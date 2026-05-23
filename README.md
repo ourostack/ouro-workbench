@@ -33,4 +33,5 @@ swift run OuroWorkbench
 ## Architecture
 
 See [docs/architecture.md](docs/architecture.md) and
-[docs/recovery.md](docs/recovery.md).
+[docs/recovery.md](docs/recovery.md). The current Ouro bridge contract is in
+[docs/ouro-bridge.md](docs/ouro-bridge.md).

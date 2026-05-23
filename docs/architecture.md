@@ -30,6 +30,8 @@ developer processes.
    - Lets the selected Ouro agent inspect state and act.
    - Provides tools for status, output inspection, input sending, process
      control, todos, scratchpads, timers, and recovery summaries.
+   - Uses Ouro Mailbox HTTP as the read plane and `ouro mcp-serve --agent <agent>`
+     as the boss conversation plane before adding new daemon APIs.
 
 4. Terminal-agent lanes
    - Claude Code.
@@ -61,3 +63,5 @@ On startup, recovery classifies prior sessions as:
 
 This repo owns the native workbench. Ouroboros Agent Harness remains the local
 agent runtime. Hosted substrate work remains outside this repo.
+
+See [ouro-bridge.md](ouro-bridge.md) for the current bridge contract.

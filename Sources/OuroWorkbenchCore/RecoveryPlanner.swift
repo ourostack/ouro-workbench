@@ -35,10 +35,36 @@ public struct RecoveryPlanner: Sendable {
     }
 
     public func planRecovery(for entry: ProcessEntry, latestRun: ProcessRun?) -> RecoveryPlan {
+        guard let latestRun else {
+            return RecoveryPlan(
+                entryId: entry.id,
+                runId: nil,
+                action: .noAction,
+                reason: "no prior run to recover"
+            )
+        }
+
+        guard latestRun.status == .needsRecovery else {
+            if latestRun.status == .manualActionNeeded {
+                return RecoveryPlan(
+                    entryId: entry.id,
+                    runId: latestRun.id,
+                    action: .manualActionNeeded,
+                    reason: "latest run already requires manual action"
+                )
+            }
+            return RecoveryPlan(
+                entryId: entry.id,
+                runId: latestRun.id,
+                action: .noAction,
+                reason: "latest run status is \(latestRun.status.rawValue)"
+            )
+        }
+
         guard entry.trust == .trusted else {
             return RecoveryPlan(
                 entryId: entry.id,
-                runId: latestRun?.id,
+                runId: latestRun.id,
                 action: .manualActionNeeded,
                 reason: "entry is not trusted"
             )
@@ -47,7 +73,7 @@ public struct RecoveryPlanner: Sendable {
         guard entry.autoResume else {
             return RecoveryPlan(
                 entryId: entry.id,
-                runId: latestRun?.id,
+                runId: latestRun.id,
                 action: .noAction,
                 reason: "auto-resume is disabled"
             )
@@ -57,7 +83,7 @@ public struct RecoveryPlanner: Sendable {
             guard let preset = TerminalAgentPresets.preset(for: agentKind) else {
                 return RecoveryPlan(
                     entryId: entry.id,
-                    runId: latestRun?.id,
+                    runId: latestRun.id,
                     action: .manualActionNeeded,
                     reason: "unknown terminal agent preset"
                 )
@@ -65,31 +91,31 @@ public struct RecoveryPlanner: Sendable {
 
             switch preset.resumeStrategy.kind {
             case .nativeResumeCommand:
-                if latestRun?.terminalSessionId?.isEmpty == false {
+                if latestRun.terminalSessionId?.isEmpty == false {
                     return RecoveryPlan(
                         entryId: entry.id,
-                        runId: latestRun?.id,
+                        runId: latestRun.id,
                         action: .autoResume,
                         reason: "\(preset.displayName) has native resume metadata"
                     )
                 }
                 return RecoveryPlan(
                     entryId: entry.id,
-                    runId: latestRun?.id,
+                    runId: latestRun.id,
                     action: .manualActionNeeded,
                     reason: "\(preset.displayName) lacks a persisted session id"
                 )
             case .checkpointPrompt:
                 return RecoveryPlan(
                     entryId: entry.id,
-                    runId: latestRun?.id,
+                    runId: latestRun.id,
                     action: .respawn,
                     reason: "\(preset.displayName) will reopen from persisted checkpoint context"
                 )
             case .manual:
                 return RecoveryPlan(
                     entryId: entry.id,
-                    runId: latestRun?.id,
+                    runId: latestRun.id,
                     action: .manualActionNeeded,
                     reason: "\(preset.displayName) requires manual recovery"
                 )
@@ -98,7 +124,7 @@ public struct RecoveryPlanner: Sendable {
 
         return RecoveryPlan(
             entryId: entry.id,
-            runId: latestRun?.id,
+            runId: latestRun.id,
             action: .respawn,
             reason: "trusted non-agent process may be respawned by policy"
         )
