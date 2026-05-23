@@ -12,6 +12,7 @@ public struct BossDashboardSnapshot: Equatable, Sendable {
     public var codingItems: [MailboxCodingItem]
     public var observedAt: String?
     public var availability: BossDashboardAvailability
+    public var knownAgentNames: [String]
 
     public init(
         agentName: String,
@@ -24,7 +25,8 @@ public struct BossDashboardSnapshot: Equatable, Sendable {
         needsMeItems: [MailboxNeedsMeItem],
         codingItems: [MailboxCodingItem],
         observedAt: String?,
-        availability: BossDashboardAvailability = .complete
+        availability: BossDashboardAvailability = .complete,
+        knownAgentNames: [String] = []
     ) {
         self.agentName = agentName
         self.daemonStatus = daemonStatus
@@ -37,6 +39,7 @@ public struct BossDashboardSnapshot: Equatable, Sendable {
         self.codingItems = codingItems
         self.observedAt = observedAt
         self.availability = availability
+        self.knownAgentNames = knownAgentNames
     }
 
     public var oneLineStatus: String {
@@ -93,6 +96,7 @@ public struct BossDashboardBuilder: Sendable {
     ) -> BossDashboardSnapshot {
         let selectedAgent = machine?.agents.first { $0.agentName.caseInsensitiveCompare(boss.agentName) == .orderedSame }
         let totals = machine?.overview?.totals
+        let knownAgentNames = machine?.agents.map(\.agentName).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending } ?? []
         return BossDashboardSnapshot(
             agentName: boss.agentName,
             daemonStatus: machine?.overview?.daemon?.status ?? "unknown",
@@ -104,7 +108,8 @@ public struct BossDashboardBuilder: Sendable {
             needsMeItems: needsMe?.items ?? [],
             codingItems: coding?.items ?? [],
             observedAt: machine?.overview?.observedAt,
-            availability: availability
+            availability: availability,
+            knownAgentNames: knownAgentNames
         )
     }
 }

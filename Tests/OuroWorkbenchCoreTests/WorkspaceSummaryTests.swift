@@ -54,5 +54,7 @@ final class WorkspaceSummaryTests: XCTestCase {
         XCTAssertTrue(prompt.contains("Question: is anything waiting on me?"))
         XCTAssertTrue(prompt.contains("GitHub Copilot CLI"))
         XCTAssertTrue(prompt.contains("action=respawn"))
+        XCTAssertTrue(prompt.contains("```ouro-workbench-actions"))
+        XCTAssertTrue(prompt.contains("\"action\":\"recover\""))
     }
 }

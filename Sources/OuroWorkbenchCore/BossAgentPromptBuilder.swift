@@ -16,6 +16,10 @@ public struct BossAgentPromptBuilder: Sendable {
         lines.append("")
         lines.append("Your job: answer what is going on, identify whether anything is waiting on the human, and keep trusted work moving when the next action is clear.")
         lines.append("You may recommend or take only auditable Workbench actions: inspect output, send input, start, stop, restart, resume, respawn, update todo/scratchpad/timer/lock state, or report status.")
+        lines.append("When you want the native app to act now, include exactly one fenced JSON block labeled ouro-workbench-actions. Supported action values: launch, recover, terminate, sendInput. Use the process id from Processes in the entry field; names are accepted only when unique. Example:")
+        lines.append("```ouro-workbench-actions")
+        lines.append("[{\"action\":\"recover\",\"entry\":\"PROCESS-ID\"},{\"action\":\"sendInput\",\"entry\":\"PROCESS-ID\",\"text\":\"continue\",\"appendNewline\":true}]")
+        lines.append("```")
         lines.append("")
         lines.append("Workspace status: \(summary.oneLineStatus)")
         if let dashboard {
@@ -44,7 +48,7 @@ public struct BossAgentPromptBuilder: Sendable {
         lines.append("")
         lines.append("Processes:")
         for snapshot in summary.processSnapshots {
-            lines.append("- \(snapshot.name): status=\(snapshot.status.rawValue), attention=\(snapshot.attention.rawValue), summary=\(snapshot.summary)")
+            lines.append("- \(snapshot.name) (id=\(snapshot.id.uuidString)): status=\(snapshot.status.rawValue), attention=\(snapshot.attention.rawValue), summary=\(snapshot.summary)")
         }
         lines.append("")
         lines.append("Recovery:")

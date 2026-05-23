@@ -134,8 +134,20 @@ struct BossDashboardView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Boss: \(model.state.boss.agentName)")
-                        .font(.headline)
+                    if model.bossAgentChoices.count > 1 {
+                        Picker("Boss", selection: Binding(
+                            get: { model.state.boss.agentName },
+                            set: { model.selectBoss(agentName: $0) }
+                        )) {
+                            ForEach(model.bossAgentChoices, id: \.self) { agentName in
+                                Text(agentName).tag(agentName)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    } else {
+                        Text("Boss: \(model.state.boss.agentName)")
+                            .font(.headline)
+                    }
                     Text(model.bossDashboard?.oneLineStatus ?? model.mailboxStatusLine)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -221,6 +233,17 @@ struct BossDashboardView: View {
                     Text(answer)
                         .font(.callout)
                         .textSelection(.enabled)
+                }
+            }
+            if !model.bossAppliedActions.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Applied Actions")
+                        .font(.caption.weight(.semibold))
+                    ForEach(model.bossAppliedActions, id: \.self) { result in
+                        Text(result)
+                            .font(.caption)
+                            .textSelection(.enabled)
+                    }
                 }
             }
         }
@@ -353,6 +376,7 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var bossCheckInPrompt: String?
     @Published var bossCheckInAnswer: String?
     @Published var bossCheckInIsRunning = false
+    @Published var bossAppliedActions: [String] = []
     @Published var mailboxError: String?
 
     private let paths: WorkbenchPaths
@@ -365,6 +389,7 @@ final class WorkbenchViewModel: ObservableObject {
     private let bossBridgePlanner = BossAgentBridgePlanner()
     private let bossPromptBuilder = BossAgentPromptBuilder()
     private let bossMCPClient: BossAgentMCPClient
+    private let bossActionParser = BossWorkbenchActionParser()
     private let terminationPolicy = ProcessTerminationPolicy()
     private var manuallyTerminatedRunIDs = Set<UUID>()
     private var didAttemptStartupRecovery = false
@@ -414,6 +439,28 @@ final class WorkbenchViewModel: ObservableObject {
 
     var bossMCPCommand: String {
         bossBridgePlanner.mcpServePlan(for: state.boss).displayCommand
+    }
+
+    var bossAgentChoices: [String] {
+        let names = (bossDashboard?.knownAgentNames ?? []) + [state.boss.agentName]
+        return Array(Set(names))
+            .filter { !$0.isEmpty }
+            .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
+    func selectBoss(agentName: String) {
+        guard !agentName.isEmpty, agentName != state.boss.agentName else {
+            return
+        }
+        state.boss.agentName = agentName
+        bossDashboard = nil
+        bossCheckInPrompt = nil
+        bossCheckInAnswer = nil
+        bossAppliedActions = []
+        save()
+        Task {
+            await refreshBossDashboard()
+        }
     }
 
     func launchCommand(for entry: ProcessEntry) -> String {
@@ -497,23 +544,42 @@ final class WorkbenchViewModel: ObservableObject {
         guard !bossCheckInIsRunning else {
             return
         }
+        let requestedBoss = state.boss.agentName
         bossCheckInIsRunning = true
         bossCheckInAnswer = nil
         defer {
             bossCheckInIsRunning = false
         }
         await refreshBossDashboard()
+        guard state.boss.agentName == requestedBoss else {
+            return
+        }
         prepareBossCheckIn()
         guard let bossCheckInPrompt else {
             return
         }
         do {
-            bossCheckInAnswer = try await bossMCPClient.ask(
-                agentName: state.boss.agentName,
+            let answer = try await bossMCPClient.ask(
+                agentName: requestedBoss,
                 question: bossCheckInPrompt
             )
+            guard state.boss.agentName == requestedBoss else {
+                return
+            }
+            bossCheckInAnswer = answer
+            applyBossActions(from: answer)
         } catch {
             bossCheckInAnswer = "Check-in failed: \(error)"
+            bossAppliedActions = []
+        }
+    }
+
+    func applyBossActions(from answer: String) {
+        do {
+            let actions = try bossActionParser.parse(answer)
+            bossAppliedActions = actions.map(applyBossAction)
+        } catch {
+            bossAppliedActions = ["Failed to parse boss actions: \(error)"]
         }
     }
 
@@ -614,6 +680,52 @@ final class WorkbenchViewModel: ObservableObject {
         } catch {
             errorMessage = String(describing: error)
         }
+    }
+
+    private func applyBossAction(_ action: BossWorkbenchAction) -> String {
+        guard let entry = processEntry(matching: action.entry) else {
+            return "Skipped \(action.action.rawValue): no unique process entry matches \(action.entry)"
+        }
+
+        switch action.action {
+        case .launch:
+            guard activeSessions[entry.id] == nil else {
+                return "Skipped launch for \(entry.name): already running"
+            }
+            launch(entry)
+            return "Launched \(entry.name)"
+        case .recover:
+            guard canRecover(entry) else {
+                return "Skipped recover for \(entry.name): \(recoveryReason(for: entry))"
+            }
+            recover(entry)
+            return "Recovered \(entry.name)"
+        case .terminate:
+            guard activeSessions[entry.id] != nil else {
+                return "Skipped terminate for \(entry.name): not running"
+            }
+            terminate(entry)
+            return "Stopped \(entry.name)"
+        case .sendInput:
+            guard activeSessions[entry.id] != nil else {
+                return "Skipped sendInput for \(entry.name): not running"
+            }
+            guard let text = action.text, !text.isEmpty else {
+                return "Skipped sendInput for \(entry.name): missing text"
+            }
+            sendInput(text, to: entry, appendNewline: action.appendNewline)
+            return "Sent input to \(entry.name)"
+        }
+    }
+
+    private func processEntry(matching value: String) -> ProcessEntry? {
+        if let id = UUID(uuidString: value), let entry = state.processEntries.first(where: { $0.id == id }) {
+            return entry
+        }
+        let nameMatches = state.processEntries.filter { entry in
+            entry.name.caseInsensitiveCompare(value) == .orderedSame
+        }
+        return nameMatches.count == 1 ? nameMatches[0] : nil
     }
 
     private func start(_ entry: ProcessEntry, with plan: TerminalCommandPlan) {
