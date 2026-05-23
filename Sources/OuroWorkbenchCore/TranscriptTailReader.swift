@@ -15,7 +15,7 @@ public struct TranscriptTail: Equatable, Sendable {
 public struct TranscriptTailReader: Sendable {
     public var maxBytes: UInt64
 
-    public init(maxBytes: UInt64 = 12_000) {
+    public init(maxBytes: UInt64 = TranscriptTailLimit.defaultBytes) {
         self.maxBytes = maxBytes
     }
 
@@ -46,5 +46,14 @@ public struct TranscriptTailReader: Sendable {
         } catch {
             return nil
         }
+    }
+}
+
+public enum TranscriptTailLimit {
+    public static let defaultBytes: UInt64 = 12_000
+    public static let maximumBytes: UInt64 = 64_000
+
+    public static func clamped(_ requested: UInt64?) -> UInt64 {
+        min(requested ?? defaultBytes, maximumBytes)
     }
 }

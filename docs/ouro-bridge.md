@@ -50,5 +50,23 @@ Direct Workbench control is still necessary for local terminal panes it owns:
 - terminate sessions
 - classify restart recovery as resumed, respawned, or manual
 
-Future daemon APIs can promote these actions into first-class Workbench tools
-after the native app proves the product shape.
+## Workbench MCP Server
+
+The packaged app includes a companion MCP server:
+
+```bash
+"/Users/arimendelow/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP"
+```
+
+This gives an Ouro agent a direct Workbench-facing tool surface:
+
+- `workbench_status`: summarize persisted Workbench state, processes, recovery
+  plans, and transcript paths.
+- `workbench_transcript_tail`: read a bounded tail from the latest transcript
+  for a process entry. The server clamps transcript reads to 64 KB.
+- `workbench_request_action`: queue `launch`, `recover`, `terminate`, or
+  `sendInput` for the native app to apply.
+
+The native app drains queued action requests from Application Support and applies
+them through the same trust-gated action path used by boss check-ins. Untrusted
+entries are denied before action execution.

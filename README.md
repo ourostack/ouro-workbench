@@ -49,6 +49,12 @@ scripts/install-app.sh --open
 Use the native `Open at Login` switch in the app to reopen Workbench after a
 computer restart and trigger session recovery.
 
+The installed bundle also includes an Ouro-facing MCP server:
+
+```bash
+"/Users/arimendelow/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP"
+```
+
 ## Architecture
 
 See [docs/architecture.md](docs/architecture.md) and

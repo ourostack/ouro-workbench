@@ -69,6 +69,9 @@ struct WorkbenchRootView: View {
         .sheet(isPresented: $model.isNewSessionSheetPresented) {
             NewTerminalSessionSheet(model: model)
         }
+        .task {
+            await model.runExternalActionPump()
+        }
     }
 }
 
@@ -627,6 +630,7 @@ final class WorkbenchViewModel: ObservableObject {
     private let terminationPolicy = ProcessTerminationPolicy()
     private let customSessionFactory = CustomTerminalSessionFactory()
     private let transcriptTailReader = TranscriptTailReader()
+    private let externalActionQueue: WorkbenchActionRequestQueue
     private var manuallyTerminatedRunIDs = Set<UUID>()
     private var didAttemptStartupRecovery = false
 
@@ -639,6 +643,7 @@ final class WorkbenchViewModel: ObservableObject {
         self.store = WorkbenchStore(paths: paths)
         self.mailboxClient = mailboxClient
         self.bossMCPClient = bossMCPClient
+        self.externalActionQueue = WorkbenchActionRequestQueue(paths: paths)
         self.state = WorkspaceState()
         load()
     }
@@ -827,6 +832,28 @@ final class WorkbenchViewModel: ObservableObject {
             bossAppliedActions = actions.map(applyBossAction)
         } catch {
             bossAppliedActions = ["Failed to parse boss actions: \(error)"]
+        }
+    }
+
+    func runExternalActionPump() async {
+        while !Task.isCancelled {
+            drainExternalActionRequests()
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+        }
+    }
+
+    func drainExternalActionRequests() {
+        do {
+            let requests = try externalActionQueue.drain()
+            guard !requests.isEmpty else {
+                return
+            }
+            let results = requests.map { request in
+                "External \(request.source): \(applyBossAction(request.action))"
+            }
+            bossAppliedActions = Array((results + bossAppliedActions).prefix(12))
+        } catch {
+            errorMessage = "External Workbench action queue failed: \(error.localizedDescription)"
         }
     }
 
