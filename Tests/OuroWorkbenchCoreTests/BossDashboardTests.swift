@@ -17,6 +17,13 @@ final class BossDashboardTests: XCTestCase {
                     attention: MailboxAttentionSummary(level: "active", label: "active"),
                     obligations: MailboxCountSummary(openCount: 2),
                     coding: MailboxCountSummary(activeCount: 1, blockedCount: 0)
+                ),
+                MailboxMachineAgentView(
+                    agentName: "boss-b",
+                    enabled: true,
+                    attention: nil,
+                    obligations: nil,
+                    coding: nil
                 )
             ]
         )
@@ -57,6 +64,7 @@ final class BossDashboardTests: XCTestCase {
         XCTAssertEqual(snapshot.openObligations, 2)
         XCTAssertEqual(snapshot.activeCodingAgents, 1)
         XCTAssertEqual(snapshot.needsMeItems.map(\.label), ["Needs review"])
+        XCTAssertEqual(snapshot.knownAgentNames, ["boss-b", "slugger"])
         XCTAssertEqual(snapshot.oneLineStatus, "1 item waiting on you")
     }
 
