@@ -30,8 +30,16 @@ Run the native prototype:
 swift run OuroWorkbench
 ```
 
+Package a local `.app` bundle:
+
+```bash
+scripts/package-app.sh
+open "dist/Ouro Workbench.app"
+```
+
 ## Architecture
 
 See [docs/architecture.md](docs/architecture.md) and
-[docs/recovery.md](docs/recovery.md). The current Ouro bridge contract is in
-[docs/ouro-bridge.md](docs/ouro-bridge.md).
+[docs/recovery.md](docs/recovery.md). Native packaging notes are in
+[docs/native-packaging.md](docs/native-packaging.md). The current Ouro bridge
+contract is in [docs/ouro-bridge.md](docs/ouro-bridge.md).
