@@ -21,6 +21,10 @@ public struct WorkbenchPaths: Sendable {
         rootURL.appendingPathComponent("transcripts", isDirectory: true)
     }
 
+    public var actionRequestsURL: URL {
+        rootURL.appendingPathComponent("action-requests", isDirectory: true)
+    }
+
     public func transcriptURL(entryId: UUID, runId: UUID) -> URL {
         transcriptsURL
             .appendingPathComponent(entryId.uuidString, isDirectory: true)

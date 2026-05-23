@@ -30,6 +30,12 @@ final class TranscriptTailReaderTests: XCTestCase {
         try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
     }
 
+    func testTranscriptTailLimitClampsCallerProvidedValues() {
+        XCTAssertEqual(TranscriptTailLimit.clamped(nil), 12_000)
+        XCTAssertEqual(TranscriptTailLimit.clamped(40_000), 40_000)
+        XCTAssertEqual(TranscriptTailLimit.clamped(1_000_000), 64_000)
+    }
+
     private func transcript(contents: String) throws -> URL {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
