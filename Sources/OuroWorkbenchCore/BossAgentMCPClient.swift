@@ -33,20 +33,19 @@ public final class BossAgentMCPClient: @unchecked Sendable {
 
         let stdin = Pipe()
         let stdout = Pipe()
-        let stderr = Pipe()
+        let stderr = try FileHandle(forWritingTo: URL(fileURLWithPath: "/dev/null"))
         process.standardInput = stdin
         process.standardOutput = stdout
         process.standardError = stderr
+        defer {
+            try? stderr.close()
+        }
 
         let processBox = ProcessIOBox(
             process: process,
-            stdout: stdout.fileHandleForReading,
-            stderr: stderr.fileHandleForReading
+            stdout: stdout.fileHandleForReading
         )
         try process.run()
-        let stderrTask = Task.detached {
-            processBox.readStderrToEnd()
-        }
 
         do {
             try writeLine(
@@ -59,11 +58,11 @@ public final class BossAgentMCPClient: @unchecked Sendable {
             )
             let response = try await readResponse(processBox, id: 2, timeoutNanoseconds: timeoutNanoseconds)
             try? stdin.fileHandleForWriting.close()
-            await stop(processBox, stderrTask: stderrTask)
+            await stop(processBox)
             return response
         } catch {
             try? stdin.fileHandleForWriting.close()
-            await stop(processBox, stderrTask: stderrTask)
+            await stop(processBox)
             throw error
         }
     }
@@ -115,11 +114,10 @@ public final class BossAgentMCPClient: @unchecked Sendable {
         }
     }
 
-    private func stop(_ processBox: ProcessIOBox, stderrTask: Task<Data, Never>) async {
+    private func stop(_ processBox: ProcessIOBox) async {
         processBox.terminate()
         try? await Task.sleep(nanoseconds: 100_000_000)
         processBox.forceKill()
-        _ = await stderrTask.value
     }
 
     private func writeLine(_ object: [String: Any], to handle: FileHandle) throws {
@@ -192,12 +190,10 @@ private struct MCPTextContent: Decodable {
 private final class ProcessIOBox: @unchecked Sendable {
     private let process: Process
     private let stdout: FileHandle
-    private let stderr: FileHandle
 
-    init(process: Process, stdout: FileHandle, stderr: FileHandle) {
+    init(process: Process, stdout: FileHandle) {
         self.process = process
         self.stdout = stdout
-        self.stderr = stderr
     }
 
     func readResponse(id: Int) throws -> String {
@@ -223,10 +219,6 @@ private final class ProcessIOBox: @unchecked Sendable {
                 }
             }
         }
-    }
-
-    func readStderrToEnd() -> Data {
-        stderr.readDataToEndOfFile()
     }
 
     func terminate() {
