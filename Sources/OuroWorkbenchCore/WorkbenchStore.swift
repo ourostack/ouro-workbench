@@ -18,6 +18,10 @@ public final class WorkbenchStore {
         decoder.dateDecodingStrategy = .iso8601
     }
 
+    public convenience init(paths: WorkbenchPaths = .defaultPaths()) {
+        self.init(stateURL: paths.stateURL)
+    }
+
     public func load() throws -> WorkspaceState {
         guard FileManager.default.fileExists(atPath: stateURL.path) else {
             return WorkspaceState()
