@@ -322,6 +322,9 @@ struct SessionDetailView: View {
                         }
                         .buttonStyle(.borderedProminent)
                     }
+                    if let tail = model.transcriptTail(for: entry) {
+                        TranscriptHistoryView(tail: tail)
+                    }
                 }
                 .padding()
                 Spacer()
@@ -372,6 +375,37 @@ struct SessionControlBar: View {
         }
         model.sendInput(pendingInput, to: entry, appendNewline: true)
         pendingInput = ""
+    }
+}
+
+struct TranscriptHistoryView: View {
+    var tail: TranscriptTail
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Latest Transcript")
+                    .font(.caption.weight(.semibold))
+                if tail.truncated {
+                    Text("tail")
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text(tail.path)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            ScrollView {
+                Text(tail.text.isEmpty ? "No transcript output yet" : tail.text)
+                    .font(.caption.monospaced())
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .textSelection(.enabled)
+            }
+            .frame(maxHeight: 220)
+        }
     }
 }
 
@@ -592,6 +626,7 @@ final class WorkbenchViewModel: ObservableObject {
     private let bossActionAuthorizer = BossWorkbenchActionAuthorizer()
     private let terminationPolicy = ProcessTerminationPolicy()
     private let customSessionFactory = CustomTerminalSessionFactory()
+    private let transcriptTailReader = TranscriptTailReader()
     private var manuallyTerminatedRunIDs = Set<UUID>()
     private var didAttemptStartupRecovery = false
 
@@ -705,6 +740,17 @@ final class WorkbenchViewModel: ObservableObject {
 
     func activeSession(for entry: ProcessEntry) -> TerminalSessionController? {
         activeSessions[entry.id]
+    }
+
+    func latestRun(for entry: ProcessEntry) -> ProcessRun? {
+        state.processRuns
+            .filter { $0.entryId == entry.id }
+            .sorted { $0.startedAt > $1.startedAt }
+            .first
+    }
+
+    func transcriptTail(for entry: ProcessEntry) -> TranscriptTail? {
+        transcriptTailReader.read(path: latestRun(for: entry)?.transcriptPath)
     }
 
     func refreshBossDashboard() async {
