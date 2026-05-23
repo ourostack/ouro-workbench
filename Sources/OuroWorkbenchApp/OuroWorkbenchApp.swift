@@ -41,6 +41,8 @@ struct WorkbenchRootView: View {
             VStack(alignment: .leading, spacing: 0) {
                 HeaderView(summary: model.summary)
                 Divider()
+                BossDashboardView(model: model)
+                Divider()
                 if let entry = model.selectedEntry {
                     SessionDetailView(entry: entry, model: model)
                 } else {
@@ -54,6 +56,9 @@ struct WorkbenchRootView: View {
             }
         } message: {
             Text(model.errorMessage ?? "Unknown error")
+        }
+        .task {
+            await model.refreshBossDashboard()
         }
     }
 }
@@ -121,6 +126,123 @@ struct HeaderView: View {
     }
 }
 
+struct BossDashboardView: View {
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Boss: \(model.state.boss.agentName)")
+                        .font(.headline)
+                    Text(model.bossDashboard?.oneLineStatus ?? model.mailboxStatusLine)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button {
+                    Task {
+                        await model.refreshBossDashboard()
+                    }
+                } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+                Button {
+                    Task {
+                        await model.runBossCheckIn()
+                    }
+                } label: {
+                    Label("Check In", systemImage: "bubble.left.and.text.bubble.right")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(model.bossCheckInIsRunning)
+            }
+            if model.bossCheckInIsRunning {
+                ProgressView()
+                    .controlSize(.small)
+            }
+            if let dashboard = model.bossDashboard {
+                if !dashboard.availability.issues.isEmpty {
+                    Text("Mailbox warnings: \(dashboard.availability.issues.joined(separator: "; "))")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+                HStack(spacing: 18) {
+                    MetricView(label: "daemon", value: dashboard.daemonStatus)
+                    MetricView(label: "needs me", value: dashboard.availability.needsMeAvailable ? "\(dashboard.needsMeItems.count)" : "?")
+                    MetricView(label: "coding", value: dashboard.availability.codingAvailable ? "\(dashboard.activeCodingAgents)" : "?")
+                    MetricView(label: "blocked", value: dashboard.availability.codingAvailable ? "\(dashboard.blockedCodingAgents)" : "?")
+                    MetricView(label: "mode", value: dashboard.daemonMode)
+                }
+                if !dashboard.needsMeItems.isEmpty || !dashboard.codingItems.isEmpty {
+                    HStack(alignment: .top, spacing: 18) {
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("Needs Me")
+                                .font(.caption.weight(.semibold))
+                            ForEach(dashboard.needsMeItems.prefix(3)) { item in
+                                Text("\(item.label) - \(item.detail)")
+                                    .font(.caption)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            }
+                        }
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("Coding")
+                                .font(.caption.weight(.semibold))
+                            ForEach(dashboard.codingItems.prefix(3)) { item in
+                                Text("\(item.runner) - \(item.status) - \(item.workdir)")
+                                    .font(.caption)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                            }
+                        }
+                    }
+                }
+            }
+            if let prompt = model.bossCheckInPrompt {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(model.bossMCPCommand)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                    ScrollView {
+                        Text(prompt)
+                            .font(.caption.monospaced())
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .textSelection(.enabled)
+                    }
+                    .frame(maxHeight: 120)
+                }
+            }
+            if let answer = model.bossCheckInAnswer {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Boss Reply")
+                        .font(.caption.weight(.semibold))
+                    Text(answer)
+                        .font(.callout)
+                        .textSelection(.enabled)
+                }
+            }
+        }
+        .padding()
+    }
+}
+
+struct MetricView: View {
+    var label: String
+    var value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value)
+                .font(.headline.monospacedDigit())
+            Text(label)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(minWidth: 58, alignment: .leading)
+    }
+}
+
 struct SessionDetailView: View {
     var entry: ProcessEntry
     @ObservedObject var model: WorkbenchViewModel
@@ -171,16 +293,32 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var selectedEntryID: UUID?
     @Published var activeSessions: [UUID: TerminalSessionController] = [:]
     @Published var errorMessage: String?
+    @Published var bossDashboard: BossDashboardSnapshot?
+    @Published var bossCheckInPrompt: String?
+    @Published var bossCheckInAnswer: String?
+    @Published var bossCheckInIsRunning = false
+    @Published var mailboxError: String?
 
     private let paths: WorkbenchPaths
     private let store: WorkbenchStore
     private let bootstrapper = WorkbenchBootstrapper()
     private let startupRecoveryReconciler = StartupRecoveryReconciler()
     private let summarizer = WorkspaceSummarizer()
+    private let mailboxClient: MailboxClient
+    private let bossDashboardBuilder = BossDashboardBuilder()
+    private let bossBridgePlanner = BossAgentBridgePlanner()
+    private let bossPromptBuilder = BossAgentPromptBuilder()
+    private let bossMCPClient: BossAgentMCPClient
 
-    init(paths: WorkbenchPaths = .defaultPaths()) {
+    init(
+        paths: WorkbenchPaths = .defaultPaths(),
+        mailboxClient: MailboxClient = MailboxClient(),
+        bossMCPClient: BossAgentMCPClient = BossAgentMCPClient()
+    ) {
         self.paths = paths
         self.store = WorkbenchStore(paths: paths)
+        self.mailboxClient = mailboxClient
+        self.bossMCPClient = bossMCPClient
         self.state = WorkspaceState()
         load()
     }
@@ -211,6 +349,14 @@ final class WorkbenchViewModel: ObservableObject {
         summarizer.summarize(state)
     }
 
+    var mailboxStatusLine: String {
+        mailboxError ?? "Mailbox status unavailable"
+    }
+
+    var bossMCPCommand: String {
+        bossBridgePlanner.mcpServePlan(for: state.boss).displayCommand
+    }
+
     func launchCommand(for entry: ProcessEntry) -> String {
         do {
             return try WorkbenchCommandPlanner(paths: paths).launchPlan(for: entry).displayCommand
@@ -225,6 +371,64 @@ final class WorkbenchViewModel: ObservableObject {
 
     func activeSession(for entry: ProcessEntry) -> TerminalSessionController? {
         activeSessions[entry.id]
+    }
+
+    func refreshBossDashboard() async {
+        async let machineResult = fetchResult(.machine, as: MailboxMachineView.self, label: "machine")
+        async let needsMeResult = fetchResult(.needsMe(state.boss.agentName), as: MailboxNeedsMeView.self, label: "needs-me")
+        async let codingResult = fetchResult(.coding(state.boss.agentName), as: MailboxCodingSummary.self, label: "coding")
+
+        let (machine, needsMe, coding) = await (machineResult, needsMeResult, codingResult)
+        let issues = [machine.issue, needsMe.issue, coding.issue].compactMap(\.self)
+
+        let snapshot = bossDashboardBuilder.build(
+            boss: state.boss,
+            machine: machine.value,
+            needsMe: needsMe.value,
+            coding: coding.value,
+            availability: BossDashboardAvailability(
+                machineAvailable: machine.issue == nil,
+                needsMeAvailable: needsMe.issue == nil,
+                codingAvailable: coding.issue == nil,
+                issues: issues
+            )
+        )
+        bossDashboard = snapshot
+        mailboxError = issues.isEmpty ? nil : "Mailbox warnings: \(issues.joined(separator: "; "))"
+    }
+
+    func prepareBossCheckIn() {
+        let question = bossBridgePlanner.checkInQuestion()
+        bossCheckInPrompt = bossPromptBuilder.checkInPrompt(
+            question: question,
+            state: state,
+            summary: summary,
+            dashboard: bossDashboard
+        )
+    }
+
+    func runBossCheckIn() async {
+        guard !bossCheckInIsRunning else {
+            return
+        }
+        bossCheckInIsRunning = true
+        bossCheckInAnswer = nil
+        defer {
+            bossCheckInIsRunning = false
+        }
+        await refreshBossDashboard()
+        prepareBossCheckIn()
+        guard let bossCheckInPrompt else {
+            return
+        }
+        do {
+            bossCheckInAnswer = try await bossMCPClient.ask(
+                agentName: state.boss.agentName,
+                question: bossCheckInPrompt
+            )
+        } catch {
+            bossCheckInAnswer = "Check-in failed: \(error)"
+        }
     }
 
     func launch(_ entry: ProcessEntry) {
@@ -325,6 +529,24 @@ final class WorkbenchViewModel: ObservableObject {
             errorMessage = String(describing: error)
         }
     }
+
+    private func fetchResult<T: Decodable & Sendable>(
+        _ endpoint: MailboxEndpoint,
+        as type: T.Type,
+        label: String
+    ) async -> MailboxFetchResult<T> {
+        do {
+            let value = try await mailboxClient.fetch(endpoint, as: type)
+            return MailboxFetchResult(value: value, issue: nil)
+        } catch {
+            return MailboxFetchResult(value: nil, issue: "\(label): \(error)")
+        }
+    }
+}
+
+private struct MailboxFetchResult<Value: Sendable>: Sendable {
+    var value: Value?
+    var issue: String?
 }
 
 struct TerminalPane: NSViewRepresentable {

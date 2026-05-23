@@ -8,14 +8,18 @@ public struct TerminalEnvironment: Equatable, Sendable {
     }
 
     public func mergedWithTerminalDefaults() -> [String] {
+        valuesWithResolvedPath()
+            .sorted { $0.key < $1.key }
+            .map { "\($0.key)=\($0.value)" }
+    }
+
+    public func valuesWithResolvedPath() -> [String: String] {
         var merged = values
         merged["TERM"] = merged["TERM"] ?? "xterm-256color"
         merged["COLORTERM"] = merged["COLORTERM"] ?? "truecolor"
         merged["LANG"] = merged["LANG"] ?? "en_US.UTF-8"
         merged["PATH"] = Self.resolvedPath(from: merged)
         return merged
-            .sorted { $0.key < $1.key }
-            .map { "\($0.key)=\($0.value)" }
     }
 
     public static func resolvedPath(from values: [String: String]) -> String {
