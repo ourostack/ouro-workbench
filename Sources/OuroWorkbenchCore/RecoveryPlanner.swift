@@ -99,6 +99,14 @@ public struct RecoveryPlanner: Sendable {
                         reason: "\(preset.displayName) has native resume metadata"
                     )
                 }
+                if !preset.resumeStrategy.fallbackCommandTemplate.isEmpty {
+                    return RecoveryPlan(
+                        entryId: entry.id,
+                        runId: latestRun.id,
+                        action: .autoResume,
+                        reason: "\(preset.displayName) can continue the most recent session in this working directory"
+                    )
+                }
                 return RecoveryPlan(
                     entryId: entry.id,
                     runId: latestRun.id,

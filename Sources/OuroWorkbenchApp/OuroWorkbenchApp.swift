@@ -58,6 +58,7 @@ struct WorkbenchRootView: View {
             Text(model.errorMessage ?? "Unknown error")
         }
         .task {
+            model.recoverEligibleSessionsOnStartup()
             await model.refreshBossDashboard()
         }
     }
@@ -270,6 +271,8 @@ struct SessionDetailView: View {
             .padding()
             Divider()
             if let session = model.activeSession(for: entry) {
+                SessionControlBar(entry: entry, model: model)
+                Divider()
                 TerminalPane(session: session)
                     .id(session.id)
             } else {
@@ -279,11 +282,64 @@ struct SessionDetailView: View {
                     Text("Recovery: \(model.recoveryReason(for: entry))")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    if model.canRecover(entry) {
+                        Button {
+                            model.recover(entry)
+                        } label: {
+                            Label(model.recoveryButtonTitle(for: entry), systemImage: "arrow.clockwise")
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
                 }
                 .padding()
                 Spacer()
             }
         }
+    }
+}
+
+struct SessionControlBar: View {
+    var entry: ProcessEntry
+    @ObservedObject var model: WorkbenchViewModel
+    @State private var pendingInput = ""
+
+    var body: some View {
+        HStack(spacing: 8) {
+            TextField("Send input to \(entry.name)", text: $pendingInput)
+                .textFieldStyle(.roundedBorder)
+                .font(.body.monospaced())
+                .onSubmit(sendLine)
+            Button {
+                sendLine()
+            } label: {
+                Label("Send", systemImage: "paperplane.fill")
+            }
+            .disabled(pendingInput.isEmpty)
+            Button {
+                model.sendControlC(to: entry)
+            } label: {
+                Label("Ctrl-C", systemImage: "command")
+            }
+            Button {
+                model.sendEscape(to: entry)
+            } label: {
+                Label("Esc", systemImage: "escape")
+            }
+            Button(role: .destructive) {
+                model.terminate(entry)
+            } label: {
+                Label("Stop", systemImage: "stop.fill")
+            }
+        }
+        .padding()
+    }
+
+    private func sendLine() {
+        guard !pendingInput.isEmpty else {
+            return
+        }
+        model.sendInput(pendingInput, to: entry, appendNewline: true)
+        pendingInput = ""
     }
 }
 
@@ -309,6 +365,9 @@ final class WorkbenchViewModel: ObservableObject {
     private let bossBridgePlanner = BossAgentBridgePlanner()
     private let bossPromptBuilder = BossAgentPromptBuilder()
     private let bossMCPClient: BossAgentMCPClient
+    private let terminationPolicy = ProcessTerminationPolicy()
+    private var manuallyTerminatedRunIDs = Set<UUID>()
+    private var didAttemptStartupRecovery = false
 
     init(
         paths: WorkbenchPaths = .defaultPaths(),
@@ -366,7 +425,34 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     func recoveryReason(for entry: ProcessEntry) -> String {
-        summary.recoveryPlans.first { $0.entryId == entry.id }?.reason ?? "no action"
+        recoveryPlan(for: entry)?.reason ?? "no action"
+    }
+
+    func recoveryPlan(for entry: ProcessEntry) -> RecoveryPlan? {
+        summary.recoveryPlans.first { $0.entryId == entry.id }
+    }
+
+    func canRecover(_ entry: ProcessEntry) -> Bool {
+        guard let plan = recoveryPlan(for: entry) else {
+            return false
+        }
+        return plan.action == .autoResume || plan.action == .respawn
+    }
+
+    func recoveryButtonTitle(for entry: ProcessEntry) -> String {
+        guard let plan = recoveryPlan(for: entry) else {
+            return "Recover"
+        }
+        switch plan.action {
+        case .autoResume:
+            return "Resume"
+        case .respawn:
+            return "Respawn"
+        case .manualActionNeeded:
+            return "Manual Recovery"
+        case .noAction:
+            return "Recover"
+        }
     }
 
     func activeSession(for entry: ProcessEntry) -> TerminalSessionController? {
@@ -431,10 +517,109 @@ final class WorkbenchViewModel: ObservableObject {
         }
     }
 
+    func recoverEligibleSessionsOnStartup() {
+        guard !didAttemptStartupRecovery else {
+            return
+        }
+        didAttemptStartupRecovery = true
+        for plan in summary.recoveryPlans where plan.action == .autoResume || plan.action == .respawn {
+            guard let entry = state.processEntries.first(where: { $0.id == plan.entryId }) else {
+                continue
+            }
+            recover(entry, recoveryPlan: plan)
+        }
+    }
+
+    func recover(_ entry: ProcessEntry) {
+        guard let plan = recoveryPlan(for: entry) else {
+            errorMessage = "No recovery plan is available for \(entry.name)"
+            return
+        }
+        recover(entry, recoveryPlan: plan)
+    }
+
     func launch(_ entry: ProcessEntry) {
         do {
             let plan = try WorkbenchCommandPlanner(paths: paths).launchPlan(for: entry)
+            start(entry, with: plan)
+        } catch {
+            errorMessage = String(describing: error)
+        }
+    }
+
+    func sendInput(_ text: String, to entry: ProcessEntry, appendNewline: Bool) {
+        guard let session = activeSessions[entry.id] else {
+            errorMessage = "\(entry.name) is not running"
+            return
+        }
+        session.sendInput(appendNewline ? "\(text)\n" : text)
+        updateEntry(entry.id) { entry in
+            entry.attention = .active
+            entry.lastSummary = "Sent input to \(entry.name)"
+        }
+        save()
+    }
+
+    func sendControlC(to entry: ProcessEntry) {
+        guard let session = activeSessions[entry.id] else {
+            errorMessage = "\(entry.name) is not running"
+            return
+        }
+        session.sendBytes([0x03])
+        updateEntry(entry.id) { entry in
+            entry.attention = .active
+            entry.lastSummary = "Sent Ctrl-C to \(entry.name)"
+        }
+        save()
+    }
+
+    func sendEscape(to entry: ProcessEntry) {
+        guard let session = activeSessions[entry.id] else {
+            errorMessage = "\(entry.name) is not running"
+            return
+        }
+        session.sendBytes([0x1b])
+        updateEntry(entry.id) { entry in
+            entry.attention = .active
+            entry.lastSummary = "Sent Esc to \(entry.name)"
+        }
+        save()
+    }
+
+    func terminate(_ entry: ProcessEntry) {
+        guard let session = activeSessions[entry.id] else {
+            errorMessage = "\(entry.name) is not running"
+            return
+        }
+        manuallyTerminatedRunIDs.insert(session.plan.runId)
+        session.terminate()
+    }
+
+    private func recover(_ entry: ProcessEntry, recoveryPlan: RecoveryPlan) {
+        do {
+            guard recoveryPlan.action == .autoResume || recoveryPlan.action == .respawn else {
+                errorMessage = "\(entry.name) is not eligible for automatic recovery: \(recoveryPlan.reason)"
+                return
+            }
+            let latestRun = state.processRuns
+                .filter { $0.entryId == entry.id }
+                .sorted { $0.startedAt > $1.startedAt }
+                .first
+            let plan = try WorkbenchCommandPlanner(paths: paths).recoveryPlan(
+                for: entry,
+                latestRun: latestRun,
+                action: recoveryPlan.action
+            )
+            start(entry, with: plan)
+        } catch {
+            errorMessage = String(describing: error)
+        }
+    }
+
+    private func start(_ entry: ProcessEntry, with plan: TerminalCommandPlan) {
+        do {
             if let existingSession = activeSessions[entry.id] {
+                manuallyTerminatedRunIDs.insert(existingSession.plan.runId)
                 existingSession.terminate()
                 markTerminated(entryId: entry.id, runId: existingSession.plan.runId, rawStatus: nil)
             }
@@ -460,7 +645,7 @@ final class WorkbenchViewModel: ObservableObject {
     func markStarted(plan: TerminalCommandPlan, pid: Int32?) {
         updateEntry(plan.entryId) { entry in
             entry.attention = .active
-            entry.lastSummary = "\(entry.name) launched"
+            entry.lastSummary = plan.reason
         }
         state.processRuns.removeAll { $0.id == plan.runId }
         state.processRuns.append(
@@ -485,16 +670,26 @@ final class WorkbenchViewModel: ObservableObject {
 
     func markTerminated(entryId: UUID, runId: UUID, rawStatus: Int32?) {
         let status = ProcessExitStatus(rawWaitStatus: rawStatus)
-        let isCurrentSession = activeSessions[entryId]?.plan.runId == runId
+        let currentPlan = activeSessions[entryId]?.plan
+        let isCurrentSession = currentPlan?.runId == runId
+        let manuallyTerminated = manuallyTerminatedRunIDs.remove(runId) != nil
+        let nextRunStatus = terminationPolicy.statusAfterTermination(
+            recoveryAction: isCurrentSession ? currentPlan?.recoveryAction : nil,
+            manuallyTerminated: manuallyTerminated
+        )
         if isCurrentSession {
             activeSessions[entryId] = nil
             updateEntry(entryId) { entry in
-                entry.attention = .idle
-                entry.lastSummary = "\(entry.name) exited with code \(status.exitCode.map(String.init) ?? "unknown")"
+                entry.attention = nextRunStatus == .manualActionNeeded ? .needsBossReview : .idle
+                if nextRunStatus == .manualActionNeeded {
+                    entry.lastSummary = "\(entry.name) recovery attempt exited with code \(status.exitCode.map(String.init) ?? "unknown")"
+                } else {
+                    entry.lastSummary = "\(entry.name) exited with code \(status.exitCode.map(String.init) ?? "unknown")"
+                }
             }
         }
         if let runIndex = state.processRuns.firstIndex(where: { $0.id == runId && $0.entryId == entryId }) {
-            state.processRuns[runIndex].status = .exited
+            state.processRuns[runIndex].status = nextRunStatus
             state.processRuns[runIndex].endedAt = Date()
             state.processRuns[runIndex].exitCode = status.exitCode
             state.processRuns[runIndex].rawExitStatus = status.rawWaitStatus

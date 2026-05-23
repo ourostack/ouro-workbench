@@ -16,11 +16,18 @@ public enum ResumeStrategyKind: String, Codable, Sendable {
 public struct ResumeStrategy: Codable, Equatable, Sendable {
     public var kind: ResumeStrategyKind
     public var commandTemplate: [String]
+    public var fallbackCommandTemplate: [String]
     public var notes: String
 
-    public init(kind: ResumeStrategyKind, commandTemplate: [String] = [], notes: String) {
+    public init(
+        kind: ResumeStrategyKind,
+        commandTemplate: [String] = [],
+        fallbackCommandTemplate: [String] = [],
+        notes: String
+    ) {
         self.kind = kind
         self.commandTemplate = commandTemplate
+        self.fallbackCommandTemplate = fallbackCommandTemplate
         self.notes = notes
     }
 }
@@ -61,7 +68,8 @@ public enum TerminalAgentPresets {
             resumeStrategy: ResumeStrategy(
                 kind: .nativeResumeCommand,
                 commandTemplate: ["claude", "--resume", "{{sessionId}}"],
-                notes: "Use Claude Code native resume when a session id is known; otherwise reopen with checkpoint context."
+                fallbackCommandTemplate: ["claude", "--continue"],
+                notes: "Use Claude Code native resume when a session id is known; otherwise continue the most recent conversation in the working directory."
             )
         ),
         TerminalAgentPreset(
@@ -84,7 +92,8 @@ public enum TerminalAgentPresets {
             resumeStrategy: ResumeStrategy(
                 kind: .nativeResumeCommand,
                 commandTemplate: ["codex", "resume", "{{sessionId}}"],
-                notes: "Use Codex native resume when a session id is known; otherwise reopen with checkpoint context."
+                fallbackCommandTemplate: ["codex", "resume", "--last"],
+                notes: "Use Codex native resume when a session id is known; otherwise continue the most recent interactive session."
             )
         )
     ]

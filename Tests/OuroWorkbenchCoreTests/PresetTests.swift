@@ -19,4 +19,12 @@ final class PresetTests: XCTestCase {
         XCTAssertTrue(copilot.yoloArguments.contains("--yolo"))
         XCTAssertTrue(codex.yoloArguments.contains("--yolo"))
     }
+
+    func testNativeResumeFallbacksAvoidManualPickerAfterRestart() throws {
+        let claude = try XCTUnwrap(TerminalAgentPresets.preset(for: .claudeCode))
+        let codex = try XCTUnwrap(TerminalAgentPresets.preset(for: .openAICodex))
+
+        XCTAssertEqual(claude.resumeStrategy.fallbackCommandTemplate, ["claude", "--continue"])
+        XCTAssertEqual(codex.resumeStrategy.fallbackCommandTemplate, ["codex", "resume", "--last"])
+    }
 }
