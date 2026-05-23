@@ -92,8 +92,13 @@ public struct WorkbenchCommandPlanner: Sendable {
             return try nativeResumePlan(for: entry, latestRun: latestRun, action: action)
         case .respawn:
             var plan = try launchPlan(for: entry)
+            if checkpointRecoveryPromptIsNeeded(for: entry) {
+                plan.arguments.append(checkpointRecoveryPrompt(for: entry, latestRun: latestRun))
+            }
             plan.recoveryAction = action
-            plan.reason = "respawn \(entry.name) from persisted workbench context"
+            plan.reason = checkpointRecoveryPromptIsNeeded(for: entry)
+                ? "respawn \(entry.name) with checkpoint recovery prompt"
+                : "respawn \(entry.name) from persisted workbench context"
             return plan
         case .manualActionNeeded, .noAction:
             var plan = try launchPlan(for: entry)
@@ -115,6 +120,20 @@ public struct WorkbenchCommandPlanner: Sendable {
         }
 
         guard let sessionId = latestRun?.terminalSessionId, !sessionId.isEmpty else {
+            if let executable = preset.resumeStrategy.fallbackCommandTemplate.first {
+                let arguments = entry.arguments + Array(preset.resumeStrategy.fallbackCommandTemplate.dropFirst())
+                let runId = UUID()
+                return TerminalCommandPlan(
+                    entryId: entry.id,
+                    runId: runId,
+                    executable: executable,
+                    arguments: arguments,
+                    workingDirectory: entry.workingDirectory,
+                    transcriptPath: paths?.transcriptURL(entryId: entry.id, runId: runId).path,
+                    recoveryAction: action,
+                    reason: "resume \(entry.name) using latest-session fallback"
+                )
+            }
             throw CommandPlanningError.missingSessionId(entryName: entry.name)
         }
 
@@ -122,7 +141,7 @@ public struct WorkbenchCommandPlanner: Sendable {
             token.replacingOccurrences(of: "{{sessionId}}", with: sessionId)
         }
         let executable = rendered.first ?? entry.executable
-        let arguments = Array(rendered.dropFirst())
+        let arguments = entry.arguments + Array(rendered.dropFirst())
         let runId = UUID()
         return TerminalCommandPlan(
             entryId: entry.id,
@@ -134,6 +153,31 @@ public struct WorkbenchCommandPlanner: Sendable {
             recoveryAction: action,
             reason: "resume \(entry.name) using native session metadata"
         )
+    }
+
+    private func checkpointRecoveryPromptIsNeeded(for entry: ProcessEntry) -> Bool {
+        guard
+            entry.kind == .terminalAgent,
+            let agentKind = entry.agentKind,
+            let preset = TerminalAgentPresets.preset(for: agentKind)
+        else {
+            return false
+        }
+        return preset.resumeStrategy.kind == .checkpointPrompt
+    }
+
+    private func checkpointRecoveryPrompt(for entry: ProcessEntry, latestRun: ProcessRun?) -> String {
+        var pieces = [
+            "Recover this Ouro Workbench terminal-agent session after an app or computer restart.",
+            "Working directory: \(entry.workingDirectory).",
+            "Inspect current repo state and continue the prior task autonomously.",
+        ]
+        if let transcriptPath = latestRun?.transcriptPath, !transcriptPath.isEmpty {
+            pieces.append("Previous transcript path: \(transcriptPath). Use it as checkpoint context if available.")
+        } else {
+            pieces.append("No previous transcript path is available; reconstruct context from the workspace and continue carefully.")
+        }
+        return pieces.joined(separator: " ")
     }
 }
 

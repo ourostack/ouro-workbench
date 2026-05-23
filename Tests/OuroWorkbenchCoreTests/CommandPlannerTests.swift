@@ -53,7 +53,7 @@ final class CommandPlannerTests: XCTestCase {
         let plan = try WorkbenchCommandPlanner().recoveryPlan(for: entry, latestRun: run, action: .autoResume)
 
         XCTAssertEqual(plan.executable, "claude")
-        XCTAssertEqual(plan.arguments, ["--resume", "claude-session-123"])
+        XCTAssertEqual(plan.arguments, ["--dangerously-skip-permissions", "--resume", "claude-session-123"])
         XCTAssertEqual(plan.recoveryAction, .autoResume)
     }
 
@@ -71,7 +71,7 @@ final class CommandPlannerTests: XCTestCase {
         XCTAssertEqual(plan.launchInvocation.execName, "zsh")
     }
 
-    func testNativeResumeRequiresSessionId() {
+    func testNativeResumeFallsBackToLatestSessionCommand() throws {
         let project = WorkbenchProject(name: "Project", rootPath: "/tmp/project")
         let entry = ProcessEntry(
             projectId: project.id,
@@ -79,13 +79,46 @@ final class CommandPlannerTests: XCTestCase {
             kind: .terminalAgent,
             agentKind: .openAICodex,
             executable: "codex",
+            arguments: ["--yolo"],
             workingDirectory: "/tmp/project",
             trust: .trusted,
             autoResume: true
         )
 
-        XCTAssertThrowsError(try WorkbenchCommandPlanner().recoveryPlan(for: entry, latestRun: nil, action: .autoResume)) { error in
-            XCTAssertEqual(error as? CommandPlanningError, .missingSessionId(entryName: "Codex"))
-        }
+        let plan = try WorkbenchCommandPlanner().recoveryPlan(for: entry, latestRun: nil, action: .autoResume)
+
+        XCTAssertEqual(plan.executable, "codex")
+        XCTAssertEqual(plan.arguments, ["--yolo", "resume", "--last"])
+        XCTAssertEqual(plan.recoveryAction, .autoResume)
+        XCTAssertEqual(plan.reason, "resume Codex using latest-session fallback")
+    }
+
+    func testCheckpointRespawnIncludesRecoveryPrompt() throws {
+        let project = WorkbenchProject(name: "Project", rootPath: "/tmp/project")
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "GitHub Copilot CLI",
+            kind: .terminalAgent,
+            agentKind: .githubCopilotCLI,
+            executable: "copilot",
+            arguments: ["--yolo"],
+            workingDirectory: "/tmp/project",
+            trust: .trusted,
+            autoResume: true
+        )
+        let run = ProcessRun(
+            entryId: entry.id,
+            status: .needsRecovery,
+            transcriptPath: "/tmp/transcript.log"
+        )
+
+        let plan = try WorkbenchCommandPlanner().recoveryPlan(for: entry, latestRun: run, action: .respawn)
+
+        XCTAssertEqual(plan.executable, "copilot")
+        XCTAssertEqual(plan.arguments.first, "--yolo")
+        XCTAssertEqual(plan.recoveryAction, .respawn)
+        XCTAssertEqual(plan.reason, "respawn GitHub Copilot CLI with checkpoint recovery prompt")
+        XCTAssertTrue(plan.arguments.last?.contains("Recover this Ouro Workbench terminal-agent session") == true)
+        XCTAssertTrue(plan.arguments.last?.contains("/tmp/transcript.log") == true)
     }
 }

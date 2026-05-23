@@ -54,6 +54,27 @@ final class RecoveryPlannerTests: XCTestCase {
         XCTAssertEqual(plan.first?.reason, "GitHub Copilot CLI will reopen from persisted checkpoint context")
     }
 
+    func testClaudeCodeWithoutSessionIdUsesLatestSessionFallback() {
+        let project = WorkbenchProject(name: "Harness", rootPath: "/repo")
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "Claude",
+            kind: .terminalAgent,
+            agentKind: .claudeCode,
+            executable: "claude",
+            workingDirectory: "/repo",
+            trust: .trusted,
+            autoResume: true
+        )
+        let run = ProcessRun(entryId: entry.id, status: .needsRecovery)
+        let state = WorkspaceState(projects: [project], processEntries: [entry], processRuns: [run])
+
+        let plan = RecoveryPlanner().planRecovery(for: state)
+
+        XCTAssertEqual(plan.first?.action, .autoResume)
+        XCTAssertEqual(plan.first?.reason, "Claude Code can continue the most recent session in this working directory")
+    }
+
     func testUntrustedEntriesNeverAutoResume() {
         let project = WorkbenchProject(name: "Harness", rootPath: "/repo")
         let entry = ProcessEntry(
