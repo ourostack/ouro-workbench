@@ -174,6 +174,7 @@ struct BossDashboardView: View {
                 ProgressView()
                     .controlSize(.small)
             }
+            MachineRuntimeView()
             if let dashboard = model.bossDashboard {
                 if !dashboard.availability.issues.isEmpty {
                     Text("Mailbox warnings: \(dashboard.availability.issues.joined(separator: "; "))")
@@ -363,6 +364,110 @@ struct SessionControlBar: View {
         }
         model.sendInput(pendingInput, to: entry, appendNewline: true)
         pendingInput = ""
+    }
+}
+
+struct MachineRuntimeView: View {
+    @StateObject private var loginItem = LoginItemController()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 12) {
+                Label("Native Runtime", systemImage: "macwindow")
+                    .font(.caption.weight(.semibold))
+                Toggle("Open at Login", isOn: Binding(
+                    get: { loginItem.isEnabled },
+                    set: { loginItem.setEnabled($0) }
+                ))
+                .toggleStyle(.switch)
+                .disabled(loginItem.isUpdating)
+                Text(loginItem.statusLine)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+                Button {
+                    loginItem.refresh()
+                } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+                .help("Refresh login item status")
+            }
+            if let lastError = loginItem.lastError {
+                Text(lastError)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .textSelection(.enabled)
+            }
+        }
+    }
+}
+
+@MainActor
+final class LoginItemController: ObservableObject {
+    @Published private(set) var status: LaunchAgentLoginItemStatus
+    @Published private(set) var isUpdating = false
+    @Published var lastError: String?
+
+    private let loginItem: LaunchAgentLoginItem
+
+    init() {
+        self.loginItem = LaunchAgentLoginItem(appURL: LaunchAgentLoginItem.defaultAppURL())
+        self.status = loginItem.status()
+    }
+
+    var isEnabled: Bool {
+        status == .enabled
+    }
+
+    var statusLine: String {
+        switch status {
+        case .enabled:
+            return "enabled"
+        case .notInstalled:
+            return "not registered"
+        case .appBundleMissing:
+            return "install app first"
+        }
+    }
+
+    func refresh() {
+        status = loginItem.status()
+    }
+
+    func setEnabled(_ enabled: Bool) {
+        isUpdating = true
+        defer {
+            refresh()
+            isUpdating = false
+        }
+
+        do {
+            if enabled {
+                try registerIfNeeded()
+            } else {
+                try unregisterIfNeeded()
+            }
+            lastError = nil
+        } catch {
+            lastError = "Open at Login update failed: \(error.localizedDescription)"
+        }
+    }
+
+    private func registerIfNeeded() throws {
+        guard status != .enabled else {
+            return
+        }
+        try loginItem.install()
+    }
+
+    private func unregisterIfNeeded() throws {
+        switch status {
+        case .enabled:
+            try loginItem.uninstall()
+        case .notInstalled, .appBundleMissing:
+            return
+        }
     }
 }
 

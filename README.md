@@ -37,6 +37,15 @@ scripts/package-app.sh
 open "dist/Ouro Workbench.app"
 ```
 
+Install it on this Mac:
+
+```bash
+scripts/install-app.sh --open
+```
+
+Use the native `Open at Login` switch in the app to reopen Workbench after a
+computer restart and trigger session recovery.
+
 ## Architecture
 
 See [docs/architecture.md](docs/architecture.md) and

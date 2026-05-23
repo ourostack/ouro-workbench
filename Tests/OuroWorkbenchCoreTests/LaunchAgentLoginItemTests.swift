@@ -1,0 +1,76 @@
+import Foundation
+import XCTest
+@testable import OuroWorkbenchCore
+
+final class LaunchAgentLoginItemTests: XCTestCase {
+    func testDefaultAppURLUsesBundleWhenRunningFromAppBundle() {
+        let home = URL(fileURLWithPath: "/Users/example", isDirectory: true)
+        let bundle = URL(fileURLWithPath: "/Users/example/Applications/Ouro Workbench.app", isDirectory: true)
+
+        let appURL = LaunchAgentLoginItem.defaultAppURL(bundleURL: bundle, homeURL: home)
+
+        XCTAssertEqual(appURL.path, bundle.path)
+    }
+
+    func testDefaultAppURLFallsBackToHomeApplicationsForDevelopmentRuns() {
+        let home = URL(fileURLWithPath: "/Users/example", isDirectory: true)
+        let bundle = URL(fileURLWithPath: "/tmp/.build/debug/OuroWorkbench")
+
+        let appURL = LaunchAgentLoginItem.defaultAppURL(bundleURL: bundle, homeURL: home)
+
+        XCTAssertEqual(appURL.path, "/Users/example/Applications/Ouro Workbench.app")
+    }
+
+    func testInstallWritesLaunchAgentPlist() throws {
+        let root = try temporaryDirectory()
+        let appURL = root.appendingPathComponent("Applications/Ouro Workbench.app", isDirectory: true)
+        try FileManager.default.createDirectory(at: appURL, withIntermediateDirectories: true)
+        let loginItem = LaunchAgentLoginItem(
+            appURL: appURL,
+            homeURL: root
+        )
+
+        XCTAssertEqual(loginItem.status(), .notInstalled)
+        try loginItem.install()
+
+        XCTAssertEqual(loginItem.status(), .enabled)
+        let data = try Data(contentsOf: loginItem.plistURL)
+        let plist = try XCTUnwrap(
+            PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any]
+        )
+        XCTAssertEqual(plist["Label"] as? String, "com.ourostack.workbench.login")
+        XCTAssertEqual(plist["RunAtLoad"] as? Bool, true)
+        XCTAssertEqual(plist["LimitLoadToSessionType"] as? String, "Aqua")
+        XCTAssertEqual(plist["ProgramArguments"] as? [String], ["/usr/bin/open", appURL.path])
+        XCTAssertEqual(
+            plist["StandardErrorPath"] as? String,
+            root.appendingPathComponent("Library/Logs/OuroWorkbench/login.err.log").path
+        )
+
+        try loginItem.uninstall()
+        XCTAssertEqual(loginItem.status(), .notInstalled)
+        try? FileManager.default.removeItem(at: root)
+    }
+
+    func testInstallFailsWhenAppBundleIsMissing() throws {
+        let root = try temporaryDirectory()
+        let appURL = root.appendingPathComponent("Applications/Ouro Workbench.app", isDirectory: true)
+        let loginItem = LaunchAgentLoginItem(
+            appURL: appURL,
+            homeURL: root
+        )
+
+        XCTAssertEqual(loginItem.status(), .appBundleMissing)
+        XCTAssertThrowsError(try loginItem.install()) { error in
+            XCTAssertEqual(error as? LaunchAgentLoginItemError, .appBundleMissing(appURL.path))
+        }
+        try? FileManager.default.removeItem(at: root)
+    }
+
+    private func temporaryDirectory() throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+}
