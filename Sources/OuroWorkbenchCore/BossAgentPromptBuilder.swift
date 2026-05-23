@@ -48,7 +48,8 @@ public struct BossAgentPromptBuilder: Sendable {
         lines.append("")
         lines.append("Processes:")
         for snapshot in summary.processSnapshots {
-            lines.append("- \(snapshot.name) (id=\(snapshot.id.uuidString)): status=\(snapshot.status.rawValue), attention=\(snapshot.attention.rawValue), summary=\(snapshot.summary)")
+            let trust = state.processEntries.first { $0.id == snapshot.id }?.trust.rawValue ?? "unknown"
+            lines.append("- \(snapshot.name) (id=\(snapshot.id.uuidString)): trust=\(trust), status=\(snapshot.status.rawValue), attention=\(snapshot.attention.rawValue), summary=\(snapshot.summary)")
         }
         lines.append("")
         lines.append("Recovery:")

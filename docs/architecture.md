@@ -37,7 +37,7 @@ developer processes.
    - Claude Code.
    - GitHub Copilot CLI.
    - OpenAI Codex.
-   - Custom terminal/TUI agents.
+   - Custom terminal/TUI agents created from native `New Session`.
 
 ## Persistence Contract
 
@@ -55,7 +55,8 @@ persists enough state to recover honestly:
 On startup, recovery classifies prior sessions as:
 
 - `autoResume`: native session metadata exists and policy allows resume
-- `respawn`: trusted process can reopen from checkpoint context
+- `respawn`: trusted process or custom terminal/TUI session can reopen from
+  persisted command and workspace context
 - `manualActionNeeded`: human/boss review is required
 - `noAction`: auto-resume is disabled
 
