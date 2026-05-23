@@ -14,6 +14,11 @@ literal process immortality. It is seamless restoration:
 - resume safely where supported
 - report what could not be resumed
 
+The app records terminal output to per-run transcript files under Application
+Support. Inactive sessions show the latest transcript tail in the detail pane,
+and boss check-in prompts include transcript paths so durable output remains
+discoverable after restart.
+
 ## Named Agent Lanes
 
 ### Claude Code
@@ -25,8 +30,12 @@ template is:
 claude --resume {{sessionId}}
 ```
 
-If no session id is available, reopen with checkpoint context and mark the lane
-as manual-action-needed until the resume strategy is verified.
+If no session id is available, continue the most recent Claude Code session in
+the same working directory with:
+
+```text
+claude --continue
+```
 
 ### GitHub Copilot CLI
 
@@ -42,8 +51,11 @@ is:
 codex resume {{sessionId}}
 ```
 
-If no session id is available, reopen with checkpoint context and mark the lane
-as manual-action-needed until the resume strategy is verified.
+If no session id is available, resume the most recent Codex session with:
+
+```text
+codex resume --last
+```
 
 ## Trust
 

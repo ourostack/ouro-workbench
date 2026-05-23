@@ -40,7 +40,7 @@ final class WorkspaceSummaryTests: XCTestCase {
             trust: .trusted,
             autoResume: true
         )
-        let run = ProcessRun(entryId: entry.id, status: .needsRecovery)
+        let run = ProcessRun(entryId: entry.id, status: .needsRecovery, transcriptPath: "/tmp/copilot.log")
         let state = WorkspaceState(projects: [project], processEntries: [entry], processRuns: [run])
         let summary = WorkspaceSummarizer().summarize(state)
 
@@ -54,6 +54,7 @@ final class WorkspaceSummaryTests: XCTestCase {
         XCTAssertTrue(prompt.contains("Question: is anything waiting on me?"))
         XCTAssertTrue(prompt.contains("GitHub Copilot CLI"))
         XCTAssertTrue(prompt.contains("trust=trusted"))
+        XCTAssertTrue(prompt.contains("transcript=/tmp/copilot.log"))
         XCTAssertTrue(prompt.contains("action=respawn"))
         XCTAssertTrue(prompt.contains("```ouro-workbench-actions"))
         XCTAssertTrue(prompt.contains("\"action\":\"recover\""))
