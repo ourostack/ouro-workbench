@@ -37,15 +37,21 @@ public enum MailboxEndpoint: Equatable, Sendable {
 
 public struct MailboxClientConfiguration: Equatable, Sendable {
     public var baseURL: URL
+    public var requestTimeoutNanoseconds: UInt64
 
-    public init(baseURL: URL = URL(string: "http://127.0.0.1:6876")!) {
+    public init(
+        baseURL: URL = URL(string: "http://127.0.0.1:6876")!,
+        requestTimeoutNanoseconds: UInt64 = 3_000_000_000
+    ) {
         self.baseURL = baseURL
+        self.requestTimeoutNanoseconds = requestTimeoutNanoseconds
     }
 }
 
 public enum MailboxClientError: Error, Equatable, Sendable {
     case invalidURL
     case badStatus(Int)
+    case timeout
 }
 
 public struct MailboxClient: Sendable {
@@ -69,11 +75,28 @@ public struct MailboxClient: Sendable {
 
     public func fetch<T: Decodable & Sendable>(_ endpoint: MailboxEndpoint, as type: T.Type = T.self) async throws -> T {
         let url = try url(for: endpoint)
-        let (data, response) = try await dataLoader(url)
+        let (data, response) = try await load(url)
         guard (200..<300).contains(response.statusCode) else {
             throw MailboxClientError.badStatus(response.statusCode)
         }
         return try JSONDecoder().decode(type, from: data)
+    }
+
+    private func load(_ url: URL) async throws -> (Data, HTTPURLResponse) {
+        try await withThrowingTaskGroup(of: (Data, HTTPURLResponse).self) { group in
+            group.addTask {
+                try await dataLoader(url)
+            }
+            group.addTask {
+                try await Task.sleep(nanoseconds: configuration.requestTimeoutNanoseconds)
+                throw MailboxClientError.timeout
+            }
+            guard let result = try await group.next() else {
+                throw MailboxClientError.timeout
+            }
+            group.cancelAll()
+            return result
+        }
     }
 
     public static func defaultDataLoader(url: URL) async throws -> (Data, HTTPURLResponse) {
@@ -179,5 +202,85 @@ public struct MailboxCountSummary: Decodable, Equatable, Sendable {
         self.openCount = openCount
         self.activeCount = activeCount
         self.blockedCount = blockedCount
+    }
+}
+
+public struct MailboxNeedsMeView: Decodable, Equatable, Sendable {
+    public var items: [MailboxNeedsMeItem]
+
+    public init(items: [MailboxNeedsMeItem]) {
+        self.items = items
+    }
+}
+
+public struct MailboxNeedsMeItem: Decodable, Equatable, Identifiable, Sendable {
+    public var urgency: String
+    public var label: String
+    public var detail: String
+    public var ref: MailboxNavigationRef?
+    public var ageMs: Int?
+
+    public var id: String {
+        "\(urgency)-\(label)-\(detail)"
+    }
+
+    public init(urgency: String, label: String, detail: String, ref: MailboxNavigationRef?, ageMs: Int?) {
+        self.urgency = urgency
+        self.label = label
+        self.detail = detail
+        self.ref = ref
+        self.ageMs = ageMs
+    }
+}
+
+public struct MailboxNavigationRef: Decodable, Equatable, Sendable {
+    public var tab: String
+    public var focus: String?
+
+    public init(tab: String, focus: String?) {
+        self.tab = tab
+        self.focus = focus
+    }
+}
+
+public struct MailboxCodingSummary: Decodable, Equatable, Sendable {
+    public var totalCount: Int
+    public var activeCount: Int
+    public var blockedCount: Int
+    public var items: [MailboxCodingItem]
+
+    public init(totalCount: Int, activeCount: Int, blockedCount: Int, items: [MailboxCodingItem]) {
+        self.totalCount = totalCount
+        self.activeCount = activeCount
+        self.blockedCount = blockedCount
+        self.items = items
+    }
+}
+
+public struct MailboxCodingItem: Decodable, Equatable, Identifiable, Sendable {
+    public var id: String
+    public var runner: String
+    public var status: String
+    public var workdir: String
+    public var lastActivityAt: String?
+    public var checkpoint: String?
+    public var taskRef: String?
+
+    public init(
+        id: String,
+        runner: String,
+        status: String,
+        workdir: String,
+        lastActivityAt: String?,
+        checkpoint: String?,
+        taskRef: String?
+    ) {
+        self.id = id
+        self.runner = runner
+        self.status = status
+        self.workdir = workdir
+        self.lastActivityAt = lastActivityAt
+        self.checkpoint = checkpoint
+        self.taskRef = taskRef
     }
 }

@@ -21,4 +21,12 @@ final class TerminalEnvironmentTests: XCTestCase {
         XCTAssertTrue(environment.contains { $0.hasPrefix("PATH=") && $0.contains("/opt/homebrew/bin") })
         XCTAssertTrue(environment.contains("HOME=/Users/test"))
     }
+
+    func testDictionaryEnvironmentIncludesResolvedPath() {
+        let environment = TerminalEnvironment(values: ["PATH": "/custom/bin"]).valuesWithResolvedPath()
+
+        XCTAssertEqual(environment["TERM"], "xterm-256color")
+        XCTAssertEqual(environment["PATH"]?.hasPrefix("/custom/bin"), true)
+        XCTAssertEqual(environment["PATH"]?.contains("/opt/homebrew/bin"), true)
+    }
 }
