@@ -31,6 +31,11 @@ struct WorkbenchRootView: View {
                         TerminalAgentRow(entry: entry, isSelected: model.selectedEntryID == entry.id)
                             .tag(entry.id)
                     }
+                    Button {
+                        model.isNewSessionSheetPresented = true
+                    } label: {
+                        Label("New Session", systemImage: "plus")
+                    }
                 }
                 Section("Recovery") {
                     Label(model.summary.oneLineStatus, systemImage: "arrow.clockwise.circle")
@@ -60,6 +65,9 @@ struct WorkbenchRootView: View {
         .task {
             model.recoverEligibleSessionsOnStartup()
             await model.refreshBossDashboard()
+        }
+        .sheet(isPresented: $model.isNewSessionSheetPresented) {
+            NewTerminalSessionSheet(model: model)
         }
     }
 }
@@ -367,6 +375,91 @@ struct SessionControlBar: View {
     }
 }
 
+struct NewTerminalSessionSheet: View {
+    @ObservedObject var model: WorkbenchViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var command = ""
+    @State private var workingDirectory = FileManager.default.homeDirectoryForCurrentUser.path
+    @State private var trusted = true
+    @State private var autoResume = true
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("New Terminal Session")
+                .font(.title3.weight(.semibold))
+            Form {
+                TextField("Name", text: $name)
+                TextField("Command", text: $command)
+                    .font(.body.monospaced())
+                HStack {
+                    TextField("Working Directory", text: $workingDirectory)
+                        .font(.body.monospaced())
+                    Button {
+                        chooseWorkingDirectory()
+                    } label: {
+                        Label("Choose", systemImage: "folder")
+                    }
+                }
+                Toggle("Trusted", isOn: $trusted)
+                Toggle("Auto Resume", isOn: $autoResume)
+            }
+            HStack {
+                Spacer()
+                Button("Cancel") {
+                    dismiss()
+                }
+                Button {
+                    create(launchAfterCreate: false)
+                } label: {
+                    Label("Create", systemImage: "checkmark")
+                }
+                .disabled(!canCreate)
+                Button {
+                    create(launchAfterCreate: true)
+                } label: {
+                    Label("Create & Launch", systemImage: "play.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!canCreate)
+            }
+        }
+        .padding()
+        .frame(width: 560)
+    }
+
+    private var canCreate: Bool {
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !workingDirectory.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func create(launchAfterCreate: Bool) {
+        let draft = CustomTerminalSessionDraft(
+            name: name,
+            command: command,
+            workingDirectory: workingDirectory,
+            trust: trusted ? .trusted : .untrusted,
+            autoResume: autoResume
+        )
+        guard model.createCustomSession(draft, launchAfterCreate: launchAfterCreate) != nil else {
+            return
+        }
+        dismiss()
+    }
+
+    private func chooseWorkingDirectory() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = URL(fileURLWithPath: workingDirectory, isDirectory: true)
+        if panel.runModal() == .OK, let url = panel.url {
+            workingDirectory = url.path
+        }
+    }
+}
+
 struct MachineRuntimeView: View {
     @StateObject private var loginItem = LoginItemController()
 
@@ -483,6 +576,7 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var bossCheckInIsRunning = false
     @Published var bossAppliedActions: [String] = []
     @Published var mailboxError: String?
+    @Published var isNewSessionSheetPresented = false
 
     private let paths: WorkbenchPaths
     private let store: WorkbenchStore
@@ -495,7 +589,9 @@ final class WorkbenchViewModel: ObservableObject {
     private let bossPromptBuilder = BossAgentPromptBuilder()
     private let bossMCPClient: BossAgentMCPClient
     private let bossActionParser = BossWorkbenchActionParser()
+    private let bossActionAuthorizer = BossWorkbenchActionAuthorizer()
     private let terminationPolicy = ProcessTerminationPolicy()
+    private let customSessionFactory = CustomTerminalSessionFactory()
     private var manuallyTerminatedRunIDs = Set<UUID>()
     private var didAttemptStartupRecovery = false
 
@@ -766,6 +862,30 @@ final class WorkbenchViewModel: ObservableObject {
         session.terminate()
     }
 
+    @discardableResult
+    func createCustomSession(_ draft: CustomTerminalSessionDraft, launchAfterCreate: Bool) -> ProcessEntry? {
+        do {
+            if state.projects.isEmpty {
+                state = bootstrapper.bootstrappedState(from: state)
+            }
+            guard let project = state.projects.first else {
+                errorMessage = "No workbench project is available"
+                return nil
+            }
+            let entry = try customSessionFactory.makeEntry(projectId: project.id, draft: draft)
+            state.processEntries.append(entry)
+            selectedEntryID = entry.id
+            save()
+            if launchAfterCreate {
+                launch(entry)
+            }
+            return entry
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
     private func recover(_ entry: ProcessEntry, recoveryPlan: RecoveryPlan) {
         do {
             guard recoveryPlan.action == .autoResume || recoveryPlan.action == .respawn else {
@@ -790,6 +910,10 @@ final class WorkbenchViewModel: ObservableObject {
     private func applyBossAction(_ action: BossWorkbenchAction) -> String {
         guard let entry = processEntry(matching: action.entry) else {
             return "Skipped \(action.action.rawValue): no unique process entry matches \(action.entry)"
+        }
+        let authorization = bossActionAuthorizer.authorize(action, for: entry)
+        guard authorization.isAllowed else {
+            return "Skipped \(action.action.rawValue) for \(entry.name): \(authorization.reason ?? "not authorized")"
         }
 
         switch action.action {

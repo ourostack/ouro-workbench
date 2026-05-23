@@ -1,0 +1,39 @@
+import Foundation
+import XCTest
+@testable import OuroWorkbenchCore
+
+final class BossWorkbenchActionAuthorizerTests: XCTestCase {
+    func testTrustedEntriesCanReceiveBossActions() throws {
+        let entry = ProcessEntry(
+            projectId: UUID(),
+            name: "Trusted",
+            kind: .terminalAgent,
+            executable: "codex",
+            workingDirectory: "/repo",
+            trust: .trusted
+        )
+        let action = BossWorkbenchAction(action: .sendInput, entry: entry.id.uuidString, text: "status")
+
+        let authorization = BossWorkbenchActionAuthorizer().authorize(action, for: entry)
+
+        XCTAssertTrue(authorization.isAllowed)
+        XCTAssertNil(authorization.reason)
+    }
+
+    func testUntrustedEntriesCannotReceiveBossActions() throws {
+        let entry = ProcessEntry(
+            projectId: UUID(),
+            name: "Untrusted",
+            kind: .terminalAgent,
+            executable: "/bin/zsh",
+            workingDirectory: "/repo",
+            trust: .untrusted
+        )
+        let action = BossWorkbenchAction(action: .launch, entry: entry.id.uuidString)
+
+        let authorization = BossWorkbenchActionAuthorizer().authorize(action, for: entry)
+
+        XCTAssertFalse(authorization.isAllowed)
+        XCTAssertEqual(authorization.reason, "entry is untrusted")
+    }
+}
