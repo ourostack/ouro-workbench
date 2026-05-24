@@ -40,7 +40,7 @@ public struct TranscriptTailReader: Sendable {
             let data = try handle.readToEnd() ?? Data()
             return TranscriptTail(
                 path: path,
-                text: String(decoding: data, as: UTF8.self),
+                text: TranscriptTextSanitizer.sanitized(String(decoding: data, as: UTF8.self)),
                 truncated: offset > 0
             )
         } catch {

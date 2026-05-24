@@ -159,6 +159,7 @@ final class WorkbenchMCPServer {
             text: arguments["text"] as? String,
             appendNewline: (arguments["appendNewline"] as? Bool) ?? true
         )
+        try action.validateForQueueing()
         let authorization = authorizer.authorize(action, for: entry)
         guard authorization.isAllowed else {
             throw MCPToolFailure("Action denied for \(entry.name): \(authorization.reason ?? "not authorized")")
@@ -268,7 +269,7 @@ final class WorkbenchMCPServer {
                     "properties": [
                         "action": ["type": "string", "enum": ["launch", "recover", "terminate", "sendInput"]],
                         "entry": ["type": "string", "description": "Process UUID or unique process name."],
-                        "text": ["type": "string", "description": "Input text for sendInput."],
+                        "text": ["type": "string", "description": "Required non-empty input text when action is sendInput."],
                         "appendNewline": ["type": "boolean"],
                         "source": ["type": "string", "description": "Agent or tool requesting the action."]
                     ],

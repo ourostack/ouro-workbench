@@ -41,6 +41,28 @@ public struct BossWorkbenchAction: Codable, Equatable, Sendable {
     }
 }
 
+public enum BossWorkbenchActionValidationError: LocalizedError, Equatable, Sendable {
+    case missingTextForSendInput
+
+    public var errorDescription: String? {
+        switch self {
+        case .missingTextForSendInput:
+            return "sendInput requires non-empty text"
+        }
+    }
+}
+
+public extension BossWorkbenchAction {
+    func validateForQueueing() throws {
+        guard action == .sendInput else {
+            return
+        }
+        guard text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+            throw BossWorkbenchActionValidationError.missingTextForSendInput
+        }
+    }
+}
+
 public struct BossWorkbenchActionParser: Sendable {
     public init() {}
 

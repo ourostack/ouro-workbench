@@ -100,8 +100,8 @@ final class CommandPlannerTests: XCTestCase {
             name: "GitHub Copilot CLI",
             kind: .terminalAgent,
             agentKind: .githubCopilotCLI,
-            executable: "copilot",
-            arguments: ["--yolo"],
+            executable: "gh",
+            arguments: ["copilot", "--", "--yolo"],
             workingDirectory: "/tmp/project",
             trust: .trusted,
             autoResume: true
@@ -114,8 +114,8 @@ final class CommandPlannerTests: XCTestCase {
 
         let plan = try WorkbenchCommandPlanner().recoveryPlan(for: entry, latestRun: run, action: .respawn)
 
-        XCTAssertEqual(plan.executable, "copilot")
-        XCTAssertEqual(plan.arguments.first, "--yolo")
+        XCTAssertEqual(plan.executable, "gh")
+        XCTAssertEqual(Array(plan.arguments.prefix(3)), ["copilot", "--", "--yolo"])
         XCTAssertEqual(plan.recoveryAction, .respawn)
         XCTAssertEqual(plan.reason, "respawn GitHub Copilot CLI with checkpoint recovery prompt")
         XCTAssertTrue(plan.arguments.last?.contains("Recover this Ouro Workbench terminal-agent session") == true)

@@ -25,4 +25,18 @@ final class BossWorkbenchActionTests: XCTestCase {
     func testNoActionBlockReturnsEmptyList() throws {
         XCTAssertEqual(try BossWorkbenchActionParser().parse("No action needed."), [])
     }
+
+    func testSendInputRequiresNonEmptyTextBeforeQueueing() {
+        let action = BossWorkbenchAction(action: .sendInput, entry: "Claude Code", text: "   ")
+
+        XCTAssertThrowsError(try action.validateForQueueing()) { error in
+            XCTAssertEqual(error as? BossWorkbenchActionValidationError, .missingTextForSendInput)
+        }
+    }
+
+    func testNonInputActionsDoNotRequireTextBeforeQueueing() throws {
+        let action = BossWorkbenchAction(action: .launch, entry: "Claude Code")
+
+        XCTAssertNoThrow(try action.validateForQueueing())
+    }
 }

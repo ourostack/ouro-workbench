@@ -75,12 +75,12 @@ public enum TerminalAgentPresets {
         TerminalAgentPreset(
             id: .githubCopilotCLI,
             displayName: "GitHub Copilot CLI",
-            executable: "copilot",
-            defaultArguments: [],
-            yoloArguments: ["--yolo"],
+            executable: "gh",
+            defaultArguments: ["copilot"],
+            yoloArguments: ["copilot", "--", "--yolo"],
             resumeStrategy: ResumeStrategy(
                 kind: .checkpointPrompt,
-                notes: "Persist transcript and checkpoint state; use a recovery prompt until a native resume command is verified."
+                notes: "Launch through the GitHub CLI Copilot bridge; persist transcript and checkpoint state until a native resume command is verified."
             )
         ),
         TerminalAgentPreset(

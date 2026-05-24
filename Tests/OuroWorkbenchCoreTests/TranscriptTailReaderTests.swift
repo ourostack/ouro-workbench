@@ -30,6 +30,15 @@ final class TranscriptTailReaderTests: XCTestCase {
         try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
     }
 
+    func testReadsTailWithoutANSIEscapeCodes() throws {
+        let url = try transcript(contents: "\u{001B}[32mready\u{001B}[0m\n")
+
+        let tail = try XCTUnwrap(TranscriptTailReader(maxBytes: 100).read(path: url.path))
+
+        XCTAssertEqual(tail.text, "ready\n")
+        try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
+    }
+
     func testTranscriptTailLimitClampsCallerProvidedValues() {
         XCTAssertEqual(TranscriptTailLimit.clamped(nil), 12_000)
         XCTAssertEqual(TranscriptTailLimit.clamped(40_000), 40_000)
