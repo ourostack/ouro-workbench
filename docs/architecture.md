@@ -24,12 +24,13 @@ developer processes.
    - Terminal-agent presets.
    - Process entries and run history.
    - Recovery planning.
-   - Persistent JSON state first; durable event/output storage comes next.
+   - Persistent JSON state, transcript files, queued action requests, and a
+     bounded action log.
 
 3. Boss-agent bridge
    - Lets the selected Ouro agent inspect state and act.
-   - Provides tools for status, output inspection, input sending, process
-     control, todos, scratchpads, timers, and recovery summaries.
+   - Provides tools for status, transcript tail/search, queued process control,
+     input sending, and recovery drill summaries.
    - Uses Ouro Mailbox HTTP as the read plane and `ouro mcp-serve --agent <agent>`
      as the boss conversation plane before adding new daemon APIs.
 
@@ -52,6 +53,8 @@ persists enough state to recover honestly:
 - transcript/output pointers
 - terminal session ids where available
 - recovery policy and attention state
+- Boss Watch preference
+- bounded boss/external action log
 
 On startup, recovery classifies prior sessions as:
 

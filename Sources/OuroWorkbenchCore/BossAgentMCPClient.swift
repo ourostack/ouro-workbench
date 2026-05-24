@@ -1,13 +1,30 @@
 import Foundation
 import Darwin
 
-public enum BossAgentMCPClientError: Error, Equatable, Sendable {
-    case processNotAvailable
+public enum BossAgentMCPClientError: Error, Equatable, LocalizedError, Sendable {
+    case processNotAvailable(String)
     case timeout
     case closed
     case malformedResponse
     case rpcError(String)
     case toolError(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .processNotAvailable(let message):
+            return message.isEmpty ? "Ouro MCP process is not available." : message
+        case .timeout:
+            return "Ouro MCP request timed out."
+        case .closed:
+            return "Ouro MCP process closed before returning a response."
+        case .malformedResponse:
+            return "Ouro MCP returned a malformed response."
+        case .rpcError(let message):
+            return message
+        case .toolError(let message):
+            return message
+        }
+    }
 }
 
 public final class BossAgentMCPClient: @unchecked Sendable {
@@ -33,17 +50,15 @@ public final class BossAgentMCPClient: @unchecked Sendable {
 
         let stdin = Pipe()
         let stdout = Pipe()
-        let stderr = try FileHandle(forWritingTo: URL(fileURLWithPath: "/dev/null"))
+        let stderr = Pipe()
         process.standardInput = stdin
         process.standardOutput = stdout
         process.standardError = stderr
-        defer {
-            try? stderr.close()
-        }
 
         let processBox = ProcessIOBox(
             process: process,
-            stdout: stdout.fileHandleForReading
+            stdout: stdout.fileHandleForReading,
+            stderr: stderr.fileHandleForReading
         )
         try process.run()
 
@@ -190,10 +205,12 @@ private struct MCPTextContent: Decodable {
 private final class ProcessIOBox: @unchecked Sendable {
     private let process: Process
     private let stdout: FileHandle
+    private let stderr: FileHandle
 
-    init(process: Process, stdout: FileHandle) {
+    init(process: Process, stdout: FileHandle, stderr: FileHandle) {
         self.process = process
         self.stdout = stdout
+        self.stderr = stderr
     }
 
     func readResponse(id: Int) throws -> String {
@@ -206,6 +223,10 @@ private final class ProcessIOBox: @unchecked Sendable {
                     if let text = try BossAgentMCPClient.extractTextIfMatching(line: line, id: id) {
                         return text
                     }
+                }
+                let stderrText = readStderrText()
+                if !stderrText.isEmpty {
+                    throw BossAgentMCPClientError.processNotAvailable(stderrText)
                 }
                 throw BossAgentMCPClientError.closed
             }
@@ -231,5 +252,11 @@ private final class ProcessIOBox: @unchecked Sendable {
         if process.isRunning {
             kill(process.processIdentifier, SIGKILL)
         }
+    }
+
+    private func readStderrText() -> String {
+        let data = stderr.readDataToEndOfFile()
+        return String(decoding: data, as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

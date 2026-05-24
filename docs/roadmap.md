@@ -19,8 +19,8 @@ agent-aware terminal workbench rather than a launcher with terminal panes.
 - Treat local shells, named coding agents, custom terminal/TUI agents, and
   ordinary commands as first-class sessions.
 - Add edit, duplicate, archive, and delete controls for custom sessions.
-- Store per-session working directory, trust, auto-resume, launch profile, and
-  notes.
+- Store per-session working directory, trust, auto-resume, command launch
+  profile, and notes. Initial fields and custom-session management exist.
 - Add session grouping by project/workspace.
 - Persist selected session, window size, and sidebar width.
 
@@ -30,7 +30,7 @@ agent-aware terminal workbench rather than a launcher with terminal panes.
 - Support drag-to-reorder sessions.
 - Add keyboard shortcuts for new session, launch/restart, stop, focus terminal,
   next/previous session, and boss check-in.
-- Add a compact command palette.
+- Add a compact command palette. Initial native palette exists.
 - Keep dense native layout; avoid web-app dashboard sprawl.
 
 ## History And Search
@@ -38,9 +38,11 @@ agent-aware terminal workbench rather than a launcher with terminal panes.
 - Keep bounded live scrollback in the terminal pane.
 - Persist transcript files per run.
 - Show transcript tails for inactive/recovered sessions.
-- Add transcript search by session and workspace.
+- Add transcript search by session and workspace. Initial workspace-wide search
+  exists in native UI and MCP.
 - Add filters for running, waiting, blocked, needs recovery, and recently active.
-- Expose transcript search through the Workbench MCP bridge.
+- Expose transcript search through the Workbench MCP bridge. Initial MCP tool
+  exists.
 
 ## Recovery
 
@@ -51,6 +53,7 @@ agent-aware terminal workbench rather than a launcher with terminal panes.
   explicit.
 - Preserve terminal pane layout across restart.
 - Add a recovery drill command/test that simulates prior running sessions.
+  Initial native and MCP drill exists.
 - Surface failed recovery attempts as clear obligations for the boss.
 
 ## Boss Agent
@@ -58,14 +61,16 @@ agent-aware terminal workbench rather than a launcher with terminal panes.
 - Register the packaged `OuroWorkbenchMCP` with the selected Ouro boss agent.
   Initial native install/update status exists for `agent.json` registration.
 - Let the boss inspect status, transcript tails, and queued actions from its own
-  tool surface. Initial MCP tools exist for status, transcript tails, and queued
-  launch/recover/terminate/send-input actions.
+  tool surface. Initial MCP tools exist for status, transcript tails,
+  transcript search, recovery drill, and queued launch/recover/terminate/send-input
+  actions.
 - Keep native check-ins for human-facing status.
 - Keep action execution trust-gated and auditable.
 - Add an action log view with source, requested action, result, and timestamp.
   Initial persisted log and dashboard view exist for boss/external actions.
-- Add boss watch mode for periodic status checks.
-- Add "what changed since last check-in" summaries.
+- Add boss watch mode for periodic status checks. Initial mode exists and
+  persists across app launches.
+- Add "what changed since last check-in" summaries. Initial summaries exist.
 
 ## Agent Lanes
 
@@ -74,12 +79,15 @@ agent-aware terminal workbench rather than a launcher with terminal panes.
   Initial executable health exists for configured session commands.
 - Add preset editors for launch arguments.
 - Add yolo/dangerous-mode profile visibility without burying it in docs.
+  Initial trust/restart chips exist in the session header and TTFA popover.
 - Add per-lane health checks.
+  Initial executable health exists for configured session commands.
 - Add default recovery prompts for agents without native resume.
 
 ## Integrations
 
 - Wire Workbench MCP into Ouro agent setup.
+  Initial native registration for the selected boss exists.
 - Add optional MCP setup snippets for Claude Code, Codex, and other tools.
 - Surface Git branch, PR, CI, and dirty-worktree status per session.
 - Add hooks for task docs and Desk summaries.
@@ -89,7 +97,9 @@ agent-aware terminal workbench rather than a launcher with terminal panes.
 
 - Keep all boss/external actions trust-gated.
 - Add a durable action log.
+  Initial persisted, bounded action log exists.
 - Add explicit "untrusted" visual state and blocked action explanations.
+  Initial trust chips and skipped action log entries exist.
 - Add a way to downgrade a session to untrusted.
 - Keep transcript reads bounded by default and capped for external tools.
 - Never claim a process survived reboot; preserve recovery truth.

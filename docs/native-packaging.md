@@ -28,6 +28,10 @@ installed app at login, so app startup can trigger workspace recovery after a
 computer restart. The LaunchAgent writes logs under
 `~/Library/Logs/OuroWorkbench/`.
 
+If the installed app path changes, the native status shows `update needed`
+instead of treating a stale plist as healthy; toggling `Open at Login` back on
+rewrites the LaunchAgent for the current bundle path.
+
 Current bundle identity:
 
 - Bundle name: `Ouro Workbench`

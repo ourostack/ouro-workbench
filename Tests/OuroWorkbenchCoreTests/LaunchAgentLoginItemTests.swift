@@ -52,6 +52,33 @@ final class LaunchAgentLoginItemTests: XCTestCase {
         try? FileManager.default.removeItem(at: root)
     }
 
+    func testStatusReportsNeedsUpdateWhenPlistPointsAtDifferentApp() throws {
+        let root = try temporaryDirectory()
+        let appURL = root.appendingPathComponent("Applications/Ouro Workbench.app", isDirectory: true)
+        try FileManager.default.createDirectory(at: appURL, withIntermediateDirectories: true)
+        let loginItem = LaunchAgentLoginItem(
+            appURL: appURL,
+            homeURL: root
+        )
+        let stalePlist: [String: Any] = [
+            "Label": "com.ourostack.workbench.login",
+            "ProgramArguments": ["/usr/bin/open", "/tmp/Old Ouro Workbench.app"],
+            "RunAtLoad": true
+        ]
+        try FileManager.default.createDirectory(
+            at: loginItem.plistURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let data = try PropertyListSerialization.data(fromPropertyList: stalePlist, format: .xml, options: 0)
+        try data.write(to: loginItem.plistURL)
+
+        XCTAssertEqual(loginItem.status(), .needsUpdate)
+
+        try loginItem.install()
+        XCTAssertEqual(loginItem.status(), .enabled)
+        try? FileManager.default.removeItem(at: root)
+    }
+
     func testInstallFailsWhenAppBundleIsMissing() throws {
         let root = try temporaryDirectory()
         let appURL = root.appendingPathComponent("Applications/Ouro Workbench.app", isDirectory: true)

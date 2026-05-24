@@ -45,6 +45,16 @@ if [[ ! -d "$APP_SOURCE" ]]; then
   exit 1
 fi
 
+if [[ "$OPEN_AFTER_INSTALL" == "true" ]]; then
+  osascript -e 'tell application id "com.ourostack.workbench" to quit' >/dev/null 2>&1 || true
+  for _ in {1..20}; do
+    if ! pgrep -x "OuroWorkbench" >/dev/null 2>&1; then
+      break
+    fi
+    sleep 0.25
+  done
+fi
+
 mkdir -p "$INSTALL_DIR"
 rm -rf "$APP_DEST"
 ditto "$APP_SOURCE" "$APP_DEST"
@@ -52,5 +62,13 @@ ditto "$APP_SOURCE" "$APP_DEST"
 printf 'Installed %s\n' "$APP_DEST"
 
 if [[ "$OPEN_AFTER_INSTALL" == "true" ]]; then
-  open "$APP_DEST"
+  open_status=1
+  for _ in {1..5}; do
+    if open "$APP_DEST"; then
+      open_status=0
+      break
+    fi
+    sleep 0.5
+  done
+  exit "$open_status"
 fi

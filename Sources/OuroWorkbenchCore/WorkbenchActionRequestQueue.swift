@@ -21,11 +21,13 @@ public struct WorkbenchActionRequest: Codable, Equatable, Identifiable, Sendable
 
 public final class WorkbenchActionRequestQueue {
     public let directoryURL: URL
+    public let rejectedDirectoryURL: URL
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
     public init(directoryURL: URL) {
         self.directoryURL = directoryURL
+        self.rejectedDirectoryURL = directoryURL.appendingPathComponent("rejected", isDirectory: true)
         self.encoder = JSONEncoder()
         self.decoder = JSONDecoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -57,10 +59,27 @@ public final class WorkbenchActionRequestQueue {
 
         var requests: [WorkbenchActionRequest] = []
         for url in urls {
-            let data = try Data(contentsOf: url)
-            requests.append(try decoder.decode(WorkbenchActionRequest.self, from: data))
-            try FileManager.default.removeItem(at: url)
+            do {
+                let data = try Data(contentsOf: url)
+                requests.append(try decoder.decode(WorkbenchActionRequest.self, from: data))
+                try FileManager.default.removeItem(at: url)
+            } catch {
+                quarantineInvalidRequestFile(url)
+            }
         }
         return requests
+    }
+
+    private func quarantineInvalidRequestFile(_ url: URL) {
+        do {
+            try FileManager.default.createDirectory(at: rejectedDirectoryURL, withIntermediateDirectories: true)
+            var destination = rejectedDirectoryURL.appendingPathComponent(url.lastPathComponent)
+            if FileManager.default.fileExists(atPath: destination.path) {
+                destination = rejectedDirectoryURL.appendingPathComponent("\(UUID().uuidString)-\(url.lastPathComponent)")
+            }
+            try FileManager.default.moveItem(at: url, to: destination)
+        } catch {
+            try? FileManager.default.removeItem(at: url)
+        }
     }
 }
