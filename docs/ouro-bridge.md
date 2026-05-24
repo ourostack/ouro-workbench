@@ -71,6 +71,11 @@ The native app drains queued action requests from Application Support and applie
 them through the same trust-gated action path used by boss check-ins. Untrusted
 entries are denied before action execution.
 
+Applied boss and external Workbench actions are written to the persisted
+workspace action log with source, action, target, result, success state, and
+timestamp. The boss dashboard shows the recent log so control remains auditable
+after the transient check-in output scrolls away.
+
 The native boss dashboard has a `Workbench MCP` row that registers or updates an
 `ouro_workbench` entry in `~/AgentBundles/<boss>.ouro/agent.json`. The entry
 points at the packaged `OuroWorkbenchMCP` executable and uses no arguments:

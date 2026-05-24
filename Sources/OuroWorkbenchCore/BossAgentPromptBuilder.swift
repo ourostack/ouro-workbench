@@ -67,6 +67,15 @@ public struct BossAgentPromptBuilder: Sendable {
                 lines.append("- \(entryName): action=\(plan.action.rawValue), reason=\(plan.reason)")
             }
         }
+        if !state.actionLog.isEmpty {
+            lines.append("")
+            lines.append("Recent action log:")
+            for entry in state.actionLog.sorted(by: { $0.occurredAt > $1.occurredAt }).prefix(8) {
+                let outcome = entry.succeeded ? "ok" : "skipped"
+                let target = entry.targetName ?? "none"
+                lines.append("- \(entry.occurredAt.ISO8601Format()): \(outcome), source=\(entry.source), action=\(entry.action), target=\(target), result=\(entry.result)")
+            }
+        }
         return lines.joined(separator: "\n")
     }
 }

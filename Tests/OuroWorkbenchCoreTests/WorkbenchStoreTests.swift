@@ -8,9 +8,18 @@ final class WorkbenchStoreTests: XCTestCase {
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         let store = WorkbenchStore(stateURL: root.appendingPathComponent("workspace.json"))
         let project = WorkbenchProject(name: "Harness", rootPath: "/repo")
+        let logEntry = WorkbenchActionLogEntry(
+            occurredAt: Date(timeIntervalSince1970: 1_779_552_000),
+            source: "boss:slugger",
+            action: "sendInput",
+            targetName: "Claude Code",
+            result: "Sent input to Claude Code",
+            succeeded: true
+        )
         let state = WorkspaceState(
             boss: BossAgentSelection(agentName: "slugger"),
-            projects: [project]
+            projects: [project],
+            actionLog: [logEntry]
         )
 
         try store.save(state)
@@ -18,6 +27,7 @@ final class WorkbenchStoreTests: XCTestCase {
 
         XCTAssertEqual(loaded.boss.agentName, "slugger")
         XCTAssertEqual(loaded.projects, [project])
+        XCTAssertEqual(loaded.actionLog, [logEntry])
         try? FileManager.default.removeItem(at: root)
     }
 
@@ -70,6 +80,7 @@ final class WorkbenchStoreTests: XCTestCase {
 
         XCTAssertEqual(loaded.processEntries.first?.attention, .idle)
         XCTAssertNil(loaded.processEntries.first?.lastSummary)
+        XCTAssertEqual(loaded.actionLog, [])
         try? FileManager.default.removeItem(at: root)
     }
 }

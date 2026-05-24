@@ -172,13 +172,55 @@ public struct ProcessRun: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
+public struct WorkbenchActionLogEntry: Codable, Equatable, Identifiable, Sendable {
+    public var id: UUID
+    public var occurredAt: Date
+    public var source: String
+    public var action: String
+    public var targetEntryId: UUID?
+    public var targetName: String?
+    public var result: String
+    public var succeeded: Bool
+
+    public init(
+        id: UUID = UUID(),
+        occurredAt: Date = Date(),
+        source: String,
+        action: String,
+        targetEntryId: UUID? = nil,
+        targetName: String? = nil,
+        result: String,
+        succeeded: Bool
+    ) {
+        self.id = id
+        self.occurredAt = occurredAt
+        self.source = source
+        self.action = action
+        self.targetEntryId = targetEntryId
+        self.targetName = targetName
+        self.result = result
+        self.succeeded = succeeded
+    }
+}
+
 public struct WorkspaceState: Codable, Equatable, Sendable {
     public var schemaVersion: Int
     public var boss: BossAgentSelection
     public var projects: [WorkbenchProject]
     public var processEntries: [ProcessEntry]
     public var processRuns: [ProcessRun]
+    public var actionLog: [WorkbenchActionLogEntry]
     public var updatedAt: Date
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion
+        case boss
+        case projects
+        case processEntries
+        case processRuns
+        case actionLog
+        case updatedAt
+    }
 
     public init(
         schemaVersion: Int = 1,
@@ -186,6 +228,7 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         projects: [WorkbenchProject] = [],
         processEntries: [ProcessEntry] = [],
         processRuns: [ProcessRun] = [],
+        actionLog: [WorkbenchActionLogEntry] = [],
         updatedAt: Date = Date()
     ) {
         self.schemaVersion = schemaVersion
@@ -193,6 +236,18 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         self.projects = projects
         self.processEntries = processEntries
         self.processRuns = processRuns
+        self.actionLog = actionLog
         self.updatedAt = updatedAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+        self.boss = try container.decode(BossAgentSelection.self, forKey: .boss)
+        self.projects = try container.decode([WorkbenchProject].self, forKey: .projects)
+        self.processEntries = try container.decode([ProcessEntry].self, forKey: .processEntries)
+        self.processRuns = try container.decode([ProcessRun].self, forKey: .processRuns)
+        self.actionLog = try container.decodeIfPresent([WorkbenchActionLogEntry].self, forKey: .actionLog) ?? []
+        self.updatedAt = try container.decode(Date.self, forKey: .updatedAt)
     }
 }
