@@ -25,7 +25,9 @@ struct WorkbenchRootView: View {
             WorkbenchSidebarView(model: model)
         } detail: {
             VStack(alignment: .leading, spacing: 0) {
-                HeaderView(summary: model.summary)
+                HeaderView(summary: model.summary) {
+                    model.isCommandPalettePresented = true
+                }
                 Divider()
                 BossDashboardView(model: model)
                 Divider()
@@ -54,6 +56,9 @@ struct WorkbenchRootView: View {
         }
         .sheet(item: $model.editingSession) { entry in
             EditTerminalSessionSheet(model: model, entry: entry)
+        }
+        .sheet(isPresented: $model.isCommandPalettePresented) {
+            CommandPaletteSheet(model: model)
         }
         .confirmationDialog("Delete Terminal Session?", isPresented: model.deleteConfirmationIsPresented) {
             if let entry = model.pendingDeleteSession {
@@ -98,6 +103,7 @@ struct WorkbenchSidebarView: View {
                 } label: {
                     Label("New Session", systemImage: "plus")
                 }
+                .keyboardShortcut("n", modifiers: [.command])
             }
             if !model.archivedSessionEntries.isEmpty {
                 Section("Archived") {
@@ -174,6 +180,7 @@ struct StatusDot: View {
 
 struct HeaderView: View {
     var summary: WorkspaceSummary
+    var openCommandPalette: () -> Void
 
     var body: some View {
         HStack {
@@ -190,8 +197,77 @@ struct HeaderView: View {
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
                 .background(.green.opacity(0.16), in: Capsule())
+            Button {
+                openCommandPalette()
+            } label: {
+                Label("Commands", systemImage: "command")
+            }
+            .keyboardShortcut("k", modifiers: [.command])
         }
         .padding()
+    }
+}
+
+struct CommandPaletteSheet: View {
+    @ObservedObject var model: WorkbenchViewModel
+    @Environment(\.dismiss) private var dismiss
+    @FocusState private var searchFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "command")
+                    .foregroundStyle(.secondary)
+                TextField("Run command", text: $model.commandPaletteQuery)
+                    .textFieldStyle(.plain)
+                    .focused($searchFocused)
+                    .onSubmit(runFirstCommand)
+            }
+            .padding(10)
+            .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 6))
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(model.filteredCommandPaletteItems) { command in
+                        Button {
+                            model.performCommand(command.id)
+                            dismiss()
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: command.systemImage)
+                                    .frame(width: 20)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(command.title)
+                                        .font(.body.weight(.semibold))
+                                    Text(command.detail)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(8)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .frame(minHeight: 240, maxHeight: 360)
+        }
+        .padding()
+        .frame(width: 560)
+        .onAppear {
+            model.commandPaletteQuery = ""
+            searchFocused = true
+        }
+    }
+
+    private func runFirstCommand() {
+        guard let command = model.filteredCommandPaletteItems.first else {
+            return
+        }
+        model.performCommand(command.id)
+        dismiss()
     }
 }
 
@@ -247,6 +323,7 @@ struct BossDashboardView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(model.bossCheckInIsRunning)
+                .keyboardShortcut("i", modifiers: [.command])
             }
             if model.bossCheckInIsRunning {
                 ProgressView()
@@ -419,6 +496,7 @@ struct TranscriptSearchView: View {
                     Label("Search", systemImage: "magnifyingglass")
                 }
                 .disabled(model.transcriptSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .keyboardShortcut("f", modifiers: [.command])
             }
             if !model.transcriptSearchResults.isEmpty {
                 ForEach(model.transcriptSearchResults.prefix(6)) { match in
@@ -521,6 +599,7 @@ struct SessionDetailView: View {
                         Label(model.activeSession(for: entry) == nil ? "Launch" : "Restart", systemImage: "play.fill")
                     }
                     .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.return, modifiers: [.command])
                 }
             }
             .padding()
@@ -719,6 +798,7 @@ struct SessionControlBar: View {
             } label: {
                 Label("Stop", systemImage: "stop.fill")
             }
+            .keyboardShortcut(".", modifiers: [.command])
         }
         .padding()
     }
@@ -1069,6 +1149,8 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var bossAppliedActions: [String] = []
     @Published var mailboxError: String?
     @Published var isNewSessionSheetPresented = false
+    @Published var isCommandPalettePresented = false
+    @Published var commandPaletteQuery = ""
     @Published var editingSession: ProcessEntry?
     @Published var pendingDeleteSession: ProcessEntry?
     @Published var bossWorkbenchMCPRegistration: BossWorkbenchMCPRegistrationSnapshot?
@@ -1084,6 +1166,7 @@ final class WorkbenchViewModel: ObservableObject {
     private let bossBridgePlanner = BossAgentBridgePlanner()
     private let bossPromptBuilder = BossAgentPromptBuilder()
     private let changeSummarizer = WorkspaceChangeSummarizer()
+    private let commandPalette = WorkbenchCommandPalette()
     private let bossMCPClient: BossAgentMCPClient
     private let bossWorkbenchMCPRegistrar: BossWorkbenchMCPRegistrar
     private let executableHealthChecker: ExecutableHealthChecker
@@ -1205,6 +1288,72 @@ final class WorkbenchViewModel: ObservableObject {
             return "Enter a query to search saved transcripts."
         }
         return "No transcript matches for \(transcriptSearchLastQuery)."
+    }
+
+    var commandPaletteItems: [WorkbenchCommandDescriptor] {
+        var commands: [WorkbenchCommandDescriptor] = [
+            WorkbenchCommandDescriptor(
+                id: .newSession,
+                title: "New Session",
+                detail: "Create a custom terminal/TUI session",
+                systemImage: "plus"
+            ),
+            WorkbenchCommandDescriptor(
+                id: .toggleBossWatch,
+                title: bossWatchIsEnabled ? "Pause Boss Watch" : "Start Boss Watch",
+                detail: "Toggle automatic boss monitoring",
+                systemImage: bossWatchIsEnabled ? "eye.slash" : "eye"
+            ),
+            WorkbenchCommandDescriptor(
+                id: .searchTranscripts,
+                title: "Search Transcripts",
+                detail: "Run the current transcript search query",
+                systemImage: "text.magnifyingglass"
+            )
+        ]
+
+        if !bossCheckInIsRunning {
+            commands.insert(
+                WorkbenchCommandDescriptor(
+                    id: .bossCheckIn,
+                    title: "Boss Check In",
+                    detail: "Ask \(state.boss.agentName) what is going on",
+                    systemImage: "bubble.left.and.text.bubble.right"
+                ),
+                at: 1
+            )
+        }
+
+        if let selectedEntry, !selectedEntry.isArchived {
+            commands.append(WorkbenchCommandDescriptor(
+                id: .launchSelectedSession,
+                title: activeSession(for: selectedEntry) == nil ? "Launch \(selectedEntry.name)" : "Restart \(selectedEntry.name)",
+                detail: launchCommand(for: selectedEntry),
+                systemImage: "play.fill"
+            ))
+            if activeSession(for: selectedEntry) != nil {
+                commands.append(WorkbenchCommandDescriptor(
+                    id: .stopSelectedSession,
+                    title: "Stop \(selectedEntry.name)",
+                    detail: "Terminate the running terminal session",
+                    systemImage: "stop.fill"
+                ))
+            }
+            if canRecover(selectedEntry) {
+                commands.append(WorkbenchCommandDescriptor(
+                    id: .recoverSelectedSession,
+                    title: "\(recoveryButtonTitle(for: selectedEntry)) \(selectedEntry.name)",
+                    detail: recoveryReason(for: selectedEntry),
+                    systemImage: "arrow.clockwise"
+                ))
+            }
+        }
+
+        return commands
+    }
+
+    var filteredCommandPaletteItems: [WorkbenchCommandDescriptor] {
+        commandPalette.filter(commandPaletteItems, query: commandPaletteQuery)
     }
 
     func executableHealth(for entry: ProcessEntry) -> ExecutableHealth? {
@@ -1436,6 +1585,43 @@ final class WorkbenchViewModel: ObservableObject {
             state: state,
             maxMatches: TranscriptSearchLimit.defaultMatches
         )
+    }
+
+    func performCommand(_ command: WorkbenchCommandID) {
+        switch command {
+        case .newSession:
+            isNewSessionSheetPresented = true
+        case .bossCheckIn:
+            guard !bossCheckInIsRunning else {
+                errorMessage = "A boss check-in is already running"
+                return
+            }
+            Task {
+                await runBossCheckIn()
+            }
+        case .toggleBossWatch:
+            setBossWatchEnabled(!bossWatchIsEnabled)
+        case .launchSelectedSession:
+            guard let selectedEntry else {
+                errorMessage = "No session is selected"
+                return
+            }
+            launch(selectedEntry)
+        case .stopSelectedSession:
+            guard let selectedEntry else {
+                errorMessage = "No session is selected"
+                return
+            }
+            terminate(selectedEntry)
+        case .recoverSelectedSession:
+            guard let selectedEntry else {
+                errorMessage = "No session is selected"
+                return
+            }
+            recover(selectedEntry)
+        case .searchTranscripts:
+            searchTranscripts()
+        }
     }
 
     func refreshBossDashboard() async {
