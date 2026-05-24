@@ -1,0 +1,367 @@
+import Foundation
+
+public enum AutonomyReadinessState: String, Codable, Equatable, Sendable {
+    case ready
+    case attention
+    case blocked
+}
+
+public enum AutonomyReadinessCheckState: String, Codable, Equatable, Sendable {
+    case ok
+    case warning
+    case blocker
+}
+
+public struct AutonomyReadinessCheck: Codable, Equatable, Identifiable, Sendable {
+    public var id: String
+    public var label: String
+    public var detail: String
+    public var state: AutonomyReadinessCheckState
+
+    public init(id: String, label: String, detail: String, state: AutonomyReadinessCheckState) {
+        self.id = id
+        self.label = label
+        self.detail = detail
+        self.state = state
+    }
+}
+
+public struct AutonomyReadinessSnapshot: Codable, Equatable, Sendable {
+    public var label: String
+    public var state: AutonomyReadinessState
+    public var headline: String
+    public var detail: String
+    public var checks: [AutonomyReadinessCheck]
+
+    public init(label: String = "TTFA", checks: [AutonomyReadinessCheck]) {
+        self.label = label
+        self.checks = checks
+        self.state = Self.state(for: checks)
+        self.headline = Self.headline(for: state)
+        self.detail = Self.detail(for: state)
+    }
+
+    public var blockerCount: Int {
+        checks.filter { $0.state == .blocker }.count
+    }
+
+    public var warningCount: Int {
+        checks.filter { $0.state == .warning }.count
+    }
+
+    public func appending(_ check: AutonomyReadinessCheck) -> AutonomyReadinessSnapshot {
+        AutonomyReadinessSnapshot(label: label, checks: checks + [check])
+    }
+
+    private static func state(for checks: [AutonomyReadinessCheck]) -> AutonomyReadinessState {
+        if checks.contains(where: { $0.state == .blocker }) {
+            return .blocked
+        }
+        if checks.contains(where: { $0.state == .warning }) {
+            return .attention
+        }
+        return .ready
+    }
+
+    private static func headline(for state: AutonomyReadinessState) -> String {
+        switch state {
+        case .ready:
+            return "Boss is clear to run"
+        case .attention:
+            return "Autonomy is usable with watch points"
+        case .blocked:
+            return "Human-free operation is blocked"
+        }
+    }
+
+    private static func detail(for state: AutonomyReadinessState) -> String {
+        switch state {
+        case .ready:
+            return "The selected Ouro boss can inspect and control the Workbench, P0 lanes are trusted, and restart recovery has no manual gaps."
+        case .attention:
+            return "Workbench can run, but one or more checks should be tightened before fully hands-off operation."
+        case .blocked:
+            return "The boss cannot fully inspect, control, or recover the Workbench until blockers are fixed."
+        }
+    }
+}
+
+public struct AutonomyReadinessBuilder: Sendable {
+    private static let p0AgentKinds: Set<TerminalAgentKind> = [.claudeCode, .githubCopilotCLI, .openAICodex]
+
+    public init() {}
+
+    public func build(
+        state: WorkspaceState,
+        summary: WorkspaceSummary,
+        mcpRegistration: BossWorkbenchMCPRegistrationSnapshot?,
+        executableHealth: [UUID: ExecutableHealth],
+        bossWatchIsEnabled: Bool
+    ) -> AutonomyReadinessSnapshot {
+        AutonomyReadinessSnapshot(checks: [
+            bossCheck(for: state.boss),
+            mcpCheck(mcpRegistration),
+            p0TrustCheck(for: state),
+            p0ResumeCheck(for: state),
+            executableCheck(for: state, executableHealth: executableHealth),
+            recoveryCheck(summary),
+            bossWatchCheck(isEnabled: bossWatchIsEnabled)
+        ])
+    }
+
+    private func bossCheck(for boss: BossAgentSelection) -> AutonomyReadinessCheck {
+        if BossWorkbenchMCPRegistrar.isValidAgentBundleName(boss.agentName) {
+            return AutonomyReadinessCheck(
+                id: "boss",
+                label: "Boss agent",
+                detail: "\(boss.agentName) is selected.",
+                state: .ok
+            )
+        }
+        return AutonomyReadinessCheck(
+            id: "boss",
+            label: "Boss agent",
+            detail: "The selected boss name is not a valid Ouro agent bundle name.",
+            state: .blocker
+        )
+    }
+
+    private func mcpCheck(_ registration: BossWorkbenchMCPRegistrationSnapshot?) -> AutonomyReadinessCheck {
+        guard let registration else {
+            return AutonomyReadinessCheck(
+                id: "boss-mcp",
+                label: "Boss bridge",
+                detail: "Workbench MCP registration has not been checked.",
+                state: .warning
+            )
+        }
+
+        switch registration.status {
+        case .registered:
+            return AutonomyReadinessCheck(
+                id: "boss-mcp",
+                label: "Boss bridge",
+                detail: "Workbench MCP is registered for \(registration.agentName).",
+                state: .ok
+            )
+        case .notRegistered:
+            return AutonomyReadinessCheck(
+                id: "boss-mcp",
+                label: "Boss bridge",
+                detail: "Workbench MCP is not registered for \(registration.agentName).",
+                state: .blocker
+            )
+        case .needsUpdate:
+            return AutonomyReadinessCheck(
+                id: "boss-mcp",
+                label: "Boss bridge",
+                detail: "Workbench MCP points at an older command and needs an update.",
+                state: .blocker
+            )
+        case .agentMissing:
+            return AutonomyReadinessCheck(
+                id: "boss-mcp",
+                label: "Boss bridge",
+                detail: "The selected boss agent bundle is missing.",
+                state: .blocker
+            )
+        case .executableMissing:
+            return AutonomyReadinessCheck(
+                id: "boss-mcp",
+                label: "Boss bridge",
+                detail: "The Workbench MCP executable is not installed.",
+                state: .blocker
+            )
+        case .invalidConfig:
+            return AutonomyReadinessCheck(
+                id: "boss-mcp",
+                label: "Boss bridge",
+                detail: "The selected boss agent config cannot be updated safely.",
+                state: .blocker
+            )
+        }
+    }
+
+    private func p0TrustCheck(for state: WorkspaceState) -> AutonomyReadinessCheck {
+        let p0Entries = activeP0Entries(in: state)
+        let missing = missingP0Kinds(in: p0Entries)
+        if !missing.isEmpty {
+            return AutonomyReadinessCheck(
+                id: "p0-trust",
+                label: "P0 lanes",
+                detail: "Missing \(displayNames(for: missing)).",
+                state: .blocker
+            )
+        }
+
+        let untrusted = p0Entries.filter { $0.trust != .trusted }
+        if !untrusted.isEmpty {
+            return AutonomyReadinessCheck(
+                id: "p0-trust",
+                label: "P0 lanes",
+                detail: "\(entryNames(untrusted)) \(untrusted.count == 1 ? "is" : "are") not trusted.",
+                state: .blocker
+            )
+        }
+
+        return AutonomyReadinessCheck(
+            id: "p0-trust",
+            label: "P0 lanes",
+            detail: "\(entryNames(p0Entries)) are trusted.",
+            state: .ok
+        )
+    }
+
+    private func p0ResumeCheck(for state: WorkspaceState) -> AutonomyReadinessCheck {
+        let p0Entries = activeP0Entries(in: state)
+        let manualResume = p0Entries.filter { entry in
+            guard let agentKind = entry.agentKind,
+                  let preset = TerminalAgentPresets.preset(for: agentKind) else {
+                return true
+            }
+            return preset.resumeStrategy.kind == .manual
+        }
+        if !manualResume.isEmpty {
+            return AutonomyReadinessCheck(
+                id: "p0-resume",
+                label: "Restart posture",
+                detail: "\(entryNames(manualResume)) \(manualResume.count == 1 ? "has" : "have") no automatic resume strategy.",
+                state: .blocker
+            )
+        }
+
+        let disabled = p0Entries.filter { !$0.autoResume }
+        if !disabled.isEmpty {
+            return AutonomyReadinessCheck(
+                id: "p0-resume",
+                label: "Restart posture",
+                detail: "\(entryNames(disabled)) \(disabled.count == 1 ? "has" : "have") auto-resume disabled.",
+                state: .blocker
+            )
+        }
+
+        return AutonomyReadinessCheck(
+            id: "p0-resume",
+            label: "Restart posture",
+            detail: "P0 lanes have automatic resume strategies.",
+            state: .ok
+        )
+    }
+
+    private func executableCheck(
+        for state: WorkspaceState,
+        executableHealth: [UUID: ExecutableHealth]
+    ) -> AutonomyReadinessCheck {
+        let p0Entries = activeP0Entries(in: state)
+        let unchecked = p0Entries.filter { executableHealth[$0.id] == nil }
+        if !unchecked.isEmpty {
+            return AutonomyReadinessCheck(
+                id: "executables",
+                label: "Executables",
+                detail: "Executable health has not been checked for \(entryNames(unchecked)).",
+                state: .warning
+            )
+        }
+
+        let unavailable = p0Entries.filter { entry in
+            executableHealth[entry.id]?.status != .available
+        }
+        if !unavailable.isEmpty {
+            let details = unavailable.map { entry -> String in
+                let health = executableHealth[entry.id]
+                return "\(entry.name): \(health?.detail ?? "not checked")"
+            }
+            return AutonomyReadinessCheck(
+                id: "executables",
+                label: "Executables",
+                detail: details.joined(separator: " "),
+                state: .blocker
+            )
+        }
+
+        return AutonomyReadinessCheck(
+            id: "executables",
+            label: "Executables",
+            detail: "P0 terminal agent commands are available.",
+            state: .ok
+        )
+    }
+
+    private func recoveryCheck(_ summary: WorkspaceSummary) -> AutonomyReadinessCheck {
+        let manual = summary.recoveryPlans.filter { $0.action == .manualActionNeeded }
+        if !manual.isEmpty {
+            return AutonomyReadinessCheck(
+                id: "recovery",
+                label: "Recovery",
+                detail: "\(manual.count) session\(manual.count == 1 ? "" : "s") require manual recovery.",
+                state: .blocker
+            )
+        }
+
+        let queued = summary.needsRecovery.filter { $0.action == .autoResume || $0.action == .respawn }
+        if !queued.isEmpty {
+            return AutonomyReadinessCheck(
+                id: "recovery",
+                label: "Recovery",
+                detail: "\(queued.count) restart action\(queued.count == 1 ? "" : "s") are queued.",
+                state: .warning
+            )
+        }
+
+        return AutonomyReadinessCheck(
+            id: "recovery",
+            label: "Recovery",
+            detail: "No sessions require manual recovery.",
+            state: .ok
+        )
+    }
+
+    private func bossWatchCheck(isEnabled: Bool) -> AutonomyReadinessCheck {
+        if isEnabled {
+            return AutonomyReadinessCheck(
+                id: "boss-watch",
+                label: "Boss watch",
+                detail: "Automatic watch mode is running.",
+                state: .ok
+            )
+        }
+
+        return AutonomyReadinessCheck(
+            id: "boss-watch",
+            label: "Boss watch",
+            detail: "Watch mode is paused; manual boss asks still work.",
+            state: .warning
+        )
+    }
+
+    private func activeP0Entries(in state: WorkspaceState) -> [ProcessEntry] {
+        state.processEntries
+            .filter { !$0.isArchived && $0.kind == .terminalAgent }
+            .filter { entry in
+                guard let agentKind = entry.agentKind else {
+                    return false
+                }
+                return Self.p0AgentKinds.contains(agentKind)
+            }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    private func missingP0Kinds(in entries: [ProcessEntry]) -> [TerminalAgentKind] {
+        let present = Set(entries.compactMap(\.agentKind))
+        return Self.p0AgentKinds
+            .subtracting(present)
+            .sorted { displayName(for: $0) < displayName(for: $1) }
+    }
+
+    private func entryNames(_ entries: [ProcessEntry]) -> String {
+        entries.map(\.name).joined(separator: ", ")
+    }
+
+    private func displayNames(for kinds: [TerminalAgentKind]) -> String {
+        kinds.map(displayName(for:)).joined(separator: ", ")
+    }
+
+    private func displayName(for kind: TerminalAgentKind) -> String {
+        TerminalAgentPresets.preset(for: kind)?.displayName ?? kind.rawValue
+    }
+}

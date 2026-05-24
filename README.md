@@ -61,11 +61,28 @@ The installed bundle also includes an Ouro-facing MCP server:
 Use the native `Workbench MCP` row in the boss dashboard to register that server
 with the selected Ouro boss agent.
 
+The `TTFA` badge in the header is an autonomy readiness surface. It checks the
+selected boss, Workbench MCP registration, trusted P0 lanes, restart posture,
+executable availability, recovery state, Boss Watch, and Open at Login. Click it
+to see blockers and apply obvious fixes such as registering the MCP bridge,
+starting Boss Watch, or enabling launch-at-login.
+
 The boss dashboard also includes `Watch` mode. When enabled, Workbench keeps a
 rolling baseline of workspace state, summarizes changes such as run transitions,
 attention changes, archive/restore operations, and applied actions, then asks
 the selected boss agent to keep trusted work moving when there is something new
 or recoverable to handle.
+
+Use `Boss Line` to ask the selected Ouro boss about the Workbench through the
+Ouro CLI. The quick asks cover "what is going on?", "is anything waiting on me?",
+"keep moving", and "respond for me"; boss replies can include auditable
+Workbench actions that the native app applies through the same trust gates as
+external MCP requests.
+
+Each session header also has an `Ask Boss` button for focused questions about
+that terminal. It gives the boss the selected process id and asks whether the
+session is waiting, what it is doing, and whether a safe Workbench action should
+move it forward.
 
 Use `Transcript Search` in the boss dashboard to search saved transcript lines
 across Workbench runs. Boss agents can use the same capability through the
