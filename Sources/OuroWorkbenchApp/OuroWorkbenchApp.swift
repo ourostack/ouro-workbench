@@ -182,23 +182,7 @@ struct HeaderView: View {
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
-                if model.bossAgentChoices.count > 1 {
-                    Picker("Boss", selection: Binding(
-                        get: { model.state.boss.agentName },
-                        set: { model.selectBoss(agentName: $0) }
-                    )) {
-                        ForEach(model.bossAgentChoices, id: \.self) { agentName in
-                            Text(agentName).tag(agentName)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                    .frame(maxWidth: 180, alignment: .leading)
-                } else {
-                    Text("Boss: \(model.state.boss.agentName)")
-                        .font(.headline)
-                        .lineLimit(1)
-                }
+                BossSelectorView(model: model)
                 Text(model.summary.oneLineStatus)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -245,6 +229,113 @@ struct HeaderView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .frame(minHeight: 68)
+    }
+}
+
+struct BossSelectorView: View {
+    @ObservedObject var model: WorkbenchViewModel
+    @State private var customBossIsPresented = false
+    @State private var draftAgentName = ""
+
+    var body: some View {
+        Menu {
+            if !model.bossAgentChoices.isEmpty {
+                ForEach(model.bossAgentChoices, id: \.self) { agentName in
+                    Button {
+                        model.selectBoss(agentName: agentName)
+                    } label: {
+                        if agentName == model.state.boss.agentName {
+                            Label(agentName, systemImage: "checkmark")
+                        } else {
+                            Text(agentName)
+                        }
+                    }
+                }
+                Divider()
+            }
+            Button {
+                draftAgentName = model.state.boss.agentName
+                customBossIsPresented = true
+            } label: {
+                Label("Use Other Boss...", systemImage: "person.badge.plus")
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Text("Boss: \(model.state.boss.agentName)")
+                    .font(.headline)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Image(systemName: "chevron.down")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .frame(maxWidth: 220, alignment: .leading)
+        .help("Choose boss agent")
+        .popover(isPresented: $customBossIsPresented) {
+            BossAgentNamePopover(
+                agentName: $draftAgentName,
+                isPresented: $customBossIsPresented,
+                model: model
+            )
+            .frame(width: 280)
+            .padding(14)
+        }
+    }
+}
+
+struct BossAgentNamePopover: View {
+    @Binding var agentName: String
+    @Binding var isPresented: Bool
+    @ObservedObject var model: WorkbenchViewModel
+    @FocusState private var fieldIsFocused: Bool
+
+    private var trimmedAgentName: String {
+        agentName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var canApply: Bool {
+        BossWorkbenchMCPRegistrar.isValidAgentBundleName(trimmedAgentName)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Boss Agent")
+                .font(.headline)
+            TextField("agent bundle name", text: $agentName)
+                .textFieldStyle(.roundedBorder)
+                .focused($fieldIsFocused)
+                .onSubmit(apply)
+            if !trimmedAgentName.isEmpty && !canApply {
+                Text("Invalid bundle name.")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+            HStack {
+                Spacer()
+                Button("Cancel") {
+                    isPresented = false
+                }
+                Button("Use") {
+                    apply()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!canApply)
+            }
+        }
+        .onAppear {
+            fieldIsFocused = true
+        }
+    }
+
+    private func apply() {
+        guard canApply else {
+            return
+        }
+        model.selectBoss(agentName: trimmedAgentName)
+        isPresented = false
     }
 }
 
@@ -1816,14 +1907,15 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     func selectBoss(agentName: String) {
-        guard !agentName.isEmpty, agentName != state.boss.agentName else {
+        let normalizedAgentName = agentName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedAgentName.isEmpty, normalizedAgentName != state.boss.agentName else {
             return
         }
-        guard BossWorkbenchMCPRegistrar.isValidAgentBundleName(agentName) else {
-            errorMessage = "Boss agent name cannot be used as a bundle name: \(agentName)"
+        guard BossWorkbenchMCPRegistrar.isValidAgentBundleName(normalizedAgentName) else {
+            errorMessage = "Boss agent name cannot be used as a bundle name: \(normalizedAgentName)"
             return
         }
-        state.boss.agentName = agentName
+        state.boss.agentName = normalizedAgentName
         bossDashboard = nil
         bossCheckInPrompt = nil
         bossCheckInAnswer = nil
