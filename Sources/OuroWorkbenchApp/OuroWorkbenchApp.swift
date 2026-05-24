@@ -23,6 +23,7 @@ struct WorkbenchRootView: View {
     var body: some View {
         NavigationSplitView {
             WorkbenchSidebarView(model: model)
+                .navigationSplitViewColumnWidth(min: 210, ideal: 230, max: 320)
         } detail: {
             VStack(alignment: .leading, spacing: 0) {
                 HeaderView(model: model)
@@ -35,8 +36,9 @@ struct WorkbenchRootView: View {
                     ContentUnavailableView("No session selected", systemImage: "terminal")
                 }
             }
-            .padding(.top, 56)
+            .padding(.top, 44)
         }
+        .background(WindowChromeConfigurator())
         .alert("Workbench Error", isPresented: model.errorIsPresented) {
             Button("OK", role: .cancel) {
                 model.errorMessage = nil
@@ -49,6 +51,9 @@ struct WorkbenchRootView: View {
             model.launchDefaultShellIfNeeded()
             model.refreshExecutableHealth()
             await model.refreshBossDashboard()
+            if model.bossWatchIsEnabled {
+                await model.runBossWatchTick(force: true)
+            }
         }
         .sheet(isPresented: $model.isNewSessionSheetPresented) {
             NewTerminalSessionSheet(model: model)
@@ -77,6 +82,26 @@ struct WorkbenchRootView: View {
         .task {
             await model.runBossWatchLoop()
         }
+    }
+}
+
+private struct WindowChromeConfigurator: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async {
+            configure(window: view.window)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            configure(window: nsView.window)
+        }
+    }
+
+    private func configure(window: NSWindow?) {
+        window?.titleVisibility = .hidden
     }
 }
 
@@ -189,15 +214,16 @@ struct HeaderView: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
-            .layoutPriority(1)
             Spacer(minLength: 12)
             AutonomyStatusButton(model: model)
+                .fixedSize()
             Button {
                 model.isCommandPalettePresented = true
             } label: {
                 Label("Commands", systemImage: "command")
             }
             .keyboardShortcut("k", modifiers: [.command])
+            .fixedSize()
             Toggle(isOn: Binding(
                 get: { model.bossWatchIsEnabled },
                 set: { model.setBossWatchEnabled($0) }
@@ -207,6 +233,7 @@ struct HeaderView: View {
             .toggleStyle(.switch)
             .disabled(model.bossCheckInIsRunning)
             .help(model.bossCheckInIsRunning ? "Check-in already running" : "Toggle boss watch mode")
+            .fixedSize()
             Button {
                 Task {
                     model.refreshExecutableHealth()
@@ -215,6 +242,7 @@ struct HeaderView: View {
             } label: {
                 Label("Refresh", systemImage: "arrow.clockwise")
             }
+            .fixedSize()
             Button {
                 Task {
                     await model.runBossCheckIn()
@@ -225,6 +253,7 @@ struct HeaderView: View {
             .buttonStyle(.borderedProminent)
             .disabled(model.bossCheckInIsRunning)
             .keyboardShortcut("i", modifiers: [.command])
+            .fixedSize()
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -357,6 +386,13 @@ struct AutonomyStatusButton: View {
                 detail: "Workbench will reopen after a computer restart.",
                 state: .ok
             )
+        case .needsUpdate:
+            return AutonomyReadinessCheck(
+                id: "open-at-login",
+                label: "Open at Login",
+                detail: "Login item points at a different app bundle and needs an update.",
+                state: .warning
+            )
         case .notInstalled:
             return AutonomyReadinessCheck(
                 id: "open-at-login",
@@ -457,7 +493,7 @@ struct AutonomyStatusPopover: View {
                     Button {
                         loginItem.setEnabled(true)
                     } label: {
-                        Label("Login", systemImage: "power")
+                        Label(loginItem.status == .needsUpdate ? "Update Login" : "Login", systemImage: "power")
                     }
                 }
                 Button {
@@ -863,6 +899,7 @@ struct BossWatchStatusView: View {
 
 struct TranscriptSearchView: View {
     @ObservedObject var model: WorkbenchViewModel
+    @FocusState private var searchFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -871,6 +908,7 @@ struct TranscriptSearchView: View {
                     .font(.caption.weight(.semibold))
                 TextField("Search transcripts", text: $model.transcriptSearchQuery)
                     .textFieldStyle(.roundedBorder)
+                    .focused($searchFocused)
                     .onChange(of: model.transcriptSearchQuery) {
                         model.transcriptSearchQueryDidChange()
                     }
@@ -878,11 +916,10 @@ struct TranscriptSearchView: View {
                         model.searchTranscripts()
                     }
                 Button {
-                    model.searchTranscripts()
+                    searchOrFocus()
                 } label: {
                     Label("Search", systemImage: "magnifyingglass")
                 }
-                .disabled(model.transcriptSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 .keyboardShortcut("f", modifiers: [.command])
             }
             if !model.transcriptSearchResults.isEmpty {
@@ -906,6 +943,14 @@ struct TranscriptSearchView: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    private func searchOrFocus() {
+        guard !model.transcriptSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            searchFocused = true
+            return
+        }
+        model.searchTranscripts()
     }
 }
 
@@ -1608,6 +1653,8 @@ final class LoginItemController: ObservableObject {
         switch status {
         case .enabled:
             return "enabled"
+        case .needsUpdate:
+            return "update needed"
         case .notInstalled:
             return "not registered"
         case .appBundleMissing:
@@ -1647,7 +1694,7 @@ final class LoginItemController: ObservableObject {
 
     private func unregisterIfNeeded() throws {
         switch status {
-        case .enabled:
+        case .enabled, .needsUpdate:
             try loginItem.uninstall()
         case .notInstalled, .appBundleMissing:
             return
@@ -1992,11 +2039,13 @@ final class WorkbenchViewModel: ObservableObject {
             return
         }
         bossWatchIsEnabled = enabled
+        state.bossWatchEnabled = enabled
         bossWatchLastError = nil
         if enabled {
             bossWatchBaselineState = state
             bossWatchChangeSummaries = []
             bossWatchLastPromptAt = nil
+            save()
             Task {
                 await runBossWatchTick(force: true)
             }
@@ -2005,6 +2054,7 @@ final class WorkbenchViewModel: ObservableObject {
             bossWatchChangeSummaries = []
             bossWatchLastRunAt = nil
             bossWatchLastPromptAt = nil
+            save()
         }
     }
 
@@ -2297,10 +2347,10 @@ final class WorkbenchViewModel: ObservableObject {
             applyBossActions(from: answer)
             bossWatchLastError = nil
         } catch {
-            bossCheckInAnswer = "Check-in failed: \(error)"
+            bossCheckInAnswer = "Check-in failed: \(error.localizedDescription)"
             bossAppliedActions = []
             if bossWatchIsEnabled {
-                bossWatchLastError = String(describing: error)
+                bossWatchLastError = error.localizedDescription
             }
         }
     }
@@ -2829,11 +2879,15 @@ final class WorkbenchViewModel: ObservableObject {
         do {
             let loaded = try store.load()
             state = startupRecoveryReconciler.reconcile(bootstrapper.bootstrappedState(from: loaded))
+            bossWatchIsEnabled = state.bossWatchEnabled
+            bossWatchBaselineState = bossWatchIsEnabled ? state : nil
             selectedEntryID = sessionEntries.first?.id
             try store.save(state)
         } catch {
             errorMessage = String(describing: error)
             state = bootstrapper.bootstrappedState(from: WorkspaceState())
+            bossWatchIsEnabled = state.bossWatchEnabled
+            bossWatchBaselineState = nil
             selectedEntryID = sessionEntries.first?.id
         }
     }
@@ -2906,7 +2960,11 @@ struct TerminalPane: NSViewRepresentable {
     var session: TerminalSessionController
 
     func makeNSView(context: Context) -> CapturingLocalProcessTerminalView {
-        session.terminal
+        let terminal = session.terminal
+        DispatchQueue.main.async {
+            terminal.window?.makeFirstResponder(terminal)
+        }
+        return terminal
     }
 
     func updateNSView(_ nsView: CapturingLocalProcessTerminalView, context: Context) {}
