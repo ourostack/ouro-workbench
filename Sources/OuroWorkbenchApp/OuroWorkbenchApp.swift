@@ -260,8 +260,44 @@ struct BossDashboardView: View {
                     }
                 }
             }
+            ActionLogView(entries: model.recentActionLogEntries)
         }
         .padding()
+    }
+}
+
+struct ActionLogView: View {
+    var entries: [WorkbenchActionLogEntry]
+
+    var body: some View {
+        if !entries.isEmpty {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Action Log")
+                    .font(.caption.weight(.semibold))
+                ForEach(entries.prefix(6)) { entry in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Image(systemName: entry.succeeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                            .foregroundStyle(entry.succeeded ? .green : .orange)
+                        Text(entry.occurredAt.formatted(date: .omitted, time: .standard))
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                        Text("\(entry.source) \(entry.action)")
+                            .font(.caption.weight(.semibold))
+                        if let targetName = entry.targetName {
+                            Text(targetName)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        Text(entry.result)
+                            .font(.caption)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -772,6 +808,10 @@ final class WorkbenchViewModel: ObservableObject {
         bossBridgePlanner.mcpServePlan(for: state.boss).displayCommand
     }
 
+    var recentActionLogEntries: [WorkbenchActionLogEntry] {
+        state.actionLog.sorted { $0.occurredAt > $1.occurredAt }
+    }
+
     var bossWorkbenchMCPStatusLine: String {
         guard let bossWorkbenchMCPRegistration else {
             return "unknown"
@@ -845,7 +885,15 @@ final class WorkbenchViewModel: ObservableObject {
     func installWorkbenchMCPForBoss() {
         do {
             bossWorkbenchMCPRegistration = try bossWorkbenchMCPRegistrar.install(for: state.boss)
-            bossAppliedActions = ["Registered Workbench MCP for \(state.boss.agentName)"] + bossAppliedActions
+            let result = "Registered Workbench MCP for \(state.boss.agentName)"
+            bossAppliedActions = [result] + bossAppliedActions
+            recordActionLog(
+                source: "native",
+                action: "registerWorkbenchMCP",
+                targetName: state.boss.agentName,
+                result: result,
+                succeeded: true
+            )
         } catch {
             errorMessage = "Workbench MCP registration failed: \(error.localizedDescription)"
             refreshWorkbenchMCPRegistration()
@@ -977,7 +1025,9 @@ final class WorkbenchViewModel: ObservableObject {
     func applyBossActions(from answer: String) {
         do {
             let actions = try bossActionParser.parse(answer)
-            bossAppliedActions = actions.map(applyBossAction)
+            bossAppliedActions = actions.map { action in
+                applyBossAction(action, source: "boss:\(state.boss.agentName)")
+            }
         } catch {
             bossAppliedActions = ["Failed to parse boss actions: \(error)"]
         }
@@ -997,7 +1047,7 @@ final class WorkbenchViewModel: ObservableObject {
                 return
             }
             let results = requests.map { request in
-                "External \(request.source): \(applyBossAction(request.action))"
+                "External \(request.source): \(applyBossAction(request.action, source: "external:\(request.source)"))"
             }
             bossAppliedActions = Array((results + bossAppliedActions).prefix(12))
         } catch {
@@ -1150,44 +1200,96 @@ final class WorkbenchViewModel: ObservableObject {
         }
     }
 
-    private func applyBossAction(_ action: BossWorkbenchAction) -> String {
+    private func applyBossAction(_ action: BossWorkbenchAction, source: String) -> String {
         guard let entry = processEntry(matching: action.entry) else {
-            return "Skipped \(action.action.rawValue): no unique process entry matches \(action.entry)"
+            return finishBossAction(
+                source: source,
+                action: action,
+                entry: nil,
+                result: "Skipped \(action.action.rawValue): no unique process entry matches \(action.entry)"
+            )
         }
         let authorization = bossActionAuthorizer.authorize(action, for: entry)
         guard authorization.isAllowed else {
-            return "Skipped \(action.action.rawValue) for \(entry.name): \(authorization.reason ?? "not authorized")"
+            return finishBossAction(
+                source: source,
+                action: action,
+                entry: entry,
+                result: "Skipped \(action.action.rawValue) for \(entry.name): \(authorization.reason ?? "not authorized")"
+            )
         }
 
         switch action.action {
         case .launch:
             guard activeSessions[entry.id] == nil else {
-                return "Skipped launch for \(entry.name): already running"
+                return finishBossAction(source: source, action: action, entry: entry, result: "Skipped launch for \(entry.name): already running")
             }
             launch(entry)
-            return "Launched \(entry.name)"
+            return finishBossAction(source: source, action: action, entry: entry, result: "Launched \(entry.name)")
         case .recover:
             guard canRecover(entry) else {
-                return "Skipped recover for \(entry.name): \(recoveryReason(for: entry))"
+                return finishBossAction(source: source, action: action, entry: entry, result: "Skipped recover for \(entry.name): \(recoveryReason(for: entry))")
             }
             recover(entry)
-            return "Recovered \(entry.name)"
+            return finishBossAction(source: source, action: action, entry: entry, result: "Recovered \(entry.name)")
         case .terminate:
             guard activeSessions[entry.id] != nil else {
-                return "Skipped terminate for \(entry.name): not running"
+                return finishBossAction(source: source, action: action, entry: entry, result: "Skipped terminate for \(entry.name): not running")
             }
             terminate(entry)
-            return "Stopped \(entry.name)"
+            return finishBossAction(source: source, action: action, entry: entry, result: "Stopped \(entry.name)")
         case .sendInput:
             guard activeSessions[entry.id] != nil else {
-                return "Skipped sendInput for \(entry.name): not running"
+                return finishBossAction(source: source, action: action, entry: entry, result: "Skipped sendInput for \(entry.name): not running")
             }
             guard let text = action.text, !text.isEmpty else {
-                return "Skipped sendInput for \(entry.name): missing text"
+                return finishBossAction(source: source, action: action, entry: entry, result: "Skipped sendInput for \(entry.name): missing text")
             }
             sendInput(text, to: entry, appendNewline: action.appendNewline)
-            return "Sent input to \(entry.name)"
+            return finishBossAction(source: source, action: action, entry: entry, result: "Sent input to \(entry.name)")
         }
+    }
+
+    private func finishBossAction(
+        source: String,
+        action: BossWorkbenchAction,
+        entry: ProcessEntry?,
+        result: String
+    ) -> String {
+        recordActionLog(
+            source: source,
+            action: action.action.rawValue,
+            targetEntryId: entry?.id,
+            targetName: entry?.name ?? action.entry,
+            result: result,
+            succeeded: !result.hasPrefix("Skipped") && !result.hasPrefix("Failed")
+        )
+        return result
+    }
+
+    private func recordActionLog(
+        source: String,
+        action: String,
+        targetEntryId: UUID? = nil,
+        targetName: String? = nil,
+        result: String,
+        succeeded: Bool
+    ) {
+        state.actionLog.insert(
+            WorkbenchActionLogEntry(
+                source: source,
+                action: action,
+                targetEntryId: targetEntryId,
+                targetName: targetName,
+                result: result,
+                succeeded: succeeded
+            ),
+            at: 0
+        )
+        if state.actionLog.count > 200 {
+            state.actionLog.removeLast(state.actionLog.count - 200)
+        }
+        save()
     }
 
     private func processEntry(matching value: String) -> ProcessEntry? {

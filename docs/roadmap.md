@@ -63,6 +63,7 @@ agent-aware terminal workbench rather than a launcher with terminal panes.
 - Keep native check-ins for human-facing status.
 - Keep action execution trust-gated and auditable.
 - Add an action log view with source, requested action, result, and timestamp.
+  Initial persisted log and dashboard view exist for boss/external actions.
 - Add boss watch mode for periodic status checks.
 - Add "what changed since last check-in" summaries.
 

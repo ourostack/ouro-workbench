@@ -41,7 +41,21 @@ final class WorkspaceSummaryTests: XCTestCase {
             autoResume: true
         )
         let run = ProcessRun(entryId: entry.id, status: .needsRecovery, transcriptPath: "/tmp/copilot.log")
-        let state = WorkspaceState(projects: [project], processEntries: [entry], processRuns: [run])
+        let actionLogEntry = WorkbenchActionLogEntry(
+            occurredAt: Date(timeIntervalSince1970: 1_779_552_000),
+            source: "external:smoke",
+            action: "recover",
+            targetEntryId: entry.id,
+            targetName: entry.name,
+            result: "Skipped recover for GitHub Copilot CLI: latest run status is running",
+            succeeded: false
+        )
+        let state = WorkspaceState(
+            projects: [project],
+            processEntries: [entry],
+            processRuns: [run],
+            actionLog: [actionLogEntry]
+        )
         let summary = WorkspaceSummarizer().summarize(state)
 
         let prompt = BossAgentPromptBuilder().checkInPrompt(
@@ -58,5 +72,8 @@ final class WorkspaceSummaryTests: XCTestCase {
         XCTAssertTrue(prompt.contains("action=respawn"))
         XCTAssertTrue(prompt.contains("```ouro-workbench-actions"))
         XCTAssertTrue(prompt.contains("\"action\":\"recover\""))
+        XCTAssertTrue(prompt.contains("Recent action log:"))
+        XCTAssertTrue(prompt.contains("source=external:smoke"))
+        XCTAssertTrue(prompt.contains("result=Skipped recover for GitHub Copilot CLI"))
     }
 }
