@@ -35,6 +35,15 @@ public struct RecoveryPlanner: Sendable {
     }
 
     public func planRecovery(for entry: ProcessEntry, latestRun: ProcessRun?) -> RecoveryPlan {
+        guard !entry.isArchived else {
+            return RecoveryPlan(
+                entryId: entry.id,
+                runId: latestRun?.id,
+                action: .noAction,
+                reason: "entry is archived"
+            )
+        }
+
         guard let latestRun else {
             return RecoveryPlan(
                 entryId: entry.id,

@@ -31,7 +31,10 @@ swift run OuroWorkbench
 ```
 
 Use `New Session` in the Sessions sidebar to add arbitrary terminal/TUI agents
-or local commands alongside the default shell and named P0 lanes.
+or local commands alongside the default shell and named P0 lanes. Custom
+sessions can be edited, duplicated, archived, restored, or deleted from the
+native session toolbar; archived sessions remain visible but cannot be launched,
+recovered, or controlled by the boss agent until restored.
 
 Package a local `.app` bundle:
 

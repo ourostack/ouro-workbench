@@ -17,6 +17,9 @@ public struct BossWorkbenchActionAuthorizer: Sendable {
     public init() {}
 
     public func authorize(_ action: BossWorkbenchAction, for entry: ProcessEntry) -> BossWorkbenchActionAuthorization {
+        guard !entry.isArchived else {
+            return .denied("entry is archived")
+        }
         guard entry.trust == .trusted else {
             return .denied("entry is untrusted")
         }

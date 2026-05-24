@@ -36,4 +36,22 @@ final class BossWorkbenchActionAuthorizerTests: XCTestCase {
         XCTAssertFalse(authorization.isAllowed)
         XCTAssertEqual(authorization.reason, "entry is untrusted")
     }
+
+    func testArchivedEntriesCannotReceiveBossActions() throws {
+        let entry = ProcessEntry(
+            projectId: UUID(),
+            name: "Archived",
+            kind: .terminalAgent,
+            executable: "/bin/zsh",
+            workingDirectory: "/repo",
+            trust: .trusted,
+            isArchived: true
+        )
+        let action = BossWorkbenchAction(action: .launch, entry: entry.id.uuidString)
+
+        let authorization = BossWorkbenchActionAuthorizer().authorize(action, for: entry)
+
+        XCTAssertFalse(authorization.isAllowed)
+        XCTAssertEqual(authorization.reason, "entry is archived")
+    }
 }

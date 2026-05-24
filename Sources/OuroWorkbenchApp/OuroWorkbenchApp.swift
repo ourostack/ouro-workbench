@@ -22,30 +22,7 @@ struct WorkbenchRootView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(selection: $model.selectedEntryID) {
-                Section("Boss") {
-                    Label(model.state.boss.agentName, systemImage: "person.crop.circle.badge.checkmark")
-                }
-                Section("Sessions") {
-                    ForEach(model.sessionEntries) { entry in
-                        TerminalAgentRow(
-                            entry: entry,
-                            isSelected: model.selectedEntryID == entry.id,
-                            health: model.executableHealth(for: entry)
-                        )
-                            .tag(entry.id)
-                    }
-                    Button {
-                        model.isNewSessionSheetPresented = true
-                    } label: {
-                        Label("New Session", systemImage: "plus")
-                    }
-                }
-                Section("Recovery") {
-                    Label(model.summary.oneLineStatus, systemImage: "arrow.clockwise.circle")
-                }
-            }
-            .navigationTitle("Ouro Workbench")
+            WorkbenchSidebarView(model: model)
         } detail: {
             VStack(alignment: .leading, spacing: 0) {
                 HeaderView(summary: model.summary)
@@ -75,9 +52,67 @@ struct WorkbenchRootView: View {
         .sheet(isPresented: $model.isNewSessionSheetPresented) {
             NewTerminalSessionSheet(model: model)
         }
+        .sheet(item: $model.editingSession) { entry in
+            EditTerminalSessionSheet(model: model, entry: entry)
+        }
+        .confirmationDialog("Delete Terminal Session?", isPresented: model.deleteConfirmationIsPresented) {
+            if let entry = model.pendingDeleteSession {
+                Button("Delete \(entry.name)", role: .destructive) {
+                    model.deleteCustomSession(entry)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            if let entry = model.pendingDeleteSession {
+                Text("This removes \(entry.name) from the workbench and clears its run records. Transcript files remain on disk.")
+            }
+        }
         .task {
             await model.runExternalActionPump()
         }
+    }
+}
+
+struct WorkbenchSidebarView: View {
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        List(selection: $model.selectedEntryID) {
+            Section("Boss") {
+                Label(model.state.boss.agentName, systemImage: "person.crop.circle.badge.checkmark")
+            }
+            Section("Sessions") {
+                ForEach(model.sessionEntries) { entry in
+                    TerminalAgentRow(
+                        entry: entry,
+                        isSelected: model.selectedEntryID == entry.id,
+                        health: model.executableHealth(for: entry)
+                    )
+                        .tag(entry.id)
+                }
+                Button {
+                    model.isNewSessionSheetPresented = true
+                } label: {
+                    Label("New Session", systemImage: "plus")
+                }
+            }
+            if !model.archivedSessionEntries.isEmpty {
+                Section("Archived") {
+                    ForEach(model.archivedSessionEntries) { entry in
+                        TerminalAgentRow(
+                            entry: entry,
+                            isSelected: model.selectedEntryID == entry.id,
+                            health: model.executableHealth(for: entry)
+                        )
+                            .tag(entry.id)
+                    }
+                }
+            }
+            Section("Recovery") {
+                Label(model.summary.oneLineStatus, systemImage: "arrow.clockwise.circle")
+            }
+        }
+        .navigationTitle("Ouro Workbench")
     }
 }
 
@@ -88,7 +123,7 @@ struct TerminalAgentRow: View {
 
     var body: some View {
         HStack {
-            Label(entry.name, systemImage: entry.kind == .shell ? "apple.terminal" : "terminal")
+            Label(entry.name, systemImage: rowIcon)
             Spacer()
             if let health, health.status != .available {
                 Image(systemName: "exclamationmark.triangle.fill")
@@ -98,6 +133,13 @@ struct TerminalAgentRow: View {
             StatusDot(attention: entry.attention)
         }
         .fontWeight(isSelected ? .semibold : .regular)
+    }
+
+    private var rowIcon: String {
+        if entry.isArchived {
+            return "archivebox"
+        }
+        return entry.kind == .shell ? "apple.terminal" : "terminal"
     }
 }
 
@@ -379,14 +421,25 @@ struct SessionDetailView: View {
                         .truncationMode(.middle)
                 }
                 Spacer()
-                Button {
-                    model.launch(entry)
-                } label: {
-                    Label(model.activeSession(for: entry) == nil ? "Launch" : "Restart", systemImage: "play.fill")
+                if entry.isArchived {
+                    Label("Archived", systemImage: "archivebox")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                } else {
+                    Button {
+                        model.launch(entry)
+                    } label: {
+                        Label(model.activeSession(for: entry) == nil ? "Launch" : "Restart", systemImage: "play.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
-                .buttonStyle(.borderedProminent)
             }
             .padding()
+            if model.isCustomSession(entry) {
+                CustomSessionManagementBar(entry: entry, model: model)
+                    .padding(.horizontal)
+                    .padding(.bottom, 12)
+            }
             Divider()
             if let session = model.activeSession(for: entry) {
                 SessionControlBar(entry: entry, model: model)
@@ -414,12 +467,12 @@ struct SessionStatusBar: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(entry.lastSummary ?? "Configured")
+            Text(entry.isArchived ? "Archived" : (entry.lastSummary ?? "Configured"))
                 .font(.body)
-            Text("Recovery: \(model.recoveryReason(for: entry))")
+            Text(entry.isArchived ? "Restore this session before launching it." : "Recovery: \(model.recoveryReason(for: entry))")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            if let health = model.executableHealth(for: entry) {
+            if !entry.isArchived, let health = model.executableHealth(for: entry) {
                 Text("Executable: \(health.detail)")
                     .font(.caption)
                     .foregroundStyle(health.status == .available ? SwiftUI.Color.secondary : SwiftUI.Color.orange)
@@ -427,7 +480,14 @@ struct SessionStatusBar: View {
                     .truncationMode(.middle)
             }
             Spacer()
-            if model.canRecover(entry) {
+            if entry.isArchived {
+                Button {
+                    model.restoreCustomSession(entry)
+                } label: {
+                    Label("Restore", systemImage: "tray.and.arrow.up")
+                }
+                .buttonStyle(.bordered)
+            } else if model.canRecover(entry) {
                 Button {
                     model.recover(entry)
                 } label: {
@@ -436,6 +496,60 @@ struct SessionStatusBar: View {
                 .buttonStyle(.bordered)
             }
         }
+    }
+}
+
+struct CustomSessionManagementBar: View {
+    var entry: ProcessEntry
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Button {
+                model.beginEditingSession(entry)
+            } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+            .disabled(isRunning)
+            .help(isRunning ? "Stop this session before editing it" : "Edit saved session settings")
+
+            Button {
+                model.duplicateCustomSession(entry)
+            } label: {
+                Label("Duplicate", systemImage: "plus.square.on.square")
+            }
+
+            if entry.isArchived {
+                Button {
+                    model.restoreCustomSession(entry)
+                } label: {
+                    Label("Restore", systemImage: "tray.and.arrow.up")
+                }
+            } else {
+                Button {
+                    model.archiveCustomSession(entry)
+                } label: {
+                    Label("Archive", systemImage: "archivebox")
+                }
+                .disabled(isRunning)
+                .help(isRunning ? "Stop this session before archiving it" : "Archive this session")
+            }
+
+            Button(role: .destructive) {
+                model.requestDeleteCustomSession(entry)
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+            .disabled(isRunning)
+            .help(isRunning ? "Stop this session before deleting it" : "Delete this saved session")
+
+            Spacer()
+        }
+        .controlSize(.small)
+    }
+
+    private var isRunning: Bool {
+        model.activeSession(for: entry) != nil
     }
 }
 
@@ -448,23 +562,32 @@ struct InactiveTerminalSurface: View {
             HStack {
                 Text("$ \(model.launchCommand(for: entry))")
                     .font(.system(size: 13, design: .monospaced))
-                    .foregroundStyle(.green)
+                    .foregroundStyle(entry.isArchived ? SwiftUI.Color.secondary : SwiftUI.Color.green)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer()
-                Button {
-                    if model.canRecover(entry) {
-                        model.recover(entry)
-                    } else {
-                        model.launch(entry)
+                if entry.isArchived {
+                    Button {
+                        model.restoreCustomSession(entry)
+                    } label: {
+                        Label("Restore", systemImage: "tray.and.arrow.up")
                     }
-                } label: {
-                    Label(model.canRecover(entry) ? model.recoveryButtonTitle(for: entry) : "Launch", systemImage: "play.fill")
+                    .buttonStyle(.bordered)
+                } else {
+                    Button {
+                        if model.canRecover(entry) {
+                            model.recover(entry)
+                        } else {
+                            model.launch(entry)
+                        }
+                    } label: {
+                        Label(model.canRecover(entry) ? model.recoveryButtonTitle(for: entry) : "Launch", systemImage: "play.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
-                .buttonStyle(.borderedProminent)
             }
             Spacer()
-            Text("ready")
+            Text(entry.isArchived ? "archived" : "ready")
                 .font(.system(size: 13, design: .monospaced))
                 .foregroundStyle(.secondary)
         }
@@ -636,6 +759,103 @@ struct NewTerminalSessionSheet: View {
     }
 }
 
+struct EditTerminalSessionSheet: View {
+    @ObservedObject var model: WorkbenchViewModel
+    let entry: ProcessEntry
+    @Environment(\.dismiss) private var dismiss
+    @State private var name: String
+    @State private var command: String
+    @State private var workingDirectory: String
+    @State private var trusted: Bool
+    @State private var autoResume: Bool
+
+    init(model: WorkbenchViewModel, entry: ProcessEntry) {
+        self.model = model
+        self.entry = entry
+        let draft = model.customSessionDraft(for: entry) ?? CustomTerminalSessionDraft(
+            name: entry.name,
+            command: "",
+            workingDirectory: entry.workingDirectory,
+            trust: entry.trust,
+            autoResume: entry.autoResume
+        )
+        _name = State(initialValue: draft.name)
+        _command = State(initialValue: draft.command)
+        _workingDirectory = State(initialValue: draft.workingDirectory)
+        _trusted = State(initialValue: draft.trust == .trusted)
+        _autoResume = State(initialValue: draft.autoResume)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Edit Terminal Session")
+                .font(.title3.weight(.semibold))
+            Form {
+                TextField("Name", text: $name)
+                TextField("Command", text: $command)
+                    .font(.body.monospaced())
+                HStack {
+                    TextField("Working Directory", text: $workingDirectory)
+                        .font(.body.monospaced())
+                    Button {
+                        chooseWorkingDirectory()
+                    } label: {
+                        Label("Choose", systemImage: "folder")
+                    }
+                }
+                Toggle("Trusted", isOn: $trusted)
+                Toggle("Auto Resume", isOn: $autoResume)
+            }
+            HStack {
+                Spacer()
+                Button("Cancel") {
+                    dismiss()
+                }
+                Button {
+                    save()
+                } label: {
+                    Label("Save", systemImage: "checkmark")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!canSave)
+            }
+        }
+        .padding()
+        .frame(width: 560)
+    }
+
+    private var canSave: Bool {
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !workingDirectory.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func save() {
+        let draft = CustomTerminalSessionDraft(
+            name: name,
+            command: command,
+            workingDirectory: workingDirectory,
+            trust: trusted ? .trusted : .untrusted,
+            autoResume: autoResume
+        )
+        guard model.updateCustomSession(entry, draft: draft) else {
+            return
+        }
+        dismiss()
+    }
+
+    private func chooseWorkingDirectory() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = URL(fileURLWithPath: workingDirectory, isDirectory: true)
+        if panel.runModal() == .OK, let url = panel.url {
+            workingDirectory = url.path
+        }
+    }
+}
+
 struct MachineRuntimeView: View {
     @StateObject private var loginItem = LoginItemController()
 
@@ -753,6 +973,8 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var bossAppliedActions: [String] = []
     @Published var mailboxError: String?
     @Published var isNewSessionSheetPresented = false
+    @Published var editingSession: ProcessEntry?
+    @Published var pendingDeleteSession: ProcessEntry?
     @Published var bossWorkbenchMCPRegistration: BossWorkbenchMCPRegistrationSnapshot?
     @Published var executableHealthByEntryID: [UUID: ExecutableHealth] = [:]
 
@@ -772,6 +994,7 @@ final class WorkbenchViewModel: ObservableObject {
     private let bossActionAuthorizer = BossWorkbenchActionAuthorizer()
     private let terminationPolicy = ProcessTerminationPolicy()
     private let customSessionFactory = CustomTerminalSessionFactory()
+    private let customSessionManager = CustomTerminalSessionManager()
     private let transcriptTailReader = TranscriptTailReader()
     private let externalActionQueue: WorkbenchActionRequestQueue
     private var manuallyTerminatedRunIDs = Set<UUID>()
@@ -809,7 +1032,26 @@ final class WorkbenchViewModel: ObservableObject {
         )
     }
 
+    var deleteConfirmationIsPresented: Binding<Bool> {
+        Binding(
+            get: { self.pendingDeleteSession != nil },
+            set: { newValue in
+                if !newValue {
+                    self.pendingDeleteSession = nil
+                }
+            }
+        )
+    }
+
     var sessionEntries: [ProcessEntry] {
+        allSessionEntries.filter { !$0.isArchived }
+    }
+
+    var archivedSessionEntries: [ProcessEntry] {
+        allSessionEntries.filter(\.isArchived)
+    }
+
+    private var allSessionEntries: [ProcessEntry] {
         state.processEntries.filter { $0.kind == .terminalAgent || $0.kind == .shell }
     }
 
@@ -912,7 +1154,7 @@ final class WorkbenchViewModel: ObservableObject {
 
     func refreshExecutableHealth() {
         executableHealthByEntryID = Dictionary(
-            uniqueKeysWithValues: sessionEntries.map { entry in
+            uniqueKeysWithValues: allSessionEntries.map { entry in
                 (entry.id, executableHealthChecker.health(for: entry.executable))
             }
         )
@@ -953,6 +1195,9 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     func canRecover(_ entry: ProcessEntry) -> Bool {
+        guard !entry.isArchived else {
+            return false
+        }
         guard let plan = recoveryPlan(for: entry) else {
             return false
         }
@@ -1129,6 +1374,10 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     func recover(_ entry: ProcessEntry) {
+        guard !entry.isArchived else {
+            errorMessage = "\(entry.name) is archived. Restore it before recovery."
+            return
+        }
         guard let plan = recoveryPlan(for: entry) else {
             errorMessage = "No recovery plan is available for \(entry.name)"
             return
@@ -1137,6 +1386,10 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     func launch(_ entry: ProcessEntry) {
+        guard !entry.isArchived else {
+            errorMessage = "\(entry.name) is archived. Restore it before launching."
+            return
+        }
         do {
             let plan = try WorkbenchCommandPlanner(paths: paths).launchPlan(for: entry)
             start(entry, with: plan)
@@ -1207,6 +1460,7 @@ final class WorkbenchViewModel: ObservableObject {
             state.processEntries.append(entry)
             selectedEntryID = entry.id
             save()
+            refreshExecutableHealth()
             if launchAfterCreate {
                 launch(entry)
             }
@@ -1215,6 +1469,156 @@ final class WorkbenchViewModel: ObservableObject {
             errorMessage = error.localizedDescription
             return nil
         }
+    }
+
+    func isCustomSession(_ entry: ProcessEntry) -> Bool {
+        customSessionManager.isCustomSession(entry)
+    }
+
+    func customSessionDraft(for entry: ProcessEntry) -> CustomTerminalSessionDraft? {
+        try? customSessionManager.draft(from: entry)
+    }
+
+    func beginEditingSession(_ entry: ProcessEntry) {
+        guard customSessionManager.isCustomSession(entry) else {
+            errorMessage = "\(entry.name) is not a custom session"
+            return
+        }
+        guard activeSessions[entry.id] == nil else {
+            errorMessage = "Stop \(entry.name) before editing it"
+            return
+        }
+        editingSession = entry
+    }
+
+    @discardableResult
+    func updateCustomSession(_ entry: ProcessEntry, draft: CustomTerminalSessionDraft) -> Bool {
+        guard activeSessions[entry.id] == nil else {
+            errorMessage = "Stop \(entry.name) before editing it"
+            return false
+        }
+        do {
+            let updated = try customSessionManager.updatedEntry(entry, draft: draft)
+            replaceEntry(updated)
+            selectedEntryID = updated.id
+            recordActionLog(
+                source: "native",
+                action: "editSession",
+                targetEntryId: updated.id,
+                targetName: updated.name,
+                result: "Edited \(updated.name)",
+                succeeded: true
+            )
+            refreshExecutableHealth()
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    @discardableResult
+    func duplicateCustomSession(_ entry: ProcessEntry) -> ProcessEntry? {
+        do {
+            let duplicate = try customSessionManager.duplicateEntry(
+                entry,
+                name: uniqueCopyName(for: entry.name)
+            )
+            state.processEntries.append(duplicate)
+            selectedEntryID = duplicate.id
+            recordActionLog(
+                source: "native",
+                action: "duplicateSession",
+                targetEntryId: duplicate.id,
+                targetName: duplicate.name,
+                result: "Duplicated \(entry.name) as \(duplicate.name)",
+                succeeded: true
+            )
+            refreshExecutableHealth()
+            return duplicate
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func archiveCustomSession(_ entry: ProcessEntry) {
+        guard activeSessions[entry.id] == nil else {
+            errorMessage = "Stop \(entry.name) before archiving it"
+            return
+        }
+        do {
+            let archived = try customSessionManager.archivedEntry(entry)
+            replaceEntry(archived)
+            selectedEntryID = archived.id
+            recordActionLog(
+                source: "native",
+                action: "archiveSession",
+                targetEntryId: archived.id,
+                targetName: archived.name,
+                result: "Archived \(archived.name)",
+                succeeded: true
+            )
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func restoreCustomSession(_ entry: ProcessEntry) {
+        do {
+            let restored = try customSessionManager.restoredEntry(entry)
+            replaceEntry(restored)
+            selectedEntryID = restored.id
+            recordActionLog(
+                source: "native",
+                action: "restoreSession",
+                targetEntryId: restored.id,
+                targetName: restored.name,
+                result: "Restored \(restored.name)",
+                succeeded: true
+            )
+            refreshExecutableHealth()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func requestDeleteCustomSession(_ entry: ProcessEntry) {
+        guard activeSessions[entry.id] == nil else {
+            errorMessage = "Stop \(entry.name) before deleting it"
+            return
+        }
+        guard customSessionManager.isCustomSession(entry) else {
+            errorMessage = "\(entry.name) is not a custom session"
+            return
+        }
+        pendingDeleteSession = entry
+    }
+
+    func deleteCustomSession(_ entry: ProcessEntry) {
+        guard activeSessions[entry.id] == nil else {
+            errorMessage = "Stop \(entry.name) before deleting it"
+            return
+        }
+        guard customSessionManager.isCustomSession(entry) else {
+            errorMessage = "\(entry.name) is not a custom session"
+            return
+        }
+        state.processEntries.removeAll { $0.id == entry.id }
+        state.processRuns.removeAll { $0.entryId == entry.id }
+        pendingDeleteSession = nil
+        if selectedEntryID == entry.id {
+            selectedEntryID = sessionEntries.first?.id ?? archivedSessionEntries.first?.id
+        }
+        recordActionLog(
+            source: "native",
+            action: "deleteSession",
+            targetEntryId: entry.id,
+            targetName: entry.name,
+            result: "Deleted \(entry.name)",
+            succeeded: true
+        )
+        refreshExecutableHealth()
     }
 
     private func recover(_ entry: ProcessEntry, recoveryPlan: RecoveryPlan) {
@@ -1439,6 +1843,26 @@ final class WorkbenchViewModel: ObservableObject {
             return
         }
         mutate(&state.processEntries[index])
+    }
+
+    private func replaceEntry(_ entry: ProcessEntry) {
+        guard let index = state.processEntries.firstIndex(where: { $0.id == entry.id }) else {
+            return
+        }
+        state.processEntries[index] = entry
+    }
+
+    private func uniqueCopyName(for name: String) -> String {
+        let baseName = "Copy of \(name)"
+        let existingNames = Set(state.processEntries.map(\.name))
+        guard existingNames.contains(baseName) else {
+            return baseName
+        }
+        var index = 2
+        while existingNames.contains("\(baseName) \(index)") {
+            index += 1
+        }
+        return "\(baseName) \(index)"
     }
 
     private func save() {
