@@ -30,8 +30,8 @@ Run the native prototype:
 swift run OuroWorkbench
 ```
 
-Use `New Session` in the Terminal Agents sidebar to add arbitrary terminal/TUI
-agents or local commands alongside the named P0 lanes.
+Use `New Session` in the Sessions sidebar to add arbitrary terminal/TUI agents
+or local commands alongside the default shell and named P0 lanes.
 
 Package a local `.app` bundle:
 
