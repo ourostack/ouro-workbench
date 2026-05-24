@@ -25,9 +25,7 @@ struct WorkbenchRootView: View {
             WorkbenchSidebarView(model: model)
         } detail: {
             VStack(alignment: .leading, spacing: 0) {
-                HeaderView(summary: model.summary) {
-                    model.isCommandPalettePresented = true
-                }
+                HeaderView(model: model)
                 Divider()
                 BossDashboardView(model: model)
                 Divider()
@@ -37,6 +35,7 @@ struct WorkbenchRootView: View {
                     ContentUnavailableView("No session selected", systemImage: "terminal")
                 }
             }
+            .padding(.top, 28)
         }
         .alert("Workbench Error", isPresented: model.errorIsPresented) {
             Button("OK", role: .cancel) {
@@ -86,9 +85,6 @@ struct WorkbenchSidebarView: View {
 
     var body: some View {
         List(selection: $model.selectedEntryID) {
-            Section("Boss") {
-                Label(model.state.boss.agentName, systemImage: "person.crop.circle.badge.checkmark")
-            }
             Section("Sessions") {
                 ForEach(model.sessionEntries) { entry in
                     TerminalAgentRow(
@@ -121,7 +117,7 @@ struct WorkbenchSidebarView: View {
                 Label(model.summary.oneLineStatus, systemImage: "arrow.clockwise.circle")
             }
         }
-        .navigationTitle("Ouro Workbench")
+        .padding(.top, 28)
     }
 }
 
@@ -179,32 +175,78 @@ struct StatusDot: View {
 }
 
 struct HeaderView: View {
-    var summary: WorkspaceSummary
-    var openCommandPalette: () -> Void
+    @ObservedObject var model: WorkbenchViewModel
 
     var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Ouro Workbench")
-                    .font(.headline)
-                Text("Boss: \(summary.boss.agentName) | \(summary.oneLineStatus)")
-                    .font(.subheadline)
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                if model.bossAgentChoices.count > 1 {
+                    Picker("Boss", selection: Binding(
+                        get: { model.state.boss.agentName },
+                        set: { model.selectBoss(agentName: $0) }
+                    )) {
+                        ForEach(model.bossAgentChoices, id: \.self) { agentName in
+                            Text(agentName).tag(agentName)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .frame(maxWidth: 180, alignment: .leading)
+                } else {
+                    Text("Boss: \(model.state.boss.agentName)")
+                        .font(.headline)
+                        .lineLimit(1)
+                }
+                Text(model.summary.oneLineStatus)
+                    .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
-            Spacer()
+            .layoutPriority(1)
+            Spacer(minLength: 12)
             Text("TTFA")
                 .font(.caption.monospaced().weight(.semibold))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
                 .background(.green.opacity(0.16), in: Capsule())
             Button {
-                openCommandPalette()
+                model.isCommandPalettePresented = true
             } label: {
                 Label("Commands", systemImage: "command")
             }
             .keyboardShortcut("k", modifiers: [.command])
+            Toggle(isOn: Binding(
+                get: { model.bossWatchIsEnabled },
+                set: { model.setBossWatchEnabled($0) }
+            )) {
+                Label("Watch", systemImage: "eye")
+            }
+            .toggleStyle(.switch)
+            .disabled(model.bossCheckInIsRunning)
+            .help(model.bossCheckInIsRunning ? "Check-in already running" : "Toggle boss watch mode")
+            Button {
+                Task {
+                    model.refreshExecutableHealth()
+                    await model.refreshBossDashboard()
+                }
+            } label: {
+                Label("Refresh", systemImage: "arrow.clockwise")
+            }
+            Button {
+                Task {
+                    await model.runBossCheckIn()
+                }
+            } label: {
+                Label("Check In", systemImage: "bubble.left.and.text.bubble.right")
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(model.bossCheckInIsRunning)
+            .keyboardShortcut("i", modifiers: [.command])
         }
-        .padding()
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(minHeight: 68)
     }
 }
 
@@ -276,55 +318,6 @@ struct BossDashboardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    if model.bossAgentChoices.count > 1 {
-                        Picker("Boss", selection: Binding(
-                            get: { model.state.boss.agentName },
-                            set: { model.selectBoss(agentName: $0) }
-                        )) {
-                            ForEach(model.bossAgentChoices, id: \.self) { agentName in
-                                Text(agentName).tag(agentName)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                    } else {
-                        Text("Boss: \(model.state.boss.agentName)")
-                            .font(.headline)
-                    }
-                    Text(model.bossDashboard?.oneLineStatus ?? model.mailboxStatusLine)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Toggle(isOn: Binding(
-                    get: { model.bossWatchIsEnabled },
-                    set: { model.setBossWatchEnabled($0) }
-                )) {
-                    Label("Watch", systemImage: "eye")
-                }
-                .toggleStyle(.switch)
-                .disabled(model.bossCheckInIsRunning)
-                .help(model.bossCheckInIsRunning ? "Check-in already running" : "Toggle boss watch mode")
-                Button {
-                    Task {
-                        model.refreshExecutableHealth()
-                        await model.refreshBossDashboard()
-                    }
-                } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
-                }
-                Button {
-                    Task {
-                        await model.runBossCheckIn()
-                    }
-                } label: {
-                    Label("Check In", systemImage: "bubble.left.and.text.bubble.right")
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(model.bossCheckInIsRunning)
-                .keyboardShortcut("i", modifiers: [.command])
-            }
             if model.bossCheckInIsRunning {
                 ProgressView()
                     .controlSize(.small)
