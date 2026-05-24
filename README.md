@@ -61,6 +61,12 @@ The installed bundle also includes an Ouro-facing MCP server:
 Use the native `Workbench MCP` row in the boss dashboard to register that server
 with the selected Ouro boss agent.
 
+The boss dashboard also includes `Watch` mode. When enabled, Workbench keeps a
+rolling baseline of workspace state, summarizes changes such as run transitions,
+attention changes, archive/restore operations, and applied actions, then asks
+the selected boss agent to keep trusted work moving when there is something new
+or recoverable to handle.
+
 ## Architecture
 
 See [docs/architecture.md](docs/architecture.md) and

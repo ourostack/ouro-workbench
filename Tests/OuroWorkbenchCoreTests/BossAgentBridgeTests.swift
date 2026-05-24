@@ -33,6 +33,14 @@ final class BossAgentBridgeTests: XCTestCase {
         XCTAssertTrue(question.contains("active terminal agents"))
     }
 
+    func testWatchQuestionTargetsChangesAndAutonomy() {
+        let question = BossAgentBridgePlanner().watchQuestion()
+
+        XCTAssertTrue(question.contains("workspace changes"))
+        XCTAssertTrue(question.contains("waiting on Ari"))
+        XCTAssertTrue(question.contains("keep trusted terminal agents moving"))
+    }
+
     func testWorkbenchMCPRegistrationInstallsServerIntoBossAgentConfig() throws {
         let agentConfigURL = try writeAgentConfig(
             agentName: "slugger",

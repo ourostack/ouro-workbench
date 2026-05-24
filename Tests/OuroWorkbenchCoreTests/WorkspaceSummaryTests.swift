@@ -86,4 +86,96 @@ final class WorkspaceSummaryTests: XCTestCase {
         XCTAssertTrue(prompt.contains("source=external:smoke"))
         XCTAssertTrue(prompt.contains("result=Skipped recover for GitHub Copilot CLI"))
     }
+
+    func testChangeSummarizerCapturesRunStatusAttentionArchiveAndActions() {
+        let project = WorkbenchProject(name: "Project", rootPath: "/tmp/project")
+        var previousEntry = ProcessEntry(
+            projectId: project.id,
+            name: "Codex",
+            kind: .terminalAgent,
+            agentKind: .openAICodex,
+            executable: "codex",
+            workingDirectory: "/tmp/project",
+            trust: .trusted,
+            autoResume: true,
+            attention: .active
+        )
+        let run = ProcessRun(
+            entryId: previousEntry.id,
+            status: .running,
+            startedAt: Date(timeIntervalSince1970: 1_000)
+        )
+        let previous = WorkspaceState(
+            projects: [project],
+            processEntries: [previousEntry],
+            processRuns: [run]
+        )
+        previousEntry.attention = .waitingOnHuman
+        previousEntry.isArchived = true
+        let exitedRun = ProcessRun(
+            id: run.id,
+            entryId: previousEntry.id,
+            status: .exited,
+            startedAt: run.startedAt
+        )
+        let action = WorkbenchActionLogEntry(
+            id: UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!,
+            occurredAt: Date(timeIntervalSince1970: 2_000),
+            source: "boss:slugger",
+            action: "sendInput",
+            targetEntryId: previousEntry.id,
+            targetName: previousEntry.name,
+            result: "Sent input to Codex",
+            succeeded: true
+        )
+        let current = WorkspaceState(
+            projects: [project],
+            processEntries: [previousEntry],
+            processRuns: [exitedRun],
+            actionLog: [action]
+        )
+
+        let changes = WorkspaceChangeSummarizer().summarize(
+            previous: previous,
+            current: current,
+            occurredAt: Date(timeIntervalSince1970: 3_000)
+        )
+
+        XCTAssertTrue(changes.contains { $0.title == "Session archived" && $0.detail.contains("Codex") })
+        XCTAssertTrue(changes.contains { $0.title == "Attention changed" && $0.detail.contains("waitingOnHuman") })
+        XCTAssertTrue(changes.contains { $0.title == "Run status changed" && $0.detail.contains("running to exited") })
+        XCTAssertTrue(changes.contains { $0.title == "Action applied" && $0.detail.contains("Sent input to Codex") })
+    }
+
+    func testBossPromptIncludesRecentWorkspaceChanges() {
+        let project = WorkbenchProject(name: "Project", rootPath: "/tmp/project")
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "Codex",
+            kind: .terminalAgent,
+            agentKind: .openAICodex,
+            executable: "codex",
+            workingDirectory: "/tmp/project",
+            trust: .trusted
+        )
+        let state = WorkspaceState(projects: [project], processEntries: [entry])
+        let summary = WorkspaceSummarizer().summarize(state)
+
+        let prompt = BossAgentPromptBuilder().checkInPrompt(
+            question: "watch",
+            state: state,
+            summary: summary,
+            recentChanges: [
+                WorkspaceChangeSummary(
+                    occurredAt: Date(timeIntervalSince1970: 1_779_552_000),
+                    entryId: entry.id,
+                    title: "Attention changed",
+                    detail: "Codex attention changed from active to waitingOnHuman"
+                )
+            ]
+        )
+
+        XCTAssertTrue(prompt.contains("Recent workspace changes:"))
+        XCTAssertTrue(prompt.contains("Attention changed - Codex attention changed"))
+    }
 }
