@@ -24,6 +24,7 @@ public struct BossAgentPromptBuilder: Sendable {
         lines.append("```")
         lines.append("")
         lines.append("Workspace status: \(summary.oneLineStatus)")
+        lines.append("Boss Watch: \(state.bossWatchEnabled ? "enabled" : "paused")")
         if let dashboard {
             if !dashboard.availability.issues.isEmpty {
                 lines.append("Mailbox warnings: \(dashboard.availability.issues.joined(separator: "; "))")

@@ -2,6 +2,7 @@ import Foundation
 
 public enum LaunchAgentLoginItemStatus: String, Equatable {
     case enabled
+    case needsUpdate
     case notInstalled
     case appBundleMissing
 }
@@ -65,7 +66,13 @@ public struct LaunchAgentLoginItem {
         guard fileManager.fileExists(atPath: appURL.path) else {
             return .appBundleMissing
         }
-        return fileManager.fileExists(atPath: plistURL.path) ? .enabled : .notInstalled
+        guard fileManager.fileExists(atPath: plistURL.path) else {
+            return .notInstalled
+        }
+        guard plistMatchesCurrentApp() else {
+            return .needsUpdate
+        }
+        return .enabled
     }
 
     public func install() throws {
@@ -103,5 +110,16 @@ public struct LaunchAgentLoginItem {
             return
         }
         try fileManager.removeItem(at: plistURL)
+    }
+
+    private func plistMatchesCurrentApp() -> Bool {
+        guard
+            let data = try? Data(contentsOf: plistURL),
+            let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any],
+            let programArguments = plist["ProgramArguments"] as? [String]
+        else {
+            return false
+        }
+        return programArguments == ["/usr/bin/open", appURL.path]
     }
 }

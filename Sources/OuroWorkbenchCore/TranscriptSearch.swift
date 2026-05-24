@@ -112,6 +112,19 @@ public struct TranscriptSearcher {
                 matches: &matches,
                 maxMatches: maxMatches
             )
+            if matches.count < maxMatches, buffer.count > TranscriptSearchLimit.maximumBufferedLineBytes {
+                lineNumber += 1
+                appendMatchIfNeeded(
+                    data: buffer,
+                    query: query,
+                    entry: entry,
+                    run: run,
+                    path: path,
+                    lineNumber: lineNumber,
+                    matches: &matches
+                )
+                buffer.removeAll(keepingCapacity: true)
+            }
         }
 
         if matches.count < maxMatches, !buffer.isEmpty {
@@ -177,14 +190,36 @@ public struct TranscriptSearcher {
             runId: run.id,
             transcriptPath: path,
             lineNumber: lineNumber,
-            line: line
+            line: clippedLine(line, query: query)
         ))
+    }
+
+    private func clippedLine(_ line: String, query: String) -> String {
+        guard line.count > TranscriptSearchLimit.maximumLineCharacters else {
+            return line
+        }
+        guard let range = line.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) else {
+            return "\(line.prefix(TranscriptSearchLimit.maximumLineCharacters))..."
+        }
+
+        let beforeBudget = TranscriptSearchLimit.maximumLineCharacters / 2
+        let availableBefore = line.distance(from: line.startIndex, to: range.lowerBound)
+        let lower = line.index(range.lowerBound, offsetBy: -min(beforeBudget, availableBefore))
+        let usedThroughMatch = line.distance(from: lower, to: range.upperBound)
+        let afterBudget = max(TranscriptSearchLimit.maximumLineCharacters - usedThroughMatch, 0)
+        let availableAfter = line.distance(from: range.upperBound, to: line.endIndex)
+        let upper = line.index(range.upperBound, offsetBy: min(afterBudget, availableAfter))
+        let prefix = lower == line.startIndex ? "" : "..."
+        let suffix = upper == line.endIndex ? "" : "..."
+        return "\(prefix)\(line[lower..<upper])\(suffix)"
     }
 }
 
 public enum TranscriptSearchLimit {
     public static let defaultMatches = 50
     public static let maximumMatches = 200
+    public static let maximumBufferedLineBytes = 1_048_576
+    public static let maximumLineCharacters = 500
 
     public static func clamped(_ requested: UInt64?) -> UInt64 {
         guard let requested else {

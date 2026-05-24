@@ -224,6 +224,7 @@ public struct WorkbenchActionLogEntry: Codable, Equatable, Identifiable, Sendabl
 public struct WorkspaceState: Codable, Equatable, Sendable {
     public var schemaVersion: Int
     public var boss: BossAgentSelection
+    public var bossWatchEnabled: Bool
     public var projects: [WorkbenchProject]
     public var processEntries: [ProcessEntry]
     public var processRuns: [ProcessRun]
@@ -233,6 +234,7 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case schemaVersion
         case boss
+        case bossWatchEnabled
         case projects
         case processEntries
         case processRuns
@@ -243,6 +245,7 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
     public init(
         schemaVersion: Int = 1,
         boss: BossAgentSelection = BossAgentSelection(),
+        bossWatchEnabled: Bool = false,
         projects: [WorkbenchProject] = [],
         processEntries: [ProcessEntry] = [],
         processRuns: [ProcessRun] = [],
@@ -251,6 +254,7 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
     ) {
         self.schemaVersion = schemaVersion
         self.boss = boss
+        self.bossWatchEnabled = bossWatchEnabled
         self.projects = projects
         self.processEntries = processEntries
         self.processRuns = processRuns
@@ -262,6 +266,7 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
         self.boss = try container.decode(BossAgentSelection.self, forKey: .boss)
+        self.bossWatchEnabled = try container.decodeIfPresent(Bool.self, forKey: .bossWatchEnabled) ?? false
         self.projects = try container.decode([WorkbenchProject].self, forKey: .projects)
         self.processEntries = try container.decode([ProcessEntry].self, forKey: .processEntries)
         self.processRuns = try container.decode([ProcessRun].self, forKey: .processRuns)

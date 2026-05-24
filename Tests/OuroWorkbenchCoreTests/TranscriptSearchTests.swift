@@ -123,6 +123,30 @@ final class TranscriptSearchTests: XCTestCase {
         XCTAssertEqual(matches.map(\.line), ["ouro@host"])
     }
 
+    func testSearchClipsVeryLongNoNewlineMatches() throws {
+        let project = WorkbenchProject(name: "Project", rootPath: "/repo")
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "TUI",
+            kind: .terminalAgent,
+            executable: "/bin/zsh",
+            workingDirectory: "/repo"
+        )
+        let longPrefix = String(repeating: "x", count: TranscriptSearchLimit.maximumBufferedLineBytes + 1)
+        let transcriptPath = try writeTranscript(
+            name: "long.log",
+            text: "\(longPrefix)needle\(String(repeating: "y", count: 1_000))"
+        )
+        let run = ProcessRun(entryId: entry.id, status: .exited, transcriptPath: transcriptPath)
+        let state = WorkspaceState(projects: [project], processEntries: [entry], processRuns: [run])
+
+        let matches = TranscriptSearcher().search(query: "needle", state: state)
+
+        XCTAssertEqual(matches.count, 1)
+        XCTAssertLessThanOrEqual(matches[0].line.count, TranscriptSearchLimit.maximumLineCharacters + 6)
+        XCTAssertTrue(matches[0].line.contains("needle"))
+    }
+
     func testEmptyQueryReturnsNoMatches() {
         let state = WorkspaceState()
 

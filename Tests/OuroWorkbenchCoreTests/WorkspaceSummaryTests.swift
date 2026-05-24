@@ -52,6 +52,7 @@ final class WorkspaceSummaryTests: XCTestCase {
             succeeded: false
         )
         let state = WorkspaceState(
+            bossWatchEnabled: true,
             projects: [project],
             processEntries: [entry],
             processRuns: [run],
@@ -75,6 +76,7 @@ final class WorkspaceSummaryTests: XCTestCase {
 
         XCTAssertTrue(prompt.contains("Boss agent: slugger"))
         XCTAssertTrue(prompt.contains("Question: is anything waiting on me?"))
+        XCTAssertTrue(prompt.contains("Boss Watch: enabled"))
         XCTAssertTrue(prompt.contains("GitHub Copilot CLI"))
         XCTAssertTrue(prompt.contains("trust=trusted"))
         XCTAssertTrue(prompt.contains("executable_health=available"))

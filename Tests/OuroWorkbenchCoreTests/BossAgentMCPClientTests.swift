@@ -41,6 +41,44 @@ final class BossAgentMCPClientTests: XCTestCase {
         XCTAssertLessThan(Date().timeIntervalSince(start), 1.5)
     }
 
+    func testCallToolSurfacesProcessStderrWhenServerCannotStart() async throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OuroWorkbenchMCPClientTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: temporaryDirectory)
+        }
+
+        let mockOuro = temporaryDirectory.appendingPathComponent("ouro")
+        let script = """
+        #!/bin/sh
+        echo 'agent bundle slugger is locked' >&2
+        exit 1
+        """
+        try script.write(to: mockOuro, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: mockOuro.path)
+
+        let oldPath = getenv("PATH").map { String(cString: $0) }
+        setenv("PATH", "\(temporaryDirectory.path):\(oldPath ?? "")", 1)
+        defer {
+            if let oldPath {
+                setenv("PATH", oldPath, 1)
+            } else {
+                unsetenv("PATH")
+            }
+        }
+
+        let client = BossAgentMCPClient(timeoutNanoseconds: 2_000_000_000)
+
+        do {
+            _ = try await client.status(agentName: "slugger")
+            XCTFail("Expected status to throw")
+        } catch let error as BossAgentMCPClientError {
+            XCTAssertEqual(error, .processNotAvailable("agent bundle slugger is locked"))
+            XCTAssertEqual(error.localizedDescription, "agent bundle slugger is locked")
+        }
+    }
+
     func testExtractsToolTextResponse() throws {
         let line = """
         {"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":"hello boss"}],"isError":false}}
