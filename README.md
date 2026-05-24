@@ -67,6 +67,11 @@ attention changes, archive/restore operations, and applied actions, then asks
 the selected boss agent to keep trusted work moving when there is something new
 or recoverable to handle.
 
+Use `Transcript Search` in the boss dashboard to search saved transcript lines
+across Workbench runs. Boss agents can use the same capability through the
+`workbench_search_transcripts` MCP tool. Results are ordered by newest run first,
+then by line order within each transcript.
+
 ## Architecture
 
 See [docs/architecture.md](docs/architecture.md) and

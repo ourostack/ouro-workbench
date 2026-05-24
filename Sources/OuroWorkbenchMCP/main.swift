@@ -18,6 +18,7 @@ final class WorkbenchMCPServer {
     private let bootstrapper = WorkbenchBootstrapper()
     private let authorizer = BossWorkbenchActionAuthorizer()
     private let executableHealthChecker = ExecutableHealthChecker()
+    private let transcriptSearcher = TranscriptSearcher()
 
     init(paths: WorkbenchPaths = .defaultPaths()) {
         self.paths = paths
@@ -79,6 +80,8 @@ final class WorkbenchMCPServer {
             return try workbenchStatus()
         case "workbench_transcript_tail":
             return try transcriptTail(arguments: arguments)
+        case "workbench_search_transcripts":
+            return try searchTranscripts(arguments: arguments)
         case "workbench_request_action":
             return try requestAction(arguments: arguments)
         default:
@@ -112,6 +115,23 @@ final class WorkbenchMCPServer {
         }
         let marker = tail.truncated ? "latest \(maxBytes) bytes" : "complete transcript"
         return "\(entry.name) transcript (\(marker)):\n\(tail.text)"
+    }
+
+    private func searchTranscripts(arguments: [String: Any]) throws -> String {
+        let state = try currentState()
+        guard let query = arguments["query"] as? String, !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw MCPToolFailure("Missing query")
+        }
+        let maxMatches = Int(TranscriptSearchLimit.clamped(uintArgument(arguments["maxMatches"])))
+        let matches = transcriptSearcher.search(query: query, state: state, maxMatches: maxMatches)
+        guard !matches.isEmpty else {
+            return "No transcript matches for \(query)."
+        }
+        var lines = ["Transcript matches for \(query):"]
+        for match in matches {
+            lines.append("- \(match.entryName) line \(match.lineNumber) (\(match.transcriptPath)): \(match.line)")
+        }
+        return lines.joined(separator: "\n")
     }
 
     private func requestAction(arguments: [String: Any]) throws -> String {
@@ -198,6 +218,23 @@ final class WorkbenchMCPServer {
                         ]
                     ],
                     "required": ["entry"],
+                    "additionalProperties": false
+                ]
+            ],
+            [
+                "name": "workbench_search_transcripts",
+                "description": "Search saved Workbench transcript text across process runs.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "query": ["type": "string", "description": "Case-insensitive text to search for."],
+                        "maxMatches": [
+                            "type": "number",
+                            "maximum": Double(TranscriptSearchLimit.maximumMatches),
+                            "description": "Maximum number of matching transcript lines to return. Values above the server cap are clamped."
+                        ]
+                    ],
+                    "required": ["query"],
                     "additionalProperties": false
                 ]
             ],

@@ -253,6 +253,7 @@ struct BossDashboardView: View {
                     .controlSize(.small)
             }
             BossWatchStatusView(model: model)
+            TranscriptSearchView(model: model)
             MachineRuntimeView()
             BossWorkbenchMCPSetupView(model: model)
             if let dashboard = model.bossDashboard {
@@ -394,6 +395,50 @@ struct BossWatchStatusView: View {
                             .truncationMode(.tail)
                     }
                 }
+            }
+        }
+    }
+}
+
+struct TranscriptSearchView: View {
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Label("Transcript Search", systemImage: "text.magnifyingglass")
+                    .font(.caption.weight(.semibold))
+                TextField("Search transcripts", text: $model.transcriptSearchQuery)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit {
+                        model.searchTranscripts()
+                    }
+                Button {
+                    model.searchTranscripts()
+                } label: {
+                    Label("Search", systemImage: "magnifyingglass")
+                }
+                .disabled(model.transcriptSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            if !model.transcriptSearchResults.isEmpty {
+                ForEach(model.transcriptSearchResults.prefix(6)) { match in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(match.entryName)
+                            .font(.caption.weight(.semibold))
+                        Text("line \(match.lineNumber)")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                        Text(match.line)
+                            .font(.caption.monospaced())
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                    .help(match.transcriptPath)
+                }
+            } else if !model.transcriptSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(model.transcriptSearchStatusLine)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -1018,6 +1063,9 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var bossWatchLastRunAt: Date?
     @Published var bossWatchLastError: String?
     @Published var bossWatchChangeSummaries: [WorkspaceChangeSummary] = []
+    @Published var transcriptSearchQuery = ""
+    @Published var transcriptSearchResults: [TranscriptSearchMatch] = []
+    @Published var transcriptSearchLastQuery: String?
     @Published var bossAppliedActions: [String] = []
     @Published var mailboxError: String?
     @Published var isNewSessionSheetPresented = false
@@ -1045,6 +1093,7 @@ final class WorkbenchViewModel: ObservableObject {
     private let customSessionFactory = CustomTerminalSessionFactory()
     private let customSessionManager = CustomTerminalSessionManager()
     private let transcriptTailReader = TranscriptTailReader()
+    private let transcriptSearcher = TranscriptSearcher()
     private let externalActionQueue: WorkbenchActionRequestQueue
     private var manuallyTerminatedRunIDs = Set<UUID>()
     private var bossWatchBaselineState: WorkspaceState?
@@ -1149,6 +1198,13 @@ final class WorkbenchViewModel: ObservableObject {
             return .orange
         }
         return bossWatchIsEnabled ? .green : .secondary
+    }
+
+    var transcriptSearchStatusLine: String {
+        guard let transcriptSearchLastQuery else {
+            return "Enter a query to search saved transcripts."
+        }
+        return "No transcript matches for \(transcriptSearchLastQuery)."
     }
 
     func executableHealth(for entry: ProcessEntry) -> ExecutableHealth? {
@@ -1370,6 +1426,16 @@ final class WorkbenchViewModel: ObservableObject {
 
     func transcriptTail(for entry: ProcessEntry) -> TranscriptTail? {
         transcriptTailReader.read(path: latestRun(for: entry)?.transcriptPath)
+    }
+
+    func searchTranscripts() {
+        let query = transcriptSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        transcriptSearchLastQuery = query.isEmpty ? nil : query
+        transcriptSearchResults = transcriptSearcher.search(
+            query: query,
+            state: state,
+            maxMatches: TranscriptSearchLimit.defaultMatches
+        )
     }
 
     func refreshBossDashboard() async {
