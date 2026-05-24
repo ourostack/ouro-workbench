@@ -29,6 +29,10 @@ public struct BossAgentBridgePlanner: Sendable {
     public func checkInQuestion(userQuestion: String? = nil) -> String {
         userQuestion ?? "Summarize what is going on, what is waiting on Ari, active terminal agents, blockers, and next actions."
     }
+
+    public func watchQuestion() -> String {
+        "Watch mode check-in: summarize important workspace changes, identify anything waiting on Ari, and keep trusted terminal agents moving when the next action is clear."
+    }
 }
 
 public enum BossWorkbenchMCPRegistrationStatus: String, Codable, Equatable, Sendable {

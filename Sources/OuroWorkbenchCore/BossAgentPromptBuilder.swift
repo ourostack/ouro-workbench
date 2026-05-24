@@ -8,7 +8,8 @@ public struct BossAgentPromptBuilder: Sendable {
         state: WorkspaceState,
         summary: WorkspaceSummary,
         dashboard: BossDashboardSnapshot? = nil,
-        executableHealth: [UUID: ExecutableHealth] = [:]
+        executableHealth: [UUID: ExecutableHealth] = [:],
+        recentChanges: [WorkspaceChangeSummary] = []
     ) -> String {
         var lines: [String] = []
         lines.append("You are the selected Ouro boss agent for Ouro Workbench.")
@@ -45,6 +46,14 @@ public struct BossAgentPromptBuilder: Sendable {
                     lines.append("- \(item.runner) \(item.id): status=\(item.status), workdir=\(item.workdir), checkpoint=\(item.checkpoint ?? "none")")
                 }
             }
+        }
+        lines.append("")
+        if !recentChanges.isEmpty {
+            lines.append("Recent workspace changes:")
+            for change in recentChanges.prefix(10) {
+                lines.append("- \(change.occurredAt.ISO8601Format()): \(change.title) - \(change.detail)")
+            }
+            lines.append("")
         }
         lines.append("")
         lines.append("Processes:")

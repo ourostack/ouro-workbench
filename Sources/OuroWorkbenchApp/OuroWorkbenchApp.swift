@@ -70,6 +70,9 @@ struct WorkbenchRootView: View {
         .task {
             await model.runExternalActionPump()
         }
+        .task {
+            await model.runBossWatchLoop()
+        }
     }
 }
 
@@ -218,6 +221,15 @@ struct BossDashboardView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
+                Toggle(isOn: Binding(
+                    get: { model.bossWatchIsEnabled },
+                    set: { model.setBossWatchEnabled($0) }
+                )) {
+                    Label("Watch", systemImage: "eye")
+                }
+                .toggleStyle(.switch)
+                .disabled(model.bossCheckInIsRunning)
+                .help(model.bossCheckInIsRunning ? "Check-in already running" : "Toggle boss watch mode")
                 Button {
                     Task {
                         model.refreshExecutableHealth()
@@ -240,6 +252,7 @@ struct BossDashboardView: View {
                 ProgressView()
                     .controlSize(.small)
             }
+            BossWatchStatusView(model: model)
             MachineRuntimeView()
             BossWorkbenchMCPSetupView(model: model)
             if let dashboard = model.bossDashboard {
@@ -345,6 +358,37 @@ struct ActionLogView: View {
                                 .truncationMode(.middle)
                         }
                         Text(entry.result)
+                            .font(.caption)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct BossWatchStatusView: View {
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 10) {
+                Label("Boss Watch", systemImage: model.bossWatchIsEnabled ? "eye.fill" : "eye")
+                    .font(.caption.weight(.semibold))
+                Text(model.bossWatchStatusLine)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(model.bossWatchStatusColor)
+            }
+            if !model.bossWatchChangeSummaries.isEmpty {
+                ForEach(model.bossWatchChangeSummaries.prefix(5)) { change in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(change.occurredAt.formatted(date: .omitted, time: .standard))
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                        Text(change.title)
+                            .font(.caption.weight(.semibold))
+                        Text(change.detail)
                             .font(.caption)
                             .lineLimit(1)
                             .truncationMode(.tail)
@@ -970,6 +1014,10 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var bossCheckInPrompt: String?
     @Published var bossCheckInAnswer: String?
     @Published var bossCheckInIsRunning = false
+    @Published var bossWatchIsEnabled = false
+    @Published var bossWatchLastRunAt: Date?
+    @Published var bossWatchLastError: String?
+    @Published var bossWatchChangeSummaries: [WorkspaceChangeSummary] = []
     @Published var bossAppliedActions: [String] = []
     @Published var mailboxError: String?
     @Published var isNewSessionSheetPresented = false
@@ -987,6 +1035,7 @@ final class WorkbenchViewModel: ObservableObject {
     private let bossDashboardBuilder = BossDashboardBuilder()
     private let bossBridgePlanner = BossAgentBridgePlanner()
     private let bossPromptBuilder = BossAgentPromptBuilder()
+    private let changeSummarizer = WorkspaceChangeSummarizer()
     private let bossMCPClient: BossAgentMCPClient
     private let bossWorkbenchMCPRegistrar: BossWorkbenchMCPRegistrar
     private let executableHealthChecker: ExecutableHealthChecker
@@ -998,8 +1047,12 @@ final class WorkbenchViewModel: ObservableObject {
     private let transcriptTailReader = TranscriptTailReader()
     private let externalActionQueue: WorkbenchActionRequestQueue
     private var manuallyTerminatedRunIDs = Set<UUID>()
+    private var bossWatchBaselineState: WorkspaceState?
+    private var bossWatchTickIsRunning = false
+    private var bossWatchLastPromptAt: Date?
     private var didAttemptStartupRecovery = false
     private var didAttemptDefaultShellLaunch = false
+    private let bossWatchIntervalNanoseconds: UInt64 = 60_000_000_000
 
     init(
         paths: WorkbenchPaths = .defaultPaths(),
@@ -1078,6 +1131,26 @@ final class WorkbenchViewModel: ObservableObject {
         state.actionLog.sorted { $0.occurredAt > $1.occurredAt }
     }
 
+    var bossWatchStatusLine: String {
+        if let bossWatchLastError {
+            return "error: \(bossWatchLastError)"
+        }
+        guard bossWatchIsEnabled else {
+            return "paused"
+        }
+        guard let bossWatchLastRunAt else {
+            return "watching"
+        }
+        return "watching; last \(bossWatchLastRunAt.formatted(date: .omitted, time: .standard))"
+    }
+
+    var bossWatchStatusColor: SwiftUI.Color {
+        if bossWatchLastError != nil {
+            return .orange
+        }
+        return bossWatchIsEnabled ? .green : .secondary
+    }
+
     func executableHealth(for entry: ProcessEntry) -> ExecutableHealth? {
         executableHealthByEntryID[entry.id]
     }
@@ -1141,11 +1214,75 @@ final class WorkbenchViewModel: ObservableObject {
         bossCheckInPrompt = nil
         bossCheckInAnswer = nil
         bossAppliedActions = []
+        bossWatchBaselineState = state
+        bossWatchChangeSummaries = []
         save()
         refreshWorkbenchMCPRegistration()
         Task {
             await refreshBossDashboard()
         }
+    }
+
+    func setBossWatchEnabled(_ enabled: Bool) {
+        guard bossWatchIsEnabled != enabled else {
+            return
+        }
+        bossWatchIsEnabled = enabled
+        bossWatchLastError = nil
+        if enabled {
+            bossWatchBaselineState = state
+            bossWatchChangeSummaries = []
+            bossWatchLastPromptAt = nil
+            Task {
+                await runBossWatchTick(force: true)
+            }
+        } else {
+            bossWatchBaselineState = nil
+            bossWatchChangeSummaries = []
+            bossWatchLastRunAt = nil
+            bossWatchLastPromptAt = nil
+        }
+    }
+
+    func runBossWatchLoop() async {
+        while !Task.isCancelled {
+            try? await Task.sleep(nanoseconds: bossWatchIntervalNanoseconds)
+            guard bossWatchIsEnabled else {
+                continue
+            }
+            await runBossWatchTick(force: false)
+        }
+    }
+
+    func runBossWatchTick(force: Bool) async {
+        guard bossWatchIsEnabled, !bossCheckInIsRunning, !bossWatchTickIsRunning else {
+            return
+        }
+        bossWatchTickIsRunning = true
+        defer {
+            bossWatchTickIsRunning = false
+        }
+        let observedAt = Date()
+        let previousState = bossWatchBaselineState ?? state
+        let changes = changeSummarizer.summarize(previous: previousState, current: state, occurredAt: observedAt)
+
+        let hasActionableState = !summary.waitingOnHuman.isEmpty || !summary.needsRecovery.isEmpty
+        let shouldAskBoss = force || !changes.isEmpty || (hasActionableState && bossWatchLastPromptAt == nil)
+        bossWatchLastRunAt = observedAt
+        guard shouldAskBoss else {
+            recordBossWatchChanges(changes)
+            bossWatchBaselineState = state
+            return
+        }
+
+        await runBossCheckIn(
+            question: bossBridgePlanner.watchQuestion(),
+            recentChanges: changes
+        )
+        bossWatchLastPromptAt = Date()
+        let finalChanges = changeSummarizer.summarize(previous: previousState, current: state, occurredAt: Date())
+        recordBossWatchChanges(finalChanges.isEmpty ? changes : finalChanges)
+        bossWatchBaselineState = state
     }
 
     func refreshWorkbenchMCPRegistration() {
@@ -1259,18 +1396,29 @@ final class WorkbenchViewModel: ObservableObject {
         mailboxError = issues.isEmpty ? nil : "Mailbox warnings: \(issues.joined(separator: "; "))"
     }
 
-    func prepareBossCheckIn() {
-        let question = bossBridgePlanner.checkInQuestion()
+    func prepareBossCheckIn(
+        question: String? = nil,
+        recentChanges: [WorkspaceChangeSummary] = []
+    ) {
+        let question = question ?? bossBridgePlanner.checkInQuestion()
         bossCheckInPrompt = bossPromptBuilder.checkInPrompt(
             question: question,
             state: state,
             summary: summary,
             dashboard: bossDashboard,
-            executableHealth: executableHealthByEntryID
+            executableHealth: executableHealthByEntryID,
+            recentChanges: recentChanges
         )
     }
 
     func runBossCheckIn() async {
+        await runBossCheckIn(question: bossBridgePlanner.checkInQuestion(), recentChanges: [])
+    }
+
+    private func runBossCheckIn(
+        question: String,
+        recentChanges: [WorkspaceChangeSummary]
+    ) async {
         guard !bossCheckInIsRunning else {
             return
         }
@@ -1285,7 +1433,7 @@ final class WorkbenchViewModel: ObservableObject {
         guard state.boss.agentName == requestedBoss else {
             return
         }
-        prepareBossCheckIn()
+        prepareBossCheckIn(question: question, recentChanges: recentChanges)
         guard let bossCheckInPrompt else {
             return
         }
@@ -1299,9 +1447,13 @@ final class WorkbenchViewModel: ObservableObject {
             }
             bossCheckInAnswer = answer
             applyBossActions(from: answer)
+            bossWatchLastError = nil
         } catch {
             bossCheckInAnswer = "Check-in failed: \(error)"
             bossAppliedActions = []
+            if bossWatchIsEnabled {
+                bossWatchLastError = String(describing: error)
+            }
         }
     }
 
@@ -1850,6 +2002,16 @@ final class WorkbenchViewModel: ObservableObject {
             return
         }
         state.processEntries[index] = entry
+    }
+
+    private func recordBossWatchChanges(_ changes: [WorkspaceChangeSummary]) {
+        guard !changes.isEmpty else {
+            return
+        }
+        var seen = Set<UUID>()
+        bossWatchChangeSummaries = Array((changes + bossWatchChangeSummaries).filter { change in
+            seen.insert(change.id).inserted
+        }.prefix(25))
     }
 
     private func uniqueCopyName(for name: String) -> String {
