@@ -35,7 +35,7 @@ struct WorkbenchRootView: View {
                     ContentUnavailableView("No session selected", systemImage: "terminal")
                 }
             }
-            .padding(.top, 28)
+            .padding(.top, 56)
         }
         .alert("Workbench Error", isPresented: model.errorIsPresented) {
             Button("OK", role: .cancel) {
@@ -207,11 +207,7 @@ struct HeaderView: View {
             }
             .layoutPriority(1)
             Spacer(minLength: 12)
-            Text("TTFA")
-                .font(.caption.monospaced().weight(.semibold))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(.green.opacity(0.16), in: Capsule())
+            AutonomyStatusButton(model: model)
             Button {
                 model.isCommandPalettePresented = true
             } label: {
@@ -249,6 +245,223 @@ struct HeaderView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .frame(minHeight: 68)
+    }
+}
+
+struct AutonomyStatusButton: View {
+    @ObservedObject var model: WorkbenchViewModel
+    @StateObject private var loginItem = LoginItemController()
+    @State private var isPresented = false
+
+    private var snapshot: AutonomyReadinessSnapshot {
+        model.autonomyReadiness.appending(loginItemCheck)
+    }
+
+    private var loginItemCheck: AutonomyReadinessCheck {
+        switch loginItem.status {
+        case .enabled:
+            return AutonomyReadinessCheck(
+                id: "open-at-login",
+                label: "Open at Login",
+                detail: "Workbench will reopen after a computer restart.",
+                state: .ok
+            )
+        case .notInstalled:
+            return AutonomyReadinessCheck(
+                id: "open-at-login",
+                label: "Open at Login",
+                detail: "Workbench will not reopen automatically after restart.",
+                state: .warning
+            )
+        case .appBundleMissing:
+            return AutonomyReadinessCheck(
+                id: "open-at-login",
+                label: "Open at Login",
+                detail: "The installed app bundle is missing.",
+                state: .blocker
+            )
+        }
+    }
+
+    var body: some View {
+        Button {
+            loginItem.refresh()
+            isPresented.toggle()
+        } label: {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(snapshot.state.tint)
+                    .frame(width: 7, height: 7)
+                Text(snapshot.label)
+                    .font(.caption.monospaced().weight(.semibold))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(snapshot.state.tint.opacity(0.16), in: Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(snapshot.state.tint.opacity(0.32), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .help("TTFA readiness")
+        .popover(isPresented: $isPresented) {
+            AutonomyStatusPopover(
+                snapshot: snapshot,
+                model: model,
+                loginItem: loginItem
+            )
+            .frame(width: 380)
+            .padding(14)
+        }
+        .onAppear {
+            loginItem.refresh()
+        }
+    }
+}
+
+struct AutonomyStatusPopover: View {
+    var snapshot: AutonomyReadinessSnapshot
+    @ObservedObject var model: WorkbenchViewModel
+    @ObservedObject var loginItem: LoginItemController
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(snapshot.label)
+                    .font(.headline.monospaced())
+                StatusPill(text: snapshot.state.displayName, color: snapshot.state.tint)
+                Spacer()
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(snapshot.headline)
+                    .font(.subheadline.weight(.semibold))
+                Text(snapshot.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(snapshot.checks) { check in
+                    AutonomyStatusCheckRow(check: check)
+                }
+            }
+            Divider()
+            HStack(spacing: 8) {
+                if model.bossWorkbenchMCPRegistration?.isActionable == true {
+                    Button {
+                        model.installWorkbenchMCPForBoss()
+                    } label: {
+                        Label(model.bossWorkbenchMCPActionTitle, systemImage: "point.3.connected.trianglepath.dotted")
+                    }
+                }
+                if !model.bossWatchIsEnabled {
+                    Button {
+                        model.setBossWatchEnabled(true)
+                    } label: {
+                        Label("Watch", systemImage: "eye")
+                    }
+                }
+                if !loginItem.isEnabled {
+                    Button {
+                        loginItem.setEnabled(true)
+                    } label: {
+                        Label("Login", systemImage: "power")
+                    }
+                }
+                Button {
+                    Task {
+                        await model.runBossCheckIn()
+                    }
+                } label: {
+                    Label("Ask", systemImage: "bubble.left.and.text.bubble.right")
+                }
+                .disabled(model.bossCheckInIsRunning)
+            }
+            .controlSize(.small)
+        }
+    }
+}
+
+struct AutonomyStatusCheckRow: View {
+    var check: AutonomyReadinessCheck
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: check.state.systemImage)
+                .foregroundStyle(check.state.tint)
+                .frame(width: 16)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(check.label)
+                    .font(.caption.weight(.semibold))
+                Text(check.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
+struct StatusPill: View {
+    var text: String
+    var color: SwiftUI.Color
+
+    var body: some View {
+        Text(text)
+            .font(.caption2.monospaced().weight(.semibold))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(color.opacity(0.14), in: Capsule())
+            .foregroundStyle(color)
+    }
+}
+
+private extension AutonomyReadinessState {
+    var tint: SwiftUI.Color {
+        switch self {
+        case .ready:
+            return .green
+        case .attention:
+            return .orange
+        case .blocked:
+            return .red
+        }
+    }
+
+    var displayName: String {
+        switch self {
+        case .ready:
+            return "ready"
+        case .attention:
+            return "watch"
+        case .blocked:
+            return "blocked"
+        }
+    }
+}
+
+private extension AutonomyReadinessCheckState {
+    var tint: SwiftUI.Color {
+        switch self {
+        case .ok:
+            return .green
+        case .warning:
+            return .orange
+        case .blocker:
+            return .red
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .ok:
+            return "checkmark.circle.fill"
+        case .warning:
+            return "exclamationmark.triangle.fill"
+        case .blocker:
+            return "xmark.octagon.fill"
+        }
     }
 }
 
@@ -321,94 +534,172 @@ struct BossDashboardView: View {
     private let dashboardColumns = [GridItem(.adaptive(minimum: 260), spacing: 18, alignment: .top)]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if model.bossCheckInIsRunning {
-                ProgressView()
-                    .controlSize(.small)
-            }
-            BossWatchStatusView(model: model)
-            TranscriptSearchView(model: model)
-            MachineRuntimeView()
-            RecoveryDrillView(model: model)
-            BossWorkbenchMCPSetupView(model: model)
-            if let dashboard = model.bossDashboard {
-                if !dashboard.availability.issues.isEmpty {
-                    Text("Mailbox warnings: \(dashboard.availability.issues.joined(separator: "; "))")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                if model.bossCheckInIsRunning {
+                    ProgressView()
+                        .controlSize(.small)
                 }
-                LazyVGrid(columns: metricColumns, alignment: .leading, spacing: 8) {
-                    MetricView(label: "daemon", value: dashboard.daemonStatus)
-                    MetricView(label: "needs me", value: dashboard.availability.needsMeAvailable ? "\(dashboard.needsMeItems.count)" : "?")
-                    MetricView(label: "coding", value: dashboard.availability.codingAvailable ? "\(dashboard.activeCodingAgents)" : "?")
-                    MetricView(label: "blocked", value: dashboard.availability.codingAvailable ? "\(dashboard.blockedCodingAgents)" : "?")
-                    MetricView(label: "mode", value: dashboard.daemonMode)
-                }
-                if !dashboard.needsMeItems.isEmpty || !dashboard.codingItems.isEmpty {
-                    LazyVGrid(columns: dashboardColumns, alignment: .leading, spacing: 10) {
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text("Needs Me")
-                                .font(.caption.weight(.semibold))
-                            ForEach(Array(dashboard.needsMeItems.prefix(3))) { item in
-                                Text("\(item.label) - \(item.detail)")
-                                    .font(.caption)
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text("Coding")
-                                .font(.caption.weight(.semibold))
-                            ForEach(Array(dashboard.codingItems.prefix(3))) { item in
-                                Text("\(item.runner) - \(item.status) - \(item.workdir)")
-                                    .font(.caption)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
-            }
-            if let prompt = model.bossCheckInPrompt {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(model.bossMCPCommand)
-                        .font(.caption.monospaced())
-                        .foregroundStyle(.secondary)
-                    ScrollView {
-                        Text(prompt)
-                            .font(.caption.monospaced())
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .textSelection(.enabled)
-                    }
-                    .frame(maxHeight: 120)
-                }
-            }
-            if let answer = model.bossCheckInAnswer {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Boss Reply")
-                        .font(.caption.weight(.semibold))
-                    Text(answer)
-                        .font(.callout)
-                        .textSelection(.enabled)
-                }
-            }
-            if !model.bossAppliedActions.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Applied Actions")
-                        .font(.caption.weight(.semibold))
-                    ForEach(model.bossAppliedActions, id: \.self) { result in
-                        Text(result)
+                BossWatchStatusView(model: model)
+                BossConversationView(model: model)
+                TranscriptSearchView(model: model)
+                MachineRuntimeView()
+                RecoveryDrillView(model: model)
+                BossWorkbenchMCPSetupView(model: model)
+                if let dashboard = model.bossDashboard {
+                    if !dashboard.availability.issues.isEmpty {
+                        Text("Mailbox warnings: \(dashboard.availability.issues.joined(separator: "; "))")
                             .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+                    LazyVGrid(columns: metricColumns, alignment: .leading, spacing: 8) {
+                        MetricView(label: "daemon", value: dashboard.daemonStatus)
+                        MetricView(label: "needs me", value: dashboard.availability.needsMeAvailable ? "\(dashboard.needsMeItems.count)" : "?")
+                        MetricView(label: "coding", value: dashboard.availability.codingAvailable ? "\(dashboard.activeCodingAgents)" : "?")
+                        MetricView(label: "blocked", value: dashboard.availability.codingAvailable ? "\(dashboard.blockedCodingAgents)" : "?")
+                        MetricView(label: "mode", value: dashboard.daemonMode)
+                    }
+                    if !dashboard.needsMeItems.isEmpty || !dashboard.codingItems.isEmpty {
+                        LazyVGrid(columns: dashboardColumns, alignment: .leading, spacing: 10) {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text("Needs Me")
+                                    .font(.caption.weight(.semibold))
+                                ForEach(Array(dashboard.needsMeItems.prefix(3))) { item in
+                                    Text("\(item.label) - \(item.detail)")
+                                        .font(.caption)
+                                        .lineLimit(1)
+                                        .truncationMode(.tail)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text("Coding")
+                                    .font(.caption.weight(.semibold))
+                                ForEach(Array(dashboard.codingItems.prefix(3))) { item in
+                                    Text("\(item.runner) - \(item.status) - \(item.workdir)")
+                                        .font(.caption)
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }
+                if let prompt = model.bossCheckInPrompt {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(model.bossMCPCommand)
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
+                        ScrollView {
+                            Text(prompt)
+                                .font(.caption.monospaced())
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .textSelection(.enabled)
+                        }
+                        .frame(maxHeight: 120)
+                    }
+                }
+                if let answer = model.bossCheckInAnswer {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Boss Reply")
+                            .font(.caption.weight(.semibold))
+                        Text(answer)
+                            .font(.callout)
                             .textSelection(.enabled)
                     }
                 }
+                if !model.bossAppliedActions.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Applied Actions")
+                            .font(.caption.weight(.semibold))
+                        ForEach(model.bossAppliedActions, id: \.self) { result in
+                            Text(result)
+                                .font(.caption)
+                                .textSelection(.enabled)
+                        }
+                    }
+                }
+                ActionLogView(entries: model.recentActionLogEntries)
             }
-            ActionLogView(entries: model.recentActionLogEntries)
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(minHeight: 190, idealHeight: 280, maxHeight: 320, alignment: .topLeading)
+    }
+}
+
+private struct BossQuickQuestion: Identifiable {
+    var id: String
+    var title: String
+    var question: String
+}
+
+private let bossQuickQuestions: [BossQuickQuestion] = [
+    BossQuickQuestion(
+        id: "status",
+        title: "What's Going On?",
+        question: "Summarize what is currently going on across the Workbench, including running terminal agents, anything waiting on Ari, and the next useful action."
+    ),
+    BossQuickQuestion(
+        id: "waiting",
+        title: "Waiting On Me?",
+        question: "Inspect the Workbench and tell Ari whether anything is waiting on him. Be concise, and include what decision or input is needed only if a human decision is genuinely required."
+    ),
+    BossQuickQuestion(
+        id: "move",
+        title: "Keep Moving",
+        question: "Inspect the Workbench and keep trusted terminal agents moving when the next action is clear. Use auditable Workbench actions for safe obvious next steps."
+    ),
+    BossQuickQuestion(
+        id: "respond",
+        title: "Respond For Me",
+        question: "Inspect the Workbench and respond on Ari's behalf when a terminal agent is clearly waiting on routine input. Use Workbench actions for safe obvious replies; escalate only genuinely human-only decisions."
+    )
+]
+
+struct BossConversationView: View {
+    @ObservedObject var model: WorkbenchViewModel
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 8) {
+                Label("Boss Line", systemImage: "bubble.left.and.text.bubble.right")
+                    .font(.caption.weight(.semibold))
+                TextField("Ask \(model.state.boss.agentName) about the Workbench", text: $model.bossQuestion)
+                    .textFieldStyle(.roundedBorder)
+                    .focused($isFocused)
+                    .onSubmit {
+                        Task {
+                            await model.runBossQuestion()
+                        }
+                    }
+                Button {
+                    Task {
+                        await model.runBossQuestion()
+                    }
+                } label: {
+                    Label("Ask", systemImage: "arrow.up.circle.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(model.bossQuestion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.bossCheckInIsRunning)
+            }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(bossQuickQuestions) { item in
+                        Button(item.title) {
+                            Task {
+                                await model.runBossQuickQuestion(item.question)
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .disabled(model.bossCheckInIsRunning)
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -598,6 +889,15 @@ struct SessionDetailView: View {
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                 } else {
+                    Button {
+                        Task {
+                            await model.runBossQuestion(about: entry)
+                        }
+                    } label: {
+                        Label("Ask Boss", systemImage: "bubble.left.and.text.bubble.right")
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(model.bossCheckInIsRunning)
                     Button {
                         model.launch(entry)
                     } label: {
@@ -797,6 +1097,26 @@ struct SessionControlBar: View {
                 Label("Send", systemImage: "paperplane.fill")
             }
             .disabled(pendingInput.isEmpty)
+            Menu {
+                Button("continue") {
+                    sendQuickLine("continue")
+                }
+                Button("status") {
+                    sendQuickLine("status")
+                }
+                Button("yes") {
+                    sendQuickLine("yes")
+                }
+                Button("no") {
+                    sendQuickLine("no")
+                }
+                Button("help") {
+                    sendQuickLine("help")
+                }
+            } label: {
+                Label("Quick", systemImage: "bolt.fill")
+            }
+            .help("Send a common response")
             Button {
                 model.sendControlC(to: entry)
             } label: {
@@ -822,6 +1142,11 @@ struct SessionControlBar: View {
             return
         }
         model.sendInput(pendingInput, to: entry, appendNewline: true)
+        pendingInput = ""
+    }
+
+    private func sendQuickLine(_ text: String) {
+        model.sendInput(text, to: entry, appendNewline: true)
         pendingInput = ""
     }
 }
@@ -1192,6 +1517,7 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var bossCheckInPrompt: String?
     @Published var bossCheckInAnswer: String?
     @Published var bossCheckInIsRunning = false
+    @Published var bossQuestion = ""
     @Published var bossWatchIsEnabled = false
     @Published var bossWatchLastRunAt: Date?
     @Published var bossWatchLastError: String?
@@ -1219,6 +1545,7 @@ final class WorkbenchViewModel: ObservableObject {
     private let bossDashboardBuilder = BossDashboardBuilder()
     private let bossBridgePlanner = BossAgentBridgePlanner()
     private let bossPromptBuilder = BossAgentPromptBuilder()
+    private let autonomyReadinessBuilder = AutonomyReadinessBuilder()
     private let changeSummarizer = WorkspaceChangeSummarizer()
     private let commandPalette = WorkbenchCommandPalette()
     private let bossMCPClient: BossAgentMCPClient
@@ -1312,6 +1639,16 @@ final class WorkbenchViewModel: ObservableObject {
 
     var bossMCPCommand: String {
         bossBridgePlanner.mcpServePlan(for: state.boss).displayCommand
+    }
+
+    var autonomyReadiness: AutonomyReadinessSnapshot {
+        autonomyReadinessBuilder.build(
+            state: state,
+            summary: summary,
+            mcpRegistration: bossWorkbenchMCPRegistration,
+            executableHealth: executableHealthByEntryID,
+            bossWatchIsEnabled: bossWatchIsEnabled
+        )
     }
 
     var recentActionLogEntries: [WorkbenchActionLogEntry] {
@@ -1490,6 +1827,7 @@ final class WorkbenchViewModel: ObservableObject {
         bossDashboard = nil
         bossCheckInPrompt = nil
         bossCheckInAnswer = nil
+        bossQuestion = ""
         bossAppliedActions = []
         bossWatchBaselineState = state
         bossWatchChangeSummaries = []
@@ -1752,6 +2090,28 @@ final class WorkbenchViewModel: ObservableObject {
 
     func runBossCheckIn() async {
         await runBossCheckIn(question: bossBridgePlanner.checkInQuestion(), recentChanges: [])
+    }
+
+    func runBossQuestion() async {
+        let question = bossQuestion.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !question.isEmpty else {
+            return
+        }
+        await runBossCheckIn(question: bossBridgePlanner.checkInQuestion(userQuestion: question), recentChanges: [])
+    }
+
+    func runBossQuickQuestion(_ question: String) async {
+        bossQuestion = question
+        await runBossCheckIn(question: bossBridgePlanner.checkInQuestion(userQuestion: question), recentChanges: [])
+    }
+
+    func runBossQuestion(about entry: ProcessEntry) async {
+        let shortQuestion = "What is going on with \(entry.name)?"
+        bossQuestion = shortQuestion
+        let question = """
+        Focus on \(entry.name) (id=\(entry.id.uuidString)). Tell Ari what this session is doing, whether it is waiting on him, and what should happen next. If the next step is obvious for a trusted session, use auditable Workbench actions.
+        """
+        await runBossCheckIn(question: bossBridgePlanner.checkInQuestion(userQuestion: question), recentChanges: [])
     }
 
     private func runBossCheckIn(

@@ -36,6 +36,17 @@ Workbench should use boss-agent turns for natural-language check-ins:
 - what blockers exist
 - what next actions can safely move work forward
 
+The native `Boss Line` is the human-facing version of this same plane. It sends
+the selected boss a Workbench-grounded prompt through `ouro mcp-serve --agent
+<boss>`, then applies any fenced `ouro-workbench-actions` through the native
+trust-gated action path. The built-in quick asks intentionally cover the common
+operating loop: status, waiting-on-human, keep moving, and respond on the
+human's behalf when the answer is routine.
+
+Session-level `Ask Boss` buttons use the same route but focus the prompt on a
+single process id so the boss can inspect or act on the terminal the human is
+currently looking at.
+
 ## Control Plane
 
 Initial control requests should route through the boss agent instead of silently
@@ -96,3 +107,20 @@ points at the packaged `OuroWorkbenchMCP` executable and uses no arguments:
 
 Once registered, the selected boss agent can discover the workbench tools from
 its normal Ouro MCP/tool surface.
+
+## TTFA Readiness
+
+`TTFA` in the native header is not decorative. It summarizes whether the selected
+boss can be trusted to run the Workbench with minimal babysitting:
+
+- boss agent name is valid
+- Workbench MCP is registered for that boss
+- Claude Code, GitHub Copilot CLI, and OpenAI Codex lanes exist and are trusted
+- P0 lanes have automatic restart strategies enabled
+- P0 executables are available on PATH
+- no session currently requires manual recovery
+- Boss Watch and Open at Login are enabled or called out as watch points
+
+The readiness popover can apply obvious local fixes, including Workbench MCP
+registration, Boss Watch startup, Open at Login registration, and a fresh boss
+ask.
