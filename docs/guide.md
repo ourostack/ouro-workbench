@@ -161,7 +161,9 @@ Then run the first-run checklist in the app:
 
 1. Confirm `Local Shell` opens as a real terminal.
 2. Confirm the P0 lanes exist: Claude Code, GitHub Copilot CLI, OpenAI Codex.
-3. Pick the boss agent in the header. The expected local default is `slugger`.
+3. Pick the boss agent from the header boss menu. The expected local default is
+   `slugger`; use `Use Other Boss...` when the agent has not appeared in
+   discovery yet.
 4. Use the `Workbench MCP` row to register the packaged MCP server for the
    selected boss.
 5. Turn on `Open at Login` so Workbench reopens after restart.
