@@ -61,13 +61,23 @@ final class WorkspaceSummaryTests: XCTestCase {
         let prompt = BossAgentPromptBuilder().checkInPrompt(
             question: "is anything waiting on me?",
             state: state,
-            summary: summary
+            summary: summary,
+            executableHealth: [
+                entry.id: ExecutableHealth(
+                    executable: "copilot",
+                    resolvedPath: "/opt/homebrew/bin/copilot",
+                    status: .available,
+                    detail: "Found /opt/homebrew/bin/copilot."
+                )
+            ]
         )
 
         XCTAssertTrue(prompt.contains("Boss agent: slugger"))
         XCTAssertTrue(prompt.contains("Question: is anything waiting on me?"))
         XCTAssertTrue(prompt.contains("GitHub Copilot CLI"))
         XCTAssertTrue(prompt.contains("trust=trusted"))
+        XCTAssertTrue(prompt.contains("executable_health=available"))
+        XCTAssertTrue(prompt.contains("executable_path=/opt/homebrew/bin/copilot"))
         XCTAssertTrue(prompt.contains("transcript=/tmp/copilot.log"))
         XCTAssertTrue(prompt.contains("action=respawn"))
         XCTAssertTrue(prompt.contains("```ouro-workbench-actions"))

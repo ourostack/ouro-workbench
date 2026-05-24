@@ -28,7 +28,11 @@ struct WorkbenchRootView: View {
                 }
                 Section("Sessions") {
                     ForEach(model.sessionEntries) { entry in
-                        TerminalAgentRow(entry: entry, isSelected: model.selectedEntryID == entry.id)
+                        TerminalAgentRow(
+                            entry: entry,
+                            isSelected: model.selectedEntryID == entry.id,
+                            health: model.executableHealth(for: entry)
+                        )
                             .tag(entry.id)
                     }
                     Button {
@@ -65,6 +69,7 @@ struct WorkbenchRootView: View {
         .task {
             model.recoverEligibleSessionsOnStartup()
             model.launchDefaultShellIfNeeded()
+            model.refreshExecutableHealth()
             await model.refreshBossDashboard()
         }
         .sheet(isPresented: $model.isNewSessionSheetPresented) {
@@ -79,11 +84,17 @@ struct WorkbenchRootView: View {
 struct TerminalAgentRow: View {
     var entry: ProcessEntry
     var isSelected: Bool
+    var health: ExecutableHealth?
 
     var body: some View {
         HStack {
             Label(entry.name, systemImage: entry.kind == .shell ? "apple.terminal" : "terminal")
             Spacer()
+            if let health, health.status != .available {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .help(health.detail)
+            }
             StatusDot(attention: entry.attention)
         }
         .fontWeight(isSelected ? .semibold : .regular)
@@ -167,6 +178,7 @@ struct BossDashboardView: View {
                 Spacer()
                 Button {
                     Task {
+                        model.refreshExecutableHealth()
                         await model.refreshBossDashboard()
                     }
                 } label: {
@@ -407,6 +419,13 @@ struct SessionStatusBar: View {
             Text("Recovery: \(model.recoveryReason(for: entry))")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            if let health = model.executableHealth(for: entry) {
+                Text("Executable: \(health.detail)")
+                    .font(.caption)
+                    .foregroundStyle(health.status == .available ? SwiftUI.Color.secondary : SwiftUI.Color.orange)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
             Spacer()
             if model.canRecover(entry) {
                 Button {
@@ -735,6 +754,7 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var mailboxError: String?
     @Published var isNewSessionSheetPresented = false
     @Published var bossWorkbenchMCPRegistration: BossWorkbenchMCPRegistrationSnapshot?
+    @Published var executableHealthByEntryID: [UUID: ExecutableHealth] = [:]
 
     private let paths: WorkbenchPaths
     private let store: WorkbenchStore
@@ -747,6 +767,7 @@ final class WorkbenchViewModel: ObservableObject {
     private let bossPromptBuilder = BossAgentPromptBuilder()
     private let bossMCPClient: BossAgentMCPClient
     private let bossWorkbenchMCPRegistrar: BossWorkbenchMCPRegistrar
+    private let executableHealthChecker: ExecutableHealthChecker
     private let bossActionParser = BossWorkbenchActionParser()
     private let bossActionAuthorizer = BossWorkbenchActionAuthorizer()
     private let terminationPolicy = ProcessTerminationPolicy()
@@ -761,17 +782,20 @@ final class WorkbenchViewModel: ObservableObject {
         paths: WorkbenchPaths = .defaultPaths(),
         mailboxClient: MailboxClient = MailboxClient(),
         bossMCPClient: BossAgentMCPClient = BossAgentMCPClient(),
-        bossWorkbenchMCPRegistrar: BossWorkbenchMCPRegistrar = BossWorkbenchMCPRegistrar()
+        bossWorkbenchMCPRegistrar: BossWorkbenchMCPRegistrar = BossWorkbenchMCPRegistrar(),
+        executableHealthChecker: ExecutableHealthChecker = ExecutableHealthChecker()
     ) {
         self.paths = paths
         self.store = WorkbenchStore(paths: paths)
         self.mailboxClient = mailboxClient
         self.bossMCPClient = bossMCPClient
         self.bossWorkbenchMCPRegistrar = bossWorkbenchMCPRegistrar
+        self.executableHealthChecker = executableHealthChecker
         self.externalActionQueue = WorkbenchActionRequestQueue(paths: paths)
         self.state = WorkspaceState()
         load()
         refreshWorkbenchMCPRegistration()
+        refreshExecutableHealth()
     }
 
     var errorIsPresented: Binding<Bool> {
@@ -810,6 +834,10 @@ final class WorkbenchViewModel: ObservableObject {
 
     var recentActionLogEntries: [WorkbenchActionLogEntry] {
         state.actionLog.sorted { $0.occurredAt > $1.occurredAt }
+    }
+
+    func executableHealth(for entry: ProcessEntry) -> ExecutableHealth? {
+        executableHealthByEntryID[entry.id]
     }
 
     var bossWorkbenchMCPStatusLine: String {
@@ -880,6 +908,14 @@ final class WorkbenchViewModel: ObservableObject {
 
     func refreshWorkbenchMCPRegistration() {
         bossWorkbenchMCPRegistration = bossWorkbenchMCPRegistrar.snapshot(for: state.boss)
+    }
+
+    func refreshExecutableHealth() {
+        executableHealthByEntryID = Dictionary(
+            uniqueKeysWithValues: sessionEntries.map { entry in
+                (entry.id, executableHealthChecker.health(for: entry.executable))
+            }
+        )
     }
 
     func installWorkbenchMCPForBoss() {
@@ -984,7 +1020,8 @@ final class WorkbenchViewModel: ObservableObject {
             question: question,
             state: state,
             summary: summary,
-            dashboard: bossDashboard
+            dashboard: bossDashboard,
+            executableHealth: executableHealthByEntryID
         )
     }
 
@@ -998,6 +1035,7 @@ final class WorkbenchViewModel: ObservableObject {
         defer {
             bossCheckInIsRunning = false
         }
+        refreshExecutableHealth()
         await refreshBossDashboard()
         guard state.boss.agentName == requestedBoss else {
             return

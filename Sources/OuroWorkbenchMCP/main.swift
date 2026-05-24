@@ -17,6 +17,7 @@ final class WorkbenchMCPServer {
     private let promptBuilder = BossAgentPromptBuilder()
     private let bootstrapper = WorkbenchBootstrapper()
     private let authorizer = BossWorkbenchActionAuthorizer()
+    private let executableHealthChecker = ExecutableHealthChecker()
 
     init(paths: WorkbenchPaths = .defaultPaths()) {
         self.paths = paths
@@ -88,10 +89,16 @@ final class WorkbenchMCPServer {
     private func workbenchStatus() throws -> String {
         let state = try currentState()
         let summary = summarizer.summarize(state)
+        let executableHealth = Dictionary(
+            uniqueKeysWithValues: state.processEntries.map { entry in
+                (entry.id, executableHealthChecker.health(for: entry.executable))
+            }
+        )
         return promptBuilder.checkInPrompt(
             question: "What is currently going on in Ouro Workbench?",
             state: state,
-            summary: summary
+            summary: summary,
+            executableHealth: executableHealth
         )
     }
 
