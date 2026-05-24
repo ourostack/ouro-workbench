@@ -69,7 +69,8 @@ public struct BossAgentPromptBuilder: Sendable {
             let executableStatus = health?.status.rawValue ?? "unknown"
             let executablePath = health?.resolvedPath ?? "none"
             let archived = entry?.isArchived ?? false
-            lines.append("- \(snapshot.name) (id=\(snapshot.id.uuidString)): archived=\(archived), trust=\(trust), executable_health=\(executableStatus), executable_path=\(executablePath), status=\(snapshot.status.rawValue), attention=\(snapshot.attention.rawValue), transcript=\(transcriptPath), summary=\(snapshot.summary)")
+            let notes = entry?.trimmedNotes.map(Self.oneLine) ?? "none"
+            lines.append("- \(snapshot.name) (id=\(snapshot.id.uuidString)): archived=\(archived), trust=\(trust), executable_health=\(executableStatus), executable_path=\(executablePath), status=\(snapshot.status.rawValue), attention=\(snapshot.attention.rawValue), transcript=\(transcriptPath), notes=\(notes), summary=\(snapshot.summary)")
         }
         lines.append("")
         lines.append("Recovery:")
@@ -91,5 +92,9 @@ public struct BossAgentPromptBuilder: Sendable {
             }
         }
         return lines.joined(separator: "\n")
+    }
+
+    private static func oneLine(_ text: String) -> String {
+        text.components(separatedBy: .newlines).joined(separator: " ")
     }
 }

@@ -38,7 +38,8 @@ final class WorkspaceSummaryTests: XCTestCase {
             executable: "copilot",
             workingDirectory: "/tmp/project",
             trust: .trusted,
-            autoResume: true
+            autoResume: true,
+            notes: "Keep this lane on PR review follow-through.\nUse yolo mode."
         )
         let run = ProcessRun(entryId: entry.id, status: .needsRecovery, transcriptPath: "/tmp/copilot.log")
         let actionLogEntry = WorkbenchActionLogEntry(
@@ -79,6 +80,7 @@ final class WorkspaceSummaryTests: XCTestCase {
         XCTAssertTrue(prompt.contains("executable_health=available"))
         XCTAssertTrue(prompt.contains("executable_path=/opt/homebrew/bin/copilot"))
         XCTAssertTrue(prompt.contains("transcript=/tmp/copilot.log"))
+        XCTAssertTrue(prompt.contains("notes=Keep this lane on PR review follow-through. Use yolo mode."))
         XCTAssertTrue(prompt.contains("action=respawn"))
         XCTAssertTrue(prompt.contains("```ouro-workbench-actions"))
         XCTAssertTrue(prompt.contains("\"action\":\"recover\""))

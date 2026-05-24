@@ -999,6 +999,11 @@ struct SessionDetailView: View {
                 }
             }
             .padding()
+            if let notes = entry.trimmedNotes {
+                SessionNotesView(notes: notes)
+                    .padding(.horizontal)
+                    .padding(.bottom, model.isCustomSession(entry) ? 8 : 12)
+            }
             if model.isCustomSession(entry) {
                 CustomSessionManagementBar(entry: entry, model: model)
                     .padding(.horizontal)
@@ -1022,6 +1027,20 @@ struct SessionDetailView: View {
                 Spacer()
             }
         }
+    }
+}
+
+struct SessionNotesView: View {
+    var notes: String
+
+    var body: some View {
+        Text(notes)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(3)
+            .fixedSize(horizontal: false, vertical: true)
+            .textSelection(.enabled)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -1281,6 +1300,7 @@ struct NewTerminalSessionSheet: View {
     @State private var workingDirectory = FileManager.default.homeDirectoryForCurrentUser.path
     @State private var trusted = true
     @State private var autoResume = true
+    @State private var notes = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -1301,6 +1321,7 @@ struct NewTerminalSessionSheet: View {
                 }
                 Toggle("Trusted", isOn: $trusted)
                 Toggle("Auto Resume", isOn: $autoResume)
+                SessionNotesEditor(notes: $notes)
             }
             HStack {
                 Spacer()
@@ -1338,7 +1359,8 @@ struct NewTerminalSessionSheet: View {
             command: command,
             workingDirectory: workingDirectory,
             trust: trusted ? .trusted : .untrusted,
-            autoResume: autoResume
+            autoResume: autoResume,
+            notes: notes
         )
         guard model.createCustomSession(draft, launchAfterCreate: launchAfterCreate) != nil else {
             return
@@ -1367,6 +1389,7 @@ struct EditTerminalSessionSheet: View {
     @State private var workingDirectory: String
     @State private var trusted: Bool
     @State private var autoResume: Bool
+    @State private var notes: String
 
     init(model: WorkbenchViewModel, entry: ProcessEntry) {
         self.model = model
@@ -1376,13 +1399,15 @@ struct EditTerminalSessionSheet: View {
             command: "",
             workingDirectory: entry.workingDirectory,
             trust: entry.trust,
-            autoResume: entry.autoResume
+            autoResume: entry.autoResume,
+            notes: entry.notes ?? ""
         )
         _name = State(initialValue: draft.name)
         _command = State(initialValue: draft.command)
         _workingDirectory = State(initialValue: draft.workingDirectory)
         _trusted = State(initialValue: draft.trust == .trusted)
         _autoResume = State(initialValue: draft.autoResume)
+        _notes = State(initialValue: draft.notes)
     }
 
     var body: some View {
@@ -1404,6 +1429,7 @@ struct EditTerminalSessionSheet: View {
                 }
                 Toggle("Trusted", isOn: $trusted)
                 Toggle("Auto Resume", isOn: $autoResume)
+                SessionNotesEditor(notes: $notes)
             }
             HStack {
                 Spacer()
@@ -1435,7 +1461,8 @@ struct EditTerminalSessionSheet: View {
             command: command,
             workingDirectory: workingDirectory,
             trust: trusted ? .trusted : .untrusted,
-            autoResume: autoResume
+            autoResume: autoResume,
+            notes: notes
         )
         guard model.updateCustomSession(entry, draft: draft) else {
             return
@@ -1451,6 +1478,26 @@ struct EditTerminalSessionSheet: View {
         panel.directoryURL = URL(fileURLWithPath: workingDirectory, isDirectory: true)
         if panel.runModal() == .OK, let url = panel.url {
             workingDirectory = url.path
+        }
+    }
+}
+
+struct SessionNotesEditor: View {
+    @Binding var notes: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Notes")
+            TextEditor(text: $notes)
+                .font(.body)
+                .frame(minHeight: 70)
+                .scrollContentBackground(.hidden)
+                .background(Color(nsColor: .textBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.secondary.opacity(0.25), lineWidth: 1)
+                )
         }
     }
 }
