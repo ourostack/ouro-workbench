@@ -102,6 +102,27 @@ final class TranscriptSearchTests: XCTestCase {
         XCTAssertEqual(matches.map(\.lineNumber), [1])
     }
 
+    func testSearchStripsANSIEscapeCodesFromMatches() throws {
+        let project = WorkbenchProject(name: "Project", rootPath: "/repo")
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "Shell",
+            kind: .shell,
+            executable: "/bin/zsh",
+            workingDirectory: "/repo"
+        )
+        let transcriptPath = try writeTranscript(
+            name: "ansi.log",
+            text: "\u{001B}[01;34mouro\u{001B}[00m@\u{001B}[01;36mhost\u{001B}[00m\n"
+        )
+        let run = ProcessRun(entryId: entry.id, status: .exited, transcriptPath: transcriptPath)
+        let state = WorkspaceState(projects: [project], processEntries: [entry], processRuns: [run])
+
+        let matches = TranscriptSearcher().search(query: "ouro", state: state)
+
+        XCTAssertEqual(matches.map(\.line), ["ouro@host"])
+    }
+
     func testEmptyQueryReturnsNoMatches() {
         let state = WorkspaceState()
 

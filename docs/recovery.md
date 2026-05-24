@@ -39,6 +39,19 @@ claude --continue
 
 ### GitHub Copilot CLI
 
+Launch through the GitHub CLI bridge:
+
+```text
+gh copilot
+```
+
+Trusted Workbench lanes pass Copilot's full-autonomy flag through the `gh`
+argument boundary:
+
+```text
+gh copilot -- --yolo
+```
+
 Native resume needs verification. Until then, persist transcript and checkpoint
 state, then respawn with a recovery prompt.
 

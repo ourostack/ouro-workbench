@@ -87,4 +87,5 @@ action, or do nothing. Boss agents can run the same dry run with the
 See [docs/architecture.md](docs/architecture.md) and
 [docs/recovery.md](docs/recovery.md). Native packaging notes are in
 [docs/native-packaging.md](docs/native-packaging.md). The current Ouro bridge
-contract is in [docs/ouro-bridge.md](docs/ouro-bridge.md).
+contract is in [docs/ouro-bridge.md](docs/ouro-bridge.md). Surface audit notes
+are in [docs/surface-audit.md](docs/surface-audit.md).

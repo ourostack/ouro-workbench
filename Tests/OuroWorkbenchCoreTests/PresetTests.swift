@@ -16,7 +16,9 @@ final class PresetTests: XCTestCase {
         let codex = try XCTUnwrap(TerminalAgentPresets.preset(for: .openAICodex))
 
         XCTAssertTrue(claude.yoloArguments.contains("--dangerously-skip-permissions"))
-        XCTAssertTrue(copilot.yoloArguments.contains("--yolo"))
+        XCTAssertEqual(copilot.executable, "gh")
+        XCTAssertEqual(copilot.defaultArguments, ["copilot"])
+        XCTAssertEqual(copilot.yoloArguments, ["copilot", "--", "--yolo"])
         XCTAssertTrue(codex.yoloArguments.contains("--yolo"))
     }
 

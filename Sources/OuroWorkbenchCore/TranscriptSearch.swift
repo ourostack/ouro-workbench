@@ -166,7 +166,7 @@ public struct TranscriptSearcher {
         lineNumber: Int,
         matches: inout [TranscriptSearchMatch]
     ) {
-        let line = String(decoding: data, as: UTF8.self)
+        let line = TranscriptTextSanitizer.sanitized(String(decoding: data, as: UTF8.self))
             .trimmingCharacters(in: CharacterSet(charactersIn: "\r"))
         guard line.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil else {
             return

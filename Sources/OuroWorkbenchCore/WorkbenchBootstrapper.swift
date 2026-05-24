@@ -63,10 +63,14 @@ public struct WorkbenchBootstrapper: Sendable {
         }
 
         for preset in TerminalAgentPresets.all {
-            let alreadyConfigured = next.processEntries.contains { entry in
+            if let existingIndex = next.processEntries.firstIndex(where: { entry in
                 entry.projectId == project.id && entry.kind == .terminalAgent && entry.agentKind == preset.id
-            }
-            if alreadyConfigured {
+            }) {
+                BuiltInWorkbenchSessions.repairTerminalAgentLane(
+                    &next.processEntries[existingIndex],
+                    preset: preset,
+                    project: project
+                )
                 continue
             }
 
@@ -135,6 +139,22 @@ public enum BuiltInWorkbenchSessions {
         entry.autoResume = true
         if entry.lastSummary == nil {
             entry.lastSummary = "Ready local shell"
+        }
+    }
+
+    public static func repairTerminalAgentLane(
+        _ entry: inout ProcessEntry,
+        preset: TerminalAgentPreset,
+        project: WorkbenchProject
+    ) {
+        entry.name = preset.displayName
+        entry.kind = .terminalAgent
+        entry.agentKind = preset.id
+        entry.executable = preset.executable
+        entry.arguments = entry.trust == .trusted ? preset.yoloArguments : preset.defaultArguments
+        entry.workingDirectory = entry.workingDirectory.isEmpty ? project.rootPath : entry.workingDirectory
+        if entry.lastSummary == nil || entry.lastSummary?.hasPrefix("Configured ") == true {
+            entry.lastSummary = "Configured \(preset.displayName) lane"
         }
     }
 }

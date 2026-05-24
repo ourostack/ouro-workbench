@@ -129,6 +129,8 @@ struct TerminalAgentRow: View {
     var body: some View {
         HStack {
             Label(entry.name, systemImage: rowIcon)
+                .lineLimit(1)
+                .truncationMode(.middle)
             Spacer()
             if let health, health.status != .available {
                 Image(systemName: "exclamationmark.triangle.fill")
@@ -315,6 +317,8 @@ struct CommandPaletteSheet: View {
 
 struct BossDashboardView: View {
     @ObservedObject var model: WorkbenchViewModel
+    private let metricColumns = [GridItem(.adaptive(minimum: 86), spacing: 12, alignment: .leading)]
+    private let dashboardColumns = [GridItem(.adaptive(minimum: 260), spacing: 18, alignment: .top)]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -333,7 +337,7 @@ struct BossDashboardView: View {
                         .font(.caption)
                         .foregroundStyle(.orange)
                 }
-                HStack(spacing: 18) {
+                LazyVGrid(columns: metricColumns, alignment: .leading, spacing: 8) {
                     MetricView(label: "daemon", value: dashboard.daemonStatus)
                     MetricView(label: "needs me", value: dashboard.availability.needsMeAvailable ? "\(dashboard.needsMeItems.count)" : "?")
                     MetricView(label: "coding", value: dashboard.availability.codingAvailable ? "\(dashboard.activeCodingAgents)" : "?")
@@ -341,27 +345,29 @@ struct BossDashboardView: View {
                     MetricView(label: "mode", value: dashboard.daemonMode)
                 }
                 if !dashboard.needsMeItems.isEmpty || !dashboard.codingItems.isEmpty {
-                    HStack(alignment: .top, spacing: 18) {
+                    LazyVGrid(columns: dashboardColumns, alignment: .leading, spacing: 10) {
                         VStack(alignment: .leading, spacing: 5) {
                             Text("Needs Me")
                                 .font(.caption.weight(.semibold))
-                            ForEach(dashboard.needsMeItems.prefix(3)) { item in
+                            ForEach(Array(dashboard.needsMeItems.prefix(3))) { item in
                                 Text("\(item.label) - \(item.detail)")
                                     .font(.caption)
                                     .lineLimit(1)
                                     .truncationMode(.tail)
                             }
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         VStack(alignment: .leading, spacing: 5) {
                             Text("Coding")
                                 .font(.caption.weight(.semibold))
-                            ForEach(dashboard.codingItems.prefix(3)) { item in
+                            ForEach(Array(dashboard.codingItems.prefix(3))) { item in
                                 Text("\(item.runner) - \(item.status) - \(item.workdir)")
                                     .font(.caption)
                                     .lineLimit(1)
                                     .truncationMode(.middle)
                             }
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
             }
@@ -402,6 +408,7 @@ struct BossDashboardView: View {
             ActionLogView(entries: model.recentActionLogEntries)
         }
         .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -434,6 +441,7 @@ struct ActionLogView: View {
                             .lineLimit(1)
                             .truncationMode(.tail)
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
@@ -481,6 +489,9 @@ struct TranscriptSearchView: View {
                     .font(.caption.weight(.semibold))
                 TextField("Search transcripts", text: $model.transcriptSearchQuery)
                     .textFieldStyle(.roundedBorder)
+                    .onChange(of: model.transcriptSearchQuery) {
+                        model.transcriptSearchQueryDidChange()
+                    }
                     .onSubmit {
                         model.searchTranscripts()
                     }
@@ -628,34 +639,43 @@ struct SessionStatusBar: View {
     @ObservedObject var model: WorkbenchViewModel
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(entry.isArchived ? "Archived" : (entry.lastSummary ?? "Configured"))
-                .font(.body)
-            Text(entry.isArchived ? "Restore this session before launching it." : "Recovery: \(model.recoveryReason(for: entry))")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            if !entry.isArchived, let health = model.executableHealth(for: entry) {
-                Text("Executable: \(health.detail)")
-                    .font(.caption)
-                    .foregroundStyle(health.status == .available ? SwiftUI.Color.secondary : SwiftUI.Color.orange)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text(entry.isArchived ? "Archived" : (entry.lastSummary ?? "Configured"))
+                    .font(.body)
                     .lineLimit(1)
-                    .truncationMode(.middle)
+                    .truncationMode(.tail)
+                Spacer()
+                if entry.isArchived {
+                    Button {
+                        model.restoreCustomSession(entry)
+                    } label: {
+                        Label("Restore", systemImage: "tray.and.arrow.up")
+                    }
+                    .buttonStyle(.bordered)
+                } else if model.canRecover(entry) {
+                    Button {
+                        model.recover(entry)
+                    } label: {
+                        Label(model.recoveryButtonTitle(for: entry), systemImage: "arrow.clockwise")
+                    }
+                    .buttonStyle(.bordered)
+                }
             }
-            Spacer()
-            if entry.isArchived {
-                Button {
-                    model.restoreCustomSession(entry)
-                } label: {
-                    Label("Restore", systemImage: "tray.and.arrow.up")
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text(entry.isArchived ? "Restore this session before launching it." : "Recovery: \(model.recoveryReason(for: entry))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                if !entry.isArchived, let health = model.executableHealth(for: entry) {
+                    Text("Executable: \(health.detail)")
+                        .font(.caption)
+                        .foregroundStyle(health.status == .available ? SwiftUI.Color.secondary : SwiftUI.Color.orange)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .layoutPriority(1)
                 }
-                .buttonStyle(.bordered)
-            } else if model.canRecover(entry) {
-                Button {
-                    model.recover(entry)
-                } label: {
-                    Label(model.recoveryButtonTitle(for: entry), systemImage: "arrow.clockwise")
-                }
-                .buttonStyle(.bordered)
             }
         }
     }
@@ -1319,10 +1339,14 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     var transcriptSearchStatusLine: String {
-        guard let transcriptSearchLastQuery else {
+        let query = transcriptSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
             return "Enter a query to search saved transcripts."
         }
-        return "No transcript matches for \(transcriptSearchLastQuery)."
+        guard transcriptSearchLastQuery == query else {
+            return "Press Search to search saved transcripts."
+        }
+        return "No transcript matches for \(query)."
     }
 
     var recoveryDrillStatusLine: String {
@@ -1633,6 +1657,15 @@ final class WorkbenchViewModel: ObservableObject {
             state: state,
             maxMatches: TranscriptSearchLimit.defaultMatches
         )
+    }
+
+    func transcriptSearchQueryDidChange() {
+        let query = transcriptSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard query != transcriptSearchLastQuery else {
+            return
+        }
+        transcriptSearchResults = []
+        transcriptSearchLastQuery = nil
     }
 
     func runRecoveryDrill() {
