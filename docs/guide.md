@@ -223,6 +223,10 @@ Important rows:
 
 The lower pane is the terminal surface for the selected session.
 
+The selected-session header shows the launch command plus compact trust and
+restart-posture chips so you can tell whether the boss may operate the session
+and whether it participates in restart recovery.
+
 Use it like a normal terminal:
 
 - type directly into the terminal

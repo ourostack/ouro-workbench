@@ -973,6 +973,16 @@ struct SessionDetailView: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
+                    HStack(spacing: 6) {
+                        StatusPill(
+                            text: entry.trust == .trusted ? "trusted" : "untrusted",
+                            color: entry.trust == .trusted ? .green : .orange
+                        )
+                        StatusPill(
+                            text: entry.autoResume ? "auto-resume" : "manual restart",
+                            color: entry.autoResume ? .blue : .secondary
+                        )
+                    }
                 }
                 Spacer()
                 if entry.isArchived {
