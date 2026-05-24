@@ -72,6 +72,11 @@ across Workbench runs. Boss agents can use the same capability through the
 `workbench_search_transcripts` MCP tool. Results are ordered by newest run first,
 then by line order within each transcript.
 
+Press `Command-K` to open the native command palette. Common shortcuts include
+`Command-N` for a new session, `Command-I` for boss check-in, `Command-Return`
+to launch or restart the selected session, `Command-.` to stop a running
+session, and `Command-F` to run the transcript search box.
+
 ## Architecture
 
 See [docs/architecture.md](docs/architecture.md) and
