@@ -19,6 +19,7 @@ final class WorkbenchMCPServer {
     private let authorizer = BossWorkbenchActionAuthorizer()
     private let executableHealthChecker = ExecutableHealthChecker()
     private let transcriptSearcher = TranscriptSearcher()
+    private let recoveryDrill = RecoveryDrill()
 
     init(paths: WorkbenchPaths = .defaultPaths()) {
         self.paths = paths
@@ -82,6 +83,8 @@ final class WorkbenchMCPServer {
             return try transcriptTail(arguments: arguments)
         case "workbench_search_transcripts":
             return try searchTranscripts(arguments: arguments)
+        case "workbench_recovery_drill":
+            return try recoveryDrillReport()
         case "workbench_request_action":
             return try requestAction(arguments: arguments)
         default:
@@ -130,6 +133,16 @@ final class WorkbenchMCPServer {
         var lines = ["Transcript matches for \(query):"]
         for match in matches {
             lines.append("- \(match.entryName) line \(match.lineNumber) (\(match.transcriptPath)): \(match.line)")
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    private func recoveryDrillReport() throws -> String {
+        let state = try currentState()
+        let result = recoveryDrill.run(state: state)
+        var lines = ["Recovery drill: \(result.oneLineStatus)"]
+        for item in result.items {
+            lines.append("- \(item.entryName): \(item.beforeStatus?.rawValue ?? "none") -> \(item.afterStatus?.rawValue ?? "none"), action=\(item.action.rawValue), reason=\(item.reason)")
         }
         return lines.joined(separator: "\n")
     }
@@ -235,6 +248,15 @@ final class WorkbenchMCPServer {
                         ]
                     ],
                     "required": ["query"],
+                    "additionalProperties": false
+                ]
+            ],
+            [
+                "name": "workbench_recovery_drill",
+                "description": "Dry-run restart recovery planning for current Workbench sessions without mutating state.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [:],
                     "additionalProperties": false
                 ]
             ],

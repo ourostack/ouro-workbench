@@ -332,6 +332,7 @@ struct BossDashboardView: View {
             BossWatchStatusView(model: model)
             TranscriptSearchView(model: model)
             MachineRuntimeView()
+            RecoveryDrillView(model: model)
             BossWorkbenchMCPSetupView(model: model)
             if let dashboard = model.bossDashboard {
                 if !dashboard.availability.issues.isEmpty {
@@ -1061,6 +1062,45 @@ struct MachineRuntimeView: View {
     }
 }
 
+struct RecoveryDrillView: View {
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 12) {
+                Label("Recovery Drill", systemImage: "arrow.clockwise.circle")
+                    .font(.caption.weight(.semibold))
+                Text(model.recoveryDrillStatusLine)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+                Button {
+                    model.runRecoveryDrill()
+                } label: {
+                    Label("Run Drill", systemImage: "play.circle")
+                }
+                .buttonStyle(.bordered)
+            }
+            if let result = model.recoveryDrillResult {
+                ForEach(result.items.prefix(5)) { item in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(item.entryName)
+                            .font(.caption.weight(.semibold))
+                        Text("\(item.beforeStatus?.rawValue ?? "none") -> \(item.afterStatus?.rawValue ?? "none")")
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
+                        Text(item.action.rawValue)
+                            .font(.caption.monospaced())
+                        Text(item.reason)
+                            .font(.caption)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                }
+            }
+        }
+    }
+}
+
 @MainActor
 final class LoginItemController: ObservableObject {
     @Published private(set) var status: LaunchAgentLoginItemStatus
@@ -1146,6 +1186,7 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var transcriptSearchQuery = ""
     @Published var transcriptSearchResults: [TranscriptSearchMatch] = []
     @Published var transcriptSearchLastQuery: String?
+    @Published var recoveryDrillResult: RecoveryDrillResult?
     @Published var bossAppliedActions: [String] = []
     @Published var mailboxError: String?
     @Published var isNewSessionSheetPresented = false
@@ -1177,6 +1218,7 @@ final class WorkbenchViewModel: ObservableObject {
     private let customSessionManager = CustomTerminalSessionManager()
     private let transcriptTailReader = TranscriptTailReader()
     private let transcriptSearcher = TranscriptSearcher()
+    private let recoveryDrill = RecoveryDrill()
     private let externalActionQueue: WorkbenchActionRequestQueue
     private var manuallyTerminatedRunIDs = Set<UUID>()
     private var bossWatchBaselineState: WorkspaceState?
@@ -1290,6 +1332,13 @@ final class WorkbenchViewModel: ObservableObject {
         return "No transcript matches for \(transcriptSearchLastQuery)."
     }
 
+    var recoveryDrillStatusLine: String {
+        guard let recoveryDrillResult else {
+            return "not run"
+        }
+        return "\(recoveryDrillResult.oneLineStatus); \(recoveryDrillResult.ranAt.formatted(date: .omitted, time: .standard))"
+    }
+
     var commandPaletteItems: [WorkbenchCommandDescriptor] {
         var commands: [WorkbenchCommandDescriptor] = [
             WorkbenchCommandDescriptor(
@@ -1309,6 +1358,12 @@ final class WorkbenchViewModel: ObservableObject {
                 title: "Search Transcripts",
                 detail: "Run the current transcript search query",
                 systemImage: "text.magnifyingglass"
+            ),
+            WorkbenchCommandDescriptor(
+                id: .runRecoveryDrill,
+                title: "Run Recovery Drill",
+                detail: "Simulate restart recovery planning",
+                systemImage: "arrow.clockwise.circle"
             )
         ]
 
@@ -1587,6 +1642,10 @@ final class WorkbenchViewModel: ObservableObject {
         )
     }
 
+    func runRecoveryDrill() {
+        recoveryDrillResult = recoveryDrill.run(state: state)
+    }
+
     func performCommand(_ command: WorkbenchCommandID) {
         switch command {
         case .newSession:
@@ -1621,6 +1680,8 @@ final class WorkbenchViewModel: ObservableObject {
             recover(selectedEntry)
         case .searchTranscripts:
             searchTranscripts()
+        case .runRecoveryDrill:
+            runRecoveryDrill()
         }
     }
 

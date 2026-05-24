@@ -8,6 +8,7 @@ public enum WorkbenchCommandID: String, Codable, CaseIterable, Sendable {
     case stopSelectedSession
     case recoverSelectedSession
     case searchTranscripts
+    case runRecoveryDrill
 }
 
 public struct WorkbenchCommandDescriptor: Codable, Equatable, Identifiable, Sendable {
