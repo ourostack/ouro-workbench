@@ -98,7 +98,7 @@ then by line order within each transcript.
 Press `Command-K` to open the native command palette. Common shortcuts include
 `Command-N` for a new session, `Command-I` for boss check-in, `Command-Return`
 to launch or restart the selected session, `Command-.` to stop a running
-session, and `Command-F` to run the transcript search box.
+session, and `Command-F` to focus or run transcript search.
 
 Use `Recovery Drill` to dry-run restart recovery without mutating workspace
 state. It reports which sessions would auto-resume, respawn, require manual

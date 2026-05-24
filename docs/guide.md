@@ -255,7 +255,7 @@ Useful shortcuts:
 | `Command-I` | Boss check-in |
 | `Command-Return` | Launch or restart selected session |
 | `Command-.` | Stop selected session |
-| `Command-F` | Transcript search |
+| `Command-F` | Focus or run transcript search |
 
 ## Daily Operating Loops
 

@@ -75,12 +75,20 @@ This gives an Ouro agent a direct Workbench-facing tool surface:
   plans, and transcript paths.
 - `workbench_transcript_tail`: read a bounded tail from the latest transcript
   for a process entry. The server clamps transcript reads to 64 KB.
+- `workbench_search_transcripts`: search saved transcript text across process
+  runs. The server clamps returned matches to 200 lines and clips pathological
+  no-newline result snippets to keep tool output readable.
+- `workbench_recovery_drill`: dry-run restart recovery planning for current
+  Workbench sessions without mutating state.
 - `workbench_request_action`: queue `launch`, `recover`, `terminate`, or
   `sendInput` for the native app to apply.
 
 The native app drains queued action requests from Application Support and applies
 them through the same trust-gated action path used by boss check-ins. Untrusted
 entries are denied before action execution.
+
+Malformed or partially written queued action files are moved into a rejected
+queue folder so one bad request cannot block later valid boss/Ouro actions.
 
 Applied boss and external Workbench actions are written to the persisted
 workspace action log with source, action, target, result, success state, and
@@ -89,6 +97,8 @@ after the transient check-in output scrolls away.
 
 Workbench status prompts include executable health for each configured session:
 `available`, `missing`, or `notExecutable`, plus the resolved path when present.
+They also include persisted Boss Watch state so the selected boss can tell
+whether background observation is enabled or paused.
 
 The native boss dashboard has a `Workbench MCP` row that registers or updates an
 `ouro_workbench` entry in `~/AgentBundles/<boss>.ouro/agent.json`. The entry
