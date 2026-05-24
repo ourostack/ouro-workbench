@@ -17,6 +17,12 @@ moving.
 - Boss agents can inspect and control trusted workspace processes.
 - Sessions restore after app or computer restart wherever technically possible.
 
+## Guide
+
+Read [docs/guide.md](docs/guide.md) for the operator mental model, first-run
+checklist, daily control loops, boss/Ouro integration, restart recovery
+playbook, trust model, and troubleshooting.
+
 ## Build
 
 ```bash
