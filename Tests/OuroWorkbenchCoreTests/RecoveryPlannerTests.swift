@@ -136,4 +136,26 @@ final class RecoveryPlannerTests: XCTestCase {
         XCTAssertEqual(plan.first?.action, .noAction)
         XCTAssertEqual(plan.first?.reason, "latest run status is exited")
     }
+
+    func testArchivedEntryDoesNotRecoverEvenWithNeedsRecoveryRun() {
+        let project = WorkbenchProject(name: "Harness", rootPath: "/repo")
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "Archived",
+            kind: .terminalAgent,
+            executable: "/bin/zsh",
+            arguments: ["-lc", "aider --yes"],
+            workingDirectory: "/repo",
+            trust: .trusted,
+            autoResume: true,
+            isArchived: true
+        )
+        let run = ProcessRun(entryId: entry.id, status: .needsRecovery)
+        let state = WorkspaceState(projects: [project], processEntries: [entry], processRuns: [run])
+
+        let plan = RecoveryPlanner().planRecovery(for: state)
+
+        XCTAssertEqual(plan.first?.action, .noAction)
+        XCTAssertEqual(plan.first?.reason, "entry is archived")
+    }
 }

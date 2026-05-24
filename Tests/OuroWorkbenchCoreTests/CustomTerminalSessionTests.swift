@@ -25,6 +25,7 @@ final class CustomTerminalSessionTests: XCTestCase {
         XCTAssertEqual(entry.workingDirectory, "/repo")
         XCTAssertEqual(entry.trust, .trusted)
         XCTAssertTrue(entry.autoResume)
+        XCTAssertFalse(entry.isArchived)
         XCTAssertEqual(entry.lastSummary, "Custom terminal session: aider --yes")
     }
 
@@ -69,6 +70,139 @@ final class CustomTerminalSessionTests: XCTestCase {
             )
         )) { error in
             XCTAssertEqual(error as? CustomTerminalSessionError, .emptyWorkingDirectory)
+        }
+    }
+
+    func testManagerExtractsDraftFromCustomSession() throws {
+        let entry = try CustomTerminalSessionFactory().makeEntry(
+            projectId: UUID(),
+            draft: CustomTerminalSessionDraft(
+                name: "Aider",
+                command: "aider --yes",
+                workingDirectory: "/repo",
+                trust: .trusted,
+                autoResume: true
+            )
+        )
+
+        let draft = try CustomTerminalSessionManager().draft(from: entry)
+
+        XCTAssertEqual(draft, CustomTerminalSessionDraft(
+            name: "Aider",
+            command: "aider --yes",
+            workingDirectory: "/repo",
+            trust: .trusted,
+            autoResume: true
+        ))
+    }
+
+    func testManagerUpdatesCustomSessionWhilePreservingIdentityAndArchiveState() throws {
+        let original = try CustomTerminalSessionFactory().makeEntry(
+            projectId: UUID(),
+            draft: CustomTerminalSessionDraft(
+                name: "Aider",
+                command: "aider --yes",
+                workingDirectory: "/repo",
+                trust: .trusted,
+                autoResume: true
+            )
+        )
+        var archived = original
+        archived.isArchived = true
+
+        let updated = try CustomTerminalSessionManager().updatedEntry(
+            archived,
+            draft: CustomTerminalSessionDraft(
+                name: "Codex Scratch",
+                command: "codex --yolo",
+                workingDirectory: "/repo/app",
+                trust: .untrusted,
+                autoResume: false
+            )
+        )
+
+        XCTAssertEqual(updated.id, original.id)
+        XCTAssertEqual(updated.projectId, original.projectId)
+        XCTAssertEqual(updated.name, "Codex Scratch")
+        XCTAssertEqual(updated.arguments, ["-lc", "codex --yolo"])
+        XCTAssertEqual(updated.workingDirectory, "/repo/app")
+        XCTAssertEqual(updated.trust, .untrusted)
+        XCTAssertFalse(updated.autoResume)
+        XCTAssertTrue(updated.isArchived)
+    }
+
+    func testManagerDuplicatesCustomSessionWithRequestedName() throws {
+        let original = try CustomTerminalSessionFactory().makeEntry(
+            projectId: UUID(),
+            draft: CustomTerminalSessionDraft(
+                name: "Aider",
+                command: "aider --yes",
+                workingDirectory: "/repo",
+                trust: .trusted,
+                autoResume: true
+            )
+        )
+
+        let duplicate = try CustomTerminalSessionManager().duplicateEntry(original, name: "Copy of Aider")
+
+        XCTAssertNotEqual(duplicate.id, original.id)
+        XCTAssertEqual(duplicate.projectId, original.projectId)
+        XCTAssertEqual(duplicate.name, "Copy of Aider")
+        XCTAssertEqual(duplicate.arguments, original.arguments)
+        XCTAssertFalse(duplicate.isArchived)
+    }
+
+    func testManagerArchivesAndRestoresCustomSession() throws {
+        let original = try CustomTerminalSessionFactory().makeEntry(
+            projectId: UUID(),
+            draft: CustomTerminalSessionDraft(
+                name: "Aider",
+                command: "aider --yes",
+                workingDirectory: "/repo",
+                trust: .trusted,
+                autoResume: true
+            )
+        )
+
+        let archived = try CustomTerminalSessionManager().archivedEntry(original)
+        let restored = try CustomTerminalSessionManager().restoredEntry(archived)
+
+        XCTAssertTrue(archived.isArchived)
+        XCTAssertEqual(archived.attention, .idle)
+        XCTAssertEqual(archived.lastSummary, "Archived custom terminal session")
+        XCTAssertFalse(restored.isArchived)
+        XCTAssertEqual(restored.lastSummary, "Restored custom terminal session")
+    }
+
+    func testManagerRejectsPresetTerminalAgents() {
+        let entry = ProcessEntry(
+            projectId: UUID(),
+            name: "Claude",
+            kind: .terminalAgent,
+            agentKind: .claudeCode,
+            executable: "claude",
+            workingDirectory: "/repo",
+            trust: .trusted
+        )
+
+        XCTAssertThrowsError(try CustomTerminalSessionManager().draft(from: entry)) { error in
+            XCTAssertEqual(error as? CustomTerminalSessionError, .notCustomSession)
+        }
+    }
+
+    func testManagerRejectsCustomSessionsWithoutShellWrappedCommand() {
+        let entry = ProcessEntry(
+            projectId: UUID(),
+            name: "Custom",
+            kind: .terminalAgent,
+            executable: "/usr/bin/env",
+            arguments: ["aider"],
+            workingDirectory: "/repo",
+            trust: .trusted
+        )
+
+        XCTAssertThrowsError(try CustomTerminalSessionManager().draft(from: entry)) { error in
+            XCTAssertEqual(error as? CustomTerminalSessionError, .unavailableCommand)
         }
     }
 }

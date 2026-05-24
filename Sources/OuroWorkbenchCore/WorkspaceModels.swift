@@ -69,6 +69,7 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
     public var workingDirectory: String
     public var trust: ProcessTrust
     public var autoResume: Bool
+    public var isArchived: Bool
     public var attention: AttentionState
     public var lastSummary: String?
 
@@ -83,6 +84,7 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         case workingDirectory
         case trust
         case autoResume
+        case isArchived
         case attention
         case lastSummary
     }
@@ -98,6 +100,7 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         workingDirectory: String,
         trust: ProcessTrust = .untrusted,
         autoResume: Bool = false,
+        isArchived: Bool = false,
         attention: AttentionState = .idle,
         lastSummary: String? = nil
     ) {
@@ -111,6 +114,7 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         self.workingDirectory = workingDirectory
         self.trust = trust
         self.autoResume = autoResume
+        self.isArchived = isArchived
         self.attention = attention
         self.lastSummary = lastSummary
     }
@@ -127,6 +131,7 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         self.workingDirectory = try container.decode(String.self, forKey: .workingDirectory)
         self.trust = try container.decode(ProcessTrust.self, forKey: .trust)
         self.autoResume = try container.decode(Bool.self, forKey: .autoResume)
+        self.isArchived = try container.decodeIfPresent(Bool.self, forKey: .isArchived) ?? false
         self.attention = try container.decodeIfPresent(AttentionState.self, forKey: .attention) ?? .idle
         self.lastSummary = try container.decodeIfPresent(String.self, forKey: .lastSummary)
     }

@@ -31,7 +31,7 @@ final class WorkbenchStoreTests: XCTestCase {
         try? FileManager.default.removeItem(at: root)
     }
 
-    func testStoreLoadsStateBeforeAttentionFieldsExisted() throws {
+    func testStoreLoadsStateBeforeAttentionAndArchiveFieldsExisted() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         let stateURL = root.appendingPathComponent("workspace.json")
@@ -79,6 +79,7 @@ final class WorkbenchStoreTests: XCTestCase {
         let loaded = try WorkbenchStore(stateURL: stateURL).load()
 
         XCTAssertEqual(loaded.processEntries.first?.attention, .idle)
+        XCTAssertEqual(loaded.processEntries.first?.isArchived, false)
         XCTAssertNil(loaded.processEntries.first?.lastSummary)
         XCTAssertEqual(loaded.actionLog, [])
         try? FileManager.default.removeItem(at: root)
