@@ -70,3 +70,21 @@ This gives an Ouro agent a direct Workbench-facing tool surface:
 The native app drains queued action requests from Application Support and applies
 them through the same trust-gated action path used by boss check-ins. Untrusted
 entries are denied before action execution.
+
+The native boss dashboard has a `Workbench MCP` row that registers or updates an
+`ouro_workbench` entry in `~/AgentBundles/<boss>.ouro/agent.json`. The entry
+points at the packaged `OuroWorkbenchMCP` executable and uses no arguments:
+
+```json
+{
+  "mcpServers": {
+    "ouro_workbench": {
+      "command": "/Users/arimendelow/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP",
+      "args": []
+    }
+  }
+}
+```
+
+Once registered, the selected boss agent can discover the workbench tools from
+its normal Ouro MCP/tool surface.
