@@ -6,7 +6,7 @@ developer processes.
 ## Core Product Shape
 
 - Native app first.
-- Terminal/TUI agents are first-class process entries.
+- Terminal/TUI agents and local shells are first-class process entries.
 - Claude Code, GitHub Copilot CLI, and OpenAI Codex are P0 named lanes.
 - A selectable Ouro boss agent can observe and control the workspace.
 - Restart recovery is P0: sessions restore, resume, respawn, or report manual
@@ -34,6 +34,7 @@ developer processes.
      as the boss conversation plane before adding new daemon APIs.
 
 4. Terminal-agent lanes
+   - Local Shell.
    - Claude Code.
    - GitHub Copilot CLI.
    - OpenAI Codex.

@@ -26,8 +26,8 @@ struct WorkbenchRootView: View {
                 Section("Boss") {
                     Label(model.state.boss.agentName, systemImage: "person.crop.circle.badge.checkmark")
                 }
-                Section("Terminal Agents") {
-                    ForEach(model.terminalEntries) { entry in
+                Section("Sessions") {
+                    ForEach(model.sessionEntries) { entry in
                         TerminalAgentRow(entry: entry, isSelected: model.selectedEntryID == entry.id)
                             .tag(entry.id)
                     }
@@ -64,6 +64,7 @@ struct WorkbenchRootView: View {
         }
         .task {
             model.recoverEligibleSessionsOnStartup()
+            model.launchDefaultShellIfNeeded()
             await model.refreshBossDashboard()
         }
         .sheet(isPresented: $model.isNewSessionSheetPresented) {
@@ -81,7 +82,7 @@ struct TerminalAgentRow: View {
 
     var body: some View {
         HStack {
-            Label(entry.name, systemImage: "terminal")
+            Label(entry.name, systemImage: entry.kind == .shell ? "apple.terminal" : "terminal")
             Spacer()
             StatusDot(attention: entry.attention)
         }
@@ -299,7 +300,7 @@ struct SessionDetailView: View {
                 Button {
                     model.launch(entry)
                 } label: {
-                    Label("Launch", systemImage: "play.fill")
+                    Label(model.activeSession(for: entry) == nil ? "Launch" : "Restart", systemImage: "play.fill")
                 }
                 .buttonStyle(.borderedProminent)
             }
@@ -312,27 +313,76 @@ struct SessionDetailView: View {
                     .id(session.id)
             } else {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(entry.lastSummary ?? "Configured")
-                        .font(.body)
-                    Text("Recovery: \(model.recoveryReason(for: entry))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    if model.canRecover(entry) {
-                        Button {
-                            model.recover(entry)
-                        } label: {
-                            Label(model.recoveryButtonTitle(for: entry), systemImage: "arrow.clockwise")
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
+                    SessionStatusBar(entry: entry, model: model)
                     if let tail = model.transcriptTail(for: entry) {
                         TranscriptHistoryView(tail: tail)
                     }
+                    InactiveTerminalSurface(entry: entry, model: model)
                 }
                 .padding()
                 Spacer()
             }
         }
+    }
+}
+
+struct SessionStatusBar: View {
+    var entry: ProcessEntry
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(entry.lastSummary ?? "Configured")
+                .font(.body)
+            Text("Recovery: \(model.recoveryReason(for: entry))")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Spacer()
+            if model.canRecover(entry) {
+                Button {
+                    model.recover(entry)
+                } label: {
+                    Label(model.recoveryButtonTitle(for: entry), systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+    }
+}
+
+struct InactiveTerminalSurface: View {
+    var entry: ProcessEntry
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("$ \(model.launchCommand(for: entry))")
+                    .font(.system(size: 13, design: .monospaced))
+                    .foregroundStyle(.green)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer()
+                Button {
+                    if model.canRecover(entry) {
+                        model.recover(entry)
+                    } else {
+                        model.launch(entry)
+                    }
+                } label: {
+                    Label(model.canRecover(entry) ? model.recoveryButtonTitle(for: entry) : "Launch", systemImage: "play.fill")
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            Spacer()
+            Text("ready")
+                .font(.system(size: 13, design: .monospaced))
+                .foregroundStyle(.secondary)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, minHeight: 320, alignment: .topLeading)
+        .background(Color.black)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 }
 
@@ -633,6 +683,7 @@ final class WorkbenchViewModel: ObservableObject {
     private let externalActionQueue: WorkbenchActionRequestQueue
     private var manuallyTerminatedRunIDs = Set<UUID>()
     private var didAttemptStartupRecovery = false
+    private var didAttemptDefaultShellLaunch = false
 
     init(
         paths: WorkbenchPaths = .defaultPaths(),
@@ -659,13 +710,13 @@ final class WorkbenchViewModel: ObservableObject {
         )
     }
 
-    var terminalEntries: [ProcessEntry] {
-        state.processEntries.filter { $0.kind == .terminalAgent }
+    var sessionEntries: [ProcessEntry] {
+        state.processEntries.filter { $0.kind == .terminalAgent || $0.kind == .shell }
     }
 
     var selectedEntry: ProcessEntry? {
         guard let selectedEntryID else {
-            return terminalEntries.first
+            return sessionEntries.first
         }
         return state.processEntries.first { $0.id == selectedEntryID }
     }
@@ -868,6 +919,28 @@ final class WorkbenchViewModel: ObservableObject {
             }
             recover(entry, recoveryPlan: plan)
         }
+    }
+
+    func launchDefaultShellIfNeeded() {
+        guard !didAttemptDefaultShellLaunch else {
+            return
+        }
+        didAttemptDefaultShellLaunch = true
+        guard activeSessions.isEmpty else {
+            return
+        }
+        guard let shell = state.processEntries.first(where: BuiltInWorkbenchSessions.isAutoLaunchableLocalShell) else {
+            return
+        }
+        selectedEntryID = shell.id
+        guard activeSessions[shell.id] == nil else {
+            return
+        }
+        if let latestRun = latestRun(for: shell),
+           latestRun.status == .needsRecovery || latestRun.status == .manualActionNeeded {
+            return
+        }
+        launch(shell)
     }
 
     func recover(_ entry: ProcessEntry) {
@@ -1115,12 +1188,12 @@ final class WorkbenchViewModel: ObservableObject {
         do {
             let loaded = try store.load()
             state = startupRecoveryReconciler.reconcile(bootstrapper.bootstrappedState(from: loaded))
-            selectedEntryID = terminalEntries.first?.id
+            selectedEntryID = sessionEntries.first?.id
             try store.save(state)
         } catch {
             errorMessage = String(describing: error)
             state = bootstrapper.bootstrappedState(from: WorkspaceState())
-            selectedEntryID = terminalEntries.first?.id
+            selectedEntryID = sessionEntries.first?.id
         }
     }
 
