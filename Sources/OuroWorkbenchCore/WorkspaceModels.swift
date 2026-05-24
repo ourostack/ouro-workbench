@@ -72,6 +72,7 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
     public var isArchived: Bool
     public var attention: AttentionState
     public var lastSummary: String?
+    public var notes: String?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -87,6 +88,7 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         case isArchived
         case attention
         case lastSummary
+        case notes
     }
 
     public init(
@@ -102,7 +104,8 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         autoResume: Bool = false,
         isArchived: Bool = false,
         attention: AttentionState = .idle,
-        lastSummary: String? = nil
+        lastSummary: String? = nil,
+        notes: String? = nil
     ) {
         self.id = id
         self.projectId = projectId
@@ -117,6 +120,15 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         self.isArchived = isArchived
         self.attention = attention
         self.lastSummary = lastSummary
+        self.notes = notes
+    }
+
+    public var trimmedNotes: String? {
+        guard let notes else {
+            return nil
+        }
+        let trimmed = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     public init(from decoder: Decoder) throws {
@@ -134,6 +146,7 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         self.isArchived = try container.decodeIfPresent(Bool.self, forKey: .isArchived) ?? false
         self.attention = try container.decodeIfPresent(AttentionState.self, forKey: .attention) ?? .idle
         self.lastSummary = try container.decodeIfPresent(String.self, forKey: .lastSummary)
+        self.notes = try container.decodeIfPresent(String.self, forKey: .notes)
     }
 }
 

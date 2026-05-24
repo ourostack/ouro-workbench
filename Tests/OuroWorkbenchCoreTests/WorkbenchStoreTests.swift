@@ -19,6 +19,19 @@ final class WorkbenchStoreTests: XCTestCase {
         let state = WorkspaceState(
             boss: BossAgentSelection(agentName: "slugger"),
             projects: [project],
+            processEntries: [
+                ProcessEntry(
+                    projectId: project.id,
+                    name: "Aider",
+                    kind: .terminalAgent,
+                    executable: "/bin/zsh",
+                    arguments: ["-lc", "aider --yes"],
+                    workingDirectory: "/repo",
+                    trust: .trusted,
+                    autoResume: true,
+                    notes: "Use for implementation passes."
+                )
+            ],
             actionLog: [logEntry]
         )
 
@@ -27,6 +40,7 @@ final class WorkbenchStoreTests: XCTestCase {
 
         XCTAssertEqual(loaded.boss.agentName, "slugger")
         XCTAssertEqual(loaded.projects, [project])
+        XCTAssertEqual(loaded.processEntries.first?.notes, "Use for implementation passes.")
         XCTAssertEqual(loaded.actionLog, [logEntry])
         try? FileManager.default.removeItem(at: root)
     }
@@ -81,6 +95,7 @@ final class WorkbenchStoreTests: XCTestCase {
         XCTAssertEqual(loaded.processEntries.first?.attention, .idle)
         XCTAssertEqual(loaded.processEntries.first?.isArchived, false)
         XCTAssertNil(loaded.processEntries.first?.lastSummary)
+        XCTAssertNil(loaded.processEntries.first?.notes)
         XCTAssertEqual(loaded.actionLog, [])
         try? FileManager.default.removeItem(at: root)
     }

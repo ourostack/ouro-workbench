@@ -29,19 +29,22 @@ public struct CustomTerminalSessionDraft: Equatable, Sendable {
     public var workingDirectory: String
     public var trust: ProcessTrust
     public var autoResume: Bool
+    public var notes: String
 
     public init(
         name: String,
         command: String,
         workingDirectory: String,
         trust: ProcessTrust,
-        autoResume: Bool
+        autoResume: Bool,
+        notes: String = ""
     ) {
         self.name = name
         self.command = command
         self.workingDirectory = workingDirectory
         self.trust = trust
         self.autoResume = autoResume
+        self.notes = notes
     }
 }
 
@@ -52,6 +55,7 @@ public struct CustomTerminalSessionFactory: Sendable {
         let name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
         let command = draft.command.trimmingCharacters(in: .whitespacesAndNewlines)
         let workingDirectory = draft.workingDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
+        let notes = draft.notes.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !name.isEmpty else {
             throw CustomTerminalSessionError.emptyName
@@ -74,7 +78,8 @@ public struct CustomTerminalSessionFactory: Sendable {
             trust: draft.trust,
             autoResume: draft.autoResume,
             attention: .idle,
-            lastSummary: "Custom terminal session: \(command)"
+            lastSummary: "Custom terminal session: \(command)",
+            notes: notes.isEmpty ? nil : notes
         )
     }
 }
@@ -106,7 +111,8 @@ public struct CustomTerminalSessionManager: Sendable {
             command: entry.arguments[1],
             workingDirectory: entry.workingDirectory,
             trust: entry.trust,
-            autoResume: entry.autoResume
+            autoResume: entry.autoResume,
+            notes: entry.notes ?? ""
         )
     }
 

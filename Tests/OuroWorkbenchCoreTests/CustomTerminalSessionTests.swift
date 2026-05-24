@@ -12,7 +12,8 @@ final class CustomTerminalSessionTests: XCTestCase {
                 command: "  aider --yes  ",
                 workingDirectory: "  /repo  ",
                 trust: .trusted,
-                autoResume: true
+                autoResume: true,
+                notes: "  Use for pair-programming spikes.  "
             )
         )
 
@@ -27,6 +28,7 @@ final class CustomTerminalSessionTests: XCTestCase {
         XCTAssertTrue(entry.autoResume)
         XCTAssertFalse(entry.isArchived)
         XCTAssertEqual(entry.lastSummary, "Custom terminal session: aider --yes")
+        XCTAssertEqual(entry.notes, "Use for pair-programming spikes.")
     }
 
     func testCustomSessionRequiresNameCommandAndWorkingDirectory() {
@@ -81,7 +83,8 @@ final class CustomTerminalSessionTests: XCTestCase {
                 command: "aider --yes",
                 workingDirectory: "/repo",
                 trust: .trusted,
-                autoResume: true
+                autoResume: true,
+                notes: "Keep this lane focused on tests."
             )
         )
 
@@ -92,7 +95,8 @@ final class CustomTerminalSessionTests: XCTestCase {
             command: "aider --yes",
             workingDirectory: "/repo",
             trust: .trusted,
-            autoResume: true
+            autoResume: true,
+            notes: "Keep this lane focused on tests."
         ))
     }
 
@@ -117,7 +121,8 @@ final class CustomTerminalSessionTests: XCTestCase {
                 command: "codex --yolo",
                 workingDirectory: "/repo/app",
                 trust: .untrusted,
-                autoResume: false
+                autoResume: false,
+                notes: "Scratch lane."
             )
         )
 
@@ -129,6 +134,7 @@ final class CustomTerminalSessionTests: XCTestCase {
         XCTAssertEqual(updated.trust, .untrusted)
         XCTAssertFalse(updated.autoResume)
         XCTAssertTrue(updated.isArchived)
+        XCTAssertEqual(updated.notes, "Scratch lane.")
     }
 
     func testManagerDuplicatesCustomSessionWithRequestedName() throws {
@@ -139,7 +145,8 @@ final class CustomTerminalSessionTests: XCTestCase {
                 command: "aider --yes",
                 workingDirectory: "/repo",
                 trust: .trusted,
-                autoResume: true
+                autoResume: true,
+                notes: "Duplicate me."
             )
         )
 
@@ -149,6 +156,7 @@ final class CustomTerminalSessionTests: XCTestCase {
         XCTAssertEqual(duplicate.projectId, original.projectId)
         XCTAssertEqual(duplicate.name, "Copy of Aider")
         XCTAssertEqual(duplicate.arguments, original.arguments)
+        XCTAssertEqual(duplicate.notes, original.notes)
         XCTAssertFalse(duplicate.isArchived)
     }
 
