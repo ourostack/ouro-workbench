@@ -55,6 +55,9 @@ The installed bundle also includes an Ouro-facing MCP server:
 "/Users/arimendelow/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP"
 ```
 
+Use the native `Workbench MCP` row in the boss dashboard to register that server
+with the selected Ouro boss agent.
+
 ## Architecture
 
 See [docs/architecture.md](docs/architecture.md) and

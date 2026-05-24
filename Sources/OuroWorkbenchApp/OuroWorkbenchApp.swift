@@ -187,6 +187,7 @@ struct BossDashboardView: View {
                     .controlSize(.small)
             }
             MachineRuntimeView()
+            BossWorkbenchMCPSetupView(model: model)
             if let dashboard = model.bossDashboard {
                 if !dashboard.availability.issues.isEmpty {
                     Text("Mailbox warnings: \(dashboard.availability.issues.joined(separator: "; "))")
@@ -261,6 +262,39 @@ struct BossDashboardView: View {
             }
         }
         .padding()
+    }
+}
+
+struct BossWorkbenchMCPSetupView: View {
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Label("Workbench MCP", systemImage: "point.3.connected.trianglepath.dotted")
+                .font(.caption.weight(.semibold))
+            Text(model.bossWorkbenchMCPStatusLine)
+                .font(.caption.monospaced())
+                .foregroundStyle(model.bossWorkbenchMCPStatusColor)
+            Button {
+                model.refreshWorkbenchMCPRegistration()
+            } label: {
+                Label("Refresh", systemImage: "arrow.clockwise")
+            }
+            .labelStyle(.iconOnly)
+            .buttonStyle(.borderless)
+            .help("Refresh Workbench MCP registration")
+            if model.bossWorkbenchMCPRegistration?.isActionable == true {
+                Button {
+                    model.installWorkbenchMCPForBoss()
+                } label: {
+                    Label(model.bossWorkbenchMCPActionTitle, systemImage: "link.badge.plus")
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .task {
+            model.refreshWorkbenchMCPRegistration()
+        }
     }
 }
 
@@ -664,6 +698,7 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var bossAppliedActions: [String] = []
     @Published var mailboxError: String?
     @Published var isNewSessionSheetPresented = false
+    @Published var bossWorkbenchMCPRegistration: BossWorkbenchMCPRegistrationSnapshot?
 
     private let paths: WorkbenchPaths
     private let store: WorkbenchStore
@@ -675,6 +710,7 @@ final class WorkbenchViewModel: ObservableObject {
     private let bossBridgePlanner = BossAgentBridgePlanner()
     private let bossPromptBuilder = BossAgentPromptBuilder()
     private let bossMCPClient: BossAgentMCPClient
+    private let bossWorkbenchMCPRegistrar: BossWorkbenchMCPRegistrar
     private let bossActionParser = BossWorkbenchActionParser()
     private let bossActionAuthorizer = BossWorkbenchActionAuthorizer()
     private let terminationPolicy = ProcessTerminationPolicy()
@@ -688,15 +724,18 @@ final class WorkbenchViewModel: ObservableObject {
     init(
         paths: WorkbenchPaths = .defaultPaths(),
         mailboxClient: MailboxClient = MailboxClient(),
-        bossMCPClient: BossAgentMCPClient = BossAgentMCPClient()
+        bossMCPClient: BossAgentMCPClient = BossAgentMCPClient(),
+        bossWorkbenchMCPRegistrar: BossWorkbenchMCPRegistrar = BossWorkbenchMCPRegistrar()
     ) {
         self.paths = paths
         self.store = WorkbenchStore(paths: paths)
         self.mailboxClient = mailboxClient
         self.bossMCPClient = bossMCPClient
+        self.bossWorkbenchMCPRegistrar = bossWorkbenchMCPRegistrar
         self.externalActionQueue = WorkbenchActionRequestQueue(paths: paths)
         self.state = WorkspaceState()
         load()
+        refreshWorkbenchMCPRegistration()
     }
 
     var errorIsPresented: Binding<Bool> {
@@ -733,15 +772,58 @@ final class WorkbenchViewModel: ObservableObject {
         bossBridgePlanner.mcpServePlan(for: state.boss).displayCommand
     }
 
+    var bossWorkbenchMCPStatusLine: String {
+        guard let bossWorkbenchMCPRegistration else {
+            return "unknown"
+        }
+        switch bossWorkbenchMCPRegistration.status {
+        case .registered:
+            return "registered for \(bossWorkbenchMCPRegistration.agentName)"
+        case .notRegistered:
+            return "not registered"
+        case .needsUpdate:
+            return "update needed"
+        case .agentMissing:
+            return "agent bundle missing"
+        case .executableMissing:
+            return "install app first"
+        case .invalidConfig:
+            return "config issue"
+        }
+    }
+
+    var bossWorkbenchMCPStatusColor: SwiftUI.Color {
+        guard let status = bossWorkbenchMCPRegistration?.status else {
+            return .secondary
+        }
+        switch status {
+        case .registered:
+            return .green
+        case .notRegistered, .needsUpdate:
+            return .orange
+        case .agentMissing, .executableMissing, .invalidConfig:
+            return .red
+        }
+    }
+
+    var bossWorkbenchMCPActionTitle: String {
+        bossWorkbenchMCPRegistration?.status == .needsUpdate ? "Update" : "Install"
+    }
+
     var bossAgentChoices: [String] {
         let names = (bossDashboard?.knownAgentNames ?? []) + [state.boss.agentName]
         return Array(Set(names))
             .filter { !$0.isEmpty }
+            .filter(BossWorkbenchMCPRegistrar.isValidAgentBundleName)
             .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 
     func selectBoss(agentName: String) {
         guard !agentName.isEmpty, agentName != state.boss.agentName else {
+            return
+        }
+        guard BossWorkbenchMCPRegistrar.isValidAgentBundleName(agentName) else {
+            errorMessage = "Boss agent name cannot be used as a bundle name: \(agentName)"
             return
         }
         state.boss.agentName = agentName
@@ -750,8 +832,23 @@ final class WorkbenchViewModel: ObservableObject {
         bossCheckInAnswer = nil
         bossAppliedActions = []
         save()
+        refreshWorkbenchMCPRegistration()
         Task {
             await refreshBossDashboard()
+        }
+    }
+
+    func refreshWorkbenchMCPRegistration() {
+        bossWorkbenchMCPRegistration = bossWorkbenchMCPRegistrar.snapshot(for: state.boss)
+    }
+
+    func installWorkbenchMCPForBoss() {
+        do {
+            bossWorkbenchMCPRegistration = try bossWorkbenchMCPRegistrar.install(for: state.boss)
+            bossAppliedActions = ["Registered Workbench MCP for \(state.boss.agentName)"] + bossAppliedActions
+        } catch {
+            errorMessage = "Workbench MCP registration failed: \(error.localizedDescription)"
+            refreshWorkbenchMCPRegistration()
         }
     }
 

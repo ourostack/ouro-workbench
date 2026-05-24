@@ -56,8 +56,10 @@ agent-aware terminal workbench rather than a launcher with terminal panes.
 ## Boss Agent
 
 - Register the packaged `OuroWorkbenchMCP` with the selected Ouro boss agent.
+  Initial native install/update status exists for `agent.json` registration.
 - Let the boss inspect status, transcript tails, and queued actions from its own
-  tool surface.
+  tool surface. Initial MCP tools exist for status, transcript tails, and queued
+  launch/recover/terminate/send-input actions.
 - Keep native check-ins for human-facing status.
 - Keep action execution trust-gated and auditable.
 - Add an action log view with source, requested action, result, and timestamp.
