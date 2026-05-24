@@ -71,6 +71,7 @@ agent-aware terminal workbench rather than a launcher with terminal panes.
 
 - Keep P0 lanes: Claude Code, GitHub Copilot CLI, OpenAI Codex.
 - Detect missing CLIs and show clear install/auth status.
+  Initial executable health exists for configured session commands.
 - Add preset editors for launch arguments.
 - Add yolo/dangerous-mode profile visibility without burying it in docs.
 - Add per-lane health checks.

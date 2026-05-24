@@ -7,7 +7,8 @@ public struct BossAgentPromptBuilder: Sendable {
         question: String,
         state: WorkspaceState,
         summary: WorkspaceSummary,
-        dashboard: BossDashboardSnapshot? = nil
+        dashboard: BossDashboardSnapshot? = nil,
+        executableHealth: [UUID: ExecutableHealth] = [:]
     ) -> String {
         var lines: [String] = []
         lines.append("You are the selected Ouro boss agent for Ouro Workbench.")
@@ -55,7 +56,10 @@ public struct BossAgentPromptBuilder: Sendable {
                 .sorted { $0.startedAt > $1.startedAt }
                 .first
             let transcriptPath = latestRun?.transcriptPath ?? "none"
-            lines.append("- \(snapshot.name) (id=\(snapshot.id.uuidString)): trust=\(trust), status=\(snapshot.status.rawValue), attention=\(snapshot.attention.rawValue), transcript=\(transcriptPath), summary=\(snapshot.summary)")
+            let health = executableHealth[snapshot.id]
+            let executableStatus = health?.status.rawValue ?? "unknown"
+            let executablePath = health?.resolvedPath ?? "none"
+            lines.append("- \(snapshot.name) (id=\(snapshot.id.uuidString)): trust=\(trust), executable_health=\(executableStatus), executable_path=\(executablePath), status=\(snapshot.status.rawValue), attention=\(snapshot.attention.rawValue), transcript=\(transcriptPath), summary=\(snapshot.summary)")
         }
         lines.append("")
         lines.append("Recovery:")

@@ -76,6 +76,9 @@ workspace action log with source, action, target, result, success state, and
 timestamp. The boss dashboard shows the recent log so control remains auditable
 after the transient check-in output scrolls away.
 
+Workbench status prompts include executable health for each configured session:
+`available`, `missing`, or `notExecutable`, plus the resolved path when present.
+
 The native boss dashboard has a `Workbench MCP` row that registers or updates an
 `ouro_workbench` entry in `~/AgentBundles/<boss>.ouro/agent.json`. The entry
 points at the packaged `OuroWorkbenchMCP` executable and uses no arguments:
