@@ -61,3 +61,14 @@ codex resume --last
 
 Trusted entries may auto-resume or respawn according to policy. Untrusted
 entries never auto-resume, even if they were running before restart.
+
+## Recovery Drill
+
+The native app exposes a dry-run `Recovery Drill`. It runs the same startup
+reconciliation and recovery planner against an in-memory copy of the current
+workspace state, then reports each session's pre-restart status, simulated
+post-restart status, planned recovery action, and reason. The drill never
+mutates persisted workspace state and does not start or stop processes.
+
+The selected boss agent can run the same dry run through the
+`workbench_recovery_drill` MCP tool.

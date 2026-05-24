@@ -77,6 +77,11 @@ Press `Command-K` to open the native command palette. Common shortcuts include
 to launch or restart the selected session, `Command-.` to stop a running
 session, and `Command-F` to run the transcript search box.
 
+Use `Recovery Drill` to dry-run restart recovery without mutating workspace
+state. It reports which sessions would auto-resume, respawn, require manual
+action, or do nothing. Boss agents can run the same dry run with the
+`workbench_recovery_drill` MCP tool.
+
 ## Architecture
 
 See [docs/architecture.md](docs/architecture.md) and
