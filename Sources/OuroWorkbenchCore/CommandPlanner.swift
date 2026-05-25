@@ -14,6 +14,7 @@ public struct TerminalCommandPlan: Equatable, Identifiable, Sendable {
     public var workingDirectory: String
     public var transcriptPath: String?
     public var recoveryAction: RecoveryAction?
+    public var persistentSessionName: String?
     public var reason: String
 
     public init(
@@ -25,6 +26,7 @@ public struct TerminalCommandPlan: Equatable, Identifiable, Sendable {
         workingDirectory: String,
         transcriptPath: String? = nil,
         recoveryAction: RecoveryAction? = nil,
+        persistentSessionName: String? = nil,
         reason: String
     ) {
         self.id = id
@@ -35,6 +37,7 @@ public struct TerminalCommandPlan: Equatable, Identifiable, Sendable {
         self.workingDirectory = workingDirectory
         self.transcriptPath = transcriptPath
         self.recoveryAction = recoveryAction
+        self.persistentSessionName = persistentSessionName
         self.reason = reason
     }
 
@@ -53,15 +56,65 @@ public struct TerminalLaunchInvocation: Equatable, Sendable {
     public var execName: String
 
     public init(plan: TerminalCommandPlan) {
-        if plan.executable.contains("/") {
-            self.executable = plan.executable
-            self.arguments = plan.arguments
-            self.execName = URL(fileURLWithPath: plan.executable).lastPathComponent
-        } else {
-            self.executable = "/usr/bin/env"
-            self.arguments = [plan.executable] + plan.arguments
-            self.execName = plan.executable
+        let direct = Self.directInvocation(for: plan)
+        guard let sessionName = plan.persistentSessionName else {
+            self = direct
+            return
         }
+        self.executable = PersistentTerminalSession.executable
+        self.arguments = PersistentTerminalSession.attachOrCreateArguments(
+            sessionName: sessionName,
+            command: [direct.executable] + direct.arguments
+        )
+        self.execName = PersistentTerminalSession.execName
+    }
+
+    private init(executable: String, arguments: [String], execName: String) {
+        self.executable = executable
+        self.arguments = arguments
+        self.execName = execName
+    }
+
+    private static func directInvocation(for plan: TerminalCommandPlan) -> TerminalLaunchInvocation {
+        if plan.executable.contains("/") {
+            return TerminalLaunchInvocation(
+                executable: plan.executable,
+                arguments: plan.arguments,
+                execName: URL(fileURLWithPath: plan.executable).lastPathComponent
+            )
+        } else {
+            return TerminalLaunchInvocation(
+                executable: "/usr/bin/env",
+                arguments: [plan.executable] + plan.arguments,
+                execName: plan.executable
+            )
+        }
+    }
+}
+
+public enum PersistentTerminalSession: Sendable {
+    public static let executable = "/usr/bin/screen"
+    public static let execName = "screen"
+
+    public static func sessionName(for entryId: UUID) -> String {
+        "ouro-wb-\(entryId.uuidString.lowercased().replacingOccurrences(of: "-", with: ""))"
+    }
+
+    public static func attachOrCreateArguments(sessionName: String, command: [String]) -> [String] {
+        [
+            "-U",
+            "-T", "xterm-256color",
+            "-h", "10000",
+            "-e", "^]]",
+            "-D",
+            "-RR",
+            "-S", sessionName,
+            "--",
+        ] + command
+    }
+
+    public static func terminateArguments(sessionName: String) -> [String] {
+        ["-S", sessionName, "-X", "quit"]
     }
 }
 
@@ -82,6 +135,7 @@ public struct WorkbenchCommandPlanner: Sendable {
             arguments: entry.arguments,
             workingDirectory: entry.workingDirectory,
             transcriptPath: transcriptPath,
+            persistentSessionName: PersistentTerminalSession.sessionName(for: entry.id),
             reason: "launch configured \(entry.name) session"
         )
     }
@@ -131,6 +185,7 @@ public struct WorkbenchCommandPlanner: Sendable {
                     workingDirectory: entry.workingDirectory,
                     transcriptPath: paths?.transcriptURL(entryId: entry.id, runId: runId).path,
                     recoveryAction: action,
+                    persistentSessionName: PersistentTerminalSession.sessionName(for: entry.id),
                     reason: "resume \(entry.name) using latest-session fallback"
                 )
             }
@@ -151,6 +206,7 @@ public struct WorkbenchCommandPlanner: Sendable {
             workingDirectory: entry.workingDirectory,
             transcriptPath: paths?.transcriptURL(entryId: entry.id, runId: runId).path,
             recoveryAction: action,
+            persistentSessionName: PersistentTerminalSession.sessionName(for: entry.id),
             reason: "resume \(entry.name) using native session metadata"
         )
     }

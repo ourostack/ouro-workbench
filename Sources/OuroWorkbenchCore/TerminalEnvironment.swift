@@ -15,9 +15,10 @@ public struct TerminalEnvironment: Equatable, Sendable {
 
     public func valuesWithResolvedPath() -> [String: String] {
         var merged = values
-        merged["TERM"] = merged["TERM"] ?? "xterm-256color"
+        merged["TERM"] = "xterm-256color"
         merged["COLORTERM"] = merged["COLORTERM"] ?? "truecolor"
         merged["LANG"] = merged["LANG"] ?? "en_US.UTF-8"
+        merged["TERM_PROGRAM"] = "OuroWorkbench"
         merged["PATH"] = Self.resolvedPath(from: merged)
         return merged
     }

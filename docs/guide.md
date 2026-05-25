@@ -398,6 +398,13 @@ The goal is to separate "needs Ari" from "needs a boring next token."
 
 ### Recover After A Restart
 
+For app quit, force-quit, or reinstall, just reopen Workbench. Running terminal
+tabs should reattach to the same underlying session and continue where they
+were. The only Workbench control that intentionally ends a terminal session is
+`Stop`.
+
+For an actual computer restart:
+
 1. Reopen Workbench, or let `Open at Login` do it.
 2. Let startup reconciliation run.
 3. Read the recovery summary in the sidebar.
@@ -408,6 +415,13 @@ The goal is to separate "needs Ari" from "needs a boring next token."
 
 Recovery should feel boring. If it feels mysterious, that is a product bug or a
 missing guide entry.
+
+### Clear The Terminal
+
+Use the normal shell `clear` command. Workbench launches terminals with
+xterm-compatible capabilities, so `clear` should repaint the visible pane just
+like a native terminal. If old output stays visible after `clear`, treat it as a
+bug in the terminal surface rather than a shell problem.
 
 ### Add A New Terminal/TUI Agent
 

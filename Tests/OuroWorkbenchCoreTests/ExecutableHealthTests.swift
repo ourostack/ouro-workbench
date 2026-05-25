@@ -53,4 +53,34 @@ final class ExecutableHealthTests: XCTestCase {
         XCTAssertEqual(health.status, .notExecutable)
         XCTAssertEqual(health.resolvedPath, executableURL.path)
     }
+
+    func testGenericShellScriptHealthTargetsShellExecutable() {
+        let entry = ProcessEntry(
+            projectId: UUID(),
+            name: "Script",
+            kind: .terminalAgent,
+            executable: "/bin/zsh",
+            arguments: ["-lc", "i=0; while true; do echo \"$i\"; i=$((i+1)); done"],
+            workingDirectory: "/tmp",
+            trust: .trusted,
+            autoResume: true
+        )
+
+        XCTAssertEqual(ExecutableHealthTarget.executable(for: entry), "/bin/zsh")
+    }
+
+    func testShellWrappedKnownAgentHealthTargetsDetectedExecutable() {
+        let entry = ProcessEntry(
+            projectId: UUID(),
+            name: "Claude",
+            kind: .terminalAgent,
+            executable: "/bin/zsh",
+            arguments: ["-lc", "claude --dangerously-skip-permissions"],
+            workingDirectory: "/tmp",
+            trust: .trusted,
+            autoResume: true
+        )
+
+        XCTAssertEqual(ExecutableHealthTarget.executable(for: entry), "claude")
+    }
 }

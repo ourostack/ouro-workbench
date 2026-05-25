@@ -12,7 +12,7 @@ Each table row below was walked against at least one concrete verification path.
 
 Commands run:
 
-- `swift test`: 118 tests, 0 failures.
+- `swift test`: 121 tests, 0 failures.
 - `swift build`: build passed.
 - `git diff --check`: whitespace check passed.
 - `scripts/install-app.sh --open`: installed and opened `/Users/arimendelow/Applications/Ouro Workbench.app`.
@@ -29,6 +29,10 @@ Live app stories exercised one by one across the matrix dimensions:
 - Called packaged MCP `initialize`, `tools/list`, `workbench_status`, `workbench_recovery_drill`, `workbench_search_transcripts`, and `workbench_request_action`.
 - Queued a boss/MCP `sendInput` action into Local Shell and verified the native app applied and logged it.
 - Verified TUI transcript repaint fragments are omitted from inactive transcript display instead of rendering as vertical character noise.
+- Reinstalled Workbench while a generated counter terminal was running, verified it reattached to the same live session and continued from `WB_PERSIST_0000` to `WB_PERSIST_0151+`.
+- Force-killed the native app with `kill -9`, verified the backing `screen` sessions became detached while the counter process kept running, reopened Workbench, and verified the same terminal reattached around `WB_PERSIST_0190+`.
+- Sent `printf 'BEFORE_CLEAR\n'; clear; printf 'AFTER_CLEAR\n'` to Local Shell and verified the visible terminal cleared to `AFTER_CLEAR` plus a fresh prompt.
+- Stopped the generated counter terminal and verified its backing `screen` session and child process were gone; then deleted the temporary terminal from the app.
 
 
 | ID | Area | Context | User Story / Action | Expected Behavior | Verification | Status |

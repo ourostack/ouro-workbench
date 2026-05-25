@@ -97,3 +97,21 @@ public struct ExecutableHealthChecker {
         return path.split(separator: ":").map(String.init)
     }
 }
+
+public enum ExecutableHealthTarget: Sendable {
+    public static func executable(for entry: ProcessEntry) -> String {
+        let canonical = TerminalAgentDetector.canonicalTokens(entry: entry)
+        if isShellScript(entry),
+           TerminalAgentDetector.detect(executable: canonical.executable, arguments: canonical.arguments) == nil {
+            return entry.executable
+        }
+        return canonical.executable
+    }
+
+    private static func isShellScript(_ entry: ProcessEntry) -> Bool {
+        let basename = URL(fileURLWithPath: entry.executable).lastPathComponent.lowercased()
+        return ["zsh", "bash", "sh"].contains(basename)
+            && entry.arguments.count >= 2
+            && ["-c", "-lc"].contains(entry.arguments[0])
+    }
+}

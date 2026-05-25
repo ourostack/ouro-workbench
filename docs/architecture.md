@@ -19,6 +19,7 @@ developer processes.
 1. Native macOS shell
    - SwiftUI/AppKit UI.
    - SwiftTerm terminal panes.
+   - System `screen` sessions as the process persistence layer.
    - No web-first terminal surface.
 
 2. Workbench core
@@ -45,10 +46,30 @@ developer processes.
    - OpenAI Codex, when a tab command resolves to `codex`.
    - Custom terminal/TUI agents created from native `New Terminal`.
 
+## Terminal Process Model
+
+The visible terminal is a client, not the durable process owner:
+
+```text
+SwiftTerm view -> screen attach client -> stable screen session -> shell/TUI/agent
+```
+
+Each Workbench terminal id maps to one deterministic `screen` session name. A
+normal launch uses `screen -D -RR -S <name> -- <command>`, which creates the
+session the first time and reattaches to it later. App quit, app force-quit, and
+app reinstall detach the client while the session keeps running. Manual `Stop`
+uses `screen -S <name> -X quit`, making the operator's stop action the only
+Workbench path that intentionally ends the underlying terminal session.
+
+`screen` is configured with UTF-8, xterm-compatible terminal capabilities,
+large scrollback, and a non-Ctrl-A command escape so shells and terminal agents
+continue to feel like ordinary terminals.
+
 ## Persistence Contract
 
-The app must never pretend a process survived a computer restart. Instead it
-persists enough state to recover honestly:
+The app must never pretend a process survived a computer restart. It preserves
+live processes across app death through `screen`, and persists enough state to
+recover honestly after machine reboot:
 
 - project and process definitions
 - selected group and selected terminal
