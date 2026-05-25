@@ -37,6 +37,12 @@ Verify a packaged bundle with:
 scripts/verify-app-bundle.sh
 ```
 
+Create a versioned zip plus manifest with SHA-256 and bundle metadata:
+
+```bash
+scripts/archive-app-artifact.sh
+```
+
 Run the full local protected-gate preflight with:
 
 ```bash
@@ -75,6 +81,8 @@ and an external update channel.
 
 CI has a separate `App bundle` job that packages the release app, verifies the
 bundle contents, rejects local build-path linkage, and uploads the unsigned app
-artifact for inspection. The uploaded artifact is a zip created with
-`ditto --keepParent`, so downloading and expanding it preserves the
-`Ouro Workbench.app` wrapper instead of flattening the bundle contents.
+artifact for inspection. The uploaded artifact contains a versioned zip created
+with `ditto --keepParent`, so downloading and expanding it preserves the
+`Ouro Workbench.app` wrapper instead of flattening the bundle contents. The
+manifest records the bundle identifier, version, build number, git SHA, archive
+filename, byte size, and SHA-256 checksum.
