@@ -50,8 +50,8 @@ and user-facing docs.
   surface chrome invariants in addition to recovery, readiness, and command
   planning outcomes.
 - Native scenario renderer: `OuroWorkbenchScenarioVerifier` renders all 5000
-  matrix rows through standard and short-window native AppKit surfaces, producing
-  10,000 layout passes and optional PNG evidence.
+  matrix rows through standard, compact, short, tall, and wide native AppKit
+  surfaces, producing 25,000 layout/invariant passes and optional PNG evidence.
 - Boss organization blindness: prompts and MCP status include selected group,
   all groups, active terminal names, and each process's group/CLI identity.
 - TUI repaint readability: inactive transcript display now omits dense cursor
@@ -88,7 +88,7 @@ printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"w
 Expected smoke result:
 
 ```text
-135 tests pass; 5000 scenario rows render through 10,000 native verifier passes
+135 tests pass; 5000 scenario rows render through 25,000 native verifier passes
 with zero failures; installed app shows group-scoped Local Shell + used
 terminals only; packaged MCP returns tool definitions and group-aware status;
 dashboard text is not clipped; focus mode terminal text stays below the macOS

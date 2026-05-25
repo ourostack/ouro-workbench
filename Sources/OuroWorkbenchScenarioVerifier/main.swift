@@ -103,7 +103,10 @@ struct NativeScenarioVerifier {
     private let recoveryPlanner = RecoveryPlanner()
     private let viewports = [
         ScenarioViewport(name: "standard", width: 1200, height: 760),
-        ScenarioViewport(name: "short-window", width: 640, height: 420)
+        ScenarioViewport(name: "short-window", width: 640, height: 420),
+        ScenarioViewport(name: "compact-terminal", width: 520, height: 360),
+        ScenarioViewport(name: "tall-workspace", width: 900, height: 1000),
+        ScenarioViewport(name: "wide-workspace", width: 1600, height: 900)
     ]
 
     func verify(matrix: WorkbenchScenarioMatrix) throws -> ScenarioVerifierSummary {
@@ -147,7 +150,9 @@ struct NativeScenarioVerifier {
                 let shouldWriteSample = writeSamples
                     && writtenSamples.count < sampleLimit
                     && !sampleKeys.contains(sampleKey)
-                let render = NativeScenarioRenderer(scenario: scenario, viewport: viewport).render(encodePNG: shouldWriteSample)
+                let render = autoreleasepool {
+                    NativeScenarioRenderer(scenario: scenario, viewport: viewport).render(encodePNG: shouldWriteSample)
+                }
                 renderPasses += 1
                 failures.append(contentsOf: render.failures)
 
@@ -197,11 +202,10 @@ struct NativeScenarioRenderer {
     var viewport: ScenarioViewport
 
     func render(encodePNG: Bool) -> NativeScenarioRender {
-        var canvas = ScenarioCanvas(size: viewport.size)
+        var canvas = ScenarioCanvas(size: viewport.size, drawRaster: encodePNG)
         let surface = WorkbenchMatrixSurface(rawValue: scenario.row.surface) ?? .sidebarDashboard
         let chrome = WorkbenchSurfaceChrome.contract(for: surface)
         canvas.fill(canvas.bounds, color: .white)
-        canvas.drawWindowChrome()
 
         switch surface {
         case .terminalFocus:
@@ -215,6 +219,7 @@ struct NativeScenarioRenderer {
         case .archivedSession:
             drawWorkbench(canvas: &canvas, sidebarVisible: true, bossPaneVisible: true, archived: true)
         }
+        canvas.drawWindowChrome()
 
         let pngData = encodePNG ? canvas.pngData() : nil
         return NativeScenarioRender(
@@ -227,7 +232,6 @@ struct NativeScenarioRenderer {
 
     private func drawTerminalFocus(canvas: inout ScenarioCanvas, chrome: WorkbenchSurfaceChromeContract) {
         canvas.fill(canvas.bounds, color: .black)
-        canvas.drawWindowChrome()
         let controlY = CGFloat(chrome.floatingControlsTopInset)
         let controls = CGRect(x: canvas.size.width - 360, y: controlY, width: 340, height: 40)
         canvas.fill(controls, color: NSColor.white.withAlphaComponent(0.25), radius: 8)
@@ -274,12 +278,14 @@ struct NativeScenarioRenderer {
             canvas.divider(y: currentY, role: .terminalSplit)
         }
 
-        let terminalHeader = CGRect(x: detailX, y: currentY, width: detailWidth, height: archived ? 150 : 88)
+        let preferredTerminalHeaderHeight: CGFloat = archived ? 150 : 88
+        let terminalHeaderHeight = min(preferredTerminalHeaderHeight, max(0, canvas.size.height - currentY))
+        let terminalHeader = CGRect(x: detailX, y: currentY, width: detailWidth, height: terminalHeaderHeight)
         canvas.fill(terminalHeader, color: .white)
         if archived {
-            canvas.text("Archived: \(scenario.fixture.entry.name)", in: terminalHeader.insetBy(dx: 16, dy: 18), role: .archivedText)
-            canvas.text("History preserved; no active terminal is launched.", in: CGRect(x: detailX + 16, y: currentY + 42, width: detailWidth - 32, height: 18), role: .archivedText)
-            canvas.text(scenario.commandLine, in: CGRect(x: detailX + 16, y: currentY + 68, width: detailWidth - 32, height: 18), role: .archivedText)
+            drawVisibleLine("Archived: \(scenario.fixture.entry.name)", y: currentY + 18, in: terminalHeader, canvas: &canvas, role: .archivedText)
+            drawVisibleLine("History preserved; no active terminal is launched.", y: currentY + 42, in: terminalHeader, canvas: &canvas, role: .archivedText)
+            drawVisibleLine(scenario.commandLine, y: currentY + 68, in: terminalHeader, canvas: &canvas, role: .archivedText)
             return
         }
 
@@ -317,6 +323,24 @@ struct NativeScenarioRenderer {
         }
         drawDashboardLine("Transcript Search      Native Runtime      Recovery Drill      Workbench MCP", advance: 28)
         drawDashboardLine("Action Log 12 recent   latest action is auditable")
+    }
+
+    private func drawVisibleLine(
+        _ text: String,
+        y: CGFloat,
+        in container: CGRect,
+        canvas: inout ScenarioCanvas,
+        role: ScenarioRegionRole
+    ) {
+        let height: CGFloat = 18
+        guard y + height <= container.maxY else {
+            return
+        }
+        canvas.text(
+            text,
+            in: CGRect(x: container.minX + 16, y: y, width: max(1, container.width - 32), height: height),
+            role: role
+        )
     }
 
     private func drawTerminalLines(canvas: inout ScenarioCanvas, in rect: CGRect, role: ScenarioRegionRole) {
@@ -419,23 +443,25 @@ struct NativeScenarioRender {
 
 struct ScenarioCanvas {
     var size: CGSize
-    var image: NSBitmapImageRep
+    var image: NSBitmapImageRep?
     var regions: [ScenarioRegion] = []
 
-    init(size: CGSize) {
+    init(size: CGSize, drawRaster: Bool) {
         self.size = size
-        self.image = NSBitmapImageRep(
-            bitmapDataPlanes: nil,
-            pixelsWide: Int(size.width),
-            pixelsHigh: Int(size.height),
-            bitsPerSample: 8,
-            samplesPerPixel: 4,
-            hasAlpha: true,
-            isPlanar: false,
-            colorSpaceName: .deviceRGB,
-            bytesPerRow: 0,
-            bitsPerPixel: 0
-        )!
+        self.image = drawRaster
+            ? NSBitmapImageRep(
+                bitmapDataPlanes: nil,
+                pixelsWide: Int(size.width),
+                pixelsHigh: Int(size.height),
+                bitsPerSample: 8,
+                samplesPerPixel: 4,
+                hasAlpha: true,
+                isPlanar: false,
+                colorSpaceName: .deviceRGB,
+                bytesPerRow: 0,
+                bitsPerPixel: 0
+            )
+            : nil
     }
 
     var bounds: CGRect {
@@ -490,6 +516,13 @@ struct ScenarioCanvas {
             .foregroundColor: color,
             .paragraphStyle: paragraph
         ]
+        guard rect.width.isFinite,
+              rect.height.isFinite,
+              rect.width > 0,
+              rect.height > 0 else {
+            regions.append(ScenarioRegion(name: string, role: role, rect: rect))
+            return
+        }
         draw { _ in
             NSAttributedString(string: string, attributes: attributes).draw(in: convert(rect))
         }
@@ -497,7 +530,7 @@ struct ScenarioCanvas {
     }
 
     func pngData() -> Data? {
-        image.representation(using: .png, properties: [:])
+        image?.representation(using: .png, properties: [:])
     }
 
     private func convert(_ rect: CGRect) -> CGRect {
@@ -505,7 +538,8 @@ struct ScenarioCanvas {
     }
 
     private func draw(_ block: (CGContext) -> Void) {
-        guard let context = NSGraphicsContext(bitmapImageRep: image) else {
+        guard let image,
+              let context = NSGraphicsContext(bitmapImageRep: image) else {
             return
         }
         NSGraphicsContext.saveGraphicsState()
