@@ -1,6 +1,6 @@
 # Surface Audit
 
-Last audited: 2026-05-24.
+Last audited: 2026-05-25.
 
 ## Scope
 
@@ -39,6 +39,16 @@ and user-facing docs.
   user's shell can run.
 - Boss-pane crowding: the coordination pane can be collapsed without disabling
   Boss Watch, giving direct terminal work the vertical space it needs.
+- Boss dashboard clipping: metrics now render as compact top-of-pane chips, the
+  action log is compact by default, and dashboard warning banners are styled and
+  placed before lower diagnostic surfaces so short windows do not slice text at
+  the terminal split boundary.
+- Terminal focus chrome: focus mode reserves the native macOS traffic-light
+  region for both terminal content and floating controls, preventing terminal
+  text from rendering under the window buttons.
+- Scenario surface contract: the 5000-case scenario matrix now verifies native
+  surface chrome invariants in addition to recovery, readiness, and command
+  planning outcomes.
 - Boss organization blindness: prompts and MCP status include selected group,
   all groups, active terminal names, and each process's group/CLI identity.
 - TUI repaint readability: inactive transcript display now omits dense cursor
@@ -68,11 +78,14 @@ swift test
 scripts/install-app.sh --open
 printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | "/Users/arimendelow/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP"
 printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"workbench_status","arguments":{}}}' | "/Users/arimendelow/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP"
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"workbench_request_action","arguments":{"action":"sendInput","entry":"<process-id>","text":"printf '\''BEFORE_CLEAR\\n'\''; clear; printf '\''AFTER_CLEAR\\n'\''","appendNewline":true,"source":"surface-audit-clear-smoke"}}}' | "/Users/arimendelow/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP"
 ```
 
 Expected smoke result:
 
 ```text
-118 tests pass; installed app shows group-scoped Local Shell + used terminals
-only; packaged MCP returns tool definitions and group-aware status.
+135 tests pass; installed app shows group-scoped Local Shell + used terminals
+only; packaged MCP returns tool definitions and group-aware status; dashboard
+text is not clipped; focus mode terminal text stays below the macOS traffic
+lights; clear repaints the visible terminal to AFTER_CLEAR plus a fresh prompt.
 ```

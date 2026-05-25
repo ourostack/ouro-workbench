@@ -67,6 +67,35 @@ final class WorkbenchScenarioMatrixTests: XCTestCase {
         XCTAssertTrue(mismatches.isEmpty, mismatches.joined(separator: "\n"))
     }
 
+    func testAllFiveThousandScenarioRowsSatisfySurfaceChromeContracts() throws {
+        let rows = try loadRows()
+        var mismatches: [String] = []
+
+        for row in rows {
+            guard let surface = WorkbenchMatrixSurface(rawValue: row.surface) else {
+                mismatches.append("\(row.caseID): unknown surface \(row.surface)")
+                continue
+            }
+
+            let chrome = WorkbenchSurfaceChrome.contract(for: surface)
+            if chrome.terminalContentOverlapsTrafficLights {
+                mismatches.append("\(row.caseID): terminal content can render under traffic lights")
+            }
+            if chrome.floatingControlsOverlapTrafficLights {
+                mismatches.append("\(row.caseID): floating controls can render under traffic lights")
+            }
+            if surface == .terminalFocus && !chrome.reservesTrafficLightRegion {
+                mismatches.append("\(row.caseID): terminal focus must reserve the titlebar traffic-light region")
+            }
+
+            if mismatches.count >= 20 {
+                break
+            }
+        }
+
+        XCTAssertTrue(mismatches.isEmpty, mismatches.joined(separator: "\n"))
+    }
+
     private func loadRows() throws -> [ScenarioRow] {
         let packageRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
         let url = packageRoot
