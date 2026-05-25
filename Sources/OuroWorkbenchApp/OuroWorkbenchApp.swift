@@ -1823,6 +1823,9 @@ struct TerminalFocusView: View {
             .padding(.trailing, 16)
         }
         .background(Color.black)
+        .onAppear {
+            session.focusInput()
+        }
     }
 }
 
@@ -4065,6 +4068,15 @@ final class TerminalSessionController: NSObject, ObservableObject, Identifiable,
 
     func sendBytes(_ bytes: [UInt8]) {
         terminal.send(bytes)
+    }
+
+    func focusInput() {
+        DispatchQueue.main.async { [weak terminal] in
+            guard let terminal else {
+                return
+            }
+            terminal.window?.makeFirstResponder(terminal)
+        }
     }
 
     func terminate() {
