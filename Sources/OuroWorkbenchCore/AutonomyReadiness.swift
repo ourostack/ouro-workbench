@@ -181,12 +181,12 @@ public struct AutonomyReadinessBuilder: Sendable {
     }
 
     private func terminalTrustCheck(for state: WorkspaceState) -> AutonomyReadinessCheck {
-        let agentEntries = activeAgentEntries(in: state)
+        let agentEntries = activeTerminalAgentEntries(in: state)
         if agentEntries.isEmpty {
             return AutonomyReadinessCheck(
                 id: "terminal-trust",
                 label: "Agent terminals",
-                detail: "No Claude, Codex, or Copilot terminals are open yet.",
+                detail: "No terminal agents are open yet.",
                 state: .warning
             )
         }
@@ -210,7 +210,7 @@ public struct AutonomyReadinessBuilder: Sendable {
     }
 
     private func terminalResumeCheck(for state: WorkspaceState) -> AutonomyReadinessCheck {
-        let agentEntries = activeAgentEntries(in: state)
+        let agentEntries = activeTerminalAgentEntries(in: state)
         if agentEntries.isEmpty {
             return AutonomyReadinessCheck(
                 id: "terminal-resume",
@@ -221,9 +221,11 @@ public struct AutonomyReadinessBuilder: Sendable {
         }
 
         let manualResume = agentEntries.filter { entry in
-            guard let agentKind = TerminalAgentDetector.detect(entry: entry),
-                  let preset = TerminalAgentPresets.preset(for: agentKind) else {
-                return true
+            guard let agentKind = TerminalAgentDetector.detect(entry: entry) else {
+                return false
+            }
+            guard let preset = TerminalAgentPresets.preset(for: agentKind) else {
+                return false
             }
             return preset.resumeStrategy.kind == .manual
         }
@@ -249,7 +251,7 @@ public struct AutonomyReadinessBuilder: Sendable {
         return AutonomyReadinessCheck(
             id: "terminal-resume",
             label: "Restart posture",
-            detail: "Detected agent terminals have automatic resume strategies.",
+            detail: "Terminal agents have automatic resume strategies.",
             state: .ok
         )
     }
@@ -258,7 +260,7 @@ public struct AutonomyReadinessBuilder: Sendable {
         for state: WorkspaceState,
         executableHealth: [UUID: ExecutableHealth]
     ) -> AutonomyReadinessCheck {
-        let agentEntries = activeAgentEntries(in: state)
+        let agentEntries = activeTerminalAgentEntries(in: state)
         let checkedEntries = agentEntries.isEmpty ? activeTerminalEntries(in: state) : agentEntries
         let unchecked = checkedEntries.filter { executableHealth[$0.id] == nil }
         if !unchecked.isEmpty {
@@ -289,7 +291,7 @@ public struct AutonomyReadinessBuilder: Sendable {
         return AutonomyReadinessCheck(
             id: "executables",
             label: "Executables",
-            detail: agentEntries.isEmpty ? "Configured terminal commands are available." : "Detected agent terminal commands are available.",
+            detail: agentEntries.isEmpty ? "Configured terminal commands are available." : "Terminal agent commands are available.",
             state: .ok
         )
     }
@@ -341,10 +343,9 @@ public struct AutonomyReadinessBuilder: Sendable {
         )
     }
 
-    private func activeAgentEntries(in state: WorkspaceState) -> [ProcessEntry] {
+    private func activeTerminalAgentEntries(in state: WorkspaceState) -> [ProcessEntry] {
         state.processEntries
             .filter { !$0.isArchived && $0.kind == .terminalAgent }
-            .filter { TerminalAgentDetector.detect(entry: $0) != nil }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 

@@ -93,8 +93,8 @@ public struct RecoveryPlanner: Sendable {
                 return RecoveryPlan(
                     entryId: entry.id,
                     runId: latestRun.id,
-                    action: .manualActionNeeded,
-                    reason: "unknown terminal agent preset"
+                    action: .respawn,
+                    reason: "custom terminal agent will reopen from persisted checkpoint context"
                 )
             }
 

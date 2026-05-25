@@ -237,12 +237,14 @@ public struct WorkbenchCommandPlanner: Sendable {
     }
 
     private func checkpointRecoveryPromptIsNeeded(for entry: ProcessEntry) -> Bool {
-        guard
-            entry.kind == .terminalAgent,
-            let agentKind = TerminalAgentDetector.detect(entry: entry),
-            let preset = TerminalAgentPresets.preset(for: agentKind)
-        else {
+        guard entry.kind == .terminalAgent else {
             return false
+        }
+        guard let agentKind = TerminalAgentDetector.detect(entry: entry) else {
+            return true
+        }
+        guard let preset = TerminalAgentPresets.preset(for: agentKind) else {
+            return true
         }
         return preset.resumeStrategy.kind == .checkpointPrompt
     }
