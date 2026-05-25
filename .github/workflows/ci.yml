@@ -28,5 +28,20 @@ jobs:
       - name: Run tests
         run: swift test
 
-      - name: Render 5000 native scenario matrix
+  native-scenario-verifier:
+    name: Native scenario verifier
+    runs-on: macos-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          swift --version
+          xcodebuild -version
+
+      - name: Resolve dependencies
+        run: swift package resolve
+
+      - name: Render 25,000 native scenario surfaces
         run: swift run OuroWorkbenchScenarioVerifier --out .build/workbench-scenario-verifier --no-samples
