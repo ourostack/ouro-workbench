@@ -80,8 +80,23 @@ This gives an Ouro agent a direct Workbench-facing tool surface:
   no-newline result snippets to keep tool output readable.
 - `workbench_recovery_drill`: dry-run restart recovery planning for current
   Workbench sessions without mutating state.
-- `workbench_request_action`: queue `launch`, `recover`, `terminate`, or
-  `sendInput` for the native app to apply.
+- `workbench_request_action`: queue audited terminal control and organization
+  actions for the native app to apply.
+
+Supported action values are:
+
+- `launch`, `recover`, `terminate`, `sendInput`
+- `createGroup`, `createTerminal`, `moveSession`
+- `setTrust`, `setAutoResume`
+- `archive`, `restore`
+
+Entry-scoped actions use the process id from `workbench_status` in `entry`.
+Names are accepted only when unique. Group-scoped actions use the group id or a
+unique group name in `group`.
+
+`trust` is a string enum (`trusted` or `untrusted`), and `autoResume` is a
+boolean. Malformed action payloads fail loudly before they enter the native
+queue; Workbench should never silently reinterpret a boss control request.
 
 The native app drains queued action requests from Application Support and applies
 them through the same trust-gated action path used by boss check-ins. Untrusted

@@ -46,10 +46,12 @@ done
 
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
+RESOURCES_DIR="$CONTENTS_DIR/Resources"
 INFO_PLIST="$CONTENTS_DIR/Info.plist"
 APP_EXECUTABLE="$MACOS_DIR/OuroWorkbench"
 MCP_EXECUTABLE="$MACOS_DIR/OuroWorkbenchMCP"
 SCREEN_EXECUTABLE="$MACOS_DIR/Tools/screen"
+APP_ICON="$RESOURCES_DIR/OuroWorkbench.icns"
 SWIFTTERM_BUNDLE="$APP_DIR/SwiftTerm_SwiftTerm.bundle"
 
 fail() {
@@ -113,6 +115,7 @@ plutil -lint "$INFO_PLIST" >/dev/null
 
 [[ "$(plist_value CFBundleIdentifier)" == "com.ourostack.workbench" ]] || fail "unexpected bundle identifier"
 [[ "$(plist_value CFBundleExecutable)" == "OuroWorkbench" ]] || fail "unexpected bundle executable"
+[[ "$(plist_value CFBundleIconFile)" == "OuroWorkbench" ]] || fail "unexpected bundle icon"
 [[ "$(plist_value CFBundlePackageType)" == "APPL" ]] || fail "unexpected bundle package type"
 expected_version="${EXPECTED_VERSION:-$(tr -d '[:space:]' < "$VERSION_FILE")}"
 [[ "$(plist_value CFBundleShortVersionString)" == "$expected_version" ]] || fail "unexpected bundle version"
@@ -122,6 +125,8 @@ expected_version="${EXPECTED_VERSION:-$(tr -d '[:space:]' < "$VERSION_FILE")}"
 require_executable "$APP_EXECUTABLE"
 require_executable "$MCP_EXECUTABLE"
 require_executable "$SCREEN_EXECUTABLE"
+[[ -f "$APP_ICON" ]] || fail "missing app icon"
+[[ "$(stat -f %z "$APP_ICON")" -gt 0 ]] || fail "empty app icon"
 [[ -d "$SWIFTTERM_BUNDLE" ]] || fail "missing SwiftTerm resource bundle"
 
 run_gui_smoke

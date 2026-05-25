@@ -51,8 +51,16 @@ build="$(plist_value CFBundleVersion)"
 bundle_id="$(plist_value CFBundleIdentifier)"
 git_sha="$(git -C "$ROOT_DIR" rev-parse HEAD 2>/dev/null || printf 'unknown')"
 short_sha="$(git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || printf 'unknown')"
-archive_name="OuroWorkbench-${version}-build.${build}-${short_sha}.zip"
-manifest_name="OuroWorkbench-${version}-build.${build}-${short_sha}.manifest.json"
+git_dirty="false"
+dirty_suffix=""
+if git -C "$ROOT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  if ! git -C "$ROOT_DIR" diff --quiet --ignore-submodules -- || ! git -C "$ROOT_DIR" diff --cached --quiet --ignore-submodules --; then
+    git_dirty="true"
+    dirty_suffix="-dirty"
+  fi
+fi
+archive_name="OuroWorkbench-${version}-build.${build}-${short_sha}${dirty_suffix}.zip"
+manifest_name="OuroWorkbench-${version}-build.${build}-${short_sha}${dirty_suffix}.manifest.json"
 archive_path="$OUT_DIR/$archive_name"
 manifest_path="$OUT_DIR/$manifest_name"
 
@@ -70,6 +78,7 @@ printf '  "bundleIdentifier": "%s",\n' "$bundle_id" >> "$manifest_path"
 printf '  "version": "%s",\n' "$version" >> "$manifest_path"
 printf '  "build": "%s",\n' "$build" >> "$manifest_path"
 printf '  "gitSha": "%s",\n' "$git_sha" >> "$manifest_path"
+printf '  "gitDirty": %s,\n' "$git_dirty" >> "$manifest_path"
 printf '  "archive": "%s",\n' "$archive_name" >> "$manifest_path"
 printf '  "sha256": "%s",\n' "$sha256" >> "$manifest_path"
 printf '  "bytes": %s,\n' "$bytes" >> "$manifest_path"

@@ -48,10 +48,21 @@ public struct MailboxClientConfiguration: Equatable, Sendable {
     }
 }
 
-public enum MailboxClientError: Error, Equatable, Sendable {
+public enum MailboxClientError: Error, Equatable, LocalizedError, Sendable {
     case invalidURL
     case badStatus(Int)
     case timeout
+
+    public var errorDescription: String? {
+        switch self {
+        case .invalidURL:
+            return "The Ouro mailbox URL is invalid."
+        case .badStatus(let status):
+            return "The Ouro mailbox returned HTTP \(status)."
+        case .timeout:
+            return "The Ouro mailbox did not answer before the Workbench timeout."
+        }
+    }
 }
 
 public struct MailboxClient: Sendable {

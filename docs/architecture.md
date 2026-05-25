@@ -75,9 +75,12 @@ Release app bundles carry their own persistence backend at
 `Contents/MacOS/Tools/screen`. Development runs fall back to `/usr/bin/screen`
 when the bundled tool is unavailable.
 
-`screen` is configured with UTF-8, xterm-compatible terminal capabilities,
-large scrollback, and a non-Ctrl-A command escape so shells and terminal agents
-continue to feel like ordinary terminals.
+`screen` is configured with UTF-8, xterm-compatible terminal capabilities, zero
+backing scrollback, and a non-Ctrl-A command escape so shells and terminal agents
+continue to feel like ordinary terminals. Durable output history belongs to
+Workbench transcripts; keeping `screen` scrollback at zero prevents commands
+such as `clear` from re-exposing old output when the native pane is resized or
+reattached.
 
 ## Persistence Contract
 

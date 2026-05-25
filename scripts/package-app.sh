@@ -14,6 +14,7 @@ RESOURCES_DIR="$CONTENTS_DIR/Resources"
 TOOLS_DIR="$MACOS_DIR/Tools"
 SCREEN_SOURCE="/usr/bin/screen"
 SWIFTTERM_BUNDLE_NAME="SwiftTerm_SwiftTerm.bundle"
+APP_ICON_NAME="OuroWorkbench.icns"
 
 cd "$ROOT_DIR"
 
@@ -62,6 +63,8 @@ fi
 cp "$SCREEN_SOURCE" "$TOOLS_DIR/screen"
 chmod 755 "$TOOLS_DIR/screen"
 
+swift "$ROOT_DIR/scripts/generate-app-icon.swift" "$RESOURCES_DIR/$APP_ICON_NAME" >/dev/null
+
 cat > "$CONTENTS_DIR/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -73,6 +76,8 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
   <string>OuroWorkbench</string>
   <key>CFBundleIdentifier</key>
   <string>com.ourostack.workbench</string>
+  <key>CFBundleIconFile</key>
+  <string>OuroWorkbench</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>

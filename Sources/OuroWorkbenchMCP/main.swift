@@ -155,27 +155,75 @@ final class WorkbenchMCPServer {
 
     private func requestAction(arguments: [String: Any]) throws -> String {
         let state = try currentState()
-        let entry = try targetEntry(arguments: arguments, state: state)
-        guard let rawAction = arguments["action"] as? String, let actionKind = BossWorkbenchActionKind(rawValue: rawAction) else {
+        guard let rawAction = try optionalString(arguments, key: "action"),
+              let actionKind = BossWorkbenchActionKind(rawValue: rawAction) else {
             throw MCPToolFailure("Missing or invalid action")
+        }
+        let trust: ProcessTrust?
+        if let rawTrust = try optionalString(arguments, key: "trust") {
+            guard let parsedTrust = ProcessTrust(rawValue: rawTrust) else {
+                throw MCPToolFailure("Invalid trust value: \(rawTrust)")
+            }
+            trust = parsedTrust
+        } else {
+            trust = nil
         }
         let action = BossWorkbenchAction(
             action: actionKind,
-            entry: entry.id.uuidString,
-            text: arguments["text"] as? String,
-            appendNewline: (arguments["appendNewline"] as? Bool) ?? true
+            entry: try optionalString(arguments, key: "entry"),
+            text: try optionalString(arguments, key: "text"),
+            appendNewline: try optionalBool(arguments, key: "appendNewline") ?? true,
+            group: try optionalString(arguments, key: "group"),
+            name: try optionalString(arguments, key: "name"),
+            command: try optionalString(arguments, key: "command"),
+            workingDirectory: try optionalString(arguments, key: "workingDirectory"),
+            trust: trust,
+            autoResume: try optionalBool(arguments, key: "autoResume")
         )
         try action.validateForQueueing()
-        let authorization = authorizer.authorize(action, for: entry)
-        guard authorization.isAllowed else {
-            throw MCPToolFailure("Action denied for \(entry.name): \(authorization.reason ?? "not authorized")")
+
+        let resolvedEntry: ProcessEntry?
+        if let entryValue = action.entry, !entryValue.isEmpty {
+            resolvedEntry = try targetEntry(value: entryValue, state: state)
+        } else {
+            resolvedEntry = nil
+        }
+
+        if let entry = resolvedEntry {
+            let authorization = authorizer.authorize(action, for: entry)
+            guard authorization.isAllowed else {
+                throw MCPToolFailure("Action denied for \(entry.name): \(authorization.reason ?? "not authorized")")
+            }
         }
         let request = WorkbenchActionRequest(
             source: (arguments["source"] as? String) ?? "ouro-workbench-mcp",
             action: action
         )
         try queue.enqueue(request)
-        return "Queued \(actionKind.rawValue) for \(entry.name) as \(request.id.uuidString)."
+        if let entry = resolvedEntry {
+            return "Queued \(actionKind.rawValue) for \(entry.name) as \(request.id.uuidString)."
+        }
+        return "Queued \(actionKind.rawValue) as \(request.id.uuidString)."
+    }
+
+    private func optionalString(_ arguments: [String: Any], key: String) throws -> String? {
+        guard let value = arguments[key] else {
+            return nil
+        }
+        guard let string = value as? String else {
+            throw MCPToolFailure("\(key) must be a string")
+        }
+        return string
+    }
+
+    private func optionalBool(_ arguments: [String: Any], key: String) throws -> Bool? {
+        guard let value = arguments[key] else {
+            return nil
+        }
+        guard let bool = value as? Bool else {
+            throw MCPToolFailure("\(key) must be a boolean")
+        }
+        return bool
     }
 
     private func currentState() throws -> WorkspaceState {
@@ -186,6 +234,10 @@ final class WorkbenchMCPServer {
         guard let value = arguments["entry"] as? String, !value.isEmpty else {
             throw MCPToolFailure("Missing entry")
         }
+        return try targetEntry(value: value, state: state)
+    }
+
+    private func targetEntry(value: String, state: WorkspaceState) throws -> ProcessEntry {
         if let id = UUID(uuidString: value), let entry = state.processEntries.first(where: { $0.id == id }) {
             return entry
         }
@@ -280,13 +332,19 @@ final class WorkbenchMCPServer {
                 "inputSchema": [
                     "type": "object",
                     "properties": [
-                        "action": ["type": "string", "enum": ["launch", "recover", "terminate", "sendInput"]],
-                        "entry": ["type": "string", "description": "Process UUID or unique process name."],
+                        "action": ["type": "string", "enum": ["launch", "recover", "terminate", "sendInput", "createGroup", "createTerminal", "moveSession", "setTrust", "setAutoResume", "archive", "restore"]],
+                        "entry": ["type": "string", "description": "Process UUID or unique process name for entry-scoped actions."],
                         "text": ["type": "string", "description": "Required non-empty input text when action is sendInput."],
                         "appendNewline": ["type": "boolean"],
+                        "group": ["type": "string", "description": "Group UUID or unique group name for createTerminal and moveSession."],
+                        "name": ["type": "string", "description": "Required for createGroup and createTerminal."],
+                        "command": ["type": "string", "description": "Required command for createTerminal."],
+                        "workingDirectory": ["type": "string", "description": "Group root path or terminal working directory."],
+                        "trust": ["type": "string", "enum": ["trusted", "untrusted"]],
+                        "autoResume": ["type": "boolean"],
                         "source": ["type": "string", "description": "Agent or tool requesting the action."]
                     ],
-                    "required": ["action", "entry"],
+                    "required": ["action"],
                     "additionalProperties": false
                 ]
             ]

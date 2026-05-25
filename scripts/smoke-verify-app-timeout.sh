@@ -8,7 +8,8 @@ trap 'rm -rf "$TEMP_ROOT"' EXIT
 APP_DIR="$TEMP_ROOT/Ouro Workbench.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
-mkdir -p "$MACOS_DIR/Tools" "$APP_DIR/SwiftTerm_SwiftTerm.bundle"
+RESOURCES_DIR="$CONTENTS_DIR/Resources"
+mkdir -p "$MACOS_DIR/Tools" "$RESOURCES_DIR" "$APP_DIR/SwiftTerm_SwiftTerm.bundle"
 
 version="$(tr -d '[:space:]' < "$ROOT_DIR/VERSION")"
 cat > "$CONTENTS_DIR/Info.plist" <<PLIST
@@ -20,6 +21,8 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
   <string>OuroWorkbench</string>
   <key>CFBundleIdentifier</key>
   <string>com.ourostack.workbench</string>
+  <key>CFBundleIconFile</key>
+  <string>OuroWorkbench</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
@@ -31,6 +34,8 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
 </dict>
 </plist>
 PLIST
+
+printf 'fake icon for timeout smoke\n' > "$RESOURCES_DIR/OuroWorkbench.icns"
 
 cat > "$MACOS_DIR/OuroWorkbench" <<'SH'
 #!/usr/bin/env bash

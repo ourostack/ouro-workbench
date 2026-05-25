@@ -119,7 +119,7 @@ public enum PersistentTerminalSession: Sendable {
         [
             "-U",
             "-T", "xterm-256color",
-            "-h", "10000",
+            "-h", "0",
             "-e", "^]]",
             "-D",
             "-RR",

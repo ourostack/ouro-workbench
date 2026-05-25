@@ -428,8 +428,10 @@ missing guide entry.
 
 Use the normal shell `clear` command. Workbench launches terminals with
 xterm-compatible capabilities, so `clear` should repaint the visible pane just
-like a native terminal. If old output stays visible after `clear`, treat it as a
-bug in the terminal surface rather than a shell problem.
+like a native terminal. Workbench keeps durable history in transcripts instead
+of backing `screen` scrollback, which prevents old output from returning after
+focus changes or window resizes. If old output stays visible after `clear`,
+treat it as a bug in the terminal surface rather than a shell problem.
 
 ### Add A New Terminal/TUI Agent
 
@@ -514,10 +516,18 @@ Workbench MCP exposes:
 | `workbench_transcript_tail` | Read a bounded tail from the latest transcript for a session. |
 | `workbench_search_transcripts` | Search saved transcript lines across runs. |
 | `workbench_recovery_drill` | Dry-run restart recovery planning. |
-| `workbench_request_action` | Queue a launch, recover, terminate, or send-input action for the native app. |
+| `workbench_request_action` | Queue terminal control and organization actions for the native app. |
 
 External MCP action requests are written to disk, drained by the native app, and
 then authorized by the same trust gates used for boss conversation actions.
+
+Supported queued actions are `launch`, `recover`, `terminate`, `sendInput`,
+`createGroup`, `createTerminal`, `moveSession`, `setTrust`, `setAutoResume`,
+`archive`, and `restore`. Entry-scoped actions use a process id or unique
+session name in `entry`; group-scoped actions use a group id or unique group
+name in `group`. The optional `trust` field is the string enum `trusted` or
+`untrusted`; `autoResume` is a boolean. Invalid action payload types are
+rejected instead of silently defaulted.
 
 ## Restart Recovery Playbook
 
@@ -549,11 +559,13 @@ and visible:
 
 - The target session must exist.
 - The target session must be trusted.
-- The target session must not be archived.
+- The target session must not be archived, except for `restore`.
 - `sendInput` requires non-empty text and a running session.
 - `launch` is skipped if the session is already running.
 - `recover` requires an available recovery plan.
 - `terminate` requires a running session.
+- `createTerminal` and `createGroup` require explicit names.
+- `moveSession`, `archive`, and `restore` only operate when the session state is safe for that change.
 - Every applied or denied action is logged.
 
 This is TTFA in product form: trust the agent, keep the trail.
@@ -570,6 +582,7 @@ This is TTFA in product form: trust the agent, keep the trail.
 | A session will not auto-recover | Trust, auto-resume, or native resume posture is missing. | Run `Recovery Drill` and inspect the reason. |
 | A boss action is skipped | The action violated a local trust gate or current runtime state. | Check `Action Log` for the exact result. |
 | The app did not reopen after restart | Login item state may be off or stale. | Toggle `Open at Login` off and back on, then refresh. |
+| Release update check is unavailable | GitHub Releases could not be reached or no release exists yet. | Use the current installed build, then check again when online. |
 | Transcript search finds nothing | The session may not have produced a persisted run transcript yet. | Launch the session, produce output, stop or switch, then search again. |
 
 ## What Good Looks Like
@@ -600,8 +613,8 @@ Workbench is already useful, but the truth matters:
   Workbench uses explicit respawn/checkpoint recovery for that CLI.
 - Boss `sendInput` only works for a running session with a retained controller.
 - Workbench MCP registration currently points at the installed app bundle path.
-- The app is local-first. Signing, notarization, update channels, and broader
-  distribution are separate release work.
+- The app is distributed as an unsigned preview. Apple Developer ID signing and
+  notarization are separate release work.
 
 Those limits are acceptable only because they are visible. The product should
 always prefer an honest yellow light over a fake green one.

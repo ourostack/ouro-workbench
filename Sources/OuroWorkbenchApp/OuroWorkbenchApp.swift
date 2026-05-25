@@ -115,6 +115,8 @@ struct WorkbenchRootView: View {
 }
 
 private struct WindowChromeConfigurator: NSViewRepresentable {
+    private static let frameAutosaveName = "OuroWorkbenchMainWindow"
+
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
         DispatchQueue.main.async {
@@ -138,6 +140,8 @@ private struct WindowChromeConfigurator: NSViewRepresentable {
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.styleMask.insert(.fullSizeContentView)
+        window.minSize = NSSize(width: 1100, height: 700)
+        window.setFrameAutosaveName(Self.frameAutosaveName)
     }
 }
 
@@ -793,6 +797,7 @@ struct BossDashboardView: View {
                 OuroAgentManagerView(model: model)
                 TranscriptSearchView(model: model)
                 MachineRuntimeView()
+                ReleaseUpdateView(model: model)
                 RecoveryDrillView(model: model)
                 BossWorkbenchMCPSetupView(model: model)
                 if let dashboard = model.bossDashboard {
@@ -2238,6 +2243,52 @@ struct MachineRuntimeView: View {
     }
 }
 
+struct ReleaseUpdateView: View {
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 12) {
+                Label("Release Updates", systemImage: "arrow.down.app")
+                    .font(.caption.weight(.semibold))
+                Text(model.releaseUpdateStatusLine)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(model.releaseUpdateStatusColor)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                if model.releaseUpdateIsChecking {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+                Button {
+                    Task {
+                        await model.checkForReleaseUpdate()
+                    }
+                } label: {
+                    Label("Check", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(model.releaseUpdateIsChecking)
+                if model.releaseUpdateURL != nil {
+                    Button {
+                        model.openReleaseUpdate()
+                    } label: {
+                        Label("Open Release", systemImage: "safari")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            }
+            if let snapshot = model.releaseUpdateSnapshot, snapshot.status == .updateAvailable {
+                Text(snapshot.hasInstallableAssets ? "Release assets include a verified app zip and manifest." : "Release is published, but installable app assets were not found.")
+                    .font(.caption)
+                    .foregroundStyle(snapshot.hasInstallableAssets ? SwiftUI.Color.secondary : SwiftUI.Color.orange)
+            }
+        }
+    }
+}
+
 struct RecoveryDrillView: View {
     @ObservedObject var model: WorkbenchViewModel
 
@@ -2405,6 +2456,8 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var bossWorkbenchMCPRegistration: BossWorkbenchMCPRegistrationSnapshot?
     @Published var bossWorkbenchMCPRegistrationByAgentName: [String: BossWorkbenchMCPRegistrationSnapshot] = [:]
     @Published var executableHealthByEntryID: [UUID: ExecutableHealth] = [:]
+    @Published var releaseUpdateSnapshot: ReleaseUpdateSnapshot?
+    @Published var releaseUpdateIsChecking = false
 
     private let paths: WorkbenchPaths
     private let store: WorkbenchStore
@@ -2432,6 +2485,7 @@ final class WorkbenchViewModel: ObservableObject {
     private let transcriptSearcher = TranscriptSearcher()
     private let recoveryDrill = RecoveryDrill()
     private let externalActionQueue: WorkbenchActionRequestQueue
+    private let releaseUpdateChecker: ReleaseUpdateChecker
     private var manuallyTerminatedRunIDs = Set<UUID>()
     private var bossWatchBaselineState: WorkspaceState?
     private var bossWatchTickIsRunning = false
@@ -2446,7 +2500,8 @@ final class WorkbenchViewModel: ObservableObject {
         bossMCPClient: BossAgentMCPClient = BossAgentMCPClient(),
         bossWorkbenchMCPRegistrar: BossWorkbenchMCPRegistrar = BossWorkbenchMCPRegistrar(),
         ouroAgentInventory: OuroAgentInventory = OuroAgentInventory(),
-        executableHealthChecker: ExecutableHealthChecker = ExecutableHealthChecker()
+        executableHealthChecker: ExecutableHealthChecker = ExecutableHealthChecker(),
+        releaseUpdateChecker: ReleaseUpdateChecker = ReleaseUpdateChecker()
     ) {
         self.paths = paths
         self.store = WorkbenchStore(paths: paths)
@@ -2455,6 +2510,7 @@ final class WorkbenchViewModel: ObservableObject {
         self.bossWorkbenchMCPRegistrar = bossWorkbenchMCPRegistrar
         self.ouroAgentInventory = ouroAgentInventory
         self.executableHealthChecker = executableHealthChecker
+        self.releaseUpdateChecker = releaseUpdateChecker
         self.externalActionQueue = WorkbenchActionRequestQueue(paths: paths)
         self.state = WorkspaceState()
         load()
@@ -2622,6 +2678,34 @@ final class WorkbenchViewModel: ObservableObject {
             return "not run"
         }
         return "\(recoveryDrillResult.oneLineStatus); \(recoveryDrillResult.ranAt.formatted(date: .omitted, time: .standard))"
+    }
+
+    var releaseUpdateStatusLine: String {
+        guard let snapshot = releaseUpdateSnapshot else {
+            return "not checked"
+        }
+        return snapshot.detail
+    }
+
+    var releaseUpdateStatusColor: SwiftUI.Color {
+        guard let status = releaseUpdateSnapshot?.status else {
+            return .secondary
+        }
+        switch status {
+        case .current:
+            return .green
+        case .updateAvailable:
+            return .orange
+        case .unavailable:
+            return .secondary
+        }
+    }
+
+    var releaseUpdateURL: URL? {
+        guard let htmlURL = releaseUpdateSnapshot?.htmlURL else {
+            return nil
+        }
+        return URL(string: htmlURL)
     }
 
     var commandPaletteItems: [WorkbenchCommandDescriptor] {
@@ -2996,7 +3080,7 @@ final class WorkbenchViewModel: ObservableObject {
         )
     }
 
-    func moveSession(_ entry: ProcessEntry, to projectId: UUID) {
+    func moveSession(_ entry: ProcessEntry, to projectId: UUID, recordNativeAction: Bool = true) {
         guard let project = state.projects.first(where: { $0.id == projectId }) else {
             errorMessage = "Target group no longer exists"
             return
@@ -3013,14 +3097,18 @@ final class WorkbenchViewModel: ObservableObject {
         state.processEntries[index].workingDirectory = project.rootPath
         selectedProjectID = projectId
         selectedEntryID = entry.id
-        recordActionLog(
-            source: "native",
-            action: "moveSession",
-            targetEntryId: entry.id,
-            targetName: entry.name,
-            result: "Moved \(entry.name) to \(project.name)",
-            succeeded: true
-        )
+        if recordNativeAction {
+            recordActionLog(
+                source: "native",
+                action: "moveSession",
+                targetEntryId: entry.id,
+                targetName: entry.name,
+                result: "Moved \(entry.name) to \(project.name)",
+                succeeded: true
+            )
+        } else {
+            save()
+        }
     }
 
     func setBossPaneCollapsed(_ collapsed: Bool) {
@@ -3211,6 +3299,24 @@ final class WorkbenchViewModel: ObservableObject {
 
     func runRecoveryDrill() {
         recoveryDrillResult = recoveryDrill.run(state: state)
+    }
+
+    func checkForReleaseUpdate() async {
+        guard !releaseUpdateIsChecking else {
+            return
+        }
+        releaseUpdateIsChecking = true
+        defer {
+            releaseUpdateIsChecking = false
+        }
+        releaseUpdateSnapshot = await releaseUpdateChecker.check()
+    }
+
+    func openReleaseUpdate() {
+        guard let releaseUpdateURL else {
+            return
+        }
+        NSWorkspace.shared.open(releaseUpdateURL)
     }
 
     func performCommand(_ command: WorkbenchCommandID) {
@@ -3523,16 +3629,23 @@ final class WorkbenchViewModel: ObservableObject {
 
     @discardableResult
     func createCustomSession(_ draft: CustomTerminalSessionDraft, launchAfterCreate: Bool) -> ProcessEntry? {
+        let projectId = selectedProject?.id ?? state.projects.first?.id
+        return createCustomSession(draft, in: projectId, launchAfterCreate: launchAfterCreate)
+    }
+
+    @discardableResult
+    private func createCustomSession(_ draft: CustomTerminalSessionDraft, in projectId: UUID?, launchAfterCreate: Bool) -> ProcessEntry? {
         do {
             if state.projects.isEmpty {
                 state = bootstrapper.bootstrappedState(from: state)
             }
-            guard let project = selectedProject ?? state.projects.first else {
+            guard let project = projectId.flatMap({ id in state.projects.first { $0.id == id } }) ?? selectedProject ?? state.projects.first else {
                 errorMessage = "No workbench project is available"
                 return nil
             }
             let entry = try customSessionFactory.makeEntry(projectId: project.id, draft: draft)
             state.processEntries.append(entry)
+            selectedProjectID = project.id
             selectedEntryID = entry.id
             save()
             refreshExecutableHealth()
@@ -3617,7 +3730,7 @@ final class WorkbenchViewModel: ObservableObject {
         }
     }
 
-    func archiveCustomSession(_ entry: ProcessEntry) {
+    func archiveCustomSession(_ entry: ProcessEntry, recordNativeAction: Bool = true) {
         guard activeSessions[entry.id] == nil else {
             errorMessage = "Stop \(entry.name) before archiving it"
             return
@@ -3626,32 +3739,40 @@ final class WorkbenchViewModel: ObservableObject {
             let archived = try customSessionManager.archivedEntry(entry)
             replaceEntry(archived)
             selectedEntryID = archived.id
-            recordActionLog(
-                source: "native",
-                action: "archiveSession",
-                targetEntryId: archived.id,
-                targetName: archived.name,
-                result: "Archived \(archived.name)",
-                succeeded: true
-            )
+            if recordNativeAction {
+                recordActionLog(
+                    source: "native",
+                    action: "archiveSession",
+                    targetEntryId: archived.id,
+                    targetName: archived.name,
+                    result: "Archived \(archived.name)",
+                    succeeded: true
+                )
+            } else {
+                save()
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
-    func restoreCustomSession(_ entry: ProcessEntry) {
+    func restoreCustomSession(_ entry: ProcessEntry, recordNativeAction: Bool = true) {
         do {
             let restored = try customSessionManager.restoredEntry(entry)
             replaceEntry(restored)
             selectedEntryID = restored.id
-            recordActionLog(
-                source: "native",
-                action: "restoreSession",
-                targetEntryId: restored.id,
-                targetName: restored.name,
-                result: "Restored \(restored.name)",
-                succeeded: true
-            )
+            if recordNativeAction {
+                recordActionLog(
+                    source: "native",
+                    action: "restoreSession",
+                    targetEntryId: restored.id,
+                    targetName: restored.name,
+                    result: "Restored \(restored.name)",
+                    succeeded: true
+                )
+            } else {
+                save()
+            }
             refreshExecutableHealth()
         } catch {
             errorMessage = error.localizedDescription
@@ -3718,12 +3839,50 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     private func applyBossAction(_ action: BossWorkbenchAction, source: String) -> String {
-        guard let entry = processEntry(matching: action.entry) else {
+        do {
+            try action.validateForQueueing()
+        } catch {
             return finishBossAction(
                 source: source,
                 action: action,
                 entry: nil,
-                result: "Skipped \(action.action.rawValue): no unique process entry matches \(action.entry)"
+                result: "Skipped \(action.action.rawValue): \(error.localizedDescription)"
+            )
+        }
+
+        switch action.action {
+        case .createGroup:
+            guard createGroup(name: action.name ?? "", rootPath: action.workingDirectory ?? "") else {
+                return finishBossAction(source: source, action: action, entry: nil, result: "Failed createGroup: \(errorMessage ?? "invalid group")")
+            }
+            return finishBossAction(source: source, action: action, entry: nil, result: "Created group \(action.name ?? "unnamed")")
+        case .createTerminal:
+            guard let project = project(matching: action.group) else {
+                return finishBossAction(source: source, action: action, entry: nil, result: "Skipped createTerminal: no unique group matches \(action.group ?? "selected group")")
+            }
+            let draft = CustomTerminalSessionDraft(
+                name: action.name ?? "",
+                command: action.command ?? "",
+                workingDirectory: nonEmpty(action.workingDirectory) ?? project.rootPath,
+                trust: action.trust ?? .untrusted,
+                autoResume: action.autoResume ?? false,
+                notes: action.text ?? "Created by \(source)"
+            )
+            guard let entry = createCustomSession(draft, in: project.id, launchAfterCreate: false) else {
+                return finishBossAction(source: source, action: action, entry: nil, result: "Failed createTerminal: \(errorMessage ?? "invalid terminal")")
+            }
+            return finishBossAction(source: source, action: action, entry: entry, result: "Created terminal \(entry.name) in \(project.name)")
+        case .launch, .recover, .terminate, .sendInput, .moveSession, .setTrust, .setAutoResume, .archive, .restore:
+            break
+        }
+
+        guard let entryValue = action.entry,
+              let entry = processEntry(matching: entryValue) else {
+            return finishBossAction(
+                source: source,
+                action: action,
+                entry: nil,
+                result: "Skipped \(action.action.rawValue): no unique process entry matches \(action.entry ?? "missing entry")"
             )
         }
         let authorization = bossActionAuthorizer.authorize(action, for: entry)
@@ -3764,6 +3923,52 @@ final class WorkbenchViewModel: ObservableObject {
             }
             sendInput(text, to: entry, appendNewline: action.appendNewline)
             return finishBossAction(source: source, action: action, entry: entry, result: "Sent input to \(entry.name)")
+        case .moveSession:
+            guard let project = project(matching: action.group) else {
+                return finishBossAction(source: source, action: action, entry: entry, result: "Skipped moveSession for \(entry.name): no unique group matches \(action.group ?? "missing group")")
+            }
+            guard activeSessions[entry.id] == nil else {
+                return finishBossAction(source: source, action: action, entry: entry, result: "Skipped moveSession for \(entry.name): stop it first")
+            }
+            moveSession(entry, to: project.id, recordNativeAction: false)
+            return finishBossAction(source: source, action: action, entry: entry, result: "Moved \(entry.name) to \(project.name)")
+        case .setTrust:
+            guard let trust = action.trust else {
+                return finishBossAction(source: source, action: action, entry: entry, result: "Skipped setTrust for \(entry.name): missing trust")
+            }
+            updateEntry(entry.id) { entry in
+                entry.trust = trust
+                entry.lastSummary = "\(entry.name) trust set to \(trust.rawValue)"
+            }
+            save()
+            return finishBossAction(source: source, action: action, entry: entry, result: "Set \(entry.name) trust to \(trust.rawValue)")
+        case .setAutoResume:
+            guard let autoResume = action.autoResume else {
+                return finishBossAction(source: source, action: action, entry: entry, result: "Skipped setAutoResume for \(entry.name): missing autoResume")
+            }
+            updateEntry(entry.id) { entry in
+                entry.autoResume = autoResume
+                entry.lastSummary = "\(entry.name) auto-resume \(autoResume ? "enabled" : "disabled")"
+            }
+            save()
+            return finishBossAction(source: source, action: action, entry: entry, result: "\(autoResume ? "Enabled" : "Disabled") auto-resume for \(entry.name)")
+        case .archive:
+            guard activeSessions[entry.id] == nil else {
+                return finishBossAction(source: source, action: action, entry: entry, result: "Skipped archive for \(entry.name): stop it first")
+            }
+            archiveCustomSession(entry, recordNativeAction: false)
+            guard state.processEntries.first(where: { $0.id == entry.id })?.isArchived == true else {
+                return finishBossAction(source: source, action: action, entry: entry, result: "Failed archive for \(entry.name): \(errorMessage ?? "not archivable")")
+            }
+            return finishBossAction(source: source, action: action, entry: entry, result: "Archived \(entry.name)")
+        case .restore:
+            restoreCustomSession(entry, recordNativeAction: false)
+            guard state.processEntries.first(where: { $0.id == entry.id })?.isArchived == false else {
+                return finishBossAction(source: source, action: action, entry: entry, result: "Failed restore for \(entry.name): \(errorMessage ?? "not restorable")")
+            }
+            return finishBossAction(source: source, action: action, entry: entry, result: "Restored \(entry.name)")
+        case .createGroup, .createTerminal:
+            return finishBossAction(source: source, action: action, entry: entry, result: "Skipped \(action.action.rawValue): already handled")
         }
     }
 
@@ -3777,7 +3982,7 @@ final class WorkbenchViewModel: ObservableObject {
             source: source,
             action: action.action.rawValue,
             targetEntryId: entry?.id,
-            targetName: entry?.name ?? action.entry,
+            targetName: entry?.name ?? action.entry ?? action.name ?? action.group,
             result: result,
             succeeded: !result.hasPrefix("Skipped") && !result.hasPrefix("Failed")
         )
@@ -3817,6 +4022,26 @@ final class WorkbenchViewModel: ObservableObject {
             entry.name.caseInsensitiveCompare(value) == .orderedSame
         }
         return nameMatches.count == 1 ? nameMatches[0] : nil
+    }
+
+    private func project(matching value: String?) -> WorkbenchProject? {
+        guard let value = nonEmpty(value) else {
+            return selectedProject ?? state.projects.first
+        }
+        if let id = UUID(uuidString: value), let project = state.projects.first(where: { $0.id == id }) {
+            return project
+        }
+        let nameMatches = state.projects.filter { project in
+            project.name.caseInsensitiveCompare(value) == .orderedSame
+        }
+        return nameMatches.count == 1 ? nameMatches[0] : nil
+    }
+
+    private func nonEmpty(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+            return nil
+        }
+        return trimmed
     }
 
     private func start(_ entry: ProcessEntry, with plan: TerminalCommandPlan) {
@@ -3983,7 +4208,7 @@ final class WorkbenchViewModel: ObservableObject {
             let value = try await mailboxClient.fetch(endpoint, as: type)
             return MailboxFetchResult(value: value, issue: nil)
         } catch {
-            return MailboxFetchResult(value: nil, issue: "\(label): \(error)")
+            return MailboxFetchResult(value: nil, issue: "\(label): \(error.localizedDescription)")
         }
     }
 }
