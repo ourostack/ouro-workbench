@@ -34,6 +34,7 @@ cd "$ROOT_DIR"
 run_step "Verify release version contract"
 scripts/verify-version-contract.sh
 scripts/smoke-package-shallow-guard.sh
+scripts/install-latest-app-artifact.sh --help >/dev/null
 
 run_step "Verify generated scenario matrix"
 scripts/generate-workbench-5000-matrix.rb
