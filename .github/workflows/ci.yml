@@ -66,3 +66,37 @@ jobs:
           path: artifacts/workbench-scenario-verifier
           if-no-files-found: error
           retention-days: 14
+
+  app-bundle:
+    name: App bundle
+    runs-on: macos-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Show toolchain
+        run: |
+          swift --version
+          xcodebuild -version
+
+      - name: Resolve dependencies
+        run: swift package resolve
+
+      - name: Package app bundle
+        run: scripts/package-app.sh
+
+      - name: Verify app bundle
+        run: scripts/verify-app-bundle.sh
+
+      - name: Archive app bundle
+        run: |
+          mkdir -p artifacts
+          ditto -c -k --keepParent "dist/Ouro Workbench.app" artifacts/OuroWorkbenchApp.zip
+
+      - name: Upload app bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: ouro-workbench-app-${{ github.sha }}
+          path: artifacts/OuroWorkbenchApp.zip
+          if-no-files-found: error
+          retention-days: 7

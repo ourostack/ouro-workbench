@@ -23,6 +23,12 @@ The generated bundle is intentionally local and unsigned for now. It lives under
 - `Contents/MacOS/OuroWorkbenchMCP`
 - `Contents/MacOS/Tools/screen`, the terminal persistence backend
 
+Verify a packaged bundle with:
+
+```bash
+scripts/verify-app-bundle.sh
+```
+
 The app prefers the bundled `screen` executable and falls back to `/usr/bin/screen`
 only during development runs where the app bundle tool is not present. The
 bundle keeps automatic and sudden termination disabled so macOS does not quietly
@@ -48,3 +54,9 @@ Current bundle identity:
 
 Before distributing beyond this machine, add signing, notarization, a real icon,
 and release versioning.
+
+CI has a separate `App bundle` job that packages the release app, verifies the
+bundle contents, rejects local build-path linkage, and uploads the unsigned app
+artifact for inspection. The uploaded artifact is a zip created with
+`ditto --keepParent`, so downloading and expanding it preserves the
+`Ouro Workbench.app` wrapper instead of flattening the bundle contents.
