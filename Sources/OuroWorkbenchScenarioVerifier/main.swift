@@ -134,6 +134,7 @@ struct NativeScenarioVerifier {
         var failures: [ScenarioVerifierFailure] = []
         var sampleKeys = Set<String>()
         var writtenSamples: [String] = []
+        var coverage = ScenarioCoverageAccumulator()
 
         var matrixRowsVerified = 0
         var deepRowsVerified = 0
@@ -161,6 +162,13 @@ struct NativeScenarioVerifier {
                 recoveryAction: recoveryAction,
                 readinessState: readiness.state.rawValue,
                 commandLine: commandPlan.displayCommand
+            )
+            coverage.record(
+                row: row,
+                fixture: fixture,
+                registration: registration,
+                recoveryAction: recoveryAction,
+                readinessState: readiness.state.rawValue
             )
 
             for viewport in viewports {
@@ -210,6 +218,7 @@ struct NativeScenarioVerifier {
             deepSeed: deepRowsVerified > 0 ? deepSeed : nil,
             renderPasses: renderPasses,
             viewportNames: viewports.map(\.name),
+            coverage: coverage.summary(viewports: viewports, renderPasses: renderPasses),
             sampleFiles: writtenSamples,
             failures: failures
         )
@@ -482,6 +491,129 @@ struct SeededRandom {
 
     mutating func nextBool() -> Bool {
         next() & 1 == 0
+    }
+}
+
+struct ScenarioCoverageAccumulator {
+    private var digest = FNV1a64()
+    private var coverage = ScenarioCoverageSummary(
+        digest: "",
+        rowCount: 0,
+        renderPasses: 0,
+        terminals: [:],
+        lifecycles: [:],
+        trustResumePostures: [:],
+        surfaces: [:],
+        bossBridgeStates: [:],
+        executableHealthStates: [:],
+        recoveryActions: [:],
+        readinessStates: [:],
+        bossAgents: [:],
+        projectCounts: [:],
+        processCounts: [:],
+        runCounts: [:],
+        viewports: [:]
+    )
+
+    mutating func record(
+        row: WorkbenchScenarioRow,
+        fixture: WorkbenchScenarioFixture,
+        registration: BossWorkbenchMCPRegistrationSnapshot,
+        recoveryAction: RecoveryAction,
+        readinessState: String
+    ) {
+        coverage.rowCount += 1
+        increment(\.terminals, row.terminal)
+        increment(\.lifecycles, row.lifecycle)
+        increment(\.trustResumePostures, row.trustResumeMetadata)
+        increment(\.surfaces, row.surface)
+        increment(\.bossBridgeStates, registration.status.rawValue)
+        increment(\.executableHealthStates, row.executableHealth)
+        increment(\.recoveryActions, recoveryAction.rawValue)
+        increment(\.readinessStates, readinessState)
+        increment(\.bossAgents, fixture.state.boss.agentName)
+        increment(\.projectCounts, String(fixture.state.projects.count))
+        increment(\.processCounts, String(fixture.state.processEntries.count))
+        increment(\.runCounts, String(fixture.state.processRuns.count))
+
+        digest.update(row.caseID)
+        digest.update(row.terminal)
+        digest.update(row.lifecycle)
+        digest.update(row.trustResumeMetadata)
+        digest.update(row.surface)
+        digest.update(registration.status.rawValue)
+        digest.update(row.executableHealth)
+        digest.update(recoveryAction.rawValue)
+        digest.update(readinessState)
+        digest.update(fixture.state.boss.agentName)
+        digest.update(String(fixture.state.projects.count))
+        digest.update(String(fixture.state.processEntries.count))
+        digest.update(String(fixture.state.processRuns.count))
+        digest.update(fixture.entry.name)
+        digest.update(fixture.entry.executable)
+        digest.update(fixture.entry.arguments.joined(separator: "\u{1f}"))
+        digest.update(fixture.entry.workingDirectory)
+        digest.update(fixture.latestRun?.terminalSessionId ?? "")
+    }
+
+    func summary(viewports: [ScenarioViewport], renderPasses: Int) -> ScenarioCoverageSummary {
+        var next = coverage
+        next.renderPasses = renderPasses
+        next.viewports = Dictionary(uniqueKeysWithValues: viewports.map { viewport in
+            (viewport.name, coverage.rowCount)
+        })
+        var finalDigest = digest
+        for viewport in viewports {
+            finalDigest.update(viewport.name)
+            finalDigest.update(String(Int(viewport.width)))
+            finalDigest.update(String(Int(viewport.height)))
+        }
+        finalDigest.update(String(renderPasses))
+        next.digest = finalDigest.hexDigest
+        return next
+    }
+
+    private mutating func increment(
+        _ keyPath: WritableKeyPath<ScenarioCoverageSummary, [String: Int]>,
+        _ key: String
+    ) {
+        coverage[keyPath: keyPath][key, default: 0] += 1
+    }
+}
+
+struct ScenarioCoverageSummary: Codable {
+    var digest: String
+    var rowCount: Int
+    var renderPasses: Int
+    var terminals: [String: Int]
+    var lifecycles: [String: Int]
+    var trustResumePostures: [String: Int]
+    var surfaces: [String: Int]
+    var bossBridgeStates: [String: Int]
+    var executableHealthStates: [String: Int]
+    var recoveryActions: [String: Int]
+    var readinessStates: [String: Int]
+    var bossAgents: [String: Int]
+    var projectCounts: [String: Int]
+    var processCounts: [String: Int]
+    var runCounts: [String: Int]
+    var viewports: [String: Int]
+}
+
+struct FNV1a64 {
+    private var value: UInt64 = 0xcbf2_9ce4_8422_2325
+
+    mutating func update(_ string: String) {
+        for byte in string.utf8 {
+            value ^= UInt64(byte)
+            value &*= 0x0000_0100_0000_01b3
+        }
+        value ^= UInt64(0xff)
+        value &*= 0x0000_0100_0000_01b3
+    }
+
+    var hexDigest: String {
+        String(format: "%016llx", value)
     }
 }
 
@@ -894,6 +1026,7 @@ struct ScenarioVerifierSummary: Codable {
     var deepSeed: UInt64?
     var renderPasses: Int
     var viewportNames: [String]
+    var coverage: ScenarioCoverageSummary
     var sampleFiles: [String]
     var failures: [ScenarioVerifierFailure]
 
@@ -906,6 +1039,7 @@ struct ScenarioVerifierSummary: Codable {
             deepSeed.map { "deep seed: \($0)" },
             "render passes: \(renderPasses)",
             "viewports: \(viewportNames.joined(separator: ", "))",
+            "coverage digest: \(coverage.digest)",
             "sample files: \(sampleFiles.count)",
             "failures: \(failures.count)"
         ].compactMap { $0 }.joined(separator: "\n")
