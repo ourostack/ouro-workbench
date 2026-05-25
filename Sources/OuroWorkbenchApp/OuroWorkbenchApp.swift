@@ -72,6 +72,9 @@ struct WorkbenchRootView: View {
         .sheet(isPresented: $model.isCommandPalettePresented) {
             CommandPaletteSheet(model: model)
         }
+        .sheet(isPresented: $model.isOuroAgentInstallSheetPresented) {
+            OuroAgentInstallSheet(model: model)
+        }
         .confirmationDialog("Delete Terminal?", isPresented: model.deleteConfirmationIsPresented) {
             if let entry = model.pendingDeleteSession {
                 Button("Delete \(entry.name)", role: .destructive) {
@@ -768,6 +771,7 @@ struct BossDashboardView: View {
                 }
                 BossWatchStatusView(model: model)
                 BossConversationView(model: model)
+                OuroAgentManagerView(model: model)
                 TranscriptSearchView(model: model)
                 MachineRuntimeView()
                 RecoveryDrillView(model: model)
@@ -926,6 +930,285 @@ struct BossConversationView: View {
                 }
             }
         }
+    }
+}
+
+struct OuroAgentManagerView: View {
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 10) {
+                Label("Ouro Agents", systemImage: "person.2.badge.gearshape")
+                    .font(.caption.weight(.semibold))
+                Text(model.ouroAgentStatusLine)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer()
+                Button {
+                    model.refreshOuroAgents()
+                } label: {
+                    Label("Refresh Agents", systemImage: "arrow.clockwise")
+                }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+                .help("Refresh local Ouro agents")
+                Button {
+                    model.isOuroAgentInstallSheetPresented = true
+                } label: {
+                    Label("Install Agent", systemImage: "square.and.arrow.down")
+                }
+                .buttonStyle(.bordered)
+            }
+            if model.ouroAgents.isEmpty {
+                HStack(spacing: 8) {
+                    Image(systemName: "person.crop.circle.badge.exclamationmark")
+                        .foregroundStyle(.orange)
+                    Text("No local agent bundles found in ~/AgentBundles.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                VStack(spacing: 5) {
+                    ForEach(model.ouroAgents) { agent in
+                        OuroAgentRowView(agent: agent, model: model)
+                    }
+                }
+            }
+        }
+        .task {
+            model.refreshOuroAgents()
+        }
+    }
+}
+
+struct OuroAgentRowView: View {
+    var agent: OuroAgentRecord
+    @ObservedObject var model: WorkbenchViewModel
+
+    private var registration: BossWorkbenchMCPRegistrationSnapshot? {
+        model.workbenchMCPRegistration(for: agent)
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 8) {
+            Image(systemName: agentStatusImage)
+                .foregroundStyle(agentStatusColor)
+                .frame(width: 16)
+                .help(agent.detail)
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 6) {
+                    Text(agent.name)
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                    if model.state.boss.agentName.caseInsensitiveCompare(agent.name) == .orderedSame {
+                        StatusPill(text: "boss", color: .blue)
+                    }
+                    if let registration {
+                        StatusPill(text: registrationPillText(registration.status), color: registrationTint(registration.status))
+                    }
+                }
+                Text(agent.summaryLine)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            Spacer(minLength: 8)
+            Button {
+                model.selectBoss(agentName: agent.name)
+            } label: {
+                Label("Use as Boss", systemImage: "person.crop.circle.badge.checkmark")
+            }
+            .labelStyle(.iconOnly)
+            .buttonStyle(.borderless)
+            .help("Use \(agent.name) as boss")
+            .disabled(!agent.isUsableAsBoss || model.state.boss.agentName.caseInsensitiveCompare(agent.name) == .orderedSame)
+            if registration?.isActionable == true {
+                Button {
+                    model.installWorkbenchMCP(for: agent)
+                } label: {
+                    Label(registration?.status == .needsUpdate ? "Update MCP" : "Install MCP", systemImage: "link.badge.plus")
+                }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+                .help(registration?.detail ?? "Register Workbench MCP")
+            }
+            Button {
+                model.revealAgentBundle(agent)
+            } label: {
+                Label("Reveal Bundle", systemImage: "folder")
+            }
+            .labelStyle(.iconOnly)
+            .buttonStyle(.borderless)
+            .help(agent.bundlePath)
+        }
+        .padding(.vertical, 3)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(agent.name), \(agent.summaryLine)")
+    }
+
+    private var agentStatusImage: String {
+        switch agent.status {
+        case .ready:
+            return "checkmark.circle.fill"
+        case .disabled:
+            return "pause.circle.fill"
+        case .missingConfig:
+            return "exclamationmark.triangle.fill"
+        case .invalidConfig:
+            return "xmark.octagon.fill"
+        }
+    }
+
+    private var agentStatusColor: SwiftUI.Color {
+        switch agent.status {
+        case .ready:
+            return .green
+        case .disabled, .missingConfig:
+            return .orange
+        case .invalidConfig:
+            return .red
+        }
+    }
+
+    private func registrationPillText(_ status: BossWorkbenchMCPRegistrationStatus) -> String {
+        switch status {
+        case .registered:
+            return "mcp"
+        case .notRegistered:
+            return "no mcp"
+        case .needsUpdate:
+            return "mcp update"
+        case .agentMissing:
+            return "missing"
+        case .executableMissing:
+            return "app missing"
+        case .invalidConfig:
+            return "config"
+        }
+    }
+
+    private func registrationTint(_ status: BossWorkbenchMCPRegistrationStatus) -> SwiftUI.Color {
+        switch status {
+        case .registered:
+            return .green
+        case .notRegistered, .needsUpdate:
+            return .orange
+        case .agentMissing, .executableMissing, .invalidConfig:
+            return .red
+        }
+    }
+}
+
+private enum OuroAgentInstallSheetMode: String, CaseIterable, Identifiable {
+    case hatch
+    case clone
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .hatch:
+            return "Hatch"
+        case .clone:
+            return "Clone"
+        }
+    }
+}
+
+struct OuroAgentInstallSheet: View {
+    @ObservedObject var model: WorkbenchViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var mode: OuroAgentInstallSheetMode = .hatch
+    @State private var agentName = ""
+    @State private var humanName = "Ari"
+    @State private var provider = "minimax"
+    @State private var remote = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Install Ouro Agent")
+                .font(.title3.weight(.semibold))
+            Picker("Mode", selection: $mode) {
+                ForEach(OuroAgentInstallSheetMode.allCases) { mode in
+                    Text(mode.label).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            Form {
+                switch mode {
+                case .hatch:
+                    TextField("Agent Name", text: $agentName)
+                    TextField("Human Name", text: $humanName)
+                    TextField("Provider", text: $provider)
+                case .clone:
+                    TextField("Git Remote", text: $remote)
+                    TextField("Agent Name Override", text: $agentName)
+                }
+            }
+            Text(commandPreview)
+                .font(.caption.monospaced())
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .truncationMode(.middle)
+                .textSelection(.enabled)
+            HStack {
+                Spacer()
+                Button("Cancel") {
+                    dismiss()
+                }
+                Button {
+                    guard install() else {
+                        return
+                    }
+                    dismiss()
+                } label: {
+                    Label("Open Installer", systemImage: "terminal")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!canInstall)
+            }
+        }
+        .padding()
+        .frame(width: 560)
+    }
+
+    private var canInstall: Bool {
+        switch mode {
+        case .hatch:
+            return !agentName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && !humanName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && !provider.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .clone:
+            return !remote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
+
+    private var commandPreview: String {
+        do {
+            return try model.ouroAgentInstallPlan(
+                mode: mode.rawValue,
+                agentName: agentName,
+                humanName: humanName,
+                provider: provider,
+                remote: remote
+            ).commandLine
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    private func install() -> Bool {
+        model.launchOuroAgentInstall(
+            mode: mode.rawValue,
+            agentName: agentName,
+            humanName: humanName,
+            provider: provider,
+            remote: remote
+        )
     }
 }
 
@@ -2002,12 +2285,15 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var isNewSessionSheetPresented = false
     @Published var isNewGroupSheetPresented = false
     @Published var isCommandPalettePresented = false
+    @Published var isOuroAgentInstallSheetPresented = false
     @Published var commandPaletteQuery = ""
     @Published var editingGroup: WorkbenchProject?
     @Published var pendingDeleteGroup: WorkbenchProject?
     @Published var editingSession: ProcessEntry?
     @Published var pendingDeleteSession: ProcessEntry?
+    @Published var ouroAgents: [OuroAgentRecord] = []
     @Published var bossWorkbenchMCPRegistration: BossWorkbenchMCPRegistrationSnapshot?
+    @Published var bossWorkbenchMCPRegistrationByAgentName: [String: BossWorkbenchMCPRegistrationSnapshot] = [:]
     @Published var executableHealthByEntryID: [UUID: ExecutableHealth] = [:]
 
     private let paths: WorkbenchPaths
@@ -2024,6 +2310,8 @@ final class WorkbenchViewModel: ObservableObject {
     private let commandPalette = WorkbenchCommandPalette()
     private let bossMCPClient: BossAgentMCPClient
     private let bossWorkbenchMCPRegistrar: BossWorkbenchMCPRegistrar
+    private let ouroAgentInventory: OuroAgentInventory
+    private let ouroAgentInstallCommandBuilder = OuroAgentInstallCommandBuilder()
     private let executableHealthChecker: ExecutableHealthChecker
     private let bossActionParser = BossWorkbenchActionParser()
     private let bossActionAuthorizer = BossWorkbenchActionAuthorizer()
@@ -2047,6 +2335,7 @@ final class WorkbenchViewModel: ObservableObject {
         mailboxClient: MailboxClient = MailboxClient(),
         bossMCPClient: BossAgentMCPClient = BossAgentMCPClient(),
         bossWorkbenchMCPRegistrar: BossWorkbenchMCPRegistrar = BossWorkbenchMCPRegistrar(),
+        ouroAgentInventory: OuroAgentInventory = OuroAgentInventory(),
         executableHealthChecker: ExecutableHealthChecker = ExecutableHealthChecker()
     ) {
         self.paths = paths
@@ -2054,10 +2343,12 @@ final class WorkbenchViewModel: ObservableObject {
         self.mailboxClient = mailboxClient
         self.bossMCPClient = bossMCPClient
         self.bossWorkbenchMCPRegistrar = bossWorkbenchMCPRegistrar
+        self.ouroAgentInventory = ouroAgentInventory
         self.executableHealthChecker = executableHealthChecker
         self.externalActionQueue = WorkbenchActionRequestQueue(paths: paths)
         self.state = WorkspaceState()
         load()
+        refreshOuroAgents()
         refreshWorkbenchMCPRegistration()
         refreshExecutableHealth()
     }
@@ -2230,6 +2521,12 @@ final class WorkbenchViewModel: ObservableObject {
                 systemImage: bossWatchIsEnabled ? "eye.slash" : "eye"
             ),
             WorkbenchCommandDescriptor(
+                id: .installOuroAgent,
+                title: "Install Ouro Agent",
+                detail: "Open a managed ouro hatch or clone installer terminal",
+                systemImage: "square.and.arrow.down"
+            ),
+            WorkbenchCommandDescriptor(
                 id: .searchTranscripts,
                 title: "Search Transcripts",
                 detail: "Run the current transcript search query",
@@ -2336,12 +2633,134 @@ final class WorkbenchViewModel: ObservableObject {
         bossWorkbenchMCPRegistration?.status == .needsUpdate ? "Update" : "Install"
     }
 
+    var ouroAgentStatusLine: String {
+        guard !ouroAgents.isEmpty else {
+            return "no local agents"
+        }
+        let readyCount = ouroAgents.filter { $0.status == .ready }.count
+        return "\(ouroAgents.count) local, \(readyCount) ready; boss \(state.boss.agentName)"
+    }
+
     var bossAgentChoices: [String] {
-        let names = (bossDashboard?.knownAgentNames ?? []) + [state.boss.agentName]
+        let names = ouroAgents.map(\.name) + (bossDashboard?.knownAgentNames ?? []) + [state.boss.agentName]
         return Array(Set(names))
             .filter { !$0.isEmpty }
             .filter(BossWorkbenchMCPRegistrar.isValidAgentBundleName)
             .sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
+    func refreshOuroAgents() {
+        ouroAgents = ouroAgentInventory.scan()
+        refreshWorkbenchMCPRegistration()
+    }
+
+    func workbenchMCPRegistration(for agent: OuroAgentRecord) -> BossWorkbenchMCPRegistrationSnapshot? {
+        bossWorkbenchMCPRegistrationByAgentName[agent.name]
+    }
+
+    func revealAgentBundle(_ agent: OuroAgentRecord) {
+        let targetPath = FileManager.default.fileExists(atPath: agent.configPath)
+            ? agent.configPath
+            : agent.bundlePath
+        NSWorkspace.shared.activateFileViewerSelecting([
+            URL(fileURLWithPath: targetPath)
+        ])
+    }
+
+    func installWorkbenchMCP(for agent: OuroAgentRecord) {
+        do {
+            let selection = BossAgentSelection(agentName: agent.name)
+            let snapshot = try bossWorkbenchMCPRegistrar.install(for: selection)
+            bossWorkbenchMCPRegistrationByAgentName[agent.name] = snapshot
+            if state.boss.agentName.caseInsensitiveCompare(agent.name) == .orderedSame {
+                bossWorkbenchMCPRegistration = snapshot
+            }
+            let result = "Registered Workbench MCP for \(agent.name)"
+            bossAppliedActions = [result] + bossAppliedActions
+            recordActionLog(
+                source: "native",
+                action: "registerWorkbenchMCP",
+                targetName: agent.name,
+                result: result,
+                succeeded: true
+            )
+        } catch {
+            errorMessage = "Workbench MCP registration failed: \(error.localizedDescription)"
+            refreshWorkbenchMCPRegistration()
+        }
+    }
+
+    func ouroAgentInstallPlan(
+        mode: String,
+        agentName: String,
+        humanName: String,
+        provider: String,
+        remote: String
+    ) throws -> OuroAgentInstallPlan {
+        switch mode {
+        case OuroAgentInstallSheetMode.hatch.rawValue:
+            return try ouroAgentInstallCommandBuilder.hatch(
+                agentName: agentName,
+                humanName: humanName,
+                provider: provider
+            )
+        case OuroAgentInstallSheetMode.clone.rawValue:
+            return try ouroAgentInstallCommandBuilder.clone(
+                remote: remote,
+                agentName: agentName
+            )
+        default:
+            return try ouroAgentInstallCommandBuilder.hatch(
+                agentName: agentName,
+                humanName: humanName,
+                provider: provider
+            )
+        }
+    }
+
+    @discardableResult
+    func launchOuroAgentInstall(
+        mode: String,
+        agentName: String,
+        humanName: String,
+        provider: String,
+        remote: String
+    ) -> Bool {
+        do {
+            let plan = try ouroAgentInstallPlan(
+                mode: mode,
+                agentName: agentName,
+                humanName: humanName,
+                provider: provider,
+                remote: remote
+            )
+            let entry = createCustomSession(
+                CustomTerminalSessionDraft(
+                    name: plan.sessionName,
+                    command: plan.commandLine,
+                    workingDirectory: selectedProject?.rootPath ?? FileManager.default.homeDirectoryForCurrentUser.path,
+                    trust: .trusted,
+                    autoResume: true,
+                    notes: plan.notes
+                ),
+                launchAfterCreate: true
+            )
+            guard let entry else {
+                return false
+            }
+            recordActionLog(
+                source: "native",
+                action: "installOuroAgent",
+                targetEntryId: entry.id,
+                targetName: entry.name,
+                result: "Opened \(entry.name) installer",
+                succeeded: true
+            )
+            return true
+        } catch {
+            errorMessage = "Ouro agent install failed: \(error.localizedDescription)"
+            return false
+        }
     }
 
     func selectBoss(agentName: String) {
@@ -2574,7 +2993,18 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     func refreshWorkbenchMCPRegistration() {
-        bossWorkbenchMCPRegistration = bossWorkbenchMCPRegistrar.snapshot(for: state.boss)
+        let selectedSnapshot = bossWorkbenchMCPRegistrar.snapshot(for: state.boss)
+        bossWorkbenchMCPRegistration = selectedSnapshot
+        var snapshots = Dictionary(
+            uniqueKeysWithValues: ouroAgents.map { agent in
+                (
+                    agent.name,
+                    bossWorkbenchMCPRegistrar.snapshot(for: BossAgentSelection(agentName: agent.name))
+                )
+            }
+        )
+        snapshots[state.boss.agentName] = selectedSnapshot
+        bossWorkbenchMCPRegistrationByAgentName = snapshots
     }
 
     func refreshExecutableHealth() {
@@ -2587,21 +3017,16 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     func installWorkbenchMCPForBoss() {
-        do {
-            bossWorkbenchMCPRegistration = try bossWorkbenchMCPRegistrar.install(for: state.boss)
-            let result = "Registered Workbench MCP for \(state.boss.agentName)"
-            bossAppliedActions = [result] + bossAppliedActions
-            recordActionLog(
-                source: "native",
-                action: "registerWorkbenchMCP",
-                targetName: state.boss.agentName,
-                result: result,
-                succeeded: true
-            )
-        } catch {
-            errorMessage = "Workbench MCP registration failed: \(error.localizedDescription)"
-            refreshWorkbenchMCPRegistration()
-        }
+        let selectedAgent = ouroAgents.first {
+            $0.name.caseInsensitiveCompare(state.boss.agentName) == .orderedSame
+        } ?? OuroAgentRecord(
+            name: state.boss.agentName,
+            bundlePath: "",
+            configPath: bossWorkbenchMCPRegistration?.agentConfigPath ?? "",
+            status: .ready,
+            detail: "selected boss"
+        )
+        installWorkbenchMCP(for: selectedAgent)
     }
 
     func launchCommand(for entry: ProcessEntry) -> String {
@@ -2698,6 +3123,8 @@ final class WorkbenchViewModel: ObservableObject {
             }
         case .toggleBossWatch:
             setBossWatchEnabled(!bossWatchIsEnabled)
+        case .installOuroAgent:
+            isOuroAgentInstallSheetPresented = true
         case .launchSelectedSession:
             guard let selectedEntry else {
                 errorMessage = "No session is selected"
@@ -2759,6 +3186,7 @@ final class WorkbenchViewModel: ObservableObject {
             summary: summary,
             dashboard: bossDashboard,
             executableHealth: executableHealthByEntryID,
+            ouroAgents: ouroAgents,
             recentChanges: recentChanges
         )
     }

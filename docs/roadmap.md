@@ -76,6 +76,24 @@ agent-aware terminal workbench rather than a launcher with terminal panes.
   persists across app launches.
 - Add "what changed since last check-in" summaries. Initial summaries exist.
 
+## Ouro Agent Management
+
+- Treat local Ouro agents as first-class Workbench entities, discovered from
+  `~/AgentBundles/*.ouro`. Initial native inventory exists in the boss pane.
+- Allow the human to choose any discovered local Ouro agent as the Workbench
+  boss. Initial boss switching is wired to the native agent manager and header
+  selector.
+- Show agent bundle health: missing config, invalid config, disabled config,
+  and provider/model lane summaries. Initial health exists.
+- Register or update Workbench MCP for any discovered local agent, not only the
+  current boss. Initial per-agent MCP action exists.
+- Open managed terminal installers for `ouro hatch` and `ouro clone` so agent
+  creation/auth prompts stay visible, recoverable, and transcripted. Initial
+  installer sheet exists.
+- Add full provisioning flows for remote catalogs, templates, vault readiness,
+  and agent bundle sync once the Ouro CLI exposes stable noninteractive
+  contracts for them.
+
 ## Agent CLI Identity
 
 - Detect Claude Code, GitHub Copilot CLI, and OpenAI Codex from launched

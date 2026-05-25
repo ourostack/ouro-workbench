@@ -76,6 +76,17 @@ final class WorkspaceSummaryTests: XCTestCase {
                     status: .available,
                     detail: "Found /opt/homebrew/bin/copilot."
                 )
+            ],
+            ouroAgents: [
+                OuroAgentRecord(
+                    name: "slugger",
+                    bundlePath: "/Users/ari/AgentBundles/slugger.ouro",
+                    configPath: "/Users/ari/AgentBundles/slugger.ouro/agent.json",
+                    status: .ready,
+                    detail: "ready",
+                    humanFacing: OuroAgentLane(provider: "minimax", model: "MiniMax-M2.7"),
+                    agentFacing: OuroAgentLane(provider: "minimax", model: "MiniMax-M2.5")
+                )
             ]
         )
 
@@ -84,6 +95,9 @@ final class WorkspaceSummaryTests: XCTestCase {
         XCTAssertTrue(prompt.contains("Boss Watch: enabled"))
         XCTAssertTrue(prompt.contains("Boss Pane: collapsed"))
         XCTAssertTrue(prompt.contains("Selected group: Project"))
+        XCTAssertTrue(prompt.contains("Local Ouro agents:"))
+        XCTAssertTrue(prompt.contains("slugger: selected_boss=true, status=ready"))
+        XCTAssertTrue(prompt.contains("human minimax/MiniMax-M2.7"))
         XCTAssertTrue(prompt.contains("Organization:"))
         XCTAssertTrue(prompt.contains("* Project (id=\(project.id.uuidString), root=/tmp/project): GitHub Copilot CLI"))
         XCTAssertTrue(prompt.contains("- Backlog (id=\(archiveProject.id.uuidString), root=/tmp/backlog): no active terminals"))

@@ -23,6 +23,9 @@ Workbench is built around these commitments:
   tabs.
 - The selected Ouro boss can inspect the group/tab map and control trusted
   Workbench sessions.
+- Local Ouro agents are discovered from `~/AgentBundles/*.ouro`; Workbench can
+  switch the boss, register MCP, reveal bundles, and open install terminals for
+  new or cloned agents.
 - Restart recovery is truthful. Processes do not survive reboot, but sessions,
   transcripts, identity, attention state, and safe resume plans persist.
 - Human interaction with terminals stays ergonomic. The human can type, copy,
@@ -186,16 +189,18 @@ Then run the first-run checklist in the app:
    `codex`, shells, or other TUI agents. Workbench will detect known agent CLIs
    from the command.
 4. Pick the boss agent from the header boss menu. The expected local default is
-   `slugger`; use `Use Other Boss...` when the agent has not appeared in
-   discovery yet.
-5. Use the `Workbench MCP` row to register the packaged MCP server for the
+   `slugger`; local agents discovered from `~/AgentBundles/*.ouro` appear in
+   the menu and in the `Ouro Agents` row.
+5. Use the `Ouro Agents` row to refresh bundle discovery, switch the boss, or
+   open an `ouro hatch` / `ouro clone` installer terminal.
+6. Use the `Workbench MCP` row to register the packaged MCP server for the
    selected boss.
-6. Collapse the boss pane when you want maximum terminal height; show it again
+7. Collapse the boss pane when you want maximum terminal height; show it again
    when you want the coordination dashboard.
-7. Turn on `Open at Login` so Workbench reopens after restart.
-8. Start `Watch` mode when you want the boss to keep observing the workspace.
-9. Click `TTFA` and clear any blockers.
-10. Run `Recovery Drill` once so the current restart posture is visible.
+8. Turn on `Open at Login` so Workbench reopens after restart.
+9. Start `Watch` mode when you want the boss to keep observing the workspace.
+10. Click `TTFA` and clear any blockers.
+11. Run `Recovery Drill` once so the current restart posture is visible.
 
 The packaged MCP executable lives inside the installed app:
 
@@ -245,6 +250,9 @@ Important rows:
 - `Boss Line`: a direct question box for the selected Ouro boss.
 - Quick asks: `What's Going On?`, `Waiting On Me?`, `Keep Moving`, and
   `Respond For Me`.
+- `Ouro Agents`: discovers local agent bundles, shows provider/model lane
+  health, switches the boss, registers Workbench MCP, reveals bundles, and opens
+  managed install terminals for `ouro hatch` or `ouro clone`.
 - `Transcript Search`: searches persisted transcript lines across runs.
 - `Native Runtime`: shows `Open at Login`.
 - `Recovery Drill`: dry-runs restart recovery without changing state.

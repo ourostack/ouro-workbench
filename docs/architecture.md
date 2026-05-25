@@ -39,7 +39,16 @@ developer processes.
    - Uses Ouro Mailbox HTTP as the read plane and `ouro mcp-serve --agent <agent>`
      as the boss conversation plane before adding new daemon APIs.
 
-4. Terminal-agent tabs
+4. Ouro agent management
+   - Discovers local agents from `~/AgentBundles/*.ouro`.
+   - Reads `agent.json` enough to show ready/disabled/missing/invalid config
+     posture and provider/model lanes.
+   - Lets Workbench select an installed local Ouro agent as boss and register
+     the packaged Workbench MCP server for any discovered bundle.
+   - Opens `ouro hatch` and `ouro clone` as managed terminal sessions so agent
+     installation remains visible, interactive, and recoverable.
+
+5. Terminal-agent tabs
    - Local Shell.
    - Claude Code, when a tab command resolves to `claude`.
    - GitHub Copilot CLI, when a tab command resolves to `gh copilot`.

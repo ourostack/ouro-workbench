@@ -4,6 +4,7 @@ public enum WorkbenchCommandID: String, Codable, CaseIterable, Sendable {
     case newSession
     case bossCheckIn
     case toggleBossWatch
+    case installOuroAgent
     case launchSelectedSession
     case stopSelectedSession
     case recoverSelectedSession
