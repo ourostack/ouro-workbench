@@ -1,0 +1,32 @@
+name: Deep Scenario Verifier
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 9 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deep-scenario-verifier
+  cancel-in-progress: false
+
+jobs:
+  deep-native-scenario-verifier:
+    name: Deep native scenario verifier
+    runs-on: macos-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Show toolchain
+        run: |
+          swift --version
+          xcodebuild -version
+
+      - name: Resolve dependencies
+        run: swift package resolve
+
+      - name: Render 100,000 native scenario surfaces
+        run: swift run OuroWorkbenchScenarioVerifier --out .build/workbench-scenario-verifier-deep --no-samples --deep-scenarios 15000 --seed 20260525

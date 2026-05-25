@@ -1,7 +1,8 @@
 # Native Scenario Verifier
 
 `OuroWorkbenchScenarioVerifier` is the rendered verification path for the
-5000-case Workbench scenario matrix.
+5000-case Workbench scenario matrix and the deterministic deep sweep built on
+top of it.
 
 It reads `docs/workbench-5000-scenario-matrix.tsv`, builds the same core
 fixtures used by `WorkbenchScenarioMatrixTests`, computes production recovery,
@@ -31,9 +32,12 @@ fixtures and geometry checks.
 - Archived session surfaces preserve history without rendering an active
   terminal body.
 - Header, sidebar, boss, terminal, and archived text/control regions stay
-  inside the viewport in both profiles.
+  inside every viewport profile.
 - The rendered evidence is backed by the same matrix fixtures used by recovery,
   readiness, and command-planning tests.
+- Deep generated scenarios mutate boss selection, project/group counts,
+  terminal names, working directories, command shapes, peer sessions, run
+  statuses, transcript paths, executable health, and restart metadata.
 
 ## Commands
 
@@ -55,6 +59,12 @@ Debug a small prefix:
 swift run OuroWorkbenchScenarioVerifier --out .build/workbench-scenario-verifier-smoke --max-rows 100 --no-samples
 ```
 
+Deep deterministic sweep:
+
+```bash
+swift run OuroWorkbenchScenarioVerifier --out .build/workbench-scenario-verifier-deep --no-samples --deep-scenarios 15000 --seed 20260525
+```
+
 The verifier writes `summary.json` to the output directory. When samples are
 enabled, representative native PNGs are rasterized and written under `samples/`.
 
@@ -69,6 +79,18 @@ viewports: standard, short-window, compact-terminal, tall-workspace, wide-worksp
 failures: 0
 ```
 
+Deep local baseline from the same date:
+
+```text
+rows verified: 20000
+matrix rows: 5000
+deep generated rows: 15000
+deep seed: 20260525
+render passes: 100000
+viewports: standard, short-window, compact-terminal, tall-workspace, wide-workspace
+failures: 0
+```
+
 ## CI And Protection Target
 
 The required pull-request target is the full 5000-row matrix across the five
@@ -78,3 +100,10 @@ in real use, but still small enough for every PR.
 
 The verifier runs as its own GitHub Actions job named `Native scenario verifier`
 so branch protection can require it separately from `Swift tests`.
+
+## Scheduled Deep Sweep
+
+The repository also has a scheduled and manually dispatchable `Deep Scenario
+Verifier` workflow. It keeps the PR gate fast, then runs the 100,000-pass deep
+sweep out of band so generated fixture coverage can keep growing without making
+ordinary pull requests feel heavy.
