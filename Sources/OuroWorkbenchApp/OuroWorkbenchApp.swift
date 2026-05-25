@@ -21,24 +21,31 @@ struct WorkbenchRootView: View {
     @StateObject private var model = WorkbenchViewModel()
 
     var body: some View {
-        NavigationSplitView {
-            WorkbenchSidebarView(model: model)
-                .navigationSplitViewColumnWidth(min: 210, ideal: 230, max: 320)
-        } detail: {
-            VStack(alignment: .leading, spacing: 0) {
-                HeaderView(model: model)
-                Divider()
-                if !model.state.bossPaneCollapsed {
-                    BossDashboardView(model: model)
-                    Divider()
-                }
-                if let entry = model.selectedEntry {
-                    SessionDetailView(entry: entry, model: model)
-                } else {
-                    ContentUnavailableView("No session selected", systemImage: "terminal")
+        Group {
+            if let entry = model.terminalFocusEntry,
+               let session = model.activeSession(for: entry) {
+                TerminalFocusView(entry: entry, session: session, model: model)
+            } else {
+                NavigationSplitView {
+                    WorkbenchSidebarView(model: model)
+                        .navigationSplitViewColumnWidth(min: 210, ideal: 230, max: 320)
+                } detail: {
+                    VStack(alignment: .leading, spacing: 0) {
+                        HeaderView(model: model)
+                        Divider()
+                        if !model.state.bossPaneCollapsed {
+                            BossDashboardView(model: model)
+                            Divider()
+                        }
+                        if let entry = model.selectedEntry {
+                            SessionDetailView(entry: entry, model: model)
+                        } else {
+                            ContentUnavailableView("No session selected", systemImage: "terminal")
+                        }
+                    }
+                    .padding(.top, 44)
                 }
             }
-            .padding(.top, 44)
         }
         .background(WindowChromeConfigurator())
         .alert("Workbench Error", isPresented: model.errorIsPresented) {
@@ -1433,6 +1440,9 @@ struct SessionDetailView: View {
                     }
                     .buttonStyle(.bordered)
                     .disabled(model.bossCheckInIsRunning)
+                    if model.activeSession(for: entry) != nil {
+                        RunningSessionHeaderControls(entry: entry, model: model)
+                    }
                     Button {
                         model.launch(entry)
                     } label: {
@@ -1455,10 +1465,9 @@ struct SessionDetailView: View {
             }
             Divider()
             if let session = model.activeSession(for: entry) {
-                SessionControlBar(entry: entry, model: model)
-                Divider()
                 TerminalPane(session: session)
                     .id(session.id)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 VStack(alignment: .leading, spacing: 12) {
                     SessionStatusBar(entry: entry, model: model)
@@ -1647,43 +1656,20 @@ struct InactiveTerminalSurface: View {
     }
 }
 
-struct SessionControlBar: View {
+struct RunningSessionHeaderControls: View {
     var entry: ProcessEntry
     @ObservedObject var model: WorkbenchViewModel
-    @State private var pendingInput = ""
 
     var body: some View {
         HStack(spacing: 8) {
-            TextField("Send input to \(entry.name)", text: $pendingInput)
-                .textFieldStyle(.roundedBorder)
-                .font(.body.monospaced())
-                .onSubmit(sendLine)
             Button {
-                sendLine()
+                model.focusTerminal(entry)
             } label: {
-                Label("Send", systemImage: "paperplane.fill")
+                Label("Full Screen", systemImage: "arrow.up.left.and.arrow.down.right")
             }
-            .disabled(pendingInput.isEmpty)
-            Menu {
-                Button("continue") {
-                    sendQuickLine("continue")
-                }
-                Button("status") {
-                    sendQuickLine("status")
-                }
-                Button("yes") {
-                    sendQuickLine("yes")
-                }
-                Button("no") {
-                    sendQuickLine("no")
-                }
-                Button("help") {
-                    sendQuickLine("help")
-                }
-            } label: {
-                Label("Quick", systemImage: "bolt.fill")
-            }
-            .help("Send a common response")
+            .keyboardShortcut("f", modifiers: [.command, .shift])
+            .help("Focus this terminal")
+
             Button {
                 model.sendControlC(to: entry)
             } label: {
@@ -1701,20 +1687,56 @@ struct SessionControlBar: View {
             }
             .keyboardShortcut(".", modifiers: [.command])
         }
-        .padding()
+        .controlSize(.small)
     }
+}
 
-    private func sendLine() {
-        guard !pendingInput.isEmpty else {
-            return
+struct TerminalFocusView: View {
+    var entry: ProcessEntry
+    var session: TerminalSessionController
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            TerminalPane(session: session)
+                .id(session.id)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .ignoresSafeArea()
+            HStack(spacing: 8) {
+                Text(entry.name)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                Button {
+                    model.exitTerminalFocus()
+                } label: {
+                    Label("Exit Full Screen", systemImage: "arrow.down.right.and.arrow.up.left")
+                }
+                .keyboardShortcut("f", modifiers: [.command, .shift])
+                Button {
+                    model.sendControlC(to: entry)
+                } label: {
+                    Label("Ctrl-C", systemImage: "command")
+                }
+                Button {
+                    model.sendEscape(to: entry)
+                } label: {
+                    Label("Esc", systemImage: "escape")
+                }
+                Button(role: .destructive) {
+                    model.terminate(entry)
+                } label: {
+                    Label("Stop", systemImage: "stop.fill")
+                }
+                .keyboardShortcut(".", modifiers: [.command])
+            }
+            .labelStyle(.titleAndIcon)
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .padding(10)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+            .padding()
         }
-        model.sendInput(pendingInput, to: entry, appendNewline: true)
-        pendingInput = ""
-    }
-
-    private func sendQuickLine(_ text: String) {
-        model.sendInput(text, to: entry, appendNewline: true)
-        pendingInput = ""
+        .background(Color.black)
     }
 }
 
@@ -2265,6 +2287,7 @@ final class WorkbenchViewModel: ObservableObject {
         }
     }
     @Published var activeSessions: [UUID: TerminalSessionController] = [:]
+    @Published var terminalFocusEntryID: UUID?
     @Published var errorMessage: String?
     @Published var bossDashboard: BossDashboardSnapshot?
     @Published var bossCheckInPrompt: String?
@@ -2439,6 +2462,14 @@ final class WorkbenchViewModel: ObservableObject {
             return sessionEntries.first
         }
         return sessionEntries.first { $0.id == selectedEntryID } ?? sessionEntries.first
+    }
+
+    var terminalFocusEntry: ProcessEntry? {
+        guard let terminalFocusEntryID,
+              activeSessions[terminalFocusEntryID] != nil else {
+            return nil
+        }
+        return allSessionEntries.first { $0.id == terminalFocusEntryID }
     }
 
     var summary: WorkspaceSummary {
@@ -3341,6 +3372,18 @@ final class WorkbenchViewModel: ObservableObject {
         }
     }
 
+    func focusTerminal(_ entry: ProcessEntry) {
+        guard activeSessions[entry.id] != nil else {
+            errorMessage = "\(entry.name) is not running"
+            return
+        }
+        terminalFocusEntryID = entry.id
+    }
+
+    func exitTerminalFocus() {
+        terminalFocusEntryID = nil
+    }
+
     func sendInput(_ text: String, to entry: ProcessEntry, appendNewline: Bool) {
         guard let session = activeSessions[entry.id] else {
             errorMessage = "\(entry.name) is not running"
@@ -3756,6 +3799,9 @@ final class WorkbenchViewModel: ObservableObject {
         )
         if isCurrentSession {
             activeSessions[entryId] = nil
+            if terminalFocusEntryID == entryId {
+                terminalFocusEntryID = nil
+            }
             updateEntry(entryId) { entry in
                 entry.attention = nextRunStatus == .manualActionNeeded ? .needsBossReview : .idle
                 if nextRunStatus == .manualActionNeeded {

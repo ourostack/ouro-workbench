@@ -271,9 +271,8 @@ and whether it participates in restart recovery.
 Use it like a normal terminal:
 
 - type directly into the terminal
-- send text through the input box
-- use `Quick` for common replies such as `continue`, `status`, `yes`, `no`, and
-  `help`
+- use `Full Screen` or `Command-Shift-F` to give the running terminal the whole
+  window
 - send `Ctrl-C`
 - send `Esc`
 - stop a running session
