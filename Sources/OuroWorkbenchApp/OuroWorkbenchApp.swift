@@ -1124,8 +1124,6 @@ struct OuroAgentInstallSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var mode: OuroAgentInstallSheetMode = .hatch
     @State private var agentName = ""
-    @State private var humanName = "Ari"
-    @State private var provider = "minimax"
     @State private var remote = ""
 
     var body: some View {
@@ -1141,9 +1139,7 @@ struct OuroAgentInstallSheet: View {
             Form {
                 switch mode {
                 case .hatch:
-                    TextField("Agent Name", text: $agentName)
-                    TextField("Human Name", text: $humanName)
-                    TextField("Provider", text: $provider)
+                    Label("SerpentGuide Conversation", systemImage: "bubble.left.and.bubble.right.fill")
                 case .clone:
                     TextField("Git Remote", text: $remote)
                     TextField("Agent Name Override", text: $agentName)
@@ -1166,7 +1162,7 @@ struct OuroAgentInstallSheet: View {
                     }
                     dismiss()
                 } label: {
-                    Label("Open Installer", systemImage: "terminal")
+                    Label(primaryButtonTitle, systemImage: "terminal")
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(!canInstall)
@@ -1179,11 +1175,18 @@ struct OuroAgentInstallSheet: View {
     private var canInstall: Bool {
         switch mode {
         case .hatch:
-            return !agentName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                && !humanName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                && !provider.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            return true
         case .clone:
             return !remote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
+
+    private var primaryButtonTitle: String {
+        switch mode {
+        case .hatch:
+            return "Open Conversation"
+        case .clone:
+            return "Open Clone"
         }
     }
 
@@ -1192,8 +1195,6 @@ struct OuroAgentInstallSheet: View {
             return try model.ouroAgentInstallPlan(
                 mode: mode.rawValue,
                 agentName: agentName,
-                humanName: humanName,
-                provider: provider,
                 remote: remote
             ).commandLine
         } catch {
@@ -1205,8 +1206,6 @@ struct OuroAgentInstallSheet: View {
         model.launchOuroAgentInstall(
             mode: mode.rawValue,
             agentName: agentName,
-            humanName: humanName,
-            provider: provider,
             remote: remote
         )
     }
@@ -2523,7 +2522,7 @@ final class WorkbenchViewModel: ObservableObject {
             WorkbenchCommandDescriptor(
                 id: .installOuroAgent,
                 title: "Install Ouro Agent",
-                detail: "Open a managed ouro hatch or clone installer terminal",
+                detail: "Open a managed hatch conversation or clone terminal",
                 systemImage: "square.and.arrow.down"
             ),
             WorkbenchCommandDescriptor(
@@ -2693,28 +2692,18 @@ final class WorkbenchViewModel: ObservableObject {
     func ouroAgentInstallPlan(
         mode: String,
         agentName: String,
-        humanName: String,
-        provider: String,
         remote: String
     ) throws -> OuroAgentInstallPlan {
         switch mode {
         case OuroAgentInstallSheetMode.hatch.rawValue:
-            return try ouroAgentInstallCommandBuilder.hatch(
-                agentName: agentName,
-                humanName: humanName,
-                provider: provider
-            )
+            return ouroAgentInstallCommandBuilder.hatch()
         case OuroAgentInstallSheetMode.clone.rawValue:
             return try ouroAgentInstallCommandBuilder.clone(
                 remote: remote,
                 agentName: agentName
             )
         default:
-            return try ouroAgentInstallCommandBuilder.hatch(
-                agentName: agentName,
-                humanName: humanName,
-                provider: provider
-            )
+            return ouroAgentInstallCommandBuilder.hatch()
         }
     }
 
@@ -2722,16 +2711,12 @@ final class WorkbenchViewModel: ObservableObject {
     func launchOuroAgentInstall(
         mode: String,
         agentName: String,
-        humanName: String,
-        provider: String,
         remote: String
     ) -> Bool {
         do {
             let plan = try ouroAgentInstallPlan(
                 mode: mode,
                 agentName: agentName,
-                humanName: humanName,
-                provider: provider,
                 remote: remote
             )
             let entry = createCustomSession(
@@ -2753,7 +2738,7 @@ final class WorkbenchViewModel: ObservableObject {
                 action: "installOuroAgent",
                 targetEntryId: entry.id,
                 targetName: entry.name,
-                result: "Opened \(entry.name) installer",
+                result: "Opened \(entry.name)",
                 succeeded: true
             )
             return true

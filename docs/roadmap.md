@@ -87,9 +87,9 @@ agent-aware terminal workbench rather than a launcher with terminal panes.
   and provider/model lane summaries. Initial health exists.
 - Register or update Workbench MCP for any discovered local agent, not only the
   current boss. Initial per-agent MCP action exists.
-- Open managed terminal installers for `ouro hatch` and `ouro clone` so agent
-  creation/auth prompts stay visible, recoverable, and transcripted. Initial
-  installer sheet exists.
+- Open managed terminals for conversational `ouro hatch` and remote-bundle
+  `ouro clone` so agent creation/auth prompts stay visible, recoverable, and
+  transcripted. Initial install sheet exists.
 - Add full provisioning flows for remote catalogs, templates, vault readiness,
   and agent bundle sync once the Ouro CLI exposes stable noninteractive
   contracts for them.

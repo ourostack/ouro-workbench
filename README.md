@@ -82,7 +82,7 @@ with the selected Ouro boss agent.
 Use the `Ouro Agents` row in the boss dashboard to refresh local agent bundle
 discovery, switch the boss to an installed local agent, reveal an agent bundle,
 register or update Workbench MCP for any discovered agent, or open a managed
-terminal installer for `ouro hatch` and `ouro clone`.
+terminal for conversational `ouro hatch` or remote-bundle `ouro clone`.
 
 The `TTFA` badge in the header is an autonomy readiness surface. It checks the
 selected boss, Workbench MCP registration, detected trusted agent terminals,

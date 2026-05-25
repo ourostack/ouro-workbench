@@ -3,8 +3,6 @@ import Foundation
 public enum OuroAgentInstallCommandError: Error, Equatable, LocalizedError, Sendable {
     case emptyAgentName
     case invalidAgentName(String)
-    case emptyHumanName
-    case emptyProvider
     case emptyRemote
 
     public var errorDescription: String? {
@@ -13,10 +11,6 @@ public enum OuroAgentInstallCommandError: Error, Equatable, LocalizedError, Send
             return "Agent name is required."
         case let .invalidAgentName(agentName):
             return "Agent name cannot be used as a bundle name: \(agentName)"
-        case .emptyHumanName:
-            return "Human name is required."
-        case .emptyProvider:
-            return "Provider is required."
         case .emptyRemote:
             return "Clone remote is required."
         }
@@ -38,30 +32,11 @@ public struct OuroAgentInstallPlan: Equatable, Sendable {
 public struct OuroAgentInstallCommandBuilder: Sendable {
     public init() {}
 
-    public func hatch(agentName: String, humanName: String, provider: String) throws -> OuroAgentInstallPlan {
-        let normalizedAgentName = try normalizedAgentName(agentName)
-        let normalizedHumanName = humanName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalizedProvider = provider.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalizedHumanName.isEmpty else {
-            throw OuroAgentInstallCommandError.emptyHumanName
-        }
-        guard !normalizedProvider.isEmpty else {
-            throw OuroAgentInstallCommandError.emptyProvider
-        }
-
+    public func hatch() -> OuroAgentInstallPlan {
         return OuroAgentInstallPlan(
-            sessionName: "Hatch \(normalizedAgentName)",
-            commandLine: ShellArgumentEscaper.commandLine([
-                "ouro",
-                "hatch",
-                "--agent",
-                normalizedAgentName,
-                "--human",
-                normalizedHumanName,
-                "--provider",
-                normalizedProvider,
-            ]),
-            notes: "Ouro agent hatch flow launched from Workbench."
+            sessionName: "Hatch Ouro Agent",
+            commandLine: ShellArgumentEscaper.commandLine(["ouro", "hatch"]),
+            notes: "Conversational Ouro hatch flow launched from Workbench."
         )
     }
 

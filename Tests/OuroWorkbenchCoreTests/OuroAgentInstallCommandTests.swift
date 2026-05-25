@@ -2,16 +2,12 @@ import XCTest
 @testable import OuroWorkbenchCore
 
 final class OuroAgentInstallCommandTests: XCTestCase {
-    func testHatchPlanBuildsQuotedCommandLine() throws {
-        let plan = try OuroAgentInstallCommandBuilder().hatch(
-            agentName: "sprout",
-            humanName: "Ari Mendelow",
-            provider: "minimax"
-        )
+    func testHatchPlanLaunchesConversationalSerpentGuideFlow() {
+        let plan = OuroAgentInstallCommandBuilder().hatch()
 
-        XCTAssertEqual(plan.sessionName, "Hatch sprout")
-        XCTAssertEqual(plan.commandLine, "ouro hatch --agent sprout --human 'Ari Mendelow' --provider minimax")
-        XCTAssertEqual(plan.notes, "Ouro agent hatch flow launched from Workbench.")
+        XCTAssertEqual(plan.sessionName, "Hatch Ouro Agent")
+        XCTAssertEqual(plan.commandLine, "ouro hatch")
+        XCTAssertEqual(plan.notes, "Conversational Ouro hatch flow launched from Workbench.")
     }
 
     func testClonePlanAllowsOptionalAgentName() throws {
@@ -35,22 +31,11 @@ final class OuroAgentInstallCommandTests: XCTestCase {
     }
 
     func testInstallPlansRejectInvalidInputs() {
-        XCTAssertThrowsError(try OuroAgentInstallCommandBuilder().hatch(
-            agentName: "../sprout",
-            humanName: "Ari",
-            provider: "minimax"
-        )) { error in
-            XCTAssertEqual(error as? OuroAgentInstallCommandError, .invalidAgentName("../sprout"))
-        }
-        XCTAssertThrowsError(try OuroAgentInstallCommandBuilder().hatch(
-            agentName: "sprout",
-            humanName: " ",
-            provider: "minimax"
-        )) { error in
-            XCTAssertEqual(error as? OuroAgentInstallCommandError, .emptyHumanName)
-        }
         XCTAssertThrowsError(try OuroAgentInstallCommandBuilder().clone(remote: " ", agentName: nil)) { error in
             XCTAssertEqual(error as? OuroAgentInstallCommandError, .emptyRemote)
+        }
+        XCTAssertThrowsError(try OuroAgentInstallCommandBuilder().clone(remote: "git@example.com:repo.git", agentName: "../sprout")) { error in
+            XCTAssertEqual(error as? OuroAgentInstallCommandError, .invalidAgentName("../sprout"))
         }
     }
 }
