@@ -6,9 +6,10 @@ APP_NAME="Ouro Workbench.app"
 INSTALL_DIR="$HOME/Applications"
 OPEN_AFTER_INSTALL="false"
 VERIFY_SCRIPT="$ROOT_DIR/scripts/verify-app-bundle.sh"
+ARTIFACT_MANIFEST=""
 
 usage() {
-  printf 'Usage: %s [--install-dir PATH] [--verify-script PATH] [--open]\n' "$(basename "$0")" >&2
+  printf 'Usage: %s [--install-dir PATH] [--artifact-manifest PATH] [--verify-script PATH] [--open]\n' "$(basename "$0")" >&2
 }
 
 while [[ $# -gt 0 ]]; do
@@ -19,6 +20,14 @@ while [[ $# -gt 0 ]]; do
         exit 64
       fi
       INSTALL_DIR="$2"
+      shift 2
+      ;;
+    --artifact-manifest)
+      if [[ $# -lt 2 || -z "$2" ]]; then
+        usage
+        exit 64
+      fi
+      ARTIFACT_MANIFEST="$2"
       shift 2
       ;;
     --verify-script)
@@ -44,7 +53,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-APP_SOURCE="$ROOT_DIR/dist/$APP_NAME"
+APP_SOURCE=""
 APP_DEST="$INSTALL_DIR/$APP_NAME"
 STAGING_ROOT=""
 STAGED_APP=""
@@ -72,15 +81,15 @@ restore_backup() {
 
 trap 'restore_backup; cleanup' EXIT
 
-"$ROOT_DIR/scripts/package-app.sh" >/dev/null
-
-if [[ ! -d "$APP_SOURCE" ]]; then
-  printf 'Packaged app not found: %s\n' "$APP_SOURCE" >&2
-  exit 1
-fi
 if [[ ! -x "$VERIFY_SCRIPT" ]]; then
   printf 'App verifier is not executable: %s\n' "$VERIFY_SCRIPT" >&2
   exit 64
+fi
+if [[ -n "$ARTIFACT_MANIFEST" ]]; then
+  "$ROOT_DIR/scripts/verify-app-artifact.sh" "$ARTIFACT_MANIFEST" >/dev/null
+else
+  "$ROOT_DIR/scripts/package-app.sh" >/dev/null
+  APP_SOURCE="$ROOT_DIR/dist/$APP_NAME"
 fi
 
 if [[ "$OPEN_AFTER_INSTALL" == "true" ]]; then
@@ -97,6 +106,20 @@ mkdir -p "$INSTALL_DIR"
 STAGING_ROOT="$(mktemp -d "$INSTALL_DIR/.ouro-workbench-install.XXXXXX")"
 STAGED_APP="$STAGING_ROOT/$APP_NAME"
 BACKUP_APP="$STAGING_ROOT/previous-$APP_NAME"
+
+if [[ -n "$ARTIFACT_MANIFEST" ]]; then
+  archive_name="$(plutil -extract archive raw -o - "$ARTIFACT_MANIFEST")"
+  archive_path="$(dirname "$ARTIFACT_MANIFEST")/$archive_name"
+  artifact_extract_root="$STAGING_ROOT/artifact"
+  mkdir -p "$artifact_extract_root"
+  ditto -x -k "$archive_path" "$artifact_extract_root"
+  APP_SOURCE="$artifact_extract_root/$APP_NAME"
+fi
+
+if [[ ! -d "$APP_SOURCE" ]]; then
+  printf 'App source not found: %s\n' "$APP_SOURCE" >&2
+  exit 1
+fi
 
 ditto "$APP_SOURCE" "$STAGED_APP"
 "$VERIFY_SCRIPT" "$STAGED_APP" >/dev/null

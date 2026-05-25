@@ -58,6 +58,7 @@ scripts/verify-app-bundle.sh
 run_step "Archive native app artifact"
 scripts/archive-app-artifact.sh
 scripts/smoke-app-artifact-verifier.sh
+scripts/smoke-install-from-artifact.sh
 
 run_step "Smoke install rollback"
 scripts/smoke-install-rollback.sh

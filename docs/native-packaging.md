@@ -14,6 +14,12 @@ For this machine, install the bundle into `~/Applications`:
 scripts/install-app.sh --open
 ```
 
+Install a downloaded, verified artifact directly from its manifest:
+
+```bash
+scripts/install-app.sh --artifact-manifest artifacts/OuroWorkbench-0.1.0-build.<build>-<sha>.manifest.json --open
+```
+
 Use `--install-dir /path/to/Applications` to choose another install location.
 The installer stages the new app inside the target directory, moves the previous
 bundle aside, promotes the staged bundle, verifies it, and restores the previous
