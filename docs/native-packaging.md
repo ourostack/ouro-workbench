@@ -15,6 +15,9 @@ scripts/install-app.sh --open
 ```
 
 Use `--install-dir /path/to/Applications` to choose another install location.
+The installer stages the new app inside the target directory, moves the previous
+bundle aside, promotes the staged bundle, verifies it, and restores the previous
+bundle if promotion fails.
 
 The generated bundle is intentionally local and unsigned for now. It lives under
 `dist/`, which is ignored by git. The bundle includes:
