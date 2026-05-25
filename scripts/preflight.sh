@@ -52,6 +52,7 @@ swift run OuroWorkbenchScenarioVerifier \
   --expect-coverage-digest 567dc7ec0c45835b
 
 run_step "Package and verify native app bundle"
+scripts/smoke-verify-app-timeout.sh
 scripts/package-app.sh
 scripts/verify-app-bundle.sh
 
