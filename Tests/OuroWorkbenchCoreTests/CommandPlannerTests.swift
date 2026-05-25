@@ -100,6 +100,39 @@ final class CommandPlannerTests: XCTestCase {
         XCTAssertEqual(PersistentTerminalSession.terminateArguments(sessionName: "session"), ["-S", "session", "-X", "quit"])
     }
 
+    func testPersistentTerminalSessionPrefersBundledScreenExecutable() throws {
+        let bundleURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OuroWorkbenchBundle-\(UUID().uuidString)")
+            .appendingPathComponent("Ouro Workbench.app")
+        let executableURL = bundleURL
+            .appendingPathComponent(PersistentTerminalSession.bundledExecutableRelativePath)
+        try FileManager.default.createDirectory(
+            at: executableURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Data("#!/bin/sh\n".utf8).write(to: executableURL)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executableURL.path)
+        defer {
+            try? FileManager.default.removeItem(at: bundleURL.deletingLastPathComponent())
+        }
+
+        XCTAssertEqual(
+            PersistentTerminalSession.executablePath(bundleURL: bundleURL),
+            executableURL.path
+        )
+    }
+
+    func testPersistentTerminalSessionFallsBackToSystemScreenWhenBundleToolIsMissing() {
+        let bundleURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MissingOuroWorkbenchBundle-\(UUID().uuidString)")
+            .appendingPathComponent("Ouro Workbench.app")
+
+        XCTAssertEqual(
+            PersistentTerminalSession.executablePath(bundleURL: bundleURL),
+            PersistentTerminalSession.systemFallbackExecutable
+        )
+    }
+
     func testNativeResumeFallsBackToLatestSessionCommand() throws {
         let project = WorkbenchProject(name: "Project", rootPath: "/tmp/project")
         let entry = ProcessEntry(

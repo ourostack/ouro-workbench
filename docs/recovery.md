@@ -9,7 +9,8 @@ events. Starting a terminal tab launches the actual command inside a stable
 system `screen` session named from the Workbench terminal id. The native app
 owns only the visible client. If the app disappears, the `screen` session and
 the child shell/TUI keep running. Reopening Workbench attaches to the same
-session instead of rerunning the command.
+session instead of rerunning the command. Installed app bundles use the bundled
+`Contents/MacOS/Tools/screen` executable for this layer.
 
 Manual `Stop` is the destructive action. It sends `screen -S <session> -X quit`
 for that terminal and then records the run as exited, so Workbench does not

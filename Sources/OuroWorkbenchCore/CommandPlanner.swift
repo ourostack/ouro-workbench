@@ -93,8 +93,23 @@ public struct TerminalLaunchInvocation: Equatable, Sendable {
 }
 
 public enum PersistentTerminalSession: Sendable {
-    public static let executable = "/usr/bin/screen"
+    public static let systemFallbackExecutable = "/usr/bin/screen"
+    public static let bundledExecutableRelativePath = "Contents/MacOS/Tools/screen"
+    public static var executable: String {
+        executablePath()
+    }
     public static let execName = "screen"
+
+    public static func executablePath(
+        bundleURL: URL = Bundle.main.bundleURL,
+        fileManager: FileManager = .default
+    ) -> String {
+        let bundledExecutable = bundleURL.appendingPathComponent(bundledExecutableRelativePath).path
+        guard fileManager.isExecutableFile(atPath: bundledExecutable) else {
+            return systemFallbackExecutable
+        }
+        return bundledExecutable
+    }
 
     public static func sessionName(for entryId: UUID) -> String {
         "ouro-wb-\(entryId.uuidString.lowercased().replacingOccurrences(of: "-", with: ""))"
