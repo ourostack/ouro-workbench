@@ -9,6 +9,7 @@ public struct BossAgentPromptBuilder: Sendable {
         summary: WorkspaceSummary,
         dashboard: BossDashboardSnapshot? = nil,
         executableHealth: [UUID: ExecutableHealth] = [:],
+        ouroAgents: [OuroAgentRecord] = [],
         recentChanges: [WorkspaceChangeSummary] = []
     ) -> String {
         var lines: [String] = []
@@ -27,6 +28,14 @@ public struct BossAgentPromptBuilder: Sendable {
         lines.append("Boss Watch: \(state.bossWatchEnabled ? "enabled" : "paused")")
         lines.append("Boss Pane: \(state.bossPaneCollapsed ? "collapsed" : "expanded")")
         lines.append("Selected group: \(selectedProjectName(in: state))")
+        if !ouroAgents.isEmpty {
+            lines.append("")
+            lines.append("Local Ouro agents:")
+            for agent in ouroAgents.prefix(12) {
+                let selected = agent.name.caseInsensitiveCompare(summary.boss.agentName) == .orderedSame
+                lines.append("- \(agent.name): selected_boss=\(selected), status=\(agent.status.rawValue), bundle=\(agent.bundlePath), config=\(agent.configPath), summary=\(agent.summaryLine)")
+            }
+        }
         if let dashboard {
             if !dashboard.availability.issues.isEmpty {
                 lines.append("Mailbox warnings: \(dashboard.availability.issues.joined(separator: "; "))")

@@ -17,6 +17,8 @@ moving.
   terminal command instead of living in separate hard-coded tabs.
 - Arbitrary terminal/TUI agents are first-class citizens.
 - `slugger` is the default boss agent on this machine.
+- Local Ouro agents in `~/AgentBundles/*.ouro` are discovered and manageable
+  from the native boss pane.
 - Boss agents can inspect the group/tab organization and control trusted
   workspace processes.
 - Sessions restore after app or computer restart wherever technically possible.
@@ -76,6 +78,11 @@ The installed bundle also includes an Ouro-facing MCP server:
 
 Use the native `Workbench MCP` row in the boss dashboard to register that server
 with the selected Ouro boss agent.
+
+Use the `Ouro Agents` row in the boss dashboard to refresh local agent bundle
+discovery, switch the boss to an installed local agent, reveal an agent bundle,
+register or update Workbench MCP for any discovered agent, or open a managed
+terminal installer for `ouro hatch` and `ouro clone`.
 
 The `TTFA` badge in the header is an autonomy readiness surface. It checks the
 selected boss, Workbench MCP registration, detected trusted agent terminals,
