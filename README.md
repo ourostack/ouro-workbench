@@ -55,6 +55,10 @@ scripts/package-app.sh
 open "dist/Ouro Workbench.app"
 ```
 
+The bundle includes the native app, the packaged Workbench MCP server, and the
+terminal persistence backend under `Contents/MacOS/Tools/` so normal installed
+runs do not depend on Homebrew or a separate multiplexer install.
+
 Install it on this Mac:
 
 ```bash

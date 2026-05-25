@@ -10,6 +10,8 @@ APP_DIR="$DIST_DIR/$APP_NAME.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
+TOOLS_DIR="$MACOS_DIR/Tools"
+SCREEN_SOURCE="/usr/bin/screen"
 
 cd "$ROOT_DIR"
 
@@ -17,12 +19,19 @@ swift build -c release --product "$PRODUCT_NAME"
 swift build -c release --product "$MCP_PRODUCT_NAME"
 
 rm -rf "$APP_DIR"
-mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
+mkdir -p "$MACOS_DIR" "$RESOURCES_DIR" "$TOOLS_DIR"
 
 cp "$ROOT_DIR/.build/release/$PRODUCT_NAME" "$MACOS_DIR/$PRODUCT_NAME"
 chmod 755 "$MACOS_DIR/$PRODUCT_NAME"
 cp "$ROOT_DIR/.build/release/$MCP_PRODUCT_NAME" "$MACOS_DIR/$MCP_PRODUCT_NAME"
 chmod 755 "$MACOS_DIR/$MCP_PRODUCT_NAME"
+
+if [[ ! -x "$SCREEN_SOURCE" ]]; then
+  printf 'Required terminal persistence backend is missing: %s\n' "$SCREEN_SOURCE" >&2
+  exit 1
+fi
+cp "$SCREEN_SOURCE" "$TOOLS_DIR/screen"
+chmod 755 "$TOOLS_DIR/screen"
 
 cat > "$CONTENTS_DIR/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>

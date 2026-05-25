@@ -61,6 +61,10 @@ app reinstall detach the client while the session keeps running. Manual `Stop`
 uses `screen -S <name> -X quit`, making the operator's stop action the only
 Workbench path that intentionally ends the underlying terminal session.
 
+Release app bundles carry their own persistence backend at
+`Contents/MacOS/Tools/screen`. Development runs fall back to `/usr/bin/screen`
+when the bundled tool is unavailable.
+
 `screen` is configured with UTF-8, xterm-compatible terminal capabilities,
 large scrollback, and a non-Ctrl-A command escape so shells and terminal agents
 continue to feel like ordinary terminals.

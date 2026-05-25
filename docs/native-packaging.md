@@ -17,9 +17,16 @@ scripts/install-app.sh --open
 Use `--install-dir /path/to/Applications` to choose another install location.
 
 The generated bundle is intentionally local and unsigned for now. It lives under
-`dist/`, which is ignored by git. The bundle keeps automatic and sudden
-termination disabled so macOS does not quietly tear down managed terminal-agent
-sessions.
+`dist/`, which is ignored by git. The bundle includes:
+
+- `Contents/MacOS/OuroWorkbench`
+- `Contents/MacOS/OuroWorkbenchMCP`
+- `Contents/MacOS/Tools/screen`, the terminal persistence backend
+
+The app prefers the bundled `screen` executable and falls back to `/usr/bin/screen`
+only during development runs where the app bundle tool is not present. The
+bundle keeps automatic and sudden termination disabled so macOS does not quietly
+tear down managed terminal-agent sessions.
 
 The native app has an `Open at Login` control in the boss dashboard. It writes a
 machine-local LaunchAgent at

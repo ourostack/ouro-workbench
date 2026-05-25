@@ -97,8 +97,8 @@ final class WorkbenchMCPServer {
         let summary = summarizer.summarize(state)
         let executableHealth = Dictionary(
             uniqueKeysWithValues: state.processEntries.map { entry in
-                let tokens = TerminalAgentDetector.canonicalTokens(entry: entry)
-                return (entry.id, executableHealthChecker.health(for: tokens.executable))
+                let executable = ExecutableHealthTarget.executable(for: entry)
+                return (entry.id, executableHealthChecker.health(for: executable))
             }
         )
         return promptBuilder.checkInPrompt(
