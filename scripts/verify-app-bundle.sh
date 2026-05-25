@@ -41,6 +41,7 @@ INFO_PLIST="$CONTENTS_DIR/Info.plist"
 APP_EXECUTABLE="$MACOS_DIR/OuroWorkbench"
 MCP_EXECUTABLE="$MACOS_DIR/OuroWorkbenchMCP"
 SCREEN_EXECUTABLE="$MACOS_DIR/Tools/screen"
+SWIFTTERM_BUNDLE="$APP_DIR/SwiftTerm_SwiftTerm.bundle"
 
 fail() {
   printf 'App bundle verification failed: %s\n' "$1" >&2
@@ -72,6 +73,12 @@ expected_version="${EXPECTED_VERSION:-$(tr -d '[:space:]' < "$VERSION_FILE")}"
 require_executable "$APP_EXECUTABLE"
 require_executable "$MCP_EXECUTABLE"
 require_executable "$SCREEN_EXECUTABLE"
+[[ -d "$SWIFTTERM_BUNDLE" ]] || fail "missing SwiftTerm resource bundle"
+
+smoke_output="$("$APP_EXECUTABLE" --smoke-launch 2>&1)" || fail "GUI launch smoke failed: $smoke_output"
+if ! grep -F "OuroWorkbench smoke launch ok" <<<"$smoke_output" >/dev/null; then
+  fail "GUI launch smoke did not report success"
+fi
 
 mcp_initialize="$(printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | "$MCP_EXECUTABLE")"
 if ! grep -F "\"name\":\"ouro-workbench\"" <<<"$mcp_initialize" >/dev/null; then
