@@ -54,6 +54,28 @@ final class RecoveryPlannerTests: XCTestCase {
         XCTAssertEqual(plan.first?.reason, "GitHub Copilot CLI will reopen from persisted checkpoint context")
     }
 
+    func testCustomTerminalAgentRespawnsFromCheckpointContext() {
+        let project = WorkbenchProject(name: "Harness", rootPath: "/repo")
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "Custom TUI",
+            kind: .terminalAgent,
+            agentKind: .custom,
+            executable: "/bin/zsh",
+            arguments: ["-lc", "aider --yes"],
+            workingDirectory: "/repo",
+            trust: .trusted,
+            autoResume: true
+        )
+        let run = ProcessRun(entryId: entry.id, status: .needsRecovery)
+        let state = WorkspaceState(projects: [project], processEntries: [entry], processRuns: [run])
+
+        let plan = RecoveryPlanner().planRecovery(for: state)
+
+        XCTAssertEqual(plan.first?.action, .respawn)
+        XCTAssertEqual(plan.first?.reason, "custom terminal agent will reopen from persisted checkpoint context")
+    }
+
     func testClaudeCodeWithoutSessionIdUsesLatestSessionFallback() {
         let project = WorkbenchProject(name: "Harness", rootPath: "/repo")
         let entry = ProcessEntry(

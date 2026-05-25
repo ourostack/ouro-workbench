@@ -231,4 +231,32 @@ final class CommandPlannerTests: XCTestCase {
         XCTAssertEqual(plan.reason, "respawn Copilot Scratch with checkpoint recovery prompt")
         XCTAssertTrue(plan.arguments.last?.contains("Recover this Ouro Workbench terminal-agent session") == true)
     }
+
+    func testCheckpointRespawnCoversGenericTerminalAgents() throws {
+        let project = WorkbenchProject(name: "Project", rootPath: "/tmp/project")
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "Generic TUI",
+            kind: .terminalAgent,
+            executable: "/bin/zsh",
+            arguments: ["-lc", "aider --yes"],
+            workingDirectory: "/tmp/project",
+            trust: .trusted,
+            autoResume: true
+        )
+        let run = ProcessRun(
+            entryId: entry.id,
+            status: .needsRecovery,
+            transcriptPath: "/tmp/generic-transcript.log"
+        )
+
+        let plan = try WorkbenchCommandPlanner().recoveryPlan(for: entry, latestRun: run, action: .respawn)
+
+        XCTAssertEqual(plan.executable, "/bin/zsh")
+        XCTAssertEqual(plan.arguments[0], "-lc")
+        XCTAssertEqual(plan.recoveryAction, .respawn)
+        XCTAssertEqual(plan.reason, "respawn Generic TUI with checkpoint recovery prompt")
+        XCTAssertTrue(plan.arguments.last?.contains("Recover this Ouro Workbench terminal-agent session") == true)
+        XCTAssertTrue(plan.arguments.last?.contains("/tmp/generic-transcript.log") == true)
+    }
 }
