@@ -31,6 +31,7 @@ The generated bundle is intentionally local and unsigned for now. It lives under
 - `Contents/MacOS/OuroWorkbench`
 - `Contents/MacOS/OuroWorkbenchMCP`
 - `Contents/MacOS/Tools/screen`, the terminal persistence backend
+- `SwiftTerm_SwiftTerm.bundle`, the embedded terminal resource bundle
 
 `VERSION` is the source of truth for `CFBundleShortVersionString` and the
 Workbench MCP `serverInfo.version`. `scripts/package-app.sh` derives the bundle
@@ -42,6 +43,9 @@ Verify a packaged bundle with:
 ```bash
 scripts/verify-app-bundle.sh
 ```
+
+Bundle verification also runs the native executable in `--smoke-launch` mode so
+missing runtime resources are caught before CI uploads the artifact.
 
 Create a versioned zip plus manifest with SHA-256 and bundle metadata:
 

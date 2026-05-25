@@ -13,6 +13,7 @@ MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 TOOLS_DIR="$MACOS_DIR/Tools"
 SCREEN_SOURCE="/usr/bin/screen"
+SWIFTTERM_BUNDLE_NAME="SwiftTerm_SwiftTerm.bundle"
 
 cd "$ROOT_DIR"
 
@@ -28,6 +29,11 @@ fi
 
 swift build -c release --product "$PRODUCT_NAME"
 swift build -c release --product "$MCP_PRODUCT_NAME"
+SWIFTTERM_BUNDLE="$(find "$ROOT_DIR/.build" -path "*/release/$SWIFTTERM_BUNDLE_NAME" -type d -print -quit)"
+if [[ -z "$SWIFTTERM_BUNDLE" ]]; then
+  printf 'Required SwiftTerm resource bundle is missing from release build\n' >&2
+  exit 1
+fi
 
 rm -rf "$APP_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR" "$TOOLS_DIR"
@@ -36,6 +42,7 @@ cp "$ROOT_DIR/.build/release/$PRODUCT_NAME" "$MACOS_DIR/$PRODUCT_NAME"
 chmod 755 "$MACOS_DIR/$PRODUCT_NAME"
 cp "$ROOT_DIR/.build/release/$MCP_PRODUCT_NAME" "$MACOS_DIR/$MCP_PRODUCT_NAME"
 chmod 755 "$MACOS_DIR/$MCP_PRODUCT_NAME"
+ditto "$SWIFTTERM_BUNDLE" "$APP_DIR/$SWIFTTERM_BUNDLE_NAME"
 
 if [[ ! -x "$SCREEN_SOURCE" ]]; then
   printf 'Required terminal persistence backend is missing: %s\n' "$SCREEN_SOURCE" >&2

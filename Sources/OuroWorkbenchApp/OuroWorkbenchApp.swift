@@ -1,11 +1,21 @@
 #if os(macOS)
 import AppKit
+import Darwin
 import OuroWorkbenchCore
 import SwiftTerm
 import SwiftUI
 
 @main
 struct OuroWorkbenchApp: App {
+    init() {
+        if CommandLine.arguments.contains("--smoke-launch") {
+            let terminal = CapturingLocalProcessTerminalView(frame: .zero)
+            terminal.configureNativeFeel()
+            FileHandle.standardOutput.write(Data("OuroWorkbench smoke launch ok\n".utf8))
+            Darwin.exit(0)
+        }
+    }
+
     var body: some Scene {
         WindowGroup("") {
             WorkbenchRootView()
