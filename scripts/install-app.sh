@@ -5,9 +5,10 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_NAME="Ouro Workbench.app"
 INSTALL_DIR="$HOME/Applications"
 OPEN_AFTER_INSTALL="false"
+VERIFY_SCRIPT="$ROOT_DIR/scripts/verify-app-bundle.sh"
 
 usage() {
-  printf 'Usage: %s [--install-dir PATH] [--open]\n' "$(basename "$0")" >&2
+  printf 'Usage: %s [--install-dir PATH] [--verify-script PATH] [--open]\n' "$(basename "$0")" >&2
 }
 
 while [[ $# -gt 0 ]]; do
@@ -18,6 +19,14 @@ while [[ $# -gt 0 ]]; do
         exit 64
       fi
       INSTALL_DIR="$2"
+      shift 2
+      ;;
+    --verify-script)
+      if [[ $# -lt 2 || -z "$2" ]]; then
+        usage
+        exit 64
+      fi
+      VERIFY_SCRIPT="$2"
       shift 2
       ;;
     --open)
@@ -40,7 +49,8 @@ APP_DEST="$INSTALL_DIR/$APP_NAME"
 STAGING_ROOT=""
 STAGED_APP=""
 BACKUP_APP=""
-PROMOTED_APP="false"
+INSTALL_SUCCEEDED="false"
+DESTINATION_REPLACED="false"
 
 cleanup() {
   if [[ -n "$STAGING_ROOT" ]]; then
@@ -49,8 +59,14 @@ cleanup() {
 }
 
 restore_backup() {
-  if [[ "$PROMOTED_APP" != "true" && -n "$BACKUP_APP" && -d "$BACKUP_APP" && ! -e "$APP_DEST" ]]; then
+  if [[ "$INSTALL_SUCCEEDED" == "true" ]]; then
+    return
+  fi
+  if [[ -n "$BACKUP_APP" && -d "$BACKUP_APP" ]]; then
+    rm -rf "$APP_DEST"
     mv "$BACKUP_APP" "$APP_DEST"
+  elif [[ "$DESTINATION_REPLACED" == "true" ]]; then
+    rm -rf "$APP_DEST"
   fi
 }
 
@@ -61,6 +77,10 @@ trap 'restore_backup; cleanup' EXIT
 if [[ ! -d "$APP_SOURCE" ]]; then
   printf 'Packaged app not found: %s\n' "$APP_SOURCE" >&2
   exit 1
+fi
+if [[ ! -x "$VERIFY_SCRIPT" ]]; then
+  printf 'App verifier is not executable: %s\n' "$VERIFY_SCRIPT" >&2
+  exit 64
 fi
 
 if [[ "$OPEN_AFTER_INSTALL" == "true" ]]; then
@@ -79,15 +99,17 @@ STAGED_APP="$STAGING_ROOT/$APP_NAME"
 BACKUP_APP="$STAGING_ROOT/previous-$APP_NAME"
 
 ditto "$APP_SOURCE" "$STAGED_APP"
+"$VERIFY_SCRIPT" "$STAGED_APP" >/dev/null
 
 if [[ -e "$APP_DEST" ]]; then
   mv "$APP_DEST" "$BACKUP_APP"
 fi
 mv "$STAGED_APP" "$APP_DEST"
-PROMOTED_APP="true"
-rm -rf "$BACKUP_APP"
+DESTINATION_REPLACED="true"
 
-"$ROOT_DIR/scripts/verify-app-bundle.sh" "$APP_DEST" >/dev/null
+"$VERIFY_SCRIPT" "$APP_DEST" >/dev/null
+INSTALL_SUCCEEDED="true"
+rm -rf "$BACKUP_APP"
 
 printf 'Installed %s\n' "$APP_DEST"
 

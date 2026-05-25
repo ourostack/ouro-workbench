@@ -52,6 +52,9 @@ run_step "Package and verify native app bundle"
 scripts/package-app.sh
 scripts/verify-app-bundle.sh
 
+run_step "Smoke install rollback"
+scripts/smoke-install-rollback.sh
+
 if [[ "$RUN_DEEP" == "true" ]]; then
   run_step "Run deep native scenario verifier"
   swift run OuroWorkbenchScenarioVerifier \

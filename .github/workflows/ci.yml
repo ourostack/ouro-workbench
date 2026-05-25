@@ -88,6 +88,9 @@ jobs:
       - name: Verify app bundle
         run: scripts/verify-app-bundle.sh
 
+      - name: Smoke install rollback
+        run: scripts/smoke-install-rollback.sh
+
       - name: Archive app bundle
         run: |
           mkdir -p artifacts
