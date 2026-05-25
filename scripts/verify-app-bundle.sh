@@ -5,9 +5,10 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VERSION_FILE="$ROOT_DIR/VERSION"
 APP_DIR="$ROOT_DIR/dist/Ouro Workbench.app"
 EXPECTED_VERSION=""
+GUI_SMOKE_TIMEOUT_SECONDS="10"
 
 usage() {
-  printf 'Usage: %s [APP_PATH] [--expected-version VERSION]\n' "$(basename "$0")" >&2
+  printf 'Usage: %s [APP_PATH] [--expected-version VERSION] [--gui-smoke-timeout SECONDS]\n' "$(basename "$0")" >&2
 }
 
 while [[ $# -gt 0 ]]; do
@@ -18,6 +19,14 @@ while [[ $# -gt 0 ]]; do
         exit 64
       fi
       EXPECTED_VERSION="$2"
+      shift 2
+      ;;
+    --gui-smoke-timeout)
+      if [[ $# -lt 2 || -z "$2" || ! "$2" =~ ^[1-9][0-9]*$ ]]; then
+        usage
+        exit 64
+      fi
+      GUI_SMOKE_TIMEOUT_SECONDS="$2"
       shift 2
       ;;
     -h|--help)
@@ -54,6 +63,46 @@ require_executable() {
   [[ -x "$path" ]] || fail "not executable $path"
 }
 
+run_gui_smoke() {
+  local output_file
+  local smoke_pid
+  local smoke_output
+  local status
+  local timeout_seconds="$GUI_SMOKE_TIMEOUT_SECONDS"
+
+  output_file="$(mktemp)"
+  "$APP_EXECUTABLE" --smoke-launch >"$output_file" 2>&1 &
+  smoke_pid=$!
+
+  for _ in $(seq 1 "$timeout_seconds"); do
+    if ! kill -0 "$smoke_pid" 2>/dev/null; then
+      break
+    fi
+    sleep 1
+  done
+
+  if kill -0 "$smoke_pid" 2>/dev/null; then
+    kill "$smoke_pid" 2>/dev/null || true
+    wait "$smoke_pid" 2>/dev/null || true
+    smoke_output="$(cat "$output_file")"
+    rm -f "$output_file"
+    fail "GUI launch smoke timed out after ${timeout_seconds}s: $smoke_output"
+  fi
+
+  if wait "$smoke_pid"; then
+    status=0
+  else
+    status=$?
+  fi
+  smoke_output="$(cat "$output_file")"
+  rm -f "$output_file"
+
+  [[ "$status" -eq 0 ]] || fail "GUI launch smoke failed: $smoke_output"
+  if ! grep -F "OuroWorkbench smoke launch ok" <<<"$smoke_output" >/dev/null; then
+    fail "GUI launch smoke did not report success"
+  fi
+}
+
 plist_value() {
   /usr/libexec/PlistBuddy -c "Print :$1" "$INFO_PLIST"
 }
@@ -75,10 +124,7 @@ require_executable "$MCP_EXECUTABLE"
 require_executable "$SCREEN_EXECUTABLE"
 [[ -d "$SWIFTTERM_BUNDLE" ]] || fail "missing SwiftTerm resource bundle"
 
-smoke_output="$("$APP_EXECUTABLE" --smoke-launch 2>&1)" || fail "GUI launch smoke failed: $smoke_output"
-if ! grep -F "OuroWorkbench smoke launch ok" <<<"$smoke_output" >/dev/null; then
-  fail "GUI launch smoke did not report success"
-fi
+run_gui_smoke
 
 mcp_initialize="$(printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | "$MCP_EXECUTABLE")"
 if ! grep -F "\"name\":\"ouro-workbench\"" <<<"$mcp_initialize" >/dev/null; then

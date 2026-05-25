@@ -85,6 +85,9 @@ jobs:
       - name: Resolve dependencies
         run: swift package resolve
 
+      - name: Verify GUI smoke timeout guard
+        run: scripts/smoke-verify-app-timeout.sh
+
       - name: Package app bundle
         run: scripts/package-app.sh
 
