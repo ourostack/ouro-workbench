@@ -57,4 +57,6 @@ and release versioning.
 
 CI has a separate `App bundle` job that packages the release app, verifies the
 bundle contents, rejects local build-path linkage, and uploads the unsigned app
-artifact for inspection.
+artifact for inspection. The uploaded artifact is a zip created with
+`ditto --keepParent`, so downloading and expanding it preserves the
+`Ouro Workbench.app` wrapper instead of flattening the bundle contents.

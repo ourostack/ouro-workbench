@@ -88,10 +88,15 @@ jobs:
       - name: Verify app bundle
         run: scripts/verify-app-bundle.sh
 
+      - name: Archive app bundle
+        run: |
+          mkdir -p artifacts
+          ditto -c -k --keepParent "dist/Ouro Workbench.app" artifacts/OuroWorkbenchApp.zip
+
       - name: Upload app bundle
         uses: actions/upload-artifact@v7
         with:
           name: ouro-workbench-app-${{ github.sha }}
-          path: dist/Ouro Workbench.app
+          path: artifacts/OuroWorkbenchApp.zip
           if-no-files-found: error
           retention-days: 7
