@@ -67,6 +67,10 @@ swift run OuroWorkbenchScenarioVerifier --out .build/workbench-scenario-verifier
 
 The verifier writes `summary.json` to the output directory. When samples are
 enabled, representative native PNGs are rasterized and written under `samples/`.
+The summary includes a stable coverage digest plus distributions for terminal
+identity, lifecycle, trust/resume posture, surface, boss bridge state,
+executable health, recovery action, readiness state, boss agent, workspace size,
+run count, and viewport coverage.
 
 ## Current Local Baseline
 
@@ -76,6 +80,7 @@ Last local run on 2026-05-25:
 rows verified: 5000
 render passes: 25000
 viewports: standard, short-window, compact-terminal, tall-workspace, wide-workspace
+coverage digest: 567dc7ec0c45835b
 failures: 0
 ```
 
@@ -88,6 +93,7 @@ deep generated rows: 15000
 deep seed: 20260525
 render passes: 100000
 viewports: standard, short-window, compact-terminal, tall-workspace, wide-workspace
+coverage digest: 0fd57795f807596d
 failures: 0
 ```
 

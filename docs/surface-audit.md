@@ -55,6 +55,8 @@ and user-facing docs.
 - Scheduled deep verifier: a separate GitHub Actions workflow runs the same
   canonical matrix plus 15,000 seeded fixture mutations for 100,000 native
   layout/invariant passes.
+- Verifier evidence fingerprint: `summary.json` records coverage distributions
+  and a stable digest so local, PR, and scheduled runs can be compared.
 - Boss organization blindness: prompts and MCP status include selected group,
   all groups, active terminal names, and each process's group/CLI identity.
 - TUI repaint readability: inactive transcript display now omits dense cursor
@@ -93,8 +95,9 @@ Expected smoke result:
 
 ```text
 135 tests pass; 5000 scenario rows render through 25,000 native verifier passes
-with zero failures; deep sweep renders 20,000 rows through 100,000 verifier
-passes with zero failures; installed app shows group-scoped Local Shell + used
+with zero failures and coverage digest `567dc7ec0c45835b`; deep sweep renders
+20,000 rows through 100,000 verifier passes with zero failures and coverage
+digest `0fd57795f807596d`; installed app shows group-scoped Local Shell + used
 terminals only; packaged MCP returns tool definitions and group-aware status;
 dashboard text is not clipped; focus mode terminal text stays below the macOS
 traffic lights; clear repaints the visible terminal to AFTER_CLEAR plus a fresh
