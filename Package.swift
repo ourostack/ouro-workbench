@@ -10,7 +10,8 @@ let package = Package(
     products: [
         .library(name: "OuroWorkbenchCore", targets: ["OuroWorkbenchCore"]),
         .executable(name: "OuroWorkbench", targets: ["OuroWorkbenchApp"]),
-        .executable(name: "OuroWorkbenchMCP", targets: ["OuroWorkbenchMCP"])
+        .executable(name: "OuroWorkbenchMCP", targets: ["OuroWorkbenchMCP"]),
+        .executable(name: "OuroWorkbenchScenarioVerifier", targets: ["OuroWorkbenchScenarioVerifier"])
     ],
     dependencies: [
         .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", from: "1.13.0")
@@ -28,6 +29,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "OuroWorkbenchMCP",
+            dependencies: ["OuroWorkbenchCore"]
+        ),
+        .executableTarget(
+            name: "OuroWorkbenchScenarioVerifier",
             dependencies: ["OuroWorkbenchCore"]
         ),
         .testTarget(
