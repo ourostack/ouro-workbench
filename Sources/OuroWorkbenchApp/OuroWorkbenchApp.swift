@@ -2580,8 +2580,8 @@ final class WorkbenchViewModel: ObservableObject {
     func refreshExecutableHealth() {
         executableHealthByEntryID = Dictionary(
             uniqueKeysWithValues: allSessionEntries.map { entry in
-                let tokens = TerminalAgentDetector.canonicalTokens(entry: entry)
-                return (entry.id, executableHealthChecker.health(for: tokens.executable))
+                let executable = ExecutableHealthTarget.executable(for: entry)
+                return (entry.id, executableHealthChecker.health(for: executable))
             }
         )
     }
@@ -3465,6 +3465,7 @@ final class TerminalSessionController: NSObject, ObservableObject, Identifiable,
     let id = UUID()
     let plan: TerminalCommandPlan
     let terminal: CapturingLocalProcessTerminalView
+    private let environmentValues: [String: String]
     private let environment: [String]
     private let onStarted: (Int32?) -> Void
     private let onOutput: () -> Void
@@ -3483,7 +3484,10 @@ final class TerminalSessionController: NSObject, ObservableObject, Identifiable,
         self.onOutput = onOutput
         self.onTerminated = onTerminated
         self.terminal = CapturingLocalProcessTerminalView(frame: .zero)
-        self.environment = TerminalEnvironment().mergedWithTerminalDefaults()
+        self.environmentValues = TerminalEnvironment().valuesWithResolvedPath()
+        self.environment = environmentValues
+            .sorted { $0.key < $1.key }
+            .map { "\($0.key)=\($0.value)" }
         if let transcriptPath = plan.transcriptPath {
             self.recorder = try TranscriptRecorder(url: URL(fileURLWithPath: transcriptPath))
         }
@@ -3519,7 +3523,25 @@ final class TerminalSessionController: NSObject, ObservableObject, Identifiable,
     }
 
     func terminate() {
+        terminatePersistentSessionIfNeeded()
         terminal.terminate()
+    }
+
+    private func terminatePersistentSessionIfNeeded() {
+        guard let sessionName = plan.persistentSessionName else {
+            return
+        }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: PersistentTerminalSession.executable)
+        process.arguments = PersistentTerminalSession.terminateArguments(sessionName: sessionName)
+        process.environment = environmentValues
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            // The attached terminal process may already be gone; the Workbench stop path
+            // still terminates the local client below and records the run as manually ended.
+        }
     }
 
     private func recordOutput(_ bytes: ArraySlice<UInt8>) {

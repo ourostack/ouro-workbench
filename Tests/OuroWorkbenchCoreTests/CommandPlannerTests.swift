@@ -26,9 +26,22 @@ final class CommandPlannerTests: XCTestCase {
         XCTAssertTrue(plan.transcriptPath?.contains(entry.id.uuidString) == true)
         XCTAssertTrue(plan.transcriptPath?.contains(plan.runId.uuidString) == true)
         XCTAssertEqual(plan.displayCommand, "codex --yolo")
-        XCTAssertEqual(plan.launchInvocation.executable, "/usr/bin/env")
-        XCTAssertEqual(plan.launchInvocation.arguments, ["codex", "--yolo"])
-        XCTAssertEqual(plan.launchInvocation.execName, "codex")
+        XCTAssertEqual(plan.persistentSessionName, PersistentTerminalSession.sessionName(for: entry.id))
+        XCTAssertEqual(plan.launchInvocation.executable, "/usr/bin/screen")
+        XCTAssertEqual(plan.launchInvocation.arguments, [
+            "-U",
+            "-T", "xterm-256color",
+            "-h", "10000",
+            "-e", "^]]",
+            "-D",
+            "-RR",
+            "-S", PersistentTerminalSession.sessionName(for: entry.id),
+            "--",
+            "/usr/bin/env",
+            "codex",
+            "--yolo",
+        ])
+        XCTAssertEqual(plan.launchInvocation.execName, "screen")
     }
 
     func testNativeResumePlanSubstitutesSessionId() throws {
@@ -69,6 +82,22 @@ final class CommandPlannerTests: XCTestCase {
         XCTAssertEqual(plan.launchInvocation.executable, "/bin/zsh")
         XCTAssertEqual(plan.launchInvocation.arguments, ["-l"])
         XCTAssertEqual(plan.launchInvocation.execName, "zsh")
+    }
+
+    func testPersistentAbsoluteExecutableLaunchesInsideScreenSession() {
+        let entryId = UUID()
+        let plan = TerminalCommandPlan(
+            entryId: entryId,
+            executable: "/bin/zsh",
+            arguments: ["-l"],
+            workingDirectory: "/tmp",
+            persistentSessionName: PersistentTerminalSession.sessionName(for: entryId),
+            reason: "test"
+        )
+
+        XCTAssertEqual(plan.launchInvocation.executable, "/usr/bin/screen")
+        XCTAssertEqual(Array(plan.launchInvocation.arguments.suffix(3)), ["--", "/bin/zsh", "-l"])
+        XCTAssertEqual(PersistentTerminalSession.terminateArguments(sessionName: "session"), ["-S", "session", "-X", "quit"])
     }
 
     func testNativeResumeFallsBackToLatestSessionCommand() throws {

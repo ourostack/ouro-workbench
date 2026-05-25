@@ -2,10 +2,29 @@
 
 Restart persistence is a P0 requirement.
 
-## Technical Truth
+## App Quit And Force-Quit
 
-macOS processes and PTYs do not survive reboot. The product requirement is not
-literal process immortality. It is seamless restoration:
+Workbench treats app quit, force-quit, reinstall, and relaunch as detach/attach
+events. Starting a terminal tab launches the actual command inside a stable
+system `screen` session named from the Workbench terminal id. The native app
+owns only the visible client. If the app disappears, the `screen` session and
+the child shell/TUI keep running. Reopening Workbench attaches to the same
+session instead of rerunning the command.
+
+Manual `Stop` is the destructive action. It sends `screen -S <session> -X quit`
+for that terminal and then records the run as exited, so Workbench does not
+schedule recovery for a session the operator intentionally ended.
+
+The `screen` command escape is moved away from Ctrl-A so readline, shells, and
+terminal agents keep normal keyboard behavior. Workbench also forces
+`TERM=xterm-256color` for launched terminals, which keeps commands such as
+`clear` using terminal capabilities the embedded terminal can render.
+
+## Computer Restart
+
+macOS processes and PTYs do not survive an actual computer restart. After a
+power cycle or OS reboot, Workbench restores the workbench state and starts the
+best available recovery action:
 
 - restore workspace state
 - restore group and selected terminal state
@@ -14,6 +33,11 @@ literal process immortality. It is seamless restoration:
 - restore panes and attention state
 - resume safely where supported
 - report what could not be resumed
+
+When Claude Code, Codex, or another CLI exposes native session metadata,
+Workbench uses that resume command. Otherwise trusted custom terminals respawn
+from their saved command and transcript context, and anything unsafe or
+ambiguous is reported for manual/boss review.
 
 The app records terminal output to per-run transcript files under Application
 Support. Inactive sessions show the latest transcript tail in the detail pane,
