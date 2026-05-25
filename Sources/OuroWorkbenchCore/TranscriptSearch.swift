@@ -180,7 +180,7 @@ public struct TranscriptSearcher {
         matches: inout [TranscriptSearchMatch]
     ) {
         let line = TranscriptTextSanitizer.sanitized(String(decoding: data, as: UTF8.self))
-            .trimmingCharacters(in: CharacterSet(charactersIn: "\r"))
+            .trimmingCharacters(in: .newlines)
         guard line.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil else {
             return
         }

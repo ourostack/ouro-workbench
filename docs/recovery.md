@@ -8,6 +8,7 @@ macOS processes and PTYs do not survive reboot. The product requirement is not
 literal process immortality. It is seamless restoration:
 
 - restore workspace state
+- restore group and selected terminal state
 - restore terminal-agent identity
 - restore transcript/output history
 - restore panes and attention state
@@ -19,7 +20,12 @@ Support. Inactive sessions show the latest transcript tail in the detail pane,
 and boss check-in prompts include transcript paths so durable output remains
 discoverable after restart.
 
-## Named Agent Lanes
+## Detected Agent Terminals
+
+Workbench detects known agent terminals from the actual command, including
+direct commands such as `claude --dangerously-skip-permissions` and legacy
+shell/env wrappers such as `/bin/zsh -lc "env claude ..."`. Detection is used
+for labels, executable health, recovery planning, and boss context.
 
 ### Claude Code
 
@@ -45,7 +51,7 @@ Launch through the GitHub CLI bridge:
 gh copilot
 ```
 
-Trusted Workbench lanes pass Copilot's full-autonomy flag through the `gh`
+Trusted Workbench tabs pass Copilot's full-autonomy flag through the `gh`
 argument boundary:
 
 ```text

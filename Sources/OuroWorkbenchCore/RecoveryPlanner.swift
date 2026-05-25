@@ -88,7 +88,7 @@ public struct RecoveryPlanner: Sendable {
             )
         }
 
-        if entry.kind == .terminalAgent, let agentKind = entry.agentKind {
+        if entry.kind == .terminalAgent, let agentKind = TerminalAgentDetector.detect(entry: entry) {
             guard let preset = TerminalAgentPresets.preset(for: agentKind) else {
                 return RecoveryPlan(
                     entryId: entry.id,

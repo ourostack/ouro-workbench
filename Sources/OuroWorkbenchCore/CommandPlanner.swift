@@ -109,7 +109,7 @@ public struct WorkbenchCommandPlanner: Sendable {
     }
 
     private func nativeResumePlan(for entry: ProcessEntry, latestRun: ProcessRun?, action: RecoveryAction) throws -> TerminalCommandPlan {
-        guard let agentKind = entry.agentKind else {
+        guard let agentKind = TerminalAgentDetector.detect(entry: entry) else {
             var plan = try launchPlan(for: entry)
             plan.recoveryAction = action
             return plan
@@ -121,7 +121,7 @@ public struct WorkbenchCommandPlanner: Sendable {
 
         guard let sessionId = latestRun?.terminalSessionId, !sessionId.isEmpty else {
             if let executable = preset.resumeStrategy.fallbackCommandTemplate.first {
-                let arguments = entry.arguments + Array(preset.resumeStrategy.fallbackCommandTemplate.dropFirst())
+                let arguments = preservedResumeArguments(for: entry, preset: preset) + Array(preset.resumeStrategy.fallbackCommandTemplate.dropFirst())
                 let runId = UUID()
                 return TerminalCommandPlan(
                     entryId: entry.id,
@@ -141,7 +141,7 @@ public struct WorkbenchCommandPlanner: Sendable {
             token.replacingOccurrences(of: "{{sessionId}}", with: sessionId)
         }
         let executable = rendered.first ?? entry.executable
-        let arguments = entry.arguments + Array(rendered.dropFirst())
+        let arguments = preservedResumeArguments(for: entry, preset: preset) + Array(rendered.dropFirst())
         let runId = UUID()
         return TerminalCommandPlan(
             entryId: entry.id,
@@ -155,10 +155,20 @@ public struct WorkbenchCommandPlanner: Sendable {
         )
     }
 
+    private func preservedResumeArguments(for entry: ProcessEntry, preset: TerminalAgentPreset) -> [String] {
+        let tokens = TerminalAgentDetector.canonicalTokens(entry: entry)
+        let explicitResumeTokens = Set(
+            (preset.resumeStrategy.commandTemplate + preset.resumeStrategy.fallbackCommandTemplate)
+                .dropFirst()
+                .filter { !$0.contains("{{") }
+        )
+        return tokens.arguments.filter { !explicitResumeTokens.contains($0) }
+    }
+
     private func checkpointRecoveryPromptIsNeeded(for entry: ProcessEntry) -> Bool {
         guard
             entry.kind == .terminalAgent,
-            let agentKind = entry.agentKind,
+            let agentKind = TerminalAgentDetector.detect(entry: entry),
             let preset = TerminalAgentPresets.preset(for: agentKind)
         else {
             return false

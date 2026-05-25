@@ -24,7 +24,9 @@ public struct TerminalEnvironment: Equatable, Sendable {
 
     public static func resolvedPath(from values: [String: String]) -> String {
         let existing = values["PATH"]?.split(separator: ":").map(String.init) ?? []
+        let homeLocalBin = values["HOME"].map { "\($0)/.local/bin" }
         let defaults = [
+            homeLocalBin,
             "/opt/homebrew/bin",
             "/opt/homebrew/sbin",
             "/usr/local/bin",
@@ -33,7 +35,7 @@ public struct TerminalEnvironment: Equatable, Sendable {
             "/bin",
             "/usr/sbin",
             "/sbin"
-        ]
+        ].compactMap { $0 }
         var seen = Set<String>()
         return (existing + defaults)
             .filter { component in

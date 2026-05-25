@@ -25,6 +25,8 @@ public struct BossAgentPromptBuilder: Sendable {
         lines.append("")
         lines.append("Workspace status: \(summary.oneLineStatus)")
         lines.append("Boss Watch: \(state.bossWatchEnabled ? "enabled" : "paused")")
+        lines.append("Boss Pane: \(state.bossPaneCollapsed ? "collapsed" : "expanded")")
+        lines.append("Selected group: \(selectedProjectName(in: state))")
         if let dashboard {
             if !dashboard.availability.issues.isEmpty {
                 lines.append("Mailbox warnings: \(dashboard.availability.issues.joined(separator: "; "))")
@@ -57,10 +59,24 @@ public struct BossAgentPromptBuilder: Sendable {
             lines.append("")
         }
         lines.append("")
+        lines.append("Organization:")
+        for project in state.projects {
+            let marker = project.id == state.selectedProjectId ? "*" : "-"
+            let entries = state.processEntries
+                .filter { $0.projectId == project.id && !$0.isArchived }
+                .map(\.name)
+                .joined(separator: ", ")
+            lines.append("\(marker) \(project.name) (id=\(project.id.uuidString), root=\(project.rootPath)): \(entries.isEmpty ? "no active terminals" : entries)")
+        }
+        lines.append("")
         lines.append("Processes:")
         for snapshot in summary.processSnapshots {
             let entry = state.processEntries.first { $0.id == snapshot.id }
             let trust = entry?.trust.rawValue ?? "unknown"
+            let groupName = entry.flatMap { processEntry in
+                state.projects.first { $0.id == processEntry.projectId }?.name
+            } ?? "unknown"
+            let agentKind = TerminalAgentDetector.displayName(for: entry.flatMap(TerminalAgentDetector.detect)) ?? "generic"
             let latestRun = state.processRuns
                 .filter { $0.entryId == snapshot.id }
                 .sorted { $0.startedAt > $1.startedAt }
@@ -71,7 +87,7 @@ public struct BossAgentPromptBuilder: Sendable {
             let executablePath = health?.resolvedPath ?? "none"
             let archived = entry?.isArchived ?? false
             let notes = entry?.trimmedNotes.map(Self.oneLine) ?? "none"
-            lines.append("- \(snapshot.name) (id=\(snapshot.id.uuidString)): archived=\(archived), trust=\(trust), executable_health=\(executableStatus), executable_path=\(executablePath), status=\(snapshot.status.rawValue), attention=\(snapshot.attention.rawValue), transcript=\(transcriptPath), notes=\(notes), summary=\(snapshot.summary)")
+            lines.append("- \(snapshot.name) (id=\(snapshot.id.uuidString)): group=\(groupName), cli=\(agentKind), archived=\(archived), trust=\(trust), executable_health=\(executableStatus), executable_path=\(executablePath), status=\(snapshot.status.rawValue), attention=\(snapshot.attention.rawValue), transcript=\(transcriptPath), notes=\(notes), summary=\(snapshot.summary)")
         }
         lines.append("")
         lines.append("Recovery:")
@@ -97,5 +113,13 @@ public struct BossAgentPromptBuilder: Sendable {
 
     private static func oneLine(_ text: String) -> String {
         text.components(separatedBy: .newlines).joined(separator: " ")
+    }
+
+    private func selectedProjectName(in state: WorkspaceState) -> String {
+        guard let selectedProjectId = state.selectedProjectId,
+              let project = state.projects.first(where: { $0.id == selectedProjectId }) else {
+            return state.projects.first?.name ?? "none"
+        }
+        return project.name
     }
 }

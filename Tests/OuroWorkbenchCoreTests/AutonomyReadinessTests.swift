@@ -2,8 +2,8 @@ import XCTest
 @testable import OuroWorkbenchCore
 
 final class AutonomyReadinessTests: XCTestCase {
-    func testReadyWhenBossBridgeP0RecoveryAndWatchAreClear() {
-        let state = bootstrappedState()
+    func testReadyWhenBossBridgeAgentRecoveryAndWatchAreClear() {
+        let state = stateWithAgentTerminals()
         let snapshot = buildSnapshot(state: state, bossWatchIsEnabled: true)
 
         XCTAssertEqual(snapshot.state, .ready)
@@ -12,7 +12,7 @@ final class AutonomyReadinessTests: XCTestCase {
     }
 
     func testPausedBossWatchMakesAutonomyAttentiveButUsable() {
-        let state = bootstrappedState()
+        let state = stateWithAgentTerminals()
         let snapshot = buildSnapshot(state: state, bossWatchIsEnabled: false)
 
         XCTAssertEqual(snapshot.state, .attention)
@@ -20,7 +20,7 @@ final class AutonomyReadinessTests: XCTestCase {
     }
 
     func testMissingBossBridgeBlocksHandsOffOperation() {
-        let state = bootstrappedState()
+        let state = stateWithAgentTerminals()
         let snapshot = buildSnapshot(
             state: state,
             registration: Self.registration(status: .notRegistered),
@@ -31,19 +31,19 @@ final class AutonomyReadinessTests: XCTestCase {
         XCTAssertEqual(snapshot.check(id: "boss-mcp")?.state, .blocker)
     }
 
-    func testP0LaneWithDisabledAutoResumeBlocksReadiness() {
-        var state = bootstrappedState()
+    func testDetectedAgentWithDisabledAutoResumeBlocksReadiness() {
+        var state = stateWithAgentTerminals()
         let codexIndex = state.processEntries.firstIndex { $0.agentKind == .openAICodex }!
         state.processEntries[codexIndex].autoResume = false
 
         let snapshot = buildSnapshot(state: state, bossWatchIsEnabled: true)
 
         XCTAssertEqual(snapshot.state, .blocked)
-        XCTAssertEqual(snapshot.check(id: "p0-resume")?.state, .blocker)
+        XCTAssertEqual(snapshot.check(id: "terminal-resume")?.state, .blocker)
     }
 
-    func testMissingP0ExecutableBlocksReadiness() {
-        let state = bootstrappedState()
+    func testMissingDetectedAgentExecutableBlocksReadiness() {
+        let state = stateWithAgentTerminals()
         let codex = state.processEntries.first { $0.agentKind == .openAICodex }!
         var health = availableHealth(for: state)
         health[codex.id] = ExecutableHealth(
@@ -59,7 +59,7 @@ final class AutonomyReadinessTests: XCTestCase {
     }
 
     func testManualRecoveryBlocksReadiness() {
-        var state = bootstrappedState()
+        var state = stateWithAgentTerminals()
         let codex = state.processEntries.first { $0.agentKind == .openAICodex }!
         state.processRuns.append(ProcessRun(entryId: codex.id, status: .manualActionNeeded))
 
@@ -69,10 +69,52 @@ final class AutonomyReadinessTests: XCTestCase {
         XCTAssertEqual(snapshot.check(id: "recovery")?.state, .blocker)
     }
 
+    func testNoAgentTerminalsIsAttentiveButNotBlocked() {
+        let state = bootstrappedState()
+        let snapshot = buildSnapshot(state: state, bossWatchIsEnabled: true)
+
+        XCTAssertEqual(snapshot.state, .attention)
+        XCTAssertEqual(snapshot.check(id: "terminal-trust")?.state, .warning)
+        XCTAssertEqual(snapshot.check(id: "terminal-resume")?.state, .warning)
+    }
+
     private func bootstrappedState() -> WorkspaceState {
         WorkbenchBootstrapper().bootstrappedState(
             from: WorkspaceState(),
             defaults: WorkbenchDefaults(projectName: "Workbench", projectRootPath: "/tmp/workbench")
+        )
+    }
+
+    private func stateWithAgentTerminals() -> WorkspaceState {
+        let project = WorkbenchProject(name: "Workbench", rootPath: "/tmp/workbench")
+        return WorkbenchBootstrapper().bootstrappedState(
+            from: WorkspaceState(
+                projects: [project],
+                processEntries: [
+                    ProcessEntry(
+                        projectId: project.id,
+                        name: "Claude",
+                        kind: .terminalAgent,
+                        agentKind: .claudeCode,
+                        executable: "claude",
+                        arguments: ["--dangerously-skip-permissions"],
+                        workingDirectory: "/tmp/workbench",
+                        trust: .trusted,
+                        autoResume: true
+                    ),
+                    ProcessEntry(
+                        projectId: project.id,
+                        name: "Codex",
+                        kind: .terminalAgent,
+                        agentKind: .openAICodex,
+                        executable: "codex",
+                        arguments: ["--yolo"],
+                        workingDirectory: "/tmp/workbench",
+                        trust: .trusted,
+                        autoResume: true
+                    )
+                ]
+            )
         )
     }
 

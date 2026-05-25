@@ -6,7 +6,7 @@ agent-aware terminal workbench rather than a launcher with terminal panes.
 ## Immediate Terminal Feel
 
 - Open to a real terminal session by default.
-- Keep a persistent `Local Shell` session as the first lane.
+- Keep a persistent `Local Shell` terminal as the first default tab.
 - Auto-start the local shell on app launch when no other session is running or
   recovering.
 - Show a terminal-shaped inactive surface for stopped sessions, not an empty
@@ -21,12 +21,16 @@ agent-aware terminal workbench rather than a launcher with terminal panes.
 - Add edit, duplicate, archive, and delete controls for custom sessions.
 - Store per-session working directory, trust, auto-resume, command launch
   profile, and notes. Initial fields and custom-session management exist.
-- Add session grouping by project/workspace.
-- Persist selected session, window size, and sidebar width.
+- Add session grouping by project/workspace. Initial cmux-style groups exist.
+- Persist selected group and selected terminal. Initial persistence exists.
+- Persist window size and sidebar width.
 
 ## Layout
 
-- Add tabs or split panes for multiple live terminals.
+- Support multiple terminal tabs per group. Initial group-scoped terminal tabs
+  exist.
+- Add split panes for multiple live terminals.
+- Keep the boss pane collapsible so terminal work can claim the vertical space.
 - Support drag-to-reorder sessions.
 - Add keyboard shortcuts for new session, launch/restart, stop, focus terminal,
   next/previous session, and boss check-in.
@@ -72,16 +76,18 @@ agent-aware terminal workbench rather than a launcher with terminal panes.
   persists across app launches.
 - Add "what changed since last check-in" summaries. Initial summaries exist.
 
-## Agent Lanes
+## Agent CLI Identity
 
-- Keep P0 lanes: Claude Code, GitHub Copilot CLI, OpenAI Codex.
+- Detect Claude Code, GitHub Copilot CLI, and OpenAI Codex from launched
+  terminal commands instead of using fixed app modes. Initial command detection
+  exists.
 - Detect missing CLIs and show clear install/auth status.
-  Initial executable health exists for configured session commands.
+  Initial executable health exists for detected terminal commands.
 - Add preset editors for launch arguments.
 - Add yolo/dangerous-mode profile visibility without burying it in docs.
   Initial trust/restart chips exist in the session header and TTFA popover.
-- Add per-lane health checks.
-  Initial executable health exists for configured session commands.
+- Add per-tab health checks.
+  Initial executable health exists for configured and detected session commands.
 - Add default recovery prompts for agents without native resume.
 
 ## Integrations
@@ -121,4 +127,5 @@ Make Workbench open like a terminal:
 - Select it first.
 - Auto-start it on app launch when nothing else is running.
 - Show inactive sessions in a terminal-shaped surface.
-- Keep existing named agent lanes and boss controls intact.
+- Keep existing terminal tabs and boss controls intact while migrating away from
+  fixed named agent tabs.

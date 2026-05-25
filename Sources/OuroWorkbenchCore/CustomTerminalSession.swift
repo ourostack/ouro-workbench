@@ -67,18 +67,25 @@ public struct CustomTerminalSessionFactory: Sendable {
             throw CustomTerminalSessionError.emptyWorkingDirectory
         }
 
+        let parsed = TerminalCommandParser.parse(command)
+        let detectedAgentKind = parsed.flatMap {
+            TerminalAgentDetector.detect(executable: $0.executable, arguments: $0.arguments)
+        }
+        let executable = detectedAgentKind == nil ? "/bin/zsh" : (parsed?.executable ?? "/bin/zsh")
+        let arguments = detectedAgentKind == nil ? ["-lc", command] : (parsed?.arguments ?? ["-lc", command])
+
         return ProcessEntry(
             projectId: projectId,
             name: name,
             kind: .terminalAgent,
-            agentKind: nil,
-            executable: "/bin/zsh",
-            arguments: ["-lc", command],
+            agentKind: detectedAgentKind,
+            executable: executable,
+            arguments: arguments,
             workingDirectory: workingDirectory,
             trust: draft.trust,
             autoResume: draft.autoResume,
             attention: .idle,
-            lastSummary: "Custom terminal session: \(command)",
+            lastSummary: detectedAgentKind.flatMap(TerminalAgentDetector.displayName).map { "Detected \($0): \(command)" } ?? "Terminal session: \(command)",
             notes: notes.isEmpty ? nil : notes
         )
     }
@@ -92,23 +99,25 @@ public struct CustomTerminalSessionManager: Sendable {
     }
 
     public func isCustomSession(_ entry: ProcessEntry) -> Bool {
-        entry.kind == .terminalAgent && entry.agentKind == nil
+        entry.kind == .terminalAgent
     }
 
     public func draft(from entry: ProcessEntry) throws -> CustomTerminalSessionDraft {
         guard isCustomSession(entry) else {
             throw CustomTerminalSessionError.notCustomSession
         }
-        guard entry.executable == "/bin/zsh",
-              entry.arguments.count == 2,
-              entry.arguments[0] == "-lc"
-        else {
-            throw CustomTerminalSessionError.unavailableCommand
+        let command: String
+        if entry.executable == "/bin/zsh",
+           entry.arguments.count == 2,
+           entry.arguments[0] == "-lc" {
+            command = entry.arguments[1]
+        } else {
+            command = ([entry.executable] + entry.arguments).map(shellQuote).joined(separator: " ")
         }
 
         return CustomTerminalSessionDraft(
             name: entry.name,
-            command: entry.arguments[1],
+            command: command,
             workingDirectory: entry.workingDirectory,
             trust: entry.trust,
             autoResume: entry.autoResume,
@@ -155,4 +164,14 @@ public struct CustomTerminalSessionManager: Sendable {
         next.lastSummary = "Restored custom terminal session"
         return next
     }
+}
+
+private func shellQuote(_ value: String) -> String {
+    guard !value.isEmpty else {
+        return "''"
+    }
+    if value.rangeOfCharacter(from: CharacterSet.whitespacesAndNewlines.union(.init(charactersIn: "'\"\\$`"))) == nil {
+        return value
+    }
+    return "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
 }

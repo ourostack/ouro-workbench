@@ -97,7 +97,8 @@ final class WorkbenchMCPServer {
         let summary = summarizer.summarize(state)
         let executableHealth = Dictionary(
             uniqueKeysWithValues: state.processEntries.map { entry in
-                (entry.id, executableHealthChecker.health(for: entry.executable))
+                let tokens = TerminalAgentDetector.canonicalTokens(entry: entry)
+                return (entry.id, executableHealthChecker.health(for: tokens.executable))
             }
         )
         return promptBuilder.checkInPrompt(
@@ -132,7 +133,8 @@ final class WorkbenchMCPServer {
         }
         var lines = ["Transcript matches for \(query):"]
         for match in matches {
-            lines.append("- \(match.entryName) line \(match.lineNumber) (\(match.transcriptPath)): \(match.line)")
+            let groupName = groupName(for: match.entryId, state: state) ?? "unknown"
+            lines.append("- \(groupName) / \(match.entryName) line \(match.lineNumber) (\(match.transcriptPath)): \(match.line)")
         }
         return lines.joined(separator: "\n")
     }
@@ -142,7 +144,8 @@ final class WorkbenchMCPServer {
         let result = recoveryDrill.run(state: state)
         var lines = ["Recovery drill: \(result.oneLineStatus)"]
         for item in result.items {
-            lines.append("- \(item.entryName): \(item.beforeStatus?.rawValue ?? "none") -> \(item.afterStatus?.rawValue ?? "none"), action=\(item.action.rawValue), reason=\(item.reason)")
+            let groupName = groupName(for: item.id, state: state) ?? "unknown"
+            lines.append("- \(groupName) / \(item.entryName): \(item.beforeStatus?.rawValue ?? "none") -> \(item.afterStatus?.rawValue ?? "none"), action=\(item.action.rawValue), reason=\(item.reason)")
         }
         return lines.joined(separator: "\n")
     }
@@ -195,6 +198,13 @@ final class WorkbenchMCPServer {
             .filter { $0.entryId == entryId }
             .sorted { $0.startedAt > $1.startedAt }
             .first
+    }
+
+    private func groupName(for entryId: UUID, state: WorkspaceState) -> String? {
+        guard let entry = state.processEntries.first(where: { $0.id == entryId }) else {
+            return nil
+        }
+        return state.projects.first { $0.id == entry.projectId }?.name
     }
 
     private func uintArgument(_ value: Any?) -> UInt64? {

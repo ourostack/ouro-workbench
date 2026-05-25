@@ -93,6 +93,27 @@ final class CommandPlannerTests: XCTestCase {
         XCTAssertEqual(plan.reason, "resume Codex using latest-session fallback")
     }
 
+    func testNativeResumeForShellWrappedDetectedAgentDoesNotReuseShellWrapper() throws {
+        let project = WorkbenchProject(name: "Project", rootPath: "/tmp/project")
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "Claude Scratch",
+            kind: .terminalAgent,
+            agentKind: .claudeCode,
+            executable: "/bin/zsh",
+            arguments: ["-lc", "claude --dangerously-skip-permissions"],
+            workingDirectory: "/tmp/project",
+            trust: .trusted,
+            autoResume: true
+        )
+
+        let plan = try WorkbenchCommandPlanner().recoveryPlan(for: entry, latestRun: nil, action: .autoResume)
+
+        XCTAssertEqual(plan.executable, "claude")
+        XCTAssertEqual(plan.arguments, ["--dangerously-skip-permissions", "--continue"])
+        XCTAssertEqual(plan.reason, "resume Claude Scratch using latest-session fallback")
+    }
+
     func testCheckpointRespawnIncludesRecoveryPrompt() throws {
         let project = WorkbenchProject(name: "Project", rootPath: "/tmp/project")
         let entry = ProcessEntry(
@@ -120,5 +141,32 @@ final class CommandPlannerTests: XCTestCase {
         XCTAssertEqual(plan.reason, "respawn GitHub Copilot CLI with checkpoint recovery prompt")
         XCTAssertTrue(plan.arguments.last?.contains("Recover this Ouro Workbench terminal-agent session") == true)
         XCTAssertTrue(plan.arguments.last?.contains("/tmp/transcript.log") == true)
+    }
+
+    func testCheckpointRespawnDetectsShellWrappedCopilot() throws {
+        let project = WorkbenchProject(name: "Project", rootPath: "/tmp/project")
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "Copilot Scratch",
+            kind: .terminalAgent,
+            executable: "/bin/zsh",
+            arguments: ["-lc", "gh copilot -- --yolo"],
+            workingDirectory: "/tmp/project",
+            trust: .trusted,
+            autoResume: true
+        )
+        let run = ProcessRun(
+            entryId: entry.id,
+            status: .needsRecovery,
+            transcriptPath: "/tmp/transcript.log"
+        )
+
+        let plan = try WorkbenchCommandPlanner().recoveryPlan(for: entry, latestRun: run, action: .respawn)
+
+        XCTAssertEqual(plan.executable, "/bin/zsh")
+        XCTAssertEqual(plan.arguments[0], "-lc")
+        XCTAssertEqual(plan.recoveryAction, .respawn)
+        XCTAssertEqual(plan.reason, "respawn Copilot Scratch with checkpoint recovery prompt")
+        XCTAssertTrue(plan.arguments.last?.contains("Recover this Ouro Workbench terminal-agent session") == true)
     }
 }
