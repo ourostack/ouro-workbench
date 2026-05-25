@@ -37,6 +37,24 @@ done
 
 APP_SOURCE="$ROOT_DIR/dist/$APP_NAME"
 APP_DEST="$INSTALL_DIR/$APP_NAME"
+STAGING_ROOT=""
+STAGED_APP=""
+BACKUP_APP=""
+PROMOTED_APP="false"
+
+cleanup() {
+  if [[ -n "$STAGING_ROOT" ]]; then
+    rm -rf "$STAGING_ROOT"
+  fi
+}
+
+restore_backup() {
+  if [[ "$PROMOTED_APP" != "true" && -n "$BACKUP_APP" && -d "$BACKUP_APP" && ! -e "$APP_DEST" ]]; then
+    mv "$BACKUP_APP" "$APP_DEST"
+  fi
+}
+
+trap 'restore_backup; cleanup' EXIT
 
 "$ROOT_DIR/scripts/package-app.sh" >/dev/null
 
@@ -56,8 +74,20 @@ if [[ "$OPEN_AFTER_INSTALL" == "true" ]]; then
 fi
 
 mkdir -p "$INSTALL_DIR"
-rm -rf "$APP_DEST"
-ditto "$APP_SOURCE" "$APP_DEST"
+STAGING_ROOT="$(mktemp -d "$INSTALL_DIR/.ouro-workbench-install.XXXXXX")"
+STAGED_APP="$STAGING_ROOT/$APP_NAME"
+BACKUP_APP="$STAGING_ROOT/previous-$APP_NAME"
+
+ditto "$APP_SOURCE" "$STAGED_APP"
+
+if [[ -e "$APP_DEST" ]]; then
+  mv "$APP_DEST" "$BACKUP_APP"
+fi
+mv "$STAGED_APP" "$APP_DEST"
+PROMOTED_APP="true"
+rm -rf "$BACKUP_APP"
+
+"$ROOT_DIR/scripts/verify-app-bundle.sh" "$APP_DEST" >/dev/null
 
 printf 'Installed %s\n' "$APP_DEST"
 
