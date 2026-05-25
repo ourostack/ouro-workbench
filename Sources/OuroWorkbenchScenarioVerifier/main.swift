@@ -4,7 +4,16 @@ import OuroWorkbenchCore
 
 @main
 struct OuroWorkbenchScenarioVerifierCommand {
-    static func main() throws {
+    static func main() {
+        do {
+            try run()
+        } catch {
+            fputs("error: \(error)\n", stderr)
+            Darwin.exit(2)
+        }
+    }
+
+    static func run() throws {
         let options = try ScenarioVerifierOptions(arguments: Array(CommandLine.arguments.dropFirst()))
         let packageRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
         let matrixURL = options.matrixURL ?? WorkbenchScenarioMatrix.defaultMatrixURL(packageRoot: packageRoot)
@@ -60,16 +69,16 @@ struct ScenarioVerifierOptions {
                 writeSamples = false
             case "--sample-limit":
                 index += 1
-                sampleLimit = Int(try Self.value(after: argument, in: arguments, at: index)) ?? sampleLimit
+                sampleLimit = try Self.nonNegativeInt(after: argument, in: arguments, at: index)
             case "--max-rows":
                 index += 1
-                maxRows = Int(try Self.value(after: argument, in: arguments, at: index))
+                maxRows = try Self.nonNegativeInt(after: argument, in: arguments, at: index)
             case "--deep-scenarios":
                 index += 1
-                deepScenarioCount = Int(try Self.value(after: argument, in: arguments, at: index)) ?? deepScenarioCount
+                deepScenarioCount = try Self.nonNegativeInt(after: argument, in: arguments, at: index)
             case "--seed":
                 index += 1
-                deepSeed = UInt64(try Self.value(after: argument, in: arguments, at: index)) ?? deepSeed
+                deepSeed = try Self.unsignedInt(after: argument, in: arguments, at: index)
             case "--help", "-h":
                 Self.printHelp()
                 Darwin.exit(0)
@@ -85,6 +94,22 @@ struct ScenarioVerifierOptions {
             throw ScenarioVerifierError.missingValue(argument)
         }
         return arguments[index]
+    }
+
+    private static func nonNegativeInt(after argument: String, in arguments: [String], at index: Int) throws -> Int {
+        let rawValue = try value(after: argument, in: arguments, at: index)
+        guard let value = Int(rawValue), value >= 0 else {
+            throw ScenarioVerifierError.invalidValue(argument: argument, value: rawValue)
+        }
+        return value
+    }
+
+    private static func unsignedInt(after argument: String, in arguments: [String], at index: Int) throws -> UInt64 {
+        let rawValue = try value(after: argument, in: arguments, at: index)
+        guard let value = UInt64(rawValue) else {
+            throw ScenarioVerifierError.invalidValue(argument: argument, value: rawValue)
+        }
+        return value
     }
 
     private static func printHelp() {
@@ -1061,6 +1086,7 @@ struct ScenarioVerifierFailure: Codable {
 enum ScenarioVerifierError: Error, CustomStringConvertible {
     case invalidArgument(String)
     case missingValue(String)
+    case invalidValue(argument: String, value: String)
 
     var description: String {
         switch self {
@@ -1068,6 +1094,8 @@ enum ScenarioVerifierError: Error, CustomStringConvertible {
             return "invalid argument: \(argument)"
         case let .missingValue(argument):
             return "missing value after \(argument)"
+        case let .invalidValue(argument, value):
+            return "invalid value for \(argument): \(value)"
         }
     }
 }
