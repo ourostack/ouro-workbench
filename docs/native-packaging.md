@@ -29,6 +29,12 @@ Verify a packaged bundle with:
 scripts/verify-app-bundle.sh
 ```
 
+Run the full local protected-gate preflight with:
+
+```bash
+scripts/preflight.sh
+```
+
 The app prefers the bundled `screen` executable and falls back to `/usr/bin/screen`
 only during development runs where the app bundle tool is not present. The
 bundle keeps automatic and sudden termination disabled so macOS does not quietly

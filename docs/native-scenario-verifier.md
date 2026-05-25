@@ -78,6 +78,19 @@ swift run OuroWorkbenchScenarioVerifier \
   --expect-coverage-digest 567dc7ec0c45835b
 ```
 
+Full local preflight, including the required native verifier contract and app
+bundle packaging:
+
+```bash
+scripts/preflight.sh
+```
+
+Include the scheduled deep sweep locally:
+
+```bash
+scripts/preflight.sh --deep
+```
+
 The verifier writes `summary.json` to the output directory. When samples are
 enabled, representative native PNGs are rasterized and written under `samples/`.
 The summary includes a stable coverage digest plus distributions for terminal
