@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+VERSION_FILE="$ROOT_DIR/VERSION"
 APP_DIR="${1:-"$ROOT_DIR/dist/Ouro Workbench.app"}"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
@@ -32,11 +33,22 @@ plutil -lint "$INFO_PLIST" >/dev/null
 [[ "$(plist_value CFBundleIdentifier)" == "com.ourostack.workbench" ]] || fail "unexpected bundle identifier"
 [[ "$(plist_value CFBundleExecutable)" == "OuroWorkbench" ]] || fail "unexpected bundle executable"
 [[ "$(plist_value CFBundlePackageType)" == "APPL" ]] || fail "unexpected bundle package type"
+expected_version="$(tr -d '[:space:]' < "$VERSION_FILE")"
+[[ "$(plist_value CFBundleShortVersionString)" == "$expected_version" ]] || fail "unexpected bundle version"
+[[ "$(plist_value CFBundleVersion)" =~ ^[0-9]+$ ]] || fail "bundle build number is not numeric"
 [[ "$(plist_value LSMinimumSystemVersion)" == "14.0" ]] || fail "unexpected minimum macOS version"
 
 require_executable "$APP_EXECUTABLE"
 require_executable "$MCP_EXECUTABLE"
 require_executable "$SCREEN_EXECUTABLE"
+
+mcp_initialize="$(printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | "$MCP_EXECUTABLE")"
+if ! grep -F "\"name\":\"ouro-workbench\"" <<<"$mcp_initialize" >/dev/null; then
+  fail "MCP initialize does not report ouro-workbench server name"
+fi
+if ! grep -F "\"version\":\"$expected_version\"" <<<"$mcp_initialize" >/dev/null; then
+  fail "MCP initialize does not report version $expected_version"
+fi
 
 for binary in "$APP_EXECUTABLE" "$MCP_EXECUTABLE"; do
   if otool -L "$binary" | tail -n +2 | grep -E "$ROOT_DIR|\\.build|DerivedData" >/dev/null; then

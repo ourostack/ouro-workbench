@@ -26,6 +26,11 @@ The generated bundle is intentionally local and unsigned for now. It lives under
 - `Contents/MacOS/OuroWorkbenchMCP`
 - `Contents/MacOS/Tools/screen`, the terminal persistence backend
 
+`VERSION` is the source of truth for `CFBundleShortVersionString` and the
+Workbench MCP `serverInfo.version`. `scripts/package-app.sh` derives the bundle
+build number from the git commit count, and `scripts/verify-version-contract.sh`
+guards the source version against drift.
+
 Verify a packaged bundle with:
 
 ```bash
@@ -62,10 +67,11 @@ Current bundle identity:
 - Bundle name: `Ouro Workbench`
 - Bundle identifier: `com.ourostack.workbench`
 - Executable: `OuroWorkbench`
+- Version source: `VERSION`
 - Minimum macOS version: `14.0`
 
 Before distributing beyond this machine, add signing, notarization, a real icon,
-and release versioning.
+and an external update channel.
 
 CI has a separate `App bundle` job that packages the release app, verifies the
 bundle contents, rejects local build-path linkage, and uploads the unsigned app
