@@ -93,6 +93,9 @@ jobs:
       - name: Verify package shallow checkout guard
         run: scripts/smoke-package-shallow-guard.sh
 
+      - name: Verify latest artifact installer help
+        run: scripts/install-latest-app-artifact.sh --help
+
       - name: Package app bundle
         run: scripts/package-app.sh
 
