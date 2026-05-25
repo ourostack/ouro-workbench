@@ -122,6 +122,10 @@ requires an intentional baseline update.
 The verifier runs as its own GitHub Actions job named `Native scenario verifier`
 so branch protection can require it separately from `Swift tests`.
 
+The `Swift tests` job also regenerates the 5000-row scenario matrix and fails
+if the checked-in TSV or markdown summary drift from
+`scripts/generate-workbench-5000-matrix.rb`.
+
 ## Scheduled Deep Sweep
 
 The repository also has a scheduled and manually dispatchable `Deep Scenario
