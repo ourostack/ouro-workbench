@@ -95,14 +95,14 @@ jobs:
         run: scripts/smoke-install-rollback.sh
 
       - name: Archive app bundle
-        run: |
-          mkdir -p artifacts
-          ditto -c -k --keepParent "dist/Ouro Workbench.app" artifacts/OuroWorkbenchApp.zip
+        run: scripts/archive-app-artifact.sh
 
       - name: Upload app bundle
         uses: actions/upload-artifact@v7
         with:
           name: ouro-workbench-app-${{ github.sha }}
-          path: artifacts/OuroWorkbenchApp.zip
+          path: |
+            artifacts/OuroWorkbench-*.zip
+            artifacts/OuroWorkbench-*.manifest.json
           if-no-files-found: error
           retention-days: 7
