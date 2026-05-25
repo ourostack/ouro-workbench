@@ -27,3 +27,6 @@ jobs:
 
       - name: Run tests
         run: swift test
+
+      - name: Render 5000 native scenario matrix
+        run: swift run OuroWorkbenchScenarioVerifier --out .build/workbench-scenario-verifier --no-samples
