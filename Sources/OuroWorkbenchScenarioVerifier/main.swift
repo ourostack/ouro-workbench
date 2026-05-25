@@ -19,7 +19,9 @@ struct OuroWorkbenchScenarioVerifierCommand {
             outputDirectory: outputDirectory,
             writeSamples: options.writeSamples,
             sampleLimit: options.sampleLimit,
-            maxRows: options.maxRows
+            maxRows: options.maxRows,
+            deepScenarioCount: options.deepScenarioCount,
+            deepSeed: options.deepSeed
         )
         let summary = try verifier.verify(matrix: matrix)
         try summary.write(to: outputDirectory.appendingPathComponent("summary.json"))
@@ -40,6 +42,8 @@ struct ScenarioVerifierOptions {
     var writeSamples = true
     var sampleLimit = 20
     var maxRows: Int?
+    var deepScenarioCount = 0
+    var deepSeed: UInt64 = 0x0F00_DF00_D202_60525
 
     init(arguments: [String]) throws {
         var index = 0
@@ -60,6 +64,12 @@ struct ScenarioVerifierOptions {
             case "--max-rows":
                 index += 1
                 maxRows = Int(try Self.value(after: argument, in: arguments, at: index))
+            case "--deep-scenarios":
+                index += 1
+                deepScenarioCount = Int(try Self.value(after: argument, in: arguments, at: index)) ?? deepScenarioCount
+            case "--seed":
+                index += 1
+                deepSeed = UInt64(try Self.value(after: argument, in: arguments, at: index)) ?? deepSeed
             case "--help", "-h":
                 Self.printHelp()
                 Darwin.exit(0)
@@ -87,6 +97,8 @@ struct ScenarioVerifierOptions {
           --no-samples         Do not write PNG sample evidence.
           --sample-limit N     Maximum sample PNGs to write. Defaults to 20.
           --max-rows N         Limit rows for local debugging.
+          --deep-scenarios N   Add N deterministic generated scenarios after the matrix.
+          --seed N             Seed for generated deep scenarios.
         """)
     }
 }
@@ -96,6 +108,8 @@ struct NativeScenarioVerifier {
     var writeSamples: Bool
     var sampleLimit: Int
     var maxRows: Int?
+    var deepScenarioCount: Int
+    var deepSeed: UInt64
 
     private let summarizer = WorkspaceSummarizer()
     private let readinessBuilder = AutonomyReadinessBuilder()
@@ -121,13 +135,16 @@ struct NativeScenarioVerifier {
         var sampleKeys = Set<String>()
         var writtenSamples: [String] = []
 
-        for row in matrix.rows.prefix(maxRows ?? matrix.rows.count) {
-            let fixture = try matrix.fixture(for: row)
+        var matrixRowsVerified = 0
+        var deepRowsVerified = 0
+
+        func verify(row: WorkbenchScenarioRow, fixture: WorkbenchScenarioFixture, registration: BossWorkbenchMCPRegistrationSnapshot) throws {
             let recoveryAction = recoveryPlanner.planRecovery(for: fixture.entry, latestRun: fixture.latestRun).action
+            let summary = summarizer.summarize(fixture.state)
             let readiness = readinessBuilder.build(
                 state: fixture.state,
-                summary: summarizer.summarize(fixture.state),
-                mcpRegistration: matrix.registration(for: row),
+                summary: summary,
+                mcpRegistration: registration,
                 executableHealth: fixture.executableHealth,
                 bossWatchIsEnabled: fixture.bossWatchEnabled
             )
@@ -140,6 +157,7 @@ struct NativeScenarioVerifier {
             let scenario = NativeScenario(
                 row: row,
                 fixture: fixture,
+                summary: summary,
                 recoveryAction: recoveryAction,
                 readinessState: readiness.state.rawValue,
                 commandLine: commandPlan.displayCommand
@@ -166,11 +184,30 @@ struct NativeScenarioVerifier {
                     writtenSamples.append(url.path)
                 }
             }
+        }
+
+        for row in matrix.rows.prefix(maxRows ?? matrix.rows.count) {
+            let fixture = try matrix.fixture(for: row)
+            try verify(row: row, fixture: fixture, registration: matrix.registration(for: row))
             rowsVerified += 1
+            matrixRowsVerified += 1
+        }
+
+        if deepScenarioCount > 0 {
+            var generator = DeepScenarioGenerator(seed: deepSeed, matrix: matrix)
+            for index in 0..<deepScenarioCount {
+                let generated = try generator.scenario(at: index)
+                try verify(row: generated.row, fixture: generated.fixture, registration: generated.registration)
+                rowsVerified += 1
+                deepRowsVerified += 1
+            }
         }
 
         return ScenarioVerifierSummary(
             rowsVerified: rowsVerified,
+            matrixRowsVerified: matrixRowsVerified,
+            deepRowsVerified: deepRowsVerified,
+            deepSeed: deepRowsVerified > 0 ? deepSeed : nil,
             renderPasses: renderPasses,
             viewportNames: viewports.map(\.name),
             sampleFiles: writtenSamples,
@@ -182,9 +219,270 @@ struct NativeScenarioVerifier {
 struct NativeScenario {
     var row: WorkbenchScenarioRow
     var fixture: WorkbenchScenarioFixture
+    var summary: WorkspaceSummary
     var recoveryAction: RecoveryAction
     var readinessState: String
     var commandLine: String
+}
+
+struct DeepGeneratedScenario {
+    var row: WorkbenchScenarioRow
+    var fixture: WorkbenchScenarioFixture
+    var registration: BossWorkbenchMCPRegistrationSnapshot
+}
+
+struct DeepScenarioGenerator {
+    private var random: SeededRandom
+    private let matrix: WorkbenchScenarioMatrix
+
+    private let terminals = ["claude", "codex", "copilot", "generic_tui", "local_shell"]
+    private let lifecycles = ["configured", "running", "waiting_for_input", "needs_recovery", "manual_action_needed"]
+    private let trustPostures = ["trusted_auto_session", "trusted_auto_no_session", "trusted_no_auto", "untrusted_auto", "untrusted_no_auto"]
+    private let surfaces = ["sidebar_dashboard", "sidebar_hidden_dashboard", "boss_pane_collapsed", "terminal_focus", "archived_session"]
+    private let bossBridgeStates = ["registered", "not_registered", "needs_update", "agent_missing"]
+    private let executableHealthStates = ["available", "missing"]
+    private let bossNames = ["slugger", "serpent-guide", "operator-boss", "night-watch", "release-captain"]
+    private let projectNames = [
+        "Workbench",
+        "Harness P0 Recovery",
+        "Ouro Mailroom",
+        "Native App Polish",
+        "Very Long Project Scope Name For Compact Sidebar Stress"
+    ]
+    private let sessionNames = [
+        "Claude",
+        "Codex",
+        "Copilot",
+        "Generic TUI",
+        "Local Shell",
+        "Release Notes",
+        "Restart Drill",
+        "This Terminal Has A Long Human Name That Must Truncate"
+    ]
+    private let commandFragments = [
+        "audit-ui --window compact",
+        "resume --last",
+        "test --filter recovery",
+        "ship --dry-run",
+        "watch --boss",
+        "plan \"quoted scope with spaces\""
+    ]
+
+    init(seed: UInt64, matrix: WorkbenchScenarioMatrix) {
+        self.random = SeededRandom(seed: seed)
+        self.matrix = matrix
+    }
+
+    mutating func scenario(at index: Int) throws -> DeepGeneratedScenario {
+        var row = matrix.rows[Int(random.next() % UInt64(matrix.rows.count))]
+        row.caseID = "WB-DEEP-\(String(format: "%05d", index + 1))"
+        row.terminal = pick(terminals)
+        row.lifecycle = pick(lifecycles)
+        row.trustResumeMetadata = pick(trustPostures)
+        row.surface = pick(surfaces)
+        row.bossBridge = pick(bossBridgeStates)
+        row.executableHealth = pick(executableHealthStates)
+
+        var fixture = try matrix.fixture(for: row)
+        let bossName = pick(bossNames)
+        fixture.state.boss = BossAgentSelection(agentName: bossName, scope: pick(["machine", "project"]))
+        fixture.state.updatedAt = Date(timeIntervalSince1970: 1_779_724_800 + TimeInterval(index))
+
+        mutateSelectedEntry(in: &fixture, index: index)
+        addGeneratedProjectsAndPeers(to: &fixture, index: index)
+        rebuildExecutableHealth(for: &fixture, selectedHealth: row.executableHealth)
+
+        var registration = matrix.registration(for: row)
+        registration.agentName = bossName
+        registration.agentConfigPath = "/Users/ari/AgentBundles/\(bossName).ouro/agent.json"
+        registration.detail = registration.status.rawValue
+
+        return DeepGeneratedScenario(row: row, fixture: fixture, registration: registration)
+    }
+
+    private mutating func mutateSelectedEntry(in fixture: inout WorkbenchScenarioFixture, index: Int) {
+        fixture.entry.name = pick(sessionNames)
+        fixture.entry.workingDirectory = generatedWorkingDirectory(index: index)
+        fixture.entry.lastSummary = pick([
+            "Actively editing Workbench internals.",
+            "Waiting on terminal output.",
+            "Preparing restart-safe resume metadata.",
+            "Checking boss bridge registration.",
+            "Reviewing compact-window layout."
+        ])
+        fixture.entry.notes = pick([
+            nil,
+            "Deep verifier generated note.",
+            "Stress: long notes should stay out of compact chrome.",
+            "Boss can keep this moving when trust and recovery are clear."
+        ])
+        if random.nextBool() {
+            fixture.entry.arguments += [pick(commandFragments)]
+        }
+        if fixture.entry.kind == .terminalAgent, fixture.entry.agentKind == nil {
+            fixture.entry.agentKind = .custom
+        }
+
+        replace(entry: fixture.entry, in: &fixture.state)
+
+        if var run = fixture.latestRun {
+            run.pid = run.status == .running ? Int32(10_000 + index % 30_000) : nil
+            run.terminalSessionId = fixture.entry.autoResume && random.nextBool()
+                ? "deep-session-\(index)-\(String(format: "%08llx", random.next()))"
+                : run.terminalSessionId
+            run.transcriptPath = "\(fixture.entry.workingDirectory)/.ouro-workbench/transcripts/\(fixture.entry.name)-\(index).log"
+            run.lastOutputAt = Date(timeIntervalSince1970: 1_779_724_800 + TimeInterval(index))
+            fixture.latestRun = run
+            replace(run: run, in: &fixture.state)
+        }
+    }
+
+    private mutating func addGeneratedProjectsAndPeers(to fixture: inout WorkbenchScenarioFixture, index: Int) {
+        let projectCount = 1 + Int(random.next() % 4)
+        fixture.state.projects = (0..<projectCount).map { slot in
+            WorkbenchProject(
+                id: stableUUID(index: index, slot: slot, namespace: 0xA1),
+                name: pick(projectNames),
+                rootPath: "/tmp/ouro-workbench/deep/\(index)/project-\(slot)",
+                boss: fixture.state.boss
+            )
+        }
+        let selectedProject = fixture.state.projects[Int(random.next() % UInt64(fixture.state.projects.count))]
+        fixture.entry.projectId = selectedProject.id
+        fixture.state.selectedProjectId = selectedProject.id
+        replace(entry: fixture.entry, in: &fixture.state)
+
+        let peerCount = Int(random.next() % 6)
+        for slot in 0..<peerCount {
+            let terminal = pick(terminals)
+            let status = processStatus(for: pick(lifecycles))
+            let project = fixture.state.projects[Int(random.next() % UInt64(fixture.state.projects.count))]
+            let peer = processEntry(
+                terminal: terminal,
+                id: stableUUID(index: index, slot: slot, namespace: 0xB2),
+                projectId: project.id,
+                name: "\(pick(sessionNames)) \(slot + 1)",
+                workingDirectory: "/tmp/ouro-workbench/deep/\(index)/peer-\(slot)"
+            )
+            fixture.state.processEntries.append(peer)
+
+            if status != .configured {
+                fixture.state.processRuns.append(ProcessRun(
+                    id: stableUUID(index: index, slot: slot, namespace: 0xC3),
+                    entryId: peer.id,
+                    pid: status == .running ? Int32(20_000 + slot) : nil,
+                    status: status,
+                    startedAt: Date(timeIntervalSince1970: 1_779_724_000 + TimeInterval(index + slot)),
+                    terminalSessionId: peer.autoResume && random.nextBool() ? "peer-session-\(index)-\(slot)" : nil,
+                    transcriptPath: "\(peer.workingDirectory)/transcript.log"
+                ))
+            }
+        }
+
+        fixture.state.selectedEntryId = fixture.entry.id
+    }
+
+    private mutating func rebuildExecutableHealth(for fixture: inout WorkbenchScenarioFixture, selectedHealth: String) {
+        var health: [UUID: ExecutableHealth] = [:]
+        for entry in fixture.state.processEntries where !entry.isArchived {
+            let available = entry.id == fixture.entry.id
+                ? selectedHealth == "available"
+                : random.next() % 5 != 0
+            health[entry.id] = ExecutableHealth(
+                executable: ExecutableHealthTarget.executable(for: entry),
+                resolvedPath: available ? "/usr/bin/\(entry.executable)" : nil,
+                status: available ? .available : .missing,
+                detail: available ? "Found command." : "Command missing in generated deep scenario."
+            )
+        }
+        fixture.executableHealth = health
+    }
+
+    private mutating func processEntry(
+        terminal: String,
+        id: UUID,
+        projectId: UUID,
+        name: String,
+        workingDirectory: String
+    ) -> ProcessEntry {
+        let posture = pick(trustPostures)
+        let trust = posture.hasPrefix("trusted") ? ProcessTrust.trusted : .untrusted
+        let autoResume = !posture.contains("no_auto")
+        switch terminal {
+        case "claude":
+            return ProcessEntry(id: id, projectId: projectId, name: name, kind: .terminalAgent, agentKind: .claudeCode, executable: "claude", arguments: ["--dangerously-skip-permissions"], workingDirectory: workingDirectory, trust: trust, autoResume: autoResume)
+        case "codex":
+            return ProcessEntry(id: id, projectId: projectId, name: name, kind: .terminalAgent, agentKind: .openAICodex, executable: "codex", arguments: ["--yolo"], workingDirectory: workingDirectory, trust: trust, autoResume: autoResume)
+        case "copilot":
+            return ProcessEntry(id: id, projectId: projectId, name: name, kind: .terminalAgent, agentKind: .githubCopilotCLI, executable: "gh", arguments: ["copilot", "--", "--yolo"], workingDirectory: workingDirectory, trust: trust, autoResume: autoResume)
+        case "generic_tui":
+            return ProcessEntry(id: id, projectId: projectId, name: name, kind: .terminalAgent, agentKind: .custom, executable: "/bin/zsh", arguments: ["-lc", "aider --yes && \(pick(commandFragments))"], workingDirectory: workingDirectory, trust: trust, autoResume: autoResume)
+        default:
+            return ProcessEntry(id: id, projectId: projectId, name: name, kind: .shell, executable: "/bin/zsh", arguments: ["-l"], workingDirectory: workingDirectory, trust: trust, autoResume: autoResume)
+        }
+    }
+
+    private func replace(entry: ProcessEntry, in state: inout WorkspaceState) {
+        guard let index = state.processEntries.firstIndex(where: { $0.id == entry.id }) else {
+            state.processEntries.append(entry)
+            return
+        }
+        state.processEntries[index] = entry
+    }
+
+    private func replace(run: ProcessRun, in state: inout WorkspaceState) {
+        guard let index = state.processRuns.firstIndex(where: { $0.id == run.id }) else {
+            state.processRuns.append(run)
+            return
+        }
+        state.processRuns[index] = run
+    }
+
+    private mutating func pick<T>(_ values: [T]) -> T {
+        values[Int(random.next() % UInt64(values.count))]
+    }
+
+    private func processStatus(for lifecycle: String) -> ProcessStatus {
+        switch lifecycle {
+        case "running":
+            return .running
+        case "waiting_for_input":
+            return .waitingForInput
+        case "needs_recovery":
+            return .needsRecovery
+        case "manual_action_needed":
+            return .manualActionNeeded
+        default:
+            return .configured
+        }
+    }
+
+    private func generatedWorkingDirectory(index: Int) -> String {
+        "/tmp/ouro-workbench/deep/\(index)/\(projectNames[index % projectNames.count].replacingOccurrences(of: " ", with: "-"))"
+    }
+
+    private func stableUUID(index: Int, slot: Int, namespace: UInt64) -> UUID {
+        let value = (UInt64(index + 1) << 12) ^ (UInt64(slot + 1) << 4) ^ namespace
+        let prefix = 0xD000_0000 | ((namespace & 0xFF) << 16) | UInt64(slot & 0xFFFF)
+        return UUID(uuidString: String(format: "%08llX-0000-0000-0000-%012llX", prefix, value & 0xFFFF_FFFF_FFFF))!
+    }
+}
+
+struct SeededRandom {
+    private var state: UInt64
+
+    init(seed: UInt64) {
+        self.state = seed == 0 ? 0xC0DE_CAFE_F00D_BAAD : seed
+    }
+
+    mutating func next() -> UInt64 {
+        state = state &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+        return state
+    }
+
+    mutating func nextBool() -> Bool {
+        next() & 1 == 0
+    }
 }
 
 struct ScenarioViewport {
@@ -255,7 +553,7 @@ struct NativeScenarioRenderer {
             let sidebar = CGRect(x: 0, y: 0, width: sidebarWidth, height: canvas.size.height)
             canvas.fill(sidebar, color: NSColor(calibratedWhite: 0.965, alpha: 1))
             canvas.text("Groups", in: CGRect(x: 16, y: 92, width: sidebarWidth - 32, height: 18), role: .sidebarText)
-            canvas.text("Matrix", in: CGRect(x: 16, y: 120, width: sidebarWidth - 32, height: 18), role: .sidebarText)
+            canvas.text(selectedProjectName, in: CGRect(x: 16, y: 120, width: sidebarWidth - 32, height: 18), role: .sidebarText)
             canvas.text(archived ? "Archived" : scenario.fixture.entry.name, in: CGRect(x: 16, y: 158, width: sidebarWidth - 32, height: 18), role: .sidebarText)
         }
 
@@ -263,8 +561,8 @@ struct NativeScenarioRenderer {
         let detailWidth = canvas.size.width - detailX
         let header = CGRect(x: detailX, y: 0, width: detailWidth, height: 92)
         canvas.fill(header, color: .white)
-        canvas.text("Boss: slugger", in: CGRect(x: detailX + 16, y: 54, width: 180, height: 18), role: .headerText)
-        canvas.text("1 running, 0 recovery actions", in: CGRect(x: detailX + 16, y: 74, width: 190, height: 14), role: .headerText)
+        canvas.text("Boss: \(scenario.fixture.state.boss.agentName)", in: CGRect(x: detailX + 16, y: 54, width: 180, height: 18), role: .headerText)
+        canvas.text(scenario.summary.oneLineStatus, in: CGRect(x: detailX + 16, y: 74, width: 190, height: 14), role: .headerText)
         let headerControls = trailingRect(in: header, preferredWidth: 400, y: 60, height: 18, minimumX: detailX + 220)
         canvas.text("TTFA   Commands   Watch   Refresh   Check In", in: headerControls, role: .headerText)
         canvas.divider(y: header.maxY, role: .headerDivider)
@@ -313,11 +611,14 @@ struct NativeScenarioRenderer {
         }
 
         drawDashboardLine("Boss Watch \(scenario.fixture.bossWatchEnabled ? "watching" : "paused")", height: 16, advance: 24)
-        drawDashboardLine("running daemon   52 needs me   0 coding   0 blocked   production mode", advance: 30)
-        drawDashboardLine("Boss Line    Ask slugger about the Workbench")
+        let runningCount = scenario.summary.processSnapshots.filter { $0.status == .running }.count
+        let waitingCount = scenario.summary.waitingOnHuman.count
+        let recoveryCount = scenario.summary.needsRecovery.count
+        drawDashboardLine("running \(runningCount)   waiting \(waitingCount)   recovery \(recoveryCount)   production mode", advance: 30)
+        drawDashboardLine("Boss Line    Ask \(scenario.fixture.state.boss.agentName) about the Workbench")
         drawDashboardLine("What's Going On?   Waiting On Me?   Keep Moving   Respond For Me", advance: 32)
-        drawDashboardLine("Ouro Agents   1 local, 1 ready; boss slugger")
-        drawDashboardLine("slugger   ready · human minimax/MiniMax-M2.7 · agent minimax/MiniMax-M2.5", advance: 28)
+        drawDashboardLine("Ouro Agents   \(scenario.fixture.state.projects.count) groups, \(scenario.fixture.state.processEntries.count) terminals; boss \(scenario.fixture.state.boss.agentName)")
+        drawDashboardLine("\(scenario.readinessState) · selected \(scenario.fixture.entry.name)", advance: 28)
         if scenario.row.executableHealth == "missing" || scenario.row.bossBridge != "registered" {
             drawDashboardLine("Mailbox warnings: \(scenario.row.bossBridge); executable \(scenario.row.executableHealth)", advance: 28)
         }
@@ -343,12 +644,20 @@ struct NativeScenarioRenderer {
         )
     }
 
+    private var selectedProjectName: String {
+        guard let selectedProjectId = scenario.fixture.state.selectedProjectId,
+              let project = scenario.fixture.state.projects.first(where: { $0.id == selectedProjectId }) else {
+            return "Matrix"
+        }
+        return project.name
+    }
+
     private func drawTerminalLines(canvas: inout ScenarioCanvas, in rect: CGRect, role: ScenarioRegionRole) {
         guard rect.height >= 18 else {
             return
         }
         let prompt = "ouro@ouroboros-host  ~"
-        let stateLine = "\(scenario.row.terminal) \(scenario.row.lifecycle) \(scenario.row.expectedReadiness)"
+        let stateLine = "\(scenario.row.terminal) \(scenario.row.lifecycle) \(scenario.readinessState)"
         let promptRect = CGRect(x: rect.minX, y: rect.minY, width: max(1, rect.width - 8), height: 18)
         canvas.text(prompt, in: promptRect, role: role, color: .systemTeal, font: .monospacedSystemFont(ofSize: 13, weight: .bold))
         guard rect.height >= 42 else {
@@ -580,6 +889,9 @@ enum ScenarioRegionRole: String {
 
 struct ScenarioVerifierSummary: Codable {
     var rowsVerified: Int
+    var matrixRowsVerified: Int
+    var deepRowsVerified: Int
+    var deepSeed: UInt64?
     var renderPasses: Int
     var viewportNames: [String]
     var sampleFiles: [String]
@@ -589,11 +901,14 @@ struct ScenarioVerifierSummary: Codable {
         [
             "Workbench native scenario verifier:",
             "rows verified: \(rowsVerified)",
+            "matrix rows: \(matrixRowsVerified)",
+            "deep generated rows: \(deepRowsVerified)",
+            deepSeed.map { "deep seed: \($0)" },
             "render passes: \(renderPasses)",
             "viewports: \(viewportNames.joined(separator: ", "))",
             "sample files: \(sampleFiles.count)",
             "failures: \(failures.count)"
-        ].joined(separator: "\n")
+        ].compactMap { $0 }.joined(separator: "\n")
     }
 
     func write(to url: URL) throws {

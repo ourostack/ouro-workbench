@@ -52,6 +52,9 @@ and user-facing docs.
 - Native scenario renderer: `OuroWorkbenchScenarioVerifier` renders all 5000
   matrix rows through standard, compact, short, tall, and wide native AppKit
   surfaces, producing 25,000 layout/invariant passes and optional PNG evidence.
+- Scheduled deep verifier: a separate GitHub Actions workflow runs the same
+  canonical matrix plus 15,000 seeded fixture mutations for 100,000 native
+  layout/invariant passes.
 - Boss organization blindness: prompts and MCP status include selected group,
   all groups, active terminal names, and each process's group/CLI identity.
 - TUI repaint readability: inactive transcript display now omits dense cursor
@@ -79,6 +82,7 @@ git diff --check
 swift build
 swift test
 swift run OuroWorkbenchScenarioVerifier --out .build/workbench-scenario-verifier --no-samples
+swift run OuroWorkbenchScenarioVerifier --out .build/workbench-scenario-verifier-deep --no-samples --deep-scenarios 15000 --seed 20260525
 scripts/install-app.sh --open
 printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | "/Users/arimendelow/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP"
 printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"workbench_status","arguments":{}}}' | "/Users/arimendelow/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP"
@@ -89,7 +93,8 @@ Expected smoke result:
 
 ```text
 135 tests pass; 5000 scenario rows render through 25,000 native verifier passes
-with zero failures; installed app shows group-scoped Local Shell + used
+with zero failures; deep sweep renders 20,000 rows through 100,000 verifier
+passes with zero failures; installed app shows group-scoped Local Shell + used
 terminals only; packaged MCP returns tool definitions and group-aware status;
 dashboard text is not clipped; focus mode terminal text stays below the macOS
 traffic lights; clear repaints the visible terminal to AFTER_CLEAR plus a fresh
