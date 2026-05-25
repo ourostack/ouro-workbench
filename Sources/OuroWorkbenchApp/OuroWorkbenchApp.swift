@@ -7,10 +7,11 @@ import SwiftUI
 @main
 struct OuroWorkbenchApp: App {
     var body: some Scene {
-        WindowGroup("Ouro Workbench") {
+        WindowGroup("") {
             WorkbenchRootView()
                 .frame(minWidth: 1100, minHeight: 700)
         }
+        .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(replacing: .newItem) {}
         }
@@ -43,7 +44,6 @@ struct WorkbenchRootView: View {
                             ContentUnavailableView("No session selected", systemImage: "terminal")
                         }
                     }
-                    .padding(.top, 44)
                 }
             }
         }
@@ -131,7 +131,14 @@ private struct WindowChromeConfigurator: NSViewRepresentable {
     }
 
     private func configure(window: NSWindow?) {
-        window?.titleVisibility = .hidden
+        guard let window else {
+            return
+        }
+        window.title = ""
+        window.subtitle = ""
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.styleMask.insert(.fullSizeContentView)
     }
 }
 
