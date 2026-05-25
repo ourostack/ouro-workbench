@@ -192,7 +192,7 @@ Then run the first-run checklist in the app:
    `slugger`; local agents discovered from `~/AgentBundles/*.ouro` appear in
    the menu and in the `Ouro Agents` row.
 5. Use the `Ouro Agents` row to refresh bundle discovery, switch the boss, or
-   open an `ouro hatch` / `ouro clone` installer terminal.
+   open a conversational `ouro hatch` terminal or an `ouro clone` terminal.
 6. Use the `Workbench MCP` row to register the packaged MCP server for the
    selected boss.
 7. Collapse the boss pane when you want maximum terminal height; show it again
@@ -252,7 +252,8 @@ Important rows:
   `Respond For Me`.
 - `Ouro Agents`: discovers local agent bundles, shows provider/model lane
   health, switches the boss, registers Workbench MCP, reveals bundles, and opens
-  managed install terminals for `ouro hatch` or `ouro clone`.
+  managed terminals for conversational `ouro hatch` or remote-bundle
+  `ouro clone`.
 - `Transcript Search`: searches persisted transcript lines across runs.
 - `Native Runtime`: shows `Open at Login`.
 - `Recovery Drill`: dry-runs restart recovery without changing state.

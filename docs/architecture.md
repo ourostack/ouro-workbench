@@ -45,8 +45,9 @@ developer processes.
      posture and provider/model lanes.
    - Lets Workbench select an installed local Ouro agent as boss and register
      the packaged Workbench MCP server for any discovered bundle.
-   - Opens `ouro hatch` and `ouro clone` as managed terminal sessions so agent
-     installation remains visible, interactive, and recoverable.
+   - Opens conversational `ouro hatch` and remote-bundle `ouro clone` as
+     managed terminal sessions so agent installation remains visible,
+     interactive, and recoverable.
 
 5. Terminal-agent tabs
    - Local Shell.
