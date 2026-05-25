@@ -76,6 +76,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Show toolchain
         run: |
@@ -87,6 +89,9 @@ jobs:
 
       - name: Verify GUI smoke timeout guard
         run: scripts/smoke-verify-app-timeout.sh
+
+      - name: Verify package shallow checkout guard
+        run: scripts/smoke-package-shallow-guard.sh
 
       - name: Package app bundle
         run: scripts/package-app.sh
