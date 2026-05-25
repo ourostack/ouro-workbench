@@ -17,7 +17,7 @@ scripts/install-app.sh --open
 Use `--install-dir /path/to/Applications` to choose another install location.
 The installer stages the new app inside the target directory, moves the previous
 bundle aside, promotes the staged bundle, verifies it, and restores the previous
-bundle if promotion fails.
+bundle if any pre-success install or verification step fails.
 
 The generated bundle is intentionally local and unsigned for now. It lives under
 `dist/`, which is ignored by git. The bundle includes:
@@ -37,6 +37,9 @@ Run the full local protected-gate preflight with:
 ```bash
 scripts/preflight.sh
 ```
+
+The preflight also runs `scripts/smoke-install-rollback.sh`, which simulates an
+installed-bundle verification failure and proves the previous app is restored.
 
 The app prefers the bundled `screen` executable and falls back to `/usr/bin/screen`
 only during development runs where the app bundle tool is not present. The
