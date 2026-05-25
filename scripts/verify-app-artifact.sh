@@ -45,6 +45,7 @@ expected_bytes="$(manifest_value bytes)"
 expected_bundle_id="$(manifest_value bundleIdentifier)"
 expected_version="$(manifest_value version)"
 expected_build="$(manifest_value build)"
+expected_dirty="$(manifest_value gitDirty 2>/dev/null || printf 'false')"
 
 if [[ -z "$ARCHIVE_PATH" ]]; then
   ARCHIVE_PATH="$(dirname "$MANIFEST_PATH")/$archive_name"
@@ -55,6 +56,7 @@ fi
 [[ "$expected_sha256" =~ ^[0-9a-f]{64}$ ]] || fail "manifest sha256 is not valid"
 [[ "$expected_bytes" =~ ^[0-9]+$ ]] || fail "manifest byte count is not numeric"
 [[ "$expected_build" =~ ^[0-9]+$ ]] || fail "manifest build is not numeric"
+[[ "$expected_dirty" == "true" || "$expected_dirty" == "false" ]] || fail "manifest gitDirty is not boolean"
 [[ "$expected_version" =~ ^[0-9]+[.][0-9]+[.][0-9]+([-.][0-9A-Za-z.]+)?$ ]] || fail "manifest version is not semver-like"
 
 actual_sha256="$(shasum -a 256 "$ARCHIVE_PATH" | awk '{print $1}')"

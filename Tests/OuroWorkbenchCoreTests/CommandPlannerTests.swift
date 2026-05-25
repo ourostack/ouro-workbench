@@ -31,7 +31,7 @@ final class CommandPlannerTests: XCTestCase {
         XCTAssertEqual(plan.launchInvocation.arguments, [
             "-U",
             "-T", "xterm-256color",
-            "-h", "10000",
+            "-h", "0",
             "-e", "^]]",
             "-D",
             "-RR",

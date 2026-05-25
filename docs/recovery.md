@@ -41,7 +41,10 @@ from their saved command and transcript context, and anything unsafe or
 ambiguous is reported for manual/boss review.
 
 The app records terminal output to per-run transcript files under Application
-Support. Inactive sessions show the latest transcript tail in the detail pane,
+Support. Workbench intentionally keeps the `screen` scrollback at zero and uses
+transcripts for durable history; that keeps ordinary terminal repaint commands
+such as `clear` from re-exposing old scrollback after focus changes or window
+resizes. Inactive sessions show the latest transcript tail in the detail pane,
 and boss check-in prompts include transcript paths so durable output remains
 discoverable after restart.
 

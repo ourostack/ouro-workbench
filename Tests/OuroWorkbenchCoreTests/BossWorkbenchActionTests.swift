@@ -34,6 +34,52 @@ final class BossWorkbenchActionTests: XCTestCase {
         }
     }
 
+    func testEntryScopedActionsRequireEntryBeforeQueueing() {
+        let action = BossWorkbenchAction(action: .launch)
+
+        XCTAssertThrowsError(try action.validateForQueueing()) { error in
+            XCTAssertEqual(error as? BossWorkbenchActionValidationError, .missingEntry(.launch))
+        }
+    }
+
+    func testCreateTerminalRequiresNameAndCommandBeforeQueueing() {
+        let missingName = BossWorkbenchAction(action: .createTerminal, command: "codex --yolo")
+        let missingCommand = BossWorkbenchAction(action: .createTerminal, name: "Codex")
+
+        XCTAssertThrowsError(try missingName.validateForQueueing()) { error in
+            XCTAssertEqual(error as? BossWorkbenchActionValidationError, .missingName(.createTerminal))
+        }
+        XCTAssertThrowsError(try missingCommand.validateForQueueing()) { error in
+            XCTAssertEqual(error as? BossWorkbenchActionValidationError, .missingCommandForCreateTerminal)
+        }
+    }
+
+    func testParsesWorkspaceManagementActions() throws {
+        let reply = """
+        ```ouro-workbench-actions
+        [
+          { "action": "createTerminal", "group": "Harness", "name": "Release Codex", "command": "codex --yolo", "workingDirectory": "/repo", "trust": "trusted", "autoResume": true },
+          { "action": "moveSession", "entry": "Release Codex", "group": "Website" }
+        ]
+        ```
+        """
+
+        let actions = try BossWorkbenchActionParser().parse(reply)
+
+        XCTAssertEqual(actions, [
+            BossWorkbenchAction(
+                action: .createTerminal,
+                group: "Harness",
+                name: "Release Codex",
+                command: "codex --yolo",
+                workingDirectory: "/repo",
+                trust: .trusted,
+                autoResume: true
+            ),
+            BossWorkbenchAction(action: .moveSession, entry: "Release Codex", group: "Website"),
+        ])
+    }
+
     func testNonInputActionsDoNotRequireTextBeforeQueueing() throws {
         let action = BossWorkbenchAction(action: .launch, entry: "Claude Code")
 

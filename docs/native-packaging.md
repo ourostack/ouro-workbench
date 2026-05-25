@@ -26,6 +26,16 @@ Install the latest successful protected `main` artifact in one step:
 scripts/install-latest-app-artifact.sh --open
 ```
 
+Install the latest published GitHub Release in one step:
+
+```bash
+scripts/install-latest-release.sh --open
+```
+
+The release installer downloads the versioned zip and manifest assets from
+GitHub Releases, verifies the SHA-256 manifest with the same artifact verifier,
+then reuses the rollback-safe installer.
+
 Use `--install-dir /path/to/Applications` to choose another install location.
 The installer stages the new app inside the target directory, moves the previous
 bundle aside, promotes the staged bundle, verifies it, and restores the previous
@@ -37,6 +47,7 @@ The generated bundle is intentionally local and unsigned for now. It lives under
 - `Contents/MacOS/OuroWorkbench`
 - `Contents/MacOS/OuroWorkbenchMCP`
 - `Contents/MacOS/Tools/screen`, the terminal persistence backend
+- `Contents/Resources/OuroWorkbench.icns`, the native app icon
 - `SwiftTerm_SwiftTerm.bundle`, the embedded terminal resource bundle
 
 `VERSION` is the source of truth for `CFBundleShortVersionString` and the
@@ -74,11 +85,28 @@ scripts/preflight.sh
 
 The preflight also runs `scripts/smoke-install-rollback.sh`, which simulates an
 installed-bundle verification failure and proves the previous app is restored.
+It also checks the release-support helper scripts so published builds and local
+bug reports use the same verified paths.
+
+Create a local support diagnostics zip with:
+
+```bash
+scripts/collect-support-diagnostics.sh
+```
+
+The diagnostics bundle records system, repo, installed app, `screen`, login item,
+and workspace-state summaries. It does not copy terminal transcript contents or
+raw `workspace-state.json` unless `--include-state` is passed explicitly.
 
 The app prefers the bundled `screen` executable and falls back to `/usr/bin/screen`
 only during development runs where the app bundle tool is not present. The
 bundle keeps automatic and sudden termination disabled so macOS does not quietly
 tear down managed terminal-agent sessions.
+
+The main native window autosaves its frame through AppKit under the
+`OuroWorkbenchMainWindow` autosave name. Relaunch should preserve the operator's
+last window size and position while still enforcing the app's minimum usable
+terminal workspace size.
 
 The native app has an `Open at Login` control in the boss dashboard. It writes a
 machine-local LaunchAgent at
@@ -99,8 +127,11 @@ Current bundle identity:
 - Version source: `VERSION`
 - Minimum macOS version: `14.0`
 
-Before distributing beyond this machine, add signing, notarization, a real icon,
-and an external update channel.
+Public unsigned preview releases are published by `.github/workflows/release.yml`.
+The workflow checks out full git history, runs `scripts/preflight.sh`, generates
+release notes, and attaches the verified app zip plus manifest to a GitHub
+Release. Apple Developer ID signing and notarization remain the explicit
+post-preview distribution gap.
 
 CI has a separate `App bundle` job that checks out full git history, packages
 the release app, verifies the bundle contents, rejects local build-path linkage,
@@ -108,6 +139,6 @@ and uploads the unsigned app artifact for inspection. The uploaded artifact
 contains a versioned zip created with `ditto --keepParent`, so downloading and
 expanding it preserves the `Ouro Workbench.app` wrapper instead of flattening
 the bundle contents. The manifest records the bundle identifier, version, build
-number, git SHA, archive filename, byte size, and SHA-256 checksum.
+number, git SHA, dirty-worktree flag, archive filename, byte size, and SHA-256 checksum.
 `scripts/verify-app-artifact.sh` checks those fields against the zip and
 expanded app.

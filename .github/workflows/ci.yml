@@ -96,6 +96,15 @@ jobs:
       - name: Verify latest artifact installer help
         run: scripts/install-latest-app-artifact.sh --help
 
+      - name: Verify latest release installer help
+        run: scripts/install-latest-release.sh --help
+
+      - name: Verify support diagnostics help
+        run: scripts/collect-support-diagnostics.sh --help
+
+      - name: Verify release notes generator
+        run: scripts/generate-release-notes.sh >/dev/null
+
       - name: Package app bundle
         run: scripts/package-app.sh
 

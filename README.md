@@ -29,6 +29,9 @@ Read [docs/guide.md](docs/guide.md) for the operator mental model, first-run
 checklist, daily control loops, boss/Ouro integration, restart recovery
 playbook, trust model, and troubleshooting.
 
+Read [docs/product-tour.md](docs/product-tour.md) for the product/investor tour,
+release-state summary, and screenshot evidence workflow.
+
 ## Build
 
 ```bash
@@ -59,7 +62,8 @@ open "dist/Ouro Workbench.app"
 
 The bundle includes the native app, the packaged Workbench MCP server, and the
 terminal persistence backend under `Contents/MacOS/Tools/` so normal installed
-runs do not depend on Homebrew or a separate multiplexer install.
+runs do not depend on Homebrew or a separate multiplexer install. It also
+includes the Workbench app icon and SwiftTerm runtime resources.
 
 Install it on this Mac:
 
@@ -69,6 +73,16 @@ scripts/install-app.sh --open
 
 Use the native `Open at Login` switch in the app to reopen Workbench after a
 computer restart and trigger session recovery.
+
+Install the latest published unsigned preview release with:
+
+```bash
+scripts/install-latest-release.sh --open
+```
+
+The native boss dashboard also has a `Release Updates` row that checks the
+public GitHub Releases feed and opens the latest release page when a newer build
+exists.
 
 The installed bundle also includes an Ouro-facing MCP server:
 
@@ -100,7 +114,9 @@ Use `Boss Line` to ask the selected Ouro boss about the Workbench through the
 Ouro CLI. The quick asks cover "what is going on?", "is anything waiting on me?",
 "keep moving", and "respond for me"; boss replies can include auditable
 Workbench actions that the native app applies through the same trust gates as
-external MCP requests.
+external MCP requests. Those actions can operate terminals and organize the
+workspace: launch, recover, stop, send input, create groups, create terminals,
+move stopped sessions, change trust/restart posture, archive, and restore.
 
 Each session header also has an `Ask Boss` button for focused questions about
 that terminal. It gives the boss the selected process id and asks whether the

@@ -61,6 +61,13 @@ and user-facing docs.
   all groups, active terminal names, and each process's group/CLI identity.
 - TUI repaint readability: inactive transcript display now omits dense cursor
   repaint fragments instead of showing vertical character noise.
+- Release packaging gap: app bundles now include a deterministic native icon,
+  and bundle verification fails when the icon is missing.
+- Unsigned preview release path: GitHub Release workflow, release notes
+  generation, release installer, and native release-check row now exist.
+- Boss control gap: queued Workbench actions now cover workspace organization
+  as well as terminal I/O, including create group/terminal, move stopped
+  sessions, trust/restart posture changes, archive, and restore.
 
 ## Verified Surfaces
 
@@ -74,8 +81,8 @@ and user-facing docs.
   manual-recovery classification, and non-mutating recovery drill.
 - Boss control: status prompt, transcript tail/search, recovery drill, queued
   launch/recover/terminate/sendInput, trust/archive gates, and action log.
-- Packaging: release app bundle includes both `OuroWorkbench` and
-  `OuroWorkbenchMCP`.
+- Packaging: release app bundle includes `OuroWorkbench`, `OuroWorkbenchMCP`,
+  bundled `screen`, SwiftTerm resources, and the native app icon.
 
 ## Verification Commands
 
@@ -94,12 +101,12 @@ printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"w
 Expected smoke result:
 
 ```text
-135 tests pass; 5000 scenario rows render through 25,000 native verifier passes
+145 tests pass; 5000 scenario rows render through 25,000 native verifier passes
 with zero failures and coverage digest `567dc7ec0c45835b`; deep sweep renders
 20,000 rows through 100,000 verifier passes with zero failures and coverage
 digest `0fd57795f807596d`; installed app shows group-scoped Local Shell + used
 terminals only; packaged MCP returns tool definitions and group-aware status;
 dashboard text is not clipped; focus mode terminal text stays below the macOS
 traffic lights; clear repaints the visible terminal to AFTER_CLEAR plus a fresh
-prompt.
+prompt and old output does not return after leaving focus mode.
 ```

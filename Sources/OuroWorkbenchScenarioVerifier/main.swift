@@ -832,7 +832,7 @@ struct NativeScenarioRenderer {
         if scenario.row.executableHealth == "missing" || scenario.row.bossBridge != "registered" {
             drawDashboardLine("Mailbox warnings: \(scenario.row.bossBridge); executable \(scenario.row.executableHealth)", advance: 28)
         }
-        drawDashboardLine("Transcript Search      Native Runtime      Recovery Drill      Workbench MCP", advance: 28)
+        drawDashboardLine("Transcript Search      Native Runtime      Release Updates      Recovery Drill      Workbench MCP", advance: 28)
         drawDashboardLine("Action Log 12 recent   latest action is auditable")
     }
 

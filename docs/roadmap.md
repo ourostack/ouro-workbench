@@ -39,7 +39,9 @@ agent-aware terminal workbench rather than a launcher with terminal panes.
 
 ## History And Search
 
-- Keep bounded live scrollback in the terminal pane.
+- Keep the live terminal pane faithful to terminal control sequences such as
+  `clear`; durable history belongs in transcripts, not backing `screen`
+  scrollback.
 - Persist transcript files per run.
 - Show transcript tails for inactive/recovered sessions.
 - Add transcript search by session and workspace. Initial workspace-wide search
@@ -66,8 +68,7 @@ agent-aware terminal workbench rather than a launcher with terminal panes.
   Initial native install/update status exists for `agent.json` registration.
 - Let the boss inspect status, transcript tails, and queued actions from its own
   tool surface. Initial MCP tools exist for status, transcript tails,
-  transcript search, recovery drill, and queued launch/recover/terminate/send-input
-  actions.
+  transcript search, recovery drill, and queued control/organization actions.
 - Keep native check-ins for human-facing status.
 - Keep action execution trust-gated and auditable.
 - Add an action log view with source, requested action, result, and timestamp.
@@ -125,16 +126,23 @@ agent-aware terminal workbench rather than a launcher with terminal panes.
 - Add explicit "untrusted" visual state and blocked action explanations.
   Initial trust chips and skipped action log entries exist.
 - Add a way to downgrade a session to untrusted.
+  Initial edit-session and boss action support exists.
 - Keep transcript reads bounded by default and capped for external tools.
 - Never claim a process survived reboot; preserve recovery truth.
 
 ## Native Release
 
 - Add app icon and bundle assets.
+  Initial deterministic icon generation and bundle verification exists.
 - Add signing and notarization.
 - Add versioned release artifacts.
+  Initial verified zip/manifest artifacts and GitHub Release workflow exist.
 - Add update/install story.
+  Initial protected-artifact installer, release installer, and in-app release
+  checker exist.
 - Add basic UI automation or screenshot checks for the native app.
+  Initial native scenario renderer covers 25,000 PR passes and 100,000 scheduled
+  deep passes.
 - Keep branch protection and CI green on `main`.
 
 ## Current Thin Slice

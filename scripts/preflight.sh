@@ -35,6 +35,9 @@ run_step "Verify release version contract"
 scripts/verify-version-contract.sh
 scripts/smoke-package-shallow-guard.sh
 scripts/install-latest-app-artifact.sh --help >/dev/null
+scripts/install-latest-release.sh --help >/dev/null
+scripts/collect-support-diagnostics.sh --help >/dev/null
+scripts/generate-release-notes.sh >/dev/null
 
 run_step "Verify generated scenario matrix"
 scripts/generate-workbench-5000-matrix.rb
@@ -57,6 +60,7 @@ run_step "Package and verify native app bundle"
 scripts/smoke-verify-app-timeout.sh
 scripts/package-app.sh
 scripts/verify-app-bundle.sh
+scripts/smoke-mcp-action-validation.sh
 
 run_step "Archive native app artifact"
 scripts/archive-app-artifact.sh
