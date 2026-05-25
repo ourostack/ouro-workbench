@@ -97,6 +97,9 @@ jobs:
       - name: Archive app bundle
         run: scripts/archive-app-artifact.sh
 
+      - name: Verify app artifact
+        run: scripts/smoke-app-artifact-verifier.sh
+
       - name: Upload app bundle
         uses: actions/upload-artifact@v7
         with:

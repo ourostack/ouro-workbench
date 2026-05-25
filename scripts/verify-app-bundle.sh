@@ -3,7 +3,38 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VERSION_FILE="$ROOT_DIR/VERSION"
-APP_DIR="${1:-"$ROOT_DIR/dist/Ouro Workbench.app"}"
+APP_DIR="$ROOT_DIR/dist/Ouro Workbench.app"
+EXPECTED_VERSION=""
+
+usage() {
+  printf 'Usage: %s [APP_PATH] [--expected-version VERSION]\n' "$(basename "$0")" >&2
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --expected-version)
+      if [[ $# -lt 2 || -z "$2" ]]; then
+        usage
+        exit 64
+      fi
+      EXPECTED_VERSION="$2"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    -*)
+      usage
+      exit 64
+      ;;
+    *)
+      APP_DIR="$1"
+      shift
+      ;;
+  esac
+done
+
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 INFO_PLIST="$CONTENTS_DIR/Info.plist"
@@ -33,7 +64,7 @@ plutil -lint "$INFO_PLIST" >/dev/null
 [[ "$(plist_value CFBundleIdentifier)" == "com.ourostack.workbench" ]] || fail "unexpected bundle identifier"
 [[ "$(plist_value CFBundleExecutable)" == "OuroWorkbench" ]] || fail "unexpected bundle executable"
 [[ "$(plist_value CFBundlePackageType)" == "APPL" ]] || fail "unexpected bundle package type"
-expected_version="$(tr -d '[:space:]' < "$VERSION_FILE")"
+expected_version="${EXPECTED_VERSION:-$(tr -d '[:space:]' < "$VERSION_FILE")}"
 [[ "$(plist_value CFBundleShortVersionString)" == "$expected_version" ]] || fail "unexpected bundle version"
 [[ "$(plist_value CFBundleVersion)" =~ ^[0-9]+$ ]] || fail "bundle build number is not numeric"
 [[ "$(plist_value LSMinimumSystemVersion)" == "14.0" ]] || fail "unexpected minimum macOS version"

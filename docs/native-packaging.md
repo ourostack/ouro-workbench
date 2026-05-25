@@ -43,6 +43,12 @@ Create a versioned zip plus manifest with SHA-256 and bundle metadata:
 scripts/archive-app-artifact.sh
 ```
 
+Verify a downloaded zip against its manifest, then expand and verify the app:
+
+```bash
+scripts/verify-app-artifact.sh artifacts/OuroWorkbench-0.1.0-build.<build>-<sha>.manifest.json
+```
+
 Run the full local protected-gate preflight with:
 
 ```bash
@@ -85,4 +91,5 @@ artifact for inspection. The uploaded artifact contains a versioned zip created
 with `ditto --keepParent`, so downloading and expanding it preserves the
 `Ouro Workbench.app` wrapper instead of flattening the bundle contents. The
 manifest records the bundle identifier, version, build number, git SHA, archive
-filename, byte size, and SHA-256 checksum.
+filename, byte size, and SHA-256 checksum. `scripts/verify-app-artifact.sh`
+checks those fields against the zip and expanded app.
