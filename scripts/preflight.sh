@@ -31,6 +31,9 @@ run_step() {
 
 cd "$ROOT_DIR"
 
+run_step "Verify release version contract"
+scripts/verify-version-contract.sh
+
 run_step "Verify generated scenario matrix"
 scripts/generate-workbench-5000-matrix.rb
 git diff --exit-code -- docs/workbench-5000-scenario-matrix.tsv docs/workbench-5000-scenario-matrix.md

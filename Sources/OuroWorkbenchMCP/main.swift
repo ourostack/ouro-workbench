@@ -56,7 +56,10 @@ final class WorkbenchMCPServer {
                 return success(id: id, result: [
                     "protocolVersion": "2024-11-05",
                     "capabilities": ["tools": [:]],
-                    "serverInfo": ["name": "ouro-workbench", "version": "0.1.0"]
+                    "serverInfo": [
+                        "name": WorkbenchRelease.mcpServerName,
+                        "version": WorkbenchRelease.version
+                    ]
                 ])
             case "tools/list":
                 return success(id: id, result: ["tools": toolDefinitions()])
