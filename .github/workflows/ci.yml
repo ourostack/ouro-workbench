@@ -44,4 +44,12 @@ jobs:
         run: swift package resolve
 
       - name: Render 25,000 native scenario surfaces
-        run: swift run OuroWorkbenchScenarioVerifier --out .build/workbench-scenario-verifier --no-samples
+        run: swift run OuroWorkbenchScenarioVerifier --out artifacts/workbench-scenario-verifier --no-samples
+
+      - name: Upload native scenario verifier summary
+        uses: actions/upload-artifact@v7
+        with:
+          name: workbench-scenario-verifier-${{ github.sha }}
+          path: artifacts/workbench-scenario-verifier
+          if-no-files-found: error
+          retention-days: 14
