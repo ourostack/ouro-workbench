@@ -35,7 +35,8 @@ The generated bundle is intentionally local and unsigned for now. It lives under
 
 `VERSION` is the source of truth for `CFBundleShortVersionString` and the
 Workbench MCP `serverInfo.version`. `scripts/package-app.sh` derives the bundle
-build number from the git commit count, and `scripts/verify-version-contract.sh`
+build number from the git commit count, refuses shallow git checkouts that would
+produce misleading build numbers, and `scripts/verify-version-contract.sh`
 guards the source version against drift.
 
 Verify a packaged bundle with:
@@ -95,11 +96,12 @@ Current bundle identity:
 Before distributing beyond this machine, add signing, notarization, a real icon,
 and an external update channel.
 
-CI has a separate `App bundle` job that packages the release app, verifies the
-bundle contents, rejects local build-path linkage, and uploads the unsigned app
-artifact for inspection. The uploaded artifact contains a versioned zip created
-with `ditto --keepParent`, so downloading and expanding it preserves the
-`Ouro Workbench.app` wrapper instead of flattening the bundle contents. The
-manifest records the bundle identifier, version, build number, git SHA, archive
-filename, byte size, and SHA-256 checksum. `scripts/verify-app-artifact.sh`
-checks those fields against the zip and expanded app.
+CI has a separate `App bundle` job that checks out full git history, packages
+the release app, verifies the bundle contents, rejects local build-path linkage,
+and uploads the unsigned app artifact for inspection. The uploaded artifact
+contains a versioned zip created with `ditto --keepParent`, so downloading and
+expanding it preserves the `Ouro Workbench.app` wrapper instead of flattening
+the bundle contents. The manifest records the bundle identifier, version, build
+number, git SHA, archive filename, byte size, and SHA-256 checksum.
+`scripts/verify-app-artifact.sh` checks those fields against the zip and
+expanded app.

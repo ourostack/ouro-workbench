@@ -22,9 +22,20 @@ if [[ ! "$VERSION" =~ ^[0-9]+[.][0-9]+[.][0-9]+([-.][0-9A-Za-z.]+)?$ ]]; then
   printf 'Invalid app version in %s: %s\n' "$VERSION_FILE" "$VERSION" >&2
   exit 1
 fi
-BUILD_NUMBER="$(git rev-list --count HEAD 2>/dev/null || true)"
-if [[ -z "$BUILD_NUMBER" || ! "$BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
-  BUILD_NUMBER="1"
+BUILD_NUMBER="1"
+if git -C "$ROOT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  IS_SHALLOW="$(git -C "$ROOT_DIR" rev-parse --is-shallow-repository 2>/dev/null || printf 'false')"
+  if [[ "$IS_SHALLOW" == "true" ]]; then
+    printf 'Cannot derive bundle build number from a shallow git checkout.\n' >&2
+    printf 'Fetch full history before packaging the app bundle.\n' >&2
+    exit 1
+  fi
+
+  BUILD_NUMBER="$(git -C "$ROOT_DIR" rev-list --count HEAD 2>/dev/null || true)"
+  if [[ -z "$BUILD_NUMBER" || ! "$BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
+    printf 'Unable to derive numeric bundle build number from git history.\n' >&2
+    exit 1
+  fi
 fi
 
 swift build -c release --product "$PRODUCT_NAME"
