@@ -773,7 +773,6 @@ struct CommandPaletteSheet: View {
 
 struct BossDashboardView: View {
     @ObservedObject var model: WorkbenchViewModel
-    private let metricColumns = [GridItem(.adaptive(minimum: 86), spacing: 12, alignment: .leading)]
     private let dashboardColumns = [GridItem(.adaptive(minimum: 260), spacing: 18, alignment: .top)]
 
     var body: some View {
@@ -784,25 +783,20 @@ struct BossDashboardView: View {
                         .controlSize(.small)
                 }
                 BossWatchStatusView(model: model)
+                if let dashboard = model.bossDashboard {
+                    DashboardMetricsStrip(dashboard: dashboard)
+                }
                 BossConversationView(model: model)
+                if let dashboard = model.bossDashboard,
+                   !dashboard.availability.issues.isEmpty {
+                    MailboxWarningView(issues: dashboard.availability.issues)
+                }
                 OuroAgentManagerView(model: model)
                 TranscriptSearchView(model: model)
                 MachineRuntimeView()
                 RecoveryDrillView(model: model)
                 BossWorkbenchMCPSetupView(model: model)
                 if let dashboard = model.bossDashboard {
-                    if !dashboard.availability.issues.isEmpty {
-                        Text("Mailbox warnings: \(dashboard.availability.issues.joined(separator: "; "))")
-                            .font(.caption)
-                            .foregroundStyle(.orange)
-                    }
-                    LazyVGrid(columns: metricColumns, alignment: .leading, spacing: 8) {
-                        MetricView(label: "daemon", value: dashboard.daemonStatus)
-                        MetricView(label: "needs me", value: dashboard.availability.needsMeAvailable ? "\(dashboard.needsMeItems.count)" : "?")
-                        MetricView(label: "coding", value: dashboard.availability.codingAvailable ? "\(dashboard.activeCodingAgents)" : "?")
-                        MetricView(label: "blocked", value: dashboard.availability.codingAvailable ? "\(dashboard.blockedCodingAgents)" : "?")
-                        MetricView(label: "mode", value: dashboard.daemonMode)
-                    }
                     if !dashboard.needsMeItems.isEmpty || !dashboard.codingItems.isEmpty {
                         LazyVGrid(columns: dashboardColumns, alignment: .leading, spacing: 10) {
                             VStack(alignment: .leading, spacing: 5) {
@@ -867,9 +861,64 @@ struct BossDashboardView: View {
                 ActionLogView(entries: model.recentActionLogEntries)
             }
             .padding()
+            .padding(.bottom, 10)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(minHeight: 190, idealHeight: 280, maxHeight: 320, alignment: .topLeading)
+        .frame(minHeight: 190, idealHeight: 340, maxHeight: 390, alignment: .topLeading)
+    }
+}
+
+struct DashboardMetricsStrip: View {
+    var dashboard: BossDashboardSnapshot
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                MetricChip(label: "daemon", value: dashboard.daemonStatus)
+                MetricChip(label: "needs me", value: dashboard.availability.needsMeAvailable ? "\(dashboard.needsMeItems.count)" : "?")
+                MetricChip(label: "coding", value: dashboard.availability.codingAvailable ? "\(dashboard.activeCodingAgents)" : "?")
+                MetricChip(label: "blocked", value: dashboard.availability.codingAvailable ? "\(dashboard.blockedCodingAgents)" : "?")
+                MetricChip(label: "mode", value: dashboard.daemonMode)
+            }
+        }
+    }
+}
+
+struct MetricChip: View {
+    var label: String
+    var value: String
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Text(value)
+                .font(.caption.weight(.semibold).monospacedDigit())
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.vertical, 3)
+        .padding(.horizontal, 8)
+        .background(.quaternary.opacity(0.55), in: RoundedRectangle(cornerRadius: 6))
+    }
+}
+
+struct MailboxWarningView: View {
+    var issues: [String]
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+            Text("Mailbox warnings: \(issues.joined(separator: "; "))")
+                .font(.caption)
+                .foregroundStyle(.orange)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+        }
+        .padding(.vertical, 5)
+        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 6))
     }
 }
 
@@ -1227,37 +1276,79 @@ struct OuroAgentInstallSheet: View {
 
 struct ActionLogView: View {
     var entries: [WorkbenchActionLogEntry]
+    @State private var isExpanded = false
+
+    private var displayedEntries: ArraySlice<WorkbenchActionLogEntry> {
+        entries.prefix(isExpanded ? 6 : 1)
+    }
 
     var body: some View {
         if !entries.isEmpty {
-            VStack(alignment: .leading, spacing: 5) {
-                Text("Action Log")
-                    .font(.caption.weight(.semibold))
-                ForEach(entries.prefix(6)) { entry in
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Image(systemName: entry.succeeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                            .foregroundStyle(entry.succeeded ? .green : .orange)
-                        Text(entry.occurredAt.formatted(date: .omitted, time: .standard))
+            if !isExpanded, let entry = entries.first {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("Action Log")
+                        .font(.caption.weight(.semibold))
+                    Text("\(entries.count) recent")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    actionLogEntryContent(entry)
+                    Spacer(minLength: 8)
+                    actionLogToggleButton
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 8) {
+                        Text("Action Log")
+                            .font(.caption.weight(.semibold))
+                        Text("\(entries.count) recent")
                             .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)
-                        Text("\(entry.source) \(entry.action)")
-                            .font(.caption.weight(.semibold))
-                        if let targetName = entry.targetName {
-                            Text(targetName)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                        }
-                        Text(entry.result)
-                            .font(.caption)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
+                        Spacer()
+                        actionLogToggleButton
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    ForEach(displayedEntries) { entry in
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            actionLogEntryContent(entry)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
                 }
             }
         }
+    }
+
+    private var actionLogToggleButton: some View {
+        Button {
+            isExpanded.toggle()
+        } label: {
+            Label(isExpanded ? "Show Less" : "Show More", systemImage: isExpanded ? "chevron.up" : "chevron.down")
+        }
+        .labelStyle(.iconOnly)
+        .buttonStyle(.borderless)
+        .help(isExpanded ? "Show fewer action log entries" : "Show more action log entries")
+    }
+
+    @ViewBuilder
+    private func actionLogEntryContent(_ entry: WorkbenchActionLogEntry) -> some View {
+        Image(systemName: entry.succeeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+            .foregroundStyle(entry.succeeded ? .green : .orange)
+        Text(entry.occurredAt.formatted(date: .omitted, time: .standard))
+            .font(.caption.monospacedDigit())
+            .foregroundStyle(.secondary)
+        Text("\(entry.source) \(entry.action)")
+            .font(.caption.weight(.semibold))
+        if let targetName = entry.targetName {
+            Text(targetName)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+        Text(entry.result)
+            .font(.caption)
+            .lineLimit(1)
+            .truncationMode(.tail)
     }
 }
 
@@ -1381,22 +1472,6 @@ struct BossWorkbenchMCPSetupView: View {
         .task {
             model.refreshWorkbenchMCPRegistration()
         }
-    }
-}
-
-struct MetricView: View {
-    var label: String
-    var value: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(value)
-                .font(.headline.monospacedDigit())
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .frame(minWidth: 58, alignment: .leading)
     }
 }
 
@@ -1702,13 +1777,16 @@ struct TerminalFocusView: View {
     var entry: ProcessEntry
     var session: TerminalSessionController
     @ObservedObject var model: WorkbenchViewModel
+    private let chrome = WorkbenchSurfaceChrome.contract(for: .terminalFocus)
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
+            Color.black
+                .ignoresSafeArea()
             TerminalPane(session: session)
                 .id(session.id)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .ignoresSafeArea()
+                .padding(.top, CGFloat(chrome.terminalContentTopInset))
             HStack(spacing: 8) {
                 Text(entry.name)
                     .font(.caption.weight(.semibold))
@@ -1741,7 +1819,8 @@ struct TerminalFocusView: View {
             .controlSize(.small)
             .padding(10)
             .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
-            .padding()
+            .padding(.top, CGFloat(chrome.floatingControlsTopInset))
+            .padding(.trailing, 16)
         }
         .background(Color.black)
     }
