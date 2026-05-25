@@ -100,6 +100,9 @@ jobs:
       - name: Verify app artifact
         run: scripts/smoke-app-artifact-verifier.sh
 
+      - name: Smoke install from artifact
+        run: scripts/smoke-install-from-artifact.sh
+
       - name: Upload app bundle
         uses: actions/upload-artifact@v7
         with:
