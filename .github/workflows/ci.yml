@@ -44,7 +44,15 @@ jobs:
         run: swift package resolve
 
       - name: Render 25,000 native scenario surfaces
-        run: swift run OuroWorkbenchScenarioVerifier --out artifacts/workbench-scenario-verifier --no-samples
+        run: >
+          swift run OuroWorkbenchScenarioVerifier
+          --out artifacts/workbench-scenario-verifier
+          --no-samples
+          --expect-rows 5000
+          --expect-matrix-rows 5000
+          --expect-deep-rows 0
+          --expect-render-passes 25000
+          --expect-coverage-digest 567dc7ec0c45835b
 
       - name: Upload native scenario verifier summary
         uses: actions/upload-artifact@v7

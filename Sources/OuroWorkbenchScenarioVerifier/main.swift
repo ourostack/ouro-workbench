@@ -36,10 +36,24 @@ struct OuroWorkbenchScenarioVerifierCommand {
         try summary.write(to: outputDirectory.appendingPathComponent("summary.json"))
 
         print(summary.consoleSummary)
+        let contractFailures = summary.contractFailures(
+            expectedRows: options.expectedRows,
+            expectedMatrixRows: options.expectedMatrixRows,
+            expectedDeepRows: options.expectedDeepRows,
+            expectedRenderPasses: options.expectedRenderPasses,
+            expectedCoverageDigest: options.expectedCoverageDigest
+        )
+        if !contractFailures.isEmpty {
+            for failure in contractFailures {
+                print("contract failure: \(failure)")
+            }
+        }
         if !summary.failures.isEmpty {
             for failure in summary.failures.prefix(25) {
                 print("failure: \(failure.caseID) [\(failure.viewport)] \(failure.message)")
             }
+        }
+        if !contractFailures.isEmpty || !summary.failures.isEmpty {
             Darwin.exit(1)
         }
     }
@@ -53,6 +67,11 @@ struct ScenarioVerifierOptions {
     var maxRows: Int?
     var deepScenarioCount = 0
     var deepSeed: UInt64 = 0x0F00_DF00_D202_60525
+    var expectedRows: Int?
+    var expectedMatrixRows: Int?
+    var expectedDeepRows: Int?
+    var expectedRenderPasses: Int?
+    var expectedCoverageDigest: String?
 
     init(arguments: [String]) throws {
         var index = 0
@@ -79,6 +98,21 @@ struct ScenarioVerifierOptions {
             case "--seed":
                 index += 1
                 deepSeed = try Self.unsignedInt(after: argument, in: arguments, at: index)
+            case "--expect-rows":
+                index += 1
+                expectedRows = try Self.nonNegativeInt(after: argument, in: arguments, at: index)
+            case "--expect-matrix-rows":
+                index += 1
+                expectedMatrixRows = try Self.nonNegativeInt(after: argument, in: arguments, at: index)
+            case "--expect-deep-rows":
+                index += 1
+                expectedDeepRows = try Self.nonNegativeInt(after: argument, in: arguments, at: index)
+            case "--expect-render-passes":
+                index += 1
+                expectedRenderPasses = try Self.nonNegativeInt(after: argument, in: arguments, at: index)
+            case "--expect-coverage-digest":
+                index += 1
+                expectedCoverageDigest = try Self.coverageDigest(after: argument, in: arguments, at: index)
             case "--help", "-h":
                 Self.printHelp()
                 Darwin.exit(0)
@@ -88,6 +122,8 @@ struct ScenarioVerifierOptions {
             index += 1
         }
     }
+
+    private static let coverageDigestCharacters = Set("0123456789abcdefABCDEF")
 
     private static func value(after argument: String, in arguments: [String], at index: Int) throws -> String {
         guard index < arguments.count else {
@@ -112,6 +148,15 @@ struct ScenarioVerifierOptions {
         return value
     }
 
+    private static func coverageDigest(after argument: String, in arguments: [String], at index: Int) throws -> String {
+        let rawValue = try value(after: argument, in: arguments, at: index)
+        guard rawValue.count == 16,
+              rawValue.allSatisfy({ coverageDigestCharacters.contains($0) }) else {
+            throw ScenarioVerifierError.invalidValue(argument: argument, value: rawValue)
+        }
+        return rawValue.lowercased()
+    }
+
     private static func printHelp() {
         print("""
         Usage: swift run OuroWorkbenchScenarioVerifier [options]
@@ -124,6 +169,14 @@ struct ScenarioVerifierOptions {
           --max-rows N         Limit rows for local debugging.
           --deep-scenarios N   Add N deterministic generated scenarios after the matrix.
           --seed N             Seed for generated deep scenarios.
+          --expect-rows N      Fail unless the run verifies exactly N rows.
+          --expect-matrix-rows N
+                               Fail unless the run verifies exactly N matrix rows.
+          --expect-deep-rows N Fail unless the run verifies exactly N deep rows.
+          --expect-render-passes N
+                               Fail unless the run performs exactly N render passes.
+          --expect-coverage-digest HEX
+                               Fail unless the coverage digest matches the 16-character hex value.
         """)
     }
 }
@@ -1074,6 +1127,29 @@ struct ScenarioVerifierSummary: Codable {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try encoder.encode(self).write(to: url)
+    }
+
+    func contractFailures(
+        expectedRows: Int?,
+        expectedMatrixRows: Int?,
+        expectedDeepRows: Int?,
+        expectedRenderPasses: Int?,
+        expectedCoverageDigest: String?
+    ) -> [String] {
+        [
+            mismatch(label: "rows verified", actual: rowsVerified, expected: expectedRows),
+            mismatch(label: "matrix rows", actual: matrixRowsVerified, expected: expectedMatrixRows),
+            mismatch(label: "deep rows", actual: deepRowsVerified, expected: expectedDeepRows),
+            mismatch(label: "render passes", actual: renderPasses, expected: expectedRenderPasses),
+            mismatch(label: "coverage digest", actual: coverage.digest, expected: expectedCoverageDigest)
+        ].compactMap { $0 }
+    }
+
+    private func mismatch<T: Equatable>(label: String, actual: T, expected: T?) -> String? {
+        guard let expected, actual != expected else {
+            return nil
+        }
+        return "\(label) expected \(expected), got \(actual)"
     }
 }
 

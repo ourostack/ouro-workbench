@@ -65,6 +65,19 @@ Deep deterministic sweep:
 swift run OuroWorkbenchScenarioVerifier --out .build/workbench-scenario-verifier-deep --no-samples --deep-scenarios 15000 --seed 20260525
 ```
 
+Strict contract check for the required CI baseline:
+
+```bash
+swift run OuroWorkbenchScenarioVerifier \
+  --out .build/workbench-scenario-verifier \
+  --no-samples \
+  --expect-rows 5000 \
+  --expect-matrix-rows 5000 \
+  --expect-deep-rows 0 \
+  --expect-render-passes 25000 \
+  --expect-coverage-digest 567dc7ec0c45835b
+```
+
 The verifier writes `summary.json` to the output directory. When samples are
 enabled, representative native PNGs are rasterized and written under `samples/`.
 The summary includes a stable coverage digest plus distributions for terminal
@@ -102,7 +115,9 @@ failures: 0
 The required pull-request target is the full 5000-row matrix across the five
 viewport profiles above: 25,000 native layout/invariant passes. This is the
 realistic always-on goal: high enough to exercise the surfaces that have broken
-in real use, but still small enough for every PR.
+in real use, but still small enough for every PR. The CI job also enforces the
+expected row counts, render-pass count, and coverage digest, so scenario drift
+requires an intentional baseline update.
 
 The verifier runs as its own GitHub Actions job named `Native scenario verifier`
 so branch protection can require it separately from `Swift tests`.
