@@ -39,6 +39,21 @@ final class TranscriptTailReaderTests: XCTestCase {
         try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
     }
 
+    func testReadsTailOmittingTerminalRepaintFragments() throws {
+        let repaint = (0..<15)
+            .map { "\u{001B}[2G\(Character(UnicodeScalar(97 + $0)!))\r\r\n" }
+            .joined()
+        let url = try transcript(contents: "stable line\n\(repaint)Resume this session with:\nclaude --resume abc\n")
+
+        let tail = try XCTUnwrap(TranscriptTailReader(maxBytes: 2_000).read(path: url.path))
+
+        XCTAssertTrue(tail.text.contains("stable line"))
+        XCTAssertTrue(tail.text.contains("[terminal screen repaint omitted]"))
+        XCTAssertTrue(tail.text.contains("Resume this session with:\nclaude --resume abc\n"))
+        XCTAssertFalse(tail.text.contains("a\n\nb\n\nc"))
+        try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
+    }
+
     func testTranscriptTailLimitClampsCallerProvidedValues() {
         XCTAssertEqual(TranscriptTailLimit.clamped(nil), 12_000)
         XCTAssertEqual(TranscriptTailLimit.clamped(40_000), 40_000)

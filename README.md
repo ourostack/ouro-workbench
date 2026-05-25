@@ -8,13 +8,17 @@ workspace state, restart recovery, and a selectable Ouro boss agent that can
 answer what is going on, what is waiting on the human, and what should keep
 moving.
 
-## P0 Shape
+## Product Shape
 
 - Native macOS app first.
-- Claude Code, GitHub Copilot CLI, and OpenAI Codex are named lanes.
+- Workbench is a cmux-style terminal workbench: named groups in the sidebar,
+  with any number of terminal tabs inside each group.
+- Claude Code, GitHub Copilot CLI, and OpenAI Codex are detected from the
+  terminal command instead of living in separate hard-coded tabs.
 - Arbitrary terminal/TUI agents are first-class citizens.
 - `slugger` is the default boss agent on this machine.
-- Boss agents can inspect and control trusted workspace processes.
+- Boss agents can inspect the group/tab organization and control trusted
+  workspace processes.
 - Sessions restore after app or computer restart wherever technically possible.
 
 ## Guide
@@ -36,9 +40,11 @@ Run the native prototype:
 swift run OuroWorkbench
 ```
 
-Use `New Session` in the Sessions sidebar to add arbitrary terminal/TUI agents
-or local commands alongside the default shell and named P0 lanes. Custom
-sessions can be edited, duplicated, archived, restored, or deleted from the
+Use `New Group` to create a project/workspace scope, then `New Terminal` to add
+Claude Code, GitHub Copilot CLI, OpenAI Codex, local shells, or any other
+terminal/TUI agent inside that group. Workbench detects known CLI identities
+from the command and adjusts recovery, health, and boss prompts accordingly.
+Terminal tabs can be edited, duplicated, archived, restored, or deleted from the
 native session toolbar; archived sessions remain visible but cannot be launched,
 recovered, or controlled by the boss agent until restored.
 
@@ -68,10 +74,10 @@ Use the native `Workbench MCP` row in the boss dashboard to register that server
 with the selected Ouro boss agent.
 
 The `TTFA` badge in the header is an autonomy readiness surface. It checks the
-selected boss, Workbench MCP registration, trusted P0 lanes, restart posture,
-executable availability, recovery state, Boss Watch, and Open at Login. Click it
-to see blockers and apply obvious fixes such as registering the MCP bridge,
-starting Boss Watch, or enabling launch-at-login.
+selected boss, Workbench MCP registration, detected trusted agent terminals,
+restart posture, executable availability, recovery state, Boss Watch, and Open
+at Login. Click it to see blockers and apply obvious fixes such as registering
+the MCP bridge, starting Boss Watch, or enabling launch-at-login.
 
 The boss dashboard also includes `Watch` mode. When enabled, Workbench keeps a
 rolling baseline of workspace state, summarizes changes such as run transitions,
@@ -111,4 +117,5 @@ See [docs/architecture.md](docs/architecture.md) and
 [docs/recovery.md](docs/recovery.md). Native packaging notes are in
 [docs/native-packaging.md](docs/native-packaging.md). The current Ouro bridge
 contract is in [docs/ouro-bridge.md](docs/ouro-bridge.md). Surface audit notes
-are in [docs/surface-audit.md](docs/surface-audit.md).
+are in [docs/surface-audit.md](docs/surface-audit.md). The 500+ case audit
+matrix is in [docs/cmux-workbench-test-matrix.md](docs/cmux-workbench-test-matrix.md).

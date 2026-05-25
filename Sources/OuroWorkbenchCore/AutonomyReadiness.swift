@@ -77,7 +77,7 @@ public struct AutonomyReadinessSnapshot: Codable, Equatable, Sendable {
     private static func detail(for state: AutonomyReadinessState) -> String {
         switch state {
         case .ready:
-            return "The selected Ouro boss can inspect and control the Workbench, P0 lanes are trusted, and restart recovery has no manual gaps."
+            return "The selected Ouro boss can inspect and control the Workbench, detected agent terminals are trusted, and restart recovery has no manual gaps."
         case .attention:
             return "Workbench can run, but one or more checks should be tightened before fully hands-off operation."
         case .blocked:
@@ -87,8 +87,6 @@ public struct AutonomyReadinessSnapshot: Codable, Equatable, Sendable {
 }
 
 public struct AutonomyReadinessBuilder: Sendable {
-    private static let p0AgentKinds: Set<TerminalAgentKind> = [.claudeCode, .githubCopilotCLI, .openAICodex]
-
     public init() {}
 
     public func build(
@@ -101,8 +99,8 @@ public struct AutonomyReadinessBuilder: Sendable {
         AutonomyReadinessSnapshot(checks: [
             bossCheck(for: state.boss),
             mcpCheck(mcpRegistration),
-            p0TrustCheck(for: state),
-            p0ResumeCheck(for: state),
+            terminalTrustCheck(for: state),
+            terminalResumeCheck(for: state),
             executableCheck(for: state, executableHealth: executableHealth),
             recoveryCheck(summary),
             bossWatchCheck(isEnabled: bossWatchIsEnabled)
@@ -182,40 +180,48 @@ public struct AutonomyReadinessBuilder: Sendable {
         }
     }
 
-    private func p0TrustCheck(for state: WorkspaceState) -> AutonomyReadinessCheck {
-        let p0Entries = activeP0Entries(in: state)
-        let missing = missingP0Kinds(in: p0Entries)
-        if !missing.isEmpty {
+    private func terminalTrustCheck(for state: WorkspaceState) -> AutonomyReadinessCheck {
+        let agentEntries = activeAgentEntries(in: state)
+        if agentEntries.isEmpty {
             return AutonomyReadinessCheck(
-                id: "p0-trust",
-                label: "P0 lanes",
-                detail: "Missing \(displayNames(for: missing)).",
-                state: .blocker
+                id: "terminal-trust",
+                label: "Agent terminals",
+                detail: "No Claude, Codex, or Copilot terminals are open yet.",
+                state: .warning
             )
         }
 
-        let untrusted = p0Entries.filter { $0.trust != .trusted }
+        let untrusted = agentEntries.filter { $0.trust != .trusted }
         if !untrusted.isEmpty {
             return AutonomyReadinessCheck(
-                id: "p0-trust",
-                label: "P0 lanes",
+                id: "terminal-trust",
+                label: "Agent terminals",
                 detail: "\(entryNames(untrusted)) \(untrusted.count == 1 ? "is" : "are") not trusted.",
                 state: .blocker
             )
         }
 
         return AutonomyReadinessCheck(
-            id: "p0-trust",
-            label: "P0 lanes",
-            detail: "\(entryNames(p0Entries)) are trusted.",
+            id: "terminal-trust",
+            label: "Agent terminals",
+            detail: "\(entryNames(agentEntries)) are trusted.",
             state: .ok
         )
     }
 
-    private func p0ResumeCheck(for state: WorkspaceState) -> AutonomyReadinessCheck {
-        let p0Entries = activeP0Entries(in: state)
-        let manualResume = p0Entries.filter { entry in
-            guard let agentKind = entry.agentKind,
+    private func terminalResumeCheck(for state: WorkspaceState) -> AutonomyReadinessCheck {
+        let agentEntries = activeAgentEntries(in: state)
+        if agentEntries.isEmpty {
+            return AutonomyReadinessCheck(
+                id: "terminal-resume",
+                label: "Restart posture",
+                detail: "Open agent terminals will be evaluated for resume when they exist.",
+                state: .warning
+            )
+        }
+
+        let manualResume = agentEntries.filter { entry in
+            guard let agentKind = TerminalAgentDetector.detect(entry: entry),
                   let preset = TerminalAgentPresets.preset(for: agentKind) else {
                 return true
             }
@@ -223,17 +229,17 @@ public struct AutonomyReadinessBuilder: Sendable {
         }
         if !manualResume.isEmpty {
             return AutonomyReadinessCheck(
-                id: "p0-resume",
+                id: "terminal-resume",
                 label: "Restart posture",
                 detail: "\(entryNames(manualResume)) \(manualResume.count == 1 ? "has" : "have") no automatic resume strategy.",
                 state: .blocker
             )
         }
 
-        let disabled = p0Entries.filter { !$0.autoResume }
+        let disabled = agentEntries.filter { !$0.autoResume }
         if !disabled.isEmpty {
             return AutonomyReadinessCheck(
-                id: "p0-resume",
+                id: "terminal-resume",
                 label: "Restart posture",
                 detail: "\(entryNames(disabled)) \(disabled.count == 1 ? "has" : "have") auto-resume disabled.",
                 state: .blocker
@@ -241,9 +247,9 @@ public struct AutonomyReadinessBuilder: Sendable {
         }
 
         return AutonomyReadinessCheck(
-            id: "p0-resume",
+            id: "terminal-resume",
             label: "Restart posture",
-            detail: "P0 lanes have automatic resume strategies.",
+            detail: "Detected agent terminals have automatic resume strategies.",
             state: .ok
         )
     }
@@ -252,8 +258,9 @@ public struct AutonomyReadinessBuilder: Sendable {
         for state: WorkspaceState,
         executableHealth: [UUID: ExecutableHealth]
     ) -> AutonomyReadinessCheck {
-        let p0Entries = activeP0Entries(in: state)
-        let unchecked = p0Entries.filter { executableHealth[$0.id] == nil }
+        let agentEntries = activeAgentEntries(in: state)
+        let checkedEntries = agentEntries.isEmpty ? activeTerminalEntries(in: state) : agentEntries
+        let unchecked = checkedEntries.filter { executableHealth[$0.id] == nil }
         if !unchecked.isEmpty {
             return AutonomyReadinessCheck(
                 id: "executables",
@@ -263,7 +270,7 @@ public struct AutonomyReadinessBuilder: Sendable {
             )
         }
 
-        let unavailable = p0Entries.filter { entry in
+        let unavailable = checkedEntries.filter { entry in
             executableHealth[entry.id]?.status != .available
         }
         if !unavailable.isEmpty {
@@ -282,7 +289,7 @@ public struct AutonomyReadinessBuilder: Sendable {
         return AutonomyReadinessCheck(
             id: "executables",
             label: "Executables",
-            detail: "P0 terminal agent commands are available.",
+            detail: agentEntries.isEmpty ? "Configured terminal commands are available." : "Detected agent terminal commands are available.",
             state: .ok
         )
     }
@@ -334,34 +341,21 @@ public struct AutonomyReadinessBuilder: Sendable {
         )
     }
 
-    private func activeP0Entries(in state: WorkspaceState) -> [ProcessEntry] {
+    private func activeAgentEntries(in state: WorkspaceState) -> [ProcessEntry] {
         state.processEntries
             .filter { !$0.isArchived && $0.kind == .terminalAgent }
-            .filter { entry in
-                guard let agentKind = entry.agentKind else {
-                    return false
-                }
-                return Self.p0AgentKinds.contains(agentKind)
-            }
+            .filter { TerminalAgentDetector.detect(entry: $0) != nil }
             .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
-    private func missingP0Kinds(in entries: [ProcessEntry]) -> [TerminalAgentKind] {
-        let present = Set(entries.compactMap(\.agentKind))
-        return Self.p0AgentKinds
-            .subtracting(present)
-            .sorted { displayName(for: $0) < displayName(for: $1) }
+    private func activeTerminalEntries(in state: WorkspaceState) -> [ProcessEntry] {
+        state.processEntries
+            .filter { !$0.isArchived && ($0.kind == .terminalAgent || $0.kind == .shell) }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
     private func entryNames(_ entries: [ProcessEntry]) -> String {
         entries.map(\.name).joined(separator: ", ")
     }
 
-    private func displayNames(for kinds: [TerminalAgentKind]) -> String {
-        kinds.map(displayName(for:)).joined(separator: ", ")
-    }
-
-    private func displayName(for kind: TerminalAgentKind) -> String {
-        TerminalAgentPresets.preset(for: kind)?.displayName ?? kind.rawValue
-    }
 }

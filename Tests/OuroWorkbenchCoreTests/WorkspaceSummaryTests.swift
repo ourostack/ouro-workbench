@@ -30,6 +30,7 @@ final class WorkspaceSummaryTests: XCTestCase {
 
     func testBossPromptIncludesProcessAndRecoveryTruth() {
         let project = WorkbenchProject(name: "Project", rootPath: "/tmp/project")
+        let archiveProject = WorkbenchProject(name: "Backlog", rootPath: "/tmp/backlog")
         let entry = ProcessEntry(
             projectId: project.id,
             name: "GitHub Copilot CLI",
@@ -53,16 +54,20 @@ final class WorkspaceSummaryTests: XCTestCase {
         )
         let state = WorkspaceState(
             bossWatchEnabled: true,
+            bossPaneCollapsed: true,
+            selectedProjectId: project.id,
             projects: [project],
             processEntries: [entry],
             processRuns: [run],
             actionLog: [actionLogEntry]
         )
+        var organizedState = state
+        organizedState.projects.append(archiveProject)
         let summary = WorkspaceSummarizer().summarize(state)
 
         let prompt = BossAgentPromptBuilder().checkInPrompt(
             question: "is anything waiting on me?",
-            state: state,
+            state: organizedState,
             summary: summary,
             executableHealth: [
                 entry.id: ExecutableHealth(
@@ -77,7 +82,13 @@ final class WorkspaceSummaryTests: XCTestCase {
         XCTAssertTrue(prompt.contains("Boss agent: slugger"))
         XCTAssertTrue(prompt.contains("Question: is anything waiting on me?"))
         XCTAssertTrue(prompt.contains("Boss Watch: enabled"))
+        XCTAssertTrue(prompt.contains("Boss Pane: collapsed"))
+        XCTAssertTrue(prompt.contains("Selected group: Project"))
+        XCTAssertTrue(prompt.contains("Organization:"))
+        XCTAssertTrue(prompt.contains("* Project (id=\(project.id.uuidString), root=/tmp/project): GitHub Copilot CLI"))
+        XCTAssertTrue(prompt.contains("- Backlog (id=\(archiveProject.id.uuidString), root=/tmp/backlog): no active terminals"))
         XCTAssertTrue(prompt.contains("GitHub Copilot CLI"))
+        XCTAssertTrue(prompt.contains("group=Project, cli=GitHub Copilot CLI"))
         XCTAssertTrue(prompt.contains("trust=trusted"))
         XCTAssertTrue(prompt.contains("executable_health=available"))
         XCTAssertTrue(prompt.contains("executable_path=/opt/homebrew/bin/copilot"))

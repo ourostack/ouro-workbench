@@ -19,6 +19,8 @@ final class WorkbenchStoreTests: XCTestCase {
         let state = WorkspaceState(
             boss: BossAgentSelection(agentName: "slugger"),
             bossWatchEnabled: true,
+            bossPaneCollapsed: true,
+            selectedProjectId: project.id,
             projects: [project],
             processEntries: [
                 ProcessEntry(
@@ -41,6 +43,8 @@ final class WorkbenchStoreTests: XCTestCase {
 
         XCTAssertEqual(loaded.boss.agentName, "slugger")
         XCTAssertEqual(loaded.bossWatchEnabled, true)
+        XCTAssertEqual(loaded.bossPaneCollapsed, true)
+        XCTAssertEqual(loaded.selectedProjectId, project.id)
         XCTAssertEqual(loaded.projects, [project])
         XCTAssertEqual(loaded.processEntries.first?.notes, "Use for implementation passes.")
         XCTAssertEqual(loaded.actionLog, [logEntry])
@@ -100,6 +104,9 @@ final class WorkbenchStoreTests: XCTestCase {
         XCTAssertNil(loaded.processEntries.first?.notes)
         XCTAssertEqual(loaded.actionLog, [])
         XCTAssertEqual(loaded.bossWatchEnabled, false)
+        XCTAssertEqual(loaded.bossPaneCollapsed, false)
+        XCTAssertNil(loaded.selectedProjectId)
+        XCTAssertNil(loaded.selectedEntryId)
         try? FileManager.default.removeItem(at: root)
     }
 }

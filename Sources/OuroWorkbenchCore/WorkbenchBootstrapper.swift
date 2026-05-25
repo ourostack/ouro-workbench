@@ -5,23 +5,17 @@ public struct WorkbenchDefaults: Sendable {
     public var projectRootPath: String
     public var boss: BossAgentSelection
     public var includeLocalShell: Bool
-    public var trustP0AgentLanes: Bool
-    public var autoResumeP0AgentLanes: Bool
 
     public init(
         projectName: String = "This Mac",
         projectRootPath: String = FileManager.default.homeDirectoryForCurrentUser.path,
         boss: BossAgentSelection = BossAgentSelection(),
-        includeLocalShell: Bool = true,
-        trustP0AgentLanes: Bool = true,
-        autoResumeP0AgentLanes: Bool = true
+        includeLocalShell: Bool = true
     ) {
         self.projectName = projectName
         self.projectRootPath = projectRootPath
         self.boss = boss
         self.includeLocalShell = includeLocalShell
-        self.trustP0AgentLanes = trustP0AgentLanes
-        self.autoResumeP0AgentLanes = autoResumeP0AgentLanes
     }
 }
 
@@ -47,6 +41,8 @@ public struct WorkbenchBootstrapper: Sendable {
             return next
         }
 
+        removeUntouchedLegacyScaffolds(from: &next)
+
         if defaults.includeLocalShell {
             if let existingIndex = next.processEntries.firstIndex(where: { entry in
                 entry.projectId == project.id && BuiltInWorkbenchSessions.isLocalShell(entry)
@@ -62,37 +58,64 @@ public struct WorkbenchBootstrapper: Sendable {
             }
         }
 
-        for preset in TerminalAgentPresets.all {
-            if let existingIndex = next.processEntries.firstIndex(where: { entry in
-                entry.projectId == project.id && entry.kind == .terminalAgent && entry.agentKind == preset.id
-            }) {
-                BuiltInWorkbenchSessions.repairTerminalAgentLane(
-                    &next.processEntries[existingIndex],
-                    preset: preset,
-                    project: project
-                )
-                continue
+        for index in next.processEntries.indices where next.processEntries[index].kind == .terminalAgent {
+            if next.processEntries[index].agentKind == nil {
+                next.processEntries[index].agentKind = TerminalAgentDetector.detect(entry: next.processEntries[index])
             }
-
-            next.processEntries.append(
-                ProcessEntry(
-                    projectId: project.id,
-                    name: preset.displayName,
-                    kind: .terminalAgent,
-                    agentKind: preset.id,
-                    executable: preset.executable,
-                    arguments: defaults.trustP0AgentLanes ? preset.yoloArguments : preset.defaultArguments,
-                    workingDirectory: project.rootPath,
-                    trust: defaults.trustP0AgentLanes ? .trusted : .untrusted,
-                    autoResume: defaults.autoResumeP0AgentLanes,
-                    attention: .idle,
-                    lastSummary: "Configured \(preset.displayName) lane"
-                )
-            )
+            if next.processEntries[index].workingDirectory.isEmpty {
+                next.processEntries[index].workingDirectory = project.rootPath
+            }
         }
 
         next.updatedAt = Date()
         return next
+    }
+
+    private func removeUntouchedLegacyScaffolds(from state: inout WorkspaceState) {
+        let removableIDs = Set(
+            state.processEntries
+                .filter { isUntouchedLegacyScaffold($0, in: state) }
+                .map(\.id)
+        )
+        guard !removableIDs.isEmpty else {
+            return
+        }
+
+        state.processEntries.removeAll { removableIDs.contains($0.id) }
+        if let selectedEntryId = state.selectedEntryId, removableIDs.contains(selectedEntryId) {
+            state.selectedEntryId = nil
+        }
+    }
+
+    private func isUntouchedLegacyScaffold(_ entry: ProcessEntry, in state: WorkspaceState) -> Bool {
+        guard !entry.isArchived,
+              !state.processRuns.contains(where: { $0.entryId == entry.id }),
+              !state.actionLog.contains(where: { $0.targetEntryId == entry.id })
+        else {
+            return false
+        }
+
+        if isLegacyAgentScaffold(entry) || isLegacyDemoAgent(entry) {
+            return true
+        }
+        return false
+    }
+
+    private func isLegacyAgentScaffold(_ entry: ProcessEntry) -> Bool {
+        TerminalAgentPresets.all.contains { preset in
+            entry.kind == .terminalAgent
+                && entry.name == preset.displayName
+                && (entry.agentKind == preset.id || TerminalAgentDetector.detect(entry: entry) == preset.id)
+                && entry.lastSummary == "Configured \(preset.displayName) lane"
+        }
+    }
+
+    private func isLegacyDemoAgent(_ entry: ProcessEntry) -> Bool {
+        entry.kind == .terminalAgent
+            && entry.name == "Demo Agent"
+            && entry.executable == "/bin/zsh"
+            && entry.arguments == ["-lc", "echo hello from demo"]
+            && entry.lastSummary == "Custom terminal session: echo hello from demo"
     }
 }
 
@@ -142,7 +165,7 @@ public enum BuiltInWorkbenchSessions {
         }
     }
 
-    public static func repairTerminalAgentLane(
+    public static func repairTerminalAgentTemplate(
         _ entry: inout ProcessEntry,
         preset: TerminalAgentPreset,
         project: WorkbenchProject
@@ -154,7 +177,7 @@ public enum BuiltInWorkbenchSessions {
         entry.arguments = entry.trust == .trusted ? preset.yoloArguments : preset.defaultArguments
         entry.workingDirectory = entry.workingDirectory.isEmpty ? project.rootPath : entry.workingDirectory
         if entry.lastSummary == nil || entry.lastSummary?.hasPrefix("Configured ") == true {
-            entry.lastSummary = "Configured \(preset.displayName) lane"
+            entry.lastSummary = "Configured \(preset.displayName) terminal"
         }
     }
 }

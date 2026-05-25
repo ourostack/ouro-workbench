@@ -15,9 +15,14 @@ and control layer around them.
 Workbench is built around these commitments:
 
 - Native macOS app first. The terminal surface is not a web app in disguise.
-- Arbitrary terminal/TUI agents are first-class sessions.
-- Claude Code, GitHub Copilot CLI, and OpenAI Codex are P0 lanes.
-- The selected Ouro boss can inspect and control trusted Workbench sessions.
+- The primary organization model is cmux-like: named groups in the sidebar,
+  with any number of terminal tabs inside each group.
+- Arbitrary terminal/TUI agents are first-class terminal tabs.
+- Claude Code, GitHub Copilot CLI, and OpenAI Codex are detected from the
+  launched command. They are not separate app modes or hard-coded top-level
+  tabs.
+- The selected Ouro boss can inspect the group/tab map and control trusted
+  Workbench sessions.
 - Restart recovery is truthful. Processes do not survive reboot, but sessions,
   transcripts, identity, attention state, and safe resume plans persist.
 - Human interaction with terminals stays ergonomic. The human can type, copy,
@@ -43,7 +48,7 @@ flowchart LR
 
 ### Session
 
-A session is one Workbench-owned terminal/process lane. It has a name, command,
+A session is one Workbench-owned terminal/process tab. It has a name, command,
 working directory, trust posture, transcript history, recovery policy, and
 attention state.
 
@@ -51,19 +56,34 @@ Sessions can be local shells, named coding agents, custom TUI agents, or
 ordinary commands. They remain in the sidebar even when stopped so their
 history, recovery state, and transcript tail stay reachable.
 
-### P0 Lane
+### Group
 
-The default P0 lanes are:
+A group is a named project/workspace scope. It owns terminal tabs, a root path,
+and the boss context needed to answer questions like "what is going on in this
+project?" without flattening every terminal on the machine into one list.
 
-| Lane | Launch shape | Recovery posture |
+Use groups the way you would use cmux project scopes: one group for a repo,
+campaign, client, or workstream; then open as many terminal tabs as that scope
+needs.
+
+### Terminal Tab
+
+A terminal tab is one Workbench-owned terminal/process entry. It can be a local
+shell, Claude Code, GitHub Copilot CLI, OpenAI Codex, another TUI agent, or an
+ordinary command.
+
+Known CLIs are detected from the command:
+
+| Detected CLI | Launch shape | Recovery posture |
 | --- | --- | --- |
 | Claude Code | `claude` | Resume by session id when known, otherwise `claude --continue`. |
-| GitHub Copilot CLI | `gh copilot -- --yolo` for trusted lanes | Explicit respawn/checkpoint recovery until native resume behavior is verified. |
+| GitHub Copilot CLI | `gh copilot -- --yolo` for trusted tabs | Explicit respawn/checkpoint recovery until native resume behavior is verified. |
 | OpenAI Codex | `codex` | Resume by session id when known, otherwise `codex resume --last`. |
 
-These lanes matter because the TTFA readiness surface treats them as core
-capability. If one is missing, untrusted, missing its executable, or configured
-without automatic restart posture, Workbench reports that as an autonomy gap.
+This detection affects labels, executable health, recovery planning, and the
+state prompt sent to the selected Ouro boss. A custom tab named "Auth refactor"
+that launches `claude --dangerously-skip-permissions` is still a Claude Code
+tab for readiness and recovery.
 
 ### Boss
 
@@ -92,9 +112,10 @@ TTFA checks:
 
 - selected boss agent name is valid
 - Workbench MCP is registered for that boss
-- P0 lanes exist and are trusted
-- P0 lanes have automatic restart strategies
-- P0 executables are available
+- detected agent terminals are trusted when boss control is expected
+- detected agent terminals have automatic restart strategies when they should
+  recover without help
+- detected agent terminal executables are available
 - no session requires manual recovery
 - Boss Watch is running, or clearly called out as paused
 
@@ -102,7 +123,7 @@ States:
 
 | State | Meaning |
 | --- | --- |
-| Ready | Boss bridge, P0 lanes, executables, and recovery posture are clear. |
+| Ready | Boss bridge, detected agent terminals, executables, and recovery posture are clear. |
 | Attention | Workbench is usable, but something should be tightened before hands-off operation. |
 | Blocked | Human-free operation is blocked until the listed issue is fixed. |
 
@@ -160,16 +181,21 @@ scripts/install-app.sh --open
 Then run the first-run checklist in the app:
 
 1. Confirm `Local Shell` opens as a real terminal.
-2. Confirm the P0 lanes exist: Claude Code, GitHub Copilot CLI, OpenAI Codex.
-3. Pick the boss agent from the header boss menu. The expected local default is
+2. Create or select a group for the project/workstream you want to operate.
+3. Add terminal tabs for the CLIs you actually use: `claude`, `gh copilot`,
+   `codex`, shells, or other TUI agents. Workbench will detect known agent CLIs
+   from the command.
+4. Pick the boss agent from the header boss menu. The expected local default is
    `slugger`; use `Use Other Boss...` when the agent has not appeared in
    discovery yet.
-4. Use the `Workbench MCP` row to register the packaged MCP server for the
+5. Use the `Workbench MCP` row to register the packaged MCP server for the
    selected boss.
-5. Turn on `Open at Login` so Workbench reopens after restart.
-6. Start `Watch` mode when you want the boss to keep observing the workspace.
-7. Click `TTFA` and clear any blockers.
-8. Run `Recovery Drill` once so the current restart posture is visible.
+6. Collapse the boss pane when you want maximum terminal height; show it again
+   when you want the coordination dashboard.
+7. Turn on `Open at Login` so Workbench reopens after restart.
+8. Start `Watch` mode when you want the boss to keep observing the workspace.
+9. Click `TTFA` and clear any blockers.
+10. Run `Recovery Drill` once so the current restart posture is visible.
 
 The packaged MCP executable lives inside the installed app:
 
@@ -195,16 +221,22 @@ selected boss agent bundle:
 
 ### Sidebar
 
-The sidebar is the session roster.
+The sidebar is the cmux-style organizer.
 
-Use it to switch between running, idle, archived, and recovering sessions. The
-status dot and row subtitle give the quick read. `New Session` creates an
-arbitrary terminal/TUI agent lane. Recovery summary rows show whether anything
-needs restart handling.
+Use the `Groups` section for project/workstream scopes. Selecting a group shows
+only that group's active terminal tabs and archived tabs. Group actions let you
+rename a group or delete it once it is empty. The terminal row status dot and
+subtitle give the quick read. `New Group` creates a scope; `New Terminal`
+creates an arbitrary terminal/TUI agent tab in the selected group. Recovery
+summary rows show whether anything needs restart handling.
 
 ### Boss Dashboard
 
 The upper dashboard is the coordination surface.
+
+Use the header eye button to collapse or restore this pane. Collapsing it
+preserves Boss Watch and boss state; it only gives the human more terminal
+space.
 
 Important rows:
 
@@ -284,7 +316,7 @@ Examples:
 
 - recover a stopped Codex session
 - send `continue` to a running agent
-- launch a trusted lane that should be active
+- launch a trusted terminal tab that should be active
 - terminate a stuck session if the state makes that safe
 
 Boss-requested actions use this fenced format:
@@ -341,12 +373,13 @@ Paused Boss Watch is a warning, not a full blocker. Manual asks still work.
 ### Start A Coding Swarm
 
 1. Open Workbench.
-2. Start or recover the lanes you want active.
-3. Verify each autonomous lane is trusted.
-4. Turn on `Watch`.
-5. Ask `What's Going On?`.
-6. Ask `Keep Moving`.
-7. Let the boss request routine Workbench actions while you stay available for
+2. Select the group for the project.
+3. Open the terminal tabs you want active.
+4. Verify each autonomous tab is trusted.
+5. Turn on `Watch`.
+6. Ask `What's Going On?`.
+7. Ask `Keep Moving`.
+8. Let the boss request routine Workbench actions while you stay available for
    real decisions.
 
 This is the happy path: terminal agents keep their own native interfaces, and
@@ -376,16 +409,17 @@ The goal is to separate "needs Ari" from "needs a boring next token."
 Recovery should feel boring. If it feels mysterious, that is a product bug or a
 missing guide entry.
 
-### Add A New TUI Agent
+### Add A New Terminal/TUI Agent
 
-1. Click `New Session`.
-2. Name it after the actual agent or task role.
-3. Set the command exactly as you would run it in a terminal.
-4. Set the working directory to the project root the agent should inhabit.
-5. Mark it trusted only if the boss may operate it.
-6. Turn on auto-resume only when respawn or native resume is safe.
-7. Launch it and confirm the terminal behaves normally.
-8. Ask `Ask Boss` on that session so the boss learns how it appears in the
+1. Select or create the group that should own the tab.
+2. Click `New Terminal`.
+3. Name it after the actual agent or task role.
+4. Set the command exactly as you would run it in a terminal.
+5. Set the working directory to the project root the agent should inhabit.
+6. Mark it trusted only if the boss may operate it.
+7. Turn on auto-resume only when respawn or native resume is safe.
+8. Launch it and confirm the terminal behaves normally.
+9. Ask `Ask Boss` on that session so the boss learns how it appears in the
    Workbench.
 
 Any terminal command can be a session. The important part is giving it enough
@@ -404,16 +438,16 @@ is too broad.
 
 ## Adding A Terminal/TUI Agent
 
-Use `New Session`.
+Use `New Terminal` inside the selected group.
 
 Recommended fields:
 
-- Name: the human-readable lane name.
+- Name: the human-readable tab name.
 - Command: the executable and arguments.
 - Working directory: the project or workspace root.
 - Trust: trusted only when you are comfortable letting the boss operate it.
 - Auto-resume: on when the command has a safe resume or respawn posture.
-- Notes: anything the boss or future human should know about the lane.
+- Notes: anything the boss or future human should know about the tab.
 
 Good custom-session examples:
 
@@ -429,8 +463,11 @@ aider --yes-always
 zsh -l
 ```
 
-Archive a session when it should remain historically visible but no longer be
+Archive a terminal tab when it should remain historically visible but no longer be
 launchable or controllable. Restore it when it becomes active work again.
+Use `Move` to transfer a stopped tab into another group; Workbench updates its
+working directory to that group's root so future launches inherit the new
+scope.
 
 ## Boss And Ouro CLI Integration
 
@@ -462,7 +499,7 @@ then authorized by the same trust gates used for boss conversation actions.
 
 ## Restart Recovery Playbook
 
-Use this to verify the P0 restart promise.
+Use this to verify the restart promise.
 
 1. Start the sessions you care about.
 2. Confirm they are trusted if the boss should be able to recover them.
@@ -505,7 +542,7 @@ This is TTFA in product form: trust the agent, keep the trail.
 | --- | --- | --- |
 | TTFA says blocked | The boss cannot fully inspect, control, or recover the workspace. | Click `TTFA`, read the blocker, and use the offered fix when present. |
 | Workbench MCP is not registered | The selected boss cannot see Workbench tools from its own Ouro runtime. | Use the `Workbench MCP` row to register or refresh. |
-| A P0 executable is missing | The command is not available on the app's PATH. | Install or repair the CLI, then refresh readiness. |
+| An agent executable is missing | The command is not available on the app's PATH. | Install or repair the CLI, then refresh readiness. |
 | Boss Watch is paused | Automatic observation is off. | Turn on `Watch` when you want background coordination. |
 | Boss Line fails | The Ouro CLI or selected boss process could not complete the ask. | Verify `ouro mcp-serve --agent <boss>` works in a terminal. |
 | A session will not auto-recover | Trust, auto-resume, or native resume posture is missing. | Run `Recovery Drill` and inspect the reason. |
@@ -521,7 +558,7 @@ A healthy Workbench has this shape:
 - `Open at Login` is enabled.
 - `Workbench MCP` is registered for the selected boss.
 - Boss Watch is on during autonomous work blocks.
-- P0 lanes are present, trusted, and executable.
+- Detected agent terminals are trusted, executable, and configured for the intended recovery posture.
 - Custom terminal/TUI agents are named clearly and trusted deliberately.
 - Recovery Drill reports no surprising manual actions.
 - Action Log tells a clear story of what the boss did.
@@ -538,7 +575,7 @@ Workbench is already useful, but the truth matters:
 - A computer restart still kills real processes and PTYs. Workbench restores
   sessions; it does not preserve a live Unix process across reboot.
 - GitHub Copilot CLI native resume behavior is not treated as verified yet.
-  Workbench uses explicit respawn/checkpoint recovery for that lane.
+  Workbench uses explicit respawn/checkpoint recovery for that CLI.
 - Boss `sendInput` only works for a running session with a retained controller.
 - Workbench MCP registration currently points at the installed app bundle path.
 - The app is local-first. Signing, notarization, update channels, and broader

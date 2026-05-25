@@ -4,7 +4,7 @@
 
 Ouro Workbench is a native macOS terminal-agent workbench. Arbitrary terminal/TUI
 agents are first-class citizens. Claude Code, GitHub Copilot CLI, and OpenAI
-Codex are P0 named lanes.
+Codex are important detected CLI identities, not separate fixed app modes.
 
 Ouro agents do not replace terminal agents. An Ouro agent can be selected as the
 workspace boss: the observer/coordinator/control layer that answers "what is
@@ -20,7 +20,7 @@ going on?", "is anything waiting on me?", and "keep things moving."
   sessions must restore: history, status, panes, and safe auto-resume where the
   underlying CLI supports it.
 - Claude Code, GitHub Copilot CLI, and OpenAI Codex must have explicit resume
-  strategies before they are treated as complete lanes.
+  strategies before they are treated as complete detected terminal identities.
 
 ## Autonomy
 

@@ -27,8 +27,26 @@ final class CustomTerminalSessionTests: XCTestCase {
         XCTAssertEqual(entry.trust, .trusted)
         XCTAssertTrue(entry.autoResume)
         XCTAssertFalse(entry.isArchived)
-        XCTAssertEqual(entry.lastSummary, "Custom terminal session: aider --yes")
+        XCTAssertEqual(entry.lastSummary, "Terminal session: aider --yes")
         XCTAssertEqual(entry.notes, "Use for pair-programming spikes.")
+    }
+
+    func testCustomSessionDetectsKnownCLIAndStoresDirectCommand() throws {
+        let entry = try CustomTerminalSessionFactory().makeEntry(
+            projectId: UUID(),
+            draft: CustomTerminalSessionDraft(
+                name: "Claude",
+                command: "claude --dangerously-skip-permissions",
+                workingDirectory: "/repo",
+                trust: .trusted,
+                autoResume: true
+            )
+        )
+
+        XCTAssertEqual(entry.agentKind, .claudeCode)
+        XCTAssertEqual(entry.executable, "claude")
+        XCTAssertEqual(entry.arguments, ["--dangerously-skip-permissions"])
+        XCTAssertEqual(entry.lastSummary, "Detected Claude Code: claude --dangerously-skip-permissions")
     }
 
     func testCustomSessionRequiresNameCommandAndWorkingDirectory() {
@@ -129,7 +147,9 @@ final class CustomTerminalSessionTests: XCTestCase {
         XCTAssertEqual(updated.id, original.id)
         XCTAssertEqual(updated.projectId, original.projectId)
         XCTAssertEqual(updated.name, "Codex Scratch")
-        XCTAssertEqual(updated.arguments, ["-lc", "codex --yolo"])
+        XCTAssertEqual(updated.agentKind, .openAICodex)
+        XCTAssertEqual(updated.executable, "codex")
+        XCTAssertEqual(updated.arguments, ["--yolo"])
         XCTAssertEqual(updated.workingDirectory, "/repo/app")
         XCTAssertEqual(updated.trust, .untrusted)
         XCTAssertFalse(updated.autoResume)
@@ -182,7 +202,7 @@ final class CustomTerminalSessionTests: XCTestCase {
         XCTAssertEqual(restored.lastSummary, "Restored custom terminal session")
     }
 
-    func testManagerRejectsPresetTerminalAgents() {
+    func testManagerExtractsDraftFromDetectedAgentTerminal() throws {
         let entry = ProcessEntry(
             projectId: UUID(),
             name: "Claude",
@@ -193,12 +213,13 @@ final class CustomTerminalSessionTests: XCTestCase {
             trust: .trusted
         )
 
-        XCTAssertThrowsError(try CustomTerminalSessionManager().draft(from: entry)) { error in
-            XCTAssertEqual(error as? CustomTerminalSessionError, .notCustomSession)
-        }
+        let draft = try CustomTerminalSessionManager().draft(from: entry)
+
+        XCTAssertEqual(draft.command, "claude")
+        XCTAssertEqual(draft.name, "Claude")
     }
 
-    func testManagerRejectsCustomSessionsWithoutShellWrappedCommand() {
+    func testManagerExtractsDraftFromDirectGenericTerminal() throws {
         let entry = ProcessEntry(
             projectId: UUID(),
             name: "Custom",
@@ -209,8 +230,8 @@ final class CustomTerminalSessionTests: XCTestCase {
             trust: .trusted
         )
 
-        XCTAssertThrowsError(try CustomTerminalSessionManager().draft(from: entry)) { error in
-            XCTAssertEqual(error as? CustomTerminalSessionError, .unavailableCommand)
-        }
+        let draft = try CustomTerminalSessionManager().draft(from: entry)
+
+        XCTAssertEqual(draft.command, "/usr/bin/env aider")
     }
 }

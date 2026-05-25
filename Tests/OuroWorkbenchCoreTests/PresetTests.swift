@@ -2,7 +2,7 @@ import XCTest
 @testable import OuroWorkbenchCore
 
 final class PresetTests: XCTestCase {
-    func testP0TerminalAgentPresetsExist() {
+    func testTerminalAgentPresetsExist() {
         let kinds = Set(TerminalAgentPresets.all.map(\.id))
 
         XCTAssertTrue(kinds.contains(.claudeCode))
@@ -10,7 +10,7 @@ final class PresetTests: XCTestCase {
         XCTAssertTrue(kinds.contains(.openAICodex))
     }
 
-    func testTrustedYoloArgumentsAreEncodedForNamedLanes() throws {
+    func testTrustedYoloArgumentsAreEncodedForDetectedAgents() throws {
         let claude = try XCTUnwrap(TerminalAgentPresets.preset(for: .claudeCode))
         let copilot = try XCTUnwrap(TerminalAgentPresets.preset(for: .githubCopilotCLI))
         let codex = try XCTUnwrap(TerminalAgentPresets.preset(for: .openAICodex))

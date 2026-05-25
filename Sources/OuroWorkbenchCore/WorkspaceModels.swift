@@ -225,6 +225,9 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
     public var schemaVersion: Int
     public var boss: BossAgentSelection
     public var bossWatchEnabled: Bool
+    public var bossPaneCollapsed: Bool
+    public var selectedProjectId: UUID?
+    public var selectedEntryId: UUID?
     public var projects: [WorkbenchProject]
     public var processEntries: [ProcessEntry]
     public var processRuns: [ProcessRun]
@@ -235,6 +238,9 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         case schemaVersion
         case boss
         case bossWatchEnabled
+        case bossPaneCollapsed
+        case selectedProjectId
+        case selectedEntryId
         case projects
         case processEntries
         case processRuns
@@ -246,6 +252,9 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         schemaVersion: Int = 1,
         boss: BossAgentSelection = BossAgentSelection(),
         bossWatchEnabled: Bool = false,
+        bossPaneCollapsed: Bool = false,
+        selectedProjectId: UUID? = nil,
+        selectedEntryId: UUID? = nil,
         projects: [WorkbenchProject] = [],
         processEntries: [ProcessEntry] = [],
         processRuns: [ProcessRun] = [],
@@ -255,6 +264,9 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         self.schemaVersion = schemaVersion
         self.boss = boss
         self.bossWatchEnabled = bossWatchEnabled
+        self.bossPaneCollapsed = bossPaneCollapsed
+        self.selectedProjectId = selectedProjectId
+        self.selectedEntryId = selectedEntryId
         self.projects = projects
         self.processEntries = processEntries
         self.processRuns = processRuns
@@ -267,6 +279,9 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         self.schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
         self.boss = try container.decode(BossAgentSelection.self, forKey: .boss)
         self.bossWatchEnabled = try container.decodeIfPresent(Bool.self, forKey: .bossWatchEnabled) ?? false
+        self.bossPaneCollapsed = try container.decodeIfPresent(Bool.self, forKey: .bossPaneCollapsed) ?? false
+        self.selectedProjectId = try container.decodeIfPresent(UUID.self, forKey: .selectedProjectId)
+        self.selectedEntryId = try container.decodeIfPresent(UUID.self, forKey: .selectedEntryId)
         self.projects = try container.decode([WorkbenchProject].self, forKey: .projects)
         self.processEntries = try container.decode([ProcessEntry].self, forKey: .processEntries)
         self.processRuns = try container.decode([ProcessRun].self, forKey: .processRuns)

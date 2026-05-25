@@ -100,6 +100,12 @@ Workbench status prompts include executable health for each configured session:
 They also include persisted Boss Watch state so the selected boss can tell
 whether background observation is enabled or paused.
 
+Status prompts include the Workbench organization map: all groups, the selected
+group, active terminal tab names per group, and each process's group plus
+detected CLI identity. This is how an Ouro boss can answer "what is going on in
+the harness group?" without treating every terminal on the machine as a flat
+bag of processes.
+
 The native boss dashboard has a `Workbench MCP` row that registers or updates an
 `ouro_workbench` entry in `~/AgentBundles/<boss>.ouro/agent.json`. The entry
 points at the packaged `OuroWorkbenchMCP` executable and uses no arguments:
@@ -125,9 +131,11 @@ boss can be trusted to run the Workbench with minimal babysitting:
 
 - boss agent name is valid
 - Workbench MCP is registered for that boss
-- Claude Code, GitHub Copilot CLI, and OpenAI Codex lanes exist and are trusted
-- P0 lanes have automatic restart strategies enabled
-- P0 executables are available on PATH
+- detected Claude Code, GitHub Copilot CLI, and OpenAI Codex terminals are
+  trusted when boss control is expected
+- detected agent terminals have automatic restart strategies enabled when they
+  should recover without human help
+- detected agent executables are available on PATH
 - no session currently requires manual recovery
 - Boss Watch and Open at Login are enabled or called out as watch points
 

@@ -28,8 +28,10 @@ struct WorkbenchRootView: View {
             VStack(alignment: .leading, spacing: 0) {
                 HeaderView(model: model)
                 Divider()
-                BossDashboardView(model: model)
-                Divider()
+                if !model.state.bossPaneCollapsed {
+                    BossDashboardView(model: model)
+                    Divider()
+                }
                 if let entry = model.selectedEntry {
                     SessionDetailView(entry: entry, model: model)
                 } else {
@@ -58,13 +60,19 @@ struct WorkbenchRootView: View {
         .sheet(isPresented: $model.isNewSessionSheetPresented) {
             NewTerminalSessionSheet(model: model)
         }
+        .sheet(isPresented: $model.isNewGroupSheetPresented) {
+            NewTerminalGroupSheet(model: model)
+        }
+        .sheet(item: $model.editingGroup) { project in
+            EditTerminalGroupSheet(model: model, project: project)
+        }
         .sheet(item: $model.editingSession) { entry in
             EditTerminalSessionSheet(model: model, entry: entry)
         }
         .sheet(isPresented: $model.isCommandPalettePresented) {
             CommandPaletteSheet(model: model)
         }
-        .confirmationDialog("Delete Terminal Session?", isPresented: model.deleteConfirmationIsPresented) {
+        .confirmationDialog("Delete Terminal?", isPresented: model.deleteConfirmationIsPresented) {
             if let entry = model.pendingDeleteSession {
                 Button("Delete \(entry.name)", role: .destructive) {
                     model.deleteCustomSession(entry)
@@ -74,6 +82,18 @@ struct WorkbenchRootView: View {
         } message: {
             if let entry = model.pendingDeleteSession {
                 Text("This removes \(entry.name) from the workbench and clears its run records. Transcript files remain on disk.")
+            }
+        }
+        .confirmationDialog("Delete Terminal Group?", isPresented: model.deleteGroupConfirmationIsPresented) {
+            if let project = model.pendingDeleteGroup {
+                Button("Delete \(project.name)", role: .destructive) {
+                    model.deleteGroup(project)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            if let project = model.pendingDeleteGroup {
+                Text("This removes the empty group \(project.name). Groups with terminals cannot be deleted.")
             }
         }
         .task {
@@ -110,11 +130,57 @@ struct WorkbenchSidebarView: View {
 
     var body: some View {
         List(selection: $model.selectedEntryID) {
-            Section("Sessions") {
+            Section("Groups") {
+                ForEach(model.state.projects) { project in
+                    HStack(spacing: 6) {
+                        Button {
+                            model.selectProject(project.id)
+                        } label: {
+                            Label(project.name, systemImage: model.selectedProject?.id == project.id ? "folder.fill" : "folder")
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        .buttonStyle(.plain)
+                        .fontWeight(model.selectedProject?.id == project.id ? .semibold : .regular)
+                        Spacer()
+                        Text("\(model.terminalCount(in: project))")
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
+                        Menu {
+                            Button {
+                                model.beginEditingGroup(project)
+                            } label: {
+                                Label("Rename Group", systemImage: "pencil")
+                            }
+                            Button(role: .destructive) {
+                                model.requestDeleteGroup(project)
+                            } label: {
+                                Label("Delete Empty Group", systemImage: "trash")
+                            }
+                            .disabled(model.totalTerminalCount(in: project) > 0 || model.state.projects.count <= 1)
+                        } label: {
+                            Label("Group Actions", systemImage: "ellipsis.circle")
+                        }
+                        .labelStyle(.iconOnly)
+                        .menuStyle(.borderlessButton)
+                        .help("Group actions")
+                    }
+                    .help(project.rootPath)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(project.name), \(model.terminalCount(in: project)) active terminals, root \(project.rootPath)")
+                }
+                Button {
+                    model.isNewGroupSheetPresented = true
+                } label: {
+                    Label("New Group", systemImage: "folder.badge.plus")
+                }
+            }
+            Section(model.selectedProject?.name ?? "Terminals") {
                 ForEach(model.sessionEntries) { entry in
                     TerminalAgentRow(
                         entry: entry,
                         isSelected: model.selectedEntryID == entry.id,
+                        cliName: model.cliName(for: entry),
                         health: model.executableHealth(for: entry)
                     )
                         .tag(entry.id)
@@ -122,7 +188,7 @@ struct WorkbenchSidebarView: View {
                 Button {
                     model.isNewSessionSheetPresented = true
                 } label: {
-                    Label("New Session", systemImage: "plus")
+                    Label("New Terminal", systemImage: "plus")
                 }
                 .keyboardShortcut("n", modifiers: [.command])
             }
@@ -132,6 +198,7 @@ struct WorkbenchSidebarView: View {
                         TerminalAgentRow(
                             entry: entry,
                             isSelected: model.selectedEntryID == entry.id,
+                            cliName: model.cliName(for: entry),
                             health: model.executableHealth(for: entry)
                         )
                             .tag(entry.id)
@@ -149,13 +216,22 @@ struct WorkbenchSidebarView: View {
 struct TerminalAgentRow: View {
     var entry: ProcessEntry
     var isSelected: Bool
+    var cliName: String?
     var health: ExecutableHealth?
 
     var body: some View {
         HStack {
-            Label(entry.name, systemImage: rowIcon)
-                .lineLimit(1)
-                .truncationMode(.middle)
+            VStack(alignment: .leading, spacing: 1) {
+                Label(entry.name, systemImage: rowIcon)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                if let cliName {
+                    Text(cliName)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
             Spacer()
             if let health, health.status != .available {
                 Image(systemName: "exclamationmark.triangle.fill")
@@ -165,6 +241,8 @@ struct TerminalAgentRow: View {
             StatusDot(attention: entry.attention)
         }
         .fontWeight(isSelected ? .semibold : .regular)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel)
     }
 
     private var rowIcon: String {
@@ -172,6 +250,19 @@ struct TerminalAgentRow: View {
             return "archivebox"
         }
         return entry.kind == .shell ? "apple.terminal" : "terminal"
+    }
+
+    private var accessibilityLabel: String {
+        var pieces = [entry.name]
+        if let cliName {
+            pieces.append(cliName)
+        }
+        pieces.append(entry.attention.rawValue)
+        pieces.append(entry.isArchived ? "archived" : "active")
+        if let health, health.status != .available {
+            pieces.append(health.detail)
+        }
+        return pieces.joined(separator: ", ")
     }
 }
 
@@ -215,6 +306,14 @@ struct HeaderView: View {
                     .truncationMode(.tail)
             }
             Spacer(minLength: 12)
+            Button {
+                model.setBossPaneCollapsed(!model.state.bossPaneCollapsed)
+            } label: {
+                Label(model.state.bossPaneCollapsed ? "Show Boss Pane" : "Hide Boss Pane", systemImage: model.state.bossPaneCollapsed ? "rectangle.topthird.inset.filled" : "rectangle.bottomthird.inset.filled")
+            }
+            .labelStyle(.iconOnly)
+            .help(model.state.bossPaneCollapsed ? "Show boss dashboard pane" : "Collapse boss dashboard pane")
+            .fixedSize()
             AutonomyStatusButton(model: model)
                 .fixedSize()
             Button {
@@ -925,8 +1024,10 @@ struct TranscriptSearchView: View {
             if !model.transcriptSearchResults.isEmpty {
                 ForEach(model.transcriptSearchResults.prefix(6)) { match in
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(match.entryName)
+                        Text(model.groupName(for: match).map { "\($0) / \(match.entryName)" } ?? match.entryName)
                             .font(.caption.weight(.semibold))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
                         Text("line \(match.lineNumber)")
                             .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)
@@ -1019,6 +1120,12 @@ struct SessionDetailView: View {
                         .lineLimit(1)
                         .truncationMode(.middle)
                     HStack(spacing: 6) {
+                        if let groupName = model.groupName(for: entry) {
+                            StatusPill(text: groupName, color: .secondary)
+                        }
+                        if let cliName = model.cliName(for: entry) {
+                            StatusPill(text: cliName, color: .purple)
+                        }
                         StatusPill(
                             text: entry.trust == .trusted ? "trusted" : "untrusted",
                             color: entry.trust == .trusted ? .green : .orange
@@ -1165,6 +1272,19 @@ struct CustomSessionManagementBar: View {
             } label: {
                 Label("Duplicate", systemImage: "plus.square.on.square")
             }
+
+            Menu {
+                ForEach(model.state.projects) { project in
+                    Button(project.name) {
+                        model.moveSession(entry, to: project.id)
+                    }
+                    .disabled(project.id == entry.projectId)
+                }
+            } label: {
+                Label("Move", systemImage: "folder")
+            }
+            .disabled(isRunning || model.state.projects.count < 2)
+            .help(isRunning ? "Stop this session before moving it" : "Move this session to another group")
 
             if entry.isArchived {
                 Button {
@@ -1347,6 +1467,124 @@ struct TranscriptHistoryView: View {
     }
 }
 
+struct NewTerminalGroupSheet: View {
+    @ObservedObject var model: WorkbenchViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var rootPath = FileManager.default.homeDirectoryForCurrentUser.path
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("New Terminal Group")
+                .font(.title3.weight(.semibold))
+            Form {
+                TextField("Name", text: $name)
+                HStack {
+                    TextField("Root Path", text: $rootPath)
+                        .font(.body.monospaced())
+                    Button {
+                        chooseRootPath()
+                    } label: {
+                        Label("Choose", systemImage: "folder")
+                    }
+                }
+            }
+            HStack {
+                Spacer()
+                Button("Cancel") {
+                    dismiss()
+                }
+                Button {
+                    guard model.createGroup(name: name, rootPath: rootPath) else {
+                        return
+                    }
+                    dismiss()
+                } label: {
+                    Label("Create", systemImage: "checkmark")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || rootPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding()
+        .frame(width: 520)
+    }
+
+    private func chooseRootPath() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = URL(fileURLWithPath: rootPath, isDirectory: true)
+        if panel.runModal() == .OK, let url = panel.url {
+            rootPath = url.path
+        }
+    }
+}
+
+struct EditTerminalGroupSheet: View {
+    @ObservedObject var model: WorkbenchViewModel
+    let project: WorkbenchProject
+    @Environment(\.dismiss) private var dismiss
+    @State private var name: String
+    @State private var rootPath: String
+
+    init(model: WorkbenchViewModel, project: WorkbenchProject) {
+        self.model = model
+        self.project = project
+        _name = State(initialValue: project.name)
+        _rootPath = State(initialValue: project.rootPath)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Edit Terminal Group")
+                .font(.title3.weight(.semibold))
+            Form {
+                TextField("Name", text: $name)
+                HStack {
+                    TextField("Root Path", text: $rootPath)
+                        .font(.body.monospaced())
+                    Button {
+                        chooseRootPath()
+                    } label: {
+                        Label("Choose", systemImage: "folder")
+                    }
+                }
+            }
+            HStack {
+                Spacer()
+                Button("Cancel") {
+                    dismiss()
+                }
+                Button {
+                    guard model.renameGroup(project, name: name, rootPath: rootPath) else {
+                        return
+                    }
+                    dismiss()
+                } label: {
+                    Label("Save", systemImage: "checkmark")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || rootPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding()
+        .frame(width: 520)
+    }
+
+    private func chooseRootPath() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = URL(fileURLWithPath: rootPath, isDirectory: true)
+        if panel.runModal() == .OK, let url = panel.url {
+            rootPath = url.path
+        }
+    }
+}
+
 struct NewTerminalSessionSheet: View {
     @ObservedObject var model: WorkbenchViewModel
     @Environment(\.dismiss) private var dismiss
@@ -1357,14 +1595,29 @@ struct NewTerminalSessionSheet: View {
     @State private var autoResume = true
     @State private var notes = ""
 
+    init(model: WorkbenchViewModel) {
+        self.model = model
+        _workingDirectory = State(initialValue: model.selectedProject?.rootPath ?? FileManager.default.homeDirectoryForCurrentUser.path)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("New Terminal Session")
+            Text("New Terminal")
                 .font(.title3.weight(.semibold))
             Form {
                 TextField("Name", text: $name)
                 TextField("Command", text: $command)
                     .font(.body.monospaced())
+                    .onChange(of: command) {
+                        guard name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                            return
+                        }
+                        if let parsed = TerminalCommandParser.parse(command),
+                           let kind = TerminalAgentDetector.detect(executable: parsed.executable, arguments: parsed.arguments),
+                           let displayName = TerminalAgentDetector.displayName(for: kind) {
+                            name = displayName
+                        }
+                    }
                 HStack {
                     TextField("Working Directory", text: $workingDirectory)
                         .font(.body.monospaced())
@@ -1467,7 +1720,7 @@ struct EditTerminalSessionSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Edit Terminal Session")
+            Text("Edit Terminal")
                 .font(.title3.weight(.semibold))
             Form {
                 TextField("Name", text: $name)
@@ -1614,8 +1867,10 @@ struct RecoveryDrillView: View {
             if let result = model.recoveryDrillResult {
                 ForEach(result.items.prefix(5)) { item in
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(item.entryName)
+                        Text(model.groupName(forEntryId: item.id).map { "\($0) / \(item.entryName)" } ?? item.entryName)
                             .font(.caption.weight(.semibold))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
                         Text("\(item.beforeStatus?.rawValue ?? "none") -> \(item.afterStatus?.rawValue ?? "none")")
                             .font(.caption.monospaced())
                             .foregroundStyle(.secondary)
@@ -1705,7 +1960,28 @@ final class LoginItemController: ObservableObject {
 @MainActor
 final class WorkbenchViewModel: ObservableObject {
     @Published var state: WorkspaceState
-    @Published var selectedEntryID: UUID?
+    @Published var selectedProjectID: UUID? {
+        didSet {
+            guard selectedProjectID != oldValue else {
+                return
+            }
+            state.selectedProjectId = selectedProjectID
+            if let selectedEntryID,
+               !sessionEntries.contains(where: { $0.id == selectedEntryID }) {
+                self.selectedEntryID = sessionEntries.first?.id
+            }
+            save()
+        }
+    }
+    @Published var selectedEntryID: UUID? {
+        didSet {
+            guard selectedEntryID != oldValue else {
+                return
+            }
+            state.selectedEntryId = selectedEntryID
+            save()
+        }
+    }
     @Published var activeSessions: [UUID: TerminalSessionController] = [:]
     @Published var errorMessage: String?
     @Published var bossDashboard: BossDashboardSnapshot?
@@ -1724,8 +2000,11 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var bossAppliedActions: [String] = []
     @Published var mailboxError: String?
     @Published var isNewSessionSheetPresented = false
+    @Published var isNewGroupSheetPresented = false
     @Published var isCommandPalettePresented = false
     @Published var commandPaletteQuery = ""
+    @Published var editingGroup: WorkbenchProject?
+    @Published var pendingDeleteGroup: WorkbenchProject?
     @Published var editingSession: ProcessEntry?
     @Published var pendingDeleteSession: ProcessEntry?
     @Published var bossWorkbenchMCPRegistration: BossWorkbenchMCPRegistrationSnapshot?
@@ -1805,23 +2084,71 @@ final class WorkbenchViewModel: ObservableObject {
         )
     }
 
+    var deleteGroupConfirmationIsPresented: Binding<Bool> {
+        Binding(
+            get: { self.pendingDeleteGroup != nil },
+            set: { newValue in
+                if !newValue {
+                    self.pendingDeleteGroup = nil
+                }
+            }
+        )
+    }
+
     var sessionEntries: [ProcessEntry] {
-        allSessionEntries.filter { !$0.isArchived }
+        projectSessionEntries.filter { !$0.isArchived }
     }
 
     var archivedSessionEntries: [ProcessEntry] {
-        allSessionEntries.filter(\.isArchived)
+        projectSessionEntries.filter(\.isArchived)
     }
 
     private var allSessionEntries: [ProcessEntry] {
         state.processEntries.filter { $0.kind == .terminalAgent || $0.kind == .shell }
     }
 
+    private var projectSessionEntries: [ProcessEntry] {
+        guard let selectedProjectID else {
+            return allSessionEntries
+        }
+        return allSessionEntries.filter { $0.projectId == selectedProjectID }
+    }
+
+    var selectedProject: WorkbenchProject? {
+        guard let selectedProjectID else {
+            return state.projects.first
+        }
+        return state.projects.first { $0.id == selectedProjectID } ?? state.projects.first
+    }
+
+    func terminalCount(in project: WorkbenchProject) -> Int {
+        allSessionEntries.filter { $0.projectId == project.id && !$0.isArchived }.count
+    }
+
+    func totalTerminalCount(in project: WorkbenchProject) -> Int {
+        allSessionEntries.filter { $0.projectId == project.id }.count
+    }
+
+    func groupName(for entry: ProcessEntry) -> String? {
+        state.projects.first { $0.id == entry.projectId }?.name
+    }
+
+    func groupName(forEntryId entryId: UUID) -> String? {
+        guard let entry = state.processEntries.first(where: { $0.id == entryId }) else {
+            return nil
+        }
+        return groupName(for: entry)
+    }
+
+    func groupName(for match: TranscriptSearchMatch) -> String? {
+        groupName(forEntryId: match.entryId)
+    }
+
     var selectedEntry: ProcessEntry? {
         guard let selectedEntryID else {
             return sessionEntries.first
         }
-        return state.processEntries.first { $0.id == selectedEntryID }
+        return sessionEntries.first { $0.id == selectedEntryID } ?? sessionEntries.first
     }
 
     var summary: WorkspaceSummary {
@@ -1892,8 +2219,8 @@ final class WorkbenchViewModel: ObservableObject {
         var commands: [WorkbenchCommandDescriptor] = [
             WorkbenchCommandDescriptor(
                 id: .newSession,
-                title: "New Session",
-                detail: "Create a custom terminal/TUI session",
+                title: "New Terminal",
+                detail: "Create a terminal/TUI tab in the selected group",
                 systemImage: "plus"
             ),
             WorkbenchCommandDescriptor(
@@ -1964,6 +2291,13 @@ final class WorkbenchViewModel: ObservableObject {
         executableHealthByEntryID[entry.id]
     }
 
+    func cliName(for entry: ProcessEntry) -> String? {
+        guard let cliName = TerminalAgentDetector.displayName(for: TerminalAgentDetector.detect(entry: entry)) else {
+            return nil
+        }
+        return cliName.localizedCaseInsensitiveCompare(entry.name) == .orderedSame ? nil : cliName
+    }
+
     var bossWorkbenchMCPStatusLine: String {
         guard let bossWorkbenchMCPRegistration else {
             return "unknown"
@@ -2032,6 +2366,146 @@ final class WorkbenchViewModel: ObservableObject {
         Task {
             await refreshBossDashboard()
         }
+    }
+
+    func selectProject(_ projectId: UUID) {
+        guard state.projects.contains(where: { $0.id == projectId }) else {
+            return
+        }
+        selectedProjectID = projectId
+        selectedEntryID = sessionEntries.first?.id
+    }
+
+    func createGroup(name: String, rootPath: String) -> Bool {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedRoot = rootPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else {
+            errorMessage = "Group name is required"
+            return false
+        }
+        guard !trimmedRoot.isEmpty else {
+            errorMessage = "Group root path is required"
+            return false
+        }
+        let project = WorkbenchProject(
+            name: trimmedName,
+            rootPath: trimmedRoot,
+            boss: state.boss
+        )
+        state.projects.append(project)
+        selectedProjectID = project.id
+        selectedEntryID = nil
+        save()
+        return true
+    }
+
+    func beginEditingGroup(_ project: WorkbenchProject) {
+        guard state.projects.contains(where: { $0.id == project.id }) else {
+            errorMessage = "Group no longer exists: \(project.name)"
+            return
+        }
+        editingGroup = project
+    }
+
+    @discardableResult
+    func renameGroup(_ project: WorkbenchProject, name: String, rootPath: String) -> Bool {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedRoot = rootPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else {
+            errorMessage = "Group name is required"
+            return false
+        }
+        guard !trimmedRoot.isEmpty else {
+            errorMessage = "Group root path is required"
+            return false
+        }
+        guard let index = state.projects.firstIndex(where: { $0.id == project.id }) else {
+            errorMessage = "Group no longer exists: \(project.name)"
+            return false
+        }
+        state.projects[index].name = trimmedName
+        state.projects[index].rootPath = trimmedRoot
+        editingGroup = nil
+        recordActionLog(
+            source: "native",
+            action: "editGroup",
+            targetName: trimmedName,
+            result: "Edited group \(trimmedName)",
+            succeeded: true
+        )
+        return true
+    }
+
+    func requestDeleteGroup(_ project: WorkbenchProject) {
+        guard state.projects.count > 1 else {
+            errorMessage = "Keep at least one terminal group"
+            return
+        }
+        guard totalTerminalCount(in: project) == 0 else {
+            errorMessage = "Move or delete terminals before deleting \(project.name)"
+            return
+        }
+        pendingDeleteGroup = project
+    }
+
+    func deleteGroup(_ project: WorkbenchProject) {
+        guard state.projects.count > 1 else {
+            errorMessage = "Keep at least one terminal group"
+            return
+        }
+        guard totalTerminalCount(in: project) == 0 else {
+            errorMessage = "Move or delete terminals before deleting \(project.name)"
+            pendingDeleteGroup = nil
+            return
+        }
+        state.projects.removeAll { $0.id == project.id }
+        pendingDeleteGroup = nil
+        if selectedProjectID == project.id {
+            selectedProjectID = state.projects.first?.id
+            selectedEntryID = sessionEntries.first?.id
+        }
+        recordActionLog(
+            source: "native",
+            action: "deleteGroup",
+            targetName: project.name,
+            result: "Deleted empty group \(project.name)",
+            succeeded: true
+        )
+    }
+
+    func moveSession(_ entry: ProcessEntry, to projectId: UUID) {
+        guard let project = state.projects.first(where: { $0.id == projectId }) else {
+            errorMessage = "Target group no longer exists"
+            return
+        }
+        guard activeSessions[entry.id] == nil else {
+            errorMessage = "Stop \(entry.name) before moving it"
+            return
+        }
+        guard let index = state.processEntries.firstIndex(where: { $0.id == entry.id }) else {
+            errorMessage = "Terminal no longer exists: \(entry.name)"
+            return
+        }
+        state.processEntries[index].projectId = projectId
+        state.processEntries[index].workingDirectory = project.rootPath
+        selectedProjectID = projectId
+        selectedEntryID = entry.id
+        recordActionLog(
+            source: "native",
+            action: "moveSession",
+            targetEntryId: entry.id,
+            targetName: entry.name,
+            result: "Moved \(entry.name) to \(project.name)",
+            succeeded: true
+        )
+    }
+
+    func setBossPaneCollapsed(_ collapsed: Bool) {
+        guard state.bossPaneCollapsed != collapsed else {
+            return
+        }
+        state.bossPaneCollapsed = collapsed
+        save()
     }
 
     func setBossWatchEnabled(_ enabled: Bool) {
@@ -2106,7 +2580,8 @@ final class WorkbenchViewModel: ObservableObject {
     func refreshExecutableHealth() {
         executableHealthByEntryID = Dictionary(
             uniqueKeysWithValues: allSessionEntries.map { entry in
-                (entry.id, executableHealthChecker.health(for: entry.executable))
+                let tokens = TerminalAgentDetector.canonicalTokens(entry: entry)
+                return (entry.id, executableHealthChecker.health(for: tokens.executable))
             }
         )
     }
@@ -2242,6 +2717,7 @@ final class WorkbenchViewModel: ObservableObject {
             }
             recover(selectedEntry)
         case .searchTranscripts:
+            setBossPaneCollapsed(false)
             searchTranscripts()
         case .runRecoveryDrill:
             runRecoveryDrill()
@@ -2288,6 +2764,7 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     func runBossCheckIn() async {
+        setBossPaneCollapsed(false)
         await runBossCheckIn(question: bossBridgePlanner.checkInQuestion(), recentChanges: [])
     }
 
@@ -2296,17 +2773,20 @@ final class WorkbenchViewModel: ObservableObject {
         guard !question.isEmpty else {
             return
         }
+        setBossPaneCollapsed(false)
         await runBossCheckIn(question: bossBridgePlanner.checkInQuestion(userQuestion: question), recentChanges: [])
     }
 
     func runBossQuickQuestion(_ question: String) async {
         bossQuestion = question
+        setBossPaneCollapsed(false)
         await runBossCheckIn(question: bossBridgePlanner.checkInQuestion(userQuestion: question), recentChanges: [])
     }
 
     func runBossQuestion(about entry: ProcessEntry) async {
         let shortQuestion = "What is going on with \(entry.name)?"
         bossQuestion = shortQuestion
+        setBossPaneCollapsed(false)
         let question = """
         Focus on \(entry.name) (id=\(entry.id.uuidString)). Tell Ari what this session is doing, whether it is waiting on him, and what should happen next. If the next step is obvious for a trusted session, use auditable Workbench actions.
         """
@@ -2494,6 +2974,7 @@ final class WorkbenchViewModel: ObservableObject {
         }
         manuallyTerminatedRunIDs.insert(session.plan.runId)
         session.terminate()
+        markTerminated(entryId: entry.id, runId: session.plan.runId, rawStatus: nil)
     }
 
     @discardableResult
@@ -2502,7 +2983,7 @@ final class WorkbenchViewModel: ObservableObject {
             if state.projects.isEmpty {
                 state = bootstrapper.bootstrappedState(from: state)
             }
-            guard let project = state.projects.first else {
+            guard let project = selectedProject ?? state.projects.first else {
                 errorMessage = "No workbench project is available"
                 return nil
             }
@@ -2847,6 +3328,11 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     func markTerminated(entryId: UUID, runId: UUID, rawStatus: Int32?) {
+        guard let runIndex = state.processRuns.firstIndex(where: { $0.id == runId && $0.entryId == entryId }),
+              state.processRuns[runIndex].status == .running
+        else {
+            return
+        }
         let status = ProcessExitStatus(rawWaitStatus: rawStatus)
         let currentPlan = activeSessions[entryId]?.plan
         let isCurrentSession = currentPlan?.runId == runId
@@ -2866,12 +3352,10 @@ final class WorkbenchViewModel: ObservableObject {
                 }
             }
         }
-        if let runIndex = state.processRuns.firstIndex(where: { $0.id == runId && $0.entryId == entryId }) {
-            state.processRuns[runIndex].status = nextRunStatus
-            state.processRuns[runIndex].endedAt = Date()
-            state.processRuns[runIndex].exitCode = status.exitCode
-            state.processRuns[runIndex].rawExitStatus = status.rawWaitStatus
-        }
+        state.processRuns[runIndex].status = nextRunStatus
+        state.processRuns[runIndex].endedAt = Date()
+        state.processRuns[runIndex].exitCode = status.exitCode
+        state.processRuns[runIndex].rawExitStatus = status.rawWaitStatus
         save()
     }
 
@@ -2881,13 +3365,19 @@ final class WorkbenchViewModel: ObservableObject {
             state = startupRecoveryReconciler.reconcile(bootstrapper.bootstrappedState(from: loaded))
             bossWatchIsEnabled = state.bossWatchEnabled
             bossWatchBaselineState = bossWatchIsEnabled ? state : nil
-            selectedEntryID = sessionEntries.first?.id
+            selectedProjectID = state.selectedProjectId.flatMap { id in
+                state.projects.contains(where: { $0.id == id }) ? id : nil
+            } ?? state.projects.first?.id
+            selectedEntryID = state.selectedEntryId.flatMap { id in
+                sessionEntries.contains(where: { $0.id == id }) ? id : nil
+            } ?? sessionEntries.first?.id
             try store.save(state)
         } catch {
             errorMessage = String(describing: error)
             state = bootstrapper.bootstrappedState(from: WorkspaceState())
             bossWatchIsEnabled = state.bossWatchEnabled
             bossWatchBaselineState = nil
+            selectedProjectID = state.projects.first?.id
             selectedEntryID = sessionEntries.first?.id
         }
     }
