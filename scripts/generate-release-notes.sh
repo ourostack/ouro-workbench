@@ -59,6 +59,9 @@ scripts/install-latest-release.sh --open
 - Stable dashboard status rows that protect controls from long diagnostics, release, recovery, MCP, and mailbox messages.
 - Cleaner terminal reparenting so split and full-screen prompts redraw at the top after app reopen or focus changes.
 - Bounded compact Action Log rows so long native action results do not crowd the reveal control.
+- Sidebar project rows keep group names readable in narrow cmux-style navigation, with subdued add actions that no longer resemble selected terminals.
+- Terminal host resize redraws keep prompts top-aligned when the boss pane is collapsed, expanded, or moved into full-screen focus.
+- A small native terminal inset keeps prompts and typed commands from rendering against the host edge.
 - In-app Support Diagnostics for collecting, revealing, and copying a local evidence zip without transcript contents by default.
 
 ## Verification

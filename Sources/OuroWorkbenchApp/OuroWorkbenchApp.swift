@@ -152,47 +152,25 @@ struct WorkbenchSidebarView: View {
         List(selection: $model.selectedEntryID) {
             Section("Groups") {
                 ForEach(model.state.projects) { project in
-                    HStack(spacing: 6) {
-                        Button {
+                    SidebarProjectRow(
+                        project: project,
+                        activeTerminalCount: model.terminalCount(in: project),
+                        totalTerminalCount: model.totalTerminalCount(in: project),
+                        isSelected: model.selectedProject?.id == project.id,
+                        canDelete: model.totalTerminalCount(in: project) == 0 && model.state.projects.count > 1,
+                        select: {
                             model.selectProject(project.id)
-                        } label: {
-                            Label(project.name, systemImage: model.selectedProject?.id == project.id ? "folder.fill" : "folder")
-                                .lineLimit(1)
-                                .truncationMode(.middle)
+                        },
+                        rename: {
+                            model.beginEditingGroup(project)
+                        },
+                        delete: {
+                            model.requestDeleteGroup(project)
                         }
-                        .buttonStyle(.plain)
-                        .fontWeight(model.selectedProject?.id == project.id ? .semibold : .regular)
-                        Spacer()
-                        Text("\(model.terminalCount(in: project))")
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
-                        Menu {
-                            Button {
-                                model.beginEditingGroup(project)
-                            } label: {
-                                Label("Rename Group", systemImage: "pencil")
-                            }
-                            Button(role: .destructive) {
-                                model.requestDeleteGroup(project)
-                            } label: {
-                                Label("Delete Empty Group", systemImage: "trash")
-                            }
-                            .disabled(model.totalTerminalCount(in: project) > 0 || model.state.projects.count <= 1)
-                        } label: {
-                            Label("Group Actions", systemImage: "ellipsis.circle")
-                        }
-                        .labelStyle(.iconOnly)
-                        .menuStyle(.borderlessButton)
-                        .help("Group actions")
-                    }
-                    .help(project.rootPath)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("\(project.name), \(model.terminalCount(in: project)) active terminals, root \(project.rootPath)")
+                    )
                 }
-                Button {
+                SidebarActionRow(title: "New Group", systemImage: "folder.badge.plus") {
                     model.isNewGroupSheetPresented = true
-                } label: {
-                    Label("New Group", systemImage: "folder.badge.plus")
                 }
             }
             Section(model.selectedProject?.name ?? "Terminals") {
@@ -205,10 +183,8 @@ struct WorkbenchSidebarView: View {
                     )
                         .tag(entry.id)
                 }
-                Button {
+                SidebarActionRow(title: "New Terminal", systemImage: "plus") {
                     model.isNewSessionSheetPresented = true
-                } label: {
-                    Label("New Terminal", systemImage: "plus")
                 }
                 .keyboardShortcut("n", modifiers: [.command])
             }
@@ -230,6 +206,106 @@ struct WorkbenchSidebarView: View {
             }
         }
         .padding(.top, 28)
+    }
+}
+
+struct SidebarProjectRow: View {
+    var project: WorkbenchProject
+    var activeTerminalCount: Int
+    var totalTerminalCount: Int
+    var isSelected: Bool
+    var canDelete: Bool
+    var select: () -> Void
+    var rename: () -> Void
+    var delete: () -> Void
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Button(action: select) {
+                HStack(spacing: 6) {
+                    Image(systemName: isSelected ? "folder.fill" : "folder")
+                        .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+                        .frame(width: 16)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(project.name)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .fontWeight(isSelected ? .semibold : .regular)
+                        Text(project.rootPath)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    .layoutPriority(1)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .layoutPriority(1)
+
+            SidebarCountBadge(count: activeTerminalCount)
+
+            Menu {
+                Button(action: rename) {
+                    Label("Rename Group", systemImage: "pencil")
+                }
+                Button(role: .destructive, action: delete) {
+                    Label("Delete Empty Group", systemImage: "trash")
+                }
+                .disabled(!canDelete)
+            } label: {
+                Label("Group Actions", systemImage: "ellipsis.circle")
+            }
+            .labelStyle(.iconOnly)
+            .menuStyle(.borderlessButton)
+            .help("Group actions")
+            .fixedSize()
+        }
+        .padding(.vertical, 1)
+        .help(project.rootPath)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(project.name), \(activeTerminalCount) active terminals, \(totalTerminalCount) total terminals, root \(project.rootPath)")
+    }
+}
+
+struct SidebarActionRow: View {
+    var title: String
+    var systemImage: String
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: systemImage)
+                    .frame(width: 16)
+                Text(title)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer(minLength: 0)
+            }
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .padding(.vertical, 2)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(title)
+        .accessibilityLabel(title)
+    }
+}
+
+struct SidebarCountBadge: View {
+    var count: Int
+
+    var body: some View {
+        Text("\(count)")
+            .font(.caption2.monospacedDigit())
+            .foregroundStyle(.secondary)
+            .frame(minWidth: 16, minHeight: 16)
+            .background(.secondary.opacity(0.10), in: Capsule())
+            .accessibilityLabel("\(count) active terminals")
     }
 }
 
@@ -5037,6 +5113,19 @@ struct TerminalPane: NSViewRepresentable {
 
 final class TerminalHostView: NSView {
     private weak var terminal: CapturingLocalProcessTerminalView?
+    private var lastLaidOutSize: NSSize = .zero
+    private var pendingRedrawWorkItem: DispatchWorkItem?
+    private static let contentInset = NSEdgeInsets(top: 2, left: 4, bottom: 2, right: 2)
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        configureBacking()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        configureBacking()
+    }
 
     override var intrinsicContentSize: NSSize {
         NSSize(width: NSView.noIntrinsicMetric, height: NSView.noIntrinsicMetric)
@@ -5049,23 +5138,51 @@ final class TerminalHostView: NSView {
         }
         self.terminal?.removeFromSuperview()
         self.terminal = terminal
+        pendingRedrawWorkItem?.cancel()
+        lastLaidOutSize = .zero
         terminal.removeFromSuperview()
-        terminal.frame = bounds
+        terminal.frame = terminalContentFrame
         terminal.autoresizingMask = [.width, .height]
         addSubview(terminal)
         needsLayout = true
         focusTerminal()
-        redrawTerminalAfterAttach()
+        scheduleTerminalRedraw(after: 0.08)
     }
 
     override func layout() {
         super.layout()
-        terminal?.frame = bounds
+        guard let terminal else {
+            return
+        }
+        terminal.frame = terminalContentFrame
+        let size = bounds.size
+        guard size.width > 20, size.height > 20 else {
+            return
+        }
+        if abs(size.width - lastLaidOutSize.width) > 1 || abs(size.height - lastLaidOutSize.height) > 1 {
+            lastLaidOutSize = size
+            scheduleTerminalRedraw(after: 0.05)
+        }
     }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         focusTerminal()
+    }
+
+    private var terminalContentFrame: NSRect {
+        let inset = Self.contentInset
+        return NSRect(
+            x: bounds.minX + inset.left,
+            y: bounds.minY + inset.bottom,
+            width: max(0, bounds.width - inset.left - inset.right),
+            height: max(0, bounds.height - inset.top - inset.bottom)
+        )
+    }
+
+    private func configureBacking() {
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.black.cgColor
     }
 
     private func focusTerminal() {
@@ -5077,14 +5194,17 @@ final class TerminalHostView: NSView {
         }
     }
 
-    private func redrawTerminalAfterAttach() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak terminal] in
+    private func scheduleTerminalRedraw(after delay: TimeInterval) {
+        pendingRedrawWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak terminal] in
             guard let terminal else {
                 return
             }
             terminal.send([0x0c])
             terminal.window?.makeFirstResponder(terminal)
         }
+        pendingRedrawWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 }
 
