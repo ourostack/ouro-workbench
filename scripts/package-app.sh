@@ -54,6 +54,8 @@ cp "$ROOT_DIR/.build/release/$PRODUCT_NAME" "$MACOS_DIR/$PRODUCT_NAME"
 chmod 755 "$MACOS_DIR/$PRODUCT_NAME"
 cp "$ROOT_DIR/.build/release/$MCP_PRODUCT_NAME" "$MACOS_DIR/$MCP_PRODUCT_NAME"
 chmod 755 "$MACOS_DIR/$MCP_PRODUCT_NAME"
+cp "$ROOT_DIR/scripts/collect-support-diagnostics.sh" "$RESOURCES_DIR/collect-support-diagnostics.sh"
+chmod 755 "$RESOURCES_DIR/collect-support-diagnostics.sh"
 ditto "$SWIFTTERM_BUNDLE" "$APP_DIR/$SWIFTTERM_BUNDLE_NAME"
 
 if [[ ! -x "$SCREEN_SOURCE" ]]; then

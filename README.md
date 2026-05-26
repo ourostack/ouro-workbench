@@ -60,10 +60,11 @@ scripts/package-app.sh
 open "dist/Ouro Workbench.app"
 ```
 
-The bundle includes the native app, the packaged Workbench MCP server, and the
-terminal persistence backend under `Contents/MacOS/Tools/` so normal installed
-runs do not depend on Homebrew or a separate multiplexer install. It also
-includes the Workbench app icon and SwiftTerm runtime resources.
+The bundle includes the native app, the packaged Workbench MCP server, the
+support diagnostics helper, and the terminal persistence backend under
+`Contents/MacOS/Tools/` so normal installed runs do not depend on Homebrew or a
+separate multiplexer install. It also includes the Workbench app icon and
+SwiftTerm runtime resources.
 
 Install it on this Mac:
 
@@ -117,6 +118,14 @@ Workbench actions that the native app applies through the same trust gates as
 external MCP requests. Those actions can operate terminals and organize the
 workspace: launch, recover, stop, send input, create groups, create terminals,
 move stopped sessions, change trust/restart posture, archive, and restore.
+
+Running terminals include a `Redraw` control in both pane and focused modes. It
+sends Ctrl-L to the terminal, which is the explicit operator move for refreshing
+a shell or TUI after resizing without silently clearing live output.
+
+The native boss dashboard includes `Support Diagnostics`. It creates a local zip
+with system, app-bundle, login-item, runtime, and workspace summary evidence
+without copying transcript contents or raw workspace state by default.
 
 Each session header also has an `Ask Boss` button for focused questions about
 that terminal. It gives the boss the selected process id and asks whether the

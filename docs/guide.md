@@ -579,10 +579,12 @@ This is TTFA in product form: trust the agent, keep the trail.
 | An agent executable is missing | The command is not available on the app's PATH. | Install or repair the CLI, then refresh readiness. |
 | Boss Watch is paused | Automatic observation is off. | Turn on `Watch` when you want background coordination. |
 | Boss Line fails | The Ouro CLI or selected boss process could not complete the ask. | Verify `ouro mcp-serve --agent <boss>` works in a terminal. |
+| A prompt sits high after focusing a terminal | The live PTY screen was preserved from a shorter pane height. | Click `Redraw` or use the command palette to send Ctrl-L; Workbench does not auto-clear live TUI output on resize. |
 | A session will not auto-recover | Trust, auto-resume, or native resume posture is missing. | Run `Recovery Drill` and inspect the reason. |
 | A boss action is skipped | The action violated a local trust gate or current runtime state. | Check `Action Log` for the exact result. |
 | The app did not reopen after restart | Login item state may be off or stale. | Toggle `Open at Login` off and back on, then refresh. |
 | Release update check is unavailable | GitHub Releases could not be reached or no release exists yet. | Use the current installed build, then check again when online. |
+| A bug report needs evidence | The app can collect a safe diagnostics bundle without transcript contents. | Use `Support Diagnostics` in the boss dashboard, then reveal the zip. |
 | Transcript search finds nothing | The session may not have produced a persisted run transcript yet. | Launch the session, produce output, stop or switch, then search again. |
 
 ## What Good Looks Like

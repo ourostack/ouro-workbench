@@ -1,9 +1,19 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUT_ROOT="$ROOT_DIR/artifacts/support-diagnostics"
-APP_PATH="$HOME/Applications/Ouro Workbench.app"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BUNDLE_MODE="false"
+if [[ "$(basename "$SCRIPT_DIR")" == "Resources" && -f "$SCRIPT_DIR/../Info.plist" ]]; then
+  BUNDLE_MODE="true"
+  CONTENTS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+  ROOT_DIR="$CONTENTS_DIR"
+  APP_PATH="$(cd "$CONTENTS_DIR/.." && pwd)"
+  OUT_ROOT="$HOME/Library/Application Support/OuroWorkbench/support-diagnostics"
+else
+  ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+  OUT_ROOT="$ROOT_DIR/artifacts/support-diagnostics"
+  APP_PATH="$HOME/Applications/Ouro Workbench.app"
+fi
 INCLUDE_STATE="false"
 
 usage() {
@@ -14,8 +24,8 @@ Create a local support diagnostics zip. By default this records summaries only:
 no transcript contents and no raw workspace state.
 
 Options:
-  --out DIR          Output directory (default: artifacts/support-diagnostics)
-  --app PATH         Installed app path (default: ~/Applications/Ouro Workbench.app)
+  --out DIR          Output directory (repo: artifacts/support-diagnostics; app: Application Support)
+  --app PATH         Installed app path (default: current bundle or ~/Applications/Ouro Workbench.app)
   --include-state    Copy raw workspace-state.json into the diagnostics bundle
   -h, --help         Show this help
 USAGE
@@ -79,7 +89,8 @@ run_capture() {
 
 {
   printf 'generated_at_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  printf 'repo=%s\n' "$ROOT_DIR"
+  printf 'mode=%s\n' "$([[ "$BUNDLE_MODE" == "true" ]] && printf 'bundle' || printf 'repo')"
+  printf 'root=%s\n' "$ROOT_DIR"
   printf 'app_path=%s\n' "$APP_PATH"
   printf 'app_support=%s\n' "$app_support"
   printf 'raw_state_included=%s\n' "$INCLUDE_STATE"
@@ -90,11 +101,21 @@ run_capture "uname.txt" uname -a
 
 {
   printf 'version='
-  tr -d '[:space:]' < "$ROOT_DIR/VERSION" 2>/dev/null || printf 'unknown'
+  if [[ -f "$ROOT_DIR/VERSION" ]]; then
+    tr -d '[:space:]' < "$ROOT_DIR/VERSION"
+  elif [[ -f "$APP_PATH/Contents/Info.plist" ]]; then
+    /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP_PATH/Contents/Info.plist" 2>/dev/null || printf 'unknown'
+  else
+    printf 'unknown'
+  fi
   printf '\n'
-  git -C "$ROOT_DIR" rev-parse --show-toplevel 2>/dev/null || true
-  git -C "$ROOT_DIR" rev-parse HEAD 2>/dev/null || true
-  git -C "$ROOT_DIR" status --short --branch 2>/dev/null || true
+  if git -C "$ROOT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    git -C "$ROOT_DIR" rev-parse --show-toplevel 2>/dev/null || true
+    git -C "$ROOT_DIR" rev-parse HEAD 2>/dev/null || true
+    git -C "$ROOT_DIR" status --short --branch 2>/dev/null || true
+  else
+    printf 'git=unavailable\n'
+  fi
 } >"$bundle_dir/repo.txt"
 
 if [[ -d "$APP_PATH" ]]; then
@@ -106,7 +127,11 @@ if [[ -d "$APP_PATH" ]]; then
     printf '\n-- codesign --\n'
     codesign -dv "$APP_PATH" 2>&1 || true
     printf '\n-- bundle verifier --\n'
-    "$ROOT_DIR/scripts/verify-app-bundle.sh" "$APP_PATH" --gui-smoke-timeout 3 2>&1 || true
+    if [[ -x "$ROOT_DIR/scripts/verify-app-bundle.sh" ]]; then
+      "$ROOT_DIR/scripts/verify-app-bundle.sh" "$APP_PATH" --gui-smoke-timeout 3 2>&1 || true
+    else
+      printf 'repo bundle verifier unavailable from this diagnostics helper\n'
+    fi
   } >"$bundle_dir/app-bundle.txt"
 else
   printf 'Installed app bundle not found at %s\n' "$APP_PATH" >"$bundle_dir/app-bundle.txt"
