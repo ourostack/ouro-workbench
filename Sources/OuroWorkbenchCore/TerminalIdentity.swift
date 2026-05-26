@@ -24,15 +24,18 @@ public enum TerminalCommandParser {
         var current = ""
         var quote: Character?
         var escaped = false
+        var tokenStarted = false
 
         for character in command {
             if escaped {
                 current.append(character)
                 escaped = false
+                tokenStarted = true
                 continue
             }
             if character == "\\" {
                 escaped = true
+                tokenStarted = true
                 continue
             }
             if let activeQuote = quote {
@@ -41,25 +44,30 @@ public enum TerminalCommandParser {
                 } else {
                     current.append(character)
                 }
+                tokenStarted = true
                 continue
             }
             if character == "\"" || character == "'" {
                 quote = character
+                tokenStarted = true
                 continue
             }
             if character.isWhitespace {
-                if !current.isEmpty {
+                if tokenStarted {
                     tokens.append(current)
                     current = ""
+                    tokenStarted = false
                 }
                 continue
             }
             current.append(character)
+            tokenStarted = true
         }
         if escaped {
             current.append("\\")
+            tokenStarted = true
         }
-        if !current.isEmpty {
+        if tokenStarted {
             tokens.append(current)
         }
         return tokens

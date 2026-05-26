@@ -30,7 +30,10 @@ jobs:
 
       - name: Render 100,000 native scenario surfaces
         run: >
-          swift run OuroWorkbenchScenarioVerifier
+          swift run
+          -Xswiftc -warnings-as-errors
+          -Xswiftc -strict-concurrency=complete
+          OuroWorkbenchScenarioVerifier
           --out artifacts/workbench-scenario-verifier-deep
           --no-samples
           --deep-scenarios 15000

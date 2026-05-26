@@ -15,6 +15,7 @@ TOOLS_DIR="$MACOS_DIR/Tools"
 SCREEN_SOURCE="/usr/bin/screen"
 SWIFTTERM_BUNDLE_NAME="SwiftTerm_SwiftTerm.bundle"
 APP_ICON_NAME="OuroWorkbench.icns"
+SWIFT_STRICT_FLAGS=(-Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete)
 
 cd "$ROOT_DIR"
 
@@ -39,8 +40,8 @@ if git -C "$ROOT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   fi
 fi
 
-swift build -c release --product "$PRODUCT_NAME"
-swift build -c release --product "$MCP_PRODUCT_NAME"
+swift build -c release "${SWIFT_STRICT_FLAGS[@]}" --product "$PRODUCT_NAME"
+swift build -c release "${SWIFT_STRICT_FLAGS[@]}" --product "$MCP_PRODUCT_NAME"
 SWIFTTERM_BUNDLE="$(find "$ROOT_DIR/.build" -path "*/release/$SWIFTTERM_BUNDLE_NAME" -type d -print -quit)"
 if [[ -z "$SWIFTTERM_BUNDLE" ]]; then
   printf 'Required SwiftTerm resource bundle is missing from release build\n' >&2

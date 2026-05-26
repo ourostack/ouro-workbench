@@ -34,7 +34,7 @@ jobs:
         run: swift package resolve
 
       - name: Run tests
-        run: swift test
+        run: swift test -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete
 
   native-scenario-verifier:
     name: Native scenario verifier
@@ -53,7 +53,10 @@ jobs:
 
       - name: Render 25,000 native scenario surfaces
         run: >
-          swift run OuroWorkbenchScenarioVerifier
+          swift run
+          -Xswiftc -warnings-as-errors
+          -Xswiftc -strict-concurrency=complete
+          OuroWorkbenchScenarioVerifier
           --out artifacts/workbench-scenario-verifier
           --no-samples
           --expect-rows 5000

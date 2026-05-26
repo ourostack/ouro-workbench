@@ -5,6 +5,7 @@ public enum TranscriptTextSanitizer {
         var output = String.UnicodeScalarView()
         let scalars = Array(text.unicodeScalars)
         var index = scalars.startIndex
+        var sawEscapeSequence = false
 
         while index < scalars.endIndex {
             let scalar = scalars[index]
@@ -16,21 +17,23 @@ public enum TranscriptTextSanitizer {
                 continue
             }
 
+            sawEscapeSequence = true
             index = indexAfterEscapeSequence(in: scalars, startingAt: index)
         }
 
-        return postProcess(String(output))
+        return postProcess(String(output), omittingRepaintFragments: sawEscapeSequence)
     }
 
     private static func shouldKeepControlScalar(_ scalar: Unicode.Scalar) -> Bool {
         scalar.value >= 0x20 || scalar == "\n" || scalar == "\t" || scalar == "\r"
     }
 
-    private static func postProcess(_ text: String) -> String {
+    private static func postProcess(_ text: String, omittingRepaintFragments: Bool) -> String {
         let normalized = text
             .replacingOccurrences(of: "\r\n", with: "\n")
             .replacingOccurrences(of: "\r", with: "\n")
-        return collapseBlankLines(omitTerminalRepaintFragments(in: normalized))
+        let text = omittingRepaintFragments ? omitTerminalRepaintFragments(in: normalized) : normalized
+        return collapseBlankLines(text)
     }
 
     private static func omitTerminalRepaintFragments(in text: String) -> String {

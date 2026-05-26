@@ -54,6 +54,15 @@ final class TranscriptTailReaderTests: XCTestCase {
         try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
     }
 
+    func testReadsTailPreservingPlainShortLines() throws {
+        let url = try transcript(contents: "1\n2\n3\n4\n5\n6\n")
+
+        let tail = try XCTUnwrap(TranscriptTailReader(maxBytes: 100).read(path: url.path))
+
+        XCTAssertEqual(tail.text, "1\n2\n3\n4\n5\n6\n")
+        try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
+    }
+
     func testTranscriptTailLimitClampsCallerProvidedValues() {
         XCTAssertEqual(TranscriptTailLimit.clamped(nil), 12_000)
         XCTAssertEqual(TranscriptTailLimit.clamped(40_000), 40_000)

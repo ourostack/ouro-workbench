@@ -70,6 +70,78 @@ final class CommandPlannerTests: XCTestCase {
         XCTAssertEqual(plan.recoveryAction, .autoResume)
     }
 
+    func testNativeResumePlanDropsStaleClaudeResumeSessionArgument() throws {
+        let project = WorkbenchProject(name: "Project", rootPath: "/tmp/project")
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "Claude Code",
+            kind: .terminalAgent,
+            agentKind: .claudeCode,
+            executable: "claude",
+            arguments: ["--dangerously-skip-permissions", "--resume", "stale-session"],
+            workingDirectory: "/tmp/project",
+            trust: .trusted,
+            autoResume: true
+        )
+        let run = ProcessRun(
+            entryId: entry.id,
+            status: .needsRecovery,
+            terminalSessionId: "fresh-session"
+        )
+
+        let plan = try WorkbenchCommandPlanner().recoveryPlan(for: entry, latestRun: run, action: .autoResume)
+
+        XCTAssertEqual(plan.arguments, ["--dangerously-skip-permissions", "--resume", "fresh-session"])
+    }
+
+    func testNativeResumePlanDropsStaleCodexResumeSessionArgument() throws {
+        let project = WorkbenchProject(name: "Project", rootPath: "/tmp/project")
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "Codex",
+            kind: .terminalAgent,
+            agentKind: .openAICodex,
+            executable: "codex",
+            arguments: ["--yolo", "resume", "stale-session"],
+            workingDirectory: "/tmp/project",
+            trust: .trusted,
+            autoResume: true
+        )
+        let run = ProcessRun(
+            entryId: entry.id,
+            status: .needsRecovery,
+            terminalSessionId: "fresh-session"
+        )
+
+        let plan = try WorkbenchCommandPlanner().recoveryPlan(for: entry, latestRun: run, action: .autoResume)
+
+        XCTAssertEqual(plan.arguments, ["--yolo", "resume", "fresh-session"])
+    }
+
+    func testNativeResumePlanPreservesNonStrategyArgumentsNamedResume() throws {
+        let project = WorkbenchProject(name: "Project", rootPath: "/tmp/project")
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "Claude Code",
+            kind: .terminalAgent,
+            agentKind: .claudeCode,
+            executable: "claude",
+            arguments: ["--label", "resume"],
+            workingDirectory: "/tmp/project",
+            trust: .trusted,
+            autoResume: true
+        )
+        let run = ProcessRun(
+            entryId: entry.id,
+            status: .needsRecovery,
+            terminalSessionId: "fresh-session"
+        )
+
+        let plan = try WorkbenchCommandPlanner().recoveryPlan(for: entry, latestRun: run, action: .autoResume)
+
+        XCTAssertEqual(plan.arguments, ["--label", "resume", "--resume", "fresh-session"])
+    }
+
     func testAbsoluteExecutablesLaunchDirectly() {
         let plan = TerminalCommandPlan(
             entryId: UUID(),
@@ -98,6 +170,19 @@ final class CommandPlannerTests: XCTestCase {
         XCTAssertEqual(plan.launchInvocation.executable, "/usr/bin/screen")
         XCTAssertEqual(Array(plan.launchInvocation.arguments.suffix(3)), ["--", "/bin/zsh", "-l"])
         XCTAssertEqual(PersistentTerminalSession.terminateArguments(sessionName: "session"), ["-S", "session", "-X", "quit"])
+        XCTAssertEqual(PersistentTerminalSession.listArguments(), ["-ls"])
+    }
+
+    func testPersistentTerminalSessionDetectsListedSessionNames() {
+        let output = """
+        There is a screen on:
+            12345.ouro-wb-abc123\t(Detached)
+        1 Socket in /var/folders/example.
+        """
+
+        XCTAssertTrue(PersistentTerminalSession.listOutput(output, contains: "ouro-wb-abc123"))
+        XCTAssertFalse(PersistentTerminalSession.listOutput(output, contains: "ouro-wb-missing"))
+        XCTAssertFalse(PersistentTerminalSession.listOutput(output, contains: "ouro-wb-abc12"))
     }
 
     func testPersistentTerminalSessionPrefersBundledScreenExecutable() throws {
