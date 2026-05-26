@@ -53,7 +53,7 @@ MCP_EXECUTABLE="$MACOS_DIR/OuroWorkbenchMCP"
 SCREEN_EXECUTABLE="$MACOS_DIR/Tools/screen"
 SUPPORT_DIAGNOSTICS_SCRIPT="$RESOURCES_DIR/collect-support-diagnostics.sh"
 APP_ICON="$RESOURCES_DIR/OuroWorkbench.icns"
-SWIFTTERM_BUNDLE="$APP_DIR/SwiftTerm_SwiftTerm.bundle"
+SWIFTTERM_BUNDLE="$RESOURCES_DIR/SwiftTerm_SwiftTerm.bundle"
 
 fail() {
   printf 'App bundle verification failed: %s\n' "$1" >&2
@@ -132,8 +132,13 @@ require_executable "$SUPPORT_DIAGNOSTICS_SCRIPT"
 [[ -f "$APP_ICON" ]] || fail "missing app icon"
 [[ "$(stat -f %z "$APP_ICON")" -gt 0 ]] || fail "empty app icon"
 [[ -d "$SWIFTTERM_BUNDLE" ]] || fail "missing SwiftTerm resource bundle"
+[[ ! -e "$APP_DIR/SwiftTerm_SwiftTerm.bundle" ]] || fail "SwiftTerm resource bundle must not be placed at app bundle root"
 
 run_gui_smoke
+
+if ! codesign --verify --deep --strict --verbose=2 "$APP_DIR" >/dev/null 2>&1; then
+  fail "app bundle code signature does not verify"
+fi
 
 mcp_initialize="$(printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | "$MCP_EXECUTABLE")"
 if ! grep -F "\"name\":\"ouro-workbench\"" <<<"$mcp_initialize" >/dev/null; then

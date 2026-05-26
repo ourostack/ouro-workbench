@@ -22,6 +22,7 @@ mkdir -p "$INSTALL_DIR"
 ditto "dist/$APP_NAME" "$INSTALL_DIR/$APP_NAME"
 mkdir -p "$INSTALL_DIR/$APP_NAME/Contents/Resources"
 printf 'previous app survived rollback\n' > "$INSTALL_DIR/$APP_NAME/$MARKER_PATH"
+codesign --force --deep --sign - "$INSTALL_DIR/$APP_NAME" >/dev/null
 
 {
   printf '#!/usr/bin/env bash\n'

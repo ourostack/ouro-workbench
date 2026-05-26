@@ -15,7 +15,7 @@ work moving.
 
 ## Release State
 
-- Public unsigned preview for macOS 14+.
+- Public ad-hoc-signed preview for macOS 14+.
 - Apple Developer ID signing and notarization are not included in this release.
 - The app bundle includes the native app, Workbench MCP server, SwiftTerm
   resources, terminal persistence backend, support diagnostics helper, and app

@@ -17,7 +17,7 @@ scripts/install-app.sh --open
 Install a downloaded, verified artifact directly from its manifest:
 
 ```bash
-scripts/install-app.sh --artifact-manifest artifacts/OuroWorkbench-0.1.6-build.<build>-<sha>.manifest.json --open
+scripts/install-app.sh --artifact-manifest artifacts/OuroWorkbench-0.1.7-build.<build>-<sha>.manifest.json --open
 ```
 
 Install the latest successful protected `main` artifact in one step:
@@ -41,8 +41,8 @@ The installer stages the new app inside the target directory, moves the previous
 bundle aside, promotes the staged bundle, verifies it, and restores the previous
 bundle if any pre-success install or verification step fails.
 
-The generated bundle is intentionally local and unsigned for now. It lives under
-`dist/`, which is ignored by git. The bundle includes:
+The generated bundle is intentionally local and ad-hoc signed for now. It lives
+under `dist/`, which is ignored by git. The bundle includes:
 
 - `Contents/MacOS/OuroWorkbench`
 - `Contents/MacOS/OuroWorkbenchMCP`
@@ -50,7 +50,8 @@ The generated bundle is intentionally local and unsigned for now. It lives under
 - `Contents/Resources/collect-support-diagnostics.sh`, the bundled support
   diagnostics helper
 - `Contents/Resources/OuroWorkbench.icns`, the native app icon
-- `SwiftTerm_SwiftTerm.bundle`, the embedded terminal resource bundle
+- `Contents/Resources/SwiftTerm_SwiftTerm.bundle`, the embedded terminal
+  resource bundle
 
 `VERSION` is the source of truth for `CFBundleShortVersionString` and the
 Workbench MCP `serverInfo.version`. `scripts/package-app.sh` derives the bundle
@@ -64,8 +65,9 @@ Verify a packaged bundle with:
 scripts/verify-app-bundle.sh
 ```
 
-Bundle verification also runs the native executable in `--smoke-launch` mode so
-missing runtime resources are caught before CI uploads the artifact.
+Bundle verification also checks the ad-hoc bundle signature and runs the native
+executable in `--smoke-launch` mode so missing runtime resources are caught
+before CI uploads the artifact.
 
 Create a versioned zip plus manifest with SHA-256 and bundle metadata:
 
@@ -76,7 +78,7 @@ scripts/archive-app-artifact.sh
 Verify a downloaded zip against its manifest, then expand and verify the app:
 
 ```bash
-scripts/verify-app-artifact.sh artifacts/OuroWorkbench-0.1.6-build.<build>-<sha>.manifest.json
+scripts/verify-app-artifact.sh artifacts/OuroWorkbench-0.1.7-build.<build>-<sha>.manifest.json
 ```
 
 Run the full local protected-gate preflight with:
@@ -135,15 +137,15 @@ Current bundle identity:
 - Version source: `VERSION`
 - Minimum macOS version: `14.0`
 
-Public unsigned preview releases are published by `.github/workflows/release.yml`.
-The workflow checks out full git history, runs `scripts/preflight.sh`, generates
-release notes, and attaches the verified app zip plus manifest to a GitHub
-Release. Apple Developer ID signing and notarization remain the explicit
-post-preview distribution gap.
+Public ad-hoc-signed preview releases are published by
+`.github/workflows/release.yml`. The workflow checks out full git history, runs
+`scripts/preflight.sh`, generates release notes, and attaches the verified app
+zip plus manifest to a GitHub Release. Apple Developer ID signing and
+notarization remain the explicit post-preview distribution gap.
 
 CI has a separate `App bundle` job that checks out full git history, packages
 the release app, verifies the bundle contents, rejects local build-path linkage,
-and uploads the unsigned app artifact for inspection. The uploaded artifact
+and uploads the ad-hoc-signed app artifact for inspection. The uploaded artifact
 contains a versioned zip created with `ditto --keepParent`, so downloading and
 expanding it preserves the `Ouro Workbench.app` wrapper instead of flattening
 the bundle contents. The manifest records the bundle identifier, version, build

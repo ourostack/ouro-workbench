@@ -9,7 +9,7 @@ APP_DIR="$TEMP_ROOT/Ouro Workbench.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
-mkdir -p "$MACOS_DIR/Tools" "$RESOURCES_DIR" "$APP_DIR/SwiftTerm_SwiftTerm.bundle"
+mkdir -p "$MACOS_DIR/Tools" "$RESOURCES_DIR/SwiftTerm_SwiftTerm.bundle"
 
 version="$(tr -d '[:space:]' < "$ROOT_DIR/VERSION")"
 cat > "$CONTENTS_DIR/Info.plist" <<PLIST

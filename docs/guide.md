@@ -628,8 +628,8 @@ Workbench is already useful, but the truth matters:
   Workbench uses explicit respawn/checkpoint recovery for that CLI.
 - Boss `sendInput` only works for a running session with a retained controller.
 - Workbench MCP registration currently points at the installed app bundle path.
-- The app is distributed as an unsigned preview. Apple Developer ID signing and
-  notarization are separate release work.
+- The app is distributed as an ad-hoc-signed preview. Apple Developer ID signing
+  and notarization are separate release work.
 
 Those limits are acceptable only because they are visible. The product should
 always prefer an honest yellow light over a fake green one.
