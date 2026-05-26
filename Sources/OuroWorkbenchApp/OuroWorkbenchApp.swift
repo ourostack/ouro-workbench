@@ -58,7 +58,11 @@ struct WorkbenchRootView: View {
             model.recoverEligibleSessionsOnStartup()
             model.launchDefaultShellIfNeeded()
             model.refreshExecutableHealth()
+            model.refreshOnboardingReadiness()
             await model.refreshBossDashboard()
+            if model.shouldPresentOnboardingOnLaunch {
+                model.isOnboardingPresented = true
+            }
             if model.bossWatchIsEnabled {
                 await model.runBossWatchTick(force: true)
             }
@@ -80,6 +84,9 @@ struct WorkbenchRootView: View {
         }
         .sheet(isPresented: $model.isOuroAgentInstallSheetPresented) {
             OuroAgentInstallSheet(model: model)
+        }
+        .sheet(isPresented: $model.isOnboardingPresented) {
+            WorkbenchOnboardingSheet(model: model)
         }
         .confirmationDialog("Delete Terminal?", isPresented: model.deleteConfirmationIsPresented) {
             if let entry = model.pendingDeleteSession {
@@ -412,6 +419,14 @@ struct HeaderView: View {
             .fixedSize()
             AutonomyStatusButton(model: model)
                 .fixedSize()
+            Button {
+                model.presentOnboarding()
+            } label: {
+                Label("Set Up Workbench", systemImage: "wand.and.stars")
+            }
+            .labelStyle(.iconOnly)
+            .help("Set up or bootstrap this Workbench")
+            .fixedSize()
             Button {
                 model.isCommandPalettePresented = true
             } label: {
@@ -1411,6 +1426,336 @@ struct OuroAgentInstallSheet: View {
             agentName: agentName,
             remote: remote
         )
+    }
+}
+
+struct WorkbenchOnboardingSheet: View {
+    @ObservedObject var model: WorkbenchViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var instruction = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center, spacing: 12) {
+                Image(systemName: "wand.and.stars")
+                    .font(.title2)
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 30)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Set Up Workbench")
+                        .font(.title3.weight(.semibold))
+                    Text("I'll find your agent, arrange your recent work, and mirror it into Desk.")
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Done") {
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+            }
+            .padding(18)
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    OnboardingConversationView(model: model)
+                    OnboardingReadinessView(model: model)
+                    OnboardingBootstrapView(model: model)
+                }
+                .padding(18)
+            }
+
+            Divider()
+
+            HStack(spacing: 10) {
+                TextField("Tell Workbench what to do next", text: $instruction)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit(handleInstruction)
+                Button {
+                    handleInstruction()
+                } label: {
+                    Label("Send", systemImage: "arrow.up.circle.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            .padding(18)
+        }
+        .frame(width: 780, height: 720)
+        .onAppear {
+            model.refreshOnboardingReadiness()
+        }
+    }
+
+    private func handleInstruction() {
+        let text = instruction
+        instruction = ""
+        model.handleOnboardingInstruction(text)
+    }
+}
+
+private struct OnboardingConversationView: View {
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            OnboardingBubble(
+                systemImage: "sparkles",
+                title: "Workbench",
+                text: model.onboardingOpeningLine
+            )
+            if let readiness = model.onboardingReadiness {
+                OnboardingBubble(
+                    systemImage: readiness.isReady ? "checkmark.circle.fill" : "exclamationmark.triangle.fill",
+                    title: readiness.selectedBossName,
+                    text: "\(readiness.headline). \(readiness.detail)"
+                )
+            }
+            if let proposal = model.onboardingProposal {
+                OnboardingBubble(
+                    systemImage: "square.grid.2x2",
+                    title: "Arrangement",
+                    text: "I found \(proposal.groups.count) group\(proposal.groups.count == 1 ? "" : "s") and \(proposal.selectedTerminalCount) high-confidence terminal\(proposal.selectedTerminalCount == 1 ? "" : "s") to resume."
+                )
+            }
+            if !model.onboardingDeskChanges.isEmpty {
+                OnboardingBubble(
+                    systemImage: "checkmark.seal.fill",
+                    title: "Desk",
+                    text: "Mirrored \(model.onboardingDeskChanges.count) Desk file\(model.onboardingDeskChanges.count == 1 ? "" : "s")."
+                )
+            }
+        }
+    }
+}
+
+private struct OnboardingBubble: View {
+    var systemImage: String
+    var title: String
+    var text: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: systemImage)
+                .frame(width: 18)
+                .foregroundStyle(Color.accentColor)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                Text(text)
+                    .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(10)
+        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct OnboardingReadinessView: View {
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label(sectionTitle, systemImage: "person.crop.circle.badge.checkmark")
+                    .font(.headline)
+                Spacer()
+                Button {
+                    model.refreshOuroAgents()
+                    model.refreshWorkbenchMCPRegistration()
+                    model.refreshOnboardingReadiness()
+                } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+                .controlSize(.small)
+            }
+            if let readiness = model.onboardingReadiness {
+                ForEach(readiness.repairSteps) { step in
+                    OnboardingRepairStepRow(step: step, model: model)
+                }
+            }
+        }
+    }
+
+    private var sectionTitle: String {
+        if model.onboardingReadiness?.isReady == true {
+            return "Ouro Agent Checks"
+        }
+        return "Ouro Agent"
+    }
+}
+
+private struct OnboardingRepairStepRow: View {
+    var step: OnboardingRepairStep
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            StatusPill(text: actorLabel, color: color)
+                .fixedSize()
+            VStack(alignment: .leading, spacing: 1) {
+                Text(step.title)
+                    .font(.caption.weight(.semibold))
+                Text(step.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            Spacer()
+            if step.id == "workbench-mcp" {
+                Button {
+                    model.installWorkbenchMCPForBoss()
+                    model.refreshOnboardingReadiness()
+                } label: {
+                    Label("Register", systemImage: "link.badge.plus")
+                }
+                .controlSize(.small)
+            } else if step.commandLine != nil {
+                Button {
+                    model.openOnboardingRepair(step)
+                } label: {
+                    Label(commandButtonTitle, systemImage: "terminal")
+                }
+                .controlSize(.small)
+            }
+        }
+    }
+
+    private var actorLabel: String {
+        if step.id.hasPrefix("check-") {
+            return "check"
+        }
+        switch step.actor {
+        case .agentRunnable:
+            return "agent"
+        case .humanRequired:
+            return "you"
+        case .humanChoice:
+            return "choose"
+        }
+    }
+
+    private var commandButtonTitle: String {
+        step.id.hasPrefix("check-") ? "Run" : "Open"
+    }
+
+    private var color: SwiftUI.Color {
+        switch step.actor {
+        case .agentRunnable:
+            return .blue
+        case .humanRequired:
+            return .orange
+        case .humanChoice:
+            return .purple
+        }
+    }
+}
+
+private struct OnboardingBootstrapView: View {
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label("Recent Work", systemImage: "clock.arrow.circlepath")
+                    .font(.headline)
+                Spacer()
+                if model.onboardingIsScanning {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+                Button {
+                    model.scanForOnboardingSessions()
+                } label: {
+                    Label("Scan", systemImage: "magnifyingglass")
+                }
+                .controlSize(.small)
+                .disabled(model.onboardingIsScanning)
+                if model.onboardingProposal != nil {
+                    Button {
+                        model.applyOnboardingProposal()
+                    } label: {
+                        Label("Arrange", systemImage: "checkmark.circle")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
+            }
+            if let proposal = model.onboardingProposal {
+                ForEach(proposal.groups) { group in
+                    OnboardingGroupProposalView(group: group, model: model)
+                }
+            } else {
+                Text("Scan the last week of local Claude Code, Codex, Copilot, shell, and Workbench activity. Your Ouro agent may read these owned-local sessions deeply; Workbench turns that into a reversible import proposal.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
+private struct OnboardingGroupProposalView: View {
+    var group: ProposedWorkbenchGroup
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(group.name)
+                        .font(.subheadline.weight(.semibold))
+                    Text("Desk track: \(group.deskTrackSlug) - \(group.rootPath)")
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                Spacer()
+                Text("\(group.terminals.filter(\.selectedByDefault).count)/\(group.terminals.count)")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(group.terminals) { terminal in
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Image(systemName: terminal.selectedByDefault ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(terminal.selectedByDefault ? .green : .secondary)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(terminal.name)
+                            .font(.caption.weight(.semibold))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        Text(terminal.candidate.resumeCommandLine)
+                            .font(.caption2.monospaced())
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    Spacer()
+                    if let kind = terminal.candidate.agentKind,
+                       let bridge = model.deskBridgePlan(for: kind),
+                       let commandLine = bridge.commandLine {
+                        Button {
+                            model.openDeskBridgeSetup(bridge)
+                        } label: {
+                            Label("Desk Bridge", systemImage: "point.3.connected.trianglepath.dotted")
+                        }
+                        .labelStyle(.iconOnly)
+                        .buttonStyle(.borderless)
+                        .help(commandLine)
+                    }
+                    Text("\(Int(terminal.candidate.confidence * 100))%")
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .fixedSize()
+                }
+            }
+        }
+        .padding(10)
+        .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
     }
 }
 
@@ -2759,6 +3104,12 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var supportDiagnosticsResult: SupportDiagnosticsResult?
     @Published var supportDiagnosticsIsCollecting = false
     @Published var supportDiagnosticsError: String?
+    @Published var isOnboardingPresented = false
+    @Published var onboardingReadiness: OnboardingReadiness?
+    @Published var onboardingCandidates: [RecentSessionCandidate] = []
+    @Published var onboardingProposal: WorkbenchImportProposal?
+    @Published var onboardingIsScanning = false
+    @Published var onboardingDeskChanges: [String] = []
 
     private let paths: WorkbenchPaths
     private let store: WorkbenchStore
@@ -2785,6 +3136,9 @@ final class WorkbenchViewModel: ObservableObject {
     private let transcriptTailReader = TranscriptTailReader()
     private let transcriptSearcher = TranscriptSearcher()
     private let recoveryDrill = RecoveryDrill()
+    private let onboardingAdvisor = WorkbenchOnboardingAdvisor()
+    private let onboardingProposalBuilder = WorkbenchImportProposalBuilder()
+    private let deskBridgePlanner = DeskBridgePlanner()
     private let externalActionQueue: WorkbenchActionRequestQueue
     private let releaseUpdateChecker: ReleaseUpdateChecker
     private var manuallyTerminatedRunIDs = Set<UUID>()
@@ -2818,6 +3172,7 @@ final class WorkbenchViewModel: ObservableObject {
         refreshOuroAgents()
         refreshWorkbenchMCPRegistration()
         refreshExecutableHealth()
+        refreshOnboardingReadiness()
     }
 
     var errorIsPresented: Binding<Bool> {
@@ -3035,6 +3390,17 @@ final class WorkbenchViewModel: ObservableObject {
         supportDiagnosticsResult?.archiveURL
     }
 
+    var shouldPresentOnboardingOnLaunch: Bool {
+        onboardingReadiness?.isReady == false
+    }
+
+    var onboardingOpeningLine: String {
+        if onboardingReadiness?.isReady == true {
+            return "Your boss is reachable. I can scan recent terminal-agent work and arrange this Workbench into Desk-shaped groups."
+        }
+        return "Let's get this machine into a good state: first a reachable Ouro boss, then recent sessions, then a clean Desk mirror."
+    }
+
     var commandPaletteItems: [WorkbenchCommandDescriptor] {
         func command(
             _ id: WorkbenchCommandID,
@@ -3073,6 +3439,13 @@ final class WorkbenchViewModel: ObservableObject {
                 state.bossPaneCollapsed ? "Reveal boss chat and diagnostics" : "Collapse boss chat and diagnostics",
                 "sidebar.leading",
                 keywords: ["collapse", "expand", "dashboard", "boss"]
+            ),
+            command(
+                .openOnboarding,
+                "Set Up Workbench",
+                "Open the conversational setup and recent-session import surface",
+                "wand.and.stars",
+                keywords: ["onboarding", "setup", "bootstrap", "desk", "import"]
             ),
             command(
                 .installOuroAgent,
@@ -3955,6 +4328,7 @@ final class WorkbenchViewModel: ObservableObject {
         refreshOuroAgents()
         refreshWorkbenchMCPRegistration()
         refreshExecutableHealth()
+        refreshOnboardingReadiness()
         await refreshBossDashboard()
         recordActionLog(
             source: "native",
@@ -3962,6 +4336,204 @@ final class WorkbenchViewModel: ObservableObject {
             result: "Refreshed workspace status",
             succeeded: true
         )
+    }
+
+    func refreshOnboardingReadiness() {
+        onboardingReadiness = onboardingAdvisor.readiness(
+            boss: state.boss,
+            agents: ouroAgents,
+            mcpRegistration: bossWorkbenchMCPRegistration
+        )
+    }
+
+    func presentOnboarding() {
+        refreshOuroAgents()
+        refreshWorkbenchMCPRegistration()
+        refreshOnboardingReadiness()
+        isOnboardingPresented = true
+    }
+
+    func handleOnboardingInstruction(_ rawText: String) {
+        let text = rawText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !text.isEmpty else {
+            return
+        }
+        if text.contains("scan") || text.contains("bootstrap") || text == "yes" {
+            scanForOnboardingSessions()
+        } else if text.contains("apply") || text.contains("arrange") || text.contains("import") {
+            applyOnboardingProposal()
+        } else if text.contains("mcp") || text.contains("tool") {
+            installWorkbenchMCPForBoss()
+            refreshOnboardingReadiness()
+        } else if text.contains("hatch") {
+            launchOuroAgentInstall(mode: "hatch", agentName: "", remote: "")
+        } else {
+            bossQuestion = rawText
+            Task {
+                await runBossQuestion()
+            }
+        }
+    }
+
+    func scanForOnboardingSessions() {
+        guard !onboardingIsScanning else {
+            return
+        }
+        onboardingIsScanning = true
+        onboardingDeskChanges = []
+        let currentState = state
+        Task {
+            let candidates = await Task.detached(priority: .userInitiated) {
+                let scanner = RecentSessionScanner()
+                let discovered = scanner.scan()
+                let existing = scanner.scanWorkbench(state: currentState)
+                return discovered + existing
+            }.value
+            onboardingCandidates = candidates
+            onboardingProposal = onboardingProposalBuilder.build(candidates: candidates)
+            onboardingIsScanning = false
+            recordActionLog(
+                source: "native",
+                action: "scanOnboardingSessions",
+                result: "Found \(candidates.count) recent session candidates",
+                succeeded: true
+            )
+        }
+    }
+
+    func applyOnboardingProposal() {
+        guard let proposal = onboardingProposal else {
+            scanForOnboardingSessions()
+            return
+        }
+        var createdEntries: [ProcessEntry] = []
+        var firstImportedProjectID: UUID?
+        for group in proposal.groups {
+            let project = ensureProject(for: group)
+            firstImportedProjectID = firstImportedProjectID ?? project.id
+            for terminal in group.terminals where terminal.selectedByDefault {
+                guard !state.processEntries.contains(where: { $0.deskTaskSlug == terminal.deskTaskSlug && $0.projectId == project.id }) else {
+                    continue
+                }
+                let draft = CustomTerminalSessionDraft(
+                    name: terminal.name,
+                    command: terminal.candidate.resumeCommandLine,
+                    workingDirectory: terminal.candidate.workingDirectory,
+                    trust: .trusted,
+                    autoResume: true,
+                    notes: onboardingNotes(for: terminal, group: group)
+                )
+                do {
+                    var entry = try customSessionFactory.makeEntry(projectId: project.id, draft: draft)
+                    entry.deskTaskSlug = terminal.deskTaskSlug
+                    state.processEntries.append(entry)
+                    createdEntries.append(entry)
+                } catch {
+                    recordActionLog(
+                        source: "native",
+                        action: "applyOnboardingProposal",
+                        result: "Skipped \(terminal.name): \(error.localizedDescription)",
+                        succeeded: false
+                    )
+                }
+            }
+        }
+
+        do {
+            onboardingDeskChanges = try DeskMirrorWriter().apply(proposal)
+        } catch {
+            onboardingDeskChanges = []
+            recordActionLog(
+                source: "native",
+                action: "mirrorDesk",
+                result: "Desk mirror failed: \(error.localizedDescription)",
+                succeeded: false
+            )
+        }
+
+        selectedProjectID = firstImportedProjectID ?? state.projects.first?.id
+        selectedEntryID = createdEntries.first?.id ?? selectedEntryID
+        save()
+        refreshExecutableHealth()
+        for entry in createdEntries {
+            launch(entry)
+        }
+        recordActionLog(
+            source: "native",
+            action: "applyOnboardingProposal",
+            result: "Created \(createdEntries.count) terminals, mirrored \(onboardingDeskChanges.count) Desk files",
+            succeeded: true
+        )
+    }
+
+    func openOnboardingRepair(_ step: OnboardingRepairStep) {
+        guard let commandLine = step.commandLine else {
+            return
+        }
+        let draft = CustomTerminalSessionDraft(
+            name: "Ouro Setup: \(step.title)",
+            command: commandLine,
+            workingDirectory: FileManager.default.homeDirectoryForCurrentUser.path,
+            trust: .trusted,
+            autoResume: false,
+            notes: "\(step.actor.rawValue): \(step.detail)"
+        )
+        _ = createCustomSession(draft, launchAfterCreate: true)
+    }
+
+    func deskBridgePlan(for kind: TerminalAgentKind) -> DeskBridgePlan? {
+        deskBridgePlanner.plan(agentName: state.boss.agentName, terminalKind: kind)
+    }
+
+    func openDeskBridgeSetup(_ bridge: DeskBridgePlan) {
+        guard let commandLine = bridge.commandLine else {
+            errorMessage = bridge.detail
+            return
+        }
+        let draft = CustomTerminalSessionDraft(
+            name: "Desk Bridge: \(bridge.terminalKind.rawValue)",
+            command: commandLine,
+            workingDirectory: FileManager.default.homeDirectoryForCurrentUser.path,
+            trust: .trusted,
+            autoResume: false,
+            notes: bridge.detail
+        )
+        _ = createCustomSession(draft, launchAfterCreate: true)
+    }
+
+    private func ensureProject(for group: ProposedWorkbenchGroup) -> WorkbenchProject {
+        if let existing = state.projects.first(where: { $0.deskTrackSlug == group.deskTrackSlug || $0.rootPath == group.rootPath || $0.name == group.name }) {
+            var updated = existing
+            updated.deskTrackSlug = updated.deskTrackSlug ?? group.deskTrackSlug
+            if let index = state.projects.firstIndex(where: { $0.id == existing.id }) {
+                state.projects[index] = updated
+            }
+            return updated
+        }
+        let project = WorkbenchProject(
+            name: group.name,
+            rootPath: group.rootPath,
+            boss: state.boss,
+            deskTrackSlug: group.deskTrackSlug
+        )
+        state.projects.append(project)
+        return project
+    }
+
+    private func onboardingNotes(for terminal: ProposedTerminalImport, group: ProposedWorkbenchGroup) -> String {
+        let candidate = terminal.candidate
+        var lines = [
+            "Imported by Workbench onboarding.",
+            "Desk track: \(group.deskTrackSlug)",
+            "Desk task: \(terminal.deskTaskSlug)",
+            "Source: \(candidate.source.rawValue)",
+            "Confidence: \(Int(candidate.confidence * 100))%",
+            "Summary: \(candidate.summary)"
+        ]
+        if !candidate.evidencePaths.isEmpty {
+            lines.append("Evidence: \(candidate.evidencePaths.joined(separator: ", "))")
+        }
+        return lines.joined(separator: "\n")
     }
 
     func performCommand(_ command: WorkbenchCommandID) {
@@ -3996,6 +4568,8 @@ final class WorkbenchViewModel: ObservableObject {
             setBossWatchEnabled(!bossWatchIsEnabled)
         case .toggleBossPane:
             setBossPaneCollapsed(!state.bossPaneCollapsed)
+        case .openOnboarding:
+            presentOnboarding()
         case .installOuroAgent:
             isOuroAgentInstallSheetPresented = true
         case .refreshWorkspace:

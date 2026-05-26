@@ -181,26 +181,33 @@ Install and open the native app on this Mac:
 scripts/install-app.sh --open
 ```
 
-Then run the first-run checklist in the app:
+Then run the first-run setup conversation in the app:
 
-1. Confirm `Local Shell` opens as a real terminal.
-2. Create or select a group for the project/workstream you want to operate.
-3. Add terminal tabs for the CLIs you actually use: `claude`, `gh copilot`,
-   `codex`, shells, or other TUI agents. Workbench will detect known agent CLIs
-   from the command.
-4. Pick the boss agent from the header boss menu. The expected local default is
-   `slugger`; local agents discovered from `~/AgentBundles/*.ouro` appear in
-   the menu and in the `Ouro Agents` row.
-5. Use the `Ouro Agents` row to refresh bundle discovery, switch the boss, or
-   open a conversational `ouro hatch` terminal or an `ouro clone` terminal.
-6. Use the `Workbench MCP` row to register the packaged MCP server for the
-   selected boss.
-7. Collapse the boss pane when you want maximum terminal height; show it again
-   when you want the coordination dashboard.
-8. Turn on `Open at Login` so Workbench reopens after restart.
-9. Start `Watch` mode when you want the boss to keep observing the workspace.
-10. Click `TTFA` and clear any blockers.
-11. Run `Recovery Drill` once so the current restart posture is visible.
+1. Click the wand button or choose `Set Up Workbench` from the command palette.
+2. Workbench checks whether this machine has a reachable Ouro boss agent. The
+   boss is the operator's agent for this machine; it is not the Desk worker and
+   it is not tied to any single terminal tab.
+3. If no boss is ready, Workbench offers the right `ouro hatch`, `ouro clone`,
+   `ouro connect`, `ouro check`, `ouro repair`, or Workbench MCP registration
+   move. Human-secret entry stays inside Ouro's own terminal/browser auth
+   flows.
+4. Once the boss is ready, choose `Scan`. Workbench inspects recent local
+   Workbench, Claude Code, Codex, Copilot/shell, and persistent-terminal
+   evidence from the last week.
+5. Workbench proposes an arrangement: Desk tracks become Workbench groups, and
+   resumable terminal-agent sessions become terminal tabs with Desk task refs.
+   It shows the full evidence set, but only preselects a small, recent,
+   high-confidence starter set so `Arrange` does not flood the Workbench with
+   stale tabs.
+6. Choose `Arrange` to create groups/tabs, mirror selected work into Desk, and
+   resume high-confidence sessions.
+7. Use the Desk Bridge buttons for Claude Code and Codex sessions that should
+   get the Ouro MCP bridge inside that terminal harness. This is independent of
+   boss selection: the boss observes the Workbench; the bridge lets the
+   terminal agent use the Desk.
+8. Collapse the boss pane when you want maximum terminal height, turn on `Open
+   at Login`, start `Watch`, click `TTFA`, and run `Recovery Drill` before
+   trusting a long-running workspace.
 
 The packaged MCP executable lives inside the installed app:
 
@@ -526,6 +533,7 @@ Workbench MCP exposes:
 | Tool | Purpose |
 | --- | --- |
 | `workbench_status` | Summarize persisted state, process entries, recovery plans, and transcript paths. |
+| `workbench_sense` | Render the Workbench sense contract: boss boundary, group/Desk mirror, and tool affordances. |
 | `workbench_transcript_tail` | Read a bounded tail from the latest transcript for a session. |
 | `workbench_search_transcripts` | Search saved transcript lines across runs. |
 | `workbench_recovery_drill` | Dry-run restart recovery planning. |

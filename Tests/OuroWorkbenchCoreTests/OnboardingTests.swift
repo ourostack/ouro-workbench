@@ -1,0 +1,266 @@
+import XCTest
+@testable import OuroWorkbenchCore
+
+final class OnboardingTests: XCTestCase {
+    private var temporaryDirectory: URL!
+
+    override func setUpWithError() throws {
+        temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ouro-workbench-onboarding-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+    }
+
+    override func tearDownWithError() throws {
+        if let temporaryDirectory {
+            try? FileManager.default.removeItem(at: temporaryDirectory)
+        }
+    }
+
+    func testAdvisorKeepsBossReadinessSeparateFromDeskBridgeSetup() {
+        let advisor = WorkbenchOnboardingAdvisor()
+        let agents = [
+            OuroAgentRecord(
+                name: "slugger",
+                bundlePath: "/Users/ari/AgentBundles/slugger.ouro",
+                configPath: "/Users/ari/AgentBundles/slugger.ouro/agent.json",
+                status: .ready,
+                detail: "ready",
+                humanFacing: OuroAgentLane(provider: "minimax", model: "MiniMax-M2.7"),
+                agentFacing: OuroAgentLane(provider: "openai-codex", model: "gpt-5.5")
+            )
+        ]
+        let readiness = advisor.readiness(
+            boss: BossAgentSelection(agentName: "slugger"),
+            agents: agents,
+            mcpRegistration: BossWorkbenchMCPRegistrationSnapshot(
+                agentName: "slugger",
+                serverName: "ouro-workbench",
+                commandPath: "/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP",
+                agentConfigPath: "/Users/ari/AgentBundles/slugger.ouro/agent.json",
+                status: .registered,
+                detail: "registered"
+            )
+        )
+
+        XCTAssertEqual(readiness.state, .ready)
+        XCTAssertEqual(readiness.selectedBossName, "slugger")
+
+        let bridge = DeskBridgePlanner().plan(agentName: "slugger", terminalKind: .claudeCode)
+        XCTAssertEqual(bridge.setupCommand, ["ouro", "setup", "--tool", "claude-code", "--agent", "slugger"])
+        XCTAssertFalse(bridge.detail.contains("boss"))
+    }
+
+    func testAdvisorSurfacesProviderAndMCPRepairs() {
+        let readiness = WorkbenchOnboardingAdvisor().readiness(
+            boss: BossAgentSelection(agentName: "slugger"),
+            agents: [
+                OuroAgentRecord(
+                    name: "slugger",
+                    bundlePath: "/tmp/slugger.ouro",
+                    configPath: "/tmp/slugger.ouro/agent.json",
+                    status: .ready,
+                    detail: "ready",
+                    humanFacing: OuroAgentLane(provider: nil, model: nil),
+                    agentFacing: OuroAgentLane(provider: "openai-codex", model: "gpt-5.5")
+                )
+            ],
+            mcpRegistration: BossWorkbenchMCPRegistrationSnapshot(
+                agentName: "slugger",
+                serverName: "ouro-workbench",
+                commandPath: "/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP",
+                agentConfigPath: "/tmp/slugger.ouro/agent.json",
+                status: .notRegistered,
+                detail: "Workbench MCP is not registered"
+            )
+        )
+
+        XCTAssertEqual(readiness.state, .needsRepair)
+        XCTAssertTrue(readiness.repairSteps.contains { $0.id == "outward-lane" && $0.actor == .humanChoice })
+        XCTAssertTrue(readiness.repairSteps.contains { $0.id == "workbench-mcp" && $0.actor == .agentRunnable })
+    }
+
+    func testRecentSessionScannerFindsClaudeCodexAndShellCandidates() throws {
+        let now = ISO8601DateFormatter().date(from: "2026-05-26T12:00:00Z")!
+        let claudeURL = temporaryDirectory
+            .appendingPathComponent(".claude/projects/-Users-ari-Projects-ouro-workbench--claude-worktrees-polish/session.jsonl")
+        try FileManager.default.createDirectory(at: claudeURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try [
+            #"{"type":"attachment","sessionId":"claude-1","cwd":"/Users/ari/Projects/ouro-workbench/.claude/worktrees/polish","timestamp":"2026-05-25T12:00:00.000Z"}"#,
+            #"{"type":"queue-operation","operation":"enqueue","sessionId":"claude-1","timestamp":"2026-05-25T12:01:00.000Z","content":"Polish the onboarding flow until it feels native."}"#
+        ].joined(separator: "\n").write(to: claudeURL, atomically: true, encoding: .utf8)
+
+        let codexURL = temporaryDirectory.appendingPathComponent(".codex/session_index.jsonl")
+        try FileManager.default.createDirectory(at: codexURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try #"{"id":"codex-1","thread_name":"Review Workbench onboarding","updated_at":"2026-05-25T14:00:00.000Z"}"#
+            .write(to: codexURL, atomically: true, encoding: .utf8)
+
+        let historyURL = temporaryDirectory.appendingPathComponent(".zsh_history")
+        try ": 1779796800:0;gh copilot suggest 'fix swift compile'\n"
+            .write(to: historyURL, atomically: true, encoding: .utf8)
+
+        let scanner = RecentSessionScanner(
+            homeURL: temporaryDirectory,
+            now: now,
+            lookback: 7 * 24 * 60 * 60,
+            sqlite3URL: temporaryDirectory.appendingPathComponent("missing-sqlite3")
+        )
+        let candidates = scanner.scan()
+
+        XCTAssertTrue(candidates.contains { $0.id == "claude:claude-1" && $0.agentKind == .claudeCode })
+        XCTAssertTrue(candidates.contains { $0.id == "codex:codex-1" && $0.agentKind == .openAICodex })
+        XCTAssertTrue(candidates.contains { $0.source == .githubCopilotCLI && $0.agentKind == .githubCopilotCLI })
+    }
+
+    func testImportProposalGroupsClaudeWorktreesByOwningProject() {
+        let candidate = RecentSessionCandidate(
+            id: "claude:1",
+            source: .claudeCode,
+            agentKind: .claudeCode,
+            title: "Ship the onboarding concierge",
+            workingDirectory: "/Users/ari/Projects/ouro-workbench/.claude/worktrees/polish",
+            lastActiveAt: Date(),
+            resumeCommand: ["claude", "--resume", "1"],
+            summary: "Build onboarding.",
+            evidencePaths: ["/tmp/session.jsonl"],
+            confidence: 0.92
+        )
+
+        let proposal = WorkbenchImportProposalBuilder().build(candidates: [candidate])
+
+        XCTAssertEqual(proposal.groups.map(\.name), ["ouro-workbench"])
+        XCTAssertEqual(proposal.groups.first?.rootPath, "/Users/ari/Projects/ouro-workbench")
+        XCTAssertEqual(proposal.groups.first?.deskTrackSlug, "ouro-workbench")
+        XCTAssertEqual(proposal.groups.first?.terminals.first?.name, "Claude: Ship the onboarding concierge")
+        XCTAssertEqual(proposal.selectedTerminalCount, 1)
+    }
+
+    func testImportProposalKeepsDeskTaskSlugsUniqueWithinGroup() {
+        let candidates = (1...2).map { index in
+            RecentSessionCandidate(
+                id: "codex:\(index)",
+                source: .openAICodex,
+                agentKind: .openAICodex,
+                title: "Same title",
+                workingDirectory: "/Users/ari/Projects/ouro-workbench",
+                lastActiveAt: Date(timeIntervalSince1970: TimeInterval(index)),
+                resumeCommand: ["codex", "resume", "\(index)"],
+                summary: "Same",
+                evidencePaths: [],
+                confidence: 0.9
+            )
+        }
+
+        let slugs = WorkbenchImportProposalBuilder()
+            .build(candidates: candidates)
+            .groups
+            .flatMap(\.terminals)
+            .map(\.deskTaskSlug)
+
+        XCTAssertEqual(Set(slugs).count, 2)
+        XCTAssertTrue(slugs.contains("same-title"))
+        XCTAssertTrue(slugs.contains("same-title-2"))
+    }
+
+    func testImportProposalCuratesDefaultSelectionsInsteadOfStampedingTabs() {
+        let candidates = (1...10).map { index in
+            RecentSessionCandidate(
+                id: "codex:\(index)",
+                source: .openAICodex,
+                agentKind: .openAICodex,
+                title: "Task \(index)",
+                workingDirectory: "/Users/ari/Projects/ouro-workbench",
+                lastActiveAt: Date(timeIntervalSince1970: TimeInterval(index)),
+                resumeCommand: ["codex", "resume", "\(index)"],
+                summary: "Task \(index)",
+                evidencePaths: [],
+                confidence: 0.94
+            )
+        }
+
+        let proposal = WorkbenchImportProposalBuilder().build(candidates: candidates)
+        let selected = proposal.groups.flatMap(\.terminals).filter(\.selectedByDefault)
+
+        XCTAssertEqual(proposal.groups.first?.terminals.count, 10)
+        XCTAssertEqual(selected.count, 6)
+        XCTAssertEqual(selected.first?.candidate.id, "codex:10")
+        XCTAssertEqual(selected.last?.candidate.id, "codex:5")
+    }
+
+    func testWorkbenchSenseRendererExposesSenseContractAndTools() {
+        let project = WorkbenchProject(
+            name: "ouro-workbench",
+            rootPath: "/Users/ari/Projects/ouro-workbench",
+            deskTrackSlug: "ouro-workbench"
+        )
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "Codex",
+            kind: .terminalAgent,
+            agentKind: .openAICodex,
+            executable: "codex",
+            arguments: ["--yolo"],
+            workingDirectory: project.rootPath
+        )
+        let state = WorkspaceState(
+            selectedProjectId: project.id,
+            selectedEntryId: entry.id,
+            projects: [project],
+            processEntries: [entry]
+        )
+
+        let rendered = WorkbenchSenseRenderer().render(
+            state: state,
+            summary: WorkspaceSummarizer().summarize(state)
+        )
+
+        XCTAssertTrue(rendered.contains("## workbench sense"))
+        XCTAssertTrue(rendered.contains("desk_track=ouro-workbench"))
+        XCTAssertTrue(rendered.contains("workbench_request_action"))
+        XCTAssertTrue(rendered.contains("workbench_sense"))
+    }
+
+    func testDeskMirrorWriterCreatesTracksAndTasksWithoutOverwriting() throws {
+        let proposal = WorkbenchImportProposal(
+            generatedAt: Date(),
+            groups: [
+                ProposedWorkbenchGroup(
+                    id: "ouro-workbench",
+                    name: "ouro-workbench",
+                    rootPath: "/Users/ari/Projects/ouro-workbench",
+                    deskTrackSlug: "ouro-workbench",
+                    terminals: [
+                        ProposedTerminalImport(
+                            id: "codex:1",
+                            candidate: RecentSessionCandidate(
+                                id: "codex:1",
+                                source: .openAICodex,
+                                agentKind: .openAICodex,
+                                title: "Onboarding",
+                                workingDirectory: "/Users/ari/Projects/ouro-workbench",
+                                lastActiveAt: Date(),
+                                resumeCommand: ["codex", "resume", "1"],
+                                summary: "Implement onboarding.",
+                                evidencePaths: ["/tmp/state.sqlite"],
+                                confidence: 0.94
+                            ),
+                            name: "Codex: Onboarding",
+                            deskTaskSlug: "onboarding",
+                            selectedByDefault: true
+                        )
+                    ]
+                )
+            ],
+            ignoredCandidates: []
+        )
+        let writer = DeskMirrorWriter(deskRoot: temporaryDirectory)
+        let changed = try writer.apply(proposal)
+
+        XCTAssertTrue(changed.contains(temporaryDirectory.appendingPathComponent("ouro-workbench/track.md").path))
+        XCTAssertTrue(changed.contains(temporaryDirectory.appendingPathComponent("ouro-workbench/onboarding/task.md").path))
+
+        let trackURL = temporaryDirectory.appendingPathComponent("ouro-workbench/track.md")
+        try "custom".write(to: trackURL, atomically: true, encoding: .utf8)
+        _ = try writer.apply(proposal)
+        XCTAssertEqual(try String(contentsOf: trackURL), "custom")
+    }
+}

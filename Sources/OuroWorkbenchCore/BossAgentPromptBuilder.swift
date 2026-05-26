@@ -14,11 +14,13 @@ public struct BossAgentPromptBuilder: Sendable {
     ) -> String {
         var lines: [String] = []
         lines.append("You are the selected Ouro boss agent for Ouro Workbench.")
+        lines.append("Workbench should appear to you as a local machine sense: a living view of terminal/TUI agents, transcripts, recovery state, and auditable native controls.")
         lines.append("Boss agent: \(summary.boss.agentName)")
         lines.append("Question: \(question)")
         lines.append("")
         lines.append("Your job: answer what is going on, identify whether anything is waiting on the human, and keep trusted work moving when the next action is clear.")
         lines.append("You may recommend or take only auditable Workbench actions: inspect output, send input, start, stop, restart, resume, respawn, create groups/terminals, move stopped sessions, update trust/restart posture, archive/restore sessions, or report status.")
+        lines.append("Available Workbench tools from your Ouro runtime should include workbench_status, workbench_sense, workbench_transcript_tail, workbench_search_transcripts, workbench_recovery_drill, and workbench_request_action when Workbench MCP is registered.")
         lines.append("When you want the native app to act now, include exactly one fenced JSON block labeled ouro-workbench-actions. Supported action values: launch, recover, terminate, sendInput, createGroup, createTerminal, moveSession, setTrust, setAutoResume, archive, restore. Use the process id from Processes in the entry field for entry-scoped actions; names are accepted only when unique. Example:")
         lines.append("```ouro-workbench-actions")
         lines.append("[{\"action\":\"recover\",\"entry\":\"PROCESS-ID\"},{\"action\":\"sendInput\",\"entry\":\"PROCESS-ID\",\"text\":\"continue\",\"appendNewline\":true}]")
@@ -75,7 +77,8 @@ public struct BossAgentPromptBuilder: Sendable {
                 .filter { $0.projectId == project.id && !$0.isArchived }
                 .map(\.name)
                 .joined(separator: ", ")
-            lines.append("\(marker) \(project.name) (id=\(project.id.uuidString), root=\(project.rootPath)): \(entries.isEmpty ? "no active terminals" : entries)")
+            let deskTrack = project.deskTrackSlug.map { ", desk_track=\($0)" } ?? ""
+            lines.append("\(marker) \(project.name) (id=\(project.id.uuidString), root=\(project.rootPath)\(deskTrack)): \(entries.isEmpty ? "no active terminals" : entries)")
         }
         lines.append("")
         lines.append("Processes:")
@@ -96,7 +99,8 @@ public struct BossAgentPromptBuilder: Sendable {
             let executablePath = health?.resolvedPath ?? "none"
             let archived = entry?.isArchived ?? false
             let notes = entry?.trimmedNotes.map(Self.oneLine) ?? "none"
-            lines.append("- \(snapshot.name) (id=\(snapshot.id.uuidString)): group=\(groupName), cli=\(agentKind), archived=\(archived), trust=\(trust), executable_health=\(executableStatus), executable_path=\(executablePath), status=\(snapshot.status.rawValue), attention=\(snapshot.attention.rawValue), transcript=\(transcriptPath), notes=\(notes), summary=\(snapshot.summary)")
+            let deskTask = entry?.deskTaskSlug ?? "none"
+            lines.append("- \(snapshot.name) (id=\(snapshot.id.uuidString)): group=\(groupName), cli=\(agentKind), desk_task=\(deskTask), archived=\(archived), trust=\(trust), executable_health=\(executableStatus), executable_path=\(executablePath), status=\(snapshot.status.rawValue), attention=\(snapshot.attention.rawValue), transcript=\(transcriptPath), notes=\(notes), summary=\(snapshot.summary)")
         }
         lines.append("")
         lines.append("Recovery:")

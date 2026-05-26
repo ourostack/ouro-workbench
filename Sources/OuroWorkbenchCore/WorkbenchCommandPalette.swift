@@ -9,6 +9,7 @@ public enum WorkbenchCommandID: String, Codable, CaseIterable, Sendable {
     case bossQuickRespondForMe
     case toggleBossWatch
     case toggleBossPane
+    case openOnboarding
     case installOuroAgent
     case refreshWorkspace
     case refreshOuroAgents

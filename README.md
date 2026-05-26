@@ -94,6 +94,13 @@ The installed bundle also includes an Ouro-facing MCP server:
 Use the native `Workbench MCP` row in the boss dashboard to register that server
 with the selected Ouro boss agent.
 
+Use `Set Up Workbench` from the wand button or command palette for the native
+onboarding conversation. It checks the machine's boss agent, opens the right
+Ouro repair/auth/setup terminal when needed, scans recent Claude Code, Codex,
+Copilot/shell, and Workbench sessions, proposes a Desk-shaped group layout, and
+mirrors selected work into Desk before resuming a curated starter set of
+high-confidence terminals.
+
 Use the `Ouro Agents` row in the boss dashboard to refresh local agent bundle
 discovery, switch the boss to an installed local agent, reveal an agent bundle,
 register or update Workbench MCP for any discovered agent, or open a managed
