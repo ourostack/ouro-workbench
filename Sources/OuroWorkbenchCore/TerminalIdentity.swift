@@ -103,6 +103,9 @@ public enum TerminalAgentDetector {
     }
 
     public static func canonicalTokens(executable: String, arguments: [String]) -> TerminalCommandTokens {
+        if isEnvironmentAssignment(executable), let nestedExecutable = arguments.first {
+            return canonicalTokens(executable: nestedExecutable, arguments: Array(arguments.dropFirst()))
+        }
         let basename = URL(fileURLWithPath: executable).lastPathComponent.lowercased()
         switch basename {
         case "zsh", "bash", "sh":
@@ -140,7 +143,7 @@ public enum TerminalAgentDetector {
         var index = 0
         while index < arguments.count {
             let token = arguments[index]
-            if token.contains("=") {
+            if isEnvironmentAssignment(token) {
                 index += 1
                 continue
             }
@@ -158,5 +161,16 @@ public enum TerminalAgentDetector {
             )
         }
         return nil
+    }
+
+    private static func isEnvironmentAssignment(_ token: String) -> Bool {
+        guard let separator = token.firstIndex(of: "="), separator > token.startIndex else {
+            return false
+        }
+        let name = token[..<separator]
+        guard let first = name.first, first == "_" || first.isLetter else {
+            return false
+        }
+        return name.allSatisfy { $0 == "_" || $0.isLetter || $0.isNumber }
     }
 }

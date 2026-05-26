@@ -68,11 +68,18 @@ public struct CustomTerminalSessionFactory: Sendable {
         }
 
         let parsed = TerminalCommandParser.parse(command)
-        let detectedAgentKind = parsed.flatMap {
+        let canonical = parsed.map {
+            TerminalAgentDetector.canonicalTokens(executable: $0.executable, arguments: $0.arguments)
+        }
+        let detectedAgentKind = canonical.flatMap {
             TerminalAgentDetector.detect(executable: $0.executable, arguments: $0.arguments)
         }
-        let executable = detectedAgentKind == nil ? "/bin/zsh" : (parsed?.executable ?? "/bin/zsh")
-        let arguments = detectedAgentKind == nil ? ["-lc", command] : (parsed?.arguments ?? ["-lc", command])
+        let canStoreDirectly = parsed != nil
+            && canonical != nil
+            && parsed?.executable == canonical?.executable
+            && parsed?.arguments == canonical?.arguments
+        let executable = detectedAgentKind != nil && canStoreDirectly ? (parsed?.executable ?? "/bin/zsh") : "/bin/zsh"
+        let arguments = detectedAgentKind != nil && canStoreDirectly ? (parsed?.arguments ?? ["-lc", command]) : ["-lc", command]
 
         return ProcessEntry(
             projectId: projectId,
