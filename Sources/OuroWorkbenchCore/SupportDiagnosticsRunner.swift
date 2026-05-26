@@ -15,6 +15,7 @@ public enum SupportDiagnosticsRunnerError: Error, Equatable, LocalizedError, Sen
     case launchFailed(String)
     case failed(status: Int32, output: String)
     case archivePathMissing(String)
+    case archiveMissing(String)
 
     public var errorDescription: String? {
         switch self {
@@ -26,6 +27,8 @@ public enum SupportDiagnosticsRunnerError: Error, Equatable, LocalizedError, Sen
             return "Support diagnostics exited with status \(status): \(output)"
         case let .archivePathMissing(output):
             return "Support diagnostics did not report an archive path: \(output)"
+        case let .archiveMissing(path):
+            return "Support diagnostics reported a missing archive: \(path)"
         }
     }
 }
@@ -79,6 +82,8 @@ public struct SupportDiagnosticsRunner: @unchecked Sendable {
 
         let process = Process()
         process.executableURL = scriptURL
+        process.currentDirectoryURL = scriptURL.deletingLastPathComponent()
+        process.standardInput = FileHandle.nullDevice
 
         let outputPipe = Pipe()
         process.standardOutput = outputPipe
@@ -100,7 +105,18 @@ public struct SupportDiagnosticsRunner: @unchecked Sendable {
         guard let archiveURL = Self.parseArchiveURL(from: output) else {
             throw SupportDiagnosticsRunnerError.archivePathMissing(output)
         }
+        guard fileManager.fileExists(atPath: archiveURL.path) else {
+            throw SupportDiagnosticsRunnerError.archiveMissing(archiveURL.path)
+        }
         return SupportDiagnosticsResult(archiveURL: archiveURL, output: output)
+    }
+
+    public static func defaultOutputDirectory(homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser) -> URL {
+        homeDirectory
+            .appendingPathComponent("Library", isDirectory: true)
+            .appendingPathComponent("Application Support", isDirectory: true)
+            .appendingPathComponent("OuroWorkbench", isDirectory: true)
+            .appendingPathComponent("support-diagnostics", isDirectory: true)
     }
 
     public static func parseArchiveURL(from output: String) -> URL? {

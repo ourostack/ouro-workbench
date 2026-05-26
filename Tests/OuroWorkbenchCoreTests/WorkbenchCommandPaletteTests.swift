@@ -37,4 +37,32 @@ final class WorkbenchCommandPaletteTests: XCTestCase {
             [.searchTranscripts]
         )
     }
+
+    func testFilterRequiresEveryQueryTokenToMatch() {
+        let commands = [
+            WorkbenchCommandDescriptor(id: .collectSupportDiagnostics, title: "Collect Support Diagnostics", detail: "Create zip", systemImage: "lifepreserver", keywords: ["diag"]),
+            WorkbenchCommandDescriptor(id: .openSupportDiagnosticsFolder, title: "Open Diagnostics Folder", detail: "Reveal support output", systemImage: "folder", keywords: ["finder"])
+        ]
+
+        XCTAssertEqual(
+            WorkbenchCommandPalette().filter(commands, query: "diag folder").map(\.id),
+            [.openSupportDiagnosticsFolder]
+        )
+    }
+
+    func testFilterMatchesCommandIDAndKeywords() {
+        let commands = [
+            WorkbenchCommandDescriptor(id: .sendEOFToSelectedSession, title: "Send EOF", detail: "Send Ctrl-D", systemImage: "eject", keywords: ["signal"]),
+            WorkbenchCommandDescriptor(id: .refreshWorkspace, title: "Refresh Workspace", detail: "Reload status", systemImage: "arrow.clockwise", keywords: ["sync"])
+        ]
+
+        XCTAssertEqual(
+            WorkbenchCommandPalette().filter(commands, query: "ctrl-d").map(\.id),
+            [.sendEOFToSelectedSession]
+        )
+        XCTAssertEqual(
+            WorkbenchCommandPalette().filter(commands, query: "refreshWorkspace").map(\.id),
+            [.refreshWorkspace]
+        )
+    }
 }

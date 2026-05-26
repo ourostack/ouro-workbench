@@ -60,6 +60,10 @@ run_step "Package and verify native app bundle"
 scripts/smoke-verify-app-timeout.sh
 scripts/package-app.sh
 scripts/verify-app-bundle.sh
+rm -rf .build/support-diagnostics-preflight
+"dist/Ouro Workbench.app/Contents/Resources/collect-support-diagnostics.sh" \
+  --out .build/support-diagnostics-preflight >/dev/null
+find .build/support-diagnostics-preflight -name 'ouro-workbench-diagnostics-*.zip' -type f | grep -q .
 scripts/smoke-mcp-action-validation.sh
 
 run_step "Archive native app artifact"

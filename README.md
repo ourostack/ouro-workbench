@@ -119,9 +119,11 @@ external MCP requests. Those actions can operate terminals and organize the
 workspace: launch, recover, stop, send input, create groups, create terminals,
 move stopped sessions, change trust/restart posture, archive, and restore.
 
-Running terminals include a `Redraw` control in both pane and focused modes. It
-sends Ctrl-L to the terminal, which is the explicit operator move for refreshing
-a shell or TUI after resizing without silently clearing live output.
+Running terminals include `Redraw`, `Ctrl-C`, `Esc`, and `EOF` controls in both
+pane and focused modes. `Redraw` sends Ctrl-L, which is the explicit operator
+move for refreshing a shell or TUI after resizing without silently clearing live
+output. `EOF` sends Ctrl-D for shells and CLIs that use end-of-file to exit or
+submit.
 
 The native boss dashboard includes `Support Diagnostics`. It creates a local zip
 with system, app-bundle, login-item, runtime, and workspace summary evidence
@@ -141,7 +143,11 @@ Press `Command-K` to open the native command palette. Common shortcuts include
 `Command-N` for a new session, `Command-I` for boss check-in, `Command-Return`
 to launch or restart the selected session, `Command-.` to stop a running
 session, `Command-Shift-F` to focus the running terminal, and `Command-F` to
-focus or run transcript search.
+focus or run transcript search. The palette understands action aliases such as
+`diag`, `boss`, `folder`, `mcp`, `signal`, and selected-session verbs, so it can
+open diagnostics folders, copy paths, refresh the Workbench, ask the boss about
+the current terminal, reveal transcripts, or send terminal signals without
+digging through the dashboard.
 
 Use `Recovery Drill` to dry-run restart recovery without mutating workspace
 state. It reports which sessions would auto-resume, respawn, require manual
@@ -155,4 +161,6 @@ See [docs/architecture.md](docs/architecture.md) and
 [docs/native-packaging.md](docs/native-packaging.md). The current Ouro bridge
 contract is in [docs/ouro-bridge.md](docs/ouro-bridge.md). Surface audit notes
 are in [docs/surface-audit.md](docs/surface-audit.md). The 500+ case audit
-matrix is in [docs/cmux-workbench-test-matrix.md](docs/cmux-workbench-test-matrix.md).
+matrix is in [docs/cmux-workbench-test-matrix.md](docs/cmux-workbench-test-matrix.md),
+and the canonical 5000-row scenario matrix is in
+[docs/workbench-5000-scenario-matrix.md](docs/workbench-5000-scenario-matrix.md).

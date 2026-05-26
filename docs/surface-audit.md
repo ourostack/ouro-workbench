@@ -101,7 +101,7 @@ printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"w
 Expected smoke result:
 
 ```text
-145 tests pass; 5000 scenario rows render through 25,000 native verifier passes
+156 tests pass; 5000 scenario rows render through 25,000 native verifier passes
 with zero failures and coverage digest `567dc7ec0c45835b`; deep sweep renders
 20,000 rows through 100,000 verifier passes with zero failures and coverage
 digest `0fd57795f807596d`; installed app shows group-scoped Local Shell + used

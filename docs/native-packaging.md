@@ -17,7 +17,7 @@ scripts/install-app.sh --open
 Install a downloaded, verified artifact directly from its manifest:
 
 ```bash
-scripts/install-app.sh --artifact-manifest artifacts/OuroWorkbench-0.1.1-build.<build>-<sha>.manifest.json --open
+scripts/install-app.sh --artifact-manifest artifacts/OuroWorkbench-0.1.2-build.<build>-<sha>.manifest.json --open
 ```
 
 Install the latest successful protected `main` artifact in one step:
@@ -76,7 +76,7 @@ scripts/archive-app-artifact.sh
 Verify a downloaded zip against its manifest, then expand and verify the app:
 
 ```bash
-scripts/verify-app-artifact.sh artifacts/OuroWorkbench-0.1.1-build.<build>-<sha>.manifest.json
+scripts/verify-app-artifact.sh artifacts/OuroWorkbench-0.1.2-build.<build>-<sha>.manifest.json
 ```
 
 Run the full local protected-gate preflight with:
@@ -102,7 +102,9 @@ bundle records system, repo-or-bundle, installed app, `screen`, login item, and
 workspace-state summaries. It does not copy terminal transcript contents or raw
 `workspace-state.json` unless `--include-state` is passed explicitly. The native
 boss dashboard exposes this as `Support Diagnostics` and can reveal the produced
-zip in Finder.
+zip in Finder or copy its path. Bundle verification rejects missing, empty, or
+non-executable diagnostics helpers, and preflight runs the helper from the
+packaged app to prove the installed path works.
 
 The app prefers the bundled `screen` executable and falls back to `/usr/bin/screen`
 only during development runs where the app bundle tool is not present. The

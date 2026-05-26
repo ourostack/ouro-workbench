@@ -273,8 +273,11 @@ Use it like a normal terminal:
 - type directly into the terminal
 - use `Full Screen` or `Command-Shift-F` to give the running terminal the whole
   window
+- use `Command-Shift-F` again to return to the split workbench view
+- use `Redraw` or `Command-L` to send Ctrl-L after a resize or TUI repaint issue
 - send `Ctrl-C`
 - send `Esc`
+- send `EOF` / Ctrl-D
 - stop a running session
 - restart or recover a stopped session
 - ask the boss about only this session with `Ask Boss`
@@ -286,6 +289,14 @@ settings page with a terminal stapled on.
 
 Press `Command-K` to open the native command palette.
 
+The palette is token-aware and understands operator aliases. Queries like
+`diag folder`, `boss selected`, `mcp refresh`, `signal eof`, and `copy command`
+find the relevant actions even when the visible title uses different wording.
+It includes boss quick asks, workspace refresh, Ouro-agent refresh, Workbench MCP
+install/refresh, release-page open, diagnostics reveal/copy/open-folder,
+selected-terminal Ask Boss, launch, focus, redraw, Ctrl-C, Esc, EOF, copy
+command, open working directory, reveal transcript, stop, and recover.
+
 Useful shortcuts:
 
 | Shortcut | Action |
@@ -295,6 +306,8 @@ Useful shortcuts:
 | `Command-I` | Boss check-in |
 | `Command-Return` | Launch or restart selected session |
 | `Command-.` | Stop selected session |
+| `Command-L` | Redraw selected running terminal |
+| `Command-Shift-F` | Enter or exit terminal focus |
 | `Command-F` | Focus or run transcript search |
 
 ## Daily Operating Loops
@@ -579,12 +592,12 @@ This is TTFA in product form: trust the agent, keep the trail.
 | An agent executable is missing | The command is not available on the app's PATH. | Install or repair the CLI, then refresh readiness. |
 | Boss Watch is paused | Automatic observation is off. | Turn on `Watch` when you want background coordination. |
 | Boss Line fails | The Ouro CLI or selected boss process could not complete the ask. | Verify `ouro mcp-serve --agent <boss>` works in a terminal. |
-| A prompt sits high after focusing a terminal | The live PTY screen was preserved from a shorter pane height. | Click `Redraw` or use the command palette to send Ctrl-L; Workbench does not auto-clear live TUI output on resize. |
+| A prompt sits high after focusing a terminal | The live PTY screen was preserved from a shorter pane height. | Click `Redraw`, press `Command-L`, or use the command palette to send Ctrl-L; Workbench does not auto-clear live TUI output on resize. |
 | A session will not auto-recover | Trust, auto-resume, or native resume posture is missing. | Run `Recovery Drill` and inspect the reason. |
 | A boss action is skipped | The action violated a local trust gate or current runtime state. | Check `Action Log` for the exact result. |
 | The app did not reopen after restart | Login item state may be off or stale. | Toggle `Open at Login` off and back on, then refresh. |
 | Release update check is unavailable | GitHub Releases could not be reached or no release exists yet. | Use the current installed build, then check again when online. |
-| A bug report needs evidence | The app can collect a safe diagnostics bundle without transcript contents. | Use `Support Diagnostics` in the boss dashboard, then reveal the zip. |
+| A bug report needs evidence | The app can collect a safe diagnostics bundle without transcript contents. | Use `Support Diagnostics` in the boss dashboard, then reveal the zip, copy its path, or open the output folder from the command palette. |
 | Transcript search finds nothing | The session may not have produced a persisted run transcript yet. | Launch the session, produce output, stop or switch, then search again. |
 
 ## What Good Looks Like

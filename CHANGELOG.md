@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.2 - Operator Control Surface
+
+- Expanded the command palette with boss quick asks, workspace refresh, Ouro-agent refresh, Workbench MCP install/refresh, release-page open, diagnostics reveal/copy/open-folder, and selected-terminal actions.
+- Made command palette search token-aware with aliases for operator terms like `diag`, `boss`, `mcp`, `folder`, and `signal`.
+- Added explicit terminal `EOF` / Ctrl-D controls, `Command-L` redraw shortcuts, selected-terminal copy/open/reveal commands, and smaller session-header utility buttons.
+- Added diagnostics zip path copy, diagnostics output-folder open, action-log entries for native diagnostics/release/terminal-control actions, and stronger diagnostics runner validation.
+- Hardened packaged-app preflight by smoke-running the bundled diagnostics helper and verifying the helper is non-empty.
+
 ## 0.1.1 - Post-Preview Hardening
 
 - Added explicit terminal `Redraw` controls that send Ctrl-L in pane and focused terminal modes.
