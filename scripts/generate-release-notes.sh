@@ -18,7 +18,8 @@ work moving.
 - Public unsigned preview for macOS 14+.
 - Apple Developer ID signing and notarization are not included in this release.
 - The app bundle includes the native app, Workbench MCP server, SwiftTerm
-  resources, terminal persistence backend, and app icon.
+  resources, terminal persistence backend, support diagnostics helper, and app
+  icon.
 - Force-quit and relaunch recovery is backed by persistent \`screen\` sessions.
 - Computer restart recovery restores Workbench state and safely resumes,
   respawns, or flags sessions according to each terminal's trust and resume
@@ -52,6 +53,8 @@ scripts/install-latest-release.sh --open
 - Workbench MCP tools for status, transcript tail/search, recovery drills, and queued trusted actions.
 - TTFA readiness badge for boss bridge, trust, executable health, recovery posture, Boss Watch, and Open at Login.
 - Recovery Drill for non-mutating restart simulations before you trust a long autonomous run.
+- Explicit Redraw controls for refreshing resized shell/TUI displays without silently clearing live terminal state.
+- In-app Support Diagnostics for collecting a local evidence zip without transcript contents by default.
 
 ## Verification
 

@@ -4,12 +4,17 @@ public enum WorkbenchCommandID: String, Codable, CaseIterable, Sendable {
     case newSession
     case bossCheckIn
     case toggleBossWatch
+    case toggleBossPane
     case installOuroAgent
     case launchSelectedSession
+    case focusSelectedSession
+    case redrawSelectedSession
     case stopSelectedSession
     case recoverSelectedSession
     case searchTranscripts
     case runRecoveryDrill
+    case collectSupportDiagnostics
+    case checkReleaseUpdates
 }
 
 public struct WorkbenchCommandDescriptor: Codable, Equatable, Identifiable, Sendable {

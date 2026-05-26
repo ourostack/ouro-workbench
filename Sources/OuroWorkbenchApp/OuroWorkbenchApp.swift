@@ -796,7 +796,7 @@ struct BossDashboardView: View {
                 }
                 OuroAgentManagerView(model: model)
                 TranscriptSearchView(model: model)
-                MachineRuntimeView()
+                MachineRuntimeView(model: model)
                 ReleaseUpdateView(model: model)
                 RecoveryDrillView(model: model)
                 BossWorkbenchMCPSetupView(model: model)
@@ -1757,6 +1757,13 @@ struct RunningSessionHeaderControls: View {
             .help("Focus this terminal")
 
             Button {
+                model.redrawTerminal(entry)
+            } label: {
+                Label("Redraw", systemImage: "arrow.clockwise")
+            }
+            .help("Send Ctrl-L to redraw the terminal")
+
+            Button {
                 model.sendControlC(to: entry)
             } label: {
                 Label("Ctrl-C", systemImage: "command")
@@ -1801,6 +1808,12 @@ struct TerminalFocusView: View {
                     Label("Exit Full Screen", systemImage: "arrow.down.right.and.arrow.up.left")
                 }
                 .keyboardShortcut("f", modifiers: [.command, .shift])
+                Button {
+                    model.redrawTerminal(entry)
+                } label: {
+                    Label("Redraw", systemImage: "arrow.clockwise")
+                }
+                .help("Send Ctrl-L to redraw the terminal")
                 Button {
                     model.sendControlC(to: entry)
                 } label: {
@@ -2208,6 +2221,7 @@ struct SessionNotesEditor: View {
 }
 
 struct MachineRuntimeView: View {
+    @ObservedObject var model: WorkbenchViewModel
     @StateObject private var loginItem = LoginItemController()
 
     var body: some View {
@@ -2238,6 +2252,36 @@ struct MachineRuntimeView: View {
                     .font(.caption)
                     .foregroundStyle(.red)
                     .textSelection(.enabled)
+            }
+            HStack(spacing: 12) {
+                Label("Support Diagnostics", systemImage: "lifepreserver")
+                    .font(.caption.weight(.semibold))
+                Text(model.supportDiagnosticsStatusLine)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(model.supportDiagnosticsStatusColor)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                if model.supportDiagnosticsIsCollecting {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+                Button {
+                    model.collectSupportDiagnostics()
+                } label: {
+                    Label("Collect", systemImage: "archivebox")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(model.supportDiagnosticsIsCollecting)
+                if model.supportDiagnosticsURL != nil {
+                    Button {
+                        model.revealSupportDiagnostics()
+                    } label: {
+                        Label("Reveal", systemImage: "folder")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
             }
         }
     }
@@ -2458,6 +2502,9 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var executableHealthByEntryID: [UUID: ExecutableHealth] = [:]
     @Published var releaseUpdateSnapshot: ReleaseUpdateSnapshot?
     @Published var releaseUpdateIsChecking = false
+    @Published var supportDiagnosticsResult: SupportDiagnosticsResult?
+    @Published var supportDiagnosticsIsCollecting = false
+    @Published var supportDiagnosticsError: String?
 
     private let paths: WorkbenchPaths
     private let store: WorkbenchStore
@@ -2708,6 +2755,30 @@ final class WorkbenchViewModel: ObservableObject {
         return URL(string: htmlURL)
     }
 
+    var supportDiagnosticsStatusLine: String {
+        if supportDiagnosticsIsCollecting {
+            return "collecting"
+        }
+        if let supportDiagnosticsError {
+            return "failed: \(supportDiagnosticsError)"
+        }
+        guard let supportDiagnosticsResult else {
+            return "not run"
+        }
+        return "wrote \(supportDiagnosticsResult.archiveURL.lastPathComponent)"
+    }
+
+    var supportDiagnosticsStatusColor: SwiftUI.Color {
+        if supportDiagnosticsError != nil {
+            return .orange
+        }
+        return supportDiagnosticsResult == nil ? .secondary : .green
+    }
+
+    var supportDiagnosticsURL: URL? {
+        supportDiagnosticsResult?.archiveURL
+    }
+
     var commandPaletteItems: [WorkbenchCommandDescriptor] {
         var commands: [WorkbenchCommandDescriptor] = [
             WorkbenchCommandDescriptor(
@@ -2721,6 +2792,12 @@ final class WorkbenchViewModel: ObservableObject {
                 title: bossWatchIsEnabled ? "Pause Boss Watch" : "Start Boss Watch",
                 detail: "Toggle automatic boss monitoring",
                 systemImage: bossWatchIsEnabled ? "eye.slash" : "eye"
+            ),
+            WorkbenchCommandDescriptor(
+                id: .toggleBossPane,
+                title: state.bossPaneCollapsed ? "Show Boss Pane" : "Hide Boss Pane",
+                detail: state.bossPaneCollapsed ? "Reveal boss chat and diagnostics" : "Collapse boss chat and diagnostics",
+                systemImage: "sidebar.leading"
             ),
             WorkbenchCommandDescriptor(
                 id: .installOuroAgent,
@@ -2739,6 +2816,18 @@ final class WorkbenchViewModel: ObservableObject {
                 title: "Run Recovery Drill",
                 detail: "Simulate restart recovery planning",
                 systemImage: "arrow.clockwise.circle"
+            ),
+            WorkbenchCommandDescriptor(
+                id: .collectSupportDiagnostics,
+                title: "Collect Support Diagnostics",
+                detail: "Create a local diagnostics zip without transcript contents",
+                systemImage: "lifepreserver"
+            ),
+            WorkbenchCommandDescriptor(
+                id: .checkReleaseUpdates,
+                title: "Check Release Updates",
+                detail: "Look for the latest published Workbench release",
+                systemImage: "arrow.down.app"
             )
         ]
 
@@ -2762,6 +2851,18 @@ final class WorkbenchViewModel: ObservableObject {
                 systemImage: "play.fill"
             ))
             if activeSession(for: selectedEntry) != nil {
+                commands.append(WorkbenchCommandDescriptor(
+                    id: .focusSelectedSession,
+                    title: "Focus \(selectedEntry.name)",
+                    detail: "Open the terminal-only view",
+                    systemImage: "arrow.up.left.and.arrow.down.right"
+                ))
+                commands.append(WorkbenchCommandDescriptor(
+                    id: .redrawSelectedSession,
+                    title: "Redraw \(selectedEntry.name)",
+                    detail: "Send Ctrl-L to refresh the terminal display",
+                    systemImage: "arrow.clockwise"
+                ))
                 commands.append(WorkbenchCommandDescriptor(
                     id: .stopSelectedSession,
                     title: "Stop \(selectedEntry.name)",
@@ -3319,6 +3420,40 @@ final class WorkbenchViewModel: ObservableObject {
         NSWorkspace.shared.open(releaseUpdateURL)
     }
 
+    func collectSupportDiagnostics() {
+        guard !supportDiagnosticsIsCollecting else {
+            return
+        }
+        supportDiagnosticsIsCollecting = true
+        supportDiagnosticsError = nil
+
+        let runner = SupportDiagnosticsRunner(resourceDirectory: Bundle.main.resourceURL)
+        Task {
+            let outcome = await Task.detached(priority: .userInitiated) {
+                do {
+                    return Result<SupportDiagnosticsResult, Error>.success(try runner.run())
+                } catch {
+                    return Result<SupportDiagnosticsResult, Error>.failure(error)
+                }
+            }.value
+
+            supportDiagnosticsIsCollecting = false
+            switch outcome {
+            case let .success(result):
+                supportDiagnosticsResult = result
+            case let .failure(error):
+                supportDiagnosticsError = error.localizedDescription
+            }
+        }
+    }
+
+    func revealSupportDiagnostics() {
+        guard let supportDiagnosticsURL else {
+            return
+        }
+        NSWorkspace.shared.activateFileViewerSelecting([supportDiagnosticsURL])
+    }
+
     func performCommand(_ command: WorkbenchCommandID) {
         switch command {
         case .newSession:
@@ -3333,6 +3468,8 @@ final class WorkbenchViewModel: ObservableObject {
             }
         case .toggleBossWatch:
             setBossWatchEnabled(!bossWatchIsEnabled)
+        case .toggleBossPane:
+            setBossPaneCollapsed(!state.bossPaneCollapsed)
         case .installOuroAgent:
             isOuroAgentInstallSheetPresented = true
         case .launchSelectedSession:
@@ -3341,6 +3478,18 @@ final class WorkbenchViewModel: ObservableObject {
                 return
             }
             launch(selectedEntry)
+        case .focusSelectedSession:
+            guard let selectedEntry else {
+                errorMessage = "No session is selected"
+                return
+            }
+            focusTerminal(selectedEntry)
+        case .redrawSelectedSession:
+            guard let selectedEntry else {
+                errorMessage = "No session is selected"
+                return
+            }
+            redrawTerminal(selectedEntry)
         case .stopSelectedSession:
             guard let selectedEntry else {
                 errorMessage = "No session is selected"
@@ -3358,6 +3507,12 @@ final class WorkbenchViewModel: ObservableObject {
             searchTranscripts()
         case .runRecoveryDrill:
             runRecoveryDrill()
+        case .collectSupportDiagnostics:
+            collectSupportDiagnostics()
+        case .checkReleaseUpdates:
+            Task {
+                await checkForReleaseUpdate()
+            }
         }
     }
 
@@ -3600,6 +3755,19 @@ final class WorkbenchViewModel: ObservableObject {
         updateEntry(entry.id) { entry in
             entry.attention = .active
             entry.lastSummary = "Sent Ctrl-C to \(entry.name)"
+        }
+        save()
+    }
+
+    func redrawTerminal(_ entry: ProcessEntry) {
+        guard let session = activeSessions[entry.id] else {
+            errorMessage = "\(entry.name) is not running"
+            return
+        }
+        session.redrawDisplay()
+        updateEntry(entry.id) { entry in
+            entry.attention = .active
+            entry.lastSummary = "Redrew \(entry.name)"
         }
         save()
     }
@@ -4292,6 +4460,10 @@ final class TerminalSessionController: NSObject, ObservableObject, Identifiable,
 
     func sendBytes(_ bytes: [UInt8]) {
         terminal.send(bytes)
+    }
+
+    func redrawDisplay() {
+        sendBytes([0x0c])
     }
 
     func focusInput() {

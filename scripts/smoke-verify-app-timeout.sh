@@ -61,6 +61,16 @@ SH
 
 chmod +x "$MACOS_DIR/OuroWorkbench" "$MACOS_DIR/OuroWorkbenchMCP" "$MACOS_DIR/Tools/screen"
 
+cat > "$RESOURCES_DIR/collect-support-diagnostics.sh" <<'SH'
+#!/usr/bin/env bash
+if [[ "${1:-}" == "--help" ]]; then
+  exit 0
+fi
+printf 'Wrote diagnostics: /tmp/fake.zip\n'
+SH
+
+chmod +x "$RESOURCES_DIR/collect-support-diagnostics.sh"
+
 set +e
 "$ROOT_DIR/scripts/verify-app-bundle.sh" "$APP_DIR" --gui-smoke-timeout 1 >"$TEMP_ROOT/stdout.log" 2>"$TEMP_ROOT/stderr.log"
 status=$?
