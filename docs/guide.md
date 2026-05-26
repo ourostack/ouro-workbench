@@ -193,7 +193,8 @@ Then run the first-run setup conversation in the app:
    flows.
 4. Once the boss is ready, choose `Scan`. Workbench inspects recent local
    Workbench, Claude Code, Codex, Copilot/shell, and persistent-terminal
-   evidence from the last week.
+   evidence from the last week. If cmux is installed, it also reads cmux's
+   saved workspace file and matches live Claude Code panes by TTY/session id.
 5. Workbench proposes an arrangement: Desk tracks become Workbench groups, and
    resumable terminal-agent sessions become terminal tabs with Desk task refs.
    It shows the full evidence set, but only preselects a small, recent,
@@ -214,6 +215,25 @@ The packaged MCP executable lives inside the installed app:
 ```bash
 "/Users/arimendelow/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP"
 ```
+
+### Moving From cmux
+
+Workbench treats cmux as an import source, not as a PTY host to commandeer. The
+safe migration is:
+
+1. Leave cmux running while Workbench scans.
+2. Let onboarding read `~/Library/Application Support/cmux/session-com.cmuxterm.app.json`.
+3. Review the proposed Workbench groups. cmux workspace titles become preferred
+   Workbench group names when available.
+4. Arrange only the sessions you want Workbench to own.
+5. Quit or idle the original cmux Claude pane before doing new work in the
+   Workbench-resumed tab.
+
+For Claude Code panes, Workbench matches the live process by TTY and
+`--session-id`, then creates a `claude --resume <session>` command. It preserves
+high-trust launch posture such as `--dangerously-skip-permissions` and
+`--permission-mode bypassPermissions`, but it intentionally drops cmux hook
+settings so the resumed tab belongs to Workbench.
 
 Registering Workbench MCP writes an `ouro_workbench` server entry into the
 selected boss agent bundle:

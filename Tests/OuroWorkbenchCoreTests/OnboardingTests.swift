@@ -111,6 +111,135 @@ final class OnboardingTests: XCTestCase {
         XCTAssertTrue(candidates.contains { $0.source == .githubCopilotCLI && $0.agentKind == .githubCopilotCLI })
     }
 
+    func testRecentSessionScannerImportsLiveCmuxClaudePanelsWithGroupNames() throws {
+        let now = ISO8601DateFormatter().date(from: "2026-05-26T12:00:00Z")!
+        let claudeURL = temporaryDirectory
+            .appendingPathComponent(".claude/projects/-Users-ari-Projects-ouroboros-agent-harness/live-1.jsonl")
+        try FileManager.default.createDirectory(at: claudeURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try [
+            #"{"sessionId":"live-1","cwd":"/Users/ari/Projects/ouroboros-agent-harness","timestamp":"2026-05-26T11:55:00.000Z"}"#,
+            #"{"sessionId":"live-1","content":"Older history title","timestamp":"2026-05-26T11:56:00.000Z"}"#
+        ].joined(separator: "\n").write(to: claudeURL, atomically: true, encoding: .utf8)
+
+        let cmuxURL = temporaryDirectory.appendingPathComponent("cmux-session.json")
+        try """
+        {
+          "windows": [{
+            "tabManager": {
+              "workspaces": [{
+                "customTitle": "Ouroboros Harness Work",
+                "currentDirectory": "/Users/ari/Projects/ouroboros-agent-harness",
+                "processTitle": "Terminal 2",
+                "statusEntries": [{
+                  "value": "Needs input",
+                  "timestamp": 1779796740
+                }],
+                "panels": [{
+                  "title": "* Debug Slugger unresponsive",
+                  "directory": "/Users/ari/Projects/ouroboros-agent-harness",
+                  "terminal": {
+                    "workingDirectory": "/Users/ari/Projects/ouroboros-agent-harness"
+                  },
+                  "ttyName": "ttys008"
+                }]
+              }]
+            }
+          }]
+        }
+        """.write(to: cmuxURL, atomically: true, encoding: .utf8)
+
+        let scanner = RecentSessionScanner(
+            homeURL: temporaryDirectory,
+            now: now,
+            lookback: 7 * 24 * 60 * 60,
+            sqlite3URL: temporaryDirectory.appendingPathComponent("missing-sqlite3"),
+            cmuxSessionURL: cmuxURL,
+            liveProcessLister: {
+                [
+                    RecentSessionScanner.LiveTerminalProcess(
+                        pid: 123,
+                        ttyName: "s008",
+                        command: "/Users/ari/.local/bin/claude --dangerously-skip-permissions --session-id live-1 --settings {\"hooks\":{}}"
+                    )
+                ]
+            }
+        )
+
+        let candidates = scanner.scan()
+        let candidate = try XCTUnwrap(candidates.first { $0.id == "claude:live-1" })
+
+        XCTAssertEqual(candidate.source, .cmux)
+        XCTAssertEqual(candidate.title, "Debug Slugger unresponsive")
+        XCTAssertEqual(candidate.workingDirectory, "/Users/ari/Projects/ouroboros-agent-harness")
+        XCTAssertEqual(candidate.resumeCommand, ["claude", "--dangerously-skip-permissions", "--resume", "live-1"])
+        XCTAssertEqual(candidate.preferredGroupName, "Ouroboros Harness Work")
+        XCTAssertTrue(candidate.evidencePaths.contains(cmuxURL.path))
+        XCTAssertGreaterThanOrEqual(candidate.confidence, 0.98)
+
+        let proposal = WorkbenchImportProposalBuilder().build(candidates: candidates, now: now)
+        XCTAssertEqual(proposal.groups.first?.name, "Ouroboros Harness Work")
+        XCTAssertEqual(proposal.groups.first?.terminals.first?.name, "Claude: Debug Slugger unresponsive")
+    }
+
+    func testRecentSessionScannerFallsBackToLiveClaudeProcessesWithoutCmuxState() throws {
+        let now = ISO8601DateFormatter().date(from: "2026-05-26T12:00:00Z")!
+        let scanner = RecentSessionScanner(
+            homeURL: temporaryDirectory,
+            now: now,
+            lookback: 7 * 24 * 60 * 60,
+            sqlite3URL: temporaryDirectory.appendingPathComponent("missing-sqlite3"),
+            cmuxSessionURL: temporaryDirectory.appendingPathComponent("missing-cmux.json"),
+            liveProcessLister: {
+                [
+                    RecentSessionScanner.LiveTerminalProcess(
+                        pid: 456,
+                        ttyName: "s009",
+                        command: #"/bin/zsh -lc "claude --permission-mode bypassPermissions --session-id live-2""#
+                    )
+                ]
+            }
+        )
+
+        let candidate = try XCTUnwrap(scanner.scan().first { $0.id == "claude:live-2" })
+
+        XCTAssertEqual(candidate.source, .claudeCode)
+        XCTAssertEqual(candidate.resumeCommand, ["claude", "--permission-mode", "bypassPermissions", "--resume", "live-2"])
+        XCTAssertEqual(candidate.workingDirectory, temporaryDirectory.path)
+        XCTAssertTrue(candidate.evidencePaths.contains("process:456"))
+    }
+
+    func testCodexSQLiteScannerUsesSingleValidOrderByQuery() throws {
+        let now = ISO8601DateFormatter().date(from: "2026-05-26T12:00:00Z")!
+        let codexURL = temporaryDirectory.appendingPathComponent(".codex/state_5.sqlite")
+        try FileManager.default.createDirectory(at: codexURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: codexURL.path, contents: Data())
+
+        let sqliteURL = temporaryDirectory.appendingPathComponent("sqlite3")
+        try """
+        #!/bin/zsh
+        query="${argv[-1]}"
+        count=$(printf "%s" "$query" | grep -o "order by" | wc -l | tr -d " ")
+        if [[ "$count" != "1" ]]; then
+          exit 42
+        fi
+        printf "codex-live\\tShip cmux import\\t/Users/ari/Projects/ouro-workbench\\tmain\\t1779796800000\\n"
+        """.write(to: sqliteURL, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: sqliteURL.path)
+
+        let scanner = RecentSessionScanner(
+            homeURL: temporaryDirectory,
+            now: now,
+            lookback: 7 * 24 * 60 * 60,
+            sqlite3URL: sqliteURL,
+            cmuxSessionURL: temporaryDirectory.appendingPathComponent("missing-cmux.json"),
+            liveProcessLister: { [] }
+        )
+
+        let candidate = try XCTUnwrap(scanner.scan().first { $0.id == "codex:codex-live" })
+        XCTAssertEqual(candidate.workingDirectory, "/Users/ari/Projects/ouro-workbench")
+        XCTAssertEqual(candidate.resumeCommand, ["codex", "resume", "codex-live"])
+    }
+
     func testImportProposalGroupsClaudeWorktreesByOwningProject() {
         let candidate = RecentSessionCandidate(
             id: "claude:1",

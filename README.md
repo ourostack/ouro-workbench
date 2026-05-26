@@ -101,6 +101,13 @@ Copilot/shell, and Workbench sessions, proposes a Desk-shaped group layout, and
 mirrors selected work into Desk before resuming a curated starter set of
 high-confidence terminals.
 
+When migrating from cmux, onboarding also reads cmux's saved workspace state,
+matches live Claude Code panes by TTY/session id, preserves cmux workspace names
+as Workbench groups, and keeps high-trust Claude launch flags such as
+`--dangerously-skip-permissions` on the generated resume command. Workbench
+does not take over the live cmux PTY; it creates a clean Workbench-owned resume
+tab from Claude's session metadata.
+
 Use the `Ouro Agents` row in the boss dashboard to refresh local agent bundle
 discovery, switch the boss to an installed local agent, reveal an agent bundle,
 register or update Workbench MCP for any discovered agent, or open a managed
