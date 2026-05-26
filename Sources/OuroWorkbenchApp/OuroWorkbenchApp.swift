@@ -663,6 +663,37 @@ struct StatusPill: View {
     }
 }
 
+private struct DashboardRowLabel: View {
+    var title: String
+    var systemImage: String
+
+    var body: some View {
+        Label(title, systemImage: systemImage)
+            .font(.caption.weight(.semibold))
+            .lineLimit(1)
+            .frame(width: 132, alignment: .leading)
+            .fixedSize(horizontal: true, vertical: false)
+    }
+}
+
+private struct DashboardStatusLine: View {
+    var text: String
+    var color: SwiftUI.Color = .secondary
+    var help: String?
+    var truncationMode: Text.TruncationMode = .middle
+
+    var body: some View {
+        Text(text)
+            .font(.caption.monospaced())
+            .foregroundStyle(color)
+            .lineLimit(1)
+            .truncationMode(truncationMode)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .layoutPriority(1)
+            .help(help ?? text)
+    }
+}
+
 private extension AutonomyReadinessState {
     var tint: SwiftUI.Color {
         switch self {
@@ -924,8 +955,10 @@ struct MailboxWarningView: View {
             Text("Mailbox warnings: \(issues.joined(separator: "; "))")
                 .font(.caption)
                 .foregroundStyle(.orange)
-                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(2)
+                .truncationMode(.tail)
                 .textSelection(.enabled)
+                .help(issues.joined(separator: "\n"))
         }
         .padding(.vertical, 5)
         .padding(.horizontal, 8)
@@ -1014,14 +1047,20 @@ struct OuroAgentManagerView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 10) {
-                Label("Ouro Agents", systemImage: "person.2.badge.gearshape")
+                HStack(spacing: 6) {
+                    Image(systemName: "person.2.badge.gearshape")
+                        .frame(width: 16)
+                    Text("Ouro Agents")
+                }
                     .font(.caption.weight(.semibold))
+                    .fixedSize()
                 Text(model.ouroAgentStatusLine)
                     .font(.caption.monospaced())
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                Spacer()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .layoutPriority(1)
                 Button {
                     model.refreshOuroAgents()
                 } label: {
@@ -1030,12 +1069,14 @@ struct OuroAgentManagerView: View {
                 .labelStyle(.iconOnly)
                 .buttonStyle(.borderless)
                 .help("Refresh local Ouro agents")
+                .fixedSize()
                 Button {
                     model.isOuroAgentInstallSheetPresented = true
                 } label: {
                     Label("Install Agent", systemImage: "square.and.arrow.down")
                 }
                 .buttonStyle(.bordered)
+                .fixedSize()
             }
             if model.ouroAgents.isEmpty {
                 HStack(spacing: 8) {
@@ -1078,11 +1119,15 @@ struct OuroAgentRowView: View {
                     Text(agent.name)
                         .font(.caption.weight(.semibold))
                         .lineLimit(1)
+                        .truncationMode(.middle)
+                        .layoutPriority(1)
                     if model.state.boss.agentName.caseInsensitiveCompare(agent.name) == .orderedSame {
                         StatusPill(text: "boss", color: .blue)
+                            .fixedSize()
                     }
                     if let registration {
                         StatusPill(text: registrationPillText(registration.status), color: registrationTint(registration.status))
+                            .fixedSize()
                     }
                 }
                 Text(agent.summaryLine)
@@ -1091,7 +1136,8 @@ struct OuroAgentRowView: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
-            Spacer(minLength: 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .layoutPriority(1)
             Button {
                 model.selectBoss(agentName: agent.name)
             } label: {
@@ -1101,6 +1147,7 @@ struct OuroAgentRowView: View {
             .buttonStyle(.borderless)
             .help("Use \(agent.name) as boss")
             .disabled(!agent.isUsableAsBoss || model.state.boss.agentName.caseInsensitiveCompare(agent.name) == .orderedSame)
+            .fixedSize()
             if registration?.isActionable == true {
                 Button {
                     model.installWorkbenchMCP(for: agent)
@@ -1110,6 +1157,7 @@ struct OuroAgentRowView: View {
                 .labelStyle(.iconOnly)
                 .buttonStyle(.borderless)
                 .help(registration?.detail ?? "Register Workbench MCP")
+                .fixedSize()
             }
             Button {
                 model.revealAgentBundle(agent)
@@ -1119,6 +1167,7 @@ struct OuroAgentRowView: View {
             .labelStyle(.iconOnly)
             .buttonStyle(.borderless)
             .help(agent.bundlePath)
+            .fixedSize()
         }
         .padding(.vertical, 3)
         .accessibilityElement(children: .ignore)
@@ -1300,11 +1349,12 @@ struct ActionLogView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text("Action Log")
                         .font(.caption.weight(.semibold))
+                        .fixedSize()
                     Text("\(entries.count) recent")
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
-                    actionLogEntryContent(entry)
-                    Spacer(minLength: 8)
+                        .fixedSize()
+                    actionLogEntryRow(entry)
                     actionLogToggleButton
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1320,10 +1370,7 @@ struct ActionLogView: View {
                         actionLogToggleButton
                     }
                     ForEach(displayedEntries) { entry in
-                        HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            actionLogEntryContent(entry)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        actionLogEntryRow(entry)
                     }
                 }
             }
@@ -1339,28 +1386,44 @@ struct ActionLogView: View {
         .labelStyle(.iconOnly)
         .buttonStyle(.borderless)
         .help(isExpanded ? "Show fewer action log entries" : "Show more action log entries")
+        .fixedSize()
     }
 
-    @ViewBuilder
-    private func actionLogEntryContent(_ entry: WorkbenchActionLogEntry) -> some View {
-        Image(systemName: entry.succeeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-            .foregroundStyle(entry.succeeded ? .green : .orange)
-        Text(entry.occurredAt.formatted(date: .omitted, time: .standard))
-            .font(.caption.monospacedDigit())
-            .foregroundStyle(.secondary)
-        Text("\(entry.source) \(entry.action)")
-            .font(.caption.weight(.semibold))
-        if let targetName = entry.targetName {
-            Text(targetName)
-                .font(.caption)
+    private func actionLogEntryRow(_ entry: WorkbenchActionLogEntry) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: entry.succeeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                .foregroundStyle(entry.succeeded ? .green : .orange)
+                .fixedSize()
+            Text(entry.occurredAt.formatted(date: .omitted, time: .standard))
+                .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
+                .fixedSize()
+            Text("\(entry.source) \(entry.action)")
+                .font(.caption.weight(.semibold))
                 .lineLimit(1)
                 .truncationMode(.middle)
+            if let targetName = entry.targetName {
+                Text(targetName)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            Text(entry.result)
+                .font(.caption)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .layoutPriority(1)
         }
-        Text(entry.result)
-            .font(.caption)
-            .lineLimit(1)
-            .truncationMode(.tail)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .layoutPriority(1)
+        .clipped()
+        .help(actionLogEntryHelp(entry))
+    }
+
+    private func actionLogEntryHelp(_ entry: WorkbenchActionLogEntry) -> String {
+        let target = entry.targetName.map { " \($0)" } ?? ""
+        return "\(entry.source) \(entry.action)\(target): \(entry.result)"
     }
 }
 
@@ -1372,9 +1435,15 @@ struct BossWatchStatusView: View {
             HStack(spacing: 10) {
                 Label("Boss Watch", systemImage: model.bossWatchIsEnabled ? "eye.fill" : "eye")
                     .font(.caption.weight(.semibold))
+                    .fixedSize()
                 Text(model.bossWatchStatusLine)
                     .font(.caption.monospaced())
                     .foregroundStyle(model.bossWatchStatusColor)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .layoutPriority(1)
+                    .help(model.bossWatchStatusLine)
             }
             if !model.bossWatchChangeSummaries.isEmpty {
                 ForEach(model.bossWatchChangeSummaries.prefix(5)) { change in
@@ -1382,13 +1451,19 @@ struct BossWatchStatusView: View {
                         Text(change.occurredAt.formatted(date: .omitted, time: .standard))
                             .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)
+                            .fixedSize()
                         Text(change.title)
                             .font(.caption.weight(.semibold))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
                         Text(change.detail)
                             .font(.caption)
                             .lineLimit(1)
                             .truncationMode(.tail)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .layoutPriority(1)
                     }
+                    .help("\(change.title): \(change.detail)")
                 }
             }
         }
@@ -1419,6 +1494,7 @@ struct TranscriptSearchView: View {
                     Label("Search", systemImage: "magnifyingglass")
                 }
                 .keyboardShortcut("f", modifiers: [.command])
+                .fixedSize()
             }
             if !model.transcriptSearchResults.isEmpty {
                 ForEach(model.transcriptSearchResults.prefix(6)) { match in
@@ -1427,13 +1503,17 @@ struct TranscriptSearchView: View {
                             .font(.caption.weight(.semibold))
                             .lineLimit(1)
                             .truncationMode(.middle)
+                            .frame(maxWidth: 180, alignment: .leading)
                         Text("line \(match.lineNumber)")
                             .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)
+                            .fixedSize()
                         Text(match.line)
                             .font(.caption.monospaced())
                             .lineLimit(1)
                             .truncationMode(.tail)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .layoutPriority(1)
                     }
                     .help(match.transcriptPath)
                 }
@@ -1459,11 +1539,11 @@ struct BossWorkbenchMCPSetupView: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Label("Workbench MCP", systemImage: "point.3.connected.trianglepath.dotted")
-                .font(.caption.weight(.semibold))
-            Text(model.bossWorkbenchMCPStatusLine)
-                .font(.caption.monospaced())
-                .foregroundStyle(model.bossWorkbenchMCPStatusColor)
+            DashboardRowLabel(title: "Workbench MCP", systemImage: "point.3.connected.trianglepath.dotted")
+            DashboardStatusLine(
+                text: model.bossWorkbenchMCPStatusLine,
+                color: model.bossWorkbenchMCPStatusColor
+            )
             Button {
                 model.refreshWorkbenchMCPRegistration()
             } label: {
@@ -1472,6 +1552,7 @@ struct BossWorkbenchMCPSetupView: View {
             .labelStyle(.iconOnly)
             .buttonStyle(.borderless)
             .help("Refresh Workbench MCP registration")
+            .fixedSize()
             if model.bossWorkbenchMCPRegistration?.isActionable == true {
                 Button {
                     model.installWorkbenchMCPForBoss()
@@ -1479,6 +1560,8 @@ struct BossWorkbenchMCPSetupView: View {
                     Label(model.bossWorkbenchMCPActionTitle, systemImage: "link.badge.plus")
                 }
                 .buttonStyle(.bordered)
+                .controlSize(.small)
+                .fixedSize()
             }
         }
         .task {
@@ -1497,6 +1580,8 @@ struct SessionDetailView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(entry.name)
                         .font(.title3.weight(.semibold))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                     Text(model.launchCommand(for: entry))
                         .font(.caption.monospaced())
                         .foregroundStyle(.secondary)
@@ -1518,12 +1603,15 @@ struct SessionDetailView: View {
                             color: entry.autoResume ? .blue : .secondary
                         )
                     }
+                    .lineLimit(1)
                 }
-                Spacer()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .layoutPriority(1)
                 if entry.isArchived {
                     Label("Archived", systemImage: "archivebox")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
+                        .fixedSize()
                 } else {
                     Button {
                         Task {
@@ -1534,6 +1622,7 @@ struct SessionDetailView: View {
                     }
                     .buttonStyle(.bordered)
                     .disabled(model.bossCheckInIsRunning)
+                    .fixedSize()
                     Button {
                         model.copyLaunchCommand(for: entry)
                     } label: {
@@ -1542,6 +1631,7 @@ struct SessionDetailView: View {
                     .buttonStyle(.bordered)
                     .controlSize(.small)
                     .help("Copy this terminal's launch command")
+                    .fixedSize()
                     Button {
                         model.openWorkingDirectory(for: entry)
                     } label: {
@@ -1550,8 +1640,10 @@ struct SessionDetailView: View {
                     .buttonStyle(.bordered)
                     .controlSize(.small)
                     .help(entry.workingDirectory)
+                    .fixedSize()
                     if model.activeSession(for: entry) != nil {
                         RunningSessionHeaderControls(entry: entry, model: model)
+                            .fixedSize()
                     }
                     Button {
                         model.launch(entry)
@@ -1560,6 +1652,7 @@ struct SessionDetailView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.return, modifiers: [.command])
+                    .fixedSize()
                 }
             }
             .padding()
@@ -2296,17 +2389,15 @@ struct MachineRuntimeView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 12) {
-                Label("Native Runtime", systemImage: "macwindow")
-                    .font(.caption.weight(.semibold))
+                DashboardRowLabel(title: "Native Runtime", systemImage: "macwindow")
                 Toggle("Open at Login", isOn: Binding(
                     get: { loginItem.isEnabled },
                     set: { loginItem.setEnabled($0) }
                 ))
                 .toggleStyle(.switch)
                 .disabled(loginItem.isUpdating)
-                Text(loginItem.statusLine)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
+                .fixedSize()
+                DashboardStatusLine(text: loginItem.statusLine)
                 Button {
                     loginItem.refresh()
                 } label: {
@@ -2315,6 +2406,7 @@ struct MachineRuntimeView: View {
                 .labelStyle(.iconOnly)
                 .buttonStyle(.borderless)
                 .help("Refresh login item status")
+                .fixedSize()
             }
             if let lastError = loginItem.lastError {
                 Text(lastError)
@@ -2323,17 +2415,16 @@ struct MachineRuntimeView: View {
                     .textSelection(.enabled)
             }
             HStack(spacing: 12) {
-                Label("Support Diagnostics", systemImage: "lifepreserver")
-                    .font(.caption.weight(.semibold))
-                Text(model.supportDiagnosticsStatusLine)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(model.supportDiagnosticsStatusColor)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .help(model.supportDiagnosticsURL?.path ?? model.supportDiagnosticsStatusLine)
+                DashboardRowLabel(title: "Support Diagnostics", systemImage: "lifepreserver")
+                DashboardStatusLine(
+                    text: model.supportDiagnosticsStatusLine,
+                    color: model.supportDiagnosticsStatusColor,
+                    help: model.supportDiagnosticsURL?.path ?? model.supportDiagnosticsStatusLine
+                )
                 if model.supportDiagnosticsIsCollecting {
                     ProgressView()
                         .controlSize(.small)
+                        .fixedSize()
                 }
                 Button {
                     model.collectSupportDiagnostics()
@@ -2344,6 +2435,7 @@ struct MachineRuntimeView: View {
                 .controlSize(.small)
                 .disabled(model.supportDiagnosticsIsCollecting)
                 .help("Create a support diagnostics zip without transcript contents or raw workspace state")
+                .fixedSize()
                 if model.supportDiagnosticsURL != nil {
                     Button {
                         model.revealSupportDiagnostics()
@@ -2353,6 +2445,7 @@ struct MachineRuntimeView: View {
                     .buttonStyle(.bordered)
                     .controlSize(.small)
                     .help("Reveal the latest diagnostics zip in Finder")
+                    .fixedSize()
                     Button {
                         model.copySupportDiagnosticsPath()
                     } label: {
@@ -2361,6 +2454,7 @@ struct MachineRuntimeView: View {
                     .buttonStyle(.bordered)
                     .controlSize(.small)
                     .help("Copy the latest diagnostics zip path")
+                    .fixedSize()
                 }
             }
         }
@@ -2373,16 +2467,15 @@ struct ReleaseUpdateView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 12) {
-                Label("Release Updates", systemImage: "arrow.down.app")
-                    .font(.caption.weight(.semibold))
-                Text(model.releaseUpdateStatusLine)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(model.releaseUpdateStatusColor)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+                DashboardRowLabel(title: "Release Updates", systemImage: "arrow.down.app")
+                DashboardStatusLine(
+                    text: model.releaseUpdateStatusLine,
+                    color: model.releaseUpdateStatusColor
+                )
                 if model.releaseUpdateIsChecking {
                     ProgressView()
                         .controlSize(.small)
+                        .fixedSize()
                 }
                 Button {
                     Task {
@@ -2394,6 +2487,7 @@ struct ReleaseUpdateView: View {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
                 .disabled(model.releaseUpdateIsChecking)
+                .fixedSize()
                 if model.releaseUpdateURL != nil {
                     Button {
                         model.openReleaseUpdate()
@@ -2402,6 +2496,7 @@ struct ReleaseUpdateView: View {
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
+                    .fixedSize()
                 }
             }
             if let snapshot = model.releaseUpdateSnapshot, snapshot.status == .updateAvailable {
@@ -2419,17 +2514,16 @@ struct RecoveryDrillView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 12) {
-                Label("Recovery Drill", systemImage: "arrow.clockwise.circle")
-                    .font(.caption.weight(.semibold))
-                Text(model.recoveryDrillStatusLine)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
+                DashboardRowLabel(title: "Recovery Drill", systemImage: "arrow.clockwise.circle")
+                DashboardStatusLine(text: model.recoveryDrillStatusLine)
                 Button {
                     model.runRecoveryDrill()
                 } label: {
                     Label("Run Drill", systemImage: "play.circle")
                 }
                 .buttonStyle(.bordered)
+                .controlSize(.small)
+                .fixedSize()
             }
             if let result = model.recoveryDrillResult {
                 ForEach(result.items.prefix(5)) { item in
@@ -4930,15 +5024,68 @@ private struct MailboxFetchResult<Value: Sendable>: Sendable {
 struct TerminalPane: NSViewRepresentable {
     var session: TerminalSessionController
 
-    func makeNSView(context: Context) -> CapturingLocalProcessTerminalView {
-        let terminal = session.terminal
-        DispatchQueue.main.async {
-            terminal.window?.makeFirstResponder(terminal)
-        }
-        return terminal
+    func makeNSView(context: Context) -> TerminalHostView {
+        let host = TerminalHostView()
+        host.attach(session.terminal)
+        return host
     }
 
-    func updateNSView(_ nsView: CapturingLocalProcessTerminalView, context: Context) {}
+    func updateNSView(_ nsView: TerminalHostView, context: Context) {
+        nsView.attach(session.terminal)
+    }
+}
+
+final class TerminalHostView: NSView {
+    private weak var terminal: CapturingLocalProcessTerminalView?
+
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: NSView.noIntrinsicMetric, height: NSView.noIntrinsicMetric)
+    }
+
+    func attach(_ terminal: CapturingLocalProcessTerminalView) {
+        guard self.terminal !== terminal else {
+            focusTerminal()
+            return
+        }
+        self.terminal?.removeFromSuperview()
+        self.terminal = terminal
+        terminal.removeFromSuperview()
+        terminal.frame = bounds
+        terminal.autoresizingMask = [.width, .height]
+        addSubview(terminal)
+        needsLayout = true
+        focusTerminal()
+        redrawTerminalAfterAttach()
+    }
+
+    override func layout() {
+        super.layout()
+        terminal?.frame = bounds
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        focusTerminal()
+    }
+
+    private func focusTerminal() {
+        DispatchQueue.main.async { [weak terminal] in
+            guard let terminal else {
+                return
+            }
+            terminal.window?.makeFirstResponder(terminal)
+        }
+    }
+
+    private func redrawTerminalAfterAttach() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak terminal] in
+            guard let terminal else {
+                return
+            }
+            terminal.send([0x0c])
+            terminal.window?.makeFirstResponder(terminal)
+        }
+    }
 }
 
 @MainActor
@@ -4946,6 +5093,7 @@ final class TerminalSessionController: NSObject, ObservableObject, Identifiable,
     let id = UUID()
     let plan: TerminalCommandPlan
     let terminal: CapturingLocalProcessTerminalView
+    private static let initialTerminalFrame = CGRect(x: 0, y: 0, width: 960, height: 520)
     private let environmentValues: [String: String]
     private let environment: [String]
     private let onStarted: (Int32?) -> Void
@@ -4964,7 +5112,7 @@ final class TerminalSessionController: NSObject, ObservableObject, Identifiable,
         self.onStarted = onStarted
         self.onOutput = onOutput
         self.onTerminated = onTerminated
-        self.terminal = CapturingLocalProcessTerminalView(frame: .zero)
+        self.terminal = CapturingLocalProcessTerminalView(frame: Self.initialTerminalFrame)
         self.environmentValues = TerminalEnvironment().valuesWithResolvedPath()
         self.environment = environmentValues
             .sorted { $0.key < $1.key }
@@ -5058,6 +5206,10 @@ final class TerminalSessionController: NSObject, ObservableObject, Identifiable,
 final class CapturingLocalProcessTerminalView: LocalProcessTerminalView {
     var onOutput: ((ArraySlice<UInt8>) -> Void)?
 
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: NSView.noIntrinsicMetric, height: NSView.noIntrinsicMetric)
+    }
+
     override func dataReceived(slice: ArraySlice<UInt8>) {
         onOutput?(slice)
         super.dataReceived(slice: slice)
@@ -5069,6 +5221,10 @@ private extension LocalProcessTerminalView {
         metalBufferingMode = .perFrameAggregated
         try? setUseMetal(true)
         getTerminal().setCursorStyle(.steadyBlock)
+        setContentHuggingPriority(.defaultLow, for: .horizontal)
+        setContentHuggingPriority(.defaultLow, for: .vertical)
+        setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         wantsLayer = true
         layer?.backgroundColor = NSColor.black.cgColor
     }

@@ -56,6 +56,9 @@ scripts/install-latest-release.sh --open
 - Recovery Drill for non-mutating restart simulations before you trust a long autonomous run.
 - Explicit Redraw, Ctrl-C, Esc, and EOF controls for operating resized shells and TUIs without silently mutating live terminal state.
 - Stable icon terminal controls so the session header stays usable without clipped labels in normal-width windows.
+- Stable dashboard status rows that protect controls from long diagnostics, release, recovery, MCP, and mailbox messages.
+- Cleaner terminal reparenting so split and full-screen prompts redraw at the top after app reopen or focus changes.
+- Bounded compact Action Log rows so long native action results do not crowd the reveal control.
 - In-app Support Diagnostics for collecting, revealing, and copying a local evidence zip without transcript contents by default.
 
 ## Verification

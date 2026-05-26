@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.4 - Dashboard Row Polish
+
+- Stabilized boss-dashboard status rows so long runtime, diagnostics, release, recovery, MCP, and mailbox messages truncate predictably without crowding controls.
+- Kept the compact Action Log reveal control reachable when native action results are long.
+- Reworked terminal hosting so split and full-screen terminals redraw cleanly after app reopen or focus-mode reparenting.
+
 ## 0.1.3 - Header Control Polish
 
 - Compact terminal signal controls to stable icon buttons so the session header stays usable in normal-width windows without truncated labels.
