@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   release:
-    name: Build unsigned preview release
+    name: Build ad-hoc-signed preview release
     runs-on: macos-latest
     steps:
       - name: Check out repository

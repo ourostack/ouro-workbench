@@ -19,6 +19,41 @@ SWIFT_STRICT_FLAGS=(-Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=co
 
 cd "$ROOT_DIR"
 
+patch_swiftterm_resource_lookup() {
+  local renderer="$ROOT_DIR/.build/checkouts/SwiftTerm/Sources/SwiftTerm/Apple/Metal/MetalTerminalRenderer.swift"
+  local marker='Bundle(path: resourceURL.appendingPathComponent("SwiftTerm_SwiftTerm.bundle").path)'
+  local temp_file
+
+  # SwiftPM's generated Bundle.module accessor expects this resource bundle at
+  # the .app root. macOS app bundles with root-level payloads cannot be sealed,
+  # so packaged builds point SwiftTerm at Contents/Resources instead.
+  if [[ ! -f "$renderer" ]]; then
+    printf 'Required SwiftTerm renderer source is missing: %s\n' "$renderer" >&2
+    exit 1
+  fi
+
+  if grep -F "$marker" "$renderer" >/dev/null; then
+    return
+  fi
+
+  temp_file="$(mktemp)"
+  if ! perl -0pe '
+    BEGIN {
+      $old = qq{        #if SWIFT_PACKAGE\n        bundles.append(Bundle.module)\n        #endif\n};
+      $new = qq{        if let resourceURL = Bundle.main.resourceURL,\n           let bundle = Bundle(path: resourceURL.appendingPathComponent("SwiftTerm_SwiftTerm.bundle").path) {\n            bundles.append(bundle)\n        }\n};
+    }
+    $count = s/\Q$old\E/$new/;
+    END { exit($count == 1 ? 0 : 1) }
+  ' "$renderer" > "$temp_file"; then
+    rm -f "$temp_file"
+    printf 'Unable to patch SwiftTerm resource lookup for signable app packaging.\n' >&2
+    printf 'The expected Bundle.module block was not found in %s\n' "$renderer" >&2
+    exit 1
+  fi
+
+  mv "$temp_file" "$renderer"
+}
+
 VERSION="$(tr -d '[:space:]' < "$VERSION_FILE")"
 if [[ ! "$VERSION" =~ ^[0-9]+[.][0-9]+[.][0-9]+([-.][0-9A-Za-z.]+)?$ ]]; then
   printf 'Invalid app version in %s: %s\n' "$VERSION_FILE" "$VERSION" >&2
@@ -40,6 +75,8 @@ if git -C "$ROOT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   fi
 fi
 
+swift package resolve
+patch_swiftterm_resource_lookup
 swift build -c release "${SWIFT_STRICT_FLAGS[@]}" --product "$PRODUCT_NAME"
 swift build -c release "${SWIFT_STRICT_FLAGS[@]}" --product "$MCP_PRODUCT_NAME"
 SWIFTTERM_BUNDLE="$(find "$ROOT_DIR/.build" -path "*/release/$SWIFTTERM_BUNDLE_NAME" -type d -print -quit)"
@@ -57,7 +94,7 @@ cp "$ROOT_DIR/.build/release/$MCP_PRODUCT_NAME" "$MACOS_DIR/$MCP_PRODUCT_NAME"
 chmod 755 "$MACOS_DIR/$MCP_PRODUCT_NAME"
 cp "$ROOT_DIR/scripts/collect-support-diagnostics.sh" "$RESOURCES_DIR/collect-support-diagnostics.sh"
 chmod 755 "$RESOURCES_DIR/collect-support-diagnostics.sh"
-ditto "$SWIFTTERM_BUNDLE" "$APP_DIR/$SWIFTTERM_BUNDLE_NAME"
+ditto "$SWIFTTERM_BUNDLE" "$RESOURCES_DIR/$SWIFTTERM_BUNDLE_NAME"
 
 if [[ ! -x "$SCREEN_SOURCE" ]]; then
   printf 'Required terminal persistence backend is missing: %s\n' "$SCREEN_SOURCE" >&2
@@ -102,5 +139,7 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
 </dict>
 </plist>
 PLIST
+
+codesign --force --deep --sign - "$APP_DIR" >/dev/null
 
 echo "$APP_DIR"

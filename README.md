@@ -75,7 +75,7 @@ scripts/install-app.sh --open
 Use the native `Open at Login` switch in the app to reopen Workbench after a
 computer restart and trigger session recovery.
 
-Install the latest published unsigned preview release with:
+Install the latest published ad-hoc-signed preview release with:
 
 ```bash
 scripts/install-latest-release.sh --open

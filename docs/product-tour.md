@@ -74,7 +74,7 @@ action. `Recovery Drill` runs that classification without mutating state.
 
 ## Release State
 
-Ready for unsigned public preview:
+Ready for ad-hoc-signed public preview:
 
 - native app icon generated and enforced in bundle verification
 - bundled `screen` persistence backend
@@ -84,7 +84,7 @@ Ready for unsigned public preview:
 - rollback-safe local installer
 - latest-release installer for GitHub Releases
 - local support diagnostics zip with summaries only by default
-- GitHub release workflow for unsigned preview artifacts
+- GitHub release workflow for ad-hoc-signed preview artifacts
 - CI checks for Swift tests, native scenario verifier, app bundle, and release
   support scripts
 - branch protection on `main` requiring the protected checks
