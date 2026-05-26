@@ -156,6 +156,27 @@ points at the packaged `OuroWorkbenchMCP` executable and uses no arguments:
 Once registered, the selected boss agent can discover the workbench tools from
 its normal Ouro MCP/tool surface.
 
+Registration is also a sense declaration. The registrar keeps the boss bundle's
+`agent.json` coherent by writing both:
+
+```json
+{
+  "senses": {
+    "workbench": { "enabled": true }
+  },
+  "mcpServers": {
+    "ouro_workbench": {
+      "command": "/Users/arimendelow/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP",
+      "args": []
+    }
+  }
+}
+```
+
+If the MCP server is present but `senses.workbench.enabled` is missing,
+Workbench treats registration as needing repair. This prevents the boss from
+having a hidden tool surface that its own sense inventory cannot name.
+
 ## TTFA Readiness
 
 `TTFA` in the native header is not decorative. It summarizes whether the selected
