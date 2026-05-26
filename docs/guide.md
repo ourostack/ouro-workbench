@@ -184,9 +184,9 @@ scripts/install-app.sh --open
 Then run the first-run setup conversation in the app:
 
 1. Click the wand button or choose `Set Up Workbench` from the command palette.
-2. Workbench checks whether this machine has a reachable Ouro boss agent. The
-   boss is the operator's agent for this machine; it is not the Desk worker and
-   it is not tied to any single terminal tab.
+2. Workbench opens with a welcome flow and asks which local Ouro agent should be
+   this Mac's boss. The boss is the operator's agent for this machine; it is not
+   the Desk worker and it is not tied to any single terminal tab.
 3. If no boss is ready, Workbench offers the right `ouro hatch`, `ouro clone`,
    `ouro connect`, `ouro check`, `ouro repair`, or Workbench MCP registration
    move. Human-secret entry stays inside Ouro's own terminal/browser auth

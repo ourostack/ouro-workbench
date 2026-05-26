@@ -95,11 +95,12 @@ Use the native `Workbench MCP` row in the boss dashboard to register that server
 with the selected Ouro boss agent.
 
 Use `Set Up Workbench` from the wand button or command palette for the native
-onboarding conversation. It checks the machine's boss agent, opens the right
-Ouro repair/auth/setup terminal when needed, scans recent Claude Code, Codex,
-Copilot/shell, and Workbench sessions, proposes a Desk-shaped group layout, and
-mirrors selected work into Desk before resuming a curated starter set of
-high-confidence terminals.
+onboarding conversation. It opens with a welcome flow, asks which local Ouro
+agent should be this Mac's boss, connects Workbench MCP for that agent, opens
+the right Ouro repair/auth/setup terminal when needed, scans recent Claude Code,
+Codex, Copilot/shell, cmux, and Workbench sessions, proposes a Desk-shaped group
+layout, and mirrors selected work into Desk before resuming a curated starter
+set of high-confidence terminals.
 
 When migrating from cmux, onboarding also reads cmux's saved workspace state,
 matches live Claude Code panes by TTY/session id, preserves cmux workspace names
