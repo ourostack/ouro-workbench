@@ -127,6 +127,7 @@ require_executable "$APP_EXECUTABLE"
 require_executable "$MCP_EXECUTABLE"
 require_executable "$SCREEN_EXECUTABLE"
 require_executable "$SUPPORT_DIAGNOSTICS_SCRIPT"
+[[ "$(stat -f %z "$SUPPORT_DIAGNOSTICS_SCRIPT")" -gt 0 ]] || fail "empty support diagnostics helper"
 "$SUPPORT_DIAGNOSTICS_SCRIPT" --help >/dev/null
 [[ -f "$APP_ICON" ]] || fail "missing app icon"
 [[ "$(stat -f %z "$APP_ICON")" -gt 0 ]] || fail "empty app icon"

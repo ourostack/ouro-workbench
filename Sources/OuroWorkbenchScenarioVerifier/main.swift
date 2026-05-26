@@ -744,7 +744,7 @@ struct NativeScenarioRenderer {
         let controls = CGRect(x: canvas.size.width - 360, y: controlY, width: 340, height: 40)
         canvas.fill(controls, color: NSColor.white.withAlphaComponent(0.25), radius: 8)
         canvas.text(scenario.fixture.entry.name, in: controls.insetBy(dx: 12, dy: 12), role: .terminalControl)
-        canvas.text("Exit Full Screen   Ctrl-C   Esc   Stop", in: controls.insetBy(dx: 100, dy: 12), role: .terminalControl)
+        canvas.text("Exit Full Screen   Redraw   Ctrl-C   Esc   EOF   Stop", in: controls.insetBy(dx: 100, dy: 12), role: .terminalControl)
 
         let terminalTop = CGFloat(chrome.terminalContentTopInset)
         let content = CGRect(x: 0, y: terminalTop, width: canvas.size.width, height: canvas.size.height - terminalTop)
@@ -799,8 +799,8 @@ struct NativeScenarioRenderer {
 
         canvas.text(scenario.fixture.entry.name, in: CGRect(x: detailX + 16, y: currentY + 16, width: 220, height: 22), role: .terminalHeaderText)
         canvas.text(scenario.commandLine, in: CGRect(x: detailX + 16, y: currentY + 42, width: detailWidth * 0.55, height: 16), role: .terminalHeaderText)
-        let terminalControls = trailingRect(in: terminalHeader, preferredWidth: 480, y: currentY + 28, height: 18, minimumX: detailX + 250)
-        canvas.text("Ask Boss   Full Screen   Ctrl-C   Esc   Stop   Restart", in: terminalControls, role: .terminalControl)
+        let terminalControls = trailingRect(in: terminalHeader, preferredWidth: 560, y: currentY + 28, height: 18, minimumX: detailX + 250)
+        canvas.text("Ask Boss   Full Screen   Redraw   Ctrl-C   Esc   EOF   Stop   Restart", in: terminalControls, role: .terminalControl)
         currentY = terminalHeader.maxY
 
         let terminal = CGRect(x: detailX, y: currentY, width: detailWidth, height: canvas.size.height - currentY)

@@ -731,6 +731,14 @@ struct CommandPaletteSheet: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 4) {
+                    if model.filteredCommandPaletteItems.isEmpty {
+                        ContentUnavailableView(
+                            "No Commands",
+                            systemImage: "command",
+                            description: Text("Try another action, terminal name, or alias.")
+                        )
+                        .frame(maxWidth: .infinity, minHeight: 220)
+                    }
                     ForEach(model.filteredCommandPaletteItems) { command in
                         Button {
                             model.performCommand(command.id)
@@ -1526,6 +1534,22 @@ struct SessionDetailView: View {
                     }
                     .buttonStyle(.bordered)
                     .disabled(model.bossCheckInIsRunning)
+                    Button {
+                        model.copyLaunchCommand(for: entry)
+                    } label: {
+                        Label("Copy Command", systemImage: "doc.on.doc")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .help("Copy this terminal's launch command")
+                    Button {
+                        model.openWorkingDirectory(for: entry)
+                    } label: {
+                        Label("Open Directory", systemImage: "folder")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .help(entry.workingDirectory)
                     if model.activeSession(for: entry) != nil {
                         RunningSessionHeaderControls(entry: entry, model: model)
                     }
@@ -1762,6 +1786,7 @@ struct RunningSessionHeaderControls: View {
                 Label("Redraw", systemImage: "arrow.clockwise")
             }
             .help("Send Ctrl-L to redraw the terminal")
+            .keyboardShortcut("l", modifiers: [.command])
 
             Button {
                 model.sendControlC(to: entry)
@@ -1773,6 +1798,12 @@ struct RunningSessionHeaderControls: View {
             } label: {
                 Label("Esc", systemImage: "escape")
             }
+            Button {
+                model.sendEOF(to: entry)
+            } label: {
+                Label("EOF", systemImage: "eject")
+            }
+            .help("Send Ctrl-D / EOF to this terminal")
             Button(role: .destructive) {
                 model.terminate(entry)
             } label: {
@@ -1808,12 +1839,14 @@ struct TerminalFocusView: View {
                     Label("Exit Full Screen", systemImage: "arrow.down.right.and.arrow.up.left")
                 }
                 .keyboardShortcut("f", modifiers: [.command, .shift])
+                .help("Return to the split workbench view")
                 Button {
                     model.redrawTerminal(entry)
                 } label: {
                     Label("Redraw", systemImage: "arrow.clockwise")
                 }
                 .help("Send Ctrl-L to redraw the terminal")
+                .keyboardShortcut("l", modifiers: [.command])
                 Button {
                     model.sendControlC(to: entry)
                 } label: {
@@ -1824,6 +1857,12 @@ struct TerminalFocusView: View {
                 } label: {
                     Label("Esc", systemImage: "escape")
                 }
+                Button {
+                    model.sendEOF(to: entry)
+                } label: {
+                    Label("EOF", systemImage: "eject")
+                }
+                .help("Send Ctrl-D / EOF to this terminal")
                 Button(role: .destructive) {
                     model.terminate(entry)
                 } label: {
@@ -2261,6 +2300,7 @@ struct MachineRuntimeView: View {
                     .foregroundStyle(model.supportDiagnosticsStatusColor)
                     .lineLimit(1)
                     .truncationMode(.middle)
+                    .help(model.supportDiagnosticsURL?.path ?? model.supportDiagnosticsStatusLine)
                 if model.supportDiagnosticsIsCollecting {
                     ProgressView()
                         .controlSize(.small)
@@ -2273,6 +2313,7 @@ struct MachineRuntimeView: View {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
                 .disabled(model.supportDiagnosticsIsCollecting)
+                .help("Create a support diagnostics zip without transcript contents or raw workspace state")
                 if model.supportDiagnosticsURL != nil {
                     Button {
                         model.revealSupportDiagnostics()
@@ -2281,6 +2322,15 @@ struct MachineRuntimeView: View {
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
+                    .help("Reveal the latest diagnostics zip in Finder")
+                    Button {
+                        model.copySupportDiagnosticsPath()
+                    } label: {
+                        Label("Copy Path", systemImage: "doc.on.doc")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .help("Copy the latest diagnostics zip path")
                 }
             }
         }
@@ -2780,102 +2830,281 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     var commandPaletteItems: [WorkbenchCommandDescriptor] {
+        func command(
+            _ id: WorkbenchCommandID,
+            _ title: String,
+            _ detail: String,
+            _ systemImage: String,
+            keywords: [String] = []
+        ) -> WorkbenchCommandDescriptor {
+            WorkbenchCommandDescriptor(
+                id: id,
+                title: title,
+                detail: detail,
+                systemImage: systemImage,
+                keywords: keywords
+            )
+        }
+
         var commands: [WorkbenchCommandDescriptor] = [
-            WorkbenchCommandDescriptor(
-                id: .newSession,
-                title: "New Terminal",
-                detail: "Create a terminal/TUI tab in the selected group",
-                systemImage: "plus"
+            command(
+                .newSession,
+                "New Terminal",
+                "Create a terminal/TUI tab in the selected group",
+                "plus",
+                keywords: ["session", "tab", "agent", "shell", "cli"]
             ),
-            WorkbenchCommandDescriptor(
-                id: .toggleBossWatch,
-                title: bossWatchIsEnabled ? "Pause Boss Watch" : "Start Boss Watch",
-                detail: "Toggle automatic boss monitoring",
-                systemImage: bossWatchIsEnabled ? "eye.slash" : "eye"
+            command(
+                .toggleBossWatch,
+                bossWatchIsEnabled ? "Pause Boss Watch" : "Start Boss Watch",
+                "Toggle automatic boss monitoring",
+                bossWatchIsEnabled ? "eye.slash" : "eye",
+                keywords: ["watch", "monitor", "autonomy", "boss"]
             ),
-            WorkbenchCommandDescriptor(
-                id: .toggleBossPane,
-                title: state.bossPaneCollapsed ? "Show Boss Pane" : "Hide Boss Pane",
-                detail: state.bossPaneCollapsed ? "Reveal boss chat and diagnostics" : "Collapse boss chat and diagnostics",
-                systemImage: "sidebar.leading"
+            command(
+                .toggleBossPane,
+                state.bossPaneCollapsed ? "Show Boss Pane" : "Hide Boss Pane",
+                state.bossPaneCollapsed ? "Reveal boss chat and diagnostics" : "Collapse boss chat and diagnostics",
+                "sidebar.leading",
+                keywords: ["collapse", "expand", "dashboard", "boss"]
             ),
-            WorkbenchCommandDescriptor(
-                id: .installOuroAgent,
-                title: "Install Ouro Agent",
-                detail: "Open a managed hatch conversation or clone terminal",
-                systemImage: "square.and.arrow.down"
+            command(
+                .installOuroAgent,
+                "Install Ouro Agent",
+                "Open a managed hatch conversation or clone terminal",
+                "square.and.arrow.down",
+                keywords: ["hatch", "clone", "agent", "install"]
             ),
-            WorkbenchCommandDescriptor(
-                id: .searchTranscripts,
-                title: "Search Transcripts",
-                detail: "Run the current transcript search query",
-                systemImage: "text.magnifyingglass"
+            command(
+                .refreshWorkspace,
+                "Refresh Workspace",
+                "Refresh dashboard, agents, MCP registration, and executable health",
+                "arrow.clockwise",
+                keywords: ["reload", "status", "health", "dashboard"]
             ),
-            WorkbenchCommandDescriptor(
-                id: .runRecoveryDrill,
-                title: "Run Recovery Drill",
-                detail: "Simulate restart recovery planning",
-                systemImage: "arrow.clockwise.circle"
+            command(
+                .refreshOuroAgents,
+                "Refresh Ouro Agents",
+                "Rescan local agent bundles",
+                "person.2.badge.gearshape",
+                keywords: ["agent", "bundle", "inventory"]
             ),
-            WorkbenchCommandDescriptor(
-                id: .collectSupportDiagnostics,
-                title: "Collect Support Diagnostics",
-                detail: "Create a local diagnostics zip without transcript contents",
-                systemImage: "lifepreserver"
+            command(
+                .refreshWorkbenchMCP,
+                "Refresh Workbench MCP",
+                "Refresh selected boss MCP registration status",
+                "point.3.connected.trianglepath.dotted",
+                keywords: ["mcp", "boss", "registration"]
             ),
-            WorkbenchCommandDescriptor(
-                id: .checkReleaseUpdates,
-                title: "Check Release Updates",
-                detail: "Look for the latest published Workbench release",
-                systemImage: "arrow.down.app"
+            command(
+                .installWorkbenchMCPForBoss,
+                "Install Workbench MCP",
+                "Register or update Workbench MCP for the selected boss",
+                "wrench.and.screwdriver",
+                keywords: ["mcp", "boss", "register", "bridge"]
+            ),
+            command(
+                .searchTranscripts,
+                "Search Transcripts",
+                "Run the current transcript search query",
+                "text.magnifyingglass",
+                keywords: ["history", "output", "find"]
+            ),
+            command(
+                .runRecoveryDrill,
+                "Run Recovery Drill",
+                "Simulate restart recovery planning",
+                "arrow.clockwise.circle",
+                keywords: ["restart", "resume", "recover", "drill"]
+            ),
+            command(
+                .collectSupportDiagnostics,
+                "Collect Support Diagnostics",
+                "Create a local diagnostics zip without transcript contents",
+                "lifepreserver",
+                keywords: ["diag", "diagnostic", "support", "bug", "zip"]
+            ),
+            command(
+                .openSupportDiagnosticsFolder,
+                "Open Diagnostics Folder",
+                "Open the support diagnostics output folder",
+                "folder",
+                keywords: ["diag", "diagnostic", "support", "finder"]
+            ),
+            command(
+                .checkReleaseUpdates,
+                "Check Release Updates",
+                "Look for the latest published Workbench release",
+                "arrow.down.app",
+                keywords: ["version", "update", "release"]
             )
         ]
 
         if !bossCheckInIsRunning {
             commands.insert(
-                WorkbenchCommandDescriptor(
-                    id: .bossCheckIn,
-                    title: "Boss Check In",
-                    detail: "Ask \(state.boss.agentName) what is going on",
-                    systemImage: "bubble.left.and.text.bubble.right"
+                command(
+                    .bossCheckIn,
+                    "Boss Check In",
+                    "Ask \(state.boss.agentName) what is going on",
+                    "bubble.left.and.text.bubble.right",
+                    keywords: ["boss", "ask", "status"]
                 ),
                 at: 1
             )
+            commands.insert(contentsOf: [
+                command(
+                    .bossQuickWhatsGoingOn,
+                    "Ask Boss: What's Going On?",
+                    "Ask \(state.boss.agentName) for the current workspace situation",
+                    "questionmark.bubble",
+                    keywords: ["boss", "status", "what"]
+                ),
+                command(
+                    .bossQuickWaitingOnMe,
+                    "Ask Boss: Waiting On Me?",
+                    "Ask \(state.boss.agentName) what needs human input",
+                    "person.crop.circle.badge.questionmark",
+                    keywords: ["boss", "human", "blocked", "waiting"]
+                ),
+                command(
+                    .bossQuickKeepMoving,
+                    "Ask Boss: Keep Moving",
+                    "Ask \(state.boss.agentName) to advance trusted work",
+                    "forward",
+                    keywords: ["boss", "continue", "autonomy", "ttfa"]
+                ),
+                command(
+                    .bossQuickRespondForMe,
+                    "Ask Boss: Respond For Me",
+                    "Ask \(state.boss.agentName) for response-ready next actions",
+                    "arrowshape.turn.up.left",
+                    keywords: ["boss", "reply", "respond"]
+                )
+            ], at: 2)
+        }
+
+        if supportDiagnosticsURL != nil {
+            commands.append(contentsOf: [
+                command(
+                    .revealSupportDiagnostics,
+                    "Reveal Diagnostics Zip",
+                    "Reveal the latest support diagnostics zip in Finder",
+                    "folder",
+                    keywords: ["diag", "diagnostic", "support", "finder"]
+                ),
+                command(
+                    .copySupportDiagnosticsPath,
+                    "Copy Diagnostics Path",
+                    "Copy the latest support diagnostics zip path",
+                    "doc.on.doc",
+                    keywords: ["diag", "diagnostic", "support", "clipboard", "path"]
+                )
+            ])
+        }
+
+        if releaseUpdateURL != nil {
+            commands.append(command(
+                .openReleaseUpdate,
+                "Open Release Page",
+                "Open the latest Workbench release page",
+                "safari",
+                keywords: ["release", "update", "github"]
+            ))
         }
 
         if let selectedEntry, !selectedEntry.isArchived {
-            commands.append(WorkbenchCommandDescriptor(
-                id: .launchSelectedSession,
-                title: activeSession(for: selectedEntry) == nil ? "Launch \(selectedEntry.name)" : "Restart \(selectedEntry.name)",
-                detail: launchCommand(for: selectedEntry),
-                systemImage: "play.fill"
-            ))
-            if activeSession(for: selectedEntry) != nil {
-                commands.append(WorkbenchCommandDescriptor(
-                    id: .focusSelectedSession,
-                    title: "Focus \(selectedEntry.name)",
-                    detail: "Open the terminal-only view",
-                    systemImage: "arrow.up.left.and.arrow.down.right"
-                ))
-                commands.append(WorkbenchCommandDescriptor(
-                    id: .redrawSelectedSession,
-                    title: "Redraw \(selectedEntry.name)",
-                    detail: "Send Ctrl-L to refresh the terminal display",
-                    systemImage: "arrow.clockwise"
-                ))
-                commands.append(WorkbenchCommandDescriptor(
-                    id: .stopSelectedSession,
-                    title: "Stop \(selectedEntry.name)",
-                    detail: "Terminate the running terminal session",
-                    systemImage: "stop.fill"
+            commands.append(contentsOf: [
+                command(
+                    .launchSelectedSession,
+                    activeSession(for: selectedEntry) == nil ? "Launch \(selectedEntry.name)" : "Restart \(selectedEntry.name)",
+                    launchCommand(for: selectedEntry),
+                    "play.fill",
+                    keywords: ["terminal", "session", "start"]
+                ),
+                command(
+                    .askBossAboutSelectedSession,
+                    "Ask Boss About \(selectedEntry.name)",
+                    "Ask \(state.boss.agentName) what this terminal is doing",
+                    "bubble.left.and.text.bubble.right",
+                    keywords: ["boss", "terminal", "session", "status"]
+                ),
+                command(
+                    .copySelectedLaunchCommand,
+                    "Copy \(selectedEntry.name) Launch Command",
+                    launchCommand(for: selectedEntry),
+                    "doc.on.doc",
+                    keywords: ["clipboard", "copy", "command"]
+                ),
+                command(
+                    .openSelectedWorkingDirectory,
+                    "Open \(selectedEntry.name) Directory",
+                    selectedEntry.workingDirectory,
+                    "folder",
+                    keywords: ["finder", "cwd", "working directory", "project"]
+                )
+            ])
+            if latestRun(for: selectedEntry)?.transcriptPath != nil {
+                commands.append(command(
+                    .revealSelectedTranscript,
+                    "Reveal \(selectedEntry.name) Transcript",
+                    "Reveal the latest transcript file in Finder",
+                    "doc.text.magnifyingglass",
+                    keywords: ["history", "output", "transcript", "finder"]
                 ))
             }
+            if activeSession(for: selectedEntry) != nil {
+                commands.append(contentsOf: [
+                    command(
+                        .focusSelectedSession,
+                        "Focus \(selectedEntry.name)",
+                        "Open the terminal-only view",
+                        "arrow.up.left.and.arrow.down.right",
+                        keywords: ["fullscreen", "terminal", "focus"]
+                    ),
+                    command(
+                        .redrawSelectedSession,
+                        "Redraw \(selectedEntry.name)",
+                        "Send Ctrl-L to refresh the terminal display",
+                        "arrow.clockwise",
+                        keywords: ["clear", "refresh", "terminal", "screen"]
+                    ),
+                    command(
+                        .sendControlCToSelectedSession,
+                        "Send Ctrl-C To \(selectedEntry.name)",
+                        "Interrupt the running terminal session",
+                        "command",
+                        keywords: ["signal", "interrupt", "terminal"]
+                    ),
+                    command(
+                        .sendEscapeToSelectedSession,
+                        "Send Esc To \(selectedEntry.name)",
+                        "Send Escape to the running terminal session",
+                        "escape",
+                        keywords: ["signal", "terminal", "cancel"]
+                    ),
+                    command(
+                        .sendEOFToSelectedSession,
+                        "Send EOF To \(selectedEntry.name)",
+                        "Send Ctrl-D to the running terminal session",
+                        "eject",
+                        keywords: ["signal", "ctrl-d", "exit", "terminal"]
+                    ),
+                    command(
+                        .stopSelectedSession,
+                        "Stop \(selectedEntry.name)",
+                        "Terminate the running terminal session",
+                        "stop.fill",
+                        keywords: ["kill", "terminate", "terminal"]
+                    )
+                ])
+            }
             if canRecover(selectedEntry) {
-                commands.append(WorkbenchCommandDescriptor(
-                    id: .recoverSelectedSession,
-                    title: "\(recoveryButtonTitle(for: selectedEntry)) \(selectedEntry.name)",
-                    detail: recoveryReason(for: selectedEntry),
-                    systemImage: "arrow.clockwise"
+                commands.append(command(
+                    .recoverSelectedSession,
+                    "\(recoveryButtonTitle(for: selectedEntry)) \(selectedEntry.name)",
+                    recoveryReason(for: selectedEntry),
+                    "arrow.clockwise",
+                    keywords: ["resume", "recover", "restart"]
                 ))
             }
         }
@@ -3410,7 +3639,14 @@ final class WorkbenchViewModel: ObservableObject {
         defer {
             releaseUpdateIsChecking = false
         }
-        releaseUpdateSnapshot = await releaseUpdateChecker.check()
+        let snapshot = await releaseUpdateChecker.check()
+        releaseUpdateSnapshot = snapshot
+        recordActionLog(
+            source: "native",
+            action: "checkReleaseUpdates",
+            result: snapshot.detail,
+            succeeded: snapshot.status != .unavailable
+        )
     }
 
     func openReleaseUpdate() {
@@ -3441,8 +3677,20 @@ final class WorkbenchViewModel: ObservableObject {
             switch outcome {
             case let .success(result):
                 supportDiagnosticsResult = result
+                recordActionLog(
+                    source: "native",
+                    action: "collectSupportDiagnostics",
+                    result: "Wrote \(result.archiveURL.lastPathComponent)",
+                    succeeded: true
+                )
             case let .failure(error):
                 supportDiagnosticsError = error.localizedDescription
+                recordActionLog(
+                    source: "native",
+                    action: "collectSupportDiagnostics",
+                    result: "Failed: \(error.localizedDescription)",
+                    succeeded: false
+                )
             }
         }
     }
@@ -3452,6 +3700,62 @@ final class WorkbenchViewModel: ObservableObject {
             return
         }
         NSWorkspace.shared.activateFileViewerSelecting([supportDiagnosticsURL])
+        recordActionLog(
+            source: "native",
+            action: "revealSupportDiagnostics",
+            result: "Revealed \(supportDiagnosticsURL.lastPathComponent)",
+            succeeded: true
+        )
+    }
+
+    func copySupportDiagnosticsPath() {
+        guard let supportDiagnosticsURL else {
+            errorMessage = "No support diagnostics zip has been collected yet"
+            return
+        }
+        copyToPasteboard(supportDiagnosticsURL.path)
+        recordActionLog(
+            source: "native",
+            action: "copySupportDiagnosticsPath",
+            result: "Copied diagnostics path",
+            succeeded: true
+        )
+    }
+
+    func openSupportDiagnosticsFolder() {
+        let folder = supportDiagnosticsURL?.deletingLastPathComponent()
+            ?? SupportDiagnosticsRunner.defaultOutputDirectory()
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            NSWorkspace.shared.open(folder)
+            recordActionLog(
+                source: "native",
+                action: "openSupportDiagnosticsFolder",
+                result: "Opened diagnostics folder",
+                succeeded: true
+            )
+        } catch {
+            errorMessage = "Diagnostics folder could not be opened: \(error.localizedDescription)"
+            recordActionLog(
+                source: "native",
+                action: "openSupportDiagnosticsFolder",
+                result: "Failed: \(error.localizedDescription)",
+                succeeded: false
+            )
+        }
+    }
+
+    func refreshWorkspace() async {
+        refreshOuroAgents()
+        refreshWorkbenchMCPRegistration()
+        refreshExecutableHealth()
+        await refreshBossDashboard()
+        recordActionLog(
+            source: "native",
+            action: "refreshWorkspace",
+            result: "Refreshed workspace status",
+            succeeded: true
+        )
     }
 
     func performCommand(_ command: WorkbenchCommandID) {
@@ -3466,18 +3770,64 @@ final class WorkbenchViewModel: ObservableObject {
             Task {
                 await runBossCheckIn()
             }
+        case .bossQuickWhatsGoingOn:
+            Task {
+                await runBossQuickQuestion("What's going on?")
+            }
+        case .bossQuickWaitingOnMe:
+            Task {
+                await runBossQuickQuestion("Is anything waiting on me?")
+            }
+        case .bossQuickKeepMoving:
+            Task {
+                await runBossQuickQuestion("Keep trusted work moving. If there is an obvious safe next step, take it through Workbench actions.")
+            }
+        case .bossQuickRespondForMe:
+            Task {
+                await runBossQuickQuestion("Respond for me where appropriate. Tell me what you did or what draft response you recommend.")
+            }
         case .toggleBossWatch:
             setBossWatchEnabled(!bossWatchIsEnabled)
         case .toggleBossPane:
             setBossPaneCollapsed(!state.bossPaneCollapsed)
         case .installOuroAgent:
             isOuroAgentInstallSheetPresented = true
+        case .refreshWorkspace:
+            Task {
+                await refreshWorkspace()
+            }
+        case .refreshOuroAgents:
+            refreshOuroAgents()
+            recordActionLog(
+                source: "native",
+                action: "refreshOuroAgents",
+                result: "Refreshed local Ouro agents",
+                succeeded: true
+            )
+        case .refreshWorkbenchMCP:
+            refreshWorkbenchMCPRegistration()
+            recordActionLog(
+                source: "native",
+                action: "refreshWorkbenchMCP",
+                result: "Refreshed Workbench MCP registration",
+                succeeded: true
+            )
+        case .installWorkbenchMCPForBoss:
+            installWorkbenchMCPForBoss()
         case .launchSelectedSession:
             guard let selectedEntry else {
                 errorMessage = "No session is selected"
                 return
             }
             launch(selectedEntry)
+        case .askBossAboutSelectedSession:
+            guard let selectedEntry else {
+                errorMessage = "No session is selected"
+                return
+            }
+            Task {
+                await runBossQuestion(about: selectedEntry)
+            }
         case .focusSelectedSession:
             guard let selectedEntry else {
                 errorMessage = "No session is selected"
@@ -3490,6 +3840,42 @@ final class WorkbenchViewModel: ObservableObject {
                 return
             }
             redrawTerminal(selectedEntry)
+        case .sendControlCToSelectedSession:
+            guard let selectedEntry else {
+                errorMessage = "No session is selected"
+                return
+            }
+            sendControlC(to: selectedEntry)
+        case .sendEscapeToSelectedSession:
+            guard let selectedEntry else {
+                errorMessage = "No session is selected"
+                return
+            }
+            sendEscape(to: selectedEntry)
+        case .sendEOFToSelectedSession:
+            guard let selectedEntry else {
+                errorMessage = "No session is selected"
+                return
+            }
+            sendEOF(to: selectedEntry)
+        case .copySelectedLaunchCommand:
+            guard let selectedEntry else {
+                errorMessage = "No session is selected"
+                return
+            }
+            copyLaunchCommand(for: selectedEntry)
+        case .openSelectedWorkingDirectory:
+            guard let selectedEntry else {
+                errorMessage = "No session is selected"
+                return
+            }
+            openWorkingDirectory(for: selectedEntry)
+        case .revealSelectedTranscript:
+            guard let selectedEntry else {
+                errorMessage = "No session is selected"
+                return
+            }
+            revealLatestTranscript(for: selectedEntry)
         case .stopSelectedSession:
             guard let selectedEntry else {
                 errorMessage = "No session is selected"
@@ -3509,10 +3895,18 @@ final class WorkbenchViewModel: ObservableObject {
             runRecoveryDrill()
         case .collectSupportDiagnostics:
             collectSupportDiagnostics()
+        case .revealSupportDiagnostics:
+            revealSupportDiagnostics()
+        case .copySupportDiagnosticsPath:
+            copySupportDiagnosticsPath()
+        case .openSupportDiagnosticsFolder:
+            openSupportDiagnosticsFolder()
         case .checkReleaseUpdates:
             Task {
                 await checkForReleaseUpdate()
             }
+        case .openReleaseUpdate:
+            openReleaseUpdate()
         }
     }
 
@@ -3756,6 +4150,14 @@ final class WorkbenchViewModel: ObservableObject {
             entry.attention = .active
             entry.lastSummary = "Sent Ctrl-C to \(entry.name)"
         }
+        recordActionLog(
+            source: "native",
+            action: "sendControlC",
+            targetEntryId: entry.id,
+            targetName: entry.name,
+            result: "Sent Ctrl-C to \(entry.name)",
+            succeeded: true
+        )
         save()
     }
 
@@ -3769,6 +4171,14 @@ final class WorkbenchViewModel: ObservableObject {
             entry.attention = .active
             entry.lastSummary = "Redrew \(entry.name)"
         }
+        recordActionLog(
+            source: "native",
+            action: "redrawTerminal",
+            targetEntryId: entry.id,
+            targetName: entry.name,
+            result: "Redrew \(entry.name)",
+            succeeded: true
+        )
         save()
     }
 
@@ -3782,7 +4192,103 @@ final class WorkbenchViewModel: ObservableObject {
             entry.attention = .active
             entry.lastSummary = "Sent Esc to \(entry.name)"
         }
+        recordActionLog(
+            source: "native",
+            action: "sendEscape",
+            targetEntryId: entry.id,
+            targetName: entry.name,
+            result: "Sent Esc to \(entry.name)",
+            succeeded: true
+        )
         save()
+    }
+
+    func sendEOF(to entry: ProcessEntry) {
+        guard let session = activeSessions[entry.id] else {
+            errorMessage = "\(entry.name) is not running"
+            return
+        }
+        session.sendBytes([0x04])
+        updateEntry(entry.id) { entry in
+            entry.attention = .active
+            entry.lastSummary = "Sent EOF to \(entry.name)"
+        }
+        recordActionLog(
+            source: "native",
+            action: "sendEOF",
+            targetEntryId: entry.id,
+            targetName: entry.name,
+            result: "Sent Ctrl-D / EOF to \(entry.name)",
+            succeeded: true
+        )
+        save()
+    }
+
+    func copyLaunchCommand(for entry: ProcessEntry) {
+        let command = launchCommand(for: entry)
+        copyToPasteboard(command)
+        recordActionLog(
+            source: "native",
+            action: "copyLaunchCommand",
+            targetEntryId: entry.id,
+            targetName: entry.name,
+            result: "Copied launch command for \(entry.name)",
+            succeeded: true
+        )
+    }
+
+    func openWorkingDirectory(for entry: ProcessEntry) {
+        let directoryURL = URL(fileURLWithPath: entry.workingDirectory, isDirectory: true)
+        guard FileManager.default.fileExists(atPath: directoryURL.path) else {
+            errorMessage = "Working directory does not exist: \(entry.workingDirectory)"
+            recordActionLog(
+                source: "native",
+                action: "openWorkingDirectory",
+                targetEntryId: entry.id,
+                targetName: entry.name,
+                result: "Missing directory: \(entry.workingDirectory)",
+                succeeded: false
+            )
+            return
+        }
+        NSWorkspace.shared.open(directoryURL)
+        recordActionLog(
+            source: "native",
+            action: "openWorkingDirectory",
+            targetEntryId: entry.id,
+            targetName: entry.name,
+            result: "Opened \(entry.workingDirectory)",
+            succeeded: true
+        )
+    }
+
+    func revealLatestTranscript(for entry: ProcessEntry) {
+        guard let transcriptPath = latestRun(for: entry)?.transcriptPath else {
+            errorMessage = "No transcript has been recorded for \(entry.name)"
+            return
+        }
+        let transcriptURL = URL(fileURLWithPath: transcriptPath)
+        guard FileManager.default.fileExists(atPath: transcriptURL.path) else {
+            errorMessage = "Transcript file is missing: \(transcriptPath)"
+            recordActionLog(
+                source: "native",
+                action: "revealTranscript",
+                targetEntryId: entry.id,
+                targetName: entry.name,
+                result: "Missing transcript: \(transcriptPath)",
+                succeeded: false
+            )
+            return
+        }
+        NSWorkspace.shared.activateFileViewerSelecting([transcriptURL])
+        recordActionLog(
+            source: "native",
+            action: "revealTranscript",
+            targetEntryId: entry.id,
+            targetName: entry.name,
+            result: "Revealed latest transcript",
+            succeeded: true
+        )
     }
 
     func terminate(_ entry: ProcessEntry) {
@@ -4378,6 +4884,11 @@ final class WorkbenchViewModel: ObservableObject {
         } catch {
             return MailboxFetchResult(value: nil, issue: "\(label): \(error.localizedDescription)")
         }
+    }
+
+    private func copyToPasteboard(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
     }
 }
 

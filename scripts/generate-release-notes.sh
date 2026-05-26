@@ -50,11 +50,12 @@ scripts/install-latest-release.sh --open
 - Cmux-style groups in the sidebar, with as many terminal tabs per group as you need.
 - Known CLI identities are detected from the command, not separated into fixed tabs.
 - Boss Line quick asks: "What's Going On?", "Waiting On Me?", "Keep Moving", and "Respond For Me".
+- Token-aware command palette with aliases for boss actions, diagnostics, Workbench MCP, refreshes, selected-terminal controls, and release updates.
 - Workbench MCP tools for status, transcript tail/search, recovery drills, and queued trusted actions.
 - TTFA readiness badge for boss bridge, trust, executable health, recovery posture, Boss Watch, and Open at Login.
 - Recovery Drill for non-mutating restart simulations before you trust a long autonomous run.
-- Explicit Redraw controls for refreshing resized shell/TUI displays without silently clearing live terminal state.
-- In-app Support Diagnostics for collecting a local evidence zip without transcript contents by default.
+- Explicit Redraw, Ctrl-C, Esc, and EOF controls for operating resized shells and TUIs without silently mutating live terminal state.
+- In-app Support Diagnostics for collecting, revealing, and copying a local evidence zip without transcript contents by default.
 
 ## Verification
 

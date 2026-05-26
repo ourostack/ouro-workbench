@@ -33,8 +33,9 @@ agent-aware terminal workbench rather than a launcher with terminal panes.
 - Keep the boss pane collapsible so terminal work can claim the vertical space.
 - Support drag-to-reorder sessions.
 - Add keyboard shortcuts for new session, launch/restart, stop, focus terminal,
-  next/previous session, and boss check-in.
-- Add a compact command palette. Initial native palette exists.
+  redraw, next/previous session, and boss check-in.
+- Add a compact command palette. Native palette now covers boss asks, refreshes,
+  diagnostics, Workbench MCP, release checks, and selected-terminal controls.
 - Keep dense native layout; avoid web-app dashboard sprawl.
 
 ## History And Search

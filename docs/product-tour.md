@@ -34,12 +34,15 @@ the human can live in the terminal.
 Key controls:
 
 - `TTFA` summarizes whether the workbench is ready for hands-off operation.
-- `Commands` opens a compact command palette for common operator moves.
+- `Commands` opens a token-aware command palette for common operator moves,
+  diagnostics, Workbench MCP, boss asks, release checks, and selected-terminal
+  controls.
 - `Watch` toggles background boss monitoring.
 - `Check In`, `What's Going On?`, `Waiting On Me?`, `Keep Moving`, and
   `Respond For Me` are direct conversational affordances for the selected Ouro
   boss.
-- `Full Screen` turns the selected terminal into the primary surface.
+- `Full Screen` turns the selected terminal into the primary surface, with
+  Redraw, Ctrl-C, Esc, EOF, and Stop still close at hand.
 
 ## Boss-Control Layer
 
