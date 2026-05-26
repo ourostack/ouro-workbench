@@ -44,17 +44,20 @@ public struct WorkbenchProject: Codable, Equatable, Identifiable, Sendable {
     public var name: String
     public var rootPath: String
     public var boss: BossAgentSelection
+    public var deskTrackSlug: String?
 
     public init(
         id: UUID = UUID(),
         name: String,
         rootPath: String,
-        boss: BossAgentSelection = BossAgentSelection()
+        boss: BossAgentSelection = BossAgentSelection(),
+        deskTrackSlug: String? = nil
     ) {
         self.id = id
         self.name = name
         self.rootPath = rootPath
         self.boss = boss
+        self.deskTrackSlug = deskTrackSlug
     }
 }
 
@@ -73,6 +76,7 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
     public var attention: AttentionState
     public var lastSummary: String?
     public var notes: String?
+    public var deskTaskSlug: String?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -89,6 +93,7 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         case attention
         case lastSummary
         case notes
+        case deskTaskSlug
     }
 
     public init(
@@ -105,7 +110,8 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         isArchived: Bool = false,
         attention: AttentionState = .idle,
         lastSummary: String? = nil,
-        notes: String? = nil
+        notes: String? = nil,
+        deskTaskSlug: String? = nil
     ) {
         self.id = id
         self.projectId = projectId
@@ -121,6 +127,7 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         self.attention = attention
         self.lastSummary = lastSummary
         self.notes = notes
+        self.deskTaskSlug = deskTaskSlug
     }
 
     public var trimmedNotes: String? {
@@ -147,6 +154,7 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         self.attention = try container.decodeIfPresent(AttentionState.self, forKey: .attention) ?? .idle
         self.lastSummary = try container.decodeIfPresent(String.self, forKey: .lastSummary)
         self.notes = try container.decodeIfPresent(String.self, forKey: .notes)
+        self.deskTaskSlug = try container.decodeIfPresent(String.self, forKey: .deskTaskSlug)
     }
 }
 

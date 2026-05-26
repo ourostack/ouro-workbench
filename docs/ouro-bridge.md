@@ -20,6 +20,21 @@ Workbench reads:
 Mailbox stays read-only. It answers what is happening without becoming the
 control authority.
 
+## Workbench Sense
+
+Workbench should show up to the selected Ouro agent as a local machine sense,
+not just as a bag of MCP tools. The sense contract is:
+
+- Workbench is the room where terminal/TUI agents run.
+- The boss agent is the observer/coordinator for this machine.
+- Terminal agents remain first-class citizens; Workbench does not replace
+  Claude Code, Codex, Copilot CLI, shells, or custom TUIs.
+- Desk tracks mirror Workbench groups when onboarding imports work.
+- Desk bridge setup for a terminal harness is independent of boss selection.
+
+The MCP tool `workbench_sense` renders this contract plus the current group and
+Desk mirror map so an Ouro agent can orient itself before acting.
+
 ## Boss Plane
 
 The selected Ouro boss agent is reached through MCP stdio:
@@ -73,6 +88,8 @@ This gives an Ouro agent a direct Workbench-facing tool surface:
 
 - `workbench_status`: summarize persisted Workbench state, processes, recovery
   plans, and transcript paths.
+- `workbench_sense`: render the Workbench sense contract, boss boundary,
+  group/Desk mirror, and current tool affordances.
 - `workbench_transcript_tail`: read a bounded tail from the latest transcript
   for a process entry. The server clamps transcript reads to 64 KB.
 - `workbench_search_transcripts`: search saved transcript text across process

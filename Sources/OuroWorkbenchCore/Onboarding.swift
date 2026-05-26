@@ -1,0 +1,996 @@
+import Foundation
+
+public enum OnboardingRepairActor: String, Codable, Equatable, Sendable {
+    case agentRunnable = "agent-runnable"
+    case humanRequired = "human-required"
+    case humanChoice = "human-choice"
+}
+
+public enum OnboardingReadinessState: String, Codable, Equatable, Sendable {
+    case ready
+    case needsAgent
+    case needsRepair
+}
+
+public struct OnboardingRepairStep: Codable, Equatable, Identifiable, Sendable {
+    public var id: String
+    public var actor: OnboardingRepairActor
+    public var title: String
+    public var detail: String
+    public var command: [String]
+
+    public init(
+        id: String,
+        actor: OnboardingRepairActor,
+        title: String,
+        detail: String,
+        command: [String] = []
+    ) {
+        self.id = id
+        self.actor = actor
+        self.title = title
+        self.detail = detail
+        self.command = command
+    }
+
+    public var commandLine: String? {
+        command.isEmpty ? nil : ShellArgumentEscaper.commandLine(command)
+    }
+}
+
+public struct OnboardingReadiness: Codable, Equatable, Sendable {
+    public var state: OnboardingReadinessState
+    public var headline: String
+    public var detail: String
+    public var selectedBossName: String
+    public var repairSteps: [OnboardingRepairStep]
+
+    public init(
+        state: OnboardingReadinessState,
+        headline: String,
+        detail: String,
+        selectedBossName: String,
+        repairSteps: [OnboardingRepairStep]
+    ) {
+        self.state = state
+        self.headline = headline
+        self.detail = detail
+        self.selectedBossName = selectedBossName
+        self.repairSteps = repairSteps
+    }
+
+    public var isReady: Bool {
+        state == .ready
+    }
+}
+
+public struct WorkbenchOnboardingAdvisor: Sendable {
+    public init() {}
+
+    public func readiness(
+        boss: BossAgentSelection,
+        agents: [OuroAgentRecord],
+        mcpRegistration: BossWorkbenchMCPRegistrationSnapshot?
+    ) -> OnboardingReadiness {
+        guard !agents.isEmpty else {
+            return OnboardingReadiness(
+                state: .needsAgent,
+                headline: "Set up an Ouro agent",
+                detail: "Workbench needs a local Ouro agent on this machine before it can act as the boss.",
+                selectedBossName: boss.agentName,
+                repairSteps: [
+                    OnboardingRepairStep(
+                        id: "hatch",
+                        actor: .humanChoice,
+                        title: "Hatch a new agent",
+                        detail: "Create a new local Ouro agent through the conversational SerpentGuide flow.",
+                        command: ["ouro", "hatch"]
+                    ),
+                    OnboardingRepairStep(
+                        id: "clone",
+                        actor: .humanChoice,
+                        title: "Clone an existing agent",
+                        detail: "Bring an existing agent bundle and vault onto this machine.",
+                        command: ["ouro", "clone", "<remote>"]
+                    )
+                ]
+            )
+        }
+
+        guard let selected = agents.first(where: { $0.name.caseInsensitiveCompare(boss.agentName) == .orderedSame }) else {
+            return OnboardingReadiness(
+                state: .needsAgent,
+                headline: "Choose this machine's boss",
+                detail: "The selected boss \(boss.agentName) is not installed. Choose a local agent or install the missing bundle.",
+                selectedBossName: boss.agentName,
+                repairSteps: agents
+                    .filter(\.isUsableAsBoss)
+                    .map { agent in
+                        OnboardingRepairStep(
+                            id: "use-\(agent.name)",
+                            actor: .humanChoice,
+                            title: "Use \(agent.name)",
+                            detail: "Make \(agent.name) the Workbench boss for this machine."
+                        )
+                    }
+            )
+        }
+
+        var repairSteps: [OnboardingRepairStep] = []
+        if selected.status != .ready {
+            repairSteps.append(
+                OnboardingRepairStep(
+                    id: "repair-agent-config",
+                    actor: .agentRunnable,
+                    title: "Repair \(selected.name)",
+                    detail: selected.detail,
+                    command: ["ouro", "repair", "--agent", selected.name]
+                )
+            )
+        }
+
+        if selected.humanFacing?.provider == nil || selected.humanFacing?.model == nil {
+            repairSteps.append(
+                OnboardingRepairStep(
+                    id: "outward-lane",
+                    actor: .humanChoice,
+                    title: "Choose outward provider",
+                    detail: "The outward lane is incomplete. Workbench can open Ouro's provider setup flow.",
+                    command: ["ouro", "connect", "providers", "--agent", selected.name]
+                )
+            )
+        } else {
+            repairSteps.append(
+                OnboardingRepairStep(
+                    id: "check-outward",
+                    actor: .agentRunnable,
+                    title: "Check outward provider",
+                    detail: "Verify the provider/model selected for human-facing turns.",
+                    command: ["ouro", "check", "--agent", selected.name, "--lane", "outward"]
+                )
+            )
+        }
+
+        if selected.agentFacing?.provider == nil || selected.agentFacing?.model == nil {
+            repairSteps.append(
+                OnboardingRepairStep(
+                    id: "inner-lane",
+                    actor: .humanChoice,
+                    title: "Choose inner provider",
+                    detail: "The inner lane is incomplete. Workbench can open Ouro's provider setup flow.",
+                    command: ["ouro", "connect", "providers", "--agent", selected.name]
+                )
+            )
+        } else {
+            repairSteps.append(
+                OnboardingRepairStep(
+                    id: "check-inner",
+                    actor: .agentRunnable,
+                    title: "Check inner provider",
+                    detail: "Verify the provider/model selected for agent-facing work.",
+                    command: ["ouro", "check", "--agent", selected.name, "--lane", "inner"]
+                )
+            )
+        }
+
+        if mcpRegistration?.status != .registered {
+            repairSteps.append(
+                OnboardingRepairStep(
+                    id: "workbench-mcp",
+                    actor: .agentRunnable,
+                    title: "Register Workbench tools",
+                    detail: mcpRegistration?.detail ?? "Workbench MCP is not registered for this boss."
+                )
+            )
+        }
+
+        let blockers = repairSteps.filter { step in
+            step.id == "repair-agent-config" || step.id == "outward-lane" || step.id == "inner-lane" || step.id == "workbench-mcp"
+        }
+        guard blockers.isEmpty else {
+            return OnboardingReadiness(
+                state: .needsRepair,
+                headline: "Repair \(selected.name)",
+                detail: "Workbench found \(selected.name), but it needs setup before it can be a reliable boss.",
+                selectedBossName: selected.name,
+                repairSteps: repairSteps
+            )
+        }
+
+        return OnboardingReadiness(
+            state: .ready,
+            headline: "\(selected.name) is ready",
+            detail: "The boss is installed, provider lanes are configured, and Workbench tools are registered.",
+            selectedBossName: selected.name,
+            repairSteps: repairSteps
+        )
+    }
+}
+
+public enum RecentSessionSource: String, Codable, Equatable, Sendable {
+    case claudeCode
+    case openAICodex
+    case githubCopilotCLI
+    case shellHistory
+    case workbench
+}
+
+public struct RecentSessionCandidate: Codable, Equatable, Identifiable, Sendable {
+    public var id: String
+    public var source: RecentSessionSource
+    public var agentKind: TerminalAgentKind?
+    public var title: String
+    public var workingDirectory: String
+    public var lastActiveAt: Date?
+    public var resumeCommand: [String]
+    public var summary: String
+    public var evidencePaths: [String]
+    public var confidence: Double
+
+    public init(
+        id: String,
+        source: RecentSessionSource,
+        agentKind: TerminalAgentKind?,
+        title: String,
+        workingDirectory: String,
+        lastActiveAt: Date?,
+        resumeCommand: [String],
+        summary: String,
+        evidencePaths: [String],
+        confidence: Double
+    ) {
+        self.id = id
+        self.source = source
+        self.agentKind = agentKind
+        self.title = title
+        self.workingDirectory = workingDirectory
+        self.lastActiveAt = lastActiveAt
+        self.resumeCommand = resumeCommand
+        self.summary = summary
+        self.evidencePaths = evidencePaths
+        self.confidence = min(1, max(0, confidence))
+    }
+
+    public var resumeCommandLine: String {
+        ShellArgumentEscaper.commandLine(resumeCommand)
+    }
+}
+
+public struct RecentSessionScanner {
+    public var homeURL: URL
+    public var fileManager: FileManager
+    public var now: Date
+    public var lookback: TimeInterval
+    public var sqlite3URL: URL
+
+    public init(
+        homeURL: URL = FileManager.default.homeDirectoryForCurrentUser,
+        fileManager: FileManager = .default,
+        now: Date = Date(),
+        lookback: TimeInterval = 7 * 24 * 60 * 60,
+        sqlite3URL: URL = URL(fileURLWithPath: "/usr/bin/sqlite3")
+    ) {
+        self.homeURL = homeURL
+        self.fileManager = fileManager
+        self.now = now
+        self.lookback = lookback
+        self.sqlite3URL = sqlite3URL
+    }
+
+    public func scan() -> [RecentSessionCandidate] {
+        dedupe(scanWorkbench() + scanClaudeCode() + scanCodex() + scanShellHistory())
+            .sorted { left, right in
+                switch (left.lastActiveAt, right.lastActiveAt) {
+                case let (leftDate?, rightDate?) where leftDate != rightDate:
+                    return leftDate > rightDate
+                case (_?, nil):
+                    return true
+                case (nil, _?):
+                    return false
+                default:
+                    return left.confidence > right.confidence
+                }
+            }
+    }
+
+    public func scanWorkbench(state: WorkspaceState = WorkspaceState()) -> [RecentSessionCandidate] {
+        state.processEntries.compactMap { entry in
+            guard entry.kind == .terminalAgent || entry.kind == .shell else {
+                return nil
+            }
+            return RecentSessionCandidate(
+                id: "workbench:\(entry.id.uuidString)",
+                source: .workbench,
+                agentKind: TerminalAgentDetector.detect(entry: entry),
+                title: entry.name,
+                workingDirectory: entry.workingDirectory,
+                lastActiveAt: state.processRuns
+                    .filter { $0.entryId == entry.id }
+                    .compactMap(\.lastOutputAt)
+                    .max(),
+                resumeCommand: [entry.executable] + entry.arguments,
+                summary: entry.lastSummary ?? entry.trimmedNotes ?? "Existing Workbench terminal.",
+                evidencePaths: [],
+                confidence: 0.96
+            )
+        }
+    }
+
+    public func scanClaudeCode() -> [RecentSessionCandidate] {
+        let projectsURL = homeURL.appendingPathComponent(".claude/projects", isDirectory: true)
+        let files = recentFiles(under: projectsURL, pathExtension: "jsonl")
+        return files.compactMap { fileURL in
+            let records = jsonLineObjects(fileURL)
+            let sessionId = firstString(records, keys: ["sessionId"])
+                ?? fileURL.deletingPathExtension().lastPathComponent
+            let cwd = firstString(records, keys: ["cwd"])
+                ?? inferredClaudeProjectPath(from: fileURL)
+                ?? homeURL.path
+            let title = firstPrompt(records)
+                .flatMap(Self.titleFromPrompt)
+                ?? fileURL.deletingPathExtension().lastPathComponent
+            let lastActive = newestDate(in: records) ?? modificationDate(fileURL)
+            guard isRecent(lastActive) else {
+                return nil
+            }
+            return RecentSessionCandidate(
+                id: "claude:\(sessionId)",
+                source: .claudeCode,
+                agentKind: .claudeCode,
+                title: title,
+                workingDirectory: cwd,
+                lastActiveAt: lastActive,
+                resumeCommand: ["claude", "--resume", sessionId],
+                summary: firstPrompt(records) ?? "Recent Claude Code session.",
+                evidencePaths: [fileURL.path],
+                confidence: cwd == homeURL.path ? 0.72 : 0.92
+            )
+        }
+    }
+
+    public func scanCodex() -> [RecentSessionCandidate] {
+        let sqliteCandidates = scanCodexSQLite()
+        if !sqliteCandidates.isEmpty {
+            return sqliteCandidates
+        }
+        let indexURL = homeURL.appendingPathComponent(".codex/session_index.jsonl")
+        return jsonLineObjects(indexURL).compactMap { object in
+            guard let id = object["id"] as? String else {
+                return nil
+            }
+            let title = (object["thread_name"] as? String).flatMap(Self.titleFromPrompt) ?? id
+            let lastActive = parseDate(object["updated_at"] as? String)
+            guard isRecent(lastActive) else {
+                return nil
+            }
+            return RecentSessionCandidate(
+                id: "codex:\(id)",
+                source: .openAICodex,
+                agentKind: .openAICodex,
+                title: title,
+                workingDirectory: homeURL.path,
+                lastActiveAt: lastActive,
+                resumeCommand: ["codex", "resume", id],
+                summary: title,
+                evidencePaths: [indexURL.path],
+                confidence: 0.68
+            )
+        }
+    }
+
+    public func scanShellHistory() -> [RecentSessionCandidate] {
+        let historyURL = homeURL.appendingPathComponent(".zsh_history")
+        guard let raw = try? String(contentsOf: historyURL, encoding: .utf8) else {
+            return []
+        }
+        return raw
+            .split(whereSeparator: \.isNewline)
+            .compactMap { line -> RecentSessionCandidate? in
+                guard let parsed = parseZshHistoryLine(String(line)) else {
+                    return nil
+                }
+                let command = parsed.command.trimmingCharacters(in: .whitespacesAndNewlines)
+                let tokens = TerminalCommandParser.parse(command)
+                let kind = tokens.flatMap { TerminalAgentDetector.detect(executable: $0.executable, arguments: $0.arguments) }
+                guard kind != nil || command.hasPrefix("gh copilot") || command.contains(" gh copilot") else {
+                    return nil
+                }
+                let date = Date(timeIntervalSince1970: TimeInterval(parsed.epoch))
+                guard isRecent(date) else {
+                    return nil
+                }
+                let fallbackTokens = tokens.map { [$0.executable] + $0.arguments } ?? command.split(whereSeparator: \.isWhitespace).map(String.init)
+                return RecentSessionCandidate(
+                    id: "shell:\(parsed.epoch):\(command.hashValue)",
+                    source: command.contains("copilot") ? .githubCopilotCLI : .shellHistory,
+                    agentKind: kind ?? (command.contains("copilot") ? .githubCopilotCLI : nil),
+                    title: command,
+                    workingDirectory: homeURL.path,
+                    lastActiveAt: date,
+                    resumeCommand: fallbackTokens,
+                    summary: "Recent shell launch: \(command)",
+                    evidencePaths: [historyURL.path],
+                    confidence: 0.42
+                )
+            }
+    }
+
+    private func scanCodexSQLite() -> [RecentSessionCandidate] {
+        let sqliteURL = homeURL.appendingPathComponent(".codex/state_5.sqlite")
+        guard fileManager.fileExists(atPath: sqliteURL.path),
+              fileManager.isExecutableFile(atPath: sqlite3URL.path)
+        else {
+            return []
+        }
+        let sinceMs = Int64((now.timeIntervalSince1970 - lookback) * 1000)
+        let query = """
+        select id, replace(title, char(9), ' '), replace(cwd, char(9), ' '), coalesce(git_branch, ''), coalesce(updated_at_ms, updated_at * 1000)
+        from threads
+        where coalesce(updated_at_ms, updated_at * 1000) >= \(sinceMs)
+        order by coalesce(updated_at_ms, updated_at * 1000) desc
+        limit 200;
+        """
+        let process = Process()
+        let pipe = Pipe()
+        process.executableURL = sqlite3URL
+        process.arguments = ["-separator", "\t", "-noheader", sqliteURL.path, query]
+        process.standardOutput = pipe
+        process.standardError = Pipe()
+        do {
+            try process.run()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            guard process.terminationStatus == 0 else {
+                return []
+            }
+            let output = String(decoding: data, as: UTF8.self)
+            return output.split(whereSeparator: \.isNewline).compactMap { line in
+                let fields = line.split(separator: "\t", omittingEmptySubsequences: false).map(String.init)
+                guard fields.count >= 5 else {
+                    return nil
+                }
+                let id = fields[0]
+                let title = Self.titleFromPrompt(fields[1]) ?? id
+                let cwd = fields[2].isEmpty ? homeURL.path : fields[2]
+                let milliseconds = Double(fields[4]) ?? 0
+                let lastActive = milliseconds > 0 ? Date(timeIntervalSince1970: milliseconds / 1000) : nil
+                return RecentSessionCandidate(
+                    id: "codex:\(id)",
+                    source: .openAICodex,
+                    agentKind: .openAICodex,
+                    title: title,
+                    workingDirectory: cwd,
+                    lastActiveAt: lastActive,
+                    resumeCommand: ["codex", "resume", id],
+                    summary: fields[1].isEmpty ? title : fields[1],
+                    evidencePaths: [sqliteURL.path],
+                    confidence: cwd == homeURL.path ? 0.74 : 0.94
+                )
+            }
+        } catch {
+            return []
+        }
+    }
+
+    private func recentFiles(under root: URL, pathExtension: String) -> [URL] {
+        guard let enumerator = fileManager.enumerator(
+            at: root,
+            includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+        var urls: [URL] = []
+        for case let url as URL in enumerator where url.pathExtension == pathExtension {
+            guard isRecent(modificationDate(url)) else {
+                continue
+            }
+            urls.append(url)
+        }
+        return urls
+    }
+
+    private func jsonLineObjects(_ url: URL) -> [[String: Any]] {
+        guard let raw = try? String(contentsOf: url, encoding: .utf8) else {
+            return []
+        }
+        return raw
+            .split(whereSeparator: \.isNewline)
+            .compactMap { line in
+                guard let data = String(line).data(using: .utf8),
+                      let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+                else {
+                    return nil
+                }
+                return object
+            }
+    }
+
+    private func firstString(_ records: [[String: Any]], keys: [String]) -> String? {
+        for record in records {
+            for key in keys {
+                if let value = record[key] as? String, !value.isEmpty {
+                    return value
+                }
+            }
+        }
+        return nil
+    }
+
+    private func firstPrompt(_ records: [[String: Any]]) -> String? {
+        for record in records {
+            for key in ["content", "message", "summary"] {
+                if let value = stringValue(record[key]), !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    return value
+                }
+            }
+        }
+        return nil
+    }
+
+    private func stringValue(_ value: Any?) -> String? {
+        if let string = value as? String {
+            return string
+        }
+        if let array = value as? [[String: Any]] {
+            return array.compactMap { $0["text"] as? String }.joined(separator: "\n")
+        }
+        if let object = value as? [String: Any] {
+            return stringValue(object["content"]) ?? stringValue(object["text"])
+        }
+        return nil
+    }
+
+    private func newestDate(in records: [[String: Any]]) -> Date? {
+        records.compactMap { parseDate($0["timestamp"] as? String) }.max()
+    }
+
+    private func parseDate(_ raw: String?) -> Date? {
+        guard let raw else {
+            return nil
+        }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: raw) {
+            return date
+        }
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: raw)
+    }
+
+    private func modificationDate(_ url: URL) -> Date? {
+        (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+    }
+
+    private func isRecent(_ date: Date?) -> Bool {
+        guard let date else {
+            return false
+        }
+        return date >= now.addingTimeInterval(-lookback)
+    }
+
+    private func inferredClaudeProjectPath(from fileURL: URL) -> String? {
+        let projectDirectory = fileURL.deletingLastPathComponent().lastPathComponent
+        guard projectDirectory.hasPrefix("-") else {
+            return nil
+        }
+        let path = "/" + projectDirectory.dropFirst().replacingOccurrences(of: "-", with: "/")
+        return path.isEmpty ? nil : path
+    }
+
+    private func parseZshHistoryLine(_ line: String) -> (epoch: Int, command: String)? {
+        guard line.hasPrefix(": ") else {
+            return nil
+        }
+        let pieces = line.dropFirst(2).split(separator: ";", maxSplits: 1, omittingEmptySubsequences: false)
+        guard pieces.count == 2,
+              let epochText = pieces[0].split(separator: ":").first,
+              let epoch = Int(epochText)
+        else {
+            return nil
+        }
+        return (epoch, String(pieces[1]))
+    }
+
+    private func dedupe(_ candidates: [RecentSessionCandidate]) -> [RecentSessionCandidate] {
+        var byId: [String: RecentSessionCandidate] = [:]
+        for candidate in candidates {
+            if let existing = byId[candidate.id], existing.confidence >= candidate.confidence {
+                continue
+            }
+            byId[candidate.id] = candidate
+        }
+        return Array(byId.values)
+    }
+
+    public static func titleFromPrompt(_ prompt: String) -> String? {
+        let cleaned = prompt
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else {
+            return nil
+        }
+        if cleaned.count <= 72 {
+            return cleaned
+        }
+        let prefix = cleaned.prefix(72)
+        if let lastSpace = prefix.lastIndex(where: { $0.isWhitespace }) {
+            return String(prefix[..<lastSpace])
+        }
+        return String(prefix)
+    }
+}
+
+public struct ProposedTerminalImport: Codable, Equatable, Identifiable, Sendable {
+    public var id: String
+    public var candidate: RecentSessionCandidate
+    public var name: String
+    public var deskTaskSlug: String
+    public var selectedByDefault: Bool
+
+    public init(
+        id: String,
+        candidate: RecentSessionCandidate,
+        name: String,
+        deskTaskSlug: String,
+        selectedByDefault: Bool
+    ) {
+        self.id = id
+        self.candidate = candidate
+        self.name = name
+        self.deskTaskSlug = deskTaskSlug
+        self.selectedByDefault = selectedByDefault
+    }
+}
+
+public struct ProposedWorkbenchGroup: Codable, Equatable, Identifiable, Sendable {
+    public var id: String
+    public var name: String
+    public var rootPath: String
+    public var deskTrackSlug: String
+    public var terminals: [ProposedTerminalImport]
+
+    public init(
+        id: String,
+        name: String,
+        rootPath: String,
+        deskTrackSlug: String,
+        terminals: [ProposedTerminalImport]
+    ) {
+        self.id = id
+        self.name = name
+        self.rootPath = rootPath
+        self.deskTrackSlug = deskTrackSlug
+        self.terminals = terminals
+    }
+}
+
+public struct WorkbenchImportProposal: Codable, Equatable, Sendable {
+    public var generatedAt: Date
+    public var groups: [ProposedWorkbenchGroup]
+    public var ignoredCandidates: [RecentSessionCandidate]
+
+    public init(
+        generatedAt: Date,
+        groups: [ProposedWorkbenchGroup],
+        ignoredCandidates: [RecentSessionCandidate]
+    ) {
+        self.generatedAt = generatedAt
+        self.groups = groups
+        self.ignoredCandidates = ignoredCandidates
+    }
+
+    public var selectedTerminalCount: Int {
+        groups.reduce(0) { sum, group in
+            sum + group.terminals.filter(\.selectedByDefault).count
+        }
+    }
+}
+
+public struct WorkbenchImportProposalBuilder: Sendable {
+    public var maxSelectedPerGroup: Int
+    public var maxSelectedTotal: Int
+
+    public init(maxSelectedPerGroup: Int = 6, maxSelectedTotal: Int = 12) {
+        self.maxSelectedPerGroup = max(1, maxSelectedPerGroup)
+        self.maxSelectedTotal = max(1, maxSelectedTotal)
+    }
+
+    public func build(candidates: [RecentSessionCandidate], now: Date = Date()) -> WorkbenchImportProposal {
+        let importable = candidates.filter { $0.confidence >= 0.50 }
+        let ignored = candidates.filter { $0.confidence < 0.50 }
+        let grouped = Dictionary(grouping: importable) { candidate in
+            workspaceRoot(for: candidate.workingDirectory)
+        }
+        var groups = grouped.map { rootPath, groupCandidates in
+            let groupName = displayName(for: rootPath)
+            let trackSlug = slug(groupName)
+            var usedTaskSlugs = Set<String>()
+            let terminals = groupCandidates
+                .sorted { ($0.lastActiveAt ?? .distantPast) > ($1.lastActiveAt ?? .distantPast) }
+                .map { candidate in
+                    let taskSlug = uniqueSlug(slug(candidate.title), used: &usedTaskSlugs)
+                    return ProposedTerminalImport(
+                        id: candidate.id,
+                        candidate: candidate,
+                        name: terminalName(for: candidate),
+                        deskTaskSlug: taskSlug,
+                        selectedByDefault: false
+                    )
+                }
+            return ProposedWorkbenchGroup(
+                id: trackSlug,
+                name: groupName,
+                rootPath: rootPath,
+                deskTrackSlug: trackSlug,
+                terminals: terminals
+            )
+        }
+        .sorted { lhs, rhs in
+            let lhsNewest = lhs.terminals.compactMap(\.candidate.lastActiveAt).max() ?? .distantPast
+            let rhsNewest = rhs.terminals.compactMap(\.candidate.lastActiveAt).max() ?? .distantPast
+            if lhsNewest != rhsNewest {
+                return lhsNewest > rhsNewest
+            }
+            return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+        }
+
+        var totalSelected = 0
+        for groupIndex in groups.indices {
+            var groupSelected = 0
+            for terminalIndex in groups[groupIndex].terminals.indices {
+                guard totalSelected < maxSelectedTotal,
+                      groupSelected < maxSelectedPerGroup,
+                      groups[groupIndex].terminals[terminalIndex].candidate.confidence >= 0.70 else {
+                    continue
+                }
+                groups[groupIndex].terminals[terminalIndex].selectedByDefault = true
+                groupSelected += 1
+                totalSelected += 1
+            }
+        }
+
+        return WorkbenchImportProposal(generatedAt: now, groups: groups, ignoredCandidates: ignored)
+    }
+
+    public func workspaceRoot(for workingDirectory: String) -> String {
+        let marker = "/.claude/worktrees/"
+        if let range = workingDirectory.range(of: marker) {
+            return String(workingDirectory[..<range.lowerBound])
+        }
+        let components = workingDirectory.split(separator: "/").map(String.init)
+        if let projectsIndex = components.firstIndex(of: "Projects"),
+           projectsIndex + 1 < components.count {
+            return "/" + components[0...projectsIndex + 1].joined(separator: "/")
+        }
+        return workingDirectory
+    }
+
+    public func displayName(for rootPath: String) -> String {
+        let last = URL(fileURLWithPath: rootPath, isDirectory: true).lastPathComponent
+        return last.isEmpty ? "Home" : last
+    }
+
+    public func terminalName(for candidate: RecentSessionCandidate) -> String {
+        let prefix: String
+        switch candidate.agentKind {
+        case .claudeCode?:
+            prefix = "Claude"
+        case .openAICodex?:
+            prefix = "Codex"
+        case .githubCopilotCLI?:
+            prefix = "Copilot"
+        default:
+            prefix = "Terminal"
+        }
+        let title = RecentSessionScanner.titleFromPrompt(candidate.title) ?? "Session"
+        return "\(prefix): \(title)"
+    }
+
+    public func slug(_ value: String) -> String {
+        let lowered = value.lowercased()
+        var scalars: [Character] = []
+        var previousWasDash = false
+        for character in lowered {
+            if character.isLetter || character.isNumber {
+                scalars.append(character)
+                previousWasDash = false
+            } else if !previousWasDash {
+                scalars.append("-")
+                previousWasDash = true
+            }
+        }
+        let slug = String(scalars).trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        return slug.isEmpty ? "workbench-import" : slug
+    }
+
+    private func uniqueSlug(_ base: String, used: inout Set<String>) -> String {
+        guard used.contains(base) else {
+            used.insert(base)
+            return base
+        }
+        var index = 2
+        while used.contains("\(base)-\(index)") {
+            index += 1
+        }
+        let value = "\(base)-\(index)"
+        used.insert(value)
+        return value
+    }
+}
+
+public struct DeskBridgePlan: Codable, Equatable, Sendable {
+    public var agentName: String
+    public var terminalKind: TerminalAgentKind
+    public var setupCommand: [String]?
+    public var detail: String
+
+    public init(agentName: String, terminalKind: TerminalAgentKind, setupCommand: [String]?, detail: String) {
+        self.agentName = agentName
+        self.terminalKind = terminalKind
+        self.setupCommand = setupCommand
+        self.detail = detail
+    }
+
+    public var commandLine: String? {
+        setupCommand.map(ShellArgumentEscaper.commandLine)
+    }
+}
+
+public struct DeskBridgePlanner: Sendable {
+    public init() {}
+
+    public func plan(agentName: String, terminalKind: TerminalAgentKind) -> DeskBridgePlan {
+        switch terminalKind {
+        case .claudeCode:
+            return DeskBridgePlan(
+                agentName: agentName,
+                terminalKind: terminalKind,
+                setupCommand: ["ouro", "setup", "--tool", "claude-code", "--agent", agentName],
+                detail: "Install the Ouro MCP bridge and hooks into Claude Code so this terminal agent can use the selected Ouro agent's desk tools."
+            )
+        case .openAICodex:
+            return DeskBridgePlan(
+                agentName: agentName,
+                terminalKind: terminalKind,
+                setupCommand: ["ouro", "setup", "--tool", "codex", "--agent", agentName],
+                detail: "Install the Ouro MCP bridge and hooks into Codex so this terminal agent can use the selected Ouro agent's desk tools."
+            )
+        case .githubCopilotCLI:
+            return DeskBridgePlan(
+                agentName: agentName,
+                terminalKind: terminalKind,
+                setupCommand: nil,
+                detail: "Copilot CLI does not yet expose the same MCP setup target; Workbench will preserve transcript and Desk context until a native bridge exists."
+            )
+        case .custom:
+            return DeskBridgePlan(
+                agentName: agentName,
+                terminalKind: terminalKind,
+                setupCommand: nil,
+                detail: "Custom terminal agents can still be mirrored into Desk through Workbench transcripts and notes."
+            )
+        }
+    }
+}
+
+public struct WorkbenchSenseRenderer: Sendable {
+    public init() {}
+
+    public func render(state: WorkspaceState, summary: WorkspaceSummary, readiness: OnboardingReadiness? = nil) -> String {
+        var lines: [String] = []
+        lines.append("## workbench sense")
+        lines.append("Ouro Workbench is my local machine sense for terminal/TUI agents. It is not a replacement for Claude Code, Codex, Copilot, or shell sessions; it is the room where I can observe them, inspect transcripts, and ask the native app to take auditable actions.")
+        lines.append("")
+        lines.append("boss: \(state.boss.agentName)")
+        if let readiness {
+            lines.append("readiness: \(readiness.state.rawValue) - \(readiness.headline)")
+        }
+        lines.append("status: \(summary.oneLineStatus)")
+        lines.append("")
+        lines.append("organization:")
+        for project in state.projects {
+            let track = project.deskTrackSlug.map { " desk_track=\($0)" } ?? ""
+            let entries = state.processEntries.filter { $0.projectId == project.id && !$0.isArchived }
+            lines.append("- \(project.name)\(track): \(entries.count) active terminal\(entries.count == 1 ? "" : "s")")
+        }
+        lines.append("")
+        lines.append("tools:")
+        lines.append("- workbench_status: read the whole machine workbench state")
+        lines.append("- workbench_transcript_tail: inspect one terminal's recent output")
+        lines.append("- workbench_search_transcripts: search remembered terminal output")
+        lines.append("- workbench_recovery_drill: simulate restart recovery")
+        lines.append("- workbench_request_action: queue auditable native actions")
+        lines.append("- workbench_sense: reread this sense contract")
+        return lines.joined(separator: "\n")
+    }
+}
+
+public struct DeskMirrorWriter {
+    public var deskRoot: URL
+    public var fileManager: FileManager
+
+    public init(
+        deskRoot: URL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("desk", isDirectory: true),
+        fileManager: FileManager = .default
+    ) {
+        self.deskRoot = deskRoot
+        self.fileManager = fileManager
+    }
+
+    public func apply(_ proposal: WorkbenchImportProposal) throws -> [String] {
+        var changed: [String] = []
+        for group in proposal.groups {
+            let trackURL = deskRoot.appendingPathComponent(group.deskTrackSlug, isDirectory: true)
+            try fileManager.createDirectory(at: trackURL, withIntermediateDirectories: true)
+            let trackFile = trackURL.appendingPathComponent("track.md")
+            if !fileManager.fileExists(atPath: trackFile.path) {
+                try renderTrack(group).write(to: trackFile, atomically: true, encoding: .utf8)
+                changed.append(trackFile.path)
+            }
+            for terminal in group.terminals where terminal.selectedByDefault {
+                let taskURL = trackURL.appendingPathComponent(terminal.deskTaskSlug, isDirectory: true)
+                try fileManager.createDirectory(at: taskURL, withIntermediateDirectories: true)
+                let taskFile = taskURL.appendingPathComponent("task.md")
+                if !fileManager.fileExists(atPath: taskFile.path) {
+                    try renderTask(terminal, group: group).write(to: taskFile, atomically: true, encoding: .utf8)
+                    changed.append(taskFile.path)
+                }
+            }
+        }
+        return changed
+    }
+
+    private func renderTrack(_ group: ProposedWorkbenchGroup) -> String {
+        """
+        ---
+        schema_version: 1
+        title: \(group.deskTrackSlug)
+        status: active
+        created: \(Date().ISO8601Format())
+        updated: \(Date().ISO8601Format())
+        ---
+
+        # \(group.name)
+
+        Workbench mirror track for \(group.rootPath).
+
+        ## Workbench terminals
+
+        \(group.terminals.map { "- `\($0.deskTaskSlug)` - \($0.name)" }.joined(separator: "\n"))
+        """
+    }
+
+    private func renderTask(_ terminal: ProposedTerminalImport, group: ProposedWorkbenchGroup) -> String {
+        let candidate = terminal.candidate
+        return """
+        ---
+        schema_version: 1
+        title: \(terminal.deskTaskSlug)
+        status: drafting
+        created: \(Date().ISO8601Format())
+        updated: \(Date().ISO8601Format())
+        track: \(group.deskTrackSlug)
+        source: ouro-workbench
+        ---
+
+        # \(terminal.name)
+
+        Imported from \(candidate.source.rawValue) by Ouro Workbench onboarding.
+
+        ## Summary
+
+        \(candidate.summary)
+
+        ## Resume
+
+        ```bash
+        \(candidate.resumeCommandLine)
+        ```
+
+        ## Evidence
+
+        \(candidate.evidencePaths.map { "- `\($0)`" }.joined(separator: "\n"))
+        """
+    }
+}

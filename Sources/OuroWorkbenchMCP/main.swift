@@ -20,6 +20,7 @@ final class WorkbenchMCPServer {
     private let executableHealthChecker = ExecutableHealthChecker()
     private let transcriptSearcher = TranscriptSearcher()
     private let recoveryDrill = RecoveryDrill()
+    private let senseRenderer = WorkbenchSenseRenderer()
 
     init(paths: WorkbenchPaths = .defaultPaths()) {
         self.paths = paths
@@ -82,6 +83,8 @@ final class WorkbenchMCPServer {
         switch name {
         case "workbench_status":
             return try workbenchStatus()
+        case "workbench_sense":
+            return try workbenchSense()
         case "workbench_transcript_tail":
             return try transcriptTail(arguments: arguments)
         case "workbench_search_transcripts":
@@ -109,6 +112,14 @@ final class WorkbenchMCPServer {
             state: state,
             summary: summary,
             executableHealth: executableHealth
+        )
+    }
+
+    private func workbenchSense() throws -> String {
+        let state = try currentState()
+        return senseRenderer.render(
+            state: state,
+            summary: summarizer.summarize(state)
         )
     }
 
@@ -280,6 +291,15 @@ final class WorkbenchMCPServer {
             [
                 "name": "workbench_status",
                 "description": "Summarize Ouro Workbench state, processes, recovery plans, and transcript paths.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [:],
+                    "additionalProperties": false
+                ]
+            ],
+            [
+                "name": "workbench_sense",
+                "description": "Render the Workbench sense contract for the selected Ouro agent, including boss/terminal boundaries and available Workbench tools.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [:],
