@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.3 - Header Control Polish
+
+- Compact terminal signal controls to stable icon buttons so the session header stays usable in normal-width windows without truncated labels.
+- Preserve tooltips and accessibility labels for Full Screen, Redraw, Ctrl-C, Esc, EOF, and Stop controls in both pane and focused terminal modes.
+
 ## 0.1.2 - Operator Control Surface
 
 - Expanded the command palette with boss quick asks, workspace refresh, Ouro-agent refresh, Workbench MCP install/refresh, release-page open, diagnostics reveal/copy/open-folder, and selected-terminal actions.

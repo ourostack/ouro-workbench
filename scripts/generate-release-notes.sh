@@ -55,6 +55,7 @@ scripts/install-latest-release.sh --open
 - TTFA readiness badge for boss bridge, trust, executable health, recovery posture, Boss Watch, and Open at Login.
 - Recovery Drill for non-mutating restart simulations before you trust a long autonomous run.
 - Explicit Redraw, Ctrl-C, Esc, and EOF controls for operating resized shells and TUIs without silently mutating live terminal state.
+- Stable icon terminal controls so the session header stays usable without clipped labels in normal-width windows.
 - In-app Support Diagnostics for collecting, revealing, and copying a local evidence zip without transcript contents by default.
 
 ## Verification
