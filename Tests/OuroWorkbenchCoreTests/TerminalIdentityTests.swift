@@ -46,4 +46,15 @@ final class TerminalIdentityTests: XCTestCase {
         XCTAssertEqual(shellWrapped.arguments, ["--dangerously-skip-permissions"])
         XCTAssertEqual(TerminalAgentDetector.detect(executable: "/usr/bin/env", arguments: ["gh", "copilot"]), .githubCopilotCLI)
     }
+
+    func testCanonicalTokensUnwrapLeadingEnvironmentAssignments() {
+        let shellWrapped = TerminalAgentDetector.canonicalTokens(
+            executable: "/bin/zsh",
+            arguments: ["-lc", "ANTHROPIC_MODEL=opus claude --dangerously-skip-permissions"]
+        )
+
+        XCTAssertEqual(shellWrapped.executable, "claude")
+        XCTAssertEqual(shellWrapped.arguments, ["--dangerously-skip-permissions"])
+        XCTAssertEqual(TerminalAgentDetector.detect(executable: shellWrapped.executable, arguments: shellWrapped.arguments), .claudeCode)
+    }
 }

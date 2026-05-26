@@ -49,6 +49,24 @@ final class CustomTerminalSessionTests: XCTestCase {
         XCTAssertEqual(entry.lastSummary, "Detected Claude Code: claude --dangerously-skip-permissions")
     }
 
+    func testCustomSessionDetectsKnownCLIWithLeadingEnvironmentWithoutDroppingShellCommand() throws {
+        let entry = try CustomTerminalSessionFactory().makeEntry(
+            projectId: UUID(),
+            draft: CustomTerminalSessionDraft(
+                name: "Claude With Env",
+                command: "ANTHROPIC_MODEL=opus claude --dangerously-skip-permissions",
+                workingDirectory: "/repo",
+                trust: .trusted,
+                autoResume: true
+            )
+        )
+
+        XCTAssertEqual(entry.agentKind, .claudeCode)
+        XCTAssertEqual(entry.executable, "/bin/zsh")
+        XCTAssertEqual(entry.arguments, ["-lc", "ANTHROPIC_MODEL=opus claude --dangerously-skip-permissions"])
+        XCTAssertEqual(entry.lastSummary, "Detected Claude Code: ANTHROPIC_MODEL=opus claude --dangerously-skip-permissions")
+    }
+
     func testCustomSessionRequiresNameCommandAndWorkingDirectory() {
         let projectId = UUID()
         let factory = CustomTerminalSessionFactory()
