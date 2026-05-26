@@ -1775,41 +1775,56 @@ struct RunningSessionHeaderControls: View {
             Button {
                 model.focusTerminal(entry)
             } label: {
-                Label("Full Screen", systemImage: "arrow.up.left.and.arrow.down.right")
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
             }
             .keyboardShortcut("f", modifiers: [.command, .shift])
             .help("Focus this terminal")
+            .accessibilityLabel("Full Screen")
+            .frame(width: 28)
 
             Button {
                 model.redrawTerminal(entry)
             } label: {
-                Label("Redraw", systemImage: "arrow.clockwise")
+                Image(systemName: "arrow.clockwise")
             }
             .help("Send Ctrl-L to redraw the terminal")
             .keyboardShortcut("l", modifiers: [.command])
+            .accessibilityLabel("Redraw")
+            .frame(width: 28)
 
             Button {
                 model.sendControlC(to: entry)
             } label: {
-                Label("Ctrl-C", systemImage: "command")
+                Image(systemName: "command")
             }
+            .help("Send Ctrl-C to this terminal")
+            .accessibilityLabel("Ctrl-C")
+            .frame(width: 28)
             Button {
                 model.sendEscape(to: entry)
             } label: {
-                Label("Esc", systemImage: "escape")
+                Image(systemName: "escape")
             }
+            .help("Send Esc to this terminal")
+            .accessibilityLabel("Esc")
+            .frame(width: 28)
             Button {
                 model.sendEOF(to: entry)
             } label: {
-                Label("EOF", systemImage: "eject")
+                Image(systemName: "eject")
             }
             .help("Send Ctrl-D / EOF to this terminal")
+            .accessibilityLabel("EOF")
+            .frame(width: 28)
             Button(role: .destructive) {
                 model.terminate(entry)
             } label: {
-                Label("Stop", systemImage: "stop.fill")
+                Image(systemName: "stop.fill")
             }
             .keyboardShortcut(".", modifiers: [.command])
+            .help("Stop this terminal")
+            .accessibilityLabel("Stop")
+            .frame(width: 28)
         }
         .controlSize(.small)
     }
@@ -1836,39 +1851,54 @@ struct TerminalFocusView: View {
                 Button {
                     model.exitTerminalFocus()
                 } label: {
-                    Label("Exit Full Screen", systemImage: "arrow.down.right.and.arrow.up.left")
+                    Image(systemName: "arrow.down.right.and.arrow.up.left")
                 }
                 .keyboardShortcut("f", modifiers: [.command, .shift])
                 .help("Return to the split workbench view")
+                .accessibilityLabel("Exit Full Screen")
+                .frame(width: 28)
                 Button {
                     model.redrawTerminal(entry)
                 } label: {
-                    Label("Redraw", systemImage: "arrow.clockwise")
+                    Image(systemName: "arrow.clockwise")
                 }
                 .help("Send Ctrl-L to redraw the terminal")
                 .keyboardShortcut("l", modifiers: [.command])
+                .accessibilityLabel("Redraw")
+                .frame(width: 28)
                 Button {
                     model.sendControlC(to: entry)
                 } label: {
-                    Label("Ctrl-C", systemImage: "command")
+                    Image(systemName: "command")
                 }
+                .help("Send Ctrl-C to this terminal")
+                .accessibilityLabel("Ctrl-C")
+                .frame(width: 28)
                 Button {
                     model.sendEscape(to: entry)
                 } label: {
-                    Label("Esc", systemImage: "escape")
+                    Image(systemName: "escape")
                 }
+                .help("Send Esc to this terminal")
+                .accessibilityLabel("Esc")
+                .frame(width: 28)
                 Button {
                     model.sendEOF(to: entry)
                 } label: {
-                    Label("EOF", systemImage: "eject")
+                    Image(systemName: "eject")
                 }
                 .help("Send Ctrl-D / EOF to this terminal")
+                .accessibilityLabel("EOF")
+                .frame(width: 28)
                 Button(role: .destructive) {
                     model.terminate(entry)
                 } label: {
-                    Label("Stop", systemImage: "stop.fill")
+                    Image(systemName: "stop.fill")
                 }
                 .keyboardShortcut(".", modifiers: [.command])
+                .help("Stop this terminal")
+                .accessibilityLabel("Stop")
+                .frame(width: 28)
             }
             .labelStyle(.titleAndIcon)
             .buttonStyle(.bordered)
