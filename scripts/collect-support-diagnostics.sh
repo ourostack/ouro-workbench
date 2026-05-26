@@ -87,6 +87,34 @@ run_capture() {
   } >"$bundle_dir/$output_file" 2>&1 || true
 }
 
+recent_crash_reports() {
+  local reports_dir="$HOME/Library/Logs/DiagnosticReports"
+  local -a reports=()
+
+  if [[ ! -d "$reports_dir" ]]; then
+    printf 'DiagnosticReports directory not found: %s\n' "$reports_dir"
+    return
+  fi
+
+  while IFS= read -r -d '' report; do
+    reports+=("$report")
+  done < <(
+    find "$reports_dir" -maxdepth 1 -type f \
+      \( -name 'Ouro Workbench-*.crash' \
+        -o -name 'Ouro Workbench-*.ips' \
+        -o -name 'OuroWorkbench-*.crash' \
+        -o -name 'OuroWorkbench-*.ips' \) \
+      -print0 2>/dev/null
+  )
+
+  if [[ "${#reports[@]}" -eq 0 ]]; then
+    printf 'No recent Ouro Workbench crash reports found\n'
+    return
+  fi
+
+  ls -t "${reports[@]}" 2>/dev/null | head -n 10 || true
+}
+
 {
   printf 'generated_at_utc=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   printf 'mode=%s\n' "$([[ "$BUNDLE_MODE" == "true" ]] && printf 'bundle' || printf 'repo')"
@@ -189,9 +217,7 @@ fi
   printf '\n-- login item --\n'
   launchctl print "gui/$(id -u)/com.ourostack.workbench.login" 2>&1 || true
   printf '\n-- recent crash reports --\n'
-  find "$HOME/Library/Logs/DiagnosticReports" \
-    \( -name 'Ouro Workbench*.crash' -o -name 'OuroWorkbench*.crash' \) \
-    -maxdepth 1 -type f -print 2>/dev/null | tail -n 10 || true
+  recent_crash_reports
 } >"$bundle_dir/runtime.txt"
 
 (
