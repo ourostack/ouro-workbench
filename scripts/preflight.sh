@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUN_DEEP="false"
+SWIFT_STRICT_FLAGS=(-Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete)
 
 usage() {
   printf 'Usage: %s [--deep]\n' "$(basename "$0")" >&2
@@ -44,10 +45,10 @@ scripts/generate-workbench-5000-matrix.rb
 git diff --exit-code -- docs/workbench-5000-scenario-matrix.tsv docs/workbench-5000-scenario-matrix.md
 
 run_step "Run Swift tests"
-swift test
+swift test "${SWIFT_STRICT_FLAGS[@]}"
 
 run_step "Run required native scenario verifier"
-swift run OuroWorkbenchScenarioVerifier \
+swift run "${SWIFT_STRICT_FLAGS[@]}" OuroWorkbenchScenarioVerifier \
   --out .build/workbench-scenario-verifier-preflight \
   --no-samples \
   --expect-rows 5000 \
@@ -76,7 +77,7 @@ scripts/smoke-install-rollback.sh
 
 if [[ "$RUN_DEEP" == "true" ]]; then
   run_step "Run deep native scenario verifier"
-  swift run OuroWorkbenchScenarioVerifier \
+  swift run "${SWIFT_STRICT_FLAGS[@]}" OuroWorkbenchScenarioVerifier \
     --out .build/workbench-scenario-verifier-deep-preflight \
     --no-samples \
     --deep-scenarios 15000 \

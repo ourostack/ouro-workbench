@@ -874,8 +874,18 @@ struct NativeScenarioRenderer {
             return
         }
         let secondLineY = min(rect.minY + 24, rect.maxY - 18)
-        canvas.text("> \(stateLine)", in: CGRect(x: rect.minX, y: secondLineY, width: max(1, rect.width - 8), height: 18), role: role, color: .white, font: .monospacedSystemFont(ofSize: 13, weight: .regular))
-        canvas.text(scenario.recoveryAction.rawValue, in: CGRect(x: max(rect.minX, rect.maxX - 220), y: secondLineY, width: min(210, rect.width), height: 18), role: role, color: .lightGray, font: .monospacedSystemFont(ofSize: 13, weight: .regular))
+        let recoveryWidth = min(210, rect.width)
+        let shouldStackRecovery = rect.width < 560
+        let stateWidth = shouldStackRecovery ? max(1, rect.width - 8) : max(1, rect.width - recoveryWidth - 18)
+        canvas.text("> \(stateLine)", in: CGRect(x: rect.minX, y: secondLineY, width: stateWidth, height: 18), role: role, color: .white, font: .monospacedSystemFont(ofSize: 13, weight: .regular))
+        if shouldStackRecovery {
+            guard rect.height >= 66 else {
+                return
+            }
+            canvas.text("recovery: \(scenario.recoveryAction.rawValue)", in: CGRect(x: rect.minX, y: secondLineY + 24, width: max(1, rect.width - 8), height: 18), role: role, color: .lightGray, font: .monospacedSystemFont(ofSize: 13, weight: .regular))
+        } else {
+            canvas.text(scenario.recoveryAction.rawValue, in: CGRect(x: max(rect.minX, rect.maxX - recoveryWidth), y: secondLineY, width: recoveryWidth, height: 18), role: role, color: .lightGray, font: .monospacedSystemFont(ofSize: 13, weight: .regular))
+        }
     }
 
     private func verify(
@@ -891,6 +901,15 @@ struct NativeScenarioRenderer {
         for region in canvas.regions where region.role.isVisibleTextOrControl {
             if !canvas.bounds.contains(region.rect) {
                 fail("\(region.name) escapes viewport: \(region.rect)")
+            }
+        }
+
+        let terminalText = canvas.regions.filter { $0.role == .terminalText }
+        for leftIndex in terminalText.indices {
+            for rightIndex in terminalText.indices where rightIndex > leftIndex {
+                if terminalText[leftIndex].rect.intersects(terminalText[rightIndex].rect) {
+                    fail("terminal text overlaps: \(terminalText[leftIndex].name) / \(terminalText[rightIndex].name)")
+                }
             }
         }
 

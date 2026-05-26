@@ -732,6 +732,9 @@ struct StatusPill: View {
     var body: some View {
         Text(text)
             .font(.caption2.monospaced().weight(.semibold))
+            .lineLimit(1)
+            .truncationMode(.middle)
+            .frame(maxWidth: 180)
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
             .background(color.opacity(0.14), in: Capsule())
@@ -2704,8 +2707,8 @@ final class WorkbenchViewModel: ObservableObject {
             }
             state.selectedProjectId = selectedProjectID
             if let selectedEntryID,
-               !sessionEntries.contains(where: { $0.id == selectedEntryID }) {
-                self.selectedEntryID = sessionEntries.first?.id
+               !projectSessionEntries.contains(where: { $0.id == selectedEntryID }) {
+                self.selectedEntryID = sessionEntries.first?.id ?? archivedSessionEntries.first?.id
             }
             save()
         }
@@ -2900,9 +2903,11 @@ final class WorkbenchViewModel: ObservableObject {
 
     var selectedEntry: ProcessEntry? {
         guard let selectedEntryID else {
-            return sessionEntries.first
+            return sessionEntries.first ?? archivedSessionEntries.first
         }
-        return sessionEntries.first { $0.id == selectedEntryID } ?? sessionEntries.first
+        return projectSessionEntries.first { $0.id == selectedEntryID }
+            ?? sessionEntries.first
+            ?? archivedSessionEntries.first
     }
 
     var terminalFocusEntry: ProcessEntry? {
@@ -3510,7 +3515,7 @@ final class WorkbenchViewModel: ObservableObject {
             return
         }
         selectedProjectID = projectId
-        selectedEntryID = sessionEntries.first?.id
+        selectedEntryID = sessionEntries.first?.id ?? archivedSessionEntries.first?.id
     }
 
     func createGroup(name: String, rootPath: String) -> Bool {
@@ -3599,7 +3604,7 @@ final class WorkbenchViewModel: ObservableObject {
         pendingDeleteGroup = nil
         if selectedProjectID == project.id {
             selectedProjectID = state.projects.first?.id
-            selectedEntryID = sessionEntries.first?.id
+            selectedEntryID = sessionEntries.first?.id ?? archivedSessionEntries.first?.id
         }
         recordActionLog(
             source: "native",
@@ -4980,6 +4985,26 @@ final class WorkbenchViewModel: ObservableObject {
         let currentPlan = activeSessions[entryId]?.plan
         let isCurrentSession = currentPlan?.runId == runId
         let manuallyTerminated = manuallyTerminatedRunIDs.remove(runId) != nil
+        let detachedPersistentSession = isCurrentSession
+            && !manuallyTerminated
+            && currentPlan?.persistentSessionName.map(persistentSessionIsListed) == true
+        if detachedPersistentSession {
+            activeSessions[entryId] = nil
+            if terminalFocusEntryID == entryId {
+                terminalFocusEntryID = nil
+            }
+            updateEntry(entryId) { entry in
+                entry.attention = .needsBossReview
+                entry.lastSummary = "\(entry.name) detached; recovery can reattach the persistent terminal session"
+            }
+            state.processRuns[runIndex].status = .needsRecovery
+            state.processRuns[runIndex].pid = nil
+            state.processRuns[runIndex].endedAt = nil
+            state.processRuns[runIndex].exitCode = nil
+            state.processRuns[runIndex].rawExitStatus = nil
+            save()
+            return
+        }
         let nextRunStatus = terminationPolicy.statusAfterTermination(
             recoveryAction: isCurrentSession ? currentPlan?.recoveryAction : nil,
             manuallyTerminated: manuallyTerminated
@@ -5005,6 +5030,24 @@ final class WorkbenchViewModel: ObservableObject {
         save()
     }
 
+    private func persistentSessionIsListed(_ sessionName: String) -> Bool {
+        let process = Process()
+        let pipe = Pipe()
+        process.executableURL = URL(fileURLWithPath: PersistentTerminalSession.executable)
+        process.arguments = PersistentTerminalSession.listArguments()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        do {
+            try process.run()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            let output = String(decoding: data, as: UTF8.self)
+            return PersistentTerminalSession.listOutput(output, contains: sessionName)
+        } catch {
+            return false
+        }
+    }
+
     private func load() {
         do {
             let loaded = try store.load()
@@ -5015,8 +5058,8 @@ final class WorkbenchViewModel: ObservableObject {
                 state.projects.contains(where: { $0.id == id }) ? id : nil
             } ?? state.projects.first?.id
             selectedEntryID = state.selectedEntryId.flatMap { id in
-                sessionEntries.contains(where: { $0.id == id }) ? id : nil
-            } ?? sessionEntries.first?.id
+                projectSessionEntries.contains(where: { $0.id == id }) ? id : nil
+            } ?? sessionEntries.first?.id ?? archivedSessionEntries.first?.id
             try store.save(state)
         } catch {
             errorMessage = String(describing: error)
@@ -5024,7 +5067,7 @@ final class WorkbenchViewModel: ObservableObject {
             bossWatchIsEnabled = state.bossWatchEnabled
             bossWatchBaselineState = nil
             selectedProjectID = state.projects.first?.id
-            selectedEntryID = sessionEntries.first?.id
+            selectedEntryID = sessionEntries.first?.id ?? archivedSessionEntries.first?.id
         }
     }
 

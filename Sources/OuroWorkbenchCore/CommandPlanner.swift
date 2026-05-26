@@ -128,8 +128,30 @@ public enum PersistentTerminalSession: Sendable {
         ] + command
     }
 
+    public static func listArguments() -> [String] {
+        ["-ls"]
+    }
+
     public static func terminateArguments(sessionName: String) -> [String] {
         ["-S", sessionName, "-X", "quit"]
+    }
+
+    public static func listOutput(_ output: String, contains sessionName: String) -> Bool {
+        output
+            .split(whereSeparator: \.isNewline)
+            .contains { line in
+                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard let firstField = trimmed.split(whereSeparator: \.isWhitespace).first.map(String.init) else {
+                    return false
+                }
+                if firstField == sessionName {
+                    return true
+                }
+                guard let separator = firstField.firstIndex(of: ".") else {
+                    return false
+                }
+                return String(firstField[firstField.index(after: separator)...]) == sessionName
+            }
     }
 }
 
@@ -228,12 +250,39 @@ public struct WorkbenchCommandPlanner: Sendable {
 
     private func preservedResumeArguments(for entry: ProcessEntry, preset: TerminalAgentPreset) -> [String] {
         let tokens = TerminalAgentDetector.canonicalTokens(entry: entry)
-        let explicitResumeTokens = Set(
-            (preset.resumeStrategy.commandTemplate + preset.resumeStrategy.fallbackCommandTemplate)
-                .dropFirst()
-                .filter { !$0.contains("{{") }
-        )
-        return tokens.arguments.filter { !explicitResumeTokens.contains($0) }
+        let strategyArguments = [
+            Array(preset.resumeStrategy.commandTemplate.dropFirst()),
+            Array(preset.resumeStrategy.fallbackCommandTemplate.dropFirst()),
+        ].filter { !$0.isEmpty }
+
+        var preserved: [String] = []
+        var index = 0
+        while index < tokens.arguments.count {
+            if let matchedPattern = strategyArguments.first(where: { pattern in
+                Self.argumentPattern(pattern, matches: tokens.arguments, at: index)
+            }) {
+                index += matchedPattern.count
+            } else {
+                preserved.append(tokens.arguments[index])
+                index += 1
+            }
+        }
+        return preserved
+    }
+
+    private static func argumentPattern(_ pattern: [String], matches arguments: [String], at index: Int) -> Bool {
+        guard !pattern.isEmpty, index + pattern.count <= arguments.count else {
+            return false
+        }
+        for (offset, patternToken) in pattern.enumerated() {
+            if patternToken.contains("{{") {
+                continue
+            }
+            guard arguments[index + offset] == patternToken else {
+                return false
+            }
+        }
+        return true
     }
 
     private func checkpointRecoveryPromptIsNeeded(for entry: ProcessEntry) -> Bool {

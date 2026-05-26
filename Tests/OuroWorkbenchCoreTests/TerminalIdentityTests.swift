@@ -9,6 +9,13 @@ final class TerminalIdentityTests: XCTestCase {
         XCTAssertEqual(parsed?.arguments, ["--model", "opus 4", "two words"])
     }
 
+    func testParserPreservesEmptyQuotedArguments() {
+        let parsed = TerminalCommandParser.parse("claude --flag '' \"\" tail")
+
+        XCTAssertEqual(parsed?.executable, "claude")
+        XCTAssertEqual(parsed?.arguments, ["--flag", "", "", "tail"])
+    }
+
     func testDetectsKnownCLIsFromExecutableAndArguments() {
         XCTAssertEqual(TerminalAgentDetector.detect(executable: "claude", arguments: []), .claudeCode)
         XCTAssertEqual(TerminalAgentDetector.detect(executable: "/opt/homebrew/bin/codex", arguments: ["--yolo"]), .openAICodex)
