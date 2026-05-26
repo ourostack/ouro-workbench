@@ -57,17 +57,27 @@ public final class WorkbenchActionRequestQueue {
         .filter { $0.pathExtension == "json" }
         .sorted { $0.lastPathComponent < $1.lastPathComponent }
 
-        var requests: [WorkbenchActionRequest] = []
+        var decodedRequests: [(url: URL, request: WorkbenchActionRequest)] = []
         for url in urls {
             do {
                 let data = try Data(contentsOf: url)
-                requests.append(try decoder.decode(WorkbenchActionRequest.self, from: data))
-                try FileManager.default.removeItem(at: url)
+                let request = try decoder.decode(WorkbenchActionRequest.self, from: data)
+                decodedRequests.append((url: url, request: request))
             } catch {
                 quarantineInvalidRequestFile(url)
             }
         }
-        return requests
+
+        let sortedRequests = decodedRequests.sorted { lhs, rhs in
+            if lhs.request.createdAt != rhs.request.createdAt {
+                return lhs.request.createdAt < rhs.request.createdAt
+            }
+            return lhs.request.id.uuidString < rhs.request.id.uuidString
+        }
+        for item in sortedRequests {
+            try FileManager.default.removeItem(at: item.url)
+        }
+        return sortedRequests.map(\.request)
     }
 
     private func quarantineInvalidRequestFile(_ url: URL) {
