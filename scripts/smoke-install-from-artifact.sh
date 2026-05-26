@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ARTIFACTS_DIR="$ROOT_DIR/artifacts"
 TEMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/ouro-workbench-install-artifact.XXXXXX")"
 INSTALL_DIR="$TEMP_ROOT/Applications"
+VERSION="$(tr -d '[:space:]' < "$ROOT_DIR/VERSION")"
 
 cleanup() {
   rm -rf "$TEMP_ROOT"
@@ -12,9 +13,9 @@ cleanup() {
 
 trap cleanup EXIT
 
-latest_manifest="$(find "$ARTIFACTS_DIR" -name 'OuroWorkbench-*.manifest.json' -type f -print | sort | tail -n 1)"
+latest_manifest="$(find "$ARTIFACTS_DIR" -name "OuroWorkbench-${VERSION}-*.manifest.json" -type f -print | sort | tail -n 1)"
 if [[ -z "$latest_manifest" ]]; then
-  printf 'Install-from-artifact smoke failed: no manifest found in %s\n' "$ARTIFACTS_DIR" >&2
+  printf 'Install-from-artifact smoke failed: no manifest found for version %s in %s\n' "$VERSION" "$ARTIFACTS_DIR" >&2
   exit 1
 fi
 
