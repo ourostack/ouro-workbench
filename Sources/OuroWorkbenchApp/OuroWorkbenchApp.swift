@@ -2083,6 +2083,7 @@ struct TerminalFocusView: View {
         .background(Color.black)
         .onAppear {
             session.focusInput()
+            session.redrawDisplayBurst(after: [0.12, 0.35, 0.75, 1.25])
         }
     }
 }
@@ -5174,6 +5175,41 @@ final class TerminalHostView: NSView {
         NSSize(width: NSView.noIntrinsicMetric, height: NSView.noIntrinsicMetric)
     }
 
+    override var acceptsFirstResponder: Bool {
+        true
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
+    override func becomeFirstResponder() -> Bool {
+        terminal?.claimKeyboardFocus()
+        return true
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        terminal?.claimKeyboardFocus()
+        super.mouseDown(with: event)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        guard let terminal else {
+            super.keyDown(with: event)
+            return
+        }
+        terminal.keyDown(with: event)
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let hitView = super.hitTest(point)
+        if let terminal,
+           hitView === terminal || hitView?.isDescendant(of: terminal) == true {
+            terminal.claimKeyboardFocus()
+        }
+        return hitView
+    }
+
     func attach(_ terminal: CapturingLocalProcessTerminalView) {
         guard self.terminal !== terminal else {
             focusTerminal()
@@ -5189,7 +5225,7 @@ final class TerminalHostView: NSView {
         addSubview(terminal)
         needsLayout = true
         focusTerminal()
-        scheduleTerminalRedraws(after: [0.08, 0.22, 0.45])
+        scheduleTerminalRedraws(after: [0.08, 0.22, 0.55, 1.0])
     }
 
     override func layout() {
@@ -5204,7 +5240,7 @@ final class TerminalHostView: NSView {
         }
         if abs(size.width - lastLaidOutSize.width) > 1 || abs(size.height - lastLaidOutSize.height) > 1 {
             lastLaidOutSize = size
-            scheduleTerminalRedraws(after: [0.05, 0.18])
+            scheduleTerminalRedraws(after: [0.05, 0.18, 0.55, 1.0])
         }
     }
 
@@ -5233,7 +5269,7 @@ final class TerminalHostView: NSView {
             guard let terminal else {
                 return
             }
-            terminal.window?.makeFirstResponder(terminal)
+            terminal.claimKeyboardFocus()
         }
     }
 
@@ -5252,7 +5288,7 @@ final class TerminalHostView: NSView {
                     return
                 }
                 terminal.send([0x0c])
-                terminal.window?.makeFirstResponder(terminal)
+                terminal.claimKeyboardFocus()
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
             return workItem
@@ -5327,12 +5363,21 @@ final class TerminalSessionController: NSObject, ObservableObject, Identifiable,
         sendBytes([0x0c])
     }
 
+    func redrawDisplayBurst(after delays: [TimeInterval]) {
+        for delay in delays {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                self?.redrawDisplay()
+                self?.focusInput()
+            }
+        }
+    }
+
     func focusInput() {
         DispatchQueue.main.async { [weak terminal] in
             guard let terminal else {
                 return
             }
-            terminal.window?.makeFirstResponder(terminal)
+            terminal.claimKeyboardFocus()
         }
     }
 
@@ -5382,9 +5427,17 @@ final class CapturingLocalProcessTerminalView: LocalProcessTerminalView {
         NSSize(width: NSView.noIntrinsicMetric, height: NSView.noIntrinsicMetric)
     }
 
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
     override func dataReceived(slice: ArraySlice<UInt8>) {
         onOutput?(slice)
         super.dataReceived(slice: slice)
+    }
+
+    func claimKeyboardFocus() {
+        window?.makeFirstResponder(self)
     }
 }
 

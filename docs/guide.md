@@ -592,7 +592,7 @@ This is TTFA in product form: trust the agent, keep the trail.
 | An agent executable is missing | The command is not available on the app's PATH. | Install or repair the CLI, then refresh readiness. |
 | Boss Watch is paused | Automatic observation is off. | Turn on `Watch` when you want background coordination. |
 | Boss Line fails | The Ouro CLI or selected boss process could not complete the ask. | Verify `ouro mcp-serve --agent <boss>` works in a terminal. |
-| A prompt sits high after focusing a terminal | A shell or TUI did not repaint cleanly after attach, focus, or resize. | Workbench automatically sends Ctrl-L after attach and meaningful resize; click `Redraw`, press `Command-L`, or use the command palette to force one more repaint if a stubborn TUI still needs it. |
+| A prompt sits high or low after focusing a terminal | A shell or TUI did not repaint cleanly after attach, focus, or resize. | Workbench automatically sends Ctrl-L after attach, focus-mode entry, and meaningful resize; click `Redraw`, press `Command-L`, or use the command palette to force one more repaint if a stubborn TUI still needs it. |
 | A session will not auto-recover | Trust, auto-resume, or native resume posture is missing. | Run `Recovery Drill` and inspect the reason. |
 | A boss action is skipped | The action violated a local trust gate or current runtime state. | Check `Action Log` for the exact result. |
 | The app did not reopen after restart | Login item state may be off or stale. | Toggle `Open at Login` off and back on, then refresh. |
