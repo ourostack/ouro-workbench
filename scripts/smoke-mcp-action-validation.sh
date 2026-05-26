@@ -17,4 +17,12 @@ if [[ "$output" != *'"isError":true'* ]] || [[ "$output" != *'trust must be a st
   exit 1
 fi
 
+huge_number_request='{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"workbench_search_transcripts","arguments":{"query":"oversized-number-smoke","maxMatches":1e100}}}'
+huge_number_output="$(printf '%s\n' "$huge_number_request" | "$MCP_EXECUTABLE")"
+
+if [[ "$huge_number_output" != *'No transcript matches for oversized-number-smoke'* ]]; then
+  printf 'MCP action validation smoke failed: oversized numeric limit did not clamp cleanly\n%s\n' "$huge_number_output" >&2
+  exit 1
+fi
+
 printf 'MCP action validation smoke passed\n'

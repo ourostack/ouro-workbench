@@ -267,6 +267,9 @@ final class WorkbenchMCPServer {
             return UInt64(int)
         }
         if let double = value as? Double, double > 0 {
+            guard double.isFinite, double <= Double(UInt64.max) else {
+                return UInt64.max
+            }
             return UInt64(double)
         }
         return nil
