@@ -38,6 +38,7 @@ scripts/smoke-package-shallow-guard.sh
 scripts/install-latest-app-artifact.sh --help >/dev/null
 scripts/install-latest-release.sh --help >/dev/null
 scripts/collect-support-diagnostics.sh --help >/dev/null
+scripts/smoke-support-diagnostics-crash-reports.sh
 scripts/generate-release-notes.sh >/dev/null
 
 run_step "Verify generated scenario matrix"
