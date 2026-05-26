@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.5 - Sidebar And Resize Polish
+
+- Reworked sidebar project and add-action rows so group names stay readable and "New Group" / "New Terminal" no longer look like selected tabs.
+- Redraw terminals after real host-size changes so collapsing, expanding, and focusing the boss pane does not leave prompts stranded halfway down the terminal.
+- Added a small backed terminal inset so shell prompts and typed commands do not render hard against the window edge.
+
 ## 0.1.4 - Dashboard Row Polish
 
 - Stabilized boss-dashboard status rows so long runtime, diagnostics, release, recovery, MCP, and mailbox messages truncate predictably without crowding controls.
