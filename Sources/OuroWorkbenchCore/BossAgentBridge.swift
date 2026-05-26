@@ -185,12 +185,20 @@ public struct BossWorkbenchMCPRegistrar {
                     detail: "Workbench MCP is not registered for this boss agent."
                 )
             }
-            if serverMatches(server) {
+            if serverMatches(server), workbenchSenseEnabled(in: root) {
                 return makeSnapshot(
                     agentName: boss.agentName,
                     configURL: configURL,
                     status: .registered,
                     detail: "Workbench MCP is registered for this boss agent."
+                )
+            }
+            if serverMatches(server) {
+                return makeSnapshot(
+                    agentName: boss.agentName,
+                    configURL: configURL,
+                    status: .needsUpdate,
+                    detail: "Workbench MCP is registered, but senses.workbench.enabled is missing."
                 )
             }
             return makeSnapshot(
@@ -232,6 +240,9 @@ public struct BossWorkbenchMCPRegistrar {
                 "args": []
             ]
             root["mcpServers"] = mcpServers
+            var senses = root["senses"] as? [String: Any] ?? [:]
+            senses["workbench"] = ["enabled": true]
+            root["senses"] = senses
             let data = try JSONSerialization.data(
                 withJSONObject: root,
                 options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
@@ -283,5 +294,13 @@ public struct BossWorkbenchMCPRegistrar {
         }
         let args = server["args"] as? [String]
         return args == [] || server["args"] == nil
+    }
+
+    private func workbenchSenseEnabled(in root: [String: Any]) -> Bool {
+        guard let senses = root["senses"] as? [String: Any],
+              let workbench = senses["workbench"] as? [String: Any] else {
+            return false
+        }
+        return workbench["enabled"] as? Bool == true
     }
 }

@@ -74,6 +74,9 @@ final class BossAgentBridgeTests: XCTestCase {
         let workbench = try XCTUnwrap(servers["ouro_workbench"] as? [String: Any])
         XCTAssertEqual(workbench["command"] as? String, executableURL.path)
         XCTAssertEqual(workbench["args"] as? [String], [])
+        let senses = try XCTUnwrap(root["senses"] as? [String: Any])
+        let workbenchSense = try XCTUnwrap(senses["workbench"] as? [String: Any])
+        XCTAssertEqual(workbenchSense["enabled"] as? Bool, true)
     }
 
     func testWorkbenchMCPRegistrationDetectsDriftAndUpdates() throws {
@@ -106,6 +109,64 @@ final class BossAgentBridgeTests: XCTestCase {
         let workbench = try XCTUnwrap(servers["ouro_workbench"] as? [String: Any])
         XCTAssertEqual(workbench["command"] as? String, executableURL.path)
         XCTAssertEqual(workbench["args"] as? [String], [])
+    }
+
+    func testWorkbenchMCPRegistrationRepairsMissingWorkbenchSenseFlag() throws {
+        let executableURL = try writeExecutable()
+        try writeAgentConfig(
+            agentName: "slugger",
+            json: """
+            {
+              "version": 2,
+              "mcpServers": {
+                "ouro_workbench": {
+                  "command": "\(executableURL.path)",
+                  "args": []
+                }
+              },
+              "senses": {
+                "cli": { "enabled": true }
+              }
+            }
+            """
+        )
+        let registrar = BossWorkbenchMCPRegistrar(
+            agentBundlesURL: temporaryDirectory,
+            mcpExecutableURL: executableURL
+        )
+
+        let snapshot = registrar.snapshot(for: BossAgentSelection(agentName: "slugger"))
+
+        XCTAssertEqual(snapshot.status, .needsUpdate)
+        XCTAssertTrue(snapshot.detail.contains("senses.workbench.enabled"))
+    }
+
+    func testWorkbenchMCPRegistrationPreservesExistingSenses() throws {
+        let agentConfigURL = try writeAgentConfig(
+            agentName: "slugger",
+            json: """
+            {
+              "version": 2,
+              "senses": {
+                "cli": { "enabled": true },
+                "mail": { "enabled": true }
+              }
+            }
+            """
+        )
+        let executableURL = try writeExecutable()
+        let registrar = BossWorkbenchMCPRegistrar(
+            agentBundlesURL: temporaryDirectory,
+            mcpExecutableURL: executableURL
+        )
+
+        try registrar.install(for: BossAgentSelection(agentName: "slugger"))
+
+        let root = try loadJSON(agentConfigURL)
+        let senses = try XCTUnwrap(root["senses"] as? [String: Any])
+        XCTAssertEqual((senses["cli"] as? [String: Any])?["enabled"] as? Bool, true)
+        XCTAssertEqual((senses["mail"] as? [String: Any])?["enabled"] as? Bool, true)
+        XCTAssertEqual((senses["workbench"] as? [String: Any])?["enabled"] as? Bool, true)
     }
 
     func testWorkbenchMCPRegistrationReportsMissingAgentAndExecutable() throws {

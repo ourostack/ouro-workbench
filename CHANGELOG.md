@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.11 - Workbench Sense Registration
+
+- Register Workbench as an explicit Ouro local sense when installing the boss-agent MCP bridge.
+- Treat a matching Workbench MCP server without `senses.workbench.enabled` as repair-needed instead of fully registered.
+- Preserve existing boss-agent senses while adding the Workbench sense declaration.
+
 ## 0.1.5 - Sidebar And Resize Polish
 
 - Reworked sidebar project and add-action rows so group names stay readable and "New Group" / "New Terminal" no longer look like selected tabs.
