@@ -61,9 +61,26 @@ BACKUP_APP=""
 INSTALL_SUCCEEDED="false"
 DESTINATION_REPLACED="false"
 
+running_workbench_pids_for_destination() {
+  local pid
+  local command
+  for pid in $(pgrep -x "OuroWorkbench" 2>/dev/null || true); do
+    command="$(ps -p "$pid" -o command= 2>/dev/null || true)"
+    case "$command" in
+      "$APP_DEST/Contents/MacOS/OuroWorkbench"*)
+        printf '%s\n' "$pid"
+        ;;
+    esac
+  done
+}
+
+destination_workbench_is_running() {
+  [[ -n "$(running_workbench_pids_for_destination)" ]]
+}
+
 wait_until_workbench_stops() {
   for _ in {1..40}; do
-    if ! pgrep -x "OuroWorkbench" >/dev/null 2>&1; then
+    if ! destination_workbench_is_running; then
       return 0
     fi
     sleep 0.25
@@ -72,7 +89,7 @@ wait_until_workbench_stops() {
 }
 
 stop_running_workbench() {
-  if ! pgrep -x "OuroWorkbench" >/dev/null 2>&1; then
+  if ! destination_workbench_is_running; then
     return
   fi
 
@@ -82,7 +99,10 @@ stop_running_workbench() {
     return
   fi
 
-  pkill -TERM -x "OuroWorkbench" >/dev/null 2>&1 || true
+  while IFS= read -r pid; do
+    [[ -n "$pid" ]] || continue
+    kill -TERM "$pid" >/dev/null 2>&1 || true
+  done < <(running_workbench_pids_for_destination)
   if wait_until_workbench_stops; then
     return
   fi
@@ -92,17 +112,7 @@ stop_running_workbench() {
 }
 
 installed_workbench_is_running() {
-  local pid
-  local command
-  for pid in $(pgrep -x "OuroWorkbench" 2>/dev/null || true); do
-    command="$(ps -p "$pid" -o command= 2>/dev/null || true)"
-    case "$command" in
-      "$APP_DEST/Contents/MacOS/OuroWorkbench"*)
-        return 0
-        ;;
-    esac
-  done
-  return 1
+  destination_workbench_is_running
 }
 
 cleanup() {
