@@ -61,6 +61,50 @@ BACKUP_APP=""
 INSTALL_SUCCEEDED="false"
 DESTINATION_REPLACED="false"
 
+wait_until_workbench_stops() {
+  for _ in {1..40}; do
+    if ! pgrep -x "OuroWorkbench" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 0.25
+  done
+  return 1
+}
+
+stop_running_workbench() {
+  if ! pgrep -x "OuroWorkbench" >/dev/null 2>&1; then
+    return
+  fi
+
+  printf 'Stopping running Ouro Workbench before install...\n' >&2
+  osascript -e 'tell application id "com.ourostack.workbench" to quit' >/dev/null 2>&1 || true
+  if wait_until_workbench_stops; then
+    return
+  fi
+
+  pkill -TERM -x "OuroWorkbench" >/dev/null 2>&1 || true
+  if wait_until_workbench_stops; then
+    return
+  fi
+
+  printf 'Unable to stop running Ouro Workbench before install.\n' >&2
+  exit 1
+}
+
+installed_workbench_is_running() {
+  local pid
+  local command
+  for pid in $(pgrep -x "OuroWorkbench" 2>/dev/null || true); do
+    command="$(ps -p "$pid" -o command= 2>/dev/null || true)"
+    case "$command" in
+      "$APP_DEST/Contents/MacOS/OuroWorkbench"*)
+        return 0
+        ;;
+    esac
+  done
+  return 1
+}
+
 cleanup() {
   if [[ -n "$STAGING_ROOT" ]]; then
     rm -rf "$STAGING_ROOT"
@@ -92,15 +136,7 @@ else
   APP_SOURCE="$ROOT_DIR/dist/$APP_NAME"
 fi
 
-if [[ "$OPEN_AFTER_INSTALL" == "true" ]]; then
-  osascript -e 'tell application id "com.ourostack.workbench" to quit' >/dev/null 2>&1 || true
-  for _ in {1..20}; do
-    if ! pgrep -x "OuroWorkbench" >/dev/null 2>&1; then
-      break
-    fi
-    sleep 0.25
-  done
-fi
+stop_running_workbench
 
 mkdir -p "$INSTALL_DIR"
 STAGING_ROOT="$(mktemp -d "$INSTALL_DIR/.ouro-workbench-install.XXXXXX")"
@@ -145,5 +181,17 @@ if [[ "$OPEN_AFTER_INSTALL" == "true" ]]; then
     fi
     sleep 0.5
   done
-  exit "$open_status"
+  if [[ "$open_status" -ne 0 ]]; then
+    exit "$open_status"
+  fi
+
+  for _ in {1..40}; do
+    if installed_workbench_is_running; then
+      exit 0
+    fi
+    sleep 0.25
+  done
+
+  printf 'Installed Ouro Workbench did not launch from %s\n' "$APP_DEST" >&2
+  exit 1
 fi

@@ -17,7 +17,7 @@ scripts/install-app.sh --open
 Install a downloaded, verified artifact directly from its manifest:
 
 ```bash
-scripts/install-app.sh --artifact-manifest artifacts/OuroWorkbench-0.1.7-build.<build>-<sha>.manifest.json --open
+scripts/install-app.sh --artifact-manifest artifacts/OuroWorkbench-0.1.8-build.<build>-<sha>.manifest.json --open
 ```
 
 Install the latest successful protected `main` artifact in one step:
@@ -37,9 +37,11 @@ GitHub Releases, verifies the SHA-256 manifest with the same artifact verifier,
 then reuses the rollback-safe installer.
 
 Use `--install-dir /path/to/Applications` to choose another install location.
-The installer stages the new app inside the target directory, moves the previous
-bundle aside, promotes the staged bundle, verifies it, and restores the previous
-bundle if any pre-success install or verification step fails.
+The installer stops any currently running Workbench process before replacement,
+stages the new app inside the target directory, moves the previous bundle aside,
+promotes the staged bundle, verifies it, and restores the previous bundle if any
+pre-success install or verification step fails. With `--open`, it also verifies
+that Launch Services actually started the installed app path.
 
 The generated bundle is intentionally local and ad-hoc signed for now. It lives
 under `dist/`, which is ignored by git. The bundle includes:
@@ -78,7 +80,7 @@ scripts/archive-app-artifact.sh
 Verify a downloaded zip against its manifest, then expand and verify the app:
 
 ```bash
-scripts/verify-app-artifact.sh artifacts/OuroWorkbench-0.1.7-build.<build>-<sha>.manifest.json
+scripts/verify-app-artifact.sh artifacts/OuroWorkbench-0.1.8-build.<build>-<sha>.manifest.json
 ```
 
 Run the full local protected-gate preflight with:
