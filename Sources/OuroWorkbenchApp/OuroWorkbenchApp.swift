@@ -5157,7 +5157,7 @@ struct TerminalPane: NSViewRepresentable {
 final class TerminalHostView: NSView {
     private weak var terminal: CapturingLocalProcessTerminalView?
     private var lastLaidOutSize: NSSize = .zero
-    private var pendingRedrawWorkItem: DispatchWorkItem?
+    private var pendingRedrawWorkItems: [DispatchWorkItem] = []
     private static let contentInset = NSEdgeInsets(top: 2, left: 4, bottom: 2, right: 2)
 
     override init(frame frameRect: NSRect) {
@@ -5181,7 +5181,7 @@ final class TerminalHostView: NSView {
         }
         self.terminal?.removeFromSuperview()
         self.terminal = terminal
-        pendingRedrawWorkItem?.cancel()
+        cancelPendingRedraws()
         lastLaidOutSize = .zero
         terminal.removeFromSuperview()
         terminal.frame = terminalContentFrame
@@ -5189,7 +5189,7 @@ final class TerminalHostView: NSView {
         addSubview(terminal)
         needsLayout = true
         focusTerminal()
-        scheduleTerminalRedraw(after: 0.08)
+        scheduleTerminalRedraws(after: [0.08, 0.22, 0.45])
     }
 
     override func layout() {
@@ -5204,7 +5204,7 @@ final class TerminalHostView: NSView {
         }
         if abs(size.width - lastLaidOutSize.width) > 1 || abs(size.height - lastLaidOutSize.height) > 1 {
             lastLaidOutSize = size
-            scheduleTerminalRedraw(after: 0.05)
+            scheduleTerminalRedraws(after: [0.05, 0.18])
         }
     }
 
@@ -5237,17 +5237,26 @@ final class TerminalHostView: NSView {
         }
     }
 
-    private func scheduleTerminalRedraw(after delay: TimeInterval) {
-        pendingRedrawWorkItem?.cancel()
-        let workItem = DispatchWorkItem { [weak terminal] in
-            guard let terminal else {
-                return
+    private func cancelPendingRedraws() {
+        pendingRedrawWorkItems.forEach { $0.cancel() }
+        pendingRedrawWorkItems.removeAll()
+    }
+
+    private func scheduleTerminalRedraws(after delays: [TimeInterval]) {
+        cancelPendingRedraws()
+        pendingRedrawWorkItems = delays.map { delay in
+            let workItem = DispatchWorkItem { [weak self, weak terminal] in
+                guard let self,
+                      let terminal,
+                      terminal.superview === self else {
+                    return
+                }
+                terminal.send([0x0c])
+                terminal.window?.makeFirstResponder(terminal)
             }
-            terminal.send([0x0c])
-            terminal.window?.makeFirstResponder(terminal)
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+            return workItem
         }
-        pendingRedrawWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 }
 
