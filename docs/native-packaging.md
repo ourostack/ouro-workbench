@@ -17,7 +17,7 @@ scripts/install-app.sh --open
 Install a downloaded, verified artifact directly from its manifest:
 
 ```bash
-scripts/install-app.sh --artifact-manifest artifacts/OuroWorkbench-0.1.11-build.<build>-<sha>.manifest.json --open
+scripts/install-app.sh --artifact-manifest artifacts/OuroWorkbench-0.1.12-build.<build>-<sha>.manifest.json --open
 ```
 
 Install the latest successful protected `main` artifact in one step:
@@ -80,7 +80,7 @@ scripts/archive-app-artifact.sh
 Verify a downloaded zip against its manifest, then expand and verify the app:
 
 ```bash
-scripts/verify-app-artifact.sh artifacts/OuroWorkbench-0.1.11-build.<build>-<sha>.manifest.json
+scripts/verify-app-artifact.sh artifacts/OuroWorkbench-0.1.12-build.<build>-<sha>.manifest.json
 ```
 
 Run the full local protected-gate preflight with:

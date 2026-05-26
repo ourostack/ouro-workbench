@@ -209,6 +209,7 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
 
 public enum RecentSessionSource: String, Codable, Equatable, Sendable {
     case claudeCode
+    case cmux
     case openAICodex
     case githubCopilotCLI
     case shellHistory
@@ -226,6 +227,7 @@ public struct RecentSessionCandidate: Codable, Equatable, Identifiable, Sendable
     public var summary: String
     public var evidencePaths: [String]
     public var confidence: Double
+    public var preferredGroupName: String?
 
     public init(
         id: String,
@@ -237,7 +239,8 @@ public struct RecentSessionCandidate: Codable, Equatable, Identifiable, Sendable
         resumeCommand: [String],
         summary: String,
         evidencePaths: [String],
-        confidence: Double
+        confidence: Double,
+        preferredGroupName: String? = nil
     ) {
         self.id = id
         self.source = source
@@ -249,6 +252,7 @@ public struct RecentSessionCandidate: Codable, Equatable, Identifiable, Sendable
         self.summary = summary
         self.evidencePaths = evidencePaths
         self.confidence = min(1, max(0, confidence))
+        self.preferredGroupName = preferredGroupName
     }
 
     public var resumeCommandLine: String {
@@ -257,28 +261,56 @@ public struct RecentSessionCandidate: Codable, Equatable, Identifiable, Sendable
 }
 
 public struct RecentSessionScanner {
+    public struct LiveTerminalProcess: Equatable, Sendable {
+        public var pid: Int
+        public var ttyName: String?
+        public var command: String
+
+        public init(pid: Int, ttyName: String?, command: String) {
+            self.pid = pid
+            self.ttyName = ttyName
+            self.command = command
+        }
+    }
+
     public var homeURL: URL
     public var fileManager: FileManager
     public var now: Date
     public var lookback: TimeInterval
     public var sqlite3URL: URL
+    public var cmuxSessionURL: URL
+    public var liveProcessLister: () -> [LiveTerminalProcess]
 
     public init(
         homeURL: URL = FileManager.default.homeDirectoryForCurrentUser,
         fileManager: FileManager = .default,
         now: Date = Date(),
         lookback: TimeInterval = 7 * 24 * 60 * 60,
-        sqlite3URL: URL = URL(fileURLWithPath: "/usr/bin/sqlite3")
+        sqlite3URL: URL = URL(fileURLWithPath: "/usr/bin/sqlite3"),
+        cmuxSessionURL: URL? = nil,
+        liveProcessLister: (() -> [LiveTerminalProcess])? = nil
     ) {
         self.homeURL = homeURL
         self.fileManager = fileManager
         self.now = now
         self.lookback = lookback
         self.sqlite3URL = sqlite3URL
+        self.cmuxSessionURL = cmuxSessionURL ?? homeURL
+            .appendingPathComponent("Library/Application Support/cmux/session-com.cmuxterm.app.json")
+        self.liveProcessLister = liveProcessLister ?? Self.systemLiveTerminalProcesses
     }
 
     public func scan() -> [RecentSessionCandidate] {
-        dedupe(scanWorkbench() + scanClaudeCode() + scanCodex() + scanShellHistory())
+        let liveProcesses = liveProcessLister()
+        let claudeHistory = scanClaudeCode()
+        let candidates = scanWorkbench()
+            + scanCmuxSessions(liveProcesses: liveProcesses, claudeHistory: claudeHistory)
+            + scanLiveClaudeCode(liveProcesses: liveProcesses, claudeHistory: claudeHistory)
+            + claudeHistory
+            + scanCodex()
+            + scanShellHistory()
+
+        return dedupe(candidates)
             .sorted { left, right in
                 switch (left.lastActiveAt, right.lastActiveAt) {
                 case let (leftDate?, rightDate?) where leftDate != rightDate:
@@ -291,6 +323,99 @@ public struct RecentSessionScanner {
                     return left.confidence > right.confidence
                 }
             }
+    }
+
+    public func scanLiveClaudeCode(
+        liveProcesses: [LiveTerminalProcess]? = nil,
+        claudeHistory: [RecentSessionCandidate] = []
+    ) -> [RecentSessionCandidate] {
+        let processes = liveProcesses ?? liveProcessLister()
+        let historyById = candidateById(claudeHistory)
+        return processes.compactMap { process in
+            guard isClaudeProcess(command: process.command),
+                  let sessionId = claudeSessionId(from: process.command)
+            else {
+                return nil
+            }
+            let id = "claude:\(sessionId)"
+            let history = historyById[id]
+            return RecentSessionCandidate(
+                id: id,
+                source: .claudeCode,
+                agentKind: .claudeCode,
+                title: history?.title ?? "Live Claude Code session \(sessionId.prefix(8))",
+                workingDirectory: history?.workingDirectory ?? homeURL.path,
+                lastActiveAt: maxDate(now, history?.lastActiveAt),
+                resumeCommand: claudeResumeCommand(sessionId: sessionId, from: process.command),
+                summary: history?.summary ?? "Live Claude Code process detected from the local process table.",
+                evidencePaths: (history?.evidencePaths ?? []) + ["process:\(process.pid)"],
+                confidence: history == nil ? 0.86 : max(0.95, history?.confidence ?? 0)
+            )
+        }
+    }
+
+    public func scanCmuxSessions(
+        liveProcesses: [LiveTerminalProcess]? = nil,
+        claudeHistory: [RecentSessionCandidate] = []
+    ) -> [RecentSessionCandidate] {
+        guard let data = try? Data(contentsOf: cmuxSessionURL),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+            return []
+        }
+
+        let processes = liveProcesses ?? liveProcessLister()
+        let processesByTTY = Dictionary(grouping: processes, by: { normalizedTTYName($0.ttyName) ?? "" })
+        let historyById = candidateById(claudeHistory)
+
+        return cmuxWorkspaces(in: root).flatMap { workspace in
+            workspace.panels.compactMap { panel -> RecentSessionCandidate? in
+                guard let panelTTY = normalizedTTYName(panel.ttyName) else {
+                    return nil
+                }
+                let liveProcess = processesByTTY[panelTTY]
+                    .flatMap { ttyProcesses in
+                        ttyProcesses.first(where: { isClaudeProcess(command: $0.command) })
+                    }
+                guard let liveProcess,
+                      let sessionId = claudeSessionId(from: liveProcess.command)
+                else {
+                    return nil
+                }
+
+                let id = "claude:\(sessionId)"
+                let history = historyById[id]
+                let cwd = panel.workingDirectory
+                    ?? panel.directory
+                    ?? workspace.currentDirectory
+                    ?? history?.workingDirectory
+                    ?? homeURL.path
+                let title = cleanedCmuxTitle(panel.title)
+                    ?? history?.title
+                    ?? workspace.customTitle
+                    ?? "Live Claude Code session \(sessionId.prefix(8))"
+                let status = workspace.statusEntries.compactMap(\.value).joined(separator: ", ")
+                let statusSentence = status.isEmpty ? "" : " Status: \(status)."
+
+                return RecentSessionCandidate(
+                    id: id,
+                    source: .cmux,
+                    agentKind: .claudeCode,
+                    title: title,
+                    workingDirectory: cwd,
+                    lastActiveAt: maxDate(
+                        now,
+                        workspace.statusEntries.compactMap(\.timestamp).max(),
+                        history?.lastActiveAt
+                    ),
+                    resumeCommand: claudeResumeCommand(sessionId: sessionId, from: liveProcess.command),
+                    summary: "Live cmux Claude Code panel in \(workspace.customTitle ?? workspace.processTitle ?? "cmux").\(statusSentence)",
+                    evidencePaths: (history?.evidencePaths ?? []) + [cmuxSessionURL.path, "tty:\(panel.ttyName ?? "unknown")"],
+                    confidence: 0.99,
+                    preferredGroupName: workspace.customTitle
+                )
+            }
+        }
     }
 
     public func scanWorkbench(state: WorkspaceState = WorkspaceState()) -> [RecentSessionCandidate] {
@@ -592,6 +717,194 @@ public struct RecentSessionScanner {
         return (epoch, String(pieces[1]))
     }
 
+    private static func systemLiveTerminalProcesses() -> [LiveTerminalProcess] {
+        let process = Process()
+        let pipe = Pipe()
+        process.executableURL = URL(fileURLWithPath: "/bin/ps")
+        process.arguments = ["-axo", "pid=,tt=,command="]
+        process.standardOutput = pipe
+        process.standardError = Pipe()
+        do {
+            try process.run()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            guard process.terminationStatus == 0 else {
+                return []
+            }
+            return String(decoding: data, as: UTF8.self)
+                .split(whereSeparator: \.isNewline)
+                .compactMap(parseProcessLine)
+        } catch {
+            return []
+        }
+    }
+
+    private static func parseProcessLine(_ line: Substring) -> LiveTerminalProcess? {
+        let pieces = line.split(separator: " ", maxSplits: 2, omittingEmptySubsequences: true)
+        guard pieces.count == 3, let pid = Int(pieces[0]) else {
+            return nil
+        }
+        return LiveTerminalProcess(
+            pid: pid,
+            ttyName: String(pieces[1]),
+            command: String(pieces[2])
+        )
+    }
+
+    private func candidateById(_ candidates: [RecentSessionCandidate]) -> [String: RecentSessionCandidate] {
+        var byId: [String: RecentSessionCandidate] = [:]
+        for candidate in candidates {
+            if let existing = byId[candidate.id], existing.confidence >= candidate.confidence {
+                continue
+            }
+            byId[candidate.id] = candidate
+        }
+        return byId
+    }
+
+    private func isClaudeProcess(command: String) -> Bool {
+        guard let parsed = canonicalCommandTokens(command) else {
+            return false
+        }
+        return URL(fileURLWithPath: parsed.executable).lastPathComponent.lowercased() == "claude"
+    }
+
+    private func claudeSessionId(from command: String) -> String? {
+        guard let parsed = canonicalCommandTokens(command) else {
+            return nil
+        }
+        var index = 0
+        while index < parsed.arguments.count {
+            let token = parsed.arguments[index]
+            if token == "--session-id", index + 1 < parsed.arguments.count {
+                return parsed.arguments[index + 1]
+            }
+            if token.hasPrefix("--session-id=") {
+                return String(token.dropFirst("--session-id=".count))
+            }
+            index += 1
+        }
+        return nil
+    }
+
+    private func claudeResumeCommand(sessionId: String, from command: String) -> [String] {
+        ["claude"] + preservedClaudeResumeArguments(from: command) + ["--resume", sessionId]
+    }
+
+    private func preservedClaudeResumeArguments(from command: String) -> [String] {
+        guard let parsed = canonicalCommandTokens(command) else {
+            return []
+        }
+        var preserved: [String] = []
+        var index = 0
+        while index < parsed.arguments.count {
+            let token = parsed.arguments[index]
+            switch token {
+            case "--dangerously-skip-permissions", "--yolo":
+                preserved.append(token)
+                index += 1
+            case "--model", "--permission-mode", "--add-dir":
+                if index + 1 < parsed.arguments.count {
+                    preserved.append(token)
+                    preserved.append(parsed.arguments[index + 1])
+                    index += 2
+                } else {
+                    index += 1
+                }
+            default:
+                if token.hasPrefix("--model=")
+                    || token.hasPrefix("--permission-mode=")
+                    || token.hasPrefix("--add-dir=")
+                {
+                    preserved.append(token)
+                }
+                index += 1
+            }
+        }
+        return preserved
+    }
+
+    private func canonicalCommandTokens(_ command: String) -> TerminalCommandTokens? {
+        guard let parsed = TerminalCommandParser.parse(command) else {
+            return nil
+        }
+        return TerminalAgentDetector.canonicalTokens(executable: parsed.executable, arguments: parsed.arguments)
+    }
+
+    private func cmuxWorkspaces(in root: [String: Any]) -> [CmuxWorkspace] {
+        let windows = root["windows"] as? [[String: Any]] ?? []
+        return windows.flatMap { window -> [CmuxWorkspace] in
+            guard let tabManager = window["tabManager"] as? [String: Any],
+                  let workspaces = tabManager["workspaces"] as? [[String: Any]]
+            else {
+                return []
+            }
+            return workspaces.map(cmuxWorkspace)
+        }
+    }
+
+    private func cmuxWorkspace(_ object: [String: Any]) -> CmuxWorkspace {
+        let panels = (object["panels"] as? [[String: Any]] ?? []).map(cmuxPanel)
+        let statusEntries = (object["statusEntries"] as? [[String: Any]] ?? []).map(cmuxStatusEntry)
+        return CmuxWorkspace(
+            customTitle: object["customTitle"] as? String,
+            currentDirectory: object["currentDirectory"] as? String,
+            processTitle: object["processTitle"] as? String,
+            panels: panels,
+            statusEntries: statusEntries
+        )
+    }
+
+    private func cmuxPanel(_ object: [String: Any]) -> CmuxPanel {
+        let terminal = object["terminal"] as? [String: Any]
+        return CmuxPanel(
+            title: object["title"] as? String,
+            directory: object["directory"] as? String,
+            workingDirectory: terminal?["workingDirectory"] as? String,
+            ttyName: object["ttyName"] as? String
+        )
+    }
+
+    private func cmuxStatusEntry(_ object: [String: Any]) -> CmuxStatusEntry {
+        let timestamp = (object["timestamp"] as? Double).map(Date.init(timeIntervalSince1970:))
+        return CmuxStatusEntry(
+            value: object["value"] as? String,
+            timestamp: timestamp
+        )
+    }
+
+    private func cleanedCmuxTitle(_ raw: String?) -> String? {
+        guard var title = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty else {
+            return nil
+        }
+        while let first = title.unicodeScalars.first,
+              !CharacterSet.alphanumerics.contains(first),
+              first != "/",
+              first != "~"
+        {
+            title.removeFirst()
+            title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return title.isEmpty ? nil : title
+    }
+
+    private func normalizedTTYName(_ ttyName: String?) -> String? {
+        guard let ttyName, !ttyName.isEmpty, ttyName != "??" else {
+            return nil
+        }
+        if ttyName.hasPrefix("ttys") {
+            return ttyName
+        }
+        if ttyName.hasPrefix("s") {
+            return "tty\(ttyName)"
+        }
+        return ttyName
+    }
+
+    private func maxDate(_ dates: Date?...) -> Date? {
+        dates.compactMap { $0 }.max()
+    }
+
     private func dedupe(_ candidates: [RecentSessionCandidate]) -> [RecentSessionCandidate] {
         var byId: [String: RecentSessionCandidate] = [:]
         for candidate in candidates {
@@ -619,6 +932,26 @@ public struct RecentSessionScanner {
         }
         return String(prefix)
     }
+}
+
+private struct CmuxWorkspace {
+    var customTitle: String?
+    var currentDirectory: String?
+    var processTitle: String?
+    var panels: [CmuxPanel]
+    var statusEntries: [CmuxStatusEntry]
+}
+
+private struct CmuxPanel {
+    var title: String?
+    var directory: String?
+    var workingDirectory: String?
+    var ttyName: String?
+}
+
+private struct CmuxStatusEntry {
+    var value: String?
+    var timestamp: Date?
 }
 
 public struct ProposedTerminalImport: Codable, Equatable, Identifiable, Sendable {
@@ -687,6 +1020,11 @@ public struct WorkbenchImportProposal: Codable, Equatable, Sendable {
     }
 }
 
+private struct WorkbenchImportGroupKey: Hashable {
+    var rootPath: String
+    var preferredName: String?
+}
+
 public struct WorkbenchImportProposalBuilder: Sendable {
     public var maxSelectedPerGroup: Int
     public var maxSelectedTotal: Int
@@ -700,10 +1038,13 @@ public struct WorkbenchImportProposalBuilder: Sendable {
         let importable = candidates.filter { $0.confidence >= 0.50 }
         let ignored = candidates.filter { $0.confidence < 0.50 }
         let grouped = Dictionary(grouping: importable) { candidate in
-            workspaceRoot(for: candidate.workingDirectory)
+            WorkbenchImportGroupKey(
+                rootPath: workspaceRoot(for: candidate.workingDirectory),
+                preferredName: candidate.preferredGroupName
+            )
         }
-        var groups = grouped.map { rootPath, groupCandidates in
-            let groupName = displayName(for: rootPath)
+        var groups = grouped.map { groupKey, groupCandidates in
+            let groupName = groupKey.preferredName ?? displayName(for: groupKey.rootPath)
             let trackSlug = slug(groupName)
             var usedTaskSlugs = Set<String>()
             let terminals = groupCandidates
@@ -721,7 +1062,7 @@ public struct WorkbenchImportProposalBuilder: Sendable {
             return ProposedWorkbenchGroup(
                 id: trackSlug,
                 name: groupName,
-                rootPath: rootPath,
+                rootPath: groupKey.rootPath,
                 deskTrackSlug: trackSlug,
                 terminals: terminals
             )
