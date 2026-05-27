@@ -4122,7 +4122,7 @@ struct TerminalFocusView: View {
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            Color.black
+            WorkbenchTerminalPalette.swiftUIBackground
                 .ignoresSafeArea()
             TerminalPane(session: session)
                 .id(session.id)
@@ -4192,7 +4192,7 @@ struct TerminalFocusView: View {
             .padding(.top, CGFloat(chrome.floatingControlsTopInset))
             .padding(.trailing, 16)
         }
-        .background(Color.black)
+        .background(WorkbenchTerminalPalette.swiftUIBackground)
         .onAppear {
             session.focusInput()
             session.redrawDisplayBurst(after: [0.12, 0.35, 0.75, 1.25])
@@ -8049,6 +8049,24 @@ private struct MailboxFetchResult<Value: Sendable>: Sendable {
     var issue: String?
 }
 
+/// Single source of truth for the Workbench terminal palette. Used by the
+/// SwiftTerm view, the host inset (so the background doesn't flash pure
+/// black before the terminal claims pixels), and the SwiftUI focus mode.
+enum WorkbenchTerminalPalette {
+    static let background = NSColor(srgbRed: 0.05, green: 0.05, blue: 0.06, alpha: 1.0)
+    static let foreground = NSColor(srgbRed: 0.92, green: 0.92, blue: 0.94, alpha: 1.0)
+    static let accent = NSColor(srgbRed: 0.35, green: 0.55, blue: 0.95, alpha: 1.0)
+
+    /// Translucent accent for selections. SwiftTerm's default uses
+    /// `NSColor.selectedTextBackgroundColor`, which on a dark terminal lands as
+    /// a glaring near-white block ("white-highlighted text").
+    static let selection = accent.withAlphaComponent(0.32)
+
+    static var swiftUIBackground: SwiftUI.Color {
+        SwiftUI.Color(nsColor: background)
+    }
+}
+
 struct TerminalPane: NSViewRepresentable {
     var session: TerminalSessionController
 
@@ -8169,7 +8187,9 @@ final class TerminalHostView: NSView {
 
     private func configureBacking() {
         wantsLayer = true
-        layer?.backgroundColor = NSColor.black.cgColor
+        // Match the new in-terminal background so the surrounding host inset
+        // doesn't paint pure black behind the terminal view.
+        layer?.backgroundColor = WorkbenchTerminalPalette.background.cgColor
     }
 
     private func focusTerminal() {
@@ -8350,6 +8370,13 @@ final class CapturingLocalProcessTerminalView: LocalProcessTerminalView {
 }
 
 private extension LocalProcessTerminalView {
+    /// Configure the terminal to feel like a native macOS terminal pane —
+    /// canonical near-black background, a soft off-white foreground, and a
+    /// calm translucent-accent selection color. The default SwiftTerm
+    /// selection color is `NSColor.selectedTextBackgroundColor`, which is
+    /// tuned for white-paper text fields; on a black terminal it lands as
+    /// a glaring near-white block ("white-highlighted text") that looks
+    /// like a rendering glitch.
     func configureNativeFeel() {
         metalBufferingMode = .perFrameAggregated
         try? setUseMetal(true)
@@ -8359,7 +8386,16 @@ private extension LocalProcessTerminalView {
         setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         wantsLayer = true
-        layer?.backgroundColor = NSColor.black.cgColor
+
+        nativeBackgroundColor = WorkbenchTerminalPalette.background
+        nativeForegroundColor = WorkbenchTerminalPalette.foreground
+        // Calm translucent accent for selections. This is the direct fix for
+        // the "white-highlighted text" artifact on a dark terminal.
+        selectedTextBackgroundColor = WorkbenchTerminalPalette.selection
+        caretColor = WorkbenchTerminalPalette.accent.withAlphaComponent(0.85)
+        caretTextColor = .white
+
+        layer?.backgroundColor = WorkbenchTerminalPalette.background.cgColor
     }
 }
 
