@@ -38,7 +38,10 @@ struct WorkbenchRootView: View {
                                 BossDashboardView(model: model)
                                 Divider()
                             }
-                            if let entry = model.selectedEntry {
+                            if let agentName = model.selectedAgentName,
+                               let agent = model.ouroAgent(named: agentName) {
+                                AgentDetailView(agent: agent, model: model)
+                            } else if let entry = model.selectedEntry {
                                 SessionDetailView(entry: entry, model: model)
                             } else {
                                 AgentHomeEmptyState(model: model)
@@ -327,6 +330,25 @@ struct WorkbenchSidebarView: View {
 
     var body: some View {
         List(selection: $model.selectedEntryID) {
+            Section("Agents") {
+                ForEach(model.ouroAgents) { agent in
+                    SidebarAgentRow(
+                        agent: agent,
+                        isBoss: model.state.boss.agentName.caseInsensitiveCompare(agent.name) == .orderedSame,
+                        isSelected: model.selectedAgentName?.caseInsensitiveCompare(agent.name) == .orderedSame,
+                        select: { model.selectAgent(agent.name) }
+                    )
+                }
+                if model.ouroAgents.isEmpty {
+                    SidebarActionRow(title: "Hatch Your First Agent", systemImage: "sparkles") {
+                        model.isOuroAgentInstallSheetPresented = true
+                    }
+                } else {
+                    SidebarActionRow(title: "Hatch / Clone Agent", systemImage: "plus") {
+                        model.isOuroAgentInstallSheetPresented = true
+                    }
+                }
+            }
             Section("Groups") {
                 ForEach(model.state.projects) { project in
                     SidebarProjectRow(
@@ -470,6 +492,72 @@ struct SidebarActionRow: View {
         .buttonStyle(.plain)
         .help(title)
         .accessibilityLabel(title)
+    }
+}
+
+/// Compact sidebar row representing one Ouro agent bundle. Clicking selects
+/// the agent in the detail pane; the boss flag and a health dot keep status
+/// glanceable.
+struct SidebarAgentRow: View {
+    var agent: OuroAgentRecord
+    var isBoss: Bool
+    var isSelected: Bool
+    var select: () -> Void
+
+    var body: some View {
+        Button(action: select) {
+            HStack(alignment: .center, spacing: 8) {
+                Circle()
+                    .fill(statusColor)
+                    .frame(width: 8, height: 8)
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 6) {
+                        Text(agent.name)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        if isBoss {
+                            Text("boss")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(Color.accentColor)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(Color.accentColor.opacity(0.14), in: Capsule())
+                                .fixedSize()
+                        }
+                    }
+                    if let lane = agent.humanFacing?.summary {
+                        Text(lane)
+                            .font(.caption2.monospaced())
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 3)
+            .padding(.horizontal, 6)
+            .contentShape(Rectangle())
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+        .help(agent.detail)
+    }
+
+    private var statusColor: SwiftUI.Color {
+        switch agent.status {
+        case .ready:
+            return .green
+        case .disabled, .missingConfig:
+            return .orange
+        case .invalidConfig:
+            return .red
+        }
     }
 }
 
@@ -688,6 +776,17 @@ struct BossSelectorView: View {
                 customBossIsPresented = true
             } label: {
                 Label("Use Other Boss...", systemImage: "person.badge.plus")
+            }
+            Divider()
+            Button {
+                model.selectAgent(model.state.boss.agentName)
+            } label: {
+                Label("Manage Agents…", systemImage: "person.2.badge.gearshape")
+            }
+            Button {
+                model.isOuroAgentInstallSheetPresented = true
+            } label: {
+                Label("Hatch / Clone Agent…", systemImage: "sparkles")
             }
         } label: {
             HStack(spacing: 5) {
@@ -2915,6 +3014,495 @@ struct BossWorkbenchMCPSetupView: View {
     }
 }
 
+/// Detail pane for the Agents sidebar. Mirrors the SessionDetailView chrome
+/// philosophy: a slim title strip with the essentials, a calm body card with
+/// lane info + MCP status, and an inspector disclosure for the bundle paths
+/// and detailed status. Lets the user switch boss, repair providers, fix MCP,
+/// open agent.json, reveal the bundle, or clone — all without diving into the
+/// dashboard's Advanced disclosure.
+struct AgentDetailView: View {
+    var agent: OuroAgentRecord
+    @ObservedObject var model: WorkbenchViewModel
+    @State private var showsInspector = false
+
+    private var isBoss: Bool {
+        model.state.boss.agentName.caseInsensitiveCompare(agent.name) == .orderedSame
+    }
+
+    private var registration: BossWorkbenchMCPRegistrationSnapshot? {
+        model.workbenchMCPRegistration(for: agent)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            AgentTitleStrip(
+                agent: agent,
+                model: model,
+                isBoss: isBoss,
+                showsInspector: $showsInspector
+            )
+            Divider()
+            if showsInspector {
+                AgentInspectorPanel(agent: agent, model: model, registration: registration)
+                Divider()
+            }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    AgentStatusCard(agent: agent, model: model, registration: registration)
+                    AgentLanesCard(agent: agent, model: model)
+                    AgentActionsCard(agent: agent, model: model)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .frame(maxWidth: 720, alignment: .leading)
+            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+    }
+}
+
+private struct AgentTitleStrip: View {
+    var agent: OuroAgentRecord
+    @ObservedObject var model: WorkbenchViewModel
+    var isBoss: Bool
+    @Binding var showsInspector: Bool
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Button {
+                showsInspector.toggle()
+            } label: {
+                Image(systemName: showsInspector ? "chevron.down" : "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 14)
+            }
+            .buttonStyle(.plain)
+            .help(showsInspector ? "Hide bundle details" : "Show bundle path and config status")
+
+            Circle()
+                .fill(statusColor)
+                .frame(width: 8, height: 8)
+
+            Text(agent.name)
+                .font(.headline)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .layoutPriority(2)
+
+            if isBoss {
+                Text("boss")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(Color.accentColor)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.accentColor.opacity(0.14), in: Capsule())
+                    .fixedSize()
+            }
+
+            Spacer(minLength: 6)
+
+            Menu {
+                Button {
+                    model.openAgentConfig(agent)
+                } label: {
+                    Label("Open agent.json…", systemImage: "doc.text")
+                }
+                Button {
+                    model.revealAgentBundle(agent)
+                } label: {
+                    Label("Reveal Bundle in Finder", systemImage: "folder")
+                }
+                Divider()
+                Button {
+                    model.repairAgent(agent)
+                } label: {
+                    Label("Run ouro check…", systemImage: "stethoscope")
+                }
+                .help("Open a Workbench terminal pre-loaded with `ouro check --agent \(agent.name)`")
+                Button {
+                    model.isOuroAgentInstallSheetPresented = true
+                } label: {
+                    Label("Hatch / Clone Another…", systemImage: "plus")
+                }
+                Divider()
+                Button {
+                    model.refreshOuroAgents()
+                } label: {
+                    Label("Refresh Agents", systemImage: "arrow.clockwise")
+                }
+            } label: {
+                Label("More", systemImage: "ellipsis.circle")
+                    .labelStyle(.iconOnly)
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .controlSize(.small)
+            .fixedSize()
+            .help("More actions for this agent")
+
+            Button {
+                model.selectBoss(agentName: agent.name)
+            } label: {
+                Label(isBoss ? "Boss" : "Use as Boss", systemImage: "person.crop.circle.badge.checkmark")
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .disabled(isBoss || !agent.isUsableAsBoss)
+            .help(isBoss
+                  ? "\(agent.name) is already this Mac's boss"
+                  : (agent.isUsableAsBoss
+                     ? "Make \(agent.name) this Mac's boss"
+                     : "Bundle must be ready before it can act as boss"))
+            .fixedSize()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 7)
+        .frame(minHeight: 38)
+    }
+
+    private var statusColor: SwiftUI.Color {
+        switch agent.status {
+        case .ready:
+            return .green
+        case .disabled, .missingConfig:
+            return .orange
+        case .invalidConfig:
+            return .red
+        }
+    }
+}
+
+private struct AgentInspectorPanel: View {
+    var agent: OuroAgentRecord
+    @ObservedObject var model: WorkbenchViewModel
+    var registration: BossWorkbenchMCPRegistrationSnapshot?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "shippingbox")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text(agent.bundlePath)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
+            }
+            HStack(spacing: 6) {
+                Image(systemName: "doc")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text(agent.configPath)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
+            }
+            HStack(spacing: 6) {
+                Image(systemName: "info.circle")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text(agent.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .truncationMode(.tail)
+            }
+            if let registration {
+                HStack(spacing: 6) {
+                    Image(systemName: "link")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Text("MCP: \(registration.detail)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+                }
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Color.primary.opacity(0.025))
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct AgentStatusCard: View {
+    var agent: OuroAgentRecord
+    @ObservedObject var model: WorkbenchViewModel
+    var registration: BossWorkbenchMCPRegistrationSnapshot?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: statusIcon)
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(statusColor)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(statusHeadline)
+                        .font(.title3.weight(.semibold))
+                    Text(agent.detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+                }
+                Spacer()
+                if let registration, registration.isActionable {
+                    Button {
+                        model.installWorkbenchMCP(for: agent)
+                    } label: {
+                        Label(
+                            registration.status == .needsUpdate ? "Update MCP" : "Install MCP",
+                            systemImage: "link.badge.plus"
+                        )
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .help(registration.detail)
+                }
+            }
+            HStack(spacing: 6) {
+                StatusPill(
+                    text: bundleStatusPillText,
+                    color: statusColor
+                )
+                if let registration {
+                    StatusPill(
+                        text: "mcp \(mcpPillText(registration.status))",
+                        color: mcpPillColor(registration.status)
+                    )
+                }
+                if !agent.isUsableAsBoss {
+                    StatusPill(text: "boss blocked", color: .secondary)
+                }
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.primary.opacity(0.04))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+        )
+    }
+
+    private var statusIcon: String {
+        switch agent.status {
+        case .ready:
+            return "checkmark.seal.fill"
+        case .disabled:
+            return "pause.circle.fill"
+        case .missingConfig:
+            return "exclamationmark.triangle.fill"
+        case .invalidConfig:
+            return "xmark.octagon.fill"
+        }
+    }
+
+    private var statusColor: SwiftUI.Color {
+        switch agent.status {
+        case .ready:
+            return .green
+        case .disabled, .missingConfig:
+            return .orange
+        case .invalidConfig:
+            return .red
+        }
+    }
+
+    private var statusHeadline: String {
+        switch agent.status {
+        case .ready:
+            return "Bundle ready"
+        case .disabled:
+            return "Bundle disabled in agent.json"
+        case .missingConfig:
+            return "Bundle missing agent.json"
+        case .invalidConfig:
+            return "Bundle config could not be read"
+        }
+    }
+
+    private var bundleStatusPillText: String {
+        switch agent.status {
+        case .ready:
+            return "ready"
+        case .disabled:
+            return "disabled"
+        case .missingConfig:
+            return "no config"
+        case .invalidConfig:
+            return "invalid"
+        }
+    }
+
+    private func mcpPillText(_ status: BossWorkbenchMCPRegistrationStatus) -> String {
+        switch status {
+        case .registered:
+            return "registered"
+        case .notRegistered:
+            return "not registered"
+        case .needsUpdate:
+            return "needs update"
+        case .agentMissing:
+            return "agent missing"
+        case .executableMissing:
+            return "app missing"
+        case .invalidConfig:
+            return "config"
+        }
+    }
+
+    private func mcpPillColor(_ status: BossWorkbenchMCPRegistrationStatus) -> SwiftUI.Color {
+        switch status {
+        case .registered:
+            return .green
+        case .notRegistered, .needsUpdate:
+            return .orange
+        case .agentMissing, .executableMissing, .invalidConfig:
+            return .red
+        }
+    }
+}
+
+private struct AgentLanesCard: View {
+    var agent: OuroAgentRecord
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("Model providers")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Button {
+                    model.openAgentConfig(agent)
+                } label: {
+                    Label("Edit agent.json", systemImage: "pencil")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Open the agent bundle's agent.json in your default JSON editor")
+            }
+            LanePanel(title: "Human-facing", systemImage: "person.crop.circle", lane: agent.humanFacing)
+            LanePanel(title: "Agent-facing", systemImage: "infinity", lane: agent.agentFacing)
+            Text("Workbench edits agent.json out-of-band. Use `ouro check` (in More menu) to verify the new lane after you save.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.primary.opacity(0.04))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+        )
+    }
+}
+
+private struct LanePanel: View {
+    var title: String
+    var systemImage: String
+    var lane: OuroAgentLane?
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: systemImage)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 18)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                if let lane, lane.summary != nil {
+                    HStack(spacing: 6) {
+                        if let provider = lane.provider, !provider.isEmpty {
+                            StatusPill(text: provider, color: .blue)
+                        }
+                        if let model = lane.model, !model.isEmpty {
+                            Text(model)
+                                .font(.callout.monospaced())
+                                .textSelection(.enabled)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                    }
+                } else {
+                    Text("Not configured")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+    }
+}
+
+private struct AgentActionsCard: View {
+    var agent: OuroAgentRecord
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Bundle actions")
+                .font(.subheadline.weight(.semibold))
+            HStack(spacing: 10) {
+                Button {
+                    model.repairAgent(agent)
+                } label: {
+                    Label("Run ouro check", systemImage: "stethoscope")
+                }
+                .buttonStyle(.bordered)
+                .help("Opens a Workbench terminal running `ouro check --agent \(agent.name)`")
+                Button {
+                    model.openAgentConfig(agent)
+                } label: {
+                    Label("Open agent.json", systemImage: "doc.text")
+                }
+                .buttonStyle(.bordered)
+                Button {
+                    model.revealAgentBundle(agent)
+                } label: {
+                    Label("Reveal in Finder", systemImage: "folder")
+                }
+                .buttonStyle(.bordered)
+                Spacer()
+                Button {
+                    model.isOuroAgentInstallSheetPresented = true
+                } label: {
+                    Label("Hatch / Clone Another…", systemImage: "plus")
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.primary.opacity(0.04))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+        )
+    }
+}
+
 struct SessionDetailView: View {
     var entry: ProcessEntry
     @ObservedObject var model: WorkbenchViewModel
@@ -4280,8 +4868,25 @@ final class WorkbenchViewModel: ObservableObject {
             guard selectedEntryID != oldValue else {
                 return
             }
+            if selectedEntryID != nil {
+                // Selecting a terminal pulls focus off the Agents pane so the
+                // detail pane switches back to the live SessionDetailView.
+                selectedAgentName = nil
+            }
             state.selectedEntryId = selectedEntryID
             save()
+        }
+    }
+    /// Currently focused Ouro agent for the Agents sidebar / detail pane.
+    /// Mutually exclusive with `selectedEntryID`: setting either clears the other.
+    /// Not persisted — the sidebar restores the natural session selection on
+    /// next launch.
+    @Published var selectedAgentName: String? {
+        didSet {
+            guard selectedAgentName != oldValue, selectedAgentName != nil else {
+                return
+            }
+            selectedEntryID = nil
         }
     }
     @Published var activeSessions: [UUID: TerminalSessionController] = [:]
@@ -5035,6 +5640,75 @@ final class WorkbenchViewModel: ObservableObject {
         NSWorkspace.shared.activateFileViewerSelecting([
             URL(fileURLWithPath: targetPath)
         ])
+    }
+
+    /// Open `agent.json` in the user's default editor (or whichever app the
+    /// finder has bound to .json). Used by the Agents pane "Open Config…"
+    /// button so users can flip provider/model without dropping out to a
+    /// terminal.
+    func openAgentConfig(_ agent: OuroAgentRecord) {
+        let url = URL(fileURLWithPath: agent.configPath)
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            errorMessage = "Agent config not found at \(agent.configPath)"
+            return
+        }
+        NSWorkspace.shared.open(url)
+    }
+
+    /// Open a Workbench terminal pre-loaded with the `ouro check` invocation
+    /// for this agent so the user can repair providers, refresh the daemon,
+    /// or fix MCP tools without remembering the CLI shape. The terminal is
+    /// trusted and auto-resumable so the user can rerun it after editing.
+    @discardableResult
+    func repairAgent(_ agent: OuroAgentRecord) -> Bool {
+        let workingDirectory = FileManager.default.fileExists(atPath: agent.bundlePath)
+            ? agent.bundlePath
+            : FileManager.default.homeDirectoryForCurrentUser.path
+        let command = ShellArgumentEscaper.commandLine(["ouro", "check", "--agent", agent.name])
+        let draft = CustomTerminalSessionDraft(
+            name: "Ouro Repair: \(agent.name)",
+            command: command,
+            workingDirectory: workingDirectory,
+            trust: .trusted,
+            autoResume: false,
+            notes: "Workbench repair shortcut: \(command)"
+        )
+        let entry = createCustomSession(draft, launchAfterCreate: true)
+        if entry != nil {
+            recordActionLog(
+                source: "native",
+                action: "repairAgent",
+                targetName: agent.name,
+                result: "Opened repair terminal",
+                succeeded: true
+            )
+        }
+        return entry != nil
+    }
+
+    /// Helper used by the sidebar / boss menu to set the Agents pane focus.
+    /// If `name` doesn't resolve to a known bundle, fall back to the first
+    /// available agent so the detail pane never lands on an empty record.
+    func selectAgent(_ name: String?) {
+        guard let name else {
+            selectedAgentName = nil
+            return
+        }
+        if ouroAgent(named: name) != nil {
+            selectedAgentName = name
+        } else if let first = ouroAgents.first {
+            selectedAgentName = first.name
+        } else {
+            // No agent bundles installed yet — kick into the hatching flow
+            // instead of landing on a blank Agents pane.
+            selectedAgentName = nil
+            isOuroAgentInstallSheetPresented = true
+        }
+    }
+
+    /// Convenience accessor for the AgentDetailView.
+    func ouroAgent(named name: String) -> OuroAgentRecord? {
+        ouroAgents.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }
     }
 
     func installWorkbenchMCP(for agent: OuroAgentRecord) {
