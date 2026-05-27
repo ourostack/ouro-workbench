@@ -106,6 +106,12 @@ and Workbench sessions, proposes a Desk-shaped group layout, and mirrors
 selected work into Desk before resuming a curated starter set of high-confidence
 terminals.
 
+The import proposal is inspectable before it creates anything. Each proposed
+terminal shows its source summary, resume command, and labeled confidence score;
+the `Preview` button opens a scrollable chat-style view with the readable
+session transcript when Workbench can resolve one, plus the exact evidence paths
+used for the proposal.
+
 When migrating from cmux, onboarding also reads cmux's saved workspace state,
 matches live Claude Code panes by TTY/session id, preserves cmux workspace names
 as Workbench groups, and keeps high-trust Claude launch flags such as

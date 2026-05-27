@@ -2137,6 +2137,7 @@ private struct OnboardingBootstrapView: View {
 private struct OnboardingGroupProposalView: View {
     var group: ProposedWorkbenchGroup
     @ObservedObject var model: WorkbenchViewModel
+    @State private var previewTerminal: ProposedTerminalImport?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
@@ -2156,14 +2157,18 @@ private struct OnboardingGroupProposalView: View {
                     .foregroundStyle(.secondary)
             }
             ForEach(group.terminals) { terminal in
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                HStack(alignment: .center, spacing: 8) {
                     Image(systemName: terminal.selectedByDefault ? "checkmark.circle.fill" : "circle")
                         .foregroundStyle(terminal.selectedByDefault ? .green : .secondary)
-                    VStack(alignment: .leading, spacing: 1) {
+                    VStack(alignment: .leading, spacing: 3) {
                         Text(terminal.name)
                             .font(.caption.weight(.semibold))
                             .lineLimit(1)
                             .truncationMode(.tail)
+                        Text(terminal.candidate.summary)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
                         Text(terminal.candidate.resumeCommandLine)
                             .font(.caption2.monospaced())
                             .foregroundStyle(.secondary)
@@ -2183,15 +2188,128 @@ private struct OnboardingGroupProposalView: View {
                         .buttonStyle(.borderless)
                         .help(commandLine)
                     }
-                    Text("\(Int(terminal.candidate.confidence * 100))%")
-                        .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .fixedSize()
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Button {
+                            previewTerminal = terminal
+                        } label: {
+                            Label("Preview", systemImage: "text.bubble")
+                        }
+                        .controlSize(.small)
+                        .buttonStyle(.bordered)
+                        Text("confidence \(Int(terminal.candidate.confidence * 100))%")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            .fixedSize()
+                            .help(model.onboardingConfidenceExplanation(for: terminal))
+                    }
                 }
+                .padding(.vertical, 2)
             }
         }
         .padding(10)
         .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
+        .sheet(item: $previewTerminal) { terminal in
+            OnboardingSessionPreviewSheet(group: group, terminal: terminal, model: model)
+        }
+    }
+}
+
+private struct OnboardingSessionPreviewSheet: View {
+    var group: ProposedWorkbenchGroup
+    var terminal: ProposedTerminalImport
+    @ObservedObject var model: WorkbenchViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center, spacing: 12) {
+                Image(systemName: terminal.candidate.agentKind == nil ? "terminal" : "text.bubble")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 32)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(terminal.name)
+                        .font(.title3.weight(.semibold))
+                        .lineLimit(1)
+                    Text("\(model.onboardingSourceLabel(for: terminal.candidate)) · \(group.name)")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer()
+                Button("Done") {
+                    dismiss()
+                }
+                .keyboardShortcut(.cancelAction)
+            }
+            .padding(20)
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    OnboardingPreviewInfoGrid(terminal: terminal, model: model)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("What Workbench Found")
+                            .font(.headline)
+                        Text(terminal.candidate.summary)
+                            .font(.body)
+                            .textSelection(.enabled)
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Session Preview")
+                            .font(.headline)
+                        Text(model.onboardingPreviewText(for: terminal))
+                            .font(.system(.body, design: .monospaced))
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(12)
+                            .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
+                    }
+                }
+                .padding(20)
+            }
+        }
+        .frame(width: 760, height: 620)
+    }
+}
+
+private struct OnboardingPreviewInfoGrid: View {
+    var terminal: ProposedTerminalImport
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
+            GridRow {
+                Text("Confidence").foregroundStyle(.secondary)
+                Text("\(Int(terminal.candidate.confidence * 100))% - \(model.onboardingConfidenceExplanation(for: terminal))")
+            }
+            GridRow {
+                Text("Resume").foregroundStyle(.secondary)
+                Text(terminal.candidate.resumeCommandLine)
+                    .font(.system(.callout, design: .monospaced))
+                    .textSelection(.enabled)
+            }
+            GridRow {
+                Text("Root").foregroundStyle(.secondary)
+                Text(terminal.candidate.workingDirectory)
+                    .font(.system(.callout, design: .monospaced))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
+            }
+            if !terminal.candidate.evidencePaths.isEmpty {
+                GridRow {
+                    Text("Evidence").foregroundStyle(.secondary)
+                    Text(terminal.candidate.evidencePaths.joined(separator: "\n"))
+                        .font(.system(.caption, design: .monospaced))
+                        .textSelection(.enabled)
+                }
+            }
+        }
+        .font(.callout)
     }
 }
 
@@ -5112,6 +5230,219 @@ final class WorkbenchViewModel: ObservableObject {
             lines.append("Evidence: \(candidate.evidencePaths.joined(separator: ", "))")
         }
         return lines.joined(separator: "\n")
+    }
+
+    func onboardingSourceLabel(for candidate: RecentSessionCandidate) -> String {
+        switch candidate.source {
+        case .claudeCode:
+            return "Claude Code history"
+        case .cmux:
+            return "cmux live panel"
+        case .openAICodex:
+            return "OpenAI Codex history"
+        case .githubCopilotCLI:
+            return "GitHub Copilot CLI history"
+        case .shellHistory:
+            return "shell history"
+        case .workbench:
+            return "existing Workbench session"
+        }
+    }
+
+    func onboardingConfidenceExplanation(for terminal: ProposedTerminalImport) -> String {
+        let candidate = terminal.candidate
+        if candidate.source == .cmux {
+            return "live cmux panel matched to a terminal process and session metadata"
+        }
+        if candidate.confidence >= 0.95 {
+            return "live or Workbench-owned session with strong resume evidence"
+        }
+        if candidate.confidence >= 0.90 {
+            return "recent session with a known working directory and native resume command"
+        }
+        if candidate.confidence >= 0.70 {
+            return "recent history with enough context to resume, but weaker project evidence"
+        }
+        return "low-confidence shell/history signal; review before importing"
+    }
+
+    func onboardingPreviewText(for terminal: ProposedTerminalImport) -> String {
+        let candidate = terminal.candidate
+        if candidate.source == .openAICodex,
+           let rolloutPath = codexRolloutPath(for: candidate),
+           let preview = previewText(fromEvidencePath: rolloutPath),
+           !preview.isEmpty {
+            return preview
+        }
+        let existingEvidence = candidate.evidencePaths.filter { path in
+            !path.hasPrefix("process:") &&
+                !path.hasPrefix("tty:") &&
+                FileManager.default.fileExists(atPath: path)
+        }
+        for path in existingEvidence {
+            if let preview = previewText(fromEvidencePath: path), !preview.isEmpty {
+                return preview
+            }
+        }
+        return [
+            "No transcript preview file was available for this candidate.",
+            "",
+            "Source: \(onboardingSourceLabel(for: candidate))",
+            "Summary: \(candidate.summary)",
+            "Resume: \(candidate.resumeCommandLine)",
+            "Evidence: \(candidate.evidencePaths.isEmpty ? "none" : candidate.evidencePaths.joined(separator: ", "))"
+        ].joined(separator: "\n")
+    }
+
+    private func codexRolloutPath(for candidate: RecentSessionCandidate) -> String? {
+        guard let sessionId = candidate.resumeCommand.last,
+              candidate.resumeCommand.count >= 2,
+              candidate.resumeCommand[candidate.resumeCommand.count - 2] == "resume",
+              let sqlitePath = candidate.evidencePaths.first(where: { $0.hasSuffix(".sqlite") }) else {
+            return nil
+        }
+        let process = Process()
+        let pipe = Pipe()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/sqlite3")
+        let escapedSessionId = sessionId.replacingOccurrences(of: "'", with: "''")
+        process.arguments = [
+            sqlitePath,
+            "select rollout_path from threads where id='\(escapedSessionId)' limit 1;"
+        ]
+        process.standardOutput = pipe
+        process.standardError = Pipe()
+        do {
+            try process.run()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            guard process.terminationStatus == 0 else {
+                return nil
+            }
+            let path = String(decoding: data, as: UTF8.self)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return path.isEmpty ? nil : path
+        } catch {
+            return nil
+        }
+    }
+
+    private func previewText(fromEvidencePath path: String) -> String? {
+        guard let data = FileManager.default.contents(atPath: path),
+              let text = String(data: data, encoding: .utf8) else {
+            return nil
+        }
+        let lines = text.split(whereSeparator: \.isNewline).suffix(120)
+        var messages: [String] = []
+        for line in lines {
+            guard let message = readablePreviewLine(String(line)),
+                  message != messages.last else {
+                continue
+            }
+            messages.append(message)
+        }
+        let preview = messages.suffix(60).joined(separator: "\n\n")
+        if preview.isEmpty {
+            return String(lines.suffix(60).joined(separator: "\n")).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return preview
+    }
+
+    private func readablePreviewLine(_ line: String) -> String? {
+        guard let data = line.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+        guard let eventType = object["type"] as? String else {
+            return nil
+        }
+        if eventType == "response_item",
+           let payload = object["payload"] as? [String: Any] {
+            return readableResponseItem(payload)
+        }
+        if eventType == "event_msg",
+           let payload = object["payload"] as? [String: Any] {
+            return readableEventMessage(payload)
+        }
+        let content = firstReadableContent(in: object)
+        guard let content, !content.isEmpty else {
+            return nil
+        }
+        return "\(eventType): \(content)"
+    }
+
+    private func readableResponseItem(_ payload: [String: Any]) -> String? {
+        guard let type = payload["type"] as? String else {
+            return nil
+        }
+        if type == "message" {
+            let role = stringValue(in: payload, keys: ["role"]) ?? "assistant"
+            guard let contentObject = payload["content"],
+                  let content = firstReadableContent(in: contentObject) else {
+                return nil
+            }
+            return "\(role): \(content)"
+        }
+        return nil
+    }
+
+    private func readableEventMessage(_ payload: [String: Any]) -> String? {
+        guard let type = payload["type"] as? String else {
+            return nil
+        }
+        if type == "agent_message",
+           let message = payload["message"] as? String {
+            return "assistant: \(clippedPreview(message))"
+        }
+        if type == "user_message",
+           let message = payload["message"] as? String {
+            return "user: \(clippedPreview(message))"
+        }
+        return nil
+    }
+
+    private func firstReadableContent(in object: Any) -> String? {
+        if let string = object as? String {
+            let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : clippedPreview(trimmed)
+        }
+        if let array = object as? [Any] {
+            return array.compactMap(firstReadableContent(in:)).first
+        }
+        guard let dictionary = object as? [String: Any] else {
+            return nil
+        }
+        if let itemType = dictionary["type"] as? String,
+           itemType == "image_url" || itemType == "input_image" {
+            return nil
+        }
+        for key in ["content", "message", "summary", "text", "prompt", "title"] {
+            if let value = dictionary[key],
+               let content = firstReadableContent(in: value) {
+                return content
+            }
+        }
+        return nil
+    }
+
+    private func clippedPreview(_ text: String) -> String {
+        let normalized = text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalized.count > 1_200 else {
+            return normalized
+        }
+        let end = normalized.index(normalized.startIndex, offsetBy: 1_200)
+        return "\(normalized[..<end])..."
+    }
+
+    private func stringValue(in dictionary: [String: Any], keys: [String]) -> String? {
+        for key in keys {
+            if let value = dictionary[key] as? String {
+                return value
+            }
+        }
+        return nil
     }
 
     func performCommand(_ command: WorkbenchCommandID) {
