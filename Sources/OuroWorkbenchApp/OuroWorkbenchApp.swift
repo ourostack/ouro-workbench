@@ -799,6 +799,36 @@ struct BossSelectorView: View {
     @State private var customBossIsPresented = false
     @State private var draftAgentName = ""
 
+    private var bossAgent: OuroAgentRecord? {
+        model.ouroAgent(named: model.state.boss.agentName)
+    }
+
+    private var bossHealthColor: SwiftUI.Color {
+        guard let bossAgent else {
+            // Persisted boss isn't installed — surface that loudly.
+            return .red
+        }
+        switch bossAgent.status {
+        case .ready:
+            return .green
+        case .disabled, .missingConfig:
+            return .orange
+        case .invalidConfig:
+            return .red
+        }
+    }
+
+    private var bossHealthHelp: String {
+        guard let bossAgent else {
+            return "\(model.state.boss.agentName) is the persisted boss but has no bundle in ~/AgentBundles. Pick an installed agent or hatch one."
+        }
+        return "\(bossAgent.name): \(bossAgent.detail)"
+    }
+
+    private var bossIsMissing: Bool {
+        bossAgent == nil
+    }
+
     var body: some View {
         Menu {
             if !model.bossAgentChoices.isEmpty {
@@ -807,9 +837,9 @@ struct BossSelectorView: View {
                         model.selectBoss(agentName: agentName)
                     } label: {
                         if agentName == model.state.boss.agentName {
-                            Label(agentName, systemImage: "checkmark")
+                            Label(menuLabel(for: agentName), systemImage: "checkmark")
                         } else {
-                            Text(agentName)
+                            Text(menuLabel(for: agentName))
                         }
                     }
                 }
@@ -833,11 +863,24 @@ struct BossSelectorView: View {
                 Label("Hatch / Clone Agent…", systemImage: "sparkles")
             }
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(bossHealthColor)
+                    .frame(width: 7, height: 7)
+                    .accessibilityHidden(true)
                 Text("Boss: \(model.state.boss.agentName)")
                     .font(.headline)
                     .lineLimit(1)
                     .truncationMode(.middle)
+                if bossIsMissing {
+                    Text("missing")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.red)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Color.red.opacity(0.14), in: Capsule())
+                        .fixedSize()
+                }
                 Image(systemName: "chevron.down")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(.secondary)
@@ -845,8 +888,8 @@ struct BossSelectorView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .frame(maxWidth: 220, alignment: .leading)
-        .help("Choose boss agent")
+        .frame(maxWidth: 260, alignment: .leading)
+        .help(bossHealthHelp)
         .popover(isPresented: $customBossIsPresented) {
             BossAgentNamePopover(
                 agentName: $draftAgentName,
@@ -856,6 +899,25 @@ struct BossSelectorView: View {
             .frame(width: 280)
             .padding(14)
         }
+    }
+
+    /// Render menu rows with a status suffix so users can see at a glance
+    /// which choices are installed and which are remote-only hints. Names
+    /// that don't resolve to a bundle pick up "(missing)".
+    private func menuLabel(for agentName: String) -> String {
+        if let agent = model.ouroAgent(named: agentName) {
+            switch agent.status {
+            case .ready:
+                return agentName
+            case .disabled:
+                return "\(agentName) — disabled"
+            case .missingConfig:
+                return "\(agentName) — no agent.json"
+            case .invalidConfig:
+                return "\(agentName) — invalid config"
+            }
+        }
+        return "\(agentName) — missing"
     }
 }
 
