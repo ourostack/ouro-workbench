@@ -106,6 +106,11 @@ and Workbench sessions, proposes a Desk-shaped group layout, and mirrors
 selected work into Desk before resuming a curated starter set of high-confidence
 terminals.
 
+The onboarding Setup Assistant stays at the bottom of the sheet. It can ask the
+selected boss a setup question and shows the reply inline; direct requests such
+as scan, import, or register tools run the matching setup step only after the
+same readiness checks as the visible buttons pass.
+
 The import proposal is inspectable before it creates anything. Each proposed
 terminal shows its source summary, resume command, and labeled confidence score;
 the `Preview` button opens a scrollable chat-style view with the readable

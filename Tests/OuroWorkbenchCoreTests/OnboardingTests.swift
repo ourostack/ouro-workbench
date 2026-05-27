@@ -417,6 +417,92 @@ final class OnboardingTests: XCTestCase {
         XCTAssertTrue(rendered.contains("workbench_sense"))
     }
 
+    func testToggleSelectionFlipsTerminalSelectionAndCount() {
+        var proposal = makeTwoTerminalProposal()
+        XCTAssertEqual(proposal.selectedTerminalCount, 1, "second terminal should start unselected")
+
+        let toggledOn = proposal.toggleSelection(groupID: "g", terminalID: "second")
+        XCTAssertEqual(toggledOn, true)
+        XCTAssertEqual(proposal.selectedTerminalCount, 2)
+        XCTAssertTrue(proposal.groups[0].terminals[1].selectedByDefault)
+
+        let toggledOff = proposal.toggleSelection(groupID: "g", terminalID: "first")
+        XCTAssertEqual(toggledOff, false)
+        XCTAssertEqual(proposal.selectedTerminalCount, 1)
+        XCTAssertFalse(proposal.groups[0].terminals[0].selectedByDefault)
+    }
+
+    func testToggleSelectionReturnsNilForUnknownIDs() {
+        var proposal = makeTwoTerminalProposal()
+        XCTAssertNil(proposal.toggleSelection(groupID: "missing", terminalID: "first"))
+        XCTAssertNil(proposal.toggleSelection(groupID: "g", terminalID: "missing"))
+        XCTAssertEqual(proposal.selectedTerminalCount, 1, "selection should be untouched on unknown IDs")
+    }
+
+    func testSetSelectionBulkSelectsAndClearsAGroup() {
+        var proposal = makeTwoTerminalProposal()
+
+        proposal.setSelection(groupID: "g", selected: true)
+        XCTAssertEqual(proposal.selectedTerminalCount, 2)
+        XCTAssertTrue(proposal.groups[0].terminals.allSatisfy(\.selectedByDefault))
+
+        proposal.setSelection(groupID: "g", selected: false)
+        XCTAssertEqual(proposal.selectedTerminalCount, 0)
+        XCTAssertTrue(proposal.groups[0].terminals.allSatisfy { !$0.selectedByDefault })
+    }
+
+    private func makeTwoTerminalProposal() -> WorkbenchImportProposal {
+        let first = ProposedTerminalImport(
+            id: "first",
+            candidate: RecentSessionCandidate(
+                id: "first",
+                source: .openAICodex,
+                agentKind: .openAICodex,
+                title: "First",
+                workingDirectory: "/tmp/g",
+                lastActiveAt: Date(),
+                resumeCommand: ["codex", "resume", "first"],
+                summary: "first",
+                evidencePaths: [],
+                confidence: 0.9
+            ),
+            name: "Codex: First",
+            deskTaskSlug: "first",
+            selectedByDefault: true
+        )
+        let second = ProposedTerminalImport(
+            id: "second",
+            candidate: RecentSessionCandidate(
+                id: "second",
+                source: .openAICodex,
+                agentKind: .openAICodex,
+                title: "Second",
+                workingDirectory: "/tmp/g",
+                lastActiveAt: Date(),
+                resumeCommand: ["codex", "resume", "second"],
+                summary: "second",
+                evidencePaths: [],
+                confidence: 0.8
+            ),
+            name: "Codex: Second",
+            deskTaskSlug: "second",
+            selectedByDefault: false
+        )
+        return WorkbenchImportProposal(
+            generatedAt: Date(),
+            groups: [
+                ProposedWorkbenchGroup(
+                    id: "g",
+                    name: "g",
+                    rootPath: "/tmp/g",
+                    deskTrackSlug: "g",
+                    terminals: [first, second]
+                )
+            ],
+            ignoredCandidates: []
+        )
+    }
+
     func testDeskMirrorWriterCreatesTracksAndTasksWithoutOverwriting() throws {
         let proposal = WorkbenchImportProposal(
             generatedAt: Date(),
