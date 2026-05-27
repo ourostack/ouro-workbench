@@ -260,7 +260,7 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         schemaVersion: Int = 1,
         boss: BossAgentSelection = BossAgentSelection(),
         bossWatchEnabled: Bool = false,
-        bossPaneCollapsed: Bool = false,
+        bossPaneCollapsed: Bool = true,
         selectedProjectId: UUID? = nil,
         selectedEntryId: UUID? = nil,
         projects: [WorkbenchProject] = [],

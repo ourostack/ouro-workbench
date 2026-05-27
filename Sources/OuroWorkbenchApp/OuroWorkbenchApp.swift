@@ -30,18 +30,21 @@ struct WorkbenchRootView: View {
                     WorkbenchSidebarView(model: model)
                         .navigationSplitViewColumnWidth(min: 210, ideal: 230, max: 320)
                 } detail: {
-                    VStack(alignment: .leading, spacing: 0) {
-                        HeaderView(model: model)
-                        Divider()
-                        if !model.state.bossPaneCollapsed {
-                            BossDashboardView(model: model)
+                    ZStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            HeaderView(model: model)
                             Divider()
+                            if !model.state.bossPaneCollapsed {
+                                BossDashboardView(model: model)
+                                Divider()
+                            }
+                            if let entry = model.selectedEntry {
+                                SessionDetailView(entry: entry, model: model)
+                            } else {
+                                AgentHomeEmptyState(model: model)
+                            }
                         }
-                        if let entry = model.selectedEntry {
-                            SessionDetailView(entry: entry, model: model)
-                        } else {
-                            ContentUnavailableView("No session selected", systemImage: "terminal")
-                        }
+                        ImportSummaryBanner(model: model)
                     }
                 }
             }
@@ -149,6 +152,173 @@ private struct WindowChromeConfigurator: NSViewRepresentable {
         window.styleMask.insert(.fullSizeContentView)
         window.minSize = NSSize(width: 1100, height: 700)
         window.setFrameAutosaveName(Self.frameAutosaveName)
+    }
+}
+
+/// Slim slide-in banner that confirms what Arrange just did. Auto-dismisses
+/// after a few seconds; user can dismiss it explicitly with the close button.
+struct ImportSummaryBanner: View {
+    @ObservedObject var model: WorkbenchViewModel
+    @State private var dismissTask: Task<Void, Never>?
+
+    var body: some View {
+        Group {
+            if let summary = model.lastImportSummary {
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Image(systemName: summary.hasImports ? "checkmark.seal.fill" : "info.circle.fill")
+                        .foregroundStyle(summary.hasImports ? Color.accentColor : Color.secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(summary.headline)
+                            .font(.subheadline.weight(.semibold))
+                        if let detail = summary.detail {
+                            Text(detail)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                                .truncationMode(.tail)
+                        }
+                    }
+                    Spacer(minLength: 8)
+                    if let entryID = summary.firstSelectedEntryID,
+                       model.state.processEntries.contains(where: { $0.id == entryID }) {
+                        Button("Open") {
+                            model.selectedEntryID = entryID
+                            model.lastImportSummary = nil
+                        }
+                        .controlSize(.small)
+                    }
+                    Button {
+                        model.lastImportSummary = nil
+                    } label: {
+                        Image(systemName: "xmark")
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(Color.accentColor.opacity(0.25), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 2)
+                .padding(.top, 12)
+                .padding(.horizontal, 16)
+                .frame(maxWidth: 560)
+                .transition(.move(edge: .top).combined(with: .opacity))
+                .onAppear {
+                    scheduleDismiss()
+                }
+                .onDisappear {
+                    dismissTask?.cancel()
+                    dismissTask = nil
+                }
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: model.lastImportSummary)
+    }
+
+    private func scheduleDismiss() {
+        dismissTask?.cancel()
+        dismissTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 7_000_000_000)
+            if !Task.isCancelled {
+                model.lastImportSummary = nil
+            }
+        }
+    }
+}
+
+/// Default detail-pane content when nothing is selected: surface the agent
+/// hatching + onboarding entry points instead of an empty "no session" card.
+struct AgentHomeEmptyState: View {
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        VStack(alignment: .center, spacing: 22) {
+            VStack(spacing: 10) {
+                Image(systemName: "infinity")
+                    .font(.system(size: 38, weight: .semibold))
+                    .foregroundStyle(Color.accentColor)
+                Text("Pick a terminal — or hatch a new one")
+                    .font(.title2.weight(.semibold))
+                    .multilineTextAlignment(.center)
+                Text("Ouro Workbench is a calm home for your terminal agents. Choose one on the left to open its live session, or set up a fresh Ouro agent below.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 540)
+            }
+            HStack(spacing: 12) {
+                Button {
+                    model.isOuroAgentInstallSheetPresented = true
+                } label: {
+                    Label("Hatch an Agent", systemImage: "sparkles")
+                        .frame(minWidth: 160)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .help("Install or refresh an Ouro agent bundle on this Mac.")
+
+                Button {
+                    model.presentOnboarding()
+                } label: {
+                    Label("Set Up Workbench", systemImage: "wand.and.stars")
+                        .frame(minWidth: 160)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .help("Choose a boss, connect MCP tools, and import recent terminals.")
+
+                Button {
+                    model.isNewSessionSheetPresented = true
+                } label: {
+                    Label("New Terminal", systemImage: "plus")
+                        .frame(minWidth: 140)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .help("Open a blank terminal session.")
+            }
+            if !model.ouroAgents.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "person.crop.circle")
+                            .foregroundStyle(.secondary)
+                        Text("Installed agents")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(model.ouroAgents) { agent in
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(agent.status == .ready ? Color.green : Color.orange)
+                                .frame(width: 7, height: 7)
+                            Text(agent.name)
+                                .font(.callout.monospaced())
+                            Spacer()
+                            if agent.name == model.state.boss.agentName {
+                                Text("boss")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(Color.accentColor)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.accentColor.opacity(0.12), in: Capsule())
+                            }
+                        }
+                    }
+                }
+                .padding(14)
+                .frame(maxWidth: 440)
+                .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 10))
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 32)
+        .padding(.top, 60)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 }
 
@@ -399,59 +569,79 @@ struct HeaderView: View {
     @ObservedObject var model: WorkbenchViewModel
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                BossSelectorView(model: model)
-                Text(model.summary.oneLineStatus)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            }
-            Spacer(minLength: 12)
-            Button {
-                model.setBossPaneCollapsed(!model.state.bossPaneCollapsed)
-            } label: {
-                Label(model.state.bossPaneCollapsed ? "Show Boss Pane" : "Hide Boss Pane", systemImage: model.state.bossPaneCollapsed ? "rectangle.topthird.inset.filled" : "rectangle.bottomthird.inset.filled")
-            }
-            .labelStyle(.iconOnly)
-            .help(model.state.bossPaneCollapsed ? "Show boss dashboard pane" : "Collapse boss dashboard pane")
-            .fixedSize()
+        HStack(alignment: .center, spacing: 10) {
+            BossSelectorView(model: model)
+                .layoutPriority(2)
+            Text(model.summary.oneLineStatus)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .help(model.summary.oneLineStatus)
+            Spacer(minLength: 8)
             AutonomyStatusButton(model: model)
                 .fixedSize()
             Button {
-                model.presentOnboarding()
+                model.setBossPaneCollapsed(!model.state.bossPaneCollapsed)
             } label: {
-                Label("Set Up Workbench", systemImage: "wand.and.stars")
+                Label(
+                    model.state.bossPaneCollapsed ? "Show Boss Pane" : "Hide Boss Pane",
+                    systemImage: model.state.bossPaneCollapsed
+                        ? "chevron.compact.down"
+                        : "chevron.compact.up"
+                )
             }
             .labelStyle(.iconOnly)
-            .help("Set up or bootstrap this Workbench")
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .help(model.state.bossPaneCollapsed ? "Show boss dashboard" : "Hide boss dashboard")
             .fixedSize()
+            Menu {
+                Button {
+                    model.presentOnboarding()
+                } label: {
+                    Label("Set Up Workbench…", systemImage: "wand.and.stars")
+                }
+                Button {
+                    model.isOuroAgentInstallSheetPresented = true
+                } label: {
+                    Label("Hatch an Agent…", systemImage: "sparkles")
+                }
+                Divider()
+                Toggle(isOn: Binding(
+                    get: { model.bossWatchIsEnabled },
+                    set: { model.setBossWatchEnabled($0) }
+                )) {
+                    Label("Boss Watch", systemImage: "eye")
+                }
+                .disabled(model.bossCheckInIsRunning)
+                Button {
+                    Task {
+                        model.refreshExecutableHealth()
+                        await model.refreshBossDashboard()
+                    }
+                } label: {
+                    Label("Refresh Status", systemImage: "arrow.clockwise")
+                }
+            } label: {
+                Label("More", systemImage: "ellipsis.circle")
+                    .labelStyle(.iconOnly)
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .controlSize(.small)
+            .fixedSize()
+            .help("More Workbench actions")
             Button {
                 model.isCommandPalettePresented = true
             } label: {
                 Label("Commands", systemImage: "command")
+                    .labelStyle(.iconOnly)
             }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
             .keyboardShortcut("k", modifiers: [.command])
-            .fixedSize()
-            Toggle(isOn: Binding(
-                get: { model.bossWatchIsEnabled },
-                set: { model.setBossWatchEnabled($0) }
-            )) {
-                Label("Watch", systemImage: "eye")
-            }
-            .toggleStyle(.switch)
-            .disabled(model.bossCheckInIsRunning)
-            .help(model.bossCheckInIsRunning ? "Check-in already running" : "Toggle boss watch mode")
-            .fixedSize()
-            Button {
-                Task {
-                    model.refreshExecutableHealth()
-                    await model.refreshBossDashboard()
-                }
-            } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
-            }
+            .help("Open the command palette (⌘K)")
             .fixedSize()
             Button {
                 Task {
@@ -461,13 +651,14 @@ struct HeaderView: View {
                 Label("Check In", systemImage: "bubble.left.and.text.bubble.right")
             }
             .buttonStyle(.borderedProminent)
+            .controlSize(.small)
             .disabled(model.bossCheckInIsRunning)
             .keyboardShortcut("i", modifiers: [.command])
             .fixedSize()
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .frame(minHeight: 68)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .frame(minHeight: 44)
     }
 }
 
@@ -959,51 +1150,74 @@ struct CommandPaletteSheet: View {
     }
 }
 
+/// Calm, terminal-first boss pane. The "Essentials" section shows the only
+/// things you usually need at-a-glance — needs-me / coding counts, watch
+/// status, the boss text field, and the latest reply. Everything else
+/// (Ouro agent manager, transcript search, machine runtime, release updates,
+/// recovery drill, MCP setup, full action log) lives behind an Advanced
+/// disclosure so it never eats the screen.
 struct BossDashboardView: View {
     @ObservedObject var model: WorkbenchViewModel
-    private let dashboardColumns = [GridItem(.adaptive(minimum: 260), spacing: 18, alignment: .top)]
+    @State private var showsAdvanced = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
                 if model.bossCheckInIsRunning {
-                    ProgressView()
-                        .controlSize(.small)
+                    HStack(spacing: 6) {
+                        ProgressView().controlSize(.small)
+                        Text("Asking \(model.state.boss.agentName)…")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
-                BossWatchStatusView(model: model)
                 if let dashboard = model.bossDashboard {
                     DashboardMetricsStrip(dashboard: dashboard)
                 }
-                BossConversationView(model: model)
                 if let dashboard = model.bossDashboard,
                    !dashboard.availability.issues.isEmpty {
                     MailboxWarningView(issues: dashboard.availability.issues)
                 }
-                OuroAgentManagerView(model: model)
-                TranscriptSearchView(model: model)
-                MachineRuntimeView(model: model)
-                ReleaseUpdateView(model: model)
-                RecoveryDrillView(model: model)
-                BossWorkbenchMCPSetupView(model: model)
-                if let dashboard = model.bossDashboard {
-                    if !dashboard.needsMeItems.isEmpty || !dashboard.codingItems.isEmpty {
-                        LazyVGrid(columns: dashboardColumns, alignment: .leading, spacing: 10) {
-                            VStack(alignment: .leading, spacing: 5) {
+                BossConversationView(model: model)
+                if let answer = model.bossCheckInAnswer {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Boss Reply")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        Text(answer)
+                            .font(.callout)
+                            .textSelection(.enabled)
+                            .lineLimit(4)
+                            .truncationMode(.tail)
+                    }
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
+                }
+                if let dashboard = model.bossDashboard,
+                   !dashboard.needsMeItems.isEmpty || !dashboard.codingItems.isEmpty {
+                    HStack(alignment: .top, spacing: 16) {
+                        if !dashboard.needsMeItems.isEmpty {
+                            VStack(alignment: .leading, spacing: 4) {
                                 Text("Needs Me")
                                     .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
                                 ForEach(Array(dashboard.needsMeItems.prefix(3))) { item in
-                                    Text("\(item.label) - \(item.detail)")
+                                    Text("\(item.label) – \(item.detail)")
                                         .font(.caption)
                                         .lineLimit(1)
                                         .truncationMode(.tail)
                                 }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            VStack(alignment: .leading, spacing: 5) {
+                        }
+                        if !dashboard.codingItems.isEmpty {
+                            VStack(alignment: .leading, spacing: 4) {
                                 Text("Coding")
                                     .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
                                 ForEach(Array(dashboard.codingItems.prefix(3))) { item in
-                                    Text("\(item.runner) - \(item.status) - \(item.workdir)")
+                                    Text("\(item.runner) – \(item.status)")
                                         .font(.caption)
                                         .lineLimit(1)
                                         .truncationMode(.middle)
@@ -1013,47 +1227,60 @@ struct BossDashboardView: View {
                         }
                     }
                 }
-                if let prompt = model.bossCheckInPrompt {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(model.bossMCPCommand)
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
-                        ScrollView {
-                            Text(prompt)
-                                .font(.caption.monospaced())
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .textSelection(.enabled)
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        showsAdvanced.toggle()
+                    }
+                } label: {
+                    Label(showsAdvanced ? "Hide Advanced" : "Show Advanced", systemImage: showsAdvanced ? "chevron.up" : "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Watch, agent manager, transcript search, runtime, release, recovery drill, and the full action log live here.")
+                if showsAdvanced {
+                    VStack(alignment: .leading, spacing: 10) {
+                        BossWatchStatusView(model: model)
+                        OuroAgentManagerView(model: model)
+                        TranscriptSearchView(model: model)
+                        MachineRuntimeView(model: model)
+                        ReleaseUpdateView(model: model)
+                        RecoveryDrillView(model: model)
+                        BossWorkbenchMCPSetupView(model: model)
+                        if let prompt = model.bossCheckInPrompt {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(model.bossMCPCommand)
+                                    .font(.caption.monospaced())
+                                    .foregroundStyle(.secondary)
+                                ScrollView {
+                                    Text(prompt)
+                                        .font(.caption.monospaced())
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .textSelection(.enabled)
+                                }
+                                .frame(maxHeight: 120)
+                            }
                         }
-                        .frame(maxHeight: 120)
-                    }
-                }
-                if let answer = model.bossCheckInAnswer {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Boss Reply")
-                            .font(.caption.weight(.semibold))
-                        Text(answer)
-                            .font(.callout)
-                            .textSelection(.enabled)
-                    }
-                }
-                if !model.bossAppliedActions.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Applied Actions")
-                            .font(.caption.weight(.semibold))
-                        ForEach(model.bossAppliedActions, id: \.self) { result in
-                            Text(result)
-                                .font(.caption)
-                                .textSelection(.enabled)
+                        if !model.bossAppliedActions.isEmpty {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Applied Actions")
+                                    .font(.caption.weight(.semibold))
+                                ForEach(model.bossAppliedActions, id: \.self) { result in
+                                    Text(result)
+                                        .font(.caption)
+                                        .textSelection(.enabled)
+                                }
+                            }
                         }
+                        ActionLogView(entries: model.recentActionLogEntries)
                     }
                 }
-                ActionLogView(entries: model.recentActionLogEntries)
             }
-            .padding()
-            .padding(.bottom, 10)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(minHeight: 190, idealHeight: 340, maxHeight: 390, alignment: .topLeading)
+        .frame(minHeight: 100, idealHeight: showsAdvanced ? 320 : 160, maxHeight: showsAdvanced ? 380 : 200, alignment: .topLeading)
     }
 }
 
@@ -1485,6 +1712,7 @@ struct WorkbenchOnboardingSheet: View {
     @ObservedObject var model: WorkbenchViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var instruction = ""
+    @State private var instructionStatus: String?
     @State private var page: OnboardingPage = .welcome
 
     fileprivate enum OnboardingPage: Int, CaseIterable {
@@ -1565,21 +1793,12 @@ struct WorkbenchOnboardingSheet: View {
                     .keyboardShortcut(.defaultAction)
                 }
 
-                HStack(alignment: .center, spacing: 10) {
-                    Image(systemName: "text.bubble")
-                        .foregroundStyle(.secondary)
-                    TextField("Ask Workbench what to do next", text: $instruction)
-                        .textFieldStyle(.roundedBorder)
-                        .onSubmit(handleInstruction)
-                    Button {
-                        handleInstruction()
-                    } label: {
-                        Image(systemName: "arrow.up.circle.fill")
-                    }
-                    .buttonStyle(.borderless)
-                    .disabled(instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    .help("Send")
-                }
+                OnboardingAssistantBox(
+                    model: model,
+                    instruction: $instruction,
+                    instructionStatus: instructionStatus,
+                    onSubmit: handleInstruction
+                )
             }
             .padding(22)
         }
@@ -1595,7 +1814,7 @@ struct WorkbenchOnboardingSheet: View {
     private func handleInstruction() {
         let text = instruction
         instruction = ""
-        model.handleOnboardingInstruction(text)
+        instructionStatus = model.handleOnboardingInstruction(text)
         syncPageAfterInstruction(text)
     }
 
@@ -1632,7 +1851,15 @@ struct WorkbenchOnboardingSheet: View {
         case .connect:
             return model.onboardingReadiness?.isReady != true
         case .importWork:
-            return model.onboardingIsScanning || model.onboardingReadiness?.isReady != true
+            if model.onboardingIsScanning || model.onboardingReadiness?.isReady != true {
+                return true
+            }
+            // Once a proposal is on screen, Arrange should be gated by whether
+            // anything is actually selected — otherwise the button "does nothing".
+            if let proposal = model.onboardingProposal, proposal.selectedTerminalCount == 0 {
+                return true
+            }
+            return false
         }
     }
 
@@ -1651,7 +1878,14 @@ struct WorkbenchOnboardingSheet: View {
             if model.onboardingProposal == nil {
                 model.scanForOnboardingSessions()
             } else {
-                model.applyOnboardingProposal()
+                let result = model.applyOnboardingProposal()
+                // Whether anything new landed or every selection was already
+                // imported, hand the user back to the workbench with a banner
+                // explaining what just happened. The banner is set by the apply
+                // path itself.
+                if result != nil {
+                    dismiss()
+                }
             }
         }
     }
@@ -1659,7 +1893,7 @@ struct WorkbenchOnboardingSheet: View {
     private func syncPageAfterInstruction(_ text: String) {
         let lowered = text.lowercased()
         if lowered.contains("scan") || lowered.contains("bootstrap") {
-            page = .importWork
+            page = model.onboardingReadiness?.isReady == true ? .importWork : .connect
         } else if lowered.contains("mcp") || lowered.contains("tool") || lowered.contains("provider") {
             page = .connect
         }
@@ -1781,6 +2015,79 @@ private struct OnboardingProgressDots: View {
                     .frame(width: candidate == page ? 9 : 7, height: candidate == page ? 9 : 7)
                     .accessibilityLabel(candidate.title)
             }
+        }
+    }
+}
+
+private struct OnboardingAssistantBox: View {
+    @ObservedObject var model: WorkbenchViewModel
+    @Binding var instruction: String
+    var instructionStatus: String?
+    var onSubmit: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Label("Setup Assistant", systemImage: "bubble.left.and.text.bubble.right")
+                    .font(.caption.weight(.semibold))
+                Text("Ask \(model.state.boss.agentName) for help, or type a setup request.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if model.bossCheckInIsRunning {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+
+            HStack(alignment: .center, spacing: 8) {
+                TextField("Ask about setup, providers, or which sessions to import", text: $instruction)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit(onSubmit)
+                    .disabled(model.bossCheckInIsRunning)
+                Button {
+                    onSubmit()
+                } label: {
+                    Label("Ask", systemImage: "arrow.up.circle.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.bossCheckInIsRunning)
+            }
+
+            if let instructionStatus {
+                Label(instructionStatus, systemImage: "info.circle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let answer = model.bossCheckInAnswer {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(model.state.boss.agentName) replied")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    ScrollView {
+                        Text(answer)
+                            .font(.caption)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .textSelection(.enabled)
+                    }
+                    .frame(maxHeight: 88)
+                }
+                .padding(10)
+                .background {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.secondary.opacity(0.08))
+                }
+            }
+        }
+        .padding(12)
+        .background {
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.secondary.opacity(0.06))
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.secondary.opacity(0.16), lineWidth: 1)
         }
     }
 }
@@ -2082,14 +2389,23 @@ private struct OnboardingBootstrapView: View {
                 .controlSize(.small)
                 .buttonStyle(.borderedProminent)
                 .disabled(model.onboardingIsScanning || model.onboardingReadiness?.isReady != true)
-                if model.onboardingProposal != nil {
+                if let proposal = model.onboardingProposal {
                     Button {
-                        model.applyOnboardingProposal()
+                        _ = model.applyOnboardingProposal()
                     } label: {
                         Label("Arrange", systemImage: "checkmark.circle")
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
+                    .disabled(
+                        model.onboardingReadiness?.isReady != true
+                        || proposal.selectedTerminalCount == 0
+                    )
+                    .help(
+                        proposal.selectedTerminalCount == 0
+                        ? "Select at least one terminal to arrange."
+                        : "Import \(proposal.selectedTerminalCount) selected terminal\(proposal.selectedTerminalCount == 1 ? "" : "s") into the Workbench."
+                    )
                 }
             }
             if model.onboardingReadiness?.isReady != true {
@@ -2106,7 +2422,7 @@ private struct OnboardingBootstrapView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     OnboardingStatusRow(
                         systemImage: "square.grid.2x2.fill",
-                        title: "Ready to arrange",
+                        title: model.onboardingReadiness?.isReady == true ? "Ready to arrange" : "Proposal waiting",
                         detail: "\(proposal.groups.count) group\(proposal.groups.count == 1 ? "" : "s"), \(proposal.selectedTerminalCount) terminal\(proposal.selectedTerminalCount == 1 ? "" : "s") selected.",
                         color: .blue
                     )
@@ -2139,9 +2455,28 @@ private struct OnboardingGroupProposalView: View {
     @ObservedObject var model: WorkbenchViewModel
     @State private var previewTerminal: ProposedTerminalImport?
 
+    private var selectedCount: Int {
+        group.terminals.filter(\.selectedByDefault).count
+    }
+
+    private var allSelected: Bool {
+        !group.terminals.isEmpty && selectedCount == group.terminals.count
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
-            HStack {
+            HStack(spacing: 8) {
+                Button {
+                    model.setOnboardingGroupSelection(groupID: group.id, selected: !allSelected)
+                } label: {
+                    Image(systemName: allSelected
+                          ? "checkmark.square.fill"
+                          : (selectedCount == 0 ? "square" : "minus.square.fill"))
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(selectedCount == 0 ? Color.secondary : Color.accentColor)
+                }
+                .buttonStyle(.plain)
+                .help(allSelected ? "Deselect every terminal in this group" : "Select every terminal in this group")
                 VStack(alignment: .leading, spacing: 1) {
                     Text(group.name)
                         .font(.subheadline.weight(.semibold))
@@ -2152,58 +2487,22 @@ private struct OnboardingGroupProposalView: View {
                         .truncationMode(.middle)
                 }
                 Spacer()
-                Text("\(group.terminals.filter(\.selectedByDefault).count)/\(group.terminals.count)")
+                Text("\(selectedCount)/\(group.terminals.count)")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
             ForEach(group.terminals) { terminal in
-                HStack(alignment: .center, spacing: 8) {
-                    Image(systemName: terminal.selectedByDefault ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(terminal.selectedByDefault ? .green : .secondary)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(terminal.name)
-                            .font(.caption.weight(.semibold))
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                        Text(terminal.candidate.summary)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                        Text(terminal.candidate.resumeCommandLine)
-                            .font(.caption2.monospaced())
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
+                ProposedTerminalRow(
+                    terminal: terminal,
+                    group: group,
+                    model: model,
+                    onToggle: {
+                        model.toggleOnboardingSelection(groupID: group.id, terminalID: terminal.id)
+                    },
+                    onPreview: {
+                        previewTerminal = terminal
                     }
-                    Spacer()
-                    if let kind = terminal.candidate.agentKind,
-                       let bridge = model.deskBridgePlan(for: kind),
-                       let commandLine = bridge.commandLine {
-                        Button {
-                            model.openDeskBridgeSetup(bridge)
-                        } label: {
-                            Label("Desk Bridge", systemImage: "point.3.connected.trianglepath.dotted")
-                        }
-                        .labelStyle(.iconOnly)
-                        .buttonStyle(.borderless)
-                        .help(commandLine)
-                    }
-                    VStack(alignment: .trailing, spacing: 4) {
-                        Button {
-                            previewTerminal = terminal
-                        } label: {
-                            Label("Preview", systemImage: "text.bubble")
-                        }
-                        .controlSize(.small)
-                        .buttonStyle(.bordered)
-                        Text("confidence \(Int(terminal.candidate.confidence * 100))%")
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                            .fixedSize()
-                            .help(model.onboardingConfidenceExplanation(for: terminal))
-                    }
-                }
-                .padding(.vertical, 2)
+                )
             }
         }
         .padding(10)
@@ -2211,6 +2510,74 @@ private struct OnboardingGroupProposalView: View {
         .sheet(item: $previewTerminal) { terminal in
             OnboardingSessionPreviewSheet(group: group, terminal: terminal, model: model)
         }
+    }
+}
+
+private struct ProposedTerminalRow: View {
+    var terminal: ProposedTerminalImport
+    var group: ProposedWorkbenchGroup
+    @ObservedObject var model: WorkbenchViewModel
+    var onToggle: () -> Void
+    var onPreview: () -> Void
+
+    var body: some View {
+        Button(action: onToggle) {
+            HStack(alignment: .center, spacing: 8) {
+                Image(systemName: terminal.selectedByDefault ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 16, weight: .regular))
+                    .foregroundStyle(terminal.selectedByDefault ? Color.accentColor : Color.secondary)
+                    .accessibilityLabel(terminal.selectedByDefault ? "Selected" : "Not selected")
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(terminal.name)
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .foregroundStyle(.primary)
+                    Text(terminal.candidate.summary)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                    Text(terminal.candidate.resumeCommandLine)
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                Spacer()
+                if let kind = terminal.candidate.agentKind,
+                   let bridge = model.deskBridgePlan(for: kind),
+                   let commandLine = bridge.commandLine {
+                    Button {
+                        model.openDeskBridgeSetup(bridge)
+                    } label: {
+                        Label("Desk Bridge", systemImage: "point.3.connected.trianglepath.dotted")
+                    }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .help(commandLine)
+                }
+                VStack(alignment: .trailing, spacing: 4) {
+                    Button {
+                        onPreview()
+                    } label: {
+                        Label("Preview", systemImage: "text.bubble")
+                    }
+                    .controlSize(.small)
+                    .buttonStyle(.bordered)
+                    Text("confidence \(Int(terminal.candidate.confidence * 100))%")
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .fixedSize()
+                        .help(model.onboardingConfidenceExplanation(for: terminal))
+                }
+            }
+            .padding(.vertical, 4)
+            .padding(.horizontal, 6)
+            .contentShape(Rectangle())
+            .background(terminal.selectedByDefault ? Color.accentColor.opacity(0.06) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
+        .help(terminal.selectedByDefault ? "Click to skip this terminal in Arrange" : "Click to include this terminal in Arrange")
     }
 }
 
@@ -2551,116 +2918,301 @@ struct BossWorkbenchMCPSetupView: View {
 struct SessionDetailView: View {
     var entry: ProcessEntry
     @ObservedObject var model: WorkbenchViewModel
+    @State private var showsInspector = false
+    @State private var showsTranscriptSheet = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(entry.name)
-                        .font(.title3.weight(.semibold))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    Text(model.launchCommand(for: entry))
-                        .font(.caption.monospaced())
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    HStack(spacing: 6) {
-                        if let groupName = model.groupName(for: entry) {
-                            StatusPill(text: groupName, color: .secondary)
-                        }
-                        if let cliName = model.cliName(for: entry) {
-                            StatusPill(text: cliName, color: .purple)
-                        }
-                        StatusPill(
-                            text: entry.trust == .trusted ? "trusted" : "untrusted",
-                            color: entry.trust == .trusted ? .green : .orange
-                        )
-                        StatusPill(
-                            text: entry.autoResume ? "auto-resume" : "manual restart",
-                            color: entry.autoResume ? .blue : .secondary
-                        )
-                    }
-                    .lineLimit(1)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .layoutPriority(1)
-                if entry.isArchived {
-                    Label("Archived", systemImage: "archivebox")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .fixedSize()
-                } else {
-                    Button {
-                        Task {
-                            await model.runBossQuestion(about: entry)
-                        }
-                    } label: {
-                        Label("Ask Boss", systemImage: "bubble.left.and.text.bubble.right")
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(model.bossCheckInIsRunning)
-                    .fixedSize()
-                    Button {
-                        model.copyLaunchCommand(for: entry)
-                    } label: {
-                        Label("Copy Command", systemImage: "doc.on.doc")
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .help("Copy this terminal's launch command")
-                    .fixedSize()
-                    Button {
-                        model.openWorkingDirectory(for: entry)
-                    } label: {
-                        Label("Open Directory", systemImage: "folder")
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .help(entry.workingDirectory)
-                    .fixedSize()
-                    if model.activeSession(for: entry) != nil {
-                        RunningSessionHeaderControls(entry: entry, model: model)
-                            .fixedSize()
-                    }
-                    Button {
-                        model.launch(entry)
-                    } label: {
-                        Label(model.activeSession(for: entry) == nil ? "Launch" : "Restart", systemImage: "play.fill")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .keyboardShortcut(.return, modifiers: [.command])
-                    .fixedSize()
-                }
-            }
-            .padding()
-            if let notes = entry.trimmedNotes {
-                SessionNotesView(notes: notes)
-                    .padding(.horizontal)
-                    .padding(.bottom, model.isCustomSession(entry) ? 8 : 12)
-            }
-            if model.isCustomSession(entry) {
-                CustomSessionManagementBar(entry: entry, model: model)
-                    .padding(.horizontal)
-                    .padding(.bottom, 12)
-            }
+            SessionTitleStrip(
+                entry: entry,
+                model: model,
+                showsInspector: $showsInspector
+            )
             Divider()
+            if showsInspector {
+                SessionInspectorPanel(
+                    entry: entry,
+                    model: model,
+                    onShowTranscript: { showsTranscriptSheet = true }
+                )
+                Divider()
+            }
             if let session = model.activeSession(for: entry) {
                 TerminalPane(session: session)
                     .id(session.id)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                VStack(alignment: .leading, spacing: 12) {
-                    SessionStatusBar(entry: entry, model: model)
-                    if let tail = model.transcriptTail(for: entry) {
-                        TranscriptHistoryView(tail: tail)
-                    }
-                    InactiveTerminalSurface(entry: entry, model: model)
+                InactiveTerminalSurface(
+                    entry: entry,
+                    model: model,
+                    onShowTranscript: { showsTranscriptSheet = true }
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .padding(.horizontal, 14)
+                .padding(.top, 10)
+            }
+        }
+        .sheet(isPresented: $showsTranscriptSheet) {
+            SessionTranscriptSheet(entry: entry, model: model)
+        }
+    }
+}
+
+/// Slim, single-row session title strip. Status pills inline, a tight
+/// keyboard-control cluster, and everything else hidden behind an inspector
+/// chevron or an overflow menu. The terminal owns the screen.
+private struct SessionTitleStrip: View {
+    var entry: ProcessEntry
+    @ObservedObject var model: WorkbenchViewModel
+    @Binding var showsInspector: Bool
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Button {
+                showsInspector.toggle()
+            } label: {
+                Image(systemName: showsInspector ? "chevron.down" : "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 14)
+            }
+            .buttonStyle(.plain)
+            .help(showsInspector ? "Hide session details" : "Show session details, transcripts, and management actions")
+
+            statusDot
+                .frame(width: 8, height: 8)
+
+            Text(entry.name)
+                .font(.headline)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .layoutPriority(2)
+
+            if let cliName = model.cliName(for: entry) {
+                Text(cliName)
+                    .font(.caption2.monospaced().weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(.quaternary.opacity(0.6), in: Capsule())
+                    .fixedSize()
+            }
+
+            Spacer(minLength: 6)
+
+            if entry.isArchived {
+                Label("Archived", systemImage: "archivebox")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .fixedSize()
+                Button {
+                    model.restoreCustomSession(entry)
+                } label: {
+                    Label("Restore", systemImage: "tray.and.arrow.up")
                 }
-                .padding()
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .fixedSize()
+            } else {
+                if model.activeSession(for: entry) != nil {
+                    RunningSessionHeaderControls(entry: entry, model: model)
+                        .fixedSize()
+                }
+                Menu {
+                    Button {
+                        Task { await model.runBossQuestion(about: entry) }
+                    } label: {
+                        Label("Ask Boss About This Session", systemImage: "bubble.left.and.text.bubble.right")
+                    }
+                    .disabled(model.bossCheckInIsRunning)
+                    Divider()
+                    Button {
+                        model.copyLaunchCommand(for: entry)
+                    } label: {
+                        Label("Copy Launch Command", systemImage: "doc.on.doc")
+                    }
+                    Button {
+                        model.openWorkingDirectory(for: entry)
+                    } label: {
+                        Label("Open Working Directory", systemImage: "folder")
+                    }
+                    .help(entry.workingDirectory)
+                    if model.isCustomSession(entry) {
+                        Divider()
+                        Button {
+                            model.beginEditingSession(entry)
+                        } label: {
+                            Label("Edit Session…", systemImage: "pencil")
+                        }
+                        .disabled(model.activeSession(for: entry) != nil)
+                        Button {
+                            model.duplicateCustomSession(entry)
+                        } label: {
+                            Label("Duplicate Session", systemImage: "plus.square.on.square")
+                        }
+                        Menu {
+                            ForEach(model.state.projects) { project in
+                                Button(project.name) {
+                                    model.moveSession(entry, to: project.id)
+                                }
+                                .disabled(project.id == entry.projectId)
+                            }
+                        } label: {
+                            Label("Move to Group", systemImage: "folder")
+                        }
+                        .disabled(model.activeSession(for: entry) != nil || model.state.projects.count < 2)
+                        Button {
+                            model.archiveCustomSession(entry)
+                        } label: {
+                            Label("Archive Session", systemImage: "archivebox")
+                        }
+                        Divider()
+                        Button(role: .destructive) {
+                            model.requestDeleteCustomSession(entry)
+                        } label: {
+                            Label("Delete Session…", systemImage: "trash")
+                        }
+                    }
+                } label: {
+                    Label("More", systemImage: "ellipsis.circle")
+                        .labelStyle(.iconOnly)
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .controlSize(.small)
+                .fixedSize()
+                .help("More actions for this terminal")
+
+                Button {
+                    model.launch(entry)
+                } label: {
+                    Label(
+                        model.activeSession(for: entry) == nil ? "Launch" : "Restart",
+                        systemImage: "play.fill"
+                    )
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .keyboardShortcut(.return, modifiers: [.command])
+                .fixedSize()
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 7)
+        .frame(minHeight: 38)
+    }
+
+    @ViewBuilder
+    private var statusDot: some View {
+        if entry.isArchived {
+            Circle().fill(Color.secondary.opacity(0.5))
+        } else if model.activeSession(for: entry) != nil {
+            Circle().fill(Color.green)
+        } else if model.canRecover(entry) {
+            Circle().fill(Color.orange)
+        } else {
+            Circle().fill(Color.secondary)
+        }
+    }
+}
+
+/// Disclosure panel that owns everything the title strip dropped: pills,
+/// resume command, transcript, notes, and recovery context. Closed by default.
+private struct SessionInspectorPanel: View {
+    var entry: ProcessEntry
+    @ObservedObject var model: WorkbenchViewModel
+    var onShowTranscript: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                if let groupName = model.groupName(for: entry) {
+                    StatusPill(text: groupName, color: .secondary)
+                }
+                if let cliName = model.cliName(for: entry) {
+                    StatusPill(text: cliName, color: .purple)
+                }
+                StatusPill(
+                    text: entry.trust == .trusted ? "trusted" : "untrusted",
+                    color: entry.trust == .trusted ? .green : .orange
+                )
+                StatusPill(
+                    text: entry.autoResume ? "auto-resume" : "manual restart",
+                    color: entry.autoResume ? .blue : .secondary
+                )
+                Spacer(minLength: 0)
+            }
+            .lineLimit(1)
+            HStack(spacing: 6) {
+                Image(systemName: "terminal")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text(model.launchCommand(for: entry))
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
+            }
+            if let notes = entry.trimmedNotes {
+                SessionNotesView(notes: notes)
+            }
+            HStack(spacing: 10) {
+                Text("Recovery: \(model.recoveryReason(for: entry))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                if model.transcriptTail(for: entry) != nil {
+                    Button {
+                        onShowTranscript()
+                    } label: {
+                        Label("Transcript", systemImage: "doc.text")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
                 Spacer()
             }
         }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Color.primary.opacity(0.025))
+    }
+}
+
+/// Modal sheet for transcript review — keeps the chrome out of the live view.
+private struct SessionTranscriptSheet: View {
+    var entry: ProcessEntry
+    @ObservedObject var model: WorkbenchViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Transcript")
+                        .font(.title3.weight(.semibold))
+                    Text(entry.name)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+            }
+            .padding()
+            Divider()
+            if let tail = model.transcriptTail(for: entry) {
+                TranscriptHistoryView(tail: tail)
+                    .padding()
+            } else {
+                Text("No transcript captured yet.")
+                    .foregroundStyle(.secondary)
+                    .padding()
+            }
+        }
+        .frame(width: 720, height: 540)
     }
 }
 
@@ -2792,48 +3344,121 @@ struct CustomSessionManagementBar: View {
     }
 }
 
+/// Calm, single-card view shown when the selected session is not currently
+/// running. No fragmented transcript snippets, no embedded mini-terminal — just
+/// the headline status, the launch command, and the one button you want.
 struct InactiveTerminalSurface: View {
     var entry: ProcessEntry
     @ObservedObject var model: WorkbenchViewModel
+    var onShowTranscript: () -> Void = {}
+
+    private var isArchived: Bool { entry.isArchived }
+    private var canRecover: Bool { !isArchived && model.canRecover(entry) }
+
+    private var statusHeadline: String {
+        if isArchived {
+            return "Archived"
+        }
+        if let summary = entry.lastSummary, !summary.isEmpty {
+            return summary
+        }
+        return canRecover ? "Ready to recover" : "Ready to launch"
+    }
+
+    private var statusTint: SwiftUI.Color {
+        if isArchived { return .secondary }
+        if canRecover { return .orange }
+        return .secondary
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("$ \(model.launchCommand(for: entry))")
-                    .font(.system(size: 13, design: .monospaced))
-                    .foregroundStyle(entry.isArchived ? SwiftUI.Color.secondary : SwiftUI.Color.green)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: isArchived ? "archivebox" : (canRecover ? "arrow.clockwise" : "terminal"))
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(statusTint)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(statusHeadline)
+                        .font(.title3.weight(.semibold))
+                    Text(isArchived ? "Restore this session to launch it again." : "Recovery: \(model.recoveryReason(for: entry))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+                }
                 Spacer()
-                if entry.isArchived {
+                if isArchived {
                     Button {
                         model.restoreCustomSession(entry)
                     } label: {
                         Label("Restore", systemImage: "tray.and.arrow.up")
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.borderedProminent)
                 } else {
                     Button {
-                        if model.canRecover(entry) {
+                        if canRecover {
                             model.recover(entry)
                         } else {
                             model.launch(entry)
                         }
                     } label: {
-                        Label(model.canRecover(entry) ? model.recoveryButtonTitle(for: entry) : "Launch", systemImage: "play.fill")
+                        Label(canRecover ? model.recoveryButtonTitle(for: entry) : "Launch",
+                              systemImage: "play.fill")
                     }
                     .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.return, modifiers: [.command])
                 }
             }
-            Spacer()
-            Text(entry.isArchived ? "archived" : "ready")
-                .font(.system(size: 13, design: .monospaced))
-                .foregroundStyle(.secondary)
+
+            HStack(spacing: 6) {
+                Text("$")
+                    .font(.system(size: 13, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                Text(model.launchCommand(for: entry))
+                    .font(.system(size: 13, design: .monospaced))
+                    .foregroundStyle(isArchived ? Color.secondary : Color.primary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
+                Spacer()
+                Button {
+                    model.copyLaunchCommand(for: entry)
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                }
+                .buttonStyle(.borderless)
+                .help("Copy launch command")
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 6))
+
+            if !isArchived, let health = model.executableHealth(for: entry), health.status != .available {
+                Label("Executable: \(health.detail)", systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+            }
+
+            if model.transcriptTail(for: entry) != nil {
+                Button {
+                    onShowTranscript()
+                } label: {
+                    Label("View latest transcript", systemImage: "doc.text")
+                }
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+            }
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, minHeight: 320, alignment: .topLeading)
-        .background(Color.black)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.primary.opacity(0.04))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+        )
     }
 }
 
@@ -3597,6 +4222,43 @@ final class LoginItemController: ObservableObject {
     }
 }
 
+struct WorkbenchImportApplyResult: Equatable {
+    var createdCount: Int
+    var groupNames: [String]
+    var deskChangeCount: Int
+    var skippedNames: [String]
+    var firstSelectedEntryID: UUID?
+
+    var hasImports: Bool { createdCount > 0 }
+
+    var headline: String {
+        switch (createdCount, groupNames.count) {
+        case (0, _):
+            return "Nothing imported"
+        case (1, _):
+            return "Arranged 1 terminal"
+        case (let n, 1):
+            return "Arranged \(n) terminals in 1 group"
+        case (let n, let g):
+            return "Arranged \(n) terminals across \(g) groups"
+        }
+    }
+
+    var detail: String? {
+        var parts: [String] = []
+        if !groupNames.isEmpty {
+            parts.append(groupNames.joined(separator: ", "))
+        }
+        if deskChangeCount > 0 {
+            parts.append("Desk mirror updated (\(deskChangeCount) file\(deskChangeCount == 1 ? "" : "s"))")
+        }
+        if !skippedNames.isEmpty {
+            parts.append("Skipped: \(skippedNames.joined(separator: ", "))")
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+}
+
 @MainActor
 final class WorkbenchViewModel: ObservableObject {
     @Published var state: WorkspaceState
@@ -3665,6 +4327,7 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var onboardingProposal: WorkbenchImportProposal?
     @Published var onboardingIsScanning = false
     @Published var onboardingDeskChanges: [String] = []
+    @Published var lastImportSummary: WorkbenchImportApplyResult?
 
     private let paths: WorkbenchPaths
     private let store: WorkbenchStore
@@ -5049,30 +5712,58 @@ final class WorkbenchViewModel: ObservableObject {
         }.value
     }
 
-    func handleOnboardingInstruction(_ rawText: String) {
+    @discardableResult
+    func handleOnboardingInstruction(_ rawText: String) -> String? {
         let text = rawText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !text.isEmpty else {
-            return
+            return nil
+        }
+        if text.looksLikeOnboardingQuestion {
+            bossQuestion = rawText
+            Task {
+                await runBossQuestion()
+            }
+            return "Asking \(state.boss.agentName). The reply will appear here."
         }
         if text.contains("scan") || text.contains("bootstrap") || text == "yes" {
+            refreshOnboardingReadiness()
+            guard onboardingReadiness?.isReady == true else {
+                runOnboardingProviderChecksIfNeeded()
+                return "Finish connecting the boss first. Workbench is checking provider and tool readiness now."
+            }
             scanForOnboardingSessions()
+            return "Scanning recent terminal work. The import proposal will update above."
         } else if text.contains("apply") || text.contains("arrange") || text.contains("import") {
+            refreshOnboardingReadiness()
+            guard onboardingReadiness?.isReady == true else {
+                runOnboardingProviderChecksIfNeeded()
+                return "Finish connecting the boss first. Import stays locked until provider checks pass."
+            }
             applyOnboardingProposal()
+            return "Arranging proposed sessions into Workbench groups."
         } else if text.contains("mcp") || text.contains("tool") {
             installWorkbenchMCPForBoss()
             refreshOnboardingReadiness()
+            return "Registering Workbench tools with the selected boss agent."
         } else if text.contains("hatch") {
             launchOuroAgentInstall(mode: "hatch", agentName: "", remote: "")
+            return "Opening the agent hatch flow."
         } else {
             bossQuestion = rawText
             Task {
                 await runBossQuestion()
             }
+            return "Asking \(state.boss.agentName). The reply will appear here."
         }
     }
 
     func scanForOnboardingSessions() {
         guard !onboardingIsScanning else {
+            return
+        }
+        guard onboardingReadiness?.isReady == true else {
+            refreshOnboardingReadiness()
+            runOnboardingProviderChecksIfNeeded()
             return
         }
         onboardingIsScanning = true
@@ -5097,16 +5788,46 @@ final class WorkbenchViewModel: ObservableObject {
         }
     }
 
-    func applyOnboardingProposal() {
+    /// Toggle whether a terminal in the current import proposal is selected.
+    /// Returns `true` after the toggle if the terminal is now selected.
+    @discardableResult
+    func toggleOnboardingSelection(groupID: String, terminalID: String) -> Bool? {
+        guard var proposal = onboardingProposal else {
+            return nil
+        }
+        let result = proposal.toggleSelection(groupID: groupID, terminalID: terminalID)
+        onboardingProposal = proposal
+        return result
+    }
+
+    /// Bulk select / clear an entire onboarding group.
+    func setOnboardingGroupSelection(groupID: String, selected: Bool) {
+        guard var proposal = onboardingProposal else {
+            return
+        }
+        proposal.setSelection(groupID: groupID, selected: selected)
+        onboardingProposal = proposal
+    }
+
+    @discardableResult
+    func applyOnboardingProposal() -> WorkbenchImportApplyResult? {
+        guard onboardingReadiness?.isReady == true else {
+            refreshOnboardingReadiness()
+            runOnboardingProviderChecksIfNeeded()
+            return nil
+        }
         guard let proposal = onboardingProposal else {
             scanForOnboardingSessions()
-            return
+            return nil
         }
         var createdEntries: [ProcessEntry] = []
         var firstImportedProjectID: UUID?
+        var importedGroupNames: [String] = []
+        var skipped: [String] = []
         for group in proposal.groups {
             let project = ensureProject(for: group)
             firstImportedProjectID = firstImportedProjectID ?? project.id
+            var groupCreated = false
             for terminal in group.terminals where terminal.selectedByDefault {
                 guard !state.processEntries.contains(where: { $0.deskTaskSlug == terminal.deskTaskSlug && $0.projectId == project.id }) else {
                     continue
@@ -5124,7 +5845,9 @@ final class WorkbenchViewModel: ObservableObject {
                     entry.deskTaskSlug = terminal.deskTaskSlug
                     state.processEntries.append(entry)
                     createdEntries.append(entry)
+                    groupCreated = true
                 } catch {
+                    skipped.append(terminal.name)
                     recordActionLog(
                         source: "native",
                         action: "applyOnboardingProposal",
@@ -5132,6 +5855,9 @@ final class WorkbenchViewModel: ObservableObject {
                         succeeded: false
                     )
                 }
+            }
+            if groupCreated {
+                importedGroupNames.append(group.name)
             }
         }
 
@@ -5160,6 +5886,15 @@ final class WorkbenchViewModel: ObservableObject {
             result: "Created \(createdEntries.count) terminals, mirrored \(onboardingDeskChanges.count) Desk files",
             succeeded: true
         )
+        let result = WorkbenchImportApplyResult(
+            createdCount: createdEntries.count,
+            groupNames: importedGroupNames,
+            deskChangeCount: onboardingDeskChanges.count,
+            skippedNames: skipped,
+            firstSelectedEntryID: createdEntries.first?.id
+        )
+        lastImportSummary = result
+        return result
     }
 
     func openOnboardingRepair(_ step: OnboardingRepairStep) {
@@ -6532,10 +7267,13 @@ final class WorkbenchViewModel: ObservableObject {
         }
     }
 
+    private static let collapsedChromeMigrationKey = "ouro.workbench.collapsedChromeMigration.v17"
+
     private func load() {
         do {
             let loaded = try store.load()
             state = startupRecoveryReconciler.reconcile(bootstrapper.bootstrappedState(from: loaded))
+            applyCollapsedChromeMigrationIfNeeded()
             bossWatchIsEnabled = state.bossWatchEnabled
             bossWatchBaselineState = bossWatchIsEnabled ? state : nil
             selectedProjectID = state.selectedProjectId.flatMap { id in
@@ -6553,6 +7291,19 @@ final class WorkbenchViewModel: ObservableObject {
             selectedProjectID = state.projects.first?.id
             selectedEntryID = sessionEntries.first?.id ?? archivedSessionEntries.first?.id
         }
+    }
+
+    /// One-time migration: the Workbench 0.1.17 redesign defaults the boss
+    /// dashboard to collapsed. Existing users had it expanded; flip them to
+    /// collapsed on first launch of this version. They can still re-open it
+    /// from the header chevron at any time.
+    private func applyCollapsedChromeMigrationIfNeeded() {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: Self.collapsedChromeMigrationKey) else {
+            return
+        }
+        state.bossPaneCollapsed = true
+        defaults.set(true, forKey: Self.collapsedChromeMigrationKey)
     }
 
     private func updateEntry(_ entryId: UUID, mutate: (inout ProcessEntry) -> Void) {
@@ -6935,6 +7686,33 @@ private extension LocalProcessTerminalView {
         setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         wantsLayer = true
         layer?.backgroundColor = NSColor.black.cgColor
+    }
+}
+
+private extension String {
+    var looksLikeOnboardingQuestion: Bool {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return false
+        }
+        if trimmed.contains("?") {
+            return true
+        }
+        let questionPrefixes = [
+            "what ",
+            "why ",
+            "how ",
+            "which ",
+            "when ",
+            "where ",
+            "who ",
+            "should ",
+            "do i ",
+            "does ",
+            "can you tell",
+            "help me understand"
+        ]
+        return questionPrefixes.contains { trimmed.hasPrefix($0) }
     }
 }
 #endif

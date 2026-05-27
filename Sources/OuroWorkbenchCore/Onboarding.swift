@@ -1078,6 +1078,30 @@ public struct WorkbenchImportProposal: Codable, Equatable, Sendable {
             sum + group.terminals.filter(\.selectedByDefault).count
         }
     }
+
+    /// Toggle a terminal's "include in arrange" state. Returns the new selection
+    /// state (`true` if the terminal is now selected, `false` otherwise) so the
+    /// view layer can react without recomputing.
+    @discardableResult
+    public mutating func toggleSelection(groupID: String, terminalID: String) -> Bool? {
+        guard let groupIndex = groups.firstIndex(where: { $0.id == groupID }),
+              let terminalIndex = groups[groupIndex].terminals.firstIndex(where: { $0.id == terminalID }) else {
+            return nil
+        }
+        let newValue = !groups[groupIndex].terminals[terminalIndex].selectedByDefault
+        groups[groupIndex].terminals[terminalIndex].selectedByDefault = newValue
+        return newValue
+    }
+
+    /// Bulk-select or bulk-clear every terminal in a group.
+    public mutating func setSelection(groupID: String, selected: Bool) {
+        guard let groupIndex = groups.firstIndex(where: { $0.id == groupID }) else {
+            return
+        }
+        for terminalIndex in groups[groupIndex].terminals.indices {
+            groups[groupIndex].terminals[terminalIndex].selectedByDefault = selected
+        }
+    }
 }
 
 private struct WorkbenchImportGroupKey: Hashable {

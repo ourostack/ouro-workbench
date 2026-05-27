@@ -203,12 +203,20 @@ Then run first-run setup in the app:
    It shows the full evidence set, but only preselects a small, recent,
    high-confidence starter set so `Arrange` does not flood the Workbench with
    stale tabs.
-6. Use `Preview` on any row to inspect the source summary, confidence
+6. Tap any row to toggle whether that terminal participates in `Arrange`. Use
+   the per-group checkbox to select or clear an entire group at once. The
+   live `selected / total` count and the `Arrange` button itself reflect your
+   selection — `Arrange` stays disabled with an explanatory tooltip if you
+   clear everything.
+7. Use `Preview` on any row to inspect the source summary, confidence
    rationale, resume command, evidence paths, and a scrollable chat-style
    session excerpt when Workbench can resolve one from Claude, Codex, or
    Workbench history.
-7. Choose `Arrange` to create groups/tabs, mirror selected work into Desk, and
-   resume high-confidence sessions.
+8. Choose `Arrange` to create groups/tabs, mirror selected work into Desk, and
+   resume the terminals you selected. Workbench reports what it did in a
+   transient banner and dismisses the onboarding sheet so the new terminals
+   are immediately reachable; an `Open` shortcut jumps to the first imported
+   terminal.
 8. Use the Desk Bridge buttons for Claude Code and Codex sessions that should
    get the Ouro MCP bridge inside that terminal harness. This is independent of
    boss selection: the boss observes the Workbench; the bridge lets the
@@ -235,6 +243,12 @@ safe migration is:
 4. Arrange only the sessions you want Workbench to own.
 5. Quit or idle the original cmux Claude pane before doing new work in the
    Workbench-resumed tab.
+
+The onboarding Setup Assistant is available throughout this flow. Ask the
+selected boss questions like "which sessions should I import?" to get an inline
+reply, or type direct setup requests like "scan recent work" once the Connect
+page shows the boss is ready. Typed setup requests use the same readiness gates
+as the visible buttons, so provider or Workbench-tool repairs stay mandatory.
 
 For Claude Code panes, Workbench matches the live process by TTY and
 `--session-id`, then creates a `claude --resume <session>` command. It preserves
