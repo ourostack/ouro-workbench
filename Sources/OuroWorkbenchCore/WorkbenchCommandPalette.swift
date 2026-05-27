@@ -35,6 +35,13 @@ public enum WorkbenchCommandID: String, Codable, CaseIterable, Sendable {
     case openSupportDiagnosticsFolder
     case checkReleaseUpdates
     case openReleaseUpdate
+    case manageAgents
+    case selectAgent
+    case useSelectedAgentAsBoss
+    case openSelectedAgentConfig
+    case revealSelectedAgentBundle
+    case repairSelectedAgent
+    case installMCPForSelectedAgent
 }
 
 public struct WorkbenchCommandDescriptor: Codable, Equatable, Identifiable, Sendable {
@@ -43,19 +50,44 @@ public struct WorkbenchCommandDescriptor: Codable, Equatable, Identifiable, Send
     public var detail: String
     public var systemImage: String
     public var keywords: [String]
+    /// Optional payload that lets one command ID address many concrete targets.
+    /// Used by per-agent palette entries (e.g. `selectAgent` with `payload: "slugger"`)
+    /// so the execute step doesn't need a separate command ID per agent.
+    public var payload: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case detail
+        case systemImage
+        case keywords
+        case payload
+    }
 
     public init(
         id: WorkbenchCommandID,
         title: String,
         detail: String,
         systemImage: String,
-        keywords: [String] = []
+        keywords: [String] = [],
+        payload: String? = nil
     ) {
         self.id = id
         self.title = title
         self.detail = detail
         self.systemImage = systemImage
         self.keywords = keywords
+        self.payload = payload
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decode(WorkbenchCommandID.self, forKey: .id)
+        self.title = try container.decode(String.self, forKey: .title)
+        self.detail = try container.decode(String.self, forKey: .detail)
+        self.systemImage = try container.decode(String.self, forKey: .systemImage)
+        self.keywords = try container.decodeIfPresent([String].self, forKey: .keywords) ?? []
+        self.payload = try container.decodeIfPresent(String.self, forKey: .payload)
     }
 }
 
