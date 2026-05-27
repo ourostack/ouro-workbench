@@ -53,7 +53,7 @@ struct WorkbenchRootView: View {
                 }
             }
         }
-        .background(WindowChromeConfigurator())
+        .background(WindowChromeConfigurator(title: model.windowTitle))
         .alert("Workbench Error", isPresented: model.errorIsPresented) {
             Button("OK", role: .cancel) {
                 model.errorMessage = nil
@@ -136,6 +136,11 @@ struct WorkbenchRootView: View {
 
 private struct WindowChromeConfigurator: NSViewRepresentable {
     private static let frameAutosaveName = "OuroWorkbenchMainWindow"
+    /// Live window title. Even though the title bar is hidden, this value is
+    /// used by macOS for the Dock window list, cmd+` window switcher, Mission
+    /// Control labels, and screen recordings — so making it dynamic (boss +
+    /// active surface) means those system surfaces stay informative.
+    var title: String
 
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
@@ -155,7 +160,7 @@ private struct WindowChromeConfigurator: NSViewRepresentable {
         guard let window else {
             return
         }
-        window.title = ""
+        window.title = title
         window.subtitle = ""
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
@@ -1399,7 +1404,7 @@ struct AutonomyStatusButton: View {
                 Circle()
                     .fill(snapshot.state.tint)
                     .frame(width: 7, height: 7)
-                Text(snapshot.label)
+                Text("\(snapshot.label) · \(snapshot.state.displayName)")
                     .font(.caption.monospaced().weight(.semibold))
             }
             .padding(.horizontal, 10)
@@ -1411,7 +1416,7 @@ struct AutonomyStatusButton: View {
             )
         }
         .buttonStyle(.plain)
-        .help("TTFA readiness")
+        .help("\(snapshot.headline). Click to open the autonomy readiness checklist.")
         .popover(isPresented: $isPresented) {
             AutonomyStatusPopover(
                 snapshot: snapshot,
@@ -6859,6 +6864,37 @@ final class WorkbenchViewModel: ObservableObject {
             return false
         }
         return plan.action == .autoResume || plan.action == .respawn
+    }
+
+    /// Title shown in the Dock window list, ⌘\` window switcher, and Mission
+    /// Control. Title bar itself is hidden, so this string is what macOS
+    /// shows when there's no visible title strip — making it dynamic means
+    /// the user can tell which boss / surface a window points at from those
+    /// system surfaces. Shape: "Ouro Workbench — <boss> — <focused surface>".
+    var windowTitle: String {
+        let appName = "Ouro Workbench"
+        let boss = state.boss.agentName
+        let focus: String
+        if let agentName = selectedAgentName, ouroAgent(named: agentName) != nil {
+            focus = "Agent: \(agentName)"
+        } else if let entry = selectedEntry {
+            if let groupName = groupName(for: entry) {
+                focus = "\(groupName) — \(entry.name)"
+            } else {
+                focus = entry.name
+            }
+        } else if let group = selectedProject?.name {
+            focus = group
+        } else {
+            focus = ""
+        }
+        if boss.isEmpty && focus.isEmpty {
+            return appName
+        }
+        if focus.isEmpty {
+            return "\(appName) — \(boss)"
+        }
+        return "\(appName) — \(boss) — \(focus)"
     }
 
     /// All sessions that the recovery planner considers actionable right now.
