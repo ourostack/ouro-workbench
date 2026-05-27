@@ -92,6 +92,9 @@ struct WorkbenchRootView: View {
         .sheet(isPresented: $model.isShortcutHelpPresented) {
             ShortcutHelpSheet()
         }
+        .sheet(isPresented: $model.isRecoverySheetPresented) {
+            RecoverySheet(model: model)
+        }
         .sheet(isPresented: $model.isOuroAgentInstallSheetPresented) {
             OuroAgentInstallSheet(model: model)
         }
@@ -230,6 +233,139 @@ struct TerminalCyclingShortcuts: View {
         }
         .frame(width: 0, height: 0)
         .accessibilityHidden(true)
+    }
+}
+
+/// Modal sheet that lists every session the recovery planner currently
+/// considers actionable. The sidebar Recovery row opens this. Per-row
+/// "Recover" + "Open" buttons; top-level "Recover All" when more than one.
+struct RecoverySheet: View {
+    @ObservedObject var model: WorkbenchViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Recovery")
+                        .font(.title3.weight(.semibold))
+                    Text(model.summary.oneLineStatus)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+                }
+                Spacer()
+                if model.recoverableEntries.count > 1 {
+                    Button {
+                        model.recoverAllRecoverableSessions()
+                        dismiss()
+                    } label: {
+                        Label("Recover All", systemImage: "arrow.clockwise.circle")
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 18)
+            .padding(.bottom, 14)
+            Divider()
+            if model.recoverableEntries.isEmpty {
+                ContentUnavailableView(
+                    "Nothing to recover",
+                    systemImage: "checkmark.seal.fill",
+                    description: Text("No sessions are currently waiting on recovery. Active terminals keep themselves running; exited sessions only show up here if the recovery planner can act on them.")
+                )
+                .frame(minHeight: 240)
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(model.recoverableEntries) { entry in
+                            RecoverableEntryRow(entry: entry, model: model, onJump: {
+                                model.selectedEntryID = entry.id
+                                dismiss()
+                            }, onRecover: {
+                                model.recover(entry)
+                            })
+                        }
+                    }
+                    .padding(20)
+                }
+            }
+        }
+        .frame(width: 620, height: 480)
+    }
+}
+
+private struct RecoverableEntryRow: View {
+    var entry: ProcessEntry
+    @ObservedObject var model: WorkbenchViewModel
+    var onJump: () -> Void
+    var onRecover: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Image(systemName: "arrow.clockwise")
+                    .foregroundStyle(.orange)
+                    .font(.system(size: 14, weight: .semibold))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(entry.name)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    if let summary = entry.lastSummary, !summary.isEmpty {
+                        Text(summary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                    Text("Recovery: \(model.recoveryReason(for: entry))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+                }
+                Spacer()
+                Button {
+                    onJump()
+                } label: {
+                    Label("Open", systemImage: "arrow.up.right.square")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Jump to this session in the workbench")
+                Button {
+                    onRecover()
+                } label: {
+                    Label(model.recoveryButtonTitle(for: entry), systemImage: "play.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            }
+            HStack(spacing: 6) {
+                Text(model.launchCommand(for: entry))
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.primary.opacity(0.04))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+        )
     }
 }
 
@@ -602,7 +738,29 @@ struct WorkbenchSidebarView: View {
                 }
             }
             Section("Recovery") {
-                Label(model.summary.oneLineStatus, systemImage: "arrow.clockwise.circle")
+                Button {
+                    model.isRecoverySheetPresented = true
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.clockwise.circle")
+                            .foregroundStyle(model.recoverableEntries.isEmpty ? Color.secondary : Color.orange)
+                        Text(model.summary.oneLineStatus)
+                            .font(.caption)
+                            .lineLimit(2)
+                            .truncationMode(.tail)
+                            .multilineTextAlignment(.leading)
+                            .foregroundStyle(.primary)
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(model.recoverableEntries.isEmpty
+                      ? "No sessions are currently waiting on recovery"
+                      : "\(model.recoverableEntries.count) session\(model.recoverableEntries.count == 1 ? "" : "s") waiting on recovery. Click to inspect.")
             }
         }
         .padding(.top, 28)
@@ -5261,6 +5419,7 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var isNewGroupSheetPresented = false
     @Published var isCommandPalettePresented = false
     @Published var isShortcutHelpPresented = false
+    @Published var isRecoverySheetPresented = false
     /// Per-session ⌘F search state. The bar is mounted as an overlay on the
     /// active session's terminal pane; opening it focuses its text field and
     /// dispatches findNext/Previous against the SwiftTerm view of the
@@ -6700,6 +6859,33 @@ final class WorkbenchViewModel: ObservableObject {
             return false
         }
         return plan.action == .autoResume || plan.action == .respawn
+    }
+
+    /// All sessions that the recovery planner considers actionable right now.
+    /// Used by the sidebar Recovery row to know whether to highlight itself,
+    /// by the Recovery sheet to render the list, and by `recoverAll`.
+    var recoverableEntries: [ProcessEntry] {
+        allSessionEntries.filter { canRecover($0) }
+    }
+
+    /// Trigger recovery for every entry the planner currently considers
+    /// recoverable. Used by the Recovery sheet's "Recover all" button.
+    /// Records a single action log entry summarising the batch so the log
+    /// doesn't get flooded with N near-identical lines.
+    func recoverAllRecoverableSessions() {
+        let entries = recoverableEntries
+        guard !entries.isEmpty else {
+            return
+        }
+        for entry in entries {
+            recover(entry)
+        }
+        recordActionLog(
+            source: "native",
+            action: "recoverAll",
+            result: "Recovered \(entries.count) session\(entries.count == 1 ? "" : "s")",
+            succeeded: true
+        )
     }
 
     func recoveryButtonTitle(for entry: ProcessEntry) -> String {
