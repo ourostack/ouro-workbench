@@ -203,13 +203,17 @@ Then run first-run setup in the app:
    It shows the full evidence set, but only preselects a small, recent,
    high-confidence starter set so `Arrange` does not flood the Workbench with
    stale tabs.
-6. Choose `Arrange` to create groups/tabs, mirror selected work into Desk, and
+6. Use `Preview` on any row to inspect the source summary, confidence
+   rationale, resume command, evidence paths, and a scrollable chat-style
+   session excerpt when Workbench can resolve one from Claude, Codex, or
+   Workbench history.
+7. Choose `Arrange` to create groups/tabs, mirror selected work into Desk, and
    resume high-confidence sessions.
-7. Use the Desk Bridge buttons for Claude Code and Codex sessions that should
+8. Use the Desk Bridge buttons for Claude Code and Codex sessions that should
    get the Ouro MCP bridge inside that terminal harness. This is independent of
    boss selection: the boss observes the Workbench; the bridge lets the
    terminal agent use the Desk.
-8. Collapse the boss pane when you want maximum terminal height, turn on `Open
+9. Collapse the boss pane when you want maximum terminal height, turn on `Open
    at Login`, start `Watch`, click `TTFA`, and run `Recovery Drill` before
    trusting a long-running workspace.
 
