@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.28 - Terminal font size shortcuts
+
+- `⌘+` / `⌘=` increases the terminal font size by 1pt, `⌘-` decreases it, `⌘0` resets to the macOS default (13pt). Matches Terminal.app / iTerm2 / browser conventions.
+- Bounds clamp to 9..28pt — below 9pt the cells become unreadable, above 28pt the layout crowds the chrome.
+- The chosen size persists in UserDefaults (`ouro.workbench.terminalFontSize`) so it survives across launches.
+- Size propagates to every currently-active session immediately on change AND to every newly-created session at start time so the user's chosen size is honored from the first frame.
+
 ## 0.1.27 - ⌘F search in the focused terminal
 
 - `⌘F` now opens a search bar over the focused terminal. Type, Return for next match, ⌘G / ⇧⌘G to step forward and backward, Esc / Done to dismiss. The bar shows a "No matches" pill when the query has no hits and clears the SwiftTerm selection on dismiss.
