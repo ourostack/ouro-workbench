@@ -42,6 +42,7 @@ public enum WorkbenchCommandID: String, Codable, CaseIterable, Sendable {
     case revealSelectedAgentBundle
     case repairSelectedAgent
     case installMCPForSelectedAgent
+    case showKeyboardShortcutHelp
 }
 
 public struct WorkbenchCommandDescriptor: Codable, Equatable, Identifiable, Sendable {

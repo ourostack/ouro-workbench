@@ -89,6 +89,9 @@ struct WorkbenchRootView: View {
         .sheet(isPresented: $model.isCommandPalettePresented) {
             CommandPaletteSheet(model: model)
         }
+        .sheet(isPresented: $model.isShortcutHelpPresented) {
+            ShortcutHelpSheet()
+        }
         .sheet(isPresented: $model.isOuroAgentInstallSheetPresented) {
             OuroAgentInstallSheet(model: model)
         }
@@ -199,6 +202,127 @@ struct TerminalCyclingShortcuts: View {
         }
         .frame(width: 0, height: 0)
         .accessibilityHidden(true)
+    }
+}
+
+/// One-screen reference sheet for every keyboard shortcut the Workbench
+/// surfaces. Reachable via ⌘? from anywhere in the app. Grouped by intent so
+/// you can find what you need at a glance instead of trial-and-erroring the
+/// menu.
+struct ShortcutHelpSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    private struct ShortcutGroup: Identifiable {
+        let id: String
+        let title: String
+        let systemImage: String
+        let rows: [Row]
+
+        struct Row: Identifiable {
+            let id = UUID()
+            let shortcut: String
+            let label: String
+        }
+    }
+
+    private var groups: [ShortcutGroup] {
+        [
+            ShortcutGroup(
+                id: "navigate",
+                title: "Navigate",
+                systemImage: "arrow.left.arrow.right.circle",
+                rows: [
+                    .init(shortcut: "⌘1 … ⌘9", label: "Select the Nth terminal in the current group"),
+                    .init(shortcut: "⌘[", label: "Previous terminal (wraps)"),
+                    .init(shortcut: "⌘]", label: "Next terminal (wraps)"),
+                    .init(shortcut: "⇧⌘[", label: "Previous group"),
+                    .init(shortcut: "⇧⌘]", label: "Next group"),
+                    .init(shortcut: "⇧⌘F", label: "Full-screen the focused terminal (and back)")
+                ]
+            ),
+            ShortcutGroup(
+                id: "boss",
+                title: "Boss + Agents",
+                systemImage: "person.2.badge.gearshape",
+                rows: [
+                    .init(shortcut: "⌘I", label: "Boss Check In"),
+                    .init(shortcut: "⌘K", label: "Open the command palette"),
+                    .init(shortcut: "⌘K, type 'agent <name>'", label: "Jump to that agent in the Agents pane"),
+                    .init(shortcut: "⌘K, type 'repair'", label: "Run `ouro check` against the focused agent"),
+                    .init(shortcut: "⌘K, type 'manage agents'", label: "Open the Agents pane on the current boss")
+                ]
+            ),
+            ShortcutGroup(
+                id: "terminal",
+                title: "Terminal Signals",
+                systemImage: "terminal",
+                rows: [
+                    .init(shortcut: "⌘\u{21A9}", label: "Launch / Restart the selected terminal"),
+                    .init(shortcut: "⌘L", label: "Send Ctrl-L (redraw)"),
+                    .init(shortcut: "⌘.", label: "Stop the selected terminal")
+                ]
+            ),
+            ShortcutGroup(
+                id: "app",
+                title: "App",
+                systemImage: "wand.and.stars",
+                rows: [
+                    .init(shortcut: "⌘N", label: "New terminal"),
+                    .init(shortcut: "⌘/", label: "Show this shortcut help")
+                ]
+            )
+        ]
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Keyboard Shortcuts")
+                        .font(.title3.weight(.semibold))
+                    Text("Press ⌘/ from anywhere to bring this back")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 18)
+            .padding(.bottom, 14)
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    ForEach(groups) { group in
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label(group.title, systemImage: group.systemImage)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            VStack(spacing: 4) {
+                                ForEach(group.rows) { row in
+                                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                                        Text(row.shortcut)
+                                            .font(.callout.monospaced().weight(.semibold))
+                                            .frame(minWidth: 170, alignment: .leading)
+                                            .textSelection(.enabled)
+                                        Text(row.label)
+                                            .font(.callout)
+                                            .foregroundStyle(.primary)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                    .padding(.vertical, 4)
+                                    .padding(.horizontal, 10)
+                                    .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 6))
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(20)
+            }
+        }
+        .frame(width: 560, height: 540)
     }
 }
 
@@ -755,6 +879,13 @@ struct HeaderView: View {
                 } label: {
                     Label("Refresh Status", systemImage: "arrow.clockwise")
                 }
+                Divider()
+                Button {
+                    model.isShortcutHelpPresented = true
+                } label: {
+                    Label("Keyboard Shortcuts…", systemImage: "keyboard")
+                }
+                .keyboardShortcut("/", modifiers: [.command])
             } label: {
                 Label("More", systemImage: "ellipsis.circle")
                     .labelStyle(.iconOnly)
@@ -5016,6 +5147,7 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var isNewSessionSheetPresented = false
     @Published var isNewGroupSheetPresented = false
     @Published var isCommandPalettePresented = false
+    @Published var isShortcutHelpPresented = false
     @Published var isOuroAgentInstallSheetPresented = false
     @Published var commandPaletteQuery = ""
     @Published var editingGroup: WorkbenchProject?
@@ -5657,6 +5789,16 @@ final class WorkbenchViewModel: ObservableObject {
                 ))
             }
         }
+
+        commands.append(
+            command(
+                .showKeyboardShortcutHelp,
+                "Show Keyboard Shortcuts",
+                "Open the keyboard shortcut reference sheet",
+                "keyboard",
+                keywords: ["keyboard", "shortcut", "help", "cheat sheet", "key", "binding"]
+            )
+        )
 
         // Agent-management commands. Always-available entry points first,
         // then one Select Agent entry per installed bundle so search like
@@ -7310,6 +7452,8 @@ final class WorkbenchViewModel: ObservableObject {
             openReleaseUpdate()
         case .manageAgents:
             selectAgent(selectedAgentName ?? state.boss.agentName)
+        case .showKeyboardShortcutHelp:
+            isShortcutHelpPresented = true
         case .selectAgent,
              .useSelectedAgentAsBoss,
              .openSelectedAgentConfig,
