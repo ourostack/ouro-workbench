@@ -8949,6 +8949,24 @@ final class TerminalSessionController: NSObject, ObservableObject, Identifiable,
         recorder?.close()
         onTerminated(exitCode)
     }
+
+    /// SwiftTerm calls this when the user activates a link in the terminal —
+    /// either an OSC 8 hyperlink emitted by the TUI, or an implicit URL the
+    /// emulator auto-detected in the buffer. Default impl is a no-op; we want
+    /// the user's default app to open the URL the way macOS Terminal.app does.
+    func requestOpenLink(source: TerminalView, link: String, params: [String: String]) {
+        guard let url = URL(string: link), url.scheme != nil else {
+            return
+        }
+        // Only open http(s) / file / mailto schemes by default; refuse anything
+        // weirder a TUI might embed (e.g. `javascript:`) so a hostile process
+        // can't navigate the user's machine.
+        let safeSchemes: Set<String> = ["http", "https", "mailto", "file"]
+        guard let scheme = url.scheme?.lowercased(), safeSchemes.contains(scheme) else {
+            return
+        }
+        NSWorkspace.shared.open(url)
+    }
 }
 
 final class CapturingLocalProcessTerminalView: LocalProcessTerminalView {
