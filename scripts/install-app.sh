@@ -176,6 +176,20 @@ fi
 mv "$STAGED_APP" "$APP_DEST"
 DESTINATION_REPLACED="true"
 
+# Refresh Launch Services so Finder/Spotlight see the new ad-hoc signature on
+# the existing bundle path. Without this, replacing an ad-hoc-signed app in
+# place (especially under /Applications) can leave Launch Services holding the
+# previous signature for this bundle id, which surfaces to the user as the
+# generic "the application may be damaged or incomplete" Finder error.
+# Also strip any com.apple.quarantine xattrs that ditto may have inherited
+# from the staging path.
+xattr -cr "$APP_DEST" >/dev/null 2>&1 || true
+LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+if [[ -x "$LSREGISTER" ]]; then
+  "$LSREGISTER" -u "$APP_DEST" >/dev/null 2>&1 || true
+  "$LSREGISTER" -f "$APP_DEST" >/dev/null 2>&1 || true
+fi
+
 "$VERIFY_SCRIPT" "$APP_DEST" >/dev/null
 INSTALL_SUCCEEDED="true"
 rm -rf "$BACKUP_APP"
