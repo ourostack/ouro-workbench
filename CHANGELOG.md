@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.22 - Keyboard cycling for terminals
+
+- Added daily-use keyboard shortcuts for jumping between terminals and groups without taking your hands off the keyboard:
+  - `⌘1` … `⌘9` — select the Nth terminal in the currently-visible session list (1-indexed; ignored silently when the slot is empty).
+  - `⌘[` / `⌘]` — cycle to the previous / next terminal, wrapping at the ends.
+  - `⇧⌘[` / `⇧⌘]` — cycle to the previous / next group.
+- Added a shared `WorkbenchCycleDirection` enum in Core and view-model helpers (`selectTerminal(atOneIndexedPosition:)`, `cycleTerminal(direction:)`, `cycleGroup(direction:)`) that the shortcuts call. Helpers are no-ops with a `false` return when the targeted slot doesn't exist, so the shortcuts decline gracefully on an empty workbench.
+- The shortcuts live in an invisible `TerminalCyclingShortcuts` view inside the root pane so they stay in the responder chain across the agent / terminal / Agent Home detail-pane modes without intercepting clicks.
+
 ## 0.1.21 - Agent-aware command palette
 
 - Surfaced the Agents IA in the ⌘K command palette so every action that used to require opening the sidebar pane is reachable by name from any focus:

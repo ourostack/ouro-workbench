@@ -48,6 +48,7 @@ struct WorkbenchRootView: View {
                             }
                         }
                         ImportSummaryBanner(model: model)
+                        TerminalCyclingShortcuts(model: model)
                     }
                 }
             }
@@ -155,6 +156,49 @@ private struct WindowChromeConfigurator: NSViewRepresentable {
         window.styleMask.insert(.fullSizeContentView)
         window.minSize = NSSize(width: 1100, height: 700)
         window.setFrameAutosaveName(Self.frameAutosaveName)
+    }
+}
+
+/// Invisible view that owns the global terminal-cycling keyboard shortcuts:
+/// ⌘1..⌘9 jump to the Nth terminal in the current group, ⌘[ / ⌘] cycle the
+/// previous / next terminal, and ⇧⌘[ / ⇧⌘] cycle previous / next group. Lives
+/// inside the root view so SwiftUI keeps it in the responder chain and never
+/// shows pixels.
+struct TerminalCyclingShortcuts: View {
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        ZStack {
+            ForEach(1...9, id: \.self) { index in
+                Button("Select Terminal \(index)") {
+                    model.selectTerminal(atOneIndexedPosition: index)
+                }
+                .keyboardShortcut(KeyEquivalent(Character("\(index)")), modifiers: [.command])
+                .hidden()
+            }
+            Button("Previous Terminal") {
+                model.cycleTerminal(direction: .previous)
+            }
+            .keyboardShortcut("[", modifiers: [.command])
+            .hidden()
+            Button("Next Terminal") {
+                model.cycleTerminal(direction: .next)
+            }
+            .keyboardShortcut("]", modifiers: [.command])
+            .hidden()
+            Button("Previous Group") {
+                model.cycleGroup(direction: .previous)
+            }
+            .keyboardShortcut("[", modifiers: [.command, .shift])
+            .hidden()
+            Button("Next Group") {
+                model.cycleGroup(direction: .next)
+            }
+            .keyboardShortcut("]", modifiers: [.command, .shift])
+            .hidden()
+        }
+        .frame(width: 0, height: 0)
+        .accessibilityHidden(true)
     }
 }
 
@@ -5767,6 +5811,63 @@ final class WorkbenchViewModel: ObservableObject {
             )
         }
         return entry != nil
+    }
+
+    /// Select the Nth terminal (1-indexed) in the currently-visible session
+    /// list. Used by the ⌘1..⌘9 keyboard shortcuts. Returns `true` on success
+    /// so callers can decline gracefully when the slot is empty.
+    @discardableResult
+    func selectTerminal(atOneIndexedPosition position: Int) -> Bool {
+        let active = sessionEntries
+        guard position >= 1, position <= active.count else {
+            return false
+        }
+        selectedEntryID = active[position - 1].id
+        return true
+    }
+
+    /// Select the previous or next terminal in the currently-visible session
+    /// list, wrapping at the ends. ⌘[ goes backwards, ⌘] goes forwards.
+    @discardableResult
+    func cycleTerminal(direction: WorkbenchCycleDirection) -> Bool {
+        let active = sessionEntries
+        guard !active.isEmpty else {
+            return false
+        }
+        let currentIndex = active.firstIndex { $0.id == selectedEntryID } ?? -1
+        let nextIndex: Int
+        switch direction {
+        case .previous:
+            nextIndex = currentIndex <= 0 ? active.count - 1 : currentIndex - 1
+        case .next:
+            nextIndex = currentIndex < 0 || currentIndex >= active.count - 1
+                ? 0
+                : currentIndex + 1
+        }
+        selectedEntryID = active[nextIndex].id
+        return true
+    }
+
+    /// Select the previous or next group in the sidebar. ⇧⌘[ goes backwards,
+    /// ⇧⌘] goes forwards.
+    @discardableResult
+    func cycleGroup(direction: WorkbenchCycleDirection) -> Bool {
+        let groups = state.projects
+        guard !groups.isEmpty else {
+            return false
+        }
+        let currentIndex = groups.firstIndex { $0.id == selectedProjectID } ?? -1
+        let nextIndex: Int
+        switch direction {
+        case .previous:
+            nextIndex = currentIndex <= 0 ? groups.count - 1 : currentIndex - 1
+        case .next:
+            nextIndex = currentIndex < 0 || currentIndex >= groups.count - 1
+                ? 0
+                : currentIndex + 1
+        }
+        selectProject(groups[nextIndex].id)
+        return true
     }
 
     /// Helper used by the sidebar / boss menu to set the Agents pane focus.
