@@ -199,6 +199,11 @@ struct TerminalCyclingShortcuts: View {
             }
             .keyboardShortcut("]", modifiers: [.command, .shift])
             .hidden()
+            Button("Find in Terminal") {
+                model.presentTerminalSearch()
+            }
+            .keyboardShortcut("f", modifiers: [.command])
+            .hidden()
         }
         .frame(width: 0, height: 0)
         .accessibilityHidden(true)
@@ -259,7 +264,9 @@ struct ShortcutHelpSheet: View {
                 rows: [
                     .init(shortcut: "⌘\u{21A9}", label: "Launch / Restart the selected terminal"),
                     .init(shortcut: "⌘L", label: "Send Ctrl-L (redraw)"),
-                    .init(shortcut: "⌘.", label: "Stop the selected terminal")
+                    .init(shortcut: "⌘.", label: "Stop the selected terminal"),
+                    .init(shortcut: "⌘F", label: "Find in the focused terminal"),
+                    .init(shortcut: "⌘G / ⇧⌘G", label: "Next / previous match in the search bar")
                 ]
             ),
             ShortcutGroup(
@@ -3763,9 +3770,16 @@ struct SessionDetailView: View {
                 Divider()
             }
             if let session = model.activeSession(for: entry) {
-                TerminalPane(session: session)
-                    .id(session.id)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                ZStack(alignment: .top) {
+                    TerminalPane(session: session)
+                        .id(session.id)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    if model.isTerminalSearchPresented {
+                        TerminalSearchBar(model: model)
+                            .padding(.top, 10)
+                            .padding(.horizontal, 14)
+                    }
+                }
             } else {
                 InactiveTerminalSurface(
                     entry: entry,
@@ -3779,6 +3793,79 @@ struct SessionDetailView: View {
         }
         .sheet(isPresented: $showsTranscriptSheet) {
             SessionTranscriptSheet(entry: entry, model: model)
+        }
+    }
+}
+
+/// Slide-in search bar that overlays the active terminal. Mounted only when
+/// `model.isTerminalSearchPresented`. Owns its own FocusState so Return /
+/// Shift+Return / Esc work even though the terminal underneath would
+/// otherwise grab keystrokes.
+struct TerminalSearchBar: View {
+    @ObservedObject var model: WorkbenchViewModel
+    @FocusState private var fieldIsFocused: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+            TextField("Find in terminal", text: $model.terminalSearchQuery)
+                .textFieldStyle(.plain)
+                .focused($fieldIsFocused)
+                .onSubmit {
+                    model.stepTerminalSearch(direction: .next)
+                }
+                .onChange(of: model.terminalSearchQuery) { _, newValue in
+                    if newValue.isEmpty {
+                        model.terminalSearchHasResult = true
+                    } else {
+                        model.stepTerminalSearch(direction: .next)
+                    }
+                }
+            if !model.terminalSearchHasResult && !model.terminalSearchQuery.isEmpty {
+                Text("No matches")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.orange)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.orange.opacity(0.18), in: Capsule())
+            }
+            Button {
+                model.stepTerminalSearch(direction: .previous)
+            } label: {
+                Image(systemName: "chevron.up")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .help("Previous match (⇧⌘G)")
+            .keyboardShortcut("g", modifiers: [.command, .shift])
+            Button {
+                model.stepTerminalSearch(direction: .next)
+            } label: {
+                Image(systemName: "chevron.down")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .help("Next match (⌘G)")
+            .keyboardShortcut("g", modifiers: [.command])
+            Button("Done") {
+                model.dismissTerminalSearch()
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .keyboardShortcut(.cancelAction)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.18), radius: 8, x: 0, y: 2)
+        .frame(maxWidth: 540)
+        .onAppear {
+            fieldIsFocused = true
         }
     }
 }
@@ -5148,6 +5235,15 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var isNewGroupSheetPresented = false
     @Published var isCommandPalettePresented = false
     @Published var isShortcutHelpPresented = false
+    /// Per-session ⌘F search state. The bar is mounted as an overlay on the
+    /// active session's terminal pane; opening it focuses its text field and
+    /// dispatches findNext/Previous against the SwiftTerm view of the
+    /// currently-selected session.
+    @Published var isTerminalSearchPresented = false
+    @Published var terminalSearchQuery: String = ""
+    /// Last seen "did the most recent search find anything" status so the
+    /// search bar can show "No matches" when the user types something missing.
+    @Published var terminalSearchHasResult: Bool = true
     @Published var isOuroAgentInstallSheetPresented = false
     @Published var commandPaletteQuery = ""
     @Published var editingGroup: WorkbenchProject?
@@ -6015,6 +6111,57 @@ final class WorkbenchViewModel: ObservableObject {
             )
         }
         return entry != nil
+    }
+
+    /// Open the ⌘F search bar over the active session's terminal pane.
+    /// If no session is selected the call is a no-op so the shortcut feels
+    /// inert rather than launching a useless empty bar.
+    func presentTerminalSearch() {
+        guard let entry = selectedEntry, activeSession(for: entry) != nil else {
+            return
+        }
+        terminalSearchHasResult = true
+        if !isTerminalSearchPresented {
+            terminalSearchQuery = ""
+        }
+        isTerminalSearchPresented = true
+    }
+
+    /// Hide the search bar and clear any selection highlight SwiftTerm left
+    /// behind. Bound to Esc inside the search bar and to the Done button.
+    func dismissTerminalSearch() {
+        guard let entry = selectedEntry, let session = activeSession(for: entry) else {
+            isTerminalSearchPresented = false
+            return
+        }
+        session.terminal.clearSearch()
+        isTerminalSearchPresented = false
+        terminalSearchHasResult = true
+    }
+
+    /// Step the search forward or backward. Returns whether anything matched
+    /// so the search bar can render its "No matches" state.
+    @discardableResult
+    func stepTerminalSearch(direction: WorkbenchCycleDirection) -> Bool {
+        guard let entry = selectedEntry, let session = activeSession(for: entry) else {
+            terminalSearchHasResult = false
+            return false
+        }
+        let query = terminalSearchQuery
+        guard !query.isEmpty else {
+            session.terminal.clearSearch()
+            terminalSearchHasResult = true
+            return true
+        }
+        let hit: Bool
+        switch direction {
+        case .next:
+            hit = session.terminal.findNext(query)
+        case .previous:
+            hit = session.terminal.findPrevious(query)
+        }
+        terminalSearchHasResult = hit
+        return hit
     }
 
     /// Select the Nth terminal (1-indexed) in the currently-visible session
