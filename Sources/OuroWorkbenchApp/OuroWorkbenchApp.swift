@@ -1208,7 +1208,7 @@ struct CommandPaletteSheet: View {
                     }
                     ForEach(model.filteredCommandPaletteItems) { command in
                         Button {
-                            model.performCommand(command.id)
+                            model.performCommand(command)
                             dismiss()
                         } label: {
                             HStack(spacing: 10) {
@@ -5552,6 +5552,89 @@ final class WorkbenchViewModel: ObservableObject {
             }
         }
 
+        // Agent-management commands. Always-available entry points first,
+        // then one Select Agent entry per installed bundle so search like
+        // "agent <name>" lands on the right row.
+        commands.append(contentsOf: [
+            command(
+                .manageAgents,
+                "Manage Agents",
+                "Open the Agents pane focused on the current boss",
+                "person.2.badge.gearshape",
+                keywords: ["agent", "bundle", "boss", "manage", "ouro"]
+            )
+        ])
+
+        for agent in ouroAgents {
+            let isBoss = state.boss.agentName.caseInsensitiveCompare(agent.name) == .orderedSame
+            commands.append(
+                WorkbenchCommandDescriptor(
+                    id: .selectAgent,
+                    title: "Select Agent: \(agent.name)\(isBoss ? " (boss)" : "")",
+                    detail: agent.summaryLine,
+                    systemImage: agent.status == .ready ? "person.crop.circle" : "person.crop.circle.badge.exclamationmark",
+                    keywords: ["agent", "bundle", "switch", "open", agent.name],
+                    payload: agent.name
+                )
+            )
+        }
+
+        if let agent = focusedAgentForCommand(nil) {
+            let isBoss = state.boss.agentName.caseInsensitiveCompare(agent.name) == .orderedSame
+            if !isBoss && agent.isUsableAsBoss {
+                commands.append(
+                    WorkbenchCommandDescriptor(
+                        id: .useSelectedAgentAsBoss,
+                        title: "Use \(agent.name) As Boss",
+                        detail: "Make \(agent.name) this Mac's boss agent",
+                        systemImage: "person.crop.circle.badge.checkmark",
+                        keywords: ["boss", "switch", "promote", agent.name],
+                        payload: agent.name
+                    )
+                )
+            }
+            commands.append(contentsOf: [
+                WorkbenchCommandDescriptor(
+                    id: .repairSelectedAgent,
+                    title: "Repair \(agent.name)",
+                    detail: "Open a terminal with `ouro check --agent \(agent.name)`",
+                    systemImage: "stethoscope",
+                    keywords: ["agent", "repair", "ouro", "check", "providers", agent.name],
+                    payload: agent.name
+                ),
+                WorkbenchCommandDescriptor(
+                    id: .openSelectedAgentConfig,
+                    title: "Open \(agent.name) agent.json",
+                    detail: agent.configPath,
+                    systemImage: "doc.text",
+                    keywords: ["agent", "config", "json", "providers", "model", agent.name],
+                    payload: agent.name
+                ),
+                WorkbenchCommandDescriptor(
+                    id: .revealSelectedAgentBundle,
+                    title: "Reveal \(agent.name) Bundle",
+                    detail: agent.bundlePath,
+                    systemImage: "folder",
+                    keywords: ["agent", "bundle", "finder", "reveal", agent.name],
+                    payload: agent.name
+                )
+            ])
+            if let registration = workbenchMCPRegistration(for: agent), registration.isActionable {
+                commands.append(
+                    WorkbenchCommandDescriptor(
+                        id: .installMCPForSelectedAgent,
+                        title: registration.status == .needsUpdate
+                            ? "Update MCP for \(agent.name)"
+                            : "Install MCP for \(agent.name)",
+                        detail: registration.detail,
+                        systemImage: "link.badge.plus",
+                        keywords: ["agent", "mcp", "register", "tools", agent.name],
+                        payload: agent.name
+                    )
+                )
+            }
+        }
+
         return commands
     }
 
@@ -6854,6 +6937,63 @@ final class WorkbenchViewModel: ObservableObject {
         return nil
     }
 
+    /// Dispatch a command palette item with full payload support. Routes
+    /// payload-bearing commands (e.g. per-agent select / repair) through this
+    /// path and falls back to the ID-only dispatcher for the rest.
+    func performCommand(_ descriptor: WorkbenchCommandDescriptor) {
+        switch descriptor.id {
+        case .selectAgent:
+            selectAgent(descriptor.payload)
+        case .useSelectedAgentAsBoss:
+            if let name = descriptor.payload ?? selectedAgentName {
+                selectBoss(agentName: name)
+            } else {
+                errorMessage = "No agent is selected"
+            }
+        case .openSelectedAgentConfig:
+            if let agent = focusedAgentForCommand(descriptor.payload) {
+                openAgentConfig(agent)
+            } else {
+                errorMessage = "No agent is selected"
+            }
+        case .revealSelectedAgentBundle:
+            if let agent = focusedAgentForCommand(descriptor.payload) {
+                revealAgentBundle(agent)
+            } else {
+                errorMessage = "No agent is selected"
+            }
+        case .repairSelectedAgent:
+            if let agent = focusedAgentForCommand(descriptor.payload) {
+                repairAgent(agent)
+            } else {
+                errorMessage = "No agent is selected"
+            }
+        case .installMCPForSelectedAgent:
+            if let agent = focusedAgentForCommand(descriptor.payload) {
+                installWorkbenchMCP(for: agent)
+            } else {
+                errorMessage = "No agent is selected"
+            }
+        case .manageAgents:
+            selectAgent(descriptor.payload ?? selectedAgentName ?? state.boss.agentName)
+        default:
+            performCommand(descriptor.id)
+        }
+    }
+
+    /// Resolve which agent a payload-bearing command should act on. Prefers
+    /// the explicit payload, falls back to the currently-focused agent, then
+    /// to the boss agent if it is installed.
+    private func focusedAgentForCommand(_ payload: String?) -> OuroAgentRecord? {
+        if let payload, let agent = ouroAgent(named: payload) {
+            return agent
+        }
+        if let name = selectedAgentName, let agent = ouroAgent(named: name) {
+            return agent
+        }
+        return ouroAgent(named: state.boss.agentName)
+    }
+
     func performCommand(_ command: WorkbenchCommandID) {
         switch command {
         case .newSession:
@@ -7005,6 +7145,24 @@ final class WorkbenchViewModel: ObservableObject {
             }
         case .openReleaseUpdate:
             openReleaseUpdate()
+        case .manageAgents:
+            selectAgent(selectedAgentName ?? state.boss.agentName)
+        case .selectAgent,
+             .useSelectedAgentAsBoss,
+             .openSelectedAgentConfig,
+             .revealSelectedAgentBundle,
+             .repairSelectedAgent,
+             .installMCPForSelectedAgent:
+            // These commands carry a payload and must be dispatched through
+            // performCommand(_: descriptor). If they reach here without a
+            // payload-aware dispatch, fall back to the currently-focused agent.
+            performCommand(WorkbenchCommandDescriptor(
+                id: command,
+                title: "",
+                detail: "",
+                systemImage: "",
+                payload: selectedAgentName
+            ))
         }
     }
 

@@ -65,4 +65,62 @@ final class WorkbenchCommandPaletteTests: XCTestCase {
             [.refreshWorkspace]
         )
     }
+
+    func testDescriptorPayloadRoundTripsThroughCoding() throws {
+        let original = WorkbenchCommandDescriptor(
+            id: .selectAgent,
+            title: "Select Agent: slugger",
+            detail: "ready",
+            systemImage: "person.crop.circle",
+            keywords: ["agent", "slugger"],
+            payload: "slugger"
+        )
+        let encoded = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(WorkbenchCommandDescriptor.self, from: encoded)
+        XCTAssertEqual(decoded, original)
+        XCTAssertEqual(decoded.payload, "slugger")
+    }
+
+    func testDescriptorDecodesWithoutPayloadForBackwardsCompatibility() throws {
+        // Older persisted descriptors had no payload field; decoding should
+        // succeed and yield a nil payload rather than throwing.
+        let legacyJSON = """
+        {
+            "id": "refreshWorkspace",
+            "title": "Refresh Workspace",
+            "detail": "Reload status",
+            "systemImage": "arrow.clockwise",
+            "keywords": ["sync"]
+        }
+        """.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(WorkbenchCommandDescriptor.self, from: legacyJSON)
+        XCTAssertEqual(decoded.id, .refreshWorkspace)
+        XCTAssertNil(decoded.payload)
+    }
+
+    func testFilterMatchesPayloadKeyword() {
+        let commands = [
+            WorkbenchCommandDescriptor(
+                id: .selectAgent,
+                title: "Select Agent: slugger",
+                detail: "ready",
+                systemImage: "person.crop.circle",
+                keywords: ["agent", "switch", "slugger"],
+                payload: "slugger"
+            ),
+            WorkbenchCommandDescriptor(
+                id: .selectAgent,
+                title: "Select Agent: caretaker",
+                detail: "ready",
+                systemImage: "person.crop.circle",
+                keywords: ["agent", "switch", "caretaker"],
+                payload: "caretaker"
+            )
+        ]
+
+        XCTAssertEqual(
+            WorkbenchCommandPalette().filter(commands, query: "slugger").map(\.payload),
+            ["slugger"]
+        )
+    }
 }
