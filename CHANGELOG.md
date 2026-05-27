@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.29 - Recovery sheet
+
+- The sidebar `Recovery` row is now a button. Clicking it opens a `RecoverySheet` listing every session the recovery planner currently considers actionable, with per-row "Open" (jump to that terminal) and "Recover" / "Resume" / "Respawn" buttons.
+- When more than one session is recoverable, a top-level `Recover All` button runs through every candidate and logs a single batch action entry instead of N near-identical ones.
+- The Recovery row icon tints orange when there's something waiting and the hover-help shows the count; gray when nothing is recoverable.
+- Previously this was a static label that just told you "N running, M recovery actions" — there was no way to act on the recovery candidates without diving into the boss dashboard's Advanced disclosure.
+
 ## 0.1.28 - Terminal font size shortcuts
 
 - `⌘+` / `⌘=` increases the terminal font size by 1pt, `⌘-` decreases it, `⌘0` resets to the macOS default (13pt). Matches Terminal.app / iTerm2 / browser conventions.
