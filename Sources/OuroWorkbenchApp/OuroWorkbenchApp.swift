@@ -204,6 +204,29 @@ struct TerminalCyclingShortcuts: View {
             }
             .keyboardShortcut("f", modifiers: [.command])
             .hidden()
+            Button("Increase Terminal Font Size") {
+                model.bumpTerminalFontSize(by: 1)
+            }
+            .keyboardShortcut("+", modifiers: [.command])
+            .hidden()
+            // Cmd+= without shift produces "=" on US keyboards. Bind it as a
+            // second route to "bigger" so the user doesn't have to hold shift
+            // for the common case, matching browser and Terminal.app convention.
+            Button("Increase Terminal Font Size (=)") {
+                model.bumpTerminalFontSize(by: 1)
+            }
+            .keyboardShortcut("=", modifiers: [.command])
+            .hidden()
+            Button("Decrease Terminal Font Size") {
+                model.bumpTerminalFontSize(by: -1)
+            }
+            .keyboardShortcut("-", modifiers: [.command])
+            .hidden()
+            Button("Reset Terminal Font Size") {
+                model.resetTerminalFontSize()
+            }
+            .keyboardShortcut("0", modifiers: [.command])
+            .hidden()
         }
         .frame(width: 0, height: 0)
         .accessibilityHidden(true)
@@ -266,7 +289,10 @@ struct ShortcutHelpSheet: View {
                     .init(shortcut: "⌘L", label: "Send Ctrl-L (redraw)"),
                     .init(shortcut: "⌘.", label: "Stop the selected terminal"),
                     .init(shortcut: "⌘F", label: "Find in the focused terminal"),
-                    .init(shortcut: "⌘G / ⇧⌘G", label: "Next / previous match in the search bar")
+                    .init(shortcut: "⌘G / ⇧⌘G", label: "Next / previous match in the search bar"),
+                    .init(shortcut: "⌘+ / ⌘=", label: "Increase terminal font size"),
+                    .init(shortcut: "⌘-", label: "Decrease terminal font size"),
+                    .init(shortcut: "⌘0", label: "Reset terminal font size")
                 ]
             ),
             ShortcutGroup(
@@ -5244,6 +5270,13 @@ final class WorkbenchViewModel: ObservableObject {
     /// Last seen "did the most recent search find anything" status so the
     /// search bar can show "No matches" when the user types something missing.
     @Published var terminalSearchHasResult: Bool = true
+    /// Persisted terminal font size. Clamped to 9..28pt; ⌘+/⌘-/⌘0 cycle it.
+    /// Persisted in UserDefaults so the user's chosen size survives across
+    /// launches; loaded once at init.
+    @Published var terminalFontSize: CGFloat = {
+        let saved = UserDefaults.standard.double(forKey: WorkbenchViewModel.terminalFontSizeDefaultsKey)
+        return saved >= 9 ? CGFloat(saved) : 13
+    }()
     @Published var isOuroAgentInstallSheetPresented = false
     @Published var commandPaletteQuery = ""
     @Published var editingGroup: WorkbenchProject?
@@ -6162,6 +6195,33 @@ final class WorkbenchViewModel: ObservableObject {
         }
         terminalSearchHasResult = hit
         return hit
+    }
+
+    /// Set the terminal font size and propagate it to every currently-active
+    /// session. Clamps to `terminalFontSizeBounds`; persists in UserDefaults
+    /// so the chosen size survives across launches.
+    func setTerminalFontSize(_ requested: CGFloat) {
+        let clamped = min(
+            Self.terminalFontSizeBounds.upperBound,
+            max(Self.terminalFontSizeBounds.lowerBound, requested)
+        )
+        terminalFontSize = clamped
+        UserDefaults.standard.set(Double(clamped), forKey: Self.terminalFontSizeDefaultsKey)
+        let font = NSFont.monospacedSystemFont(ofSize: clamped, weight: .regular)
+        for session in activeSessions.values {
+            session.terminal.font = font
+        }
+    }
+
+    /// Increment / decrement the persisted terminal font size by 1pt.
+    /// ⌘+ uses `delta = 1`, ⌘- uses `delta = -1`.
+    func bumpTerminalFontSize(by delta: CGFloat) {
+        setTerminalFontSize(terminalFontSize + delta)
+    }
+
+    /// Reset the terminal font size to the macOS default. ⌘0.
+    func resetTerminalFontSize() {
+        setTerminalFontSize(Self.defaultTerminalFontSize)
     }
 
     /// Select the Nth terminal (1-indexed) in the currently-visible session
@@ -8447,6 +8507,10 @@ final class WorkbenchViewModel: ObservableObject {
                     self?.markTerminated(entryId: entry.id, runId: plan.runId, rawStatus: rawStatus)
                 }
             )
+            // Apply the persisted font size before the session paints anything
+            // so the user's chosen ⌘+/⌘-/⌘0 size is honored from the first
+            // frame instead of springing from the hardcoded 13pt default.
+            session.terminal.font = NSFont.monospacedSystemFont(ofSize: terminalFontSize, weight: .regular)
             activeSessions[entry.id] = session
             session.start()
         } catch {
@@ -8554,6 +8618,12 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     private static let collapsedChromeMigrationKey = "ouro.workbench.collapsedChromeMigration.v17"
+    static let terminalFontSizeDefaultsKey = "ouro.workbench.terminalFontSize"
+    /// Default terminal font size. Matches macOS Terminal's default.
+    static let defaultTerminalFontSize: CGFloat = 13
+    /// Allowed terminal font-size range. Below 9pt cells become unreadable;
+    /// above 28pt the layout starts crowding the chrome.
+    static let terminalFontSizeBounds: ClosedRange<CGFloat> = 9...28
 
     private func load() {
         do {
