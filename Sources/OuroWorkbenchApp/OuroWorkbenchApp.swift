@@ -7118,6 +7118,16 @@ final class WorkbenchViewModel: ObservableObject {
     func presentOnboarding() {
         refreshOuroAgents()
         refreshWorkbenchMCPRegistration()
+        // Discard any stale provider-check entries that aren't a confirmed
+        // pass. `.running` entries get stuck when the sheet was dismissed
+        // mid-check (so the lane keeps showing "Checking..." or "did not
+        // finish" forever); `.failed` entries shouldn't pin the UI to a
+        // repair prompt from a prior config that may have since been fixed.
+        // Confirmed `.passed` results are kept so we don't waste cycles
+        // re-running a check the user knows works.
+        onboardingProviderChecks = onboardingProviderChecks.filter { _, result in
+            result.state == .passed
+        }
         refreshOnboardingReadiness()
         runOnboardingProviderChecksIfNeeded()
         isOnboardingPresented = true
