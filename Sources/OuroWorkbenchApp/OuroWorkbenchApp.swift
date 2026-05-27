@@ -8514,21 +8514,132 @@ private struct MailboxFetchResult<Value: Sendable>: Sendable {
     var issue: String?
 }
 
-/// Single source of truth for the Workbench terminal palette. Used by the
-/// SwiftTerm view, the host inset (so the background doesn't flash pure
-/// black before the terminal claims pixels), and the SwiftUI focus mode.
+/// Single source of truth for the Workbench terminal palette. Each `Theme`
+/// owns the four "chrome" colors (background / foreground / selection / caret)
+/// AND a 16-entry ANSI palette so colored TUI output (Claude Code, Codex,
+/// `ls --color`) renders correctly. Without an installed palette SwiftTerm
+/// falls back to a black-and-white interpretation of SGR codes and reverse-
+/// video lands as a pure-white block ("white-highlighted text") which is the
+/// artifact Ari reported.
 enum WorkbenchTerminalPalette {
-    static let background = NSColor(srgbRed: 0.05, green: 0.05, blue: 0.06, alpha: 1.0)
-    static let foreground = NSColor(srgbRed: 0.92, green: 0.92, blue: 0.94, alpha: 1.0)
-    static let accent = NSColor(srgbRed: 0.35, green: 0.55, blue: 0.95, alpha: 1.0)
+    /// A complete terminal theme. Builds dynamic NSColors so the SwiftUI
+    /// host inset / focus mode pick up the right shade automatically when
+    /// system appearance changes; the SwiftTerm palette is re-installed
+    /// per-view via `applyWorkbenchTheme`.
+    struct Theme {
+        var name: String
+        var background: NSColor
+        var foreground: NSColor
+        var caret: NSColor
+        var caretText: NSColor
+        var selection: NSColor
+        /// 16-entry ANSI palette in xterm order: 0-7 normal, 8-15 bright.
+        /// Index 7 is the "default-bright" / reverse-video paint color — keep
+        /// it a muted gray, not pure white, so reverse video doesn't blast.
+        var ansiPalette: [SwiftTerm.Color]
+    }
 
-    /// Translucent accent for selections. SwiftTerm's default uses
-    /// `NSColor.selectedTextBackgroundColor`, which on a dark terminal lands as
-    /// a glaring near-white block ("white-highlighted text").
-    static let selection = accent.withAlphaComponent(0.32)
+    /// Pick the right theme for the current effective appearance. Defaults to
+    /// dark when the appearance is `nil` (no window yet).
+    static func theme(for appearance: NSAppearance?) -> Theme {
+        let isLight = appearance?
+            .bestMatch(from: [.aqua, .darkAqua, .vibrantLight, .vibrantDark]) == .aqua
+            || appearance?
+            .bestMatch(from: [.aqua, .darkAqua, .vibrantLight, .vibrantDark]) == .vibrantLight
+        return isLight ? lightTheme : darkTheme
+    }
 
+    /// SwiftUI background color that auto-resolves to the dark or light theme
+    /// based on the current colorScheme. Used by the focus-mode wash and the
+    /// host inset so they never flash a hardcoded near-black behind a light
+    /// terminal.
     static var swiftUIBackground: SwiftUI.Color {
-        SwiftUI.Color(nsColor: background)
+        SwiftUI.Color(nsColor: dynamicBackground)
+    }
+
+    static let dynamicBackground = NSColor(name: "WorkbenchTerminalBackground") { appearance in
+        theme(for: appearance).background
+    }
+
+    // Convenience accessors used by header chrome before a terminal has been
+    // attached. These resolve via NSApp.effectiveAppearance at use time.
+    static var background: NSColor { dynamicBackground }
+
+    // MARK: - Themes
+
+    private static var darkTheme: Theme { _darkTheme() }
+    private static var lightTheme: Theme { _lightTheme() }
+
+    private static func _darkTheme() -> Theme { Theme(
+        name: "Workbench Dark",
+        background: NSColor(srgbRed: 0.05, green: 0.05, blue: 0.06, alpha: 1.0),
+        foreground: NSColor(srgbRed: 0.92, green: 0.92, blue: 0.93, alpha: 1.0),
+        caret: NSColor(srgbRed: 0.35, green: 0.55, blue: 0.95, alpha: 0.85),
+        caretText: .white,
+        selection: NSColor(srgbRed: 0.35, green: 0.55, blue: 0.95, alpha: 0.32),
+        ansiPalette: ansi([
+            // Normal 0-7
+            (0x1c, 0x1c, 0x20), // 0  black
+            (0xff, 0x6b, 0x6b), // 1  red
+            (0x98, 0xc3, 0x79), // 2  green
+            (0xe5, 0xc0, 0x7b), // 3  yellow
+            (0x61, 0xaf, 0xef), // 4  blue
+            (0xc6, 0x78, 0xdd), // 5  magenta
+            (0x56, 0xb6, 0xc2), // 6  cyan
+            (0xc8, 0xcc, 0xd0), // 7  white  (muted — reverse-video paint)
+            // Bright 8-15
+            (0x5c, 0x63, 0x70), // 8  bright black
+            (0xff, 0x8d, 0x8d), // 9  bright red
+            (0xb0, 0xd4, 0x9f), // 10 bright green
+            (0xf0, 0xd1, 0x91), // 11 bright yellow
+            (0x84, 0xc1, 0xf5), // 12 bright blue
+            (0xd3, 0x9b, 0xef), // 13 bright magenta
+            (0x8c, 0xc4, 0xcd), // 14 bright cyan
+            (0xeb, 0xeb, 0xed)  // 15 bright white
+        ])
+    ) }
+
+    private static func _lightTheme() -> Theme { Theme(
+        name: "Workbench Light",
+        background: NSColor(srgbRed: 0.985, green: 0.985, blue: 0.995, alpha: 1.0),
+        foreground: NSColor(srgbRed: 0.11, green: 0.11, blue: 0.12, alpha: 1.0),
+        caret: NSColor(srgbRed: 0.20, green: 0.40, blue: 0.85, alpha: 0.85),
+        caretText: .white,
+        selection: NSColor(srgbRed: 0.25, green: 0.50, blue: 0.95, alpha: 0.22),
+        ansiPalette: ansi([
+            // Normal 0-7 (tuned for white background)
+            (0x1d, 0x1d, 0x1f), // 0  black
+            (0xc9, 0x1b, 0x1b), // 1  red
+            (0x00, 0x80, 0x5a), // 2  green
+            (0x9b, 0x7b, 0x00), // 3  yellow
+            (0x24, 0x5b, 0xc4), // 4  blue
+            (0xa3, 0x47, 0xba), // 5  magenta
+            (0x1a, 0x8a, 0x9d), // 6  cyan
+            (0xc8, 0xc8, 0xca), // 7  white  (muted — reverse-video paint)
+            // Bright 8-15
+            (0x5c, 0x5c, 0x60), // 8  bright black
+            (0xd8, 0x39, 0x39), // 9  bright red
+            (0x1d, 0xa8, 0x78), // 10 bright green
+            (0xb3, 0x8e, 0x00), // 11 bright yellow
+            (0x35, 0x71, 0xd6), // 12 bright blue
+            (0xb8, 0x5e, 0xc8), // 13 bright magenta
+            (0x20, 0xa0, 0xb6), // 14 bright cyan
+            (0xe0, 0xe0, 0xe2)  // 15 bright white
+        ])
+    ) }
+
+    /// Convert an array of 8-bit RGB tuples to SwiftTerm 16-bit Color values.
+    /// SwiftTerm's `Color` uses UInt16 channels (0..65535); 8-bit → 16-bit is
+    /// a multiply-by-0x0101 (a.k.a. 257), which expands `0xab` to `0xabab`
+    /// instead of `0xab00`.
+    private static func ansi(_ tuples: [(UInt8, UInt8, UInt8)]) -> [SwiftTerm.Color] {
+        tuples.map { rgb in
+            SwiftTerm.Color(
+                red: UInt16(rgb.0) * 0x0101,
+                green: UInt16(rgb.1) * 0x0101,
+                blue: UInt16(rgb.2) * 0x0101
+            )
+        }
     }
 }
 
@@ -8614,6 +8725,13 @@ final class TerminalHostView: NSView {
         terminal.frame = terminalContentFrame
         terminal.autoresizingMask = [.width, .height]
         addSubview(terminal)
+        // The attached SwiftTerm view may have been themed for a previous
+        // system appearance (e.g. session was created while dark, user
+        // switched to light, then switched back to this terminal). Re-apply
+        // the current theme so it always matches the live appearance.
+        terminal.applyWorkbenchTheme(
+            WorkbenchTerminalPalette.theme(for: effectiveAppearance)
+        )
         needsLayout = true
         focusTerminal()
         scheduleTerminalRedraws(after: [0.08, 0.22, 0.55, 1.0])
@@ -8652,9 +8770,29 @@ final class TerminalHostView: NSView {
 
     private func configureBacking() {
         wantsLayer = true
-        // Match the new in-terminal background so the surrounding host inset
-        // doesn't paint pure black behind the terminal view.
-        layer?.backgroundColor = WorkbenchTerminalPalette.background.cgColor
+        applyThemeBacking()
+    }
+
+    /// Repaint our inset background to the current theme so the user never
+    /// sees a stale black or white sliver around the terminal pane when the
+    /// system flips light/dark.
+    private func applyThemeBacking() {
+        let theme = WorkbenchTerminalPalette.theme(for: effectiveAppearance)
+        layer?.backgroundColor = theme.background.cgColor
+    }
+
+    /// AppKit calls this when the user toggles system light/dark, or when the
+    /// host window moves to a display with a different appearance. Re-apply
+    /// our theme to the attached terminal and to our own backing layer.
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        applyThemeBacking()
+        let theme = WorkbenchTerminalPalette.theme(for: effectiveAppearance)
+        terminal?.applyWorkbenchTheme(theme)
+        // Trigger a redraw burst so ANSI cells get repainted with the new
+        // foreground / palette values; without this the visible buffer keeps
+        // the old colors until the underlying TUI emits new output.
+        scheduleTerminalRedraws(after: [0.05, 0.2, 0.5])
     }
 
     private func focusTerminal() {
@@ -8811,6 +8949,24 @@ final class TerminalSessionController: NSObject, ObservableObject, Identifiable,
         recorder?.close()
         onTerminated(exitCode)
     }
+
+    /// SwiftTerm calls this when the user activates a link in the terminal —
+    /// either an OSC 8 hyperlink emitted by the TUI, or an implicit URL the
+    /// emulator auto-detected in the buffer. Default impl is a no-op; we want
+    /// the user's default app to open the URL the way macOS Terminal.app does.
+    func requestOpenLink(source: TerminalView, link: String, params: [String: String]) {
+        guard let url = URL(string: link), url.scheme != nil else {
+            return
+        }
+        // Only open http(s) / file / mailto schemes by default; refuse anything
+        // weirder a TUI might embed (e.g. `javascript:`) so a hostile process
+        // can't navigate the user's machine.
+        let safeSchemes: Set<String> = ["http", "https", "mailto", "file"]
+        guard let scheme = url.scheme?.lowercased(), safeSchemes.contains(scheme) else {
+            return
+        }
+        NSWorkspace.shared.open(url)
+    }
 }
 
 final class CapturingLocalProcessTerminalView: LocalProcessTerminalView {
@@ -8851,16 +9007,26 @@ private extension LocalProcessTerminalView {
         setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         wantsLayer = true
+        applyWorkbenchTheme(WorkbenchTerminalPalette.theme(for: effectiveAppearance))
+    }
 
-        nativeBackgroundColor = WorkbenchTerminalPalette.background
-        nativeForegroundColor = WorkbenchTerminalPalette.foreground
-        // Calm translucent accent for selections. This is the direct fix for
-        // the "white-highlighted text" artifact on a dark terminal.
-        selectedTextBackgroundColor = WorkbenchTerminalPalette.selection
-        caretColor = WorkbenchTerminalPalette.accent.withAlphaComponent(0.85)
-        caretTextColor = .white
-
-        layer?.backgroundColor = WorkbenchTerminalPalette.background.cgColor
+    /// Install a complete Workbench theme on this SwiftTerm view: the four
+    /// chrome colors plus the 16-entry ANSI palette. Called from
+    /// `configureNativeFeel` at init and again whenever the host view notices
+    /// the system appearance flipped between light and dark.
+    func applyWorkbenchTheme(_ theme: WorkbenchTerminalPalette.Theme) {
+        nativeBackgroundColor = theme.background
+        nativeForegroundColor = theme.foreground
+        // Calm translucent accent for selections. The direct fix for the
+        // "white-highlighted text" artifact on a dark terminal.
+        selectedTextBackgroundColor = theme.selection
+        caretColor = theme.caret
+        caretTextColor = theme.caretText
+        // Install the 16-entry ANSI palette. Without this, SGR color codes
+        // collapse to a monochrome interpretation — which is why Claude Code
+        // and other TUIs were rendering black-and-white in 0.1.25.
+        installColors(theme.ansiPalette)
+        layer?.backgroundColor = theme.background.cgColor
     }
 }
 
