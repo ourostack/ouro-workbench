@@ -94,13 +94,17 @@ The installed bundle also includes an Ouro-facing MCP server:
 Use the native `Workbench MCP` row in the boss dashboard to register that server
 with the selected Ouro boss agent.
 
-Use `Set Up Workbench` from the wand button or command palette for the native
-onboarding conversation. It opens with a welcome flow, asks which local Ouro
-agent should be this Mac's boss, connects Workbench MCP for that agent, opens
-the right Ouro repair/auth/setup terminal when needed, scans recent Claude Code,
-Codex, Copilot/shell, cmux, and Workbench sessions, proposes a Desk-shaped group
-layout, and mirrors selected work into Desk before resuming a curated starter
-set of high-confidence terminals.
+Use `Set Up Workbench` from the wand button or command palette for native
+onboarding. The flow walks through Welcome, Choose Boss, Connect, and Import
+one page at a time. Boss agent rows are selectable across the whole row, and
+`Enable Tools` names the Workbench MCP registration step that lets the selected
+Ouro boss inspect and control local sessions. Workbench automatically runs the
+mandatory live provider checks for the outward and inner lanes before import;
+failures block onboarding and route to Ouro's provider repair flow. Once the
+boss is ready, onboarding scans recent Claude Code, Codex, Copilot/shell, cmux,
+and Workbench sessions, proposes a Desk-shaped group layout, and mirrors
+selected work into Desk before resuming a curated starter set of high-confidence
+terminals.
 
 When migrating from cmux, onboarding also reads cmux's saved workspace state,
 matches live Claude Code panes by TTY/session id, preserves cmux workspace names

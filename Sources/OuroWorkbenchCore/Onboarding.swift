@@ -38,6 +38,25 @@ public struct OnboardingRepairStep: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
+public enum OnboardingProviderCheckState: String, Codable, Equatable, Sendable {
+    case pending
+    case running
+    case passed
+    case failed
+}
+
+public struct OnboardingProviderCheckResult: Codable, Equatable, Sendable {
+    public var lane: String
+    public var state: OnboardingProviderCheckState
+    public var detail: String
+
+    public init(lane: String, state: OnboardingProviderCheckState, detail: String) {
+        self.lane = lane
+        self.state = state
+        self.detail = detail
+    }
+}
+
 public struct OnboardingReadiness: Codable, Equatable, Sendable {
     public var state: OnboardingReadinessState
     public var headline: String
@@ -70,7 +89,8 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
     public func readiness(
         boss: BossAgentSelection,
         agents: [OuroAgentRecord],
-        mcpRegistration: BossWorkbenchMCPRegistrationSnapshot?
+        mcpRegistration: BossWorkbenchMCPRegistrationSnapshot?,
+        providerChecks: [String: OnboardingProviderCheckResult] = [:]
     ) -> OnboardingReadiness {
         guard !agents.isEmpty else {
             return OnboardingReadiness(
@@ -129,49 +149,27 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
             )
         }
 
-        if selected.humanFacing?.provider == nil || selected.humanFacing?.model == nil {
-            repairSteps.append(
-                OnboardingRepairStep(
-                    id: "outward-lane",
-                    actor: .humanChoice,
-                    title: "Choose outward provider",
-                    detail: "The outward lane is incomplete. Workbench can open Ouro's provider setup flow.",
-                    command: ["ouro", "connect", "providers", "--agent", selected.name]
-                )
+        repairSteps.append(
+            contentsOf: providerRepairSteps(
+                agent: selected,
+                lane: "outward",
+                laneName: "outward",
+                purpose: "human-facing turns",
+                configured: selected.humanFacing?.provider != nil && selected.humanFacing?.model != nil,
+                check: providerChecks["outward"]
             )
-        } else {
-            repairSteps.append(
-                OnboardingRepairStep(
-                    id: "check-outward",
-                    actor: .agentRunnable,
-                    title: "Check outward provider",
-                    detail: "Verify the provider/model selected for human-facing turns.",
-                    command: ["ouro", "check", "--agent", selected.name, "--lane", "outward"]
-                )
-            )
-        }
+        )
 
-        if selected.agentFacing?.provider == nil || selected.agentFacing?.model == nil {
-            repairSteps.append(
-                OnboardingRepairStep(
-                    id: "inner-lane",
-                    actor: .humanChoice,
-                    title: "Choose inner provider",
-                    detail: "The inner lane is incomplete. Workbench can open Ouro's provider setup flow.",
-                    command: ["ouro", "connect", "providers", "--agent", selected.name]
-                )
+        repairSteps.append(
+            contentsOf: providerRepairSteps(
+                agent: selected,
+                lane: "inner",
+                laneName: "inner",
+                purpose: "agent-facing work",
+                configured: selected.agentFacing?.provider != nil && selected.agentFacing?.model != nil,
+                check: providerChecks["inner"]
             )
-        } else {
-            repairSteps.append(
-                OnboardingRepairStep(
-                    id: "check-inner",
-                    actor: .agentRunnable,
-                    title: "Check inner provider",
-                    detail: "Verify the provider/model selected for agent-facing work.",
-                    command: ["ouro", "check", "--agent", selected.name, "--lane", "inner"]
-                )
-            )
-        }
+        )
 
         if mcpRegistration?.status != .registered {
             repairSteps.append(
@@ -185,7 +183,14 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
         }
 
         let blockers = repairSteps.filter { step in
-            step.id == "repair-agent-config" || step.id == "outward-lane" || step.id == "inner-lane" || step.id == "workbench-mcp"
+            step.id == "repair-agent-config" ||
+                step.id == "outward-lane" ||
+                step.id == "inner-lane" ||
+                step.id == "check-outward" ||
+                step.id == "check-inner" ||
+                step.id == "repair-outward-provider" ||
+                step.id == "repair-inner-provider" ||
+                step.id == "workbench-mcp"
         }
         guard blockers.isEmpty else {
             return OnboardingReadiness(
@@ -200,10 +205,65 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
         return OnboardingReadiness(
             state: .ready,
             headline: "\(selected.name) is ready",
-            detail: "The boss is installed, provider lanes are configured, and Workbench tools are registered.",
+            detail: "The boss is installed, provider lanes passed live checks, and Workbench tools are registered.",
             selectedBossName: selected.name,
             repairSteps: repairSteps
         )
+    }
+
+    private func providerRepairSteps(
+        agent: OuroAgentRecord,
+        lane: String,
+        laneName: String,
+        purpose: String,
+        configured: Bool,
+        check: OnboardingProviderCheckResult?
+    ) -> [OnboardingRepairStep] {
+        guard configured else {
+            return [
+                OnboardingRepairStep(
+                    id: "\(lane)-lane",
+                    actor: .humanChoice,
+                    title: "Choose \(laneName) provider",
+                    detail: "The \(laneName) lane is incomplete. Workbench can open Ouro's provider setup flow.",
+                    command: ["ouro", "connect", "providers", "--agent", agent.name]
+                )
+            ]
+        }
+
+        switch check?.state {
+        case .passed?:
+            return []
+        case .failed?:
+            return [
+                OnboardingRepairStep(
+                    id: "repair-\(lane)-provider",
+                    actor: .humanRequired,
+                    title: "Repair \(laneName) provider",
+                    detail: check?.detail ?? "The \(laneName) provider failed its live check.",
+                    command: ["ouro", "connect", "providers", "--agent", agent.name]
+                )
+            ]
+        case .running?:
+            return [
+                OnboardingRepairStep(
+                    id: "check-\(lane)",
+                    actor: .agentRunnable,
+                    title: "Checking \(laneName) provider",
+                    detail: "Workbench is verifying the provider/model selected for \(purpose)."
+                )
+            ]
+        case .pending?, nil:
+            return [
+                OnboardingRepairStep(
+                    id: "check-\(lane)",
+                    actor: .agentRunnable,
+                    title: "Check \(laneName) provider",
+                    detail: "Workbench must verify the provider/model selected for \(purpose).",
+                    command: ["ouro", "check", "--agent", agent.name, "--lane", lane]
+                )
+            ]
+        }
     }
 }
 

@@ -39,7 +39,11 @@ final class OnboardingTests: XCTestCase {
                 agentConfigPath: "/Users/ari/AgentBundles/slugger.ouro/agent.json",
                 status: .registered,
                 detail: "registered"
-            )
+            ),
+            providerChecks: [
+                "outward": OnboardingProviderCheckResult(lane: "outward", state: .passed, detail: "ok"),
+                "inner": OnboardingProviderCheckResult(lane: "inner", state: .passed, detail: "ok")
+            ]
         )
 
         XCTAssertEqual(readiness.state, .ready)
@@ -77,6 +81,71 @@ final class OnboardingTests: XCTestCase {
         XCTAssertEqual(readiness.state, .needsRepair)
         XCTAssertTrue(readiness.repairSteps.contains { $0.id == "outward-lane" && $0.actor == .humanChoice })
         XCTAssertTrue(readiness.repairSteps.contains { $0.id == "workbench-mcp" && $0.actor == .agentRunnable })
+    }
+
+    func testAdvisorRequiresLiveProviderChecksBeforeReady() {
+        let readiness = WorkbenchOnboardingAdvisor().readiness(
+            boss: BossAgentSelection(agentName: "slugger"),
+            agents: [
+                OuroAgentRecord(
+                    name: "slugger",
+                    bundlePath: "/tmp/slugger.ouro",
+                    configPath: "/tmp/slugger.ouro/agent.json",
+                    status: .ready,
+                    detail: "ready",
+                    humanFacing: OuroAgentLane(provider: "minimax", model: "MiniMax-M2.7"),
+                    agentFacing: OuroAgentLane(provider: "openai-codex", model: "gpt-5.5")
+                )
+            ],
+            mcpRegistration: BossWorkbenchMCPRegistrationSnapshot(
+                agentName: "slugger",
+                serverName: "ouro-workbench",
+                commandPath: "/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP",
+                agentConfigPath: "/tmp/slugger.ouro/agent.json",
+                status: .registered,
+                detail: "registered"
+            )
+        )
+
+        XCTAssertEqual(readiness.state, .needsRepair)
+        XCTAssertTrue(readiness.repairSteps.contains { $0.id == "check-outward" && $0.actor == .agentRunnable })
+        XCTAssertTrue(readiness.repairSteps.contains { $0.id == "check-inner" && $0.actor == .agentRunnable })
+    }
+
+    func testAdvisorBlocksOnFailedProviderCheck() {
+        let readiness = WorkbenchOnboardingAdvisor().readiness(
+            boss: BossAgentSelection(agentName: "slugger"),
+            agents: [
+                OuroAgentRecord(
+                    name: "slugger",
+                    bundlePath: "/tmp/slugger.ouro",
+                    configPath: "/tmp/slugger.ouro/agent.json",
+                    status: .ready,
+                    detail: "ready",
+                    humanFacing: OuroAgentLane(provider: "minimax", model: "MiniMax-M2.7"),
+                    agentFacing: OuroAgentLane(provider: "openai-codex", model: "gpt-5.5")
+                )
+            ],
+            mcpRegistration: BossWorkbenchMCPRegistrationSnapshot(
+                agentName: "slugger",
+                serverName: "ouro-workbench",
+                commandPath: "/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP",
+                agentConfigPath: "/tmp/slugger.ouro/agent.json",
+                status: .registered,
+                detail: "registered"
+            ),
+            providerChecks: [
+                "outward": OnboardingProviderCheckResult(lane: "outward", state: .failed, detail: "vault locked"),
+                "inner": OnboardingProviderCheckResult(lane: "inner", state: .passed, detail: "ok")
+            ]
+        )
+
+        XCTAssertEqual(readiness.state, .needsRepair)
+        XCTAssertTrue(readiness.repairSteps.contains {
+            $0.id == "repair-outward-provider" &&
+                $0.actor == .humanRequired &&
+                $0.detail == "vault locked"
+        })
     }
 
     func testRecentSessionScannerFindsClaudeCodexAndShellCandidates() throws {
