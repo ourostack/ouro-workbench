@@ -181,17 +181,20 @@ Install and open the native app on this Mac:
 scripts/install-app.sh --open
 ```
 
-Then run the first-run setup conversation in the app:
+Then run first-run setup in the app:
 
 1. Click the wand button or choose `Set Up Workbench` from the command palette.
-2. Workbench opens with a welcome flow and asks which local Ouro agent should be
-   this Mac's boss. The boss is the operator's agent for this machine; it is not
-   the Desk worker and it is not tied to any single terminal tab.
-3. If no boss is ready, Workbench offers the right `ouro hatch`, `ouro clone`,
-   `ouro connect`, `ouro check`, `ouro repair`, or Workbench MCP registration
-   move. Human-secret entry stays inside Ouro's own terminal/browser auth
-   flows.
-4. Once the boss is ready, choose `Scan`. Workbench inspects recent local
+2. Read the welcome page, then choose which local Ouro agent should be this
+   Mac's boss. The boss is the operator's agent for this machine; it is not the
+   Desk worker and it is not tied to any single terminal tab. Click anywhere on
+   an agent row to select it.
+3. On the Connect page, choose `Enable Tools` if Workbench MCP is not already
+   registered for that boss. Workbench then automatically runs mandatory live
+   provider checks for both the outward and inner lanes. If no boss is ready,
+   Workbench offers the right `ouro hatch`, `ouro clone`, `ouro connect`,
+   `ouro repair`, provider repair, or Workbench MCP registration move.
+   Human-secret entry stays inside Ouro's own terminal/browser auth flows.
+4. Once the boss is ready, choose `Scan Recent Work`. Workbench inspects recent local
    Workbench, Claude Code, Codex, Copilot/shell, and persistent-terminal
    evidence from the last week. If cmux is installed, it also reads cmux's
    saved workspace file and matches live Claude Code panes by TTY/session id.
