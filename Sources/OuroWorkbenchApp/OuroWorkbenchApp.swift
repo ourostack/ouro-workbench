@@ -10583,6 +10583,14 @@ final class WorkbenchViewModel: ObservableObject {
         }
     }
 
+    /// Whether a detached `screen` session with this name is currently
+    /// listed. Used on the session-exit path to decide detach-vs-crash.
+    ///
+    /// `screen -ls` normally returns in milliseconds, but a stuck socket
+    /// (e.g. NFS home dir) could hang `waitUntilExit()` forever — and this
+    /// runs on the main actor from `markTerminated`. We bound the wait with
+    /// a watchdog: if `screen` doesn't finish within the deadline we kill it
+    /// and treat the session as not-listed rather than freezing the app.
     private func persistentSessionIsListed(_ sessionName: String) -> Bool {
         let process = Process()
         let pipe = Pipe()
@@ -10592,13 +10600,23 @@ final class WorkbenchViewModel: ObservableObject {
         process.standardError = pipe
         do {
             try process.run()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            process.waitUntilExit()
-            let output = String(decoding: data, as: UTF8.self)
-            return PersistentTerminalSession.listOutput(output, contains: sessionName)
         } catch {
             return false
         }
+        // `screen -ls` output is a handful of lines, well under the pipe
+        // buffer, so reading after exit can't deadlock.
+        let finished = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .userInitiated).async {
+            process.waitUntilExit()
+            finished.signal()
+        }
+        if finished.wait(timeout: .now() + .milliseconds(1500)) == .timedOut {
+            process.terminate()
+            return false
+        }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        let output = String(decoding: data, as: UTF8.self)
+        return PersistentTerminalSession.listOutput(output, contains: sessionName)
     }
 
     private static let collapsedChromeMigrationKey = "ouro.workbench.collapsedChromeMigration.v17"
@@ -11183,16 +11201,25 @@ final class TerminalSessionController: NSObject, ObservableObject, Identifiable,
         guard let sessionName = plan.persistentSessionName else {
             return
         }
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: PersistentTerminalSession.executable)
-        process.arguments = PersistentTerminalSession.terminateArguments(sessionName: sessionName)
-        process.environment = environmentValues
-        do {
-            try process.run()
-            process.waitUntilExit()
-        } catch {
-            // The attached terminal process may already be gone; the Workbench stop path
-            // still terminates the local client below and records the run as manually ended.
+        // Run `screen -X quit` off the main thread so stopping a session never
+        // blocks the UI on an external process (a hung `screen` socket would
+        // otherwise beachball the whole app). Fire-and-forget: the caller also
+        // terminates the local client right after, and the run is recorded as
+        // manually ended regardless of whether the quit raced ahead.
+        let executable = PersistentTerminalSession.executable
+        let arguments = PersistentTerminalSession.terminateArguments(sessionName: sessionName)
+        let environment = environmentValues
+        DispatchQueue.global(qos: .userInitiated).async {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: executable)
+            process.arguments = arguments
+            process.environment = environment
+            do {
+                try process.run()
+                process.waitUntilExit()
+            } catch {
+                // The attached terminal process may already be gone.
+            }
         }
     }
 

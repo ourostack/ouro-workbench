@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.59 - Stability: stop blocking the UI on `screen`
+
+- Stopping a session no longer blocks the main thread on `screen -X quit` — it's dispatched off-main, fire-and-forget, so `Stop` / `Stop All Running` stay responsive even if a `screen` socket is wedged.
+- The session-exit detach-vs-crash check (`screen -ls`) now runs under a 1.5s watchdog: if `screen` hangs (e.g. stuck socket on an NFS home), it's killed and treated as not-listed instead of beachballing the whole app indefinitely. The common case (screen answers in milliseconds) is unaffected.
+
 ## 0.1.58 - Stability: throttle the terminal output hot path
 
 - **Fixes the dominant source of UI jank.** Previously every chunk of terminal output (hundreds/sec from a busy Claude/Codex session) mutated `@Published state`, re-rendered the whole app, re-ran the header summarizer, and synchronously rewrote the entire workspace-state JSON to disk on the main thread.
