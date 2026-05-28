@@ -8484,8 +8484,91 @@ final class WorkbenchViewModel: ObservableObject {
                 issues: issues
             )
         )
+        let previousDashboard = bossDashboard
         bossDashboard = snapshot
         mailboxError = issues.isEmpty ? nil : "Mailbox warnings: \(issues.joined(separator: "; "))"
+        notifyAboutNewNeedsMeItems(previous: previousDashboard, current: snapshot)
+    }
+
+    /// IDs of needs-me items we've already notified the user about. We never
+    /// notify on the very first dashboard refresh of a process — otherwise
+    /// every launch dumps the entire stale backlog as banners.
+    private var seenNeedsMeIDs: Set<String> = []
+    private var seenNeedsMeBaselineEstablished = false
+
+    /// Detect newly-arrived needs-me items and post a macOS user notification
+    /// so the user can leave Workbench in the background and trust it to
+    /// ping them when something needs human input. Only runs while Boss Watch
+    /// is enabled — without Watch the user isn't in autonomous mode and
+    /// notifications would be unsolicited.
+    private func notifyAboutNewNeedsMeItems(
+        previous: BossDashboardSnapshot?,
+        current: BossDashboardSnapshot?
+    ) {
+        guard bossWatchIsEnabled else {
+            // Reset the baseline when Watch is off so a re-enable starts fresh.
+            seenNeedsMeIDs = []
+            seenNeedsMeBaselineEstablished = false
+            return
+        }
+        guard let current, current.availability.needsMeAvailable else {
+            return
+        }
+        let currentIDs = Set(current.needsMeItems.map(\.id))
+        // First successful refresh after Watch turns on: mark every existing
+        // item as seen so we don't blast notifications for prior backlog.
+        guard seenNeedsMeBaselineEstablished else {
+            seenNeedsMeIDs = currentIDs
+            seenNeedsMeBaselineEstablished = true
+            return
+        }
+        let newItems = current.needsMeItems.filter { !seenNeedsMeIDs.contains($0.id) }
+        seenNeedsMeIDs = currentIDs
+        guard !newItems.isEmpty else {
+            return
+        }
+        postNeedsMeNotification(for: newItems, total: current.needsMeItems.count)
+    }
+
+    private func postNeedsMeNotification(
+        for newItems: [MailboxNeedsMeItem],
+        total: Int
+    ) {
+        // Compose primitives outside the closure; UNNotificationRequest isn't
+        // Sendable so we build the request inside the auth callback.
+        let bossName = state.boss.agentName
+        let title: String
+        let body: String
+        if newItems.count == 1, let item = newItems.first {
+            title = "Needs you: \(item.label)"
+            body = item.detail.isEmpty ? "\(bossName) flagged something for you." : item.detail
+        } else {
+            title = "\(newItems.count) items need you"
+            body = newItems.prefix(3).map(\.label).joined(separator: " · ")
+        }
+        let subtitle = total > newItems.count
+            ? "\(total) total waiting on you"
+            : ""
+        let identifier = "ouro.workbench.needsme.\(UUID().uuidString)"
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            guard granted else {
+                return
+            }
+            let content = UNMutableNotificationContent()
+            content.title = title
+            content.body = body
+            if !subtitle.isEmpty {
+                content.subtitle = subtitle
+            }
+            content.sound = .default
+            let request = UNNotificationRequest(
+                identifier: identifier,
+                content: content,
+                trigger: nil
+            )
+            UNUserNotificationCenter.current().add(request)
+        }
     }
 
     func prepareBossCheckIn(
