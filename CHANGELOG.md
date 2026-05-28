@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.50 - Drag-to-reorder terminals in the sidebar
+
+- The sidebar now accepts drag-to-reorder on the current group's terminal rows. Pick up any row, drop it where you want — Workbench persists the new order in `WorkbenchStore` so it survives across launches and is honored by every list view that sources from `state.processEntries`.
+- The reorder is scoped to the visible (project-filtered, non-archived) rows: dragging within a group never disturbs sessions in other groups or archived entries.
+- Index translation lives in `WorkbenchEntryReorder` (new, in Core) with 5 unit tests covering single moves, drop-to-end, multi-selection blocks, out-of-bounds destinations, and empty moves.
+
 ## 0.1.49 - Stop All Running Terminals
 
 - `More → Stop All Running…` and `Stop All Running Terminals` in the ⌘K palette terminate every currently-running session in one click. End-of-day cleanup is now one action instead of N right-click / stop sequences.
