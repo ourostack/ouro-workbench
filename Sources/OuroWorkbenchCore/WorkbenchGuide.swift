@@ -209,6 +209,8 @@ public enum WorkbenchGuide {
 
         \(capabilitiesMarkdown())
 
+        If you stop at a prompt and the operator has marked this session trusted, the boss may answer it for you, using the session friend's known preferences — but never for destructive or secret prompts (those always wait for a human). Every such decision is recorded in the operator's Boss Decision Log. If a prompt must be answered by a human, make that explicit in your prompt text.
+
         ## If asked "what am I running in?"
 
         You are a terminal agent inside Ouro Workbench. You keep doing your own job (coding, answering, running commands); Workbench is the room you run in, observes your output, recovers you after restarts, and lets a boss agent take auditable actions on your session.

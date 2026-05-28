@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.96 - Boss auto-advances waiting sessions (preference-driven inbox, phase 2)
+
+- The boss now *acts*: when a session is waiting and the boss decides `autoAdvance`, Workbench sends the proposed input for it — closing the loop from detect → decide → act, for the lowest time-to-first-action.
+- Defense-in-depth gate (`evaluateAutoAdvanceGate`): a send happens only when the kill-switch is on **and** the session is `Trusted` (untrusted is the default, so this is your per-session opt-in) **and** the friend's trust is family/friend **and** the new `PromptSafetyClassifier` clears the prompt — destructive, secret, financial, deploy, and agreement prompts always escalate, never auto-answered, even if the boss proposed an answer. Idempotent: a prompt already decided is never re-sent.
+- A **Settings → Boss** toggle ("Let the boss auto-advance waiting sessions") is the global kill-switch (defaults on). Every attempt — sent (`applied`) or held with its reason (`recorded`) — lands in the Boss Decision Log (⌘K), so the automation is fully auditable. Inner agents are told in their context file that a boss may answer their prompts on trusted sessions.
+
 ## 0.1.95 - Decision log review surface (preference-driven inbox, phase 1c)
 
 - A native **Boss Decision Log** sheet to read the audit trail: each entry shows the decision (auto-advance / escalate / hold), the session and friend it was for, the waiting prompt, the proposed input, the preference cited, confidence, reasoning, time, and status. Newest-first, with an empty state explaining what will appear. Open it from the `⌘K` command palette ("Boss Decision Log").

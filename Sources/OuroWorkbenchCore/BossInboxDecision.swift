@@ -180,12 +180,20 @@ public extension WorkspaceState {
     /// it recorded.
     @discardableResult
     mutating func recordDecisionIfNew(_ decision: BossInboxDecision) -> Bool {
-        if let recent = decisionLog.first(where: { $0.entryId == decision.entryId }),
-           recent.kind == decision.kind,
-           recent.prompt == decision.prompt {
+        guard isNewDecision(entryId: decision.entryId, prompt: decision.prompt, kind: decision.kind) else {
             return false
         }
         recordDecision(decision)
         return true
+    }
+
+    /// True when no recent decision for this session already matches the same
+    /// prompt + kind. Used to gate execution *before* acting, so the boss never
+    /// re-sends input for a prompt it already advanced (idempotency).
+    func isNewDecision(entryId: UUID?, prompt: String, kind: BossDecisionKind) -> Bool {
+        guard let recent = decisionLog.first(where: { $0.entryId == entryId }) else {
+            return true
+        }
+        return !(recent.kind == kind && recent.prompt == prompt)
     }
 }
