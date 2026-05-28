@@ -12,6 +12,18 @@ on:
         required: true
         type: boolean
         default: true
+  # Callable by the auto-release-on-merge workflow.
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag, for example v0.1.0
+        required: true
+        type: string
+      prerelease:
+        description: Mark the GitHub Release as a prerelease
+        required: false
+        type: boolean
+        default: true
   push:
     tags:
       - 'v*'
@@ -60,6 +72,12 @@ jobs:
           else
             tag="$INPUT_TAG"
             prerelease="${INPUT_PRERELEASE:-true}"
+          fi
+          # Idempotent: never double-publish a tag. Safe under the merge-driven
+          # auto-release, a manual tag push, and workflow re-runs.
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $tag already exists; skipping publish."
+            exit 0
           fi
           args=(
             release create "$tag"
