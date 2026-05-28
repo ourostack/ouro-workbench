@@ -824,6 +824,7 @@ struct SettingsSheet: View {
                     appearanceSection
                     chromeSection
                     startupSection
+                    bossSection
                     advancedSection
                 }
                 .padding(20)
@@ -928,6 +929,20 @@ struct SettingsSheet: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Auto-launch resumable terminals on startup")
                     Text("On launch, start every terminal marked Auto Resume that isn't already running. Lets a `.workbench.json` workspace come up with its agents waiting for you.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .toggleStyle(.switch)
+        }
+    }
+
+    private var bossSection: some View {
+        SettingsSection(title: "Boss", systemImage: "person.2.badge.gearshape") {
+            Toggle(isOn: $model.bossAutoAdvanceEnabled) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Let the boss auto-advance waiting sessions")
+                    Text("When a session is waiting, the boss may answer the prompt itself using that session's friend's preferences. Only fires on sessions you've marked Trusted, with a trusted friend, and never for destructive or secret prompts. Every decision — acted or not — is in the Boss Decision Log (⌘K).")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -6628,6 +6643,23 @@ final class WorkbenchViewModel: ObservableObject {
         }
         return defaults.bool(forKey: WorkbenchViewModel.showMenuBarStatusItemDefaultsKey)
     }()
+    /// Global kill-switch for boss auto-advance. Defaults to **on** (TTFA —
+    /// automate what's safe), but even on it only fires on a `trusted` session
+    /// (untrusted is the default, so this is the operator's per-session opt-in)
+    /// with a trusted friend and a non-destructive prompt. Persisted; flip off
+    /// to make the boss escalate everything instead. Every send is audited in
+    /// the decision log.
+    @Published var bossAutoAdvanceEnabled: Bool = {
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: WorkbenchViewModel.bossAutoAdvanceEnabledDefaultsKey) == nil {
+            return true
+        }
+        return defaults.bool(forKey: WorkbenchViewModel.bossAutoAdvanceEnabledDefaultsKey)
+    }() {
+        didSet {
+            UserDefaults.standard.set(bossAutoAdvanceEnabled, forKey: Self.bossAutoAdvanceEnabledDefaultsKey)
+        }
+    }
     /// Auto-launch every `autoResume: true` terminal on app startup?
     /// Defaults to **off** — turning this on changes launch behavior, so we
     /// don't surprise existing users. When on, reopening Workbench brings
@@ -9981,29 +10013,58 @@ final class WorkbenchViewModel: ObservableObject {
             return
         }
         let machineOwner = SessionFriend.machineOwner()
-        var recorded = 0
+        var changed = 0
         for input in inputs {
             let entry = input.entry.flatMap { processEntry(matching: $0) }
             let friend = entry.flatMap { state.effectiveFriend(for: $0, fallback: machineOwner) }
-            let decision = BossInboxDecision(
-                source: "boss:\(state.boss.agentName)",
-                entryId: entry?.id,
-                sessionName: entry?.name,
-                friendName: friend?.name,
-                friendId: friend?.id,
-                prompt: input.prompt ?? entry?.lastSummary ?? "",
-                kind: input.kind,
-                proposedInput: input.proposedInput,
-                preferenceCited: input.preferenceCited,
-                confidence: input.confidence,
-                reasoning: input.reasoning ?? "",
-                status: .recorded
-            )
-            if state.recordDecisionIfNew(decision) {
-                recorded += 1
+            let prompt = input.prompt ?? entry?.lastSummary ?? ""
+            // Idempotency: never act on (or re-log) a prompt we already decided.
+            guard state.isNewDecision(entryId: entry?.id, prompt: prompt, kind: input.kind) else {
+                continue
             }
+
+            var status: BossDecisionStatus = .recorded
+            var reasoning = input.reasoning ?? ""
+
+            // Execute only a fresh autoAdvance that clears the full gate; every
+            // other case is recorded as the boss's judgment without acting.
+            if input.kind == .autoAdvance, let entry {
+                let gate = evaluateAutoAdvanceGate(
+                    enabled: bossAutoAdvanceEnabled,
+                    sessionTrusted: entry.trust == .trusted,
+                    friend: friend,
+                    prompt: prompt,
+                    proposedInput: input.proposedInput
+                )
+                switch gate {
+                case .allow:
+                    sendInput(input.proposedInput ?? "", to: entry, appendNewline: true)
+                    status = .applied
+                case let .block(reason):
+                    reasoning += reasoning.isEmpty ? "" : " "
+                    reasoning += "[not auto-advanced: \(reason)]"
+                }
+            }
+
+            state.recordDecision(
+                BossInboxDecision(
+                    source: "boss:\(state.boss.agentName)",
+                    entryId: entry?.id,
+                    sessionName: entry?.name,
+                    friendName: friend?.name,
+                    friendId: friend?.id,
+                    prompt: prompt,
+                    kind: input.kind,
+                    proposedInput: input.proposedInput,
+                    preferenceCited: input.preferenceCited,
+                    confidence: input.confidence,
+                    reasoning: reasoning,
+                    status: status
+                )
+            )
+            changed += 1
         }
-        if recorded > 0 {
+        if changed > 0 {
             save()
         }
     }
@@ -11243,6 +11304,7 @@ final class WorkbenchViewModel: ObservableObject {
     static let recentWorkspacePathsDefaultsKey = "ouro.workbench.recentWorkspacePaths"
     static let terminalThemeOverrideDefaultsKey = "ouro.workbench.terminalThemeOverride"
     static let showMenuBarStatusItemDefaultsKey = "ouro.workbench.showMenuBarStatusItem"
+    static let bossAutoAdvanceEnabledDefaultsKey = "ouro.workbench.bossAutoAdvanceEnabled"
     static let autoLaunchResumableOnStartupDefaultsKey = "ouro.workbench.autoLaunchResumableOnStartup"
     static let maxRecentWorkspaces = 8
     /// Default terminal font size. Matches macOS Terminal's default.

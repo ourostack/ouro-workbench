@@ -254,9 +254,15 @@ Otherwise → **escalate** (or **hold** if Boss Watch is off).
   reviewable **decision log** — the audit centerpiece. Workbench surfaces the
   inbox and the log. (Suggestions visible; advancing wired but gated off until
   the log is proven on real traffic.)
-- **Phase 2 — auto-advance on (automate-first):** the boss actually sends the
-  advance behind the §6 gate, with kill-switch, undo, and idempotency.
-  Destructive/secret prompts escalate. Every send is a decision-log entry.
+- **Phase 2 — auto-advance on (shipped, automate-first):** the boss actually
+  sends the advance behind `evaluateAutoAdvanceGate` (kill-switch on +
+  `trusted` session + trusted friend + non-destructive/non-secret prompt +
+  proposed input) and `PromptSafetyClassifier` as the defense-in-depth floor.
+  Idempotent (never re-sends a prompt already decided). The kill-switch
+  defaults on but, because sessions default to `untrusted`, nothing
+  auto-advances until the operator marks a session trusted — the per-session
+  opt-in. Every attempt — sent or held, with the reason — is a decision-log
+  entry (`applied` vs `recorded`).
 - **Phase 3 — learning:** "remember this" updates friend preferences; overrides
   record corrections, tightening future decisions.
 
