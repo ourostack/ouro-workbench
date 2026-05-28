@@ -77,6 +77,15 @@ final class WorkspaceSummaryTests: XCTestCase {
                     detail: "Found /opt/homebrew/bin/copilot."
                 )
             ],
+            gitStatus: [
+                entry.id: GitSessionStatus(
+                    isRepo: true,
+                    branch: "feature/x",
+                    dirty: true,
+                    ahead: 2,
+                    behind: 1
+                )
+            ],
             ouroAgents: [
                 OuroAgentRecord(
                     name: "slugger",
@@ -106,6 +115,7 @@ final class WorkspaceSummaryTests: XCTestCase {
         XCTAssertTrue(prompt.contains("trust=trusted"))
         XCTAssertTrue(prompt.contains("executable_health=available"))
         XCTAssertTrue(prompt.contains("executable_path=/opt/homebrew/bin/copilot"))
+        XCTAssertTrue(prompt.contains("git=feature/x (dirty, +2/-1)"))
         XCTAssertTrue(prompt.contains("transcript=/tmp/copilot.log"))
         XCTAssertTrue(prompt.contains("notes=Keep this lane on PR review follow-through. Use yolo mode."))
         XCTAssertTrue(prompt.contains("action=respawn"))
