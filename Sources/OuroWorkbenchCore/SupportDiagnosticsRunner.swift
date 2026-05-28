@@ -95,8 +95,12 @@ public struct SupportDiagnosticsRunner: @unchecked Sendable {
             throw SupportDiagnosticsRunnerError.launchFailed(error.localizedDescription)
         }
 
-        process.waitUntilExit()
+        // Drain the pipe BEFORE waiting: if the script ever emits more than
+        // the OS pipe buffer (~64KB), waiting first would deadlock (child
+        // blocks on write, parent blocks on wait). readDataToEndOfFile drains
+        // continuously and returns at EOF (process exit).
         let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
         let output = String(data: outputData, encoding: .utf8) ?? ""
 
         guard process.terminationStatus == 0 else {

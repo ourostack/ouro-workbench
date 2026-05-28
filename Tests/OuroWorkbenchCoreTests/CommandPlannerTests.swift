@@ -44,6 +44,22 @@ final class CommandPlannerTests: XCTestCase {
         XCTAssertEqual(plan.launchInvocation.execName, "screen")
     }
 
+    func testLaunchPlanThrowsOnEmptyExecutable() {
+        let entry = ProcessEntry(
+            projectId: UUID(),
+            name: "Broken",
+            kind: .terminalAgent,
+            executable: "   ",
+            workingDirectory: "/tmp"
+        )
+        XCTAssertThrowsError(try WorkbenchCommandPlanner().launchPlan(for: entry)) { error in
+            guard case CommandPlanningError.emptyExecutable(let name) = error else {
+                return XCTFail("expected emptyExecutable, got \(error)")
+            }
+            XCTAssertEqual(name, "Broken")
+        }
+    }
+
     func testNativeResumePlanSubstitutesSessionId() throws {
         let project = WorkbenchProject(name: "Project", rootPath: "/tmp/project")
         let entry = ProcessEntry(

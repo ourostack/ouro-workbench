@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.82 - Small robustness: empty-command guard + diagnostics pipe drain
+
+- Launching an entry whose command is blank now fails with a clear "no command configured" error instead of synthesizing an opaque `/usr/bin/env ''` failure. (Can't happen via the UI, but a hand-edited `.workbench.json` could.)
+- The support-diagnostics runner now drains the script's output pipe before waiting on exit, so a verbose diagnostics run can't deadlock on a full pipe buffer.
+
 ## 0.1.81 - MCP server always answers a request
 
 - The `ouro-workbench` MCP server silently dropped any stdin line it couldn't parse as a single JSON-RPC object (e.g. pretty-printed or batched input), leaving the boss agent hanging forever waiting for a reply. It now responds with a JSON-RPC parse error (`-32700`, null id) for an unparseable non-empty line, while still skipping blank keepalive lines and genuine notifications.
