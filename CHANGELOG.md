@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.93 - Boss decision-log model (preference-driven inbox, phase 1a)
+
+- The durable audit contract for the inbox: a `BossInboxDecision` records, for every call the boss makes about a waiting session, **what** it decided (`autoAdvance` / `escalate` / `hold` + the proposed input), **why** (the friend preference cited, a confidence, and freeform reasoning), **for whom** (the resolved friend), **about what** (the session + the waiting prompt), **when**, and **how it turned out** (`recorded` / `applied` / `overridden`).
+- `WorkspaceState.decisionLog` stores these newest-first, capped at 200 like the action log, decoded leniently and present-or-empty so existing state loads unchanged. Unknown decision kinds decode to the non-acting `escalate`.
+- Model + store only — no producer or UI yet. The boss recorder (MCP) and the native review surface build on this in the next slices.
+
 ## 0.1.92 - Machine-owner friend resolution (preference-driven inbox, phase 0b)
 
 - A session's friend now resolves the same way the Ouro CLI does it: a session with no explicit friend (and no group default) falls back to the **machine owner** — the local OS user as a `human`/`family` friend, with the username as its id (the exact `(local, username)` external id the boss resolves against, so the real `FriendRecord` and its preferences attach later). A given machine maps to its owner with no manual picker.
