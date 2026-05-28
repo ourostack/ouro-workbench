@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.75 - Closing the window quits cleanly (no more headless zombie)
+
+- Closing the Workbench window now quits the app. Previously it tore down the SwiftUI scene — deallocating the view model and silently cancelling the Boss-Watch and external-action loops — while the menu-bar item lingered pointing at nothing, so autonomy stopped but the UI implied it was still running. Quitting is the honest outcome, and the clean-detach-on-quit (0.1.67) means persistent sessions reattach on the next launch.
+- To keep Workbench running in the background, **minimize (⌘M)** instead of closing — that preserves the window, model, and loops. (If true close-to-background is wanted later, that's a larger change — flagged for follow-up.)
+
 ## 0.1.74 - Throttle unexpected-exit notifications
 
 - A crash-looping session, or a "Recover All" across several flaky sessions, no longer stacks one macOS banner per exit. Unexpected-exit notifications are now throttled per entry (at most one every 30s).
