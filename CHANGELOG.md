@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.57 - Pinned terminals
+
+- Right-click → `Pin to Top` floats a session to the top of its group in the sidebar; `Unpin from Top` reverses it. Pinned rows show a small pin glyph next to the name.
+- Pinned entries stay above unpinned ones (stable within each partition), so the sessions you care about are always at hand even in a busy group. Order persists in `WorkbenchStore`.
+- Stored as `isPinned` on `ProcessEntry` (decode-if-present → pre-pin state loads with `isPinned == false`). The ⌘1–9 quick-select and terminal cycling honor the pinned-first order since they read the same `sessionEntries`.
+- 4 unit tests cover the default, coding round-trip, backward-compat decode, and the pinned-first partition.
+
 ## 0.1.56 - Per-group color tags
 
 - Groups can now be color-tagged so the sidebar is scannable at a glance. Pick a color from `Group Actions → Color Tag` (8 colors + None). The group's folder icon tints to match.

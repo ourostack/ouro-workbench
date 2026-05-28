@@ -1300,7 +1300,8 @@ struct WorkbenchSidebarView: View {
                         isSelected: model.selectedEntryID == entry.id,
                         cliName: model.cliName(for: entry),
                         health: model.executableHealth(for: entry),
-                        runningSince: model.runningStartDate(for: entry)
+                        runningSince: model.runningStartDate(for: entry),
+                        isPinned: entry.isPinned
                     )
                         .tag(entry.id)
                         .contextMenu {
@@ -1596,6 +1597,15 @@ struct TerminalRowContextMenu: View {
             }
             .disabled(model.bossCheckInIsRunning)
             Button {
+                model.togglePin(for: entry)
+            } label: {
+                Label(
+                    model.isPinned(entry) ? "Unpin from Top" : "Pin to Top",
+                    systemImage: model.isPinned(entry) ? "pin.slash" : "pin"
+                )
+            }
+            .disabled(entry.isArchived)
+            Button {
                 model.copyLaunchCommand(for: entry)
             } label: {
                 Label("Copy Launch Command", systemImage: "doc.on.doc")
@@ -1668,6 +1678,9 @@ struct TerminalAgentRow: View {
     /// Drives the `5m` / `2h` elapsed-time pill in the row. `nil` skips the
     /// pill entirely — keeps the row uncluttered for idle / archived entries.
     var runningSince: Date?
+    /// Whether the entry is pinned to the top of its group. Shows a small
+    /// pin glyph next to the name.
+    var isPinned: Bool = false
 
     var body: some View {
         HStack {
@@ -1676,7 +1689,21 @@ struct TerminalAgentRow: View {
                 // make'. Middle-truncation hides the part of the name that
                 // actually identifies what the session is doing — the
                 // distinguishing detail is at the start, not the middle.
-                Label(entry.name, systemImage: rowIcon)
+                Label {
+                    HStack(spacing: 4) {
+                        Text(entry.name)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        if isPinned {
+                            Image(systemName: "pin.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .help("Pinned to top")
+                        }
+                    }
+                } icon: {
+                    Image(systemName: rowIcon)
+                }
                     .lineLimit(1)
                     .truncationMode(.tail)
                 if let cliName {
@@ -6546,7 +6573,11 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     var sessionEntries: [ProcessEntry] {
-        projectSessionEntries.filter { !$0.isArchived }
+        let visible = projectSessionEntries.filter { !$0.isArchived }
+        // Pinned entries float to the top, preserving stored order within
+        // each partition (stable). Concatenation keeps the partition stable
+        // where `sorted(by:)` would not, and keeps ID-based reorder coherent.
+        return visible.filter(\.isPinned) + visible.filter { !$0.isPinned }
     }
 
     /// SwiftUI `.onMove` handler for the sidebar's non-archived rows. The
@@ -6587,6 +6618,22 @@ final class WorkbenchViewModel: ObservableObject {
         }
         state.projects[index].colorTag = tag
         do { try store.save(state) } catch { errorMessage = String(describing: error) }
+    }
+
+    /// Toggle the pinned state of a session. Pinned sessions float to the
+    /// top of their group in the sidebar (see `sessionEntries`). Persisted.
+    func togglePin(for entry: ProcessEntry) {
+        guard let index = state.processEntries.firstIndex(where: { $0.id == entry.id }) else {
+            return
+        }
+        state.processEntries[index].isPinned.toggle()
+        do { try store.save(state) } catch { errorMessage = String(describing: error) }
+    }
+
+    /// Whether the entry is currently pinned. Convenience for the sidebar
+    /// row + context menu, which hold a possibly-stale copy of the entry.
+    func isPinned(_ entry: ProcessEntry) -> Bool {
+        state.processEntries.first(where: { $0.id == entry.id })?.isPinned ?? entry.isPinned
     }
 
     var archivedSessionEntries: [ProcessEntry] {

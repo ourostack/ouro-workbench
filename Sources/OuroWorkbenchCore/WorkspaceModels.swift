@@ -79,6 +79,9 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
     public var trust: ProcessTrust
     public var autoResume: Bool
     public var isArchived: Bool
+    /// User-pinned to the top of its group in the sidebar. Defaults to false;
+    /// decoded with decodeIfPresent so pre-pin state loads unchanged.
+    public var isPinned: Bool
     public var attention: AttentionState
     public var lastSummary: String?
     public var notes: String?
@@ -96,6 +99,7 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         case trust
         case autoResume
         case isArchived
+        case isPinned
         case attention
         case lastSummary
         case notes
@@ -114,6 +118,7 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         trust: ProcessTrust = .untrusted,
         autoResume: Bool = false,
         isArchived: Bool = false,
+        isPinned: Bool = false,
         attention: AttentionState = .idle,
         lastSummary: String? = nil,
         notes: String? = nil,
@@ -130,6 +135,7 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         self.trust = trust
         self.autoResume = autoResume
         self.isArchived = isArchived
+        self.isPinned = isPinned
         self.attention = attention
         self.lastSummary = lastSummary
         self.notes = notes
@@ -157,6 +163,7 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         self.trust = try container.decode(ProcessTrust.self, forKey: .trust)
         self.autoResume = try container.decode(Bool.self, forKey: .autoResume)
         self.isArchived = try container.decodeIfPresent(Bool.self, forKey: .isArchived) ?? false
+        self.isPinned = try container.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
         self.attention = try container.decodeIfPresent(AttentionState.self, forKey: .attention) ?? .idle
         self.lastSummary = try container.decodeIfPresent(String.self, forKey: .lastSummary)
         self.notes = try container.decodeIfPresent(String.self, forKey: .notes)
