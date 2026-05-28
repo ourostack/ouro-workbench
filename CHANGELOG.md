@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.48 - Sidebar elapsed-time pill on running sessions
+
+- Every currently-running session in the sidebar now shows a small `5m` / `1h 14m` pill next to its row. Answers "how long has this Codex been running?" at a glance without clicking through to the transcript or the run log.
+- Pill is driven by a SwiftUI `TimelineView(.periodic(by: 30))` so it refreshes once every 30 seconds — fine-grained enough for human glance, never busy.
+- Hover-help on the pill shows the absolute start date (`Running since May 27, 6:42 PM`).
+- Idle and archived rows show no pill, keeping the row uncluttered when nothing's running.
+- Format is promoted to `WorkbenchElapsedFormatter` in the core module with 6 unit tests so the displayed string is exercised end-to-end.
+
 ## 0.1.47 - Drop-folder to open workspace + About sheet
 
 - **Drop a Finder folder onto the Workbench window** to open it as a workspace. If the folder contains a `.workbench.json`, Workbench arranges the declared terminals; otherwise the user gets the same error path as `Open Workspace…`. Closes the muscle-memory gap: "drag a project root into the app" should just work, like a code editor.
