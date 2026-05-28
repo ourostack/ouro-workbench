@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.69 - Lenient boss-action parsing
+
+- A boss reply containing one malformed action (e.g. an action type a newer build knows but this one doesn't) no longer discards the entire batch of valid actions. Actions decode element-by-element; bad ones are skipped, the rest apply. A payload that isn't an action array at all still surfaces as a parse error.
+
 ## 0.1.68 - Fix launch-preflight false-blocks (self-review followups)
 
 - **Reattach/recover no longer blocked by a moved working directory.** The pre-launch validation added in 0.1.62 also ran on recover / auto-resume, which reattach to a still-live `screen` session where the original cwd is irrelevant — so a long-running session whose repo moved got wrongly blocked. Preflight now only validates fresh spawns (`recoveryAction == nil`).

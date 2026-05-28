@@ -165,7 +165,13 @@ public struct BossWorkbenchActionParser: Sendable {
         guard let json = fencedActionJSON(in: text) ?? markerActionJSON(in: text) else {
             return []
         }
-        return try JSONDecoder().decode([BossWorkbenchAction].self, from: Data(json.utf8))
+        // Decode the action array leniently: one malformed action (e.g. the
+        // boss emits an unknown action type or a wrong field shape) shouldn't
+        // discard the whole batch of otherwise-valid actions. If the payload
+        // isn't an array at all, this still throws so the caller can surface a
+        // parse error.
+        let wrappers = try JSONDecoder().decode([FailableDecodable<BossWorkbenchAction>].self, from: Data(json.utf8))
+        return wrappers.compactMap(\.base)
     }
 
     private func fencedActionJSON(in text: String) -> String? {
