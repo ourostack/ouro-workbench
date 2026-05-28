@@ -49,7 +49,7 @@ public struct TranscriptSearcher {
         let entriesByID = Dictionary(uniqueKeysWithValues: state.processEntries.map { ($0.id, $0) })
         let runs = state.processRuns
             .filter { $0.transcriptPath?.isEmpty == false }
-            .sorted { $0.startedAt > $1.startedAt }
+            .sorted(by: ProcessRun.isMoreRecent)
         var matches: [TranscriptSearchMatch] = []
 
         for run in runs {

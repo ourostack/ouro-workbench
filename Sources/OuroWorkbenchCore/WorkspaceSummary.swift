@@ -188,7 +188,7 @@ public struct WorkspaceChangeSummarizer: Sendable {
                 latest[run.entryId] = run
                 continue
             }
-            if run.startedAt > existing.startedAt {
+            if ProcessRun.isMoreRecent(run, existing) {
                 latest[run.entryId] = run
             }
         }
@@ -210,7 +210,7 @@ public struct WorkspaceSummarizer: Sendable {
             processSnapshots: state.processEntries.map { entry in
                 let latestRun = state.processRuns
                     .filter { $0.entryId == entry.id }
-                    .sorted { $0.startedAt > $1.startedAt }
+                    .sorted(by: ProcessRun.isMoreRecent)
                     .first
                 return ProcessSnapshot(
                     id: entry.id,

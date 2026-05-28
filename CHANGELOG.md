@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.79 - Deterministic "latest run" selection
+
+- The summary, recovery planner, recovery drill, startup reconciler, prompt builder, and transcript search all independently picked the "latest run" for an entry by `startedAt` alone — with no tiebreak. When two runs shared an identical timestamp (a tight create loop, or second-granularity restore), the winner depended on array order and the call sites could disagree about which run was current. A single `ProcessRun.isMoreRecent` comparator (newer `startedAt`, ties broken on `id`) now backs all of them.
+
 ## 0.1.78 - Transcript search runs off the main thread
 
 - ⌘K transcript search opened and read every transcript file synchronously on the main thread, so a workspace with many or large transcripts (or one on a slow/network volume) could freeze the UI mid-search. The search now runs on a background task and publishes results back on the main actor, dropping stale results if the query changed meanwhile. (Mirrors how support-diagnostics collection already offloads.)

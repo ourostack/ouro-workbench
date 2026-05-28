@@ -266,7 +266,7 @@ final class WorkbenchMCPServer {
     private func latestRun(for entryId: UUID, state: WorkspaceState) -> ProcessRun? {
         state.processRuns
             .filter { $0.entryId == entryId }
-            .sorted { $0.startedAt > $1.startedAt }
+            .sorted(by: ProcessRun.isMoreRecent)
             .first
     }
 

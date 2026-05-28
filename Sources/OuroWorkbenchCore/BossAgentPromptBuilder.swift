@@ -91,7 +91,7 @@ public struct BossAgentPromptBuilder: Sendable {
             let agentKind = TerminalAgentDetector.displayName(for: entry.flatMap(TerminalAgentDetector.detect)) ?? "generic"
             let latestRun = state.processRuns
                 .filter { $0.entryId == snapshot.id }
-                .sorted { $0.startedAt > $1.startedAt }
+                .sorted(by: ProcessRun.isMoreRecent)
                 .first
             let transcriptPath = latestRun?.transcriptPath ?? "none"
             let health = executableHealth[snapshot.id]

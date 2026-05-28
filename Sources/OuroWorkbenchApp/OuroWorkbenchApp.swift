@@ -8531,7 +8531,7 @@ final class WorkbenchViewModel: ObservableObject {
     func latestRun(for entry: ProcessEntry) -> ProcessRun? {
         state.processRuns
             .filter { $0.entryId == entry.id }
-            .sorted { $0.startedAt > $1.startedAt }
+            .sorted(by: ProcessRun.isMoreRecent)
             .first
     }
 
@@ -10352,7 +10352,7 @@ final class WorkbenchViewModel: ObservableObject {
             }
             let latestRun = state.processRuns
                 .filter { $0.entryId == entry.id }
-                .sorted { $0.startedAt > $1.startedAt }
+                .sorted(by: ProcessRun.isMoreRecent)
                 .first
             let plan = try WorkbenchCommandPlanner(paths: paths).recoveryPlan(
                 for: entry,
