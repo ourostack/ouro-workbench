@@ -95,6 +95,11 @@ public struct MailboxClient: Sendable {
 
     private func load(_ url: URL) async throws -> (Data, HTTPURLResponse) {
         try await withThrowingTaskGroup(of: (Data, HTTPURLResponse).self) { group in
+            // Cancel the sibling task on every exit path — including when
+            // `group.next()` *throws* the timeout. Without this `defer`, a
+            // timeout rethrows before `cancelAll()` runs, leaking the still
+            // in-flight data task.
+            defer { group.cancelAll() }
             group.addTask {
                 try await dataLoader(url)
             }
@@ -105,7 +110,6 @@ public struct MailboxClient: Sendable {
             guard let result = try await group.next() else {
                 throw MailboxClientError.timeout
             }
-            group.cancelAll()
             return result
         }
     }

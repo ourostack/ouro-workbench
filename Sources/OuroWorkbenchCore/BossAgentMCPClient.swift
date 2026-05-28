@@ -113,6 +113,10 @@ public final class BossAgentMCPClient: @unchecked Sendable {
 
     private func readResponse(_ processBox: ProcessIOBox, id: Int, timeoutNanoseconds: UInt64) async throws -> String {
         try await withThrowingTaskGroup(of: String.self) { group in
+            // Cancel the sibling on every exit path, including the timeout
+            // rethrow. (The timeout task also terminates the subprocess so
+            // the blocking read unwinds; this keeps the group tidy regardless.)
+            defer { group.cancelAll() }
             group.addTask {
                 try processBox.readResponse(id: id)
             }
@@ -124,7 +128,6 @@ public final class BossAgentMCPClient: @unchecked Sendable {
             guard let data = try await group.next() else {
                 throw BossAgentMCPClientError.closed
             }
-            group.cancelAll()
             return data
         }
     }
