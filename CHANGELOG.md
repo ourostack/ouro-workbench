@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.63 - Fix: jumping to a session in another group lands on the right one
+
+- Clicking a running session in the menu-bar list, an "Open" on the recovery sheet, or "Open" on the import summary banner now switches to the session's **group** before selecting it. Previously these set the selected entry without switching the project, so a target in another group silently fell back to the wrong terminal.
+- Centralized in `selectEntryAcrossGroups(_:)` so all cross-group jumps behave consistently.
+
 ## 0.1.62 - Validate sessions before launch
 
 - Launching (or recovering / auto-resuming) a session now fails fast with a clear message when its **working directory doesn't exist** or its **command isn't found / isn't executable**, instead of silently spawning an instantly-dead session or running the agent in the app's own directory.
