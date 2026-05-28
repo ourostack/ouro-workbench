@@ -6573,6 +6573,53 @@ final class WorkbenchViewModel: ObservableObject {
         refreshWorkbenchMCPRegistration()
         refreshExecutableHealth()
         refreshOnboardingReadiness()
+        registerTerminationObserver()
+    }
+
+    /// Observe app termination so we can record running sessions as cleanly
+    /// detached before we go. `queue: .main` runs the block on the main
+    /// thread, so hopping to the main actor is safe.
+    private func registerTerminationObserver() {
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.prepareForTermination()
+            }
+        }
+    }
+
+    /// Called on app quit. `screen` keeps each persistent session alive after
+    /// our client process dies, so the sessions are genuinely reattachable.
+    /// Mark every still-running persistent session as cleanly detached now —
+    /// otherwise its run stays `.running` in persisted state and the startup
+    /// reconciler flips it into an alarming "needs startup recovery" on the
+    /// next launch, even though one relaunch would reattach it. Reuses the
+    /// same detach framing as the live detach path.
+    func prepareForTermination() {
+        flushPendingOutput()
+        for (entryId, session) in activeSessions {
+            guard let persistentName = session.plan.persistentSessionName,
+                  !persistentName.isEmpty,
+                  let runIndex = state.processRuns.firstIndex(where: {
+                      $0.id == session.plan.runId && $0.status == .running
+                  })
+            else {
+                continue
+            }
+            state.processRuns[runIndex].status = .needsRecovery
+            state.processRuns[runIndex].pid = nil
+            state.processRuns[runIndex].endedAt = nil
+            state.processRuns[runIndex].exitCode = nil
+            state.processRuns[runIndex].rawExitStatus = nil
+            updateEntry(entryId) { entry in
+                entry.attention = .needsBossReview
+                entry.lastSummary = "\(entry.name) detached on quit; reattaches on next launch"
+            }
+        }
+        save()
     }
 
     var errorIsPresented: Binding<Bool> {
