@@ -1307,6 +1307,13 @@ struct HeaderView: View {
                     Label("Open Workspace…", systemImage: "folder.badge.gearshape")
                 }
                 .keyboardShortcut("o", modifiers: [.command])
+                Button {
+                    model.presentSaveWorkspacePanel()
+                } label: {
+                    Label("Save Workspace As…", systemImage: "square.and.arrow.down")
+                }
+                .keyboardShortcut("s", modifiers: [.command, .shift])
+                .disabled(model.selectedProject == nil)
                 Divider()
                 Toggle(isOn: Binding(
                     get: { model.bossWatchIsEnabled },
@@ -6403,6 +6410,18 @@ final class WorkbenchViewModel: ObservableObject {
             )
         )
 
+        if let selectedProject {
+            commands.append(
+                command(
+                    .saveWorkspaceConfig,
+                    "Save Workspace As…",
+                    "Write \(selectedProject.name) to a .workbench.json file",
+                    "square.and.arrow.down",
+                    keywords: ["workspace", "save", "export", "config", "json", "workbench", selectedProject.name]
+                )
+            )
+        }
+
         // Agent-management commands. Always-available entry points first,
         // then one Select Agent entry per installed bundle so search like
         // "agent <name>" lands on the right row.
@@ -7034,6 +7053,85 @@ final class WorkbenchViewModel: ObservableObject {
             return nil
         }
         return openWorkspaceConfig(config: config, configDirectory: directoryPath, loader: loader)
+    }
+
+    /// Build a `.workbench.json`-compatible config representing the currently
+    /// selected project. Each non-archived session in the project becomes a
+    /// terminal entry. Working directories under the project root are
+    /// rewritten as relative paths so the resulting file is portable.
+    func exportWorkspaceConfig(for project: WorkbenchProject) -> WorkbenchWorkspaceConfig {
+        let projectSessions = state.processEntries.filter {
+            $0.projectId == project.id && !$0.isArchived
+        }
+        let rootPath = (project.rootPath as NSString).expandingTildeInPath
+        let terminals: [WorkbenchWorkspaceConfig.TerminalConfig] = projectSessions.map { entry in
+            let workingDirectory: String?
+            if entry.workingDirectory == rootPath {
+                workingDirectory = nil
+            } else if entry.workingDirectory.hasPrefix(rootPath + "/") {
+                workingDirectory = String(entry.workingDirectory.dropFirst(rootPath.count + 1))
+            } else {
+                workingDirectory = entry.workingDirectory
+            }
+            return WorkbenchWorkspaceConfig.TerminalConfig(
+                name: entry.name,
+                command: launchCommand(for: entry),
+                workingDirectory: workingDirectory,
+                trust: entry.trust == .trusted ? "trusted" : "untrusted",
+                autoResume: entry.autoResume,
+                notes: entry.trimmedNotes
+            )
+        }
+        return WorkbenchWorkspaceConfig(
+            group: project.name,
+            rootPath: project.rootPath,
+            terminals: terminals
+        )
+    }
+
+    /// Present an NSSavePanel pre-populated with the resolved root path and
+    /// the canonical `.workbench.json` filename, then write a pretty-printed
+    /// JSON file on confirm. Surfaces parse / write errors via the existing
+    /// alert path.
+    func presentSaveWorkspacePanel() {
+        guard let project = selectedProject else {
+            errorMessage = "No group is selected to save"
+            return
+        }
+        let config = exportWorkspaceConfig(for: project)
+        guard !config.terminals.isEmpty else {
+            errorMessage = "\(project.name) has no terminals to save"
+            return
+        }
+        let panel = NSSavePanel()
+        panel.title = "Save Workspace"
+        panel.message = "Write \(project.name) to .workbench.json"
+        panel.nameFieldStringValue = WorkbenchWorkspaceConfigLoader.configFileName
+        panel.canCreateDirectories = true
+        if !project.rootPath.isEmpty {
+            let expandedRoot = (project.rootPath as NSString).expandingTildeInPath
+            if FileManager.default.fileExists(atPath: expandedRoot) {
+                panel.directoryURL = URL(fileURLWithPath: expandedRoot)
+            }
+        }
+        guard panel.runModal() == .OK, let url = panel.url else {
+            return
+        }
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+            let data = try encoder.encode(config)
+            try data.write(to: url)
+            recordActionLog(
+                source: "native",
+                action: "saveWorkspaceConfig",
+                targetName: project.name,
+                result: "Wrote \(config.terminals.count) terminals to \(url.path)",
+                succeeded: true
+            )
+        } catch {
+            errorMessage = "Couldn't save workspace: \(error.localizedDescription)"
+        }
     }
 
     /// Present an NSOpenPanel to pick a directory, then open its config. Used
@@ -8345,6 +8443,8 @@ final class WorkbenchViewModel: ObservableObject {
             isShortcutHelpPresented = true
         case .openWorkspaceConfig:
             presentOpenWorkspacePanel()
+        case .saveWorkspaceConfig:
+            presentSaveWorkspacePanel()
         case .selectAgent,
              .useSelectedAgentAsBoss,
              .openSelectedAgentConfig,

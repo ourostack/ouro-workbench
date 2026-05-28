@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.41 - Export current group as .workbench.json
+
+- New `Save Workspace As…` action in the More menu (`⇧⌘S`) and ⌘K palette — writes the currently-selected group's terminals out to a `.workbench.json` file at a user-picked location. Closes the loop with `Open Workspace…` so a workbench you've arranged interactively can be committed to a repo as declarative project setup.
+- Working directories under the project root are rewritten as relative paths so the resulting file stays portable across machines; absolute paths outside the root are kept absolute.
+- JSON output is pretty-printed with sorted keys for readable diffs when committed to a repo.
+
 ## 0.1.39 - Search options in the ⌘F bar
 
 - The in-terminal search bar now exposes three SwiftTerm `SearchOptions` toggles next to the field:
