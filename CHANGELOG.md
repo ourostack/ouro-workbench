@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.58 - Stability: throttle the terminal output hot path
+
+- **Fixes the dominant source of UI jank.** Previously every chunk of terminal output (hundreds/sec from a busy Claude/Codex session) mutated `@Published state`, re-rendered the whole app, re-ran the header summarizer, and synchronously rewrote the entire workspace-state JSON to disk on the main thread.
+- Output timestamps are now coalesced and flushed on a 2-second debounce: at most one state mutation + one disk write per interval instead of hundreds per second. The terminating-session path eagerly folds in the pending timestamp so last-output freshness isn't lost.
+- No user-visible behavior change beyond the app feeling dramatically smoother under active agent output; recovery freshness checks tolerate the 2s coalescing window.
+
 ## 0.1.57 - Pinned terminals
 
 - Right-click → `Pin to Top` floats a session to the top of its group in the sidebar; `Unpin from Top` reverses it. Pinned rows show a small pin glyph next to the name.

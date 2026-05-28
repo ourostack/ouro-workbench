@@ -6507,6 +6507,16 @@ final class WorkbenchViewModel: ObservableObject {
     private var didAttemptStartupRecovery = false
     private var didAttemptDefaultShellLaunch = false
     private var didAttemptAutoResumeLaunch = false
+    /// Coalesced "last output at" timestamps awaiting a flush to `state`.
+    /// Terminal output arrives hundreds of times per second from a busy TUI;
+    /// applying each one to `@Published state` (and saving) per chunk thrashed
+    /// the UI and the disk. We instead stash the latest timestamp per run here
+    /// and flush them in a single batch on a short debounce. Keyed by runId.
+    private var pendingOutputTimestamps: [UUID: Date] = [:]
+    private var outputFlushTask: Task<Void, Never>?
+    /// How long to coalesce output timestamps before flushing to disk. Human
+    /// glance-grade freshness; recovery freshness checks tolerate this.
+    private let outputFlushIntervalNanoseconds: UInt64 = 2_000_000_000
     private let bossWatchIntervalNanoseconds: UInt64 = 60_000_000_000
 
     init(
@@ -10400,15 +10410,62 @@ final class WorkbenchViewModel: ObservableObject {
         save()
     }
 
+    /// Record that a run produced output. Coalesced: instead of mutating
+    /// `@Published state` and rewriting the full state JSON on every PTY
+    /// chunk (which thrashed the UI and disk), we stash the latest timestamp
+    /// and flush the batch on a short debounce.
     func markOutput(entryId: UUID, runId: UUID) {
-        guard let runIndex = state.processRuns.firstIndex(where: { $0.id == runId && $0.entryId == entryId }) else {
+        pendingOutputTimestamps[runId] = Date()
+        scheduleOutputFlush()
+    }
+
+    /// Arm a single coalescing flush if one isn't already pending. The Task
+    /// inherits the main actor, so `flushPendingOutput` runs main-isolated.
+    private func scheduleOutputFlush() {
+        guard outputFlushTask == nil else { return }
+        outputFlushTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: self?.outputFlushIntervalNanoseconds ?? 2_000_000_000)
+            self?.flushPendingOutput()
+        }
+    }
+
+    /// Apply all coalesced output timestamps to `state` in one mutation and
+    /// persist once. Called on the debounce and eagerly before a run
+    /// terminates so the final freshness isn't lost.
+    private func flushPendingOutput() {
+        outputFlushTask = nil
+        guard !pendingOutputTimestamps.isEmpty else { return }
+        var didMutate = false
+        for (runId, date) in pendingOutputTimestamps {
+            if let runIndex = state.processRuns.firstIndex(where: { $0.id == runId }) {
+                state.processRuns[runIndex].lastOutputAt = date
+                didMutate = true
+            }
+        }
+        pendingOutputTimestamps.removeAll()
+        if didMutate {
+            save()
+        }
+    }
+
+    /// Apply (and clear) any pending output timestamp for a single run
+    /// without a standalone save — callers that are about to save anyway
+    /// (e.g. `markTerminated`) use this so the terminating run's last
+    /// output time is preserved in the same write.
+    private func applyPendingOutput(forRun runId: UUID) {
+        guard let date = pendingOutputTimestamps.removeValue(forKey: runId) else {
             return
         }
-        state.processRuns[runIndex].lastOutputAt = Date()
-        save()
+        if let runIndex = state.processRuns.firstIndex(where: { $0.id == runId }) {
+            state.processRuns[runIndex].lastOutputAt = date
+        }
     }
 
     func markTerminated(entryId: UUID, runId: UUID, rawStatus: Int32?) {
+        // Fold any coalesced output timestamp for this run into state before
+        // we rewrite its status, so the last-output time isn't lost to the
+        // debounce. markTerminated saves below, so no standalone write here.
+        applyPendingOutput(forRun: runId)
         guard let runIndex = state.processRuns.firstIndex(where: { $0.id == runId && $0.entryId == entryId }),
               state.processRuns[runIndex].status == .running
         else {
