@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.53 - Copy transcript tail from sidebar context menu
+
+- Right-click → `Copy Last 20 Lines` snaps the latest 20 transcript lines onto the clipboard. Handy for pasting into Slack / Linear when reporting what an agent just did, without opening the full transcript sheet.
+- Disabled when the entry has no transcript on disk yet (e.g. never launched).
+
 ## 0.1.52 - Drag-to-reorder groups in the sidebar
 
 - Mirrors the terminal-row reorder added in 0.1.50: drag any project row in the Groups section to put it where you want. Order persists in `WorkbenchStore`.

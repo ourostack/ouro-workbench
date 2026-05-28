@@ -1518,6 +1518,12 @@ struct TerminalRowContextMenu: View {
                 Label("Copy Launch Command", systemImage: "doc.on.doc")
             }
             Button {
+                model.copyTranscriptTail(for: entry)
+            } label: {
+                Label("Copy Last 20 Lines", systemImage: "doc.plaintext")
+            }
+            .disabled(model.latestRun(for: entry)?.transcriptPath == nil)
+            Button {
                 model.openWorkingDirectory(for: entry)
             } label: {
                 Label("Open Working Directory", systemImage: "folder")
@@ -9623,6 +9629,29 @@ final class WorkbenchViewModel: ObservableObject {
             targetEntryId: entry.id,
             targetName: entry.name,
             result: "Copied launch command for \(entry.name)",
+            succeeded: true
+        )
+    }
+
+    /// Copy the last ~20 lines of the entry's most recent transcript to the
+    /// pasteboard. Handy when the user wants to paste the tail into Slack /
+    /// Linear without opening the transcript sheet. Records action log so
+    /// the source-of-output is auditable. No-op (with an error message)
+    /// when there's no transcript on disk for the entry yet.
+    func copyTranscriptTail(for entry: ProcessEntry) {
+        guard let tail = transcriptTail(for: entry) else {
+            errorMessage = "No transcript on disk for \(entry.name)"
+            return
+        }
+        let lines = tail.text.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
+        let chosen = lines.suffix(20).joined(separator: "\n")
+        copyToPasteboard(chosen)
+        recordActionLog(
+            source: "native",
+            action: "copyTranscriptTail",
+            targetEntryId: entry.id,
+            targetName: entry.name,
+            result: "Copied \(min(20, lines.count)) lines from \(entry.name)",
             succeeded: true
         )
     }
