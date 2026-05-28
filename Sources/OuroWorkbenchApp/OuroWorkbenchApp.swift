@@ -10647,7 +10647,19 @@ final class WorkbenchViewModel: ObservableObject {
             } ?? sessionEntries.first?.id ?? archivedSessionEntries.first?.id
             try store.save(state)
         } catch {
-            errorMessage = String(describing: error)
+            // The store quarantines an unreadable file before we get here, so
+            // resetting to an empty workspace below no longer destroys the
+            // user's data — point them at where the old copy was saved.
+            if case let WorkbenchStoreError.unreadableState(quarantineURL, reason) = error {
+                errorMessage = """
+                Your workspace couldn't be read (\(reason)) and was set aside at:
+                \(quarantineURL.path)
+
+                Starting with a fresh workspace. Your previous data is preserved in that file if you need to recover it.
+                """
+            } else {
+                errorMessage = "Couldn't load workspace: \(error.localizedDescription)"
+            }
             state = bootstrapper.bootstrappedState(from: WorkspaceState())
             bossWatchIsEnabled = state.bossWatchEnabled
             bossWatchBaselineState = nil

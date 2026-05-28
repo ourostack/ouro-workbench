@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.60 - Stability: never silently wipe the workspace
+
+- **A corrupt or unreadable state file no longer destroys your setup.** Previously any decode failure reset the workspace to empty and immediately saved over the original. Now the unreadable file is quarantined to a timestamped `workspace-state.json.corrupt-<time>` sibling *before* the fallback, and the error message tells you exactly where it went.
+- **One bad row no longer sinks everything.** Projects, terminals, runs, and the action log decode element-by-element — a single corrupt or schema-drifted entry is skipped, the rest load.
+- **Schema drift is tolerated.** The persisted enums (`ProcessKind`, `ProcessStatus`, `ProcessTrust`, `AttentionState`, `TerminalAgentKind`) decode unknown raw values to a safe default instead of throwing — so a state file written by a newer build loads in an older one (relevant when iterating on Workbench itself).
+- 6 new tests cover quarantine, lenient element skip, and enum fallback.
+
 ## 0.1.59 - Stability: stop blocking the UI on `screen`
 
 - Stopping a session no longer blocks the main thread on `screen -X quit` — it's dispatched off-main, fire-and-forget, so `Stop` / `Stop All Running` stay responsive even if a `screen` socket is wedged.
