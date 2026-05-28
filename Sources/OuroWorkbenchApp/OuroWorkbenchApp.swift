@@ -6957,12 +6957,17 @@ final class WorkbenchViewModel: ObservableObject {
         return readiness.repairSteps.contains { Self.onboardingConfigGapBlockerIDs.contains($0.id) }
     }
 
-    /// Only force onboarding at launch for a genuine config gap. A configured
-    /// machine pending a liveness check is handled by kicking the checks off
-    /// in the background (see the startup task) so readiness flips to ready
-    /// without the sheet ever appearing.
+    /// Present onboarding at launch for a first-run machine (no usable boss
+    /// agent yet — `.needsAgent`, whose steps are hatch/clone/use-<agent>) or
+    /// a genuine configuration gap. A configured machine merely *pending* a
+    /// provider liveness check is NOT forced into the sheet — the startup
+    /// task runs those checks in the background so readiness flips to ready
+    /// on its own.
     var shouldPresentOnboardingOnLaunch: Bool {
-        onboardingReadiness?.isReady == false && onboardingHasConfigGap
+        guard let readiness = onboardingReadiness, !readiness.isReady else {
+            return false
+        }
+        return readiness.state == .needsAgent || onboardingHasConfigGap
     }
 
     var onboardingPhaseLabel: String {
