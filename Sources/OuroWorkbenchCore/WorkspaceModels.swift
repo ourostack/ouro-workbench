@@ -5,11 +5,24 @@ public enum ProcessKind: String, Codable, Sendable {
     case shell
     case terminalAgent
     case ouroBoss
+
+    // Unknown raw values (e.g. a kind added by a newer build) decode to
+    // `.command` instead of throwing — schema drift shouldn't sink the row.
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = ProcessKind(rawValue: raw) ?? .command
+    }
 }
 
 public enum ProcessTrust: String, Codable, Sendable {
     case trusted
     case untrusted
+
+    // Unknown decodes to the safe default (`.untrusted`).
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = ProcessTrust(rawValue: raw) ?? .untrusted
+    }
 }
 
 public enum ProcessStatus: String, Codable, Sendable {
@@ -19,6 +32,13 @@ public enum ProcessStatus: String, Codable, Sendable {
     case waitingForInput
     case needsRecovery
     case manualActionNeeded
+
+    // Unknown decodes to `.configured` (neutral, not-running) rather than
+    // throwing on a status added by a newer build.
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = ProcessStatus(rawValue: raw) ?? .configured
+    }
 }
 
 public enum AttentionState: String, Codable, Sendable {
@@ -27,6 +47,12 @@ public enum AttentionState: String, Codable, Sendable {
     case waitingOnHuman
     case blocked
     case needsBossReview
+
+    // Unknown decodes to `.idle`.
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = AttentionState(rawValue: raw) ?? .idle
+    }
 }
 
 public struct BossAgentSelection: Codable, Equatable, Sendable {
@@ -303,10 +329,15 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         self.bossPaneCollapsed = try container.decodeIfPresent(Bool.self, forKey: .bossPaneCollapsed) ?? false
         self.selectedProjectId = try container.decodeIfPresent(UUID.self, forKey: .selectedProjectId)
         self.selectedEntryId = try container.decodeIfPresent(UUID.self, forKey: .selectedEntryId)
-        self.projects = try container.decode([WorkbenchProject].self, forKey: .projects)
-        self.processEntries = try container.decode([ProcessEntry].self, forKey: .processEntries)
-        self.processRuns = try container.decode([ProcessRun].self, forKey: .processRuns)
-        self.actionLog = try container.decodeIfPresent([WorkbenchActionLogEntry].self, forKey: .actionLog) ?? []
+        // Decode the collections leniently: a single corrupt or
+        // schema-drifted element is skipped rather than throwing and taking
+        // the entire workspace down with it (which, combined with the load
+        // catch path, used to wipe the user's setup).
+        var skipped = 0
+        self.projects = try container.decodeLenientArray(WorkbenchProject.self, forKey: .projects, skipped: &skipped)
+        self.processEntries = try container.decodeLenientArray(ProcessEntry.self, forKey: .processEntries, skipped: &skipped)
+        self.processRuns = try container.decodeLenientArray(ProcessRun.self, forKey: .processRuns, skipped: &skipped)
+        self.actionLog = try container.decodeLenientArray(WorkbenchActionLogEntry.self, forKey: .actionLog, skipped: &skipped)
         self.updatedAt = try container.decode(Date.self, forKey: .updatedAt)
     }
 }

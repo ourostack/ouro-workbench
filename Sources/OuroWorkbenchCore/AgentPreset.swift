@@ -5,6 +5,13 @@ public enum TerminalAgentKind: String, Codable, CaseIterable, Sendable {
     case githubCopilotCLI
     case openAICodex
     case custom
+
+    // Unknown raw values (an agent kind added by a newer build) decode to
+    // `.custom` rather than throwing — keeps the terminal, defaults the kind.
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = TerminalAgentKind(rawValue: raw) ?? .custom
+    }
 }
 
 public enum ResumeStrategyKind: String, Codable, Sendable {

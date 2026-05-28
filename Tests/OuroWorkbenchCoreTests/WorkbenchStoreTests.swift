@@ -109,4 +109,95 @@ final class WorkbenchStoreTests: XCTestCase {
         XCTAssertNil(loaded.selectedEntryId)
         try? FileManager.default.removeItem(at: root)
     }
+
+    func testCorruptStateFileIsQuarantinedNotOverwritten() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let stateURL = root.appendingPathComponent("workspace.json")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try "{ this is not valid json".data(using: .utf8)?.write(to: stateURL)
+
+        let store = WorkbenchStore(stateURL: stateURL)
+        do {
+            _ = try store.load()
+            XCTFail("Expected load to throw on corrupt JSON")
+        } catch let WorkbenchStoreError.unreadableState(quarantineURL, _) {
+            // Original moved aside; nothing left at the live path to overwrite.
+            XCTAssertFalse(FileManager.default.fileExists(atPath: stateURL.path))
+            XCTAssertTrue(FileManager.default.fileExists(atPath: quarantineURL.path))
+            let preserved = try String(contentsOf: quarantineURL, encoding: .utf8)
+            XCTAssertEqual(preserved, "{ this is not valid json")
+        }
+        try? FileManager.default.removeItem(at: root)
+    }
+
+    func testLenientDecodeSkipsCorruptElementsKeepsGoodOnes() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let stateURL = root.appendingPathComponent("workspace.json")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let goodId = UUID()
+        // Two projects: one valid, one missing the required `name` field.
+        // The bad one should be skipped, the good one preserved — rather than
+        // the whole workspace failing to load.
+        let json = """
+        {
+          "boss": { "agentName": "slugger", "scope": "machine" },
+          "processEntries": [],
+          "processRuns": [],
+          "projects": [
+            { "id": "\(goodId.uuidString)", "name": "Good", "rootPath": "/good",
+              "boss": { "agentName": "slugger", "scope": "machine" } },
+            { "id": "\(UUID().uuidString)", "rootPath": "/bad",
+              "boss": { "agentName": "slugger", "scope": "machine" } }
+          ],
+          "schemaVersion": 1,
+          "updatedAt": "2026-05-23T00:00:00Z"
+        }
+        """
+        try json.data(using: .utf8)?.write(to: stateURL)
+
+        let loaded = try WorkbenchStore(stateURL: stateURL).load()
+        XCTAssertEqual(loaded.projects.map(\.name), ["Good"])
+        try? FileManager.default.removeItem(at: root)
+    }
+
+    func testUnknownEnumRawValueDecodesToFallbackNotThrow() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let stateURL = root.appendingPathComponent("workspace.json")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let projectId = UUID()
+        let entryId = UUID()
+        // `kind` and `agentKind` carry values a newer build might write. The
+        // entry should survive with the fields defaulted (.command / .custom)
+        // instead of the whole load throwing.
+        let json = """
+        {
+          "boss": { "agentName": "slugger", "scope": "machine" },
+          "processEntries": [
+            { "id": "\(entryId.uuidString)", "projectId": "\(projectId.uuidString)",
+              "name": "Future Agent", "kind": "quantumAgent", "agentKind": "geminiCLI",
+              "executable": "future", "arguments": [], "workingDirectory": "/tmp",
+              "trust": "ultraTrusted", "autoResume": false }
+          ],
+          "processRuns": [],
+          "projects": [
+            { "id": "\(projectId.uuidString)", "name": "P", "rootPath": "/tmp",
+              "boss": { "agentName": "slugger", "scope": "machine" } }
+          ],
+          "schemaVersion": 1,
+          "updatedAt": "2026-05-23T00:00:00Z"
+        }
+        """
+        try json.data(using: .utf8)?.write(to: stateURL)
+
+        let loaded = try WorkbenchStore(stateURL: stateURL).load()
+        let entry = try XCTUnwrap(loaded.processEntries.first)
+        XCTAssertEqual(entry.name, "Future Agent")
+        XCTAssertEqual(entry.kind, .command)
+        XCTAssertEqual(entry.agentKind, .custom)
+        XCTAssertEqual(entry.trust, .untrusted)
+        try? FileManager.default.removeItem(at: root)
+    }
 }
