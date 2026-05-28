@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.92 - Machine-owner friend resolution (preference-driven inbox, phase 0b)
+
+- A session's friend now resolves the same way the Ouro CLI does it: a session with no explicit friend (and no group default) falls back to the **machine owner** — the local OS user as a `human`/`family` friend, with the username as its id (the exact `(local, username)` external id the boss resolves against, so the real `FriendRecord` and its preferences attach later). A given machine maps to its owner with no manual picker.
+- The boss check-in prompt / `workbench_status` now show that resolved owner instead of `unassigned` for the common case. Resolution stays pure (`effectiveFriend(for:fallback:)`); the OS read lives in `SessionFriend.machineOwner()` at the app/MCP boundary.
+- Still identity + visibility only — no advancing yet. The design doc now records the resolved decisions: automate-first (TTFA) posture with a decision-log audit centerpiece (not escalate-only), and CLI-mirrored owner resolution.
+
 ## 0.1.91 - Session friend identity (preference-driven inbox, phase 0)
 
 - Foundation for [the preference-driven inbox](docs/preference-driven-inbox.md): a session can now carry a **friend** (human or agent) — the entity it acts for, whose preferences will govern how the boss advances it. Mirrors the Ouro `FriendRecord` (name, `kind`, `trustLevel` family/friend/acquaintance/stranger). Sessions inherit their group's `defaultFriend` when they don't set their own; unassigned sessions resolve to nil (and the boss will never auto-advance those).

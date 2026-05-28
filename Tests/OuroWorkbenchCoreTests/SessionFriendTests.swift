@@ -52,11 +52,51 @@ final class SessionFriendTests: XCTestCase {
         XCTAssertEqual(state.effectiveFriend(for: inherits), groupFriend, "inherits group default")
     }
 
-    func testEffectiveFriendNilWhenUnassigned() {
+    func testEffectiveFriendNilWhenUnassignedAndNoFallback() {
         let project = WorkbenchProject(name: "P", rootPath: "/tmp/p")
         let entry = ProcessEntry(projectId: project.id, name: "a", kind: .shell, executable: "zsh", workingDirectory: "/tmp/p")
         let state = WorkspaceState(projects: [project], processEntries: [entry])
         XCTAssertNil(state.effectiveFriend(for: entry))
+    }
+
+    func testEffectiveFriendFallsBackToMachineOwnerWhenUnassigned() {
+        let owner = SessionFriend(id: "ari", name: "Ari", kind: .human, trust: .family)
+        let project = WorkbenchProject(name: "P", rootPath: "/tmp/p")
+        let entry = ProcessEntry(projectId: project.id, name: "a", kind: .shell, executable: "zsh", workingDirectory: "/tmp/p")
+        let state = WorkspaceState(projects: [project], processEntries: [entry])
+        // No explicit/group friend -> the injected machine owner governs.
+        XCTAssertEqual(state.effectiveFriend(for: entry, fallback: owner), owner)
+    }
+
+    func testExplicitAndGroupFriendsOutrankMachineOwnerFallback() {
+        let owner = SessionFriend(id: "ari", name: "Ari", kind: .human, trust: .family)
+        let groupFriend = SessionFriend(name: "Teammate", kind: .human, trust: .friend)
+        let entryFriend = SessionFriend(name: "Codex", kind: .agent, trust: .friend)
+        var project = WorkbenchProject(name: "P", rootPath: "/tmp/p")
+        project.defaultFriend = groupFriend
+        let assigned = ProcessEntry(projectId: project.id, name: "a", kind: .terminalAgent, executable: "codex", workingDirectory: "/tmp/p", friend: entryFriend)
+        let inherits = ProcessEntry(projectId: project.id, name: "b", kind: .shell, executable: "zsh", workingDirectory: "/tmp/p")
+        let state = WorkspaceState(projects: [project], processEntries: [assigned, inherits])
+        XCTAssertEqual(state.effectiveFriend(for: assigned, fallback: owner), entryFriend)
+        XCTAssertEqual(state.effectiveFriend(for: inherits, fallback: owner), groupFriend)
+    }
+
+    // MARK: - Machine owner
+
+    func testMachineOwnerUsesUsernameAsIdAndFullNameAsName() {
+        let owner = SessionFriend.machineOwner(username: "ari", fullName: "Ari Mendelow")
+        XCTAssertEqual(owner?.id, "ari", "id is the local username — the boss's (local, username) external id")
+        XCTAssertEqual(owner?.name, "Ari Mendelow")
+        XCTAssertEqual(owner?.kind, .human)
+        XCTAssertEqual(owner?.trust, .family)
+    }
+
+    func testMachineOwnerFallsBackToUsernameWhenFullNameBlank() {
+        XCTAssertEqual(SessionFriend.machineOwner(username: "ari", fullName: "   ")?.name, "ari")
+    }
+
+    func testMachineOwnerNilWhenNoUsername() {
+        XCTAssertNil(SessionFriend.machineOwner(username: "  ", fullName: "Whoever"))
     }
 
     // MARK: - Boss prompt visibility
@@ -80,6 +120,21 @@ final class SessionFriendTests: XCTestCase {
         )
         XCTAssertTrue(prompt.contains("friend=Ari (human, family)"))
         XCTAssertTrue(prompt.contains("friend=unassigned"))
+    }
+
+    func testBossPromptResolvesUnassignedToMachineOwnerWhenProvided() {
+        let project = WorkbenchProject(name: "P", rootPath: "/tmp/p")
+        let orphan = ProcessEntry(projectId: project.id, name: "Orphan", kind: .shell, executable: "zsh", workingDirectory: "/tmp/p")
+        let state = WorkspaceState(projects: [project], processEntries: [orphan])
+        let prompt = BossAgentPromptBuilder().checkInPrompt(
+            question: "status?",
+            state: state,
+            summary: WorkspaceSummarizer().summarize(state),
+            machineFriend: SessionFriend(id: "ari", name: "Ari", kind: .human, trust: .family)
+        )
+        // With a machine owner injected, an unassigned session resolves to it.
+        XCTAssertTrue(prompt.contains("friend=Ari (human, family)"))
+        XCTAssertFalse(prompt.contains("friend=unassigned"))
     }
 
     // MARK: - Backward compatibility

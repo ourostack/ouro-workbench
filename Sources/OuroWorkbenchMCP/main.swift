@@ -128,7 +128,8 @@ final class WorkbenchMCPServer {
             state: state,
             summary: summary,
             executableHealth: executableHealth,
-            gitStatus: gitStatus
+            gitStatus: gitStatus,
+            machineFriend: SessionFriend.machineOwner()
         )
     }
 

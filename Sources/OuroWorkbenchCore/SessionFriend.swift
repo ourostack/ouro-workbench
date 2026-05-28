@@ -85,14 +85,42 @@ public struct SessionFriend: Codable, Equatable, Sendable, Identifiable {
     }
 }
 
+public extension SessionFriend {
+    /// The machine's owner as a friend, mirroring how the Ouro CLI resolves a
+    /// local session (`provider: "local"`, `externalId: <os username>`): a
+    /// machine maps to one human, family-trust by default. The `id` is the
+    /// username — the exact external id the boss resolves `(local, username)`
+    /// against — so the real `FriendRecord` (and its preferences) attaches
+    /// without separate reconciliation. Returns nil when no OS user is resolvable.
+    ///
+    /// Impure (reads the OS); call it at the app/MCP boundary and inject the
+    /// result into `effectiveFriend(for:fallback:)`, keeping resolution pure.
+    static func machineOwner(
+        username: String = NSUserName(),
+        fullName: String = NSFullUserName()
+    ) -> SessionFriend? {
+        let user = username.trimmingCharacters(in: .whitespaces)
+        guard !user.isEmpty else { return nil }
+        let trimmedFull = fullName.trimmingCharacters(in: .whitespaces)
+        let name = trimmedFull.isEmpty ? user : trimmedFull
+        return SessionFriend(id: user, name: name, kind: .human, trust: .family)
+    }
+}
+
 public extension WorkspaceState {
     /// The friend governing a session: its own assigned friend if set, otherwise
-    /// its group's `defaultFriend`, otherwise nil (unassigned — the boss never
-    /// auto-advances an unassigned session).
-    func effectiveFriend(for entry: ProcessEntry) -> SessionFriend? {
+    /// its group's `defaultFriend`, otherwise the injected `fallback` (the
+    /// machine owner, resolved at the boundary). Stays pure — the OS read lives
+    /// in `SessionFriend.machineOwner()`, not here — so resolution is testable.
+    /// A nil result (no assignment, no default, no fallback) means unassigned,
+    /// which the boss never auto-advances.
+    func effectiveFriend(for entry: ProcessEntry, fallback: SessionFriend? = nil) -> SessionFriend? {
         if let friend = entry.friend {
             return friend
         }
-        return projects.first { $0.id == entry.projectId }?.defaultFriend
+        if let groupDefault = projects.first(where: { $0.id == entry.projectId })?.defaultFriend {
+            return groupDefault
+        }
+        return fallback
     }
 }
