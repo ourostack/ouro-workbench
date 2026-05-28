@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.61 - Fix: ⌘K palette commands that open a sheet now work
+
+- Choosing **Open Settings**, **About**, **New Terminal**, **Install Agent**, or **Keyboard Shortcuts** from the ⌘K command palette previously often did nothing — the palette dismissed and the target sheet raced SwiftUI's single-presentation context and never appeared.
+- The palette now stashes the chosen command and runs it from the sheet's `onDisappear`, so the follow-on sheet presents cleanly after the palette is fully gone.
+
 ## 0.1.60 - Stability: never silently wipe the workspace
 
 - **A corrupt or unreadable state file no longer destroys your setup.** Previously any decode failure reset the workspace to empty and immediately saved over the original. Now the unreadable file is quarantined to a timestamped `workspace-state.json.corrupt-<time>` sibling *before* the fallback, and the error message tells you exactly where it went.
