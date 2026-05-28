@@ -3,6 +3,7 @@ import AppKit
 import OuroWorkbenchCore
 import SwiftTerm
 import SwiftUI
+import UserNotifications
 
 struct OuroWorkbenchApp: App {
     var body: some Scene {
@@ -54,6 +55,19 @@ struct WorkbenchRootView: View {
             }
         }
         .background(WindowChromeConfigurator(title: model.windowTitle))
+        .onChange(of: model.activeSessions.count) { _, newCount in
+            // Show the running-session count on the Dock icon so the user
+            // gets a glanceable "is anything running" signal without bringing
+            // the app forward. Empty string clears the badge.
+            NSApp.dockTile.badgeLabel = newCount > 0 ? "\(newCount)" : ""
+        }
+        .task {
+            // Set the initial badge on launch — the .onChange above only
+            // fires when the count *changes* after the view mounts.
+            NSApp.dockTile.badgeLabel = model.activeSessions.count > 0
+                ? "\(model.activeSessions.count)"
+                : ""
+        }
         .alert("Workbench Error", isPresented: model.errorIsPresented) {
             Button("OK", role: .cancel) {
                 model.errorMessage = nil
@@ -234,6 +248,15 @@ struct TerminalCyclingShortcuts: View {
                 model.resetTerminalFontSize()
             }
             .keyboardShortcut("0", modifiers: [.command])
+            .hidden()
+            // ⌘T mirrors Terminal.app / iTerm2 / browser "new tab" convention.
+            // ⌘N already does the same; binding both means the user gets the
+            // shortcut from their muscle memory regardless of which app
+            // shaped it.
+            Button("New Terminal (⌘T)") {
+                model.isNewSessionSheetPresented = true
+            }
+            .keyboardShortcut("t", modifiers: [.command])
             .hidden()
         }
         .frame(width: 0, height: 0)
@@ -947,9 +970,13 @@ struct TerminalAgentRow: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 1) {
+                // Tail-truncate so 'Codex: hello! please…' beats 'Codex: h…can
+                // make'. Middle-truncation hides the part of the name that
+                // actually identifies what the session is doing — the
+                // distinguishing detail is at the start, not the middle.
                 Label(entry.name, systemImage: rowIcon)
                     .lineLimit(1)
-                    .truncationMode(.middle)
+                    .truncationMode(.tail)
                 if let cliName {
                     Text(cliName)
                         .font(.caption2)
@@ -8823,12 +8850,75 @@ final class WorkbenchViewModel: ObservableObject {
                     entry.lastSummary = "\(entry.name) exited with code \(status.exitCode.map(String.init) ?? "unknown")"
                 }
             }
+            // Surface unexpected exits to the user via a macOS notification
+            // so they don't have to be watching the Workbench window to know
+            // a Codex / Claude session crashed. Skip clean exits (code 0) and
+            // anything the user deliberately stopped.
+            if !manuallyTerminated {
+                let exitedCleanly = status.exitCode == 0
+                if !exitedCleanly {
+                    let entryName = state.processEntries.first(where: { $0.id == entryId })?.name
+                        ?? "Terminal"
+                    let needsAttention = nextRunStatus == .manualActionNeeded
+                    postUnexpectedExitNotification(
+                        entryName: entryName,
+                        exitCode: status.exitCode,
+                        needsAttention: needsAttention
+                    )
+                }
+            }
         }
         state.processRuns[runIndex].status = nextRunStatus
         state.processRuns[runIndex].endedAt = Date()
         state.processRuns[runIndex].exitCode = status.exitCode
         state.processRuns[runIndex].rawExitStatus = status.rawWaitStatus
         save()
+    }
+
+    /// Post a macOS user notification when a terminal session ends with a
+    /// non-zero exit (or no exit code, e.g. SIGKILL). First call lazily
+    /// requests authorization; thereafter the system handles permission
+    /// state. We never block on the auth request — if it's denied the post
+    /// silently fails, which is the correct macOS behavior.
+    private func postUnexpectedExitNotification(
+        entryName: String,
+        exitCode: Int32?,
+        needsAttention: Bool
+    ) {
+        // Capture only primitives in the closure so UNNotificationRequest
+        // (non-Sendable) is constructed inside the authorization callback's
+        // execution context, not transferred across it. Mirrors the macOS
+        // recommendation for sandbox / strict-concurrency builds.
+        let title = needsAttention ? "\(entryName) needs attention" : "\(entryName) exited"
+        let body: String
+        if let code = exitCode {
+            body = "Process exited with code \(code)."
+        } else {
+            body = "Process ended without an exit code (likely a signal)."
+        }
+        let subtitle = needsAttention
+            ? "Recovery couldn't auto-resume — open the Recovery sheet."
+            : ""
+        let identifier = "ouro.workbench.exit.\(UUID().uuidString)"
+        let center = UNUserNotificationCenter.current()
+        center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            guard granted else {
+                return
+            }
+            let content = UNMutableNotificationContent()
+            content.title = title
+            content.body = body
+            if !subtitle.isEmpty {
+                content.subtitle = subtitle
+            }
+            content.sound = .default
+            let request = UNNotificationRequest(
+                identifier: identifier,
+                content: content,
+                trigger: nil
+            )
+            UNUserNotificationCenter.current().add(request)
+        }
     }
 
     private func persistentSessionIsListed(_ sessionName: String) -> Bool {
