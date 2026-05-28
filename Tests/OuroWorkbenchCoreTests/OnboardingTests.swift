@@ -359,6 +359,46 @@ final class OnboardingTests: XCTestCase {
         XCTAssertTrue(slugs.contains("same-title-2"))
     }
 
+    func testImportProposalKeepsGroupIDsUniqueAcrossGroups() {
+        // Two distinct roots whose display names slugify identically
+        // ("My Project" vs "My-Project" -> "my-project"). Without de-duping,
+        // both groups would share an id/deskTrackSlug, breaking Identifiable
+        // ForEach + selection + the Desk mirror.
+        let candidates = [
+            RecentSessionCandidate(
+                id: "codex:a",
+                source: .openAICodex,
+                agentKind: .openAICodex,
+                title: "Alpha task",
+                workingDirectory: "/Users/ari/Alpha/My Project",
+                lastActiveAt: Date(timeIntervalSince1970: 2),
+                resumeCommand: ["codex", "resume", "a"],
+                summary: "Alpha",
+                evidencePaths: [],
+                confidence: 0.9
+            ),
+            RecentSessionCandidate(
+                id: "codex:b",
+                source: .openAICodex,
+                agentKind: .openAICodex,
+                title: "Beta task",
+                workingDirectory: "/Users/ari/Beta/My-Project",
+                lastActiveAt: Date(timeIntervalSince1970: 1),
+                resumeCommand: ["codex", "resume", "b"],
+                summary: "Beta",
+                evidencePaths: [],
+                confidence: 0.9
+            )
+        ]
+
+        let groups = WorkbenchImportProposalBuilder().build(candidates: candidates).groups
+        XCTAssertEqual(groups.count, 2)
+        let ids = groups.map(\.id)
+        let slugs = groups.map(\.deskTrackSlug)
+        XCTAssertEqual(Set(ids).count, 2, "group ids must be unique: \(ids)")
+        XCTAssertEqual(Set(slugs).count, 2, "desk track slugs must be unique: \(slugs)")
+    }
+
     func testImportProposalCuratesDefaultSelectionsInsteadOfStampedingTabs() {
         let candidates = (1...10).map { index in
             RecentSessionCandidate(

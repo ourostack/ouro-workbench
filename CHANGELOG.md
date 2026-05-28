@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.72 - De-duplicate import-proposal group IDs
+
+- Two distinct projects whose names slugify identically (e.g. `My Project` and `My-Project`) no longer collide on the same import-proposal group id. The collision previously caused SwiftUI to drop/duplicate rows, made a selection toggle on one group flip the other, and merged the two projects' Desk-mirror tracks. Group ids/slugs are now de-duplicated across groups the same way task slugs already are within a group.
+
 ## 0.1.71 - Onboarding no longer re-pops on every launch
 
 - A fully-configured machine no longer gets the onboarding sheet thrown at it on every launch. Provider *liveness* checks (`ouro check`) aren't persisted and start unrun each launch, which previously read as "not ready" and forced onboarding open before the checks could pass.
