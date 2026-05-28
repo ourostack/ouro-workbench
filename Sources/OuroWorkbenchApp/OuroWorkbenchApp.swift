@@ -1240,7 +1240,8 @@ struct WorkbenchSidebarView: View {
                         entry: entry,
                         isSelected: model.selectedEntryID == entry.id,
                         cliName: model.cliName(for: entry),
-                        health: model.executableHealth(for: entry)
+                        health: model.executableHealth(for: entry),
+                        runningSince: model.runningStartDate(for: entry)
                     )
                         .tag(entry.id)
                         .contextMenu {
@@ -1560,6 +1561,10 @@ struct TerminalAgentRow: View {
     var isSelected: Bool
     var cliName: String?
     var health: ExecutableHealth?
+    /// When the entry has a currently-running process, the date it started.
+    /// Drives the `5m` / `2h` elapsed-time pill in the row. `nil` skips the
+    /// pill entirely — keeps the row uncluttered for idle / archived entries.
+    var runningSince: Date?
 
     var body: some View {
         HStack {
@@ -1579,6 +1584,9 @@ struct TerminalAgentRow: View {
                 }
             }
             Spacer()
+            if let runningSince {
+                ElapsedTimePill(startDate: runningSince)
+            }
             if let health, health.status != .available {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
@@ -1605,10 +1613,41 @@ struct TerminalAgentRow: View {
         }
         pieces.append(entry.attention.rawValue)
         pieces.append(entry.isArchived ? "archived" : "active")
+        if let runningSince {
+            pieces.append("running for \(ElapsedTimePill.coarseDescription(since: runningSince))")
+        }
         if let health, health.status != .available {
             pieces.append(health.detail)
         }
         return pieces.joined(separator: ", ")
+    }
+}
+
+/// Tiny "5m" / "2h 14m" pill rendered next to a running session's name in the
+/// sidebar. Backed by a TimelineView so it ticks once a minute without the
+/// view model needing a Timer; sub-minute updates would just noise the UI.
+struct ElapsedTimePill: View {
+    var startDate: Date
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 30)) { context in
+            Text(WorkbenchElapsedFormatter.coarseDescription(since: startDate, now: context.date))
+                .font(.caption2.monospacedDigit())
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1)
+                .foregroundStyle(.secondary)
+                .background(
+                    Capsule()
+                        .fill(Color.secondary.opacity(0.12))
+                )
+                .help("Running since \(startDate.formatted(date: .abbreviated, time: .shortened))")
+        }
+    }
+
+    /// Shim re-exposing the Core formatter so the accessibility label code
+    /// path in `TerminalAgentRow` doesn't need to import details from Core.
+    static func coarseDescription(since start: Date, now: Date = Date()) -> String {
+        WorkbenchElapsedFormatter.coarseDescription(since: start, now: now)
     }
 }
 
@@ -8091,6 +8130,17 @@ final class WorkbenchViewModel: ObservableObject {
             .filter { $0.entryId == entry.id }
             .sorted { $0.startedAt > $1.startedAt }
             .first
+    }
+
+    /// `Date` the entry's currently-running process started, or `nil` when
+    /// the entry isn't running. Used by the sidebar elapsed-time pill so the
+    /// row can show "3m" / "1h 12m" / "running" without the row needing to
+    /// dig into ProcessRun internals itself.
+    func runningStartDate(for entry: ProcessEntry) -> Date? {
+        guard let run = latestRun(for: entry), run.status == .running else {
+            return nil
+        }
+        return run.startedAt
     }
 
     func transcriptTail(for entry: ProcessEntry) -> TranscriptTail? {
