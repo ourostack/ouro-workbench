@@ -27,7 +27,16 @@ public final class TranscriptRecorder {
         defer {
             lock.unlock()
         }
-        handle?.write(Data(bytes))
+        // Use the throwing `write(contentsOf:)` rather than the deprecated
+        // `write(_:)`, which raises an *uncatchable* Objective-C NSException
+        // on disk-full or a bad descriptor and would crash the whole app.
+        // A failed transcript append is non-fatal: drop it and keep running.
+        do {
+            try handle?.write(contentsOf: Data(bytes))
+        } catch {
+            // Disk full / handle closed underneath us — transcript loses this
+            // slice but the session keeps going.
+        }
     }
 
     public func close() {
