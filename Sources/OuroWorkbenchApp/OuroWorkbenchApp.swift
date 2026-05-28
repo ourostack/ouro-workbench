@@ -6,7 +6,24 @@ import SwiftUI
 import UniformTypeIdentifiers
 import UserNotifications
 
+/// Minimal app delegate so closing the last window quits the app instead of
+/// leaving a headless process behind. Without this, closing the window tears
+/// down the SwiftUI scene — deallocating the view model and cancelling the
+/// Boss-Watch / external-action loops — while the menu-bar item (a weak ref)
+/// lingers pointing at nothing: autonomy silently stops but the UI implies
+/// it's still running. Quitting on last-window-close is the honest behavior;
+/// `prepareForTermination` (willTerminate) detaches persistent sessions so a
+/// relaunch reattaches them. To keep Workbench in the background, minimize
+/// (⌘M) rather than close — that preserves the window, model, and loops.
+final class WorkbenchAppDelegate: NSObject, NSApplicationDelegate {
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        true
+    }
+}
+
 struct OuroWorkbenchApp: App {
+    @NSApplicationDelegateAdaptor(WorkbenchAppDelegate.self) private var appDelegate
+
     var body: some Scene {
         WindowGroup("") {
             WorkbenchRootView()
