@@ -319,6 +319,10 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
     public var processEntries: [ProcessEntry]
     public var processRuns: [ProcessRun]
     public var actionLog: [WorkbenchActionLogEntry]
+    /// Durable, newest-first audit of boss decisions about waiting sessions —
+    /// what the boss decided and why. Bounded like `actionLog`; decoded
+    /// leniently and present-or-empty so existing state loads unchanged.
+    public var decisionLog: [BossInboxDecision]
     public var updatedAt: Date
 
     private enum CodingKeys: String, CodingKey {
@@ -332,6 +336,7 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         case processEntries
         case processRuns
         case actionLog
+        case decisionLog
         case updatedAt
     }
 
@@ -346,6 +351,7 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         processEntries: [ProcessEntry] = [],
         processRuns: [ProcessRun] = [],
         actionLog: [WorkbenchActionLogEntry] = [],
+        decisionLog: [BossInboxDecision] = [],
         updatedAt: Date = Date()
     ) {
         self.schemaVersion = schemaVersion
@@ -358,6 +364,7 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         self.processEntries = processEntries
         self.processRuns = processRuns
         self.actionLog = actionLog
+        self.decisionLog = decisionLog
         self.updatedAt = updatedAt
     }
 
@@ -378,6 +385,7 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         self.processEntries = try container.decodeLenientArray(ProcessEntry.self, forKey: .processEntries, skipped: &skipped)
         self.processRuns = try container.decodeLenientArray(ProcessRun.self, forKey: .processRuns, skipped: &skipped)
         self.actionLog = try container.decodeLenientArray(WorkbenchActionLogEntry.self, forKey: .actionLog, skipped: &skipped)
+        self.decisionLog = try container.decodeLenientArray(BossInboxDecision.self, forKey: .decisionLog, skipped: &skipped)
         self.updatedAt = try container.decode(Date.self, forKey: .updatedAt)
     }
 }
