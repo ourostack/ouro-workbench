@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.89 - Auto-detect when a session is waiting on you
+
+- Workbench now watches each running session's output and automatically flags it as `waiting on human` when it's sitting at a prompt that needs a decision — a Claude Code / Codex approval menu, a `y/N`, a selection list, "press enter", or a passphrase prompt. The session lights up in the sidebar (orange dot), the menubar, Boss Watch, and needs-me notifications without anyone polling it; when the agent resumes, the flag clears itself. This is the core of attention routing: knowing which of your agents needs you, across all of them, at a glance.
+- Built stability-first: a new pure, heavily-tested `AttentionSignalDetector` classifies a transcript tail and is deliberately conservative (a false "waiting" is worse than a missed one — bare shell prompts, compiler output, and progress bars never trigger it). Detection runs off the main actor against the already-written transcript on the existing output-settle debounce, so the terminal output hot path is untouched. Transitions only `active`↔`waiting`, never disturbing `needs review` / `blocked`.
+
 ## 0.1.88 - Boss sees per-session Git status
 
 - The boss check-in prompt and the `workbench_status` MCP tool now report each session's git state inline (`git=<branch> (clean|dirty[, +ahead/-behind])`, or `none` for non-repos), so the boss can reason about which sessions have uncommitted work or have drifted from their upstream. The native check-in reuses the already-refreshed app state; the MCP server probes git read-only and watchdog-bounded per session.

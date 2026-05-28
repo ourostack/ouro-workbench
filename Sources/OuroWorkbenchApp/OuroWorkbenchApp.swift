@@ -10743,6 +10743,7 @@ final class WorkbenchViewModel: ObservableObject {
         outputFlushTask = nil
         guard !pendingOutputTimestamps.isEmpty else { return }
         var didMutate = false
+        let flushedRunIds = Array(pendingOutputTimestamps.keys)
         for (runId, date) in pendingOutputTimestamps {
             if let runIndex = state.processRuns.firstIndex(where: { $0.id == runId }) {
                 state.processRuns[runIndex].lastOutputAt = date
@@ -10751,6 +10752,68 @@ final class WorkbenchViewModel: ObservableObject {
         }
         pendingOutputTimestamps.removeAll()
         if didMutate {
+            save()
+        }
+        // Output for these runs has settled (the flush only fires after the
+        // debounce). Re-classify each session's transcript tail to detect a
+        // session now sitting at a human prompt — runs off the main actor and
+        // never touches the output hot path.
+        reclassifyAttentionForFlushedRuns(flushedRunIds)
+    }
+
+    /// For each run whose output just settled, read a bounded transcript tail
+    /// off the main actor and let `AttentionSignalDetector` decide whether the
+    /// session is waiting on the human. Conservatively transitions only
+    /// active/idle → waitingOnHuman and waitingOnHuman → active (when the agent
+    /// resumed), never disturbing `.needsBossReview` / `.blocked`.
+    private func reclassifyAttentionForFlushedRuns(_ runIds: [UUID]) {
+        for runId in runIds {
+            guard let session = activeSessions.values.first(where: { $0.plan.runId == runId }),
+                  let transcriptPath = session.plan.transcriptPath else {
+                continue
+            }
+            let entryId = session.plan.entryId
+            // `Task` (not `.detached`) inherits this @MainActor context, so the
+            // result is applied main-isolated without sending `self` across an
+            // isolation boundary. The blocking read + classify happen in a
+            // nonisolated helper that captures only Sendable values.
+            Task { [weak self] in
+                let signal = await Self.classifyTranscriptTail(path: transcriptPath)
+                self?.applyAttentionSignal(signal, entryId: entryId, runId: runId)
+            }
+        }
+    }
+
+    /// Read a bounded transcript tail and classify it off the main actor.
+    /// Nonisolated and capturing only a `Sendable` path so it satisfies strict
+    /// concurrency; returns the `Sendable` `AttentionSignal`.
+    nonisolated private static func classifyTranscriptTail(path: String) async -> AttentionSignal {
+        await Task.detached(priority: .utility) {
+            guard let tail = TranscriptTailReader(maxBytes: 4096).read(path: path) else {
+                return AttentionSignal.unknown
+            }
+            return AttentionSignalDetector.classify(tail: tail.text)
+        }.value
+    }
+
+    /// Apply a detected attention signal, guarding that the run is still the
+    /// entry's live session so a stale classification can't reanimate a session
+    /// that already moved on.
+    private func applyAttentionSignal(_ signal: AttentionSignal, entryId: UUID, runId: UUID) {
+        guard activeSessions[entryId]?.plan.runId == runId,
+              let entry = state.processEntries.first(where: { $0.id == entryId }),
+              !entry.isArchived else {
+            return
+        }
+        switch signal {
+        case .waitingOnHuman:
+            guard entry.attention == .active || entry.attention == .idle else { return }
+            updateEntry(entryId) { $0.attention = .waitingOnHuman }
+            save()
+        case .unknown:
+            // The agent produced output without a prompt: clear a stale wait.
+            guard entry.attention == .waitingOnHuman else { return }
+            updateEntry(entryId) { $0.attention = .active }
             save()
         }
     }
