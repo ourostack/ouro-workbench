@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.45 - Recent workspaces
+
+- The More menu now shows an `Open Recent Workspace` submenu listing the last 8 directories you opened via `Open Workspace…`. Click a row to reopen that workspace; the per-row hover shows the full path.
+- Recent entries are persisted in `UserDefaults` (`ouro.workbench.recentWorkspacePaths`) so they survive across launches.
+- If a recent path no longer has a `.workbench.json` when you click it, the entry is silently dropped from the menu rather than showing a dead path forever.
+- A `Clear Recent Workspaces` action sits at the bottom of the submenu.
+
 ## 0.1.44 - Right-click context menu on sidebar terminals
 
 - Right-click (or two-finger click) on a terminal row in the sidebar now opens a native macOS context menu with the same actions as the per-session overflow menu: **Launch/Restart**, **Stop** (when running), **Ask Boss About This Session**, **Copy Launch Command**, **Open Working Directory**, plus, for custom sessions, **Edit**, **Duplicate**, **Move to Group**, **Archive / Restore**, and **Delete**.

@@ -1411,6 +1411,29 @@ struct HeaderView: View {
                 }
                 .keyboardShortcut("s", modifiers: [.command, .shift])
                 .disabled(model.selectedProject == nil)
+                if !model.recentWorkspacePaths.isEmpty {
+                    Menu {
+                        ForEach(model.recentWorkspacePaths, id: \.self) { path in
+                            Button {
+                                model.openWorkspaceConfig(at: path)
+                            } label: {
+                                Label(URL(fileURLWithPath: path).lastPathComponent, systemImage: "folder")
+                            }
+                            .help(path)
+                        }
+                        Divider()
+                        Button(role: .destructive) {
+                            model.recentWorkspacePaths = []
+                            UserDefaults.standard.removeObject(
+                                forKey: WorkbenchViewModel.recentWorkspacePathsDefaultsKey
+                            )
+                        } label: {
+                            Label("Clear Recent Workspaces", systemImage: "xmark.bin")
+                        }
+                    } label: {
+                        Label("Open Recent Workspace", systemImage: "clock")
+                    }
+                }
                 Divider()
                 Toggle(isOn: Binding(
                     get: { model.bossWatchIsEnabled },
@@ -5910,6 +5933,12 @@ final class WorkbenchViewModel: ObservableObject {
         let saved = UserDefaults.standard.double(forKey: WorkbenchViewModel.terminalFontSizeDefaultsKey)
         return saved >= 9 ? CGFloat(saved) : 13
     }()
+    /// Recently-opened workspace directories surfaced via the More menu's
+    /// `Open Recent` submenu and as `Open Recent: …` command palette entries.
+    /// Persisted in UserDefaults so they survive across launches.
+    @Published var recentWorkspacePaths: [String] = {
+        UserDefaults.standard.stringArray(forKey: WorkbenchViewModel.recentWorkspacePathsDefaultsKey) ?? []
+    }()
     @Published var isOuroAgentInstallSheetPresented = false
     @Published var commandPaletteQuery = ""
     @Published var editingGroup: WorkbenchProject?
@@ -7195,6 +7224,26 @@ final class WorkbenchViewModel: ObservableObject {
 
     /// Load + apply a workspace config from a directory path. Surfaces parser
     /// errors via `errorMessage` so the user sees what went wrong.
+    /// Push a workspace path to the front of the recent list, dedupe, and
+    /// persist. Trims to `maxRecentWorkspaces` entries.
+    func recordRecentWorkspace(path: String) {
+        var entries = recentWorkspacePaths.filter { $0 != path }
+        entries.insert(path, at: 0)
+        if entries.count > Self.maxRecentWorkspaces {
+            entries = Array(entries.prefix(Self.maxRecentWorkspaces))
+        }
+        recentWorkspacePaths = entries
+        UserDefaults.standard.set(entries, forKey: Self.recentWorkspacePathsDefaultsKey)
+    }
+
+    /// Drop a path from the recent list (used when opening a workspace that
+    /// no longer has `.workbench.json` — keeps the menu honest).
+    func forgetRecentWorkspace(path: String) {
+        let entries = recentWorkspacePaths.filter { $0 != path }
+        recentWorkspacePaths = entries
+        UserDefaults.standard.set(entries, forKey: Self.recentWorkspacePathsDefaultsKey)
+    }
+
     @discardableResult
     func openWorkspaceConfig(at directoryPath: String) -> WorkbenchImportApplyResult? {
         let loader = WorkbenchWorkspaceConfigLoader()
@@ -7203,6 +7252,9 @@ final class WorkbenchViewModel: ObservableObject {
             config = try loader.load(directoryPath: directoryPath)
         } catch WorkbenchWorkspaceConfigError.configFileMissing(let path) {
             errorMessage = "No .workbench.json found at \(path)"
+            // The user opened a recent that's no longer valid — drop it from
+            // the recent list so the menu doesn't keep showing a dead path.
+            forgetRecentWorkspace(path: directoryPath)
             return nil
         } catch WorkbenchWorkspaceConfigError.malformedJSON(let detail) {
             errorMessage = "Couldn't parse .workbench.json: \(detail)"
@@ -7214,7 +7266,9 @@ final class WorkbenchViewModel: ObservableObject {
             errorMessage = "Couldn't open workspace: \(error.localizedDescription)"
             return nil
         }
-        return openWorkspaceConfig(config: config, configDirectory: directoryPath, loader: loader)
+        let result = openWorkspaceConfig(config: config, configDirectory: directoryPath, loader: loader)
+        recordRecentWorkspace(path: directoryPath)
+        return result
     }
 
     /// Build a `.workbench.json`-compatible config representing the currently
@@ -7284,6 +7338,10 @@ final class WorkbenchViewModel: ObservableObject {
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
             let data = try encoder.encode(config)
             try data.write(to: url)
+            // Save target is the directory containing the .workbench.json so
+            // the recent workspaces menu reopens the directory, matching the
+            // Open Workspace… flow.
+            recordRecentWorkspace(path: url.deletingLastPathComponent().path)
             recordActionLog(
                 source: "native",
                 action: "saveWorkspaceConfig",
@@ -9711,6 +9769,8 @@ final class WorkbenchViewModel: ObservableObject {
 
     private static let collapsedChromeMigrationKey = "ouro.workbench.collapsedChromeMigration.v17"
     static let terminalFontSizeDefaultsKey = "ouro.workbench.terminalFontSize"
+    static let recentWorkspacePathsDefaultsKey = "ouro.workbench.recentWorkspacePaths"
+    static let maxRecentWorkspaces = 8
     /// Default terminal font size. Matches macOS Terminal's default.
     static let defaultTerminalFontSize: CGFloat = 13
     /// Allowed terminal font-size range. Below 9pt cells become unreadable;
