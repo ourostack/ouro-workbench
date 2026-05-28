@@ -1301,6 +1301,12 @@ struct HeaderView: View {
                 } label: {
                     Label("Hatch an Agent…", systemImage: "sparkles")
                 }
+                Button {
+                    model.presentOpenWorkspacePanel()
+                } label: {
+                    Label("Open Workspace…", systemImage: "folder.badge.gearshape")
+                }
+                .keyboardShortcut("o", modifiers: [.command])
                 Divider()
                 Toggle(isOn: Binding(
                     get: { model.bossWatchIsEnabled },
@@ -6335,6 +6341,16 @@ final class WorkbenchViewModel: ObservableObject {
             )
         )
 
+        commands.append(
+            command(
+                .openWorkspaceConfig,
+                "Open Workspace…",
+                "Pick a directory containing a .workbench.json to spin up its declared terminals",
+                "folder.badge.gearshape",
+                keywords: ["workspace", "open", "project", "config", "json", "workbench", "yaml"]
+            )
+        )
+
         // Agent-management commands. Always-available entry points first,
         // then one Select Agent entry per installed bundle so search like
         // "agent <name>" lands on the right row.
@@ -6842,6 +6858,137 @@ final class WorkbenchViewModel: ObservableObject {
         }
         selectedProjectID = projectId
         selectedEntryID = sessionEntries.first?.id ?? archivedSessionEntries.first?.id
+    }
+
+    /// Resolve or create the group used by an opened workspace config. If a
+    /// group with the same name already exists, reuses it; otherwise creates
+    /// a fresh project with the resolved root path.
+    private func ensureGroup(name: String, rootPath: String) -> WorkbenchProject {
+        if let existing = state.projects.first(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) {
+            return existing
+        }
+        let project = WorkbenchProject(name: name, rootPath: rootPath, boss: state.boss)
+        state.projects.append(project)
+        return project
+    }
+
+    /// Apply a parsed `.workbench.json` to the workbench. Reuses existing
+    /// sessions that match by name within the resolved group (so re-opening
+    /// the same workspace doesn't duplicate). Returns a banner-friendly
+    /// summary identical in shape to onboarding's Arrange result.
+    @discardableResult
+    func openWorkspaceConfig(
+        config: WorkbenchWorkspaceConfig,
+        configDirectory: String,
+        loader: WorkbenchWorkspaceConfigLoader = WorkbenchWorkspaceConfigLoader()
+    ) -> WorkbenchImportApplyResult {
+        let rootPath = loader.resolvedRootPath(for: config, configDirectory: configDirectory)
+        let groupName = loader.resolvedGroupName(for: config, rootPath: rootPath)
+        let project = ensureGroup(name: groupName, rootPath: rootPath)
+        selectedProjectID = project.id
+
+        var createdEntries: [ProcessEntry] = []
+        var skippedNames: [String] = []
+        for terminal in config.terminals {
+            let workingDirectory = loader.resolvedWorkingDirectory(for: terminal, rootPath: rootPath)
+            let trust: ProcessTrust = (terminal.trust ?? "").lowercased() == "trusted"
+                ? .trusted
+                : .untrusted
+            let autoResume = terminal.autoResume ?? false
+            let alreadyPresent = state.processEntries.contains { existing in
+                existing.projectId == project.id && existing.name == terminal.name
+            }
+            if alreadyPresent {
+                skippedNames.append(terminal.name)
+                continue
+            }
+            let draft = CustomTerminalSessionDraft(
+                name: terminal.name,
+                command: terminal.command,
+                workingDirectory: workingDirectory,
+                trust: trust,
+                autoResume: autoResume,
+                notes: terminal.notes ?? "Opened from \(configDirectory)/\(WorkbenchWorkspaceConfigLoader.configFileName)"
+            )
+            do {
+                let entry = try customSessionFactory.makeEntry(projectId: project.id, draft: draft)
+                state.processEntries.append(entry)
+                createdEntries.append(entry)
+            } catch {
+                skippedNames.append(terminal.name)
+                recordActionLog(
+                    source: "native",
+                    action: "openWorkspaceConfig",
+                    result: "Skipped \(terminal.name): \(error.localizedDescription)",
+                    succeeded: false
+                )
+            }
+        }
+
+        save()
+        refreshExecutableHealth()
+        // Auto-resume the entries the config explicitly marked autoResume so
+        // the workspace boots up the way the file promised.
+        for entry in createdEntries where entry.autoResume {
+            launch(entry)
+        }
+        selectedEntryID = createdEntries.first?.id ?? selectedEntryID
+        let result = WorkbenchImportApplyResult(
+            createdCount: createdEntries.count,
+            groupNames: createdEntries.isEmpty ? [] : [groupName],
+            deskChangeCount: 0,
+            skippedNames: skippedNames,
+            firstSelectedEntryID: createdEntries.first?.id
+        )
+        lastImportSummary = result
+        recordActionLog(
+            source: "native",
+            action: "openWorkspaceConfig",
+            targetName: groupName,
+            result: "Workspace \(groupName) created \(createdEntries.count) terminals (skipped \(skippedNames.count))",
+            succeeded: true
+        )
+        return result
+    }
+
+    /// Load + apply a workspace config from a directory path. Surfaces parser
+    /// errors via `errorMessage` so the user sees what went wrong.
+    @discardableResult
+    func openWorkspaceConfig(at directoryPath: String) -> WorkbenchImportApplyResult? {
+        let loader = WorkbenchWorkspaceConfigLoader()
+        let config: WorkbenchWorkspaceConfig
+        do {
+            config = try loader.load(directoryPath: directoryPath)
+        } catch WorkbenchWorkspaceConfigError.configFileMissing(let path) {
+            errorMessage = "No .workbench.json found at \(path)"
+            return nil
+        } catch WorkbenchWorkspaceConfigError.malformedJSON(let detail) {
+            errorMessage = "Couldn't parse .workbench.json: \(detail)"
+            return nil
+        } catch WorkbenchWorkspaceConfigError.noTerminals {
+            errorMessage = ".workbench.json must declare at least one terminal"
+            return nil
+        } catch {
+            errorMessage = "Couldn't open workspace: \(error.localizedDescription)"
+            return nil
+        }
+        return openWorkspaceConfig(config: config, configDirectory: directoryPath, loader: loader)
+    }
+
+    /// Present an NSOpenPanel to pick a directory, then open its config. Used
+    /// by the command-palette "Open Workspace…" entry and the More menu.
+    func presentOpenWorkspacePanel() {
+        let panel = NSOpenPanel()
+        panel.title = "Open Workbench Workspace"
+        panel.message = "Choose a directory containing a .workbench.json file."
+        panel.prompt = "Open"
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url else {
+            return
+        }
+        openWorkspaceConfig(at: url.path)
     }
 
     func createGroup(name: String, rootPath: String) -> Bool {
@@ -8135,6 +8282,8 @@ final class WorkbenchViewModel: ObservableObject {
             selectAgent(selectedAgentName ?? state.boss.agentName)
         case .showKeyboardShortcutHelp:
             isShortcutHelpPresented = true
+        case .openWorkspaceConfig:
+            presentOpenWorkspacePanel()
         case .selectAgent,
              .useSelectedAgentAsBoss,
              .openSelectedAgentConfig,
