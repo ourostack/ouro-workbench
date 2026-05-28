@@ -143,4 +143,11 @@ final class WorkbenchCommandPaletteTests: XCTestCase {
         // performCommand to dispatch.
         XCTAssertTrue(WorkbenchCommandID.allCases.contains(.stopAllRunningSessions))
     }
+
+    func testRecoverAllCrashedCommandIDIsPresent() {
+        // Companion to stopAllRunningSessions: one click to relaunch every
+        // crashed session. Palette only surfaces when recoverableEntries
+        // is non-empty.
+        XCTAssertTrue(WorkbenchCommandID.allCases.contains(.recoverAllCrashedSessions))
+    }
 }

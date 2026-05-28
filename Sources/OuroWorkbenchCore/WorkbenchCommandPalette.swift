@@ -48,6 +48,7 @@ public enum WorkbenchCommandID: String, Codable, CaseIterable, Sendable {
     case openSettings
     case openAbout
     case stopAllRunningSessions
+    case recoverAllCrashedSessions
 }
 
 public struct WorkbenchCommandDescriptor: Codable, Equatable, Identifiable, Sendable {

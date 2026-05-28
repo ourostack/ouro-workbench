@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.51 - Recover All Crashed Terminals
+
+- Companion to `Stop All Running…`: `More → Recover All Crashed…` and `Recover All Crashed Terminals` in the ⌘K palette run the standard recovery plan against every session currently flagged for recovery. Useful after stepping away — one click rather than N right-click / recover sequences.
+- Palette entry only surfaces when something is actually recoverable; the More menu entry mirrors that with a disabled state.
+- Result lands in the action log (`Recovered 3 crashed sessions`) for auditability.
+
 ## 0.1.50 - Drag-to-reorder terminals in the sidebar
 
 - The sidebar now accepts drag-to-reorder on the current group's terminal rows. Pick up any row, drop it where you want — Workbench persists the new order in `WorkbenchStore` so it survives across launches and is honored by every list view that sources from `state.processEntries`.
