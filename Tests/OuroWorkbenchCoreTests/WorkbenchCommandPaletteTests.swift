@@ -129,4 +129,11 @@ final class WorkbenchCommandPaletteTests: XCTestCase {
         // so guard the command ID exists in the enum's case list.
         XCTAssertTrue(WorkbenchCommandID.allCases.contains(.openSettings))
     }
+
+    func testOpenAboutCommandIDIsPresent() {
+        // The About sheet is reachable via the palette ("about", "version")
+        // as well as the More menu; guard the ID is in the enum so deletions
+        // catch as test failures, not runtime breakage.
+        XCTAssertTrue(WorkbenchCommandID.allCases.contains(.openAbout))
+    }
 }
