@@ -21,6 +21,23 @@ struct OuroWorkbenchApp: App {
 
 struct WorkbenchRootView: View {
     @StateObject private var model = WorkbenchViewModel()
+    /// Sidebar collapse state. Bound to NavigationSplitView's column
+    /// visibility so ⌃⌘B can flip between "show only the terminal" and
+    /// "show the sidebar." Matches VSCode's chrome-toggle binding.
+    @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
+
+    /// Flip the sidebar between visible and collapsed. `.automatic` lands
+    /// at the system's preferred layout (sidebar shown); `.detailOnly`
+    /// hides the sidebar entirely. We don't distinguish .all from
+    /// .automatic because the two-column split has only one sidebar.
+    private func toggleSidebarVisibility() {
+        switch columnVisibility {
+        case .detailOnly:
+            columnVisibility = .automatic
+        default:
+            columnVisibility = .detailOnly
+        }
+    }
 
     var body: some View {
         Group {
@@ -28,7 +45,7 @@ struct WorkbenchRootView: View {
                let session = model.activeSession(for: entry) {
                 TerminalFocusView(entry: entry, session: session, model: model)
             } else {
-                NavigationSplitView {
+                NavigationSplitView(columnVisibility: $columnVisibility) {
                     WorkbenchSidebarView(model: model)
                         .navigationSplitViewColumnWidth(min: 210, ideal: 230, max: 320)
                 } detail: {
@@ -51,6 +68,17 @@ struct WorkbenchRootView: View {
                         }
                         ImportSummaryBanner(model: model)
                         TerminalCyclingShortcuts(model: model)
+                        // ⌃⌘B — toggle sidebar visibility. Invisible button
+                        // so the shortcut works regardless of focus; matches
+                        // VSCode's `cmd-b` muscle memory adjusted to also
+                        // require ctrl (cmd-b alone collides with bold).
+                        Button {
+                            toggleSidebarVisibility()
+                        } label: { EmptyView() }
+                        .keyboardShortcut("b", modifiers: [.command, .control])
+                        .frame(width: 0, height: 0)
+                        .opacity(0)
+                        .accessibilityHidden(true)
                     }
                 }
             }
@@ -701,6 +729,7 @@ struct ShortcutHelpSheet: View {
                 systemImage: "wand.and.stars",
                 rows: [
                     .init(shortcut: "⌘N", label: "New terminal"),
+                    .init(shortcut: "⌃⌘B", label: "Toggle sidebar visibility"),
                     .init(shortcut: "⌘,", label: "Open Settings"),
                     .init(shortcut: "⌘/", label: "Show this shortcut help")
                 ]

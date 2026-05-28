@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.54 - Toggle sidebar visibility (⌃⌘B)
+
+- `⌃⌘B` collapses the sidebar so the terminal pane takes the full window width. Press again to bring the sidebar back. Matches VSCode's chrome-toggle binding (adjusted to require Ctrl since plain ⌘B is bold/clash territory).
+- Listed in the ⌘/ keyboard help under App.
+
 ## 0.1.53 - Copy transcript tail from sidebar context menu
 
 - Right-click → `Copy Last 20 Lines` snaps the latest 20 transcript lines onto the clipboard. Handy for pasting into Slack / Linear when reporting what an agent just did, without opening the full transcript sheet.
