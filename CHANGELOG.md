@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.39 - Search options in the ⌘F bar
+
+- The in-terminal search bar now exposes three SwiftTerm `SearchOptions` toggles next to the field:
+  - `Aa` — case-sensitive match (default off).
+  - `.*` — treat the query as a regular expression (default off).
+  - `Wˌ` — whole-word matches only (default off).
+- Active toggles light up in the workbench accent color so it's obvious which modes are on. Flipping a toggle re-runs the current query so the "No matches" pill and the highlighted hit stay in sync.
+
 ## 0.1.37 - `.workbench.json` declarative workspace config
 
 - New: a repo can commit a `.workbench.json` at its root to declare the group + terminals it wants Workbench to spin up. `Open Workspace…` (in the More menu, with `⌘O`, and in the ⌘K palette) opens a directory picker, reads the file, and reconciles the declared terminals against existing sessions — never duplicates.

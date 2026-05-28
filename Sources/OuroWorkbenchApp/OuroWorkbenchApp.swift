@@ -4238,6 +4238,32 @@ struct SessionDetailView: View {
 /// `model.isTerminalSearchPresented`. Owns its own FocusState so Return /
 /// Shift+Return / Esc work even though the terminal underneath would
 /// otherwise grab keystrokes.
+/// Compact toggle button used inside the terminal search bar to expose the
+/// SwiftTerm `SearchOptions` (case-sensitive / regex / whole-word). Lights
+/// up the accent color when active so the user always sees which modes are
+/// on before re-running the query.
+private struct TerminalSearchToggleButton: View {
+    var title: String
+    var help: String
+    @Binding var isOn: Bool
+    var onChange: () -> Void
+
+    var body: some View {
+        Button {
+            isOn.toggle()
+            onChange()
+        } label: {
+            Text(title)
+                .font(.caption.monospaced().weight(.semibold))
+                .frame(minWidth: 22)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .tint(isOn ? Color.accentColor : Color.secondary.opacity(0.6))
+        .help(help)
+    }
+}
+
 struct TerminalSearchBar: View {
     @ObservedObject var model: WorkbenchViewModel
     @FocusState private var fieldIsFocused: Bool
@@ -4267,6 +4293,26 @@ struct TerminalSearchBar: View {
                     .padding(.vertical, 2)
                     .background(Color.orange.opacity(0.18), in: Capsule())
             }
+            // SearchOptions toggles. Toggling re-issues the current query so
+            // the result/no-result state stays in sync with what's visible.
+            TerminalSearchToggleButton(
+                title: "Aa",
+                help: "Case-sensitive match",
+                isOn: $model.terminalSearchCaseSensitive,
+                onChange: { model.stepTerminalSearch(direction: .next) }
+            )
+            TerminalSearchToggleButton(
+                title: ".*",
+                help: "Treat the query as a regular expression",
+                isOn: $model.terminalSearchRegex,
+                onChange: { model.stepTerminalSearch(direction: .next) }
+            )
+            TerminalSearchToggleButton(
+                title: "Wˌ",
+                help: "Match whole words only",
+                isOn: $model.terminalSearchWholeWord,
+                onChange: { model.stepTerminalSearch(direction: .next) }
+            )
             Button {
                 model.stepTerminalSearch(direction: .previous)
             } label: {
@@ -5682,6 +5728,12 @@ final class WorkbenchViewModel: ObservableObject {
     /// Last seen "did the most recent search find anything" status so the
     /// search bar can show "No matches" when the user types something missing.
     @Published var terminalSearchHasResult: Bool = true
+    /// User toggles in the in-terminal search bar. SwiftTerm exposes these as
+    /// `SearchOptions`; we mirror them as @Published so the bar's UI binds
+    /// directly and toggling re-issues the current query.
+    @Published var terminalSearchCaseSensitive: Bool = false
+    @Published var terminalSearchRegex: Bool = false
+    @Published var terminalSearchWholeWord: Bool = false
     /// Persisted terminal font size. Clamped to 9..28pt; ⌘+/⌘-/⌘0 cycle it.
     /// Persisted in UserDefaults so the user's chosen size survives across
     /// launches; loaded once at init.
@@ -6594,6 +6646,15 @@ final class WorkbenchViewModel: ObservableObject {
         terminalSearchHasResult = true
     }
 
+    /// SwiftTerm `SearchOptions` reflecting the user's current toggle state.
+    var currentSearchOptions: SwiftTerm.SearchOptions {
+        SwiftTerm.SearchOptions(
+            caseSensitive: terminalSearchCaseSensitive,
+            regex: terminalSearchRegex,
+            wholeWord: terminalSearchWholeWord
+        )
+    }
+
     /// Step the search forward or backward. Returns whether anything matched
     /// so the search bar can render its "No matches" state.
     @discardableResult
@@ -6611,9 +6672,9 @@ final class WorkbenchViewModel: ObservableObject {
         let hit: Bool
         switch direction {
         case .next:
-            hit = session.terminal.findNext(query)
+            hit = session.terminal.findNext(query, options: currentSearchOptions)
         case .previous:
-            hit = session.terminal.findPrevious(query)
+            hit = session.terminal.findPrevious(query, options: currentSearchOptions)
         }
         terminalSearchHasResult = hit
         return hit
