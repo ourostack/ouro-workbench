@@ -90,13 +90,13 @@ manifest, installs to `~/Applications`, clears the Gatekeeper quarantine on the
 ad-hoc-signed build, and opens it:
 
 ```bash
-curl -fsSL https://ouro-workbench-install.pages.dev/workbench-install.sh | bash
+curl -fsSL https://install.ouro.bot/workbench-install.sh | bash
 ```
 
-The vanity `https://ouro.bot/workbench-install.sh` URL serves the same script
-once the `ouro.bot` DNS record is in place. The script's source lives at
-[web/workbench-install.sh](web/workbench-install.sh) and is published to
-Cloudflare Pages from `web/`. Override behavior with `OURO_WB_REPO`,
+The same script is also served directly from Cloudflare Pages at
+`https://ouro-workbench-install.pages.dev/workbench-install.sh`. The source
+lives at [web/workbench-install.sh](web/workbench-install.sh) and is published
+to Cloudflare Pages from `web/`. Override behavior with `OURO_WB_REPO`,
 `OURO_WB_INSTALL_DIR`, or `OURO_WB_NO_OPEN=1`.
 
 The native boss dashboard also has a `Release Updates` row that checks the
