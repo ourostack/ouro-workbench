@@ -42,6 +42,11 @@ public final class WorkbenchStore {
             return WorkspaceState()
         }
 
+        // Quarantine on a read failure too (not just decode): the app's load
+        // catch resets to empty state and that reset auto-saves, which would
+        // clobber a still-present file. Moving it aside first guarantees the
+        // user's data is preserved at the quarantine path even on a transient
+        // read blip. (A preserved-but-not-loaded copy beats an overwrite.)
         let data: Data
         do {
             data = try Data(contentsOf: stateURL)
