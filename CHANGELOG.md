@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.46 - Settings sheet (⌘,)
+
+- New `Settings…` sheet, reachable via `⌘,` (standard macOS shortcut), the More menu, and the ⌘K palette ("Open Settings"). Consolidates user preferences that used to be scattered across raw `UserDefaults` reads — terminal font size, theme override, menu-bar icon visibility — into a single discoverable surface.
+- **Terminal section**: font-size stepper (clamps to 9..28pt) with a Reset button. Mirrors ⌘+ / ⌘- / ⌘0 from anywhere in the app.
+- **Appearance section**: terminal-theme picker — `Follow System` (current default — flips with macOS appearance), `Light`, or `Dark`. Light/Dark pin the SwiftTerm palette regardless of system appearance, so a user can keep a light terminal in a dark editor or vice versa. Active sessions re-paint immediately on change.
+- **Workbench Chrome section**: toggle to hide the menubar status item without quitting and reinstalling. Off hides the `∞` icon; on re-attaches it to the live model.
+- **Advanced section**: shortcut button that opens System Settings → Notifications so the user can manage Workbench banners without hunting.
+- Settings persist in `UserDefaults` under `ouro.workbench.terminalThemeOverride` and `ouro.workbench.showMenuBarStatusItem`. Existing prefs (font size, recents) keep their existing keys.
+
 ## 0.1.45 - Recent workspaces
 
 - The More menu now shows an `Open Recent Workspace` submenu listing the last 8 directories you opened via `Open Workspace…`. Click a row to reopen that workspace; the per-row hover shows the full path.
