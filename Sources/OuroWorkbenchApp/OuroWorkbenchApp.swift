@@ -961,6 +961,9 @@ struct WorkbenchSidebarView: View {
                         health: model.executableHealth(for: entry)
                     )
                         .tag(entry.id)
+                        .contextMenu {
+                            TerminalRowContextMenu(entry: entry, model: model)
+                        }
                 }
                 SidebarActionRow(title: "New Terminal", systemImage: "plus") {
                     model.isNewSessionSheetPresented = true
@@ -977,6 +980,9 @@ struct WorkbenchSidebarView: View {
                             health: model.executableHealth(for: entry)
                         )
                             .tag(entry.id)
+                            .contextMenu {
+                                TerminalRowContextMenu(entry: entry, model: model)
+                            }
                     }
                 }
             }
@@ -1173,6 +1179,97 @@ struct SidebarCountBadge: View {
             .frame(minWidth: 16, minHeight: 16)
             .background(.secondary.opacity(0.10), in: Capsule())
             .accessibilityLabel("\(count) active terminals")
+    }
+}
+
+/// Right-click context menu shown when the user secondary-clicks a sidebar
+/// terminal row. Mirrors the in-pane overflow menu so daily actions are
+/// reachable with the macOS-native gesture instead of having to focus the
+/// session and dig into the header chevron.
+struct TerminalRowContextMenu: View {
+    var entry: ProcessEntry
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        Group {
+            Button {
+                model.launch(entry)
+            } label: {
+                Label(
+                    model.activeSession(for: entry) == nil ? "Launch" : "Restart",
+                    systemImage: "play.fill"
+                )
+            }
+            .disabled(entry.isArchived)
+            if model.activeSession(for: entry) != nil {
+                Button(role: .destructive) {
+                    model.terminate(entry)
+                } label: {
+                    Label("Stop", systemImage: "stop.fill")
+                }
+            }
+            Divider()
+            Button {
+                Task { await model.runBossQuestion(about: entry) }
+            } label: {
+                Label("Ask Boss About This Session", systemImage: "bubble.left.and.text.bubble.right")
+            }
+            .disabled(model.bossCheckInIsRunning)
+            Button {
+                model.copyLaunchCommand(for: entry)
+            } label: {
+                Label("Copy Launch Command", systemImage: "doc.on.doc")
+            }
+            Button {
+                model.openWorkingDirectory(for: entry)
+            } label: {
+                Label("Open Working Directory", systemImage: "folder")
+            }
+            if model.isCustomSession(entry) {
+                Divider()
+                Button {
+                    model.beginEditingSession(entry)
+                } label: {
+                    Label("Edit Session…", systemImage: "pencil")
+                }
+                .disabled(model.activeSession(for: entry) != nil)
+                Button {
+                    model.duplicateCustomSession(entry)
+                } label: {
+                    Label("Duplicate Session", systemImage: "plus.square.on.square")
+                }
+                Menu {
+                    ForEach(model.state.projects) { project in
+                        Button(project.name) {
+                            model.moveSession(entry, to: project.id)
+                        }
+                        .disabled(project.id == entry.projectId)
+                    }
+                } label: {
+                    Label("Move to Group", systemImage: "folder")
+                }
+                .disabled(model.activeSession(for: entry) != nil || model.state.projects.count < 2)
+                if entry.isArchived {
+                    Button {
+                        model.restoreCustomSession(entry)
+                    } label: {
+                        Label("Restore", systemImage: "tray.and.arrow.up")
+                    }
+                } else {
+                    Button {
+                        model.archiveCustomSession(entry)
+                    } label: {
+                        Label("Archive Session", systemImage: "archivebox")
+                    }
+                }
+                Divider()
+                Button(role: .destructive) {
+                    model.requestDeleteCustomSession(entry)
+                } label: {
+                    Label("Delete Session…", systemImage: "trash")
+                }
+            }
+        }
     }
 }
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.44 - Right-click context menu on sidebar terminals
+
+- Right-click (or two-finger click) on a terminal row in the sidebar now opens a native macOS context menu with the same actions as the per-session overflow menu: **Launch/Restart**, **Stop** (when running), **Ask Boss About This Session**, **Copy Launch Command**, **Open Working Directory**, plus, for custom sessions, **Edit**, **Duplicate**, **Move to Group**, **Archive / Restore**, and **Delete**.
+- Lets the user act on a session without having to first focus it.
+
 ## 0.1.43 - "Where you left off" inline transcript preview
 
 - Inactive-session card now renders the last ~12 lines of the most recent transcript inline under a "Where you left off" label so the user has immediate context when reopening Workbench, instead of needing to click through to the transcript sheet. The full sheet is still one tap away via the "View full transcript" button.
