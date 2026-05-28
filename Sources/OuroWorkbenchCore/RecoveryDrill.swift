@@ -84,7 +84,7 @@ public struct RecoveryDrill: Sendable {
                 latest[run.entryId] = run
                 continue
             }
-            if run.startedAt > existing.startedAt {
+            if ProcessRun.isMoreRecent(run, existing) {
                 latest[run.entryId] = run
             }
         }

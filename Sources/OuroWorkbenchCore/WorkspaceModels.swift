@@ -235,6 +235,19 @@ public struct ProcessRun: Codable, Equatable, Identifiable, Sendable {
         self.transcriptPath = transcriptPath
         self.lastOutputAt = lastOutputAt
     }
+
+    /// Deterministic "is `lhs` more recent than `rhs`" ordering for runs.
+    /// Newer `startedAt` wins; ties (equal timestamps — common when runs are
+    /// created in a tight loop or restored from second-granularity dates)
+    /// break on `id` so every call site — summary, recovery planner, drill,
+    /// prompt builder — agrees on which run is "latest" instead of depending
+    /// on array order (`sorted(by: >)` is not a stable tiebreak).
+    public static func isMoreRecent(_ lhs: ProcessRun, _ rhs: ProcessRun) -> Bool {
+        if lhs.startedAt != rhs.startedAt {
+            return lhs.startedAt > rhs.startedAt
+        }
+        return lhs.id.uuidString > rhs.id.uuidString
+    }
 }
 
 public struct WorkbenchActionLogEntry: Codable, Equatable, Identifiable, Sendable {

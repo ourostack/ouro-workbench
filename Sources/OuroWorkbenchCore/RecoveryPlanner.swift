@@ -28,7 +28,7 @@ public struct RecoveryPlanner: Sendable {
         state.processEntries.map { entry in
             let latestRun = state.processRuns
                 .filter { $0.entryId == entry.id }
-                .sorted { $0.startedAt > $1.startedAt }
+                .sorted(by: ProcessRun.isMoreRecent)
                 .first
             return planRecovery(for: entry, latestRun: latestRun)
         }

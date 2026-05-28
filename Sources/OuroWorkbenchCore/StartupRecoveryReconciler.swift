@@ -18,7 +18,7 @@ public struct StartupRecoveryReconciler: Sendable {
             let entryId = next.processEntries[entryIndex].id
             let latestRun = next.processRuns
                 .filter { $0.entryId == entryId }
-                .sorted { $0.startedAt > $1.startedAt }
+                .sorted(by: ProcessRun.isMoreRecent)
                 .first
             if latestRun?.status == .needsRecovery {
                 next.processEntries[entryIndex].attention = .needsBossReview
