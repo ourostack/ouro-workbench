@@ -26,6 +26,39 @@ final class BossWorkbenchActionTests: XCTestCase {
         XCTAssertEqual(try BossWorkbenchActionParser().parse("No action needed."), [])
     }
 
+    func testMalformedActionInBatchIsSkippedNotFatal() throws {
+        // The middle action has an unknown `action` kind a newer boss might
+        // emit. It should be skipped, the two valid actions still applied —
+        // rather than the whole batch being discarded.
+        let reply = """
+        ```ouro-workbench-actions
+        [
+          { "action": "recover", "entry": "OpenAI Codex" },
+          { "action": "teleport", "entry": "Nowhere" },
+          { "action": "sendInput", "entry": "Claude Code", "text": "go", "appendNewline": true }
+        ]
+        ```
+        """
+
+        let actions = try BossWorkbenchActionParser().parse(reply)
+
+        XCTAssertEqual(actions, [
+            BossWorkbenchAction(action: .recover, entry: "OpenAI Codex"),
+            BossWorkbenchAction(action: .sendInput, entry: "Claude Code", text: "go", appendNewline: true),
+        ])
+    }
+
+    func testNonArrayActionPayloadStillThrows() {
+        // A payload that isn't an array at all should surface as a parse
+        // error, not silently return empty.
+        let reply = """
+        ```ouro-workbench-actions
+        { "action": "recover" }
+        ```
+        """
+        XCTAssertThrowsError(try BossWorkbenchActionParser().parse(reply))
+    }
+
     func testSendInputRequiresNonEmptyTextBeforeQueueing() {
         let action = BossWorkbenchAction(action: .sendInput, entry: "Claude Code", text: "   ")
 
