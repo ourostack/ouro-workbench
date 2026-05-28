@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.91 - Session friend identity (preference-driven inbox, phase 0)
+
+- Foundation for [the preference-driven inbox](docs/preference-driven-inbox.md): a session can now carry a **friend** (human or agent) — the entity it acts for, whose preferences will govern how the boss advances it. Mirrors the Ouro `FriendRecord` (name, `kind`, `trustLevel` family/friend/acquaintance/stranger). Sessions inherit their group's `defaultFriend` when they don't set their own; unassigned sessions resolve to nil (and the boss will never auto-advance those).
+- The boss check-in prompt and `workbench_status` now report each session's friend (`friend=<name> (<kind>, <trust>)`, or `unassigned`), so the boss can already reason about whose policy applies.
+- Schema only — fully backward compatible (decode-if-present) and no behavior change yet. Assigning friends and preference-driven advancing land in later phases.
+
 ## 0.1.90 - Jump to the next session that needs you (⌘J)
 
 - `⌘J` jumps focus to the next session that needs the operator — waiting at a prompt, flagged for boss review, or blocked — across all groups, in sidebar order, wrapping around. This completes the attention loop the prior releases built: detection lights a session up, `⌘J` carries you straight to it without scanning panes. The binding is in the keyboard help (`⌘/`), and since it flows from the single-source `WorkbenchGuide` catalog it also reaches the boss `workbench_sense` and the inner-agent context. No-op when nothing needs you.
