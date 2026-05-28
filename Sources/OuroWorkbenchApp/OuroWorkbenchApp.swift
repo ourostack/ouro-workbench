@@ -8714,21 +8714,27 @@ final class WorkbenchViewModel: ObservableObject {
             process.standardOutput = pipe
             process.standardError = pipe
             do {
+                let start = Date()
                 try process.run()
-                let deadline = Date().addingTimeInterval(20)
-                while process.isRunning && Date() < deadline {
-                    try await Task.sleep(nanoseconds: 100_000_000)
+                // Drain stdout/stderr continuously via readDataToEndOfFile so a
+                // chatty `ouro check` (>64KB) can't fill the pipe buffer and
+                // block the process — which previously looked like a timeout.
+                // A watchdog terminates the process past the deadline; the
+                // terminate closes the pipe, so the read returns.
+                let watchdog = DispatchWorkItem {
+                    if process.isRunning { process.terminate() }
                 }
-                if process.isRunning {
-                    process.terminate()
-                    process.waitUntilExit()
+                DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 20, execute: watchdog)
+                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                process.waitUntilExit()
+                watchdog.cancel()
+                if Date().timeIntervalSince(start) >= 20 {
                     return OnboardingProviderCheckResult(
                         lane: lane,
                         state: .failed,
                         detail: "`ouro check --agent \(agentName) --lane \(lane)` did not finish. Open Ouro provider setup to repair auth or daemon state."
                     )
                 }
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
                 let output = String(decoding: data, as: UTF8.self)
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 if process.terminationStatus == 0 {

@@ -618,14 +618,27 @@ public struct RecentSessionScanner {
         let process = Process()
         let pipe = Pipe()
         process.executableURL = sqlite3URL
-        process.arguments = ["-separator", "\t", "-noheader", sqliteURL.path, query]
+        // `-readonly` so we never contend for a write lock with a live Codex,
+        // and a watchdog below so a WAL-locked / slow DB can't hang the scan
+        // (which would leave onboardingIsScanning stuck and disable Scan/Arrange).
+        process.arguments = ["-readonly", "-separator", "\t", "-noheader", sqliteURL.path, query]
         process.standardOutput = pipe
         process.standardError = Pipe()
         do {
+            let start = Date()
             try process.run()
+            // Terminate sqlite3 if it runs past the deadline. `readDataToEndOfFile`
+            // drains continuously and returns at EOF — which happens on normal
+            // exit OR when the watchdog terminates the process — so a hung query
+            // can't wedge us, and large output can't fill the pipe buffer.
+            let watchdog = DispatchWorkItem {
+                if process.isRunning { process.terminate() }
+            }
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 5, execute: watchdog)
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             process.waitUntilExit()
-            guard process.terminationStatus == 0 else {
+            watchdog.cancel()
+            guard Date().timeIntervalSince(start) < 5, process.terminationStatus == 0 else {
                 return []
             }
             let output = String(decoding: data, as: UTF8.self)
