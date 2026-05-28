@@ -238,7 +238,11 @@ final class WorkbenchMCPServer {
     }
 
     private func currentState() throws -> WorkspaceState {
-        bootstrapper.bootstrappedState(from: try store.load())
+        // Read-only: never quarantine. The MCP server shares the app's state
+        // file but doesn't own it — moving it aside on a transient read or a
+        // schema bump (seen by a stale MCP binary) would destroy the app's
+        // live workspace. Quarantine is the owning app's decision alone.
+        bootstrapper.bootstrappedState(from: try store.load(quarantineCorruptFile: false))
     }
 
     private func targetEntry(arguments: [String: Any], state: WorkspaceState) throws -> ProcessEntry {
