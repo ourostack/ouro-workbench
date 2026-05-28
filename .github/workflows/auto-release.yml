@@ -1,0 +1,54 @@
+name: Auto Release on main
+
+# Cut a GitHub Release automatically when main advances to a VERSION that
+# hasn't been released yet. VERSION is bumped in every PR, so each merge that
+# changes it publishes exactly one prerelease build; merges that don't change
+# VERSION (e.g. docs-only) are no-ops. Idempotent — re-running never
+# double-publishes (the reusable Release workflow guards on the existing tag).
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: auto-release
+  cancel-in-progress: false
+
+jobs:
+  decide:
+    name: Decide whether to release
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.check.outputs.should_release }}
+      tag: ${{ steps.check.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v6
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < VERSION)"
+          tag="v${version}"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $tag already exists; nothing to do."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "VERSION $version has no release yet; will publish $tag."
+            echo "should_release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  release:
+    name: Build and publish release
+    needs: decide
+    if: needs.decide.outputs.should_release == 'true'
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.decide.outputs.tag }}
+      prerelease: true
+    permissions:
+      contents: write

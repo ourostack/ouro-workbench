@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.85 - Automatic release on merge to main
+
+- New `auto-release.yml`: every push to `main` reads `VERSION` and, if no `v<VERSION>` release exists yet, builds + publishes a prerelease GitHub Release automatically. Since `VERSION` is bumped in each PR, every merge that changes it cuts exactly one release; merges that don't are no-ops.
+- `release.yml` is now a reusable (`workflow_call`) workflow and idempotent — it skips publishing if the tag's release already exists, so manual tag pushes, dispatches, the auto-release driver, and re-runs can never double-publish.
+- This is the first release to carry the full stability + hardening pass (0.1.42–0.1.84).
+
 ## 0.1.84 - Update deep scenario verifier digest for pinned/colored coverage
 
 - 0.1.83 added `isPinned`/`colorTag` draws to the deep scenario generator, which (correctly) shifts the seeded corpus and its coverage digest. Update the expected deep-run digest (`scripts/preflight.sh --deep` and the deep-scenario-verifier CI workflow) from `0fd57795f807596d` to `83e10a2284896aea`, regenerated and verified by a full `./scripts/preflight.sh --deep` run. (The standard required digest is unchanged.)
