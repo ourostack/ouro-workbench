@@ -409,6 +409,9 @@ struct DeepScenarioGenerator {
         if fixture.entry.kind == .terminalAgent, fixture.entry.agentKind == nil {
             fixture.entry.agentKind = .custom
         }
+        // Exercise the pinned-row layout (sidebar sorts pinned-first + shows a
+        // pin glyph) so the verifier actually covers the shipped field.
+        fixture.entry.isPinned = random.nextBool()
 
         replace(entry: fixture.entry, in: &fixture.state)
 
@@ -426,12 +429,16 @@ struct DeepScenarioGenerator {
 
     private mutating func addGeneratedProjectsAndPeers(to fixture: inout WorkbenchScenarioFixture, index: Int) {
         let projectCount = 1 + Int(random.next() % 4)
+        // Tag some groups with a color (and leave others untagged) so the
+        // verifier covers the color-tagged sidebar row rendering.
+        let groupColors: [String?] = [nil] + WorkbenchGroupColor.allCases.map { $0.rawValue }
         fixture.state.projects = (0..<projectCount).map { slot in
             WorkbenchProject(
                 id: stableUUID(index: index, slot: slot, namespace: 0xA1),
                 name: pick(projectNames),
                 rootPath: "/tmp/ouro-workbench/deep/\(index)/project-\(slot)",
-                boss: fixture.state.boss
+                boss: fixture.state.boss,
+                colorTag: pick(groupColors)
             )
         }
         let selectedProject = fixture.state.projects[Int(random.next() % UInt64(fixture.state.projects.count))]
@@ -444,13 +451,16 @@ struct DeepScenarioGenerator {
             let terminal = pick(terminals)
             let status = processStatus(for: pick(lifecycles))
             let project = fixture.state.projects[Int(random.next() % UInt64(fixture.state.projects.count))]
-            let peer = processEntry(
+            var peer = processEntry(
                 terminal: terminal,
                 id: stableUUID(index: index, slot: slot, namespace: 0xB2),
                 projectId: project.id,
                 name: "\(pick(sessionNames)) \(slot + 1)",
                 workingDirectory: "/tmp/ouro-workbench/deep/\(index)/peer-\(slot)"
             )
+            // Pin some peers so groups exercise the pinned-first ordering with
+            // multiple pinned rows, not just the selected entry.
+            peer.isPinned = random.nextBool()
             fixture.state.processEntries.append(peer)
 
             if status != .configured {
