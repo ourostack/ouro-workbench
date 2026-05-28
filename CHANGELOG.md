@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.43 - "Where you left off" inline transcript preview
+
+- Inactive-session card now renders the last ~12 lines of the most recent transcript inline under a "Where you left off" label so the user has immediate context when reopening Workbench, instead of needing to click through to the transcript sheet. The full sheet is still one tap away via the "View full transcript" button.
+- ANSI escape sequences (CSI cursor controls, OSC title sequences, etc.) are stripped from the inline preview so TUI cursor-position codes don't pollute it. The full transcript sheet keeps the raw bytes.
+- Limits the preview to a 180pt scroll view height so it never crowds the launch / recovery buttons.
+
 ## 0.1.42 - Boss-Watch needs-me notifications
 
 - When **Boss Watch** is enabled and the dashboard refresh surfaces newly-arrived needs-me items, Workbench now posts a macOS user notification so you can leave the app in the background and trust it to ping you. Single-item notifications include the item's label and detail; multi-item notifications summarise the new arrivals plus the total count waiting.
