@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.55 - Auto-launch resumable terminals on startup (opt-in)
+
+- New Settings → Startup toggle: **Auto-launch resumable terminals on startup** (default off). When on, reopening Workbench launches every terminal marked Auto Resume that isn't already running — so a `.workbench.json` workspace comes up with its agents waiting for you, not just on the first `Open Workspace…`.
+- Runs *after* startup recovery so crashed sessions take the recovery path; only entries with no pending recovery plan and not already running are auto-launched. Fires at most once per launch.
+- Default off so existing users see no behavior change; the result is recorded in the action log (`Auto-launched 3 resumable sessions`).
+
 ## 0.1.54 - Toggle sidebar visibility (⌃⌘B)
 
 - `⌃⌘B` collapses the sidebar so the terminal pane takes the full window width. Press again to bring the sidebar back. Matches VSCode's chrome-toggle binding (adjusted to require Ctrl since plain ⌘B is bold/clash territory).

@@ -106,6 +106,7 @@ struct WorkbenchRootView: View {
         }
         .task {
             model.recoverEligibleSessionsOnStartup()
+            model.launchAutoResumeSessionsOnStartup()
             model.launchDefaultShellIfNeeded()
             model.refreshExecutableHealth()
             model.refreshOnboardingReadiness()
@@ -851,6 +852,7 @@ struct SettingsSheet: View {
                     terminalSection
                     appearanceSection
                     chromeSection
+                    startupSection
                     advancedSection
                 }
                 .padding(20)
@@ -937,6 +939,24 @@ struct SettingsSheet: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Show menu bar icon")
                     Text("Adds the ∞ status item with running-session count, jump-to-session menu, and Boss Watch toggle.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .toggleStyle(.switch)
+        }
+    }
+
+    @ViewBuilder
+    private var startupSection: some View {
+        SettingsSection(title: "Startup", systemImage: "power") {
+            Toggle(isOn: Binding(
+                get: { model.autoLaunchResumableOnStartup },
+                set: { model.setAutoLaunchResumableOnStartup($0) }
+            )) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Auto-launch resumable terminals on startup")
+                    Text("On launch, start every terminal marked Auto Resume that isn't already running. Lets a `.workbench.json` workspace come up with its agents waiting for you.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -6359,6 +6379,13 @@ final class WorkbenchViewModel: ObservableObject {
         }
         return defaults.bool(forKey: WorkbenchViewModel.showMenuBarStatusItemDefaultsKey)
     }()
+    /// Auto-launch every `autoResume: true` terminal on app startup?
+    /// Defaults to **off** — turning this on changes launch behavior, so we
+    /// don't surprise existing users. When on, reopening Workbench brings
+    /// declared agents up automatically. Persisted in UserDefaults.
+    @Published var autoLaunchResumableOnStartup: Bool = {
+        UserDefaults.standard.bool(forKey: WorkbenchViewModel.autoLaunchResumableOnStartupDefaultsKey)
+    }()
     @Published var commandPaletteQuery = ""
     @Published var editingGroup: WorkbenchProject?
     @Published var pendingDeleteGroup: WorkbenchProject?
@@ -6418,6 +6445,7 @@ final class WorkbenchViewModel: ObservableObject {
     private var bossWatchLastPromptAt: Date?
     private var didAttemptStartupRecovery = false
     private var didAttemptDefaultShellLaunch = false
+    private var didAttemptAutoResumeLaunch = false
     private let bossWatchIntervalNanoseconds: UInt64 = 60_000_000_000
 
     init(
@@ -9472,6 +9500,49 @@ final class WorkbenchViewModel: ObservableObject {
         }
     }
 
+    /// When the "auto-launch autoResume terminals on startup" preference is
+    /// on, launch every `autoResume` entry that isn't already running and
+    /// has no pending recovery plan (so we don't double-launch what
+    /// `recoverEligibleSessionsOnStartup` already handled). Off by default;
+    /// must run *after* startup recovery so the recovery path wins for
+    /// crashed sessions. Fires at most once per launch.
+    func launchAutoResumeSessionsOnStartup() {
+        guard !didAttemptAutoResumeLaunch else {
+            return
+        }
+        didAttemptAutoResumeLaunch = true
+        guard autoLaunchResumableOnStartup else {
+            return
+        }
+        let recoveryEntryIDs = Set(summary.recoveryPlans.map(\.entryId))
+        let candidates = state.processEntries.filter { entry in
+            entry.autoResume
+                && !entry.isArchived
+                && (entry.kind == .terminalAgent || entry.kind == .shell)
+                && activeSessions[entry.id] == nil
+                && !recoveryEntryIDs.contains(entry.id)
+        }
+        guard !candidates.isEmpty else { return }
+        for entry in candidates {
+            launch(entry)
+        }
+        recordActionLog(
+            source: "native",
+            action: "launchAutoResumeSessionsOnStartup",
+            targetName: WorkbenchRelease.appName,
+            result: "Auto-launched \(candidates.count) resumable session\(candidates.count == 1 ? "" : "s")",
+            succeeded: true
+        )
+    }
+
+    /// Persist the auto-launch-on-startup preference. The actual launching
+    /// happens on the next app launch via `launchAutoResumeSessionsOnStartup`.
+    func setAutoLaunchResumableOnStartup(_ enabled: Bool) {
+        guard enabled != autoLaunchResumableOnStartup else { return }
+        autoLaunchResumableOnStartup = enabled
+        UserDefaults.standard.set(enabled, forKey: Self.autoLaunchResumableOnStartupDefaultsKey)
+    }
+
     func launchDefaultShellIfNeeded() {
         guard !didAttemptDefaultShellLaunch else {
             return
@@ -10387,6 +10458,7 @@ final class WorkbenchViewModel: ObservableObject {
     static let recentWorkspacePathsDefaultsKey = "ouro.workbench.recentWorkspacePaths"
     static let terminalThemeOverrideDefaultsKey = "ouro.workbench.terminalThemeOverride"
     static let showMenuBarStatusItemDefaultsKey = "ouro.workbench.showMenuBarStatusItem"
+    static let autoLaunchResumableOnStartupDefaultsKey = "ouro.workbench.autoLaunchResumableOnStartup"
     static let maxRecentWorkspaces = 8
     /// Default terminal font size. Matches macOS Terminal's default.
     static let defaultTerminalFontSize: CGFloat = 13
