@@ -386,7 +386,7 @@ final class WorkbenchMenuBarController: NSObject, NSMenuDelegate {
               let uuid = UUID(uuidString: raw) else {
             return
         }
-        model?.selectedEntryID = uuid
+        model?.selectEntryAcrossGroups(uuid)
         showWorkbench()
     }
 
@@ -577,7 +577,7 @@ struct RecoverySheet: View {
                     VStack(alignment: .leading, spacing: 10) {
                         ForEach(model.recoverableEntries) { entry in
                             RecoverableEntryRow(entry: entry, model: model, onJump: {
-                                model.selectedEntryID = entry.id
+                                model.selectEntryAcrossGroups(entry.id)
                                 dismiss()
                             }, onRecover: {
                                 model.recover(entry)
@@ -1029,7 +1029,7 @@ struct ImportSummaryBanner: View {
                     if let entryID = summary.firstSelectedEntryID,
                        model.state.processEntries.contains(where: { $0.id == entryID }) {
                         Button("Open") {
-                            model.selectedEntryID = entryID
+                            model.selectEntryAcrossGroups(entryID)
                             model.lastImportSummary = nil
                         }
                         .controlSize(.small)
@@ -7801,6 +7801,23 @@ final class WorkbenchViewModel: ObservableObject {
         }
         selectedProjectID = projectId
         selectedEntryID = sessionEntries.first?.id ?? archivedSessionEntries.first?.id
+    }
+
+    /// Select a specific session by id, switching the active group to the
+    /// session's project first. The menu-bar and recovery lists show sessions
+    /// from every group, but `selectedEntry` resolves through the
+    /// project-filtered list — so setting `selectedEntryID` alone would land
+    /// on the wrong terminal when the target lives in another group. Always
+    /// set the project before the entry.
+    func selectEntryAcrossGroups(_ entryId: UUID) {
+        guard let entry = state.processEntries.first(where: { $0.id == entryId }) else {
+            return
+        }
+        if entry.projectId != selectedProjectID,
+           state.projects.contains(where: { $0.id == entry.projectId }) {
+            selectedProjectID = entry.projectId
+        }
+        selectedEntryID = entryId
     }
 
     /// Resolve or create the group used by an opened workspace config. If a
