@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.76 - Fix: first-run onboarding must still auto-present (regression in 0.1.71)
+
+- 0.1.71 narrowed the launch onboarding gate to "genuine config gap," but the blocker-ID set it checked didn't include the **no-agent / boss-not-installed / boss-not-selected** states (`hatch` / `clone` / `use-<agent>` steps). A brand-new machine with no Ouro agent would therefore never see onboarding on launch. The gate now also presents whenever readiness is `.needsAgent`.
+
 ## 0.1.75 - Closing the window quits cleanly (no more headless zombie)
 
 - Closing the Workbench window now quits the app. Previously it tore down the SwiftUI scene — deallocating the view model and silently cancelling the Boss-Watch and external-action loops — while the menu-bar item lingered pointing at nothing, so autonomy stopped but the UI implied it was still running. Quitting is the honest outcome, and the clean-detach-on-quit (0.1.67) means persistent sessions reattach on the next launch.
