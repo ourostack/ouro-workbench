@@ -8553,11 +8553,28 @@ final class WorkbenchViewModel: ObservableObject {
     func searchTranscripts() {
         let query = transcriptSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         transcriptSearchLastQuery = query.isEmpty ? nil : query
-        transcriptSearchResults = transcriptSearcher.search(
-            query: query,
-            state: state,
-            maxMatches: TranscriptSearchLimit.defaultMatches
-        )
+        guard !query.isEmpty else {
+            transcriptSearchResults = []
+            return
+        }
+        // The searcher opens + reads every transcript file. Run it off the
+        // main actor so a workspace with many / large transcripts (or a slow
+        // volume) can't freeze the UI; publish results back on the main actor.
+        let snapshot = state
+        Task { [weak self] in
+            let results = await Task.detached(priority: .userInitiated) {
+                TranscriptSearcher().search(
+                    query: query,
+                    state: snapshot,
+                    maxMatches: TranscriptSearchLimit.defaultMatches
+                )
+            }.value
+            // Drop stale results if the query changed while we searched.
+            guard let self, self.transcriptSearchLastQuery == query else {
+                return
+            }
+            self.transcriptSearchResults = results
+        }
     }
 
     func transcriptSearchQueryDidChange() {

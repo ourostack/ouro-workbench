@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.78 - Transcript search runs off the main thread
+
+- ⌘K transcript search opened and read every transcript file synchronously on the main thread, so a workspace with many or large transcripts (or one on a slow/network volume) could freeze the UI mid-search. The search now runs on a background task and publishes results back on the main actor, dropping stale results if the query changed meanwhile. (Mirrors how support-diagnostics collection already offloads.)
+
 ## 0.1.77 - MCP server never quarantines the app's live state file
 
 - The `ouro-workbench` MCP server reads the same workspace-state file the app owns. With the corrupt-file quarantine added in 0.1.60, a read-only consumer hitting a transient read error — or a schema bump seen by a stale MCP binary — could move the app's live state file aside, destroying good state. `WorkbenchStore.load` gains a `quarantineCorruptFile` flag (default true for the owning app); the MCP server now loads with it `false`, so it surfaces the error without ever touching the file. Quarantine remains the owning app's decision alone.
