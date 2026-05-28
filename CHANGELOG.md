@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.65 - Fix: re-selecting/resizing a shell no longer clears its screen
+
+- The redraw nudge that Workbench sends on attach/resize/appearance-change was a Ctrl-L (form-feed). In a full-screen TUI that means "repaint" (harmless), but in a plain shell sitting at a prompt it **clears the visible scrollback** — so clicking back to a shell terminal or resizing the window wiped what you were looking at.
+- Ctrl-L is now only sent when the session is in the alternate-screen buffer (a TUI). Normal-buffer shells are left alone; SwiftTerm repaints them via its own reflow.
+
 ## 0.1.64 - Fix: disk-full no longer crashes during transcript writes
 
 - `TranscriptRecorder.append` used the deprecated `FileHandle.write(_:)`, which raises an *uncatchable* Objective-C exception on disk-full or a closed descriptor — crashing the whole app. Switched to the throwing `write(contentsOf:)`; a failed append now drops that slice and the session keeps running.

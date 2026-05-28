@@ -11193,7 +11193,17 @@ final class TerminalHostView: NSView {
                       terminal.superview === self else {
                     return
                 }
-                terminal.send([0x0c])
+                // Only nudge a redraw with Ctrl-L (form-feed) when the session
+                // is in the alternate-screen buffer — i.e. a full-screen TUI
+                // (Claude Code, Codex, vim) where Ctrl-L means "repaint" and
+                // is harmless. In the normal buffer (a plain shell sitting at
+                // a prompt) Ctrl-L *clears the visible scrollback*, so we must
+                // not inject it just because the user resized or re-selected
+                // the terminal. SwiftTerm repaints the normal buffer on its
+                // own via reflow / SIGWINCH.
+                if terminal.getTerminal().isCurrentBufferAlternate {
+                    terminal.send([0x0c])
+                }
                 terminal.claimKeyboardFocus()
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
