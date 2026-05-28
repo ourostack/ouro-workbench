@@ -81,6 +81,24 @@ Install the latest published ad-hoc-signed preview release with:
 scripts/install-latest-release.sh --open
 ```
 
+### One-line install (no checkout)
+
+If you just want the app and don't have the repo cloned, run the hosted
+installer. It needs only stock macOS tools (`curl`, `shasum`, `ditto`),
+downloads the latest published release, verifies its sha256 against the release
+manifest, installs to `~/Applications`, clears the Gatekeeper quarantine on the
+ad-hoc-signed build, and opens it:
+
+```bash
+curl -fsSL https://ouro-workbench-install.pages.dev/workbench-install.sh | bash
+```
+
+The vanity `https://ouro.bot/workbench-install.sh` URL serves the same script
+once the `ouro.bot` DNS record is in place. The script's source lives at
+[web/workbench-install.sh](web/workbench-install.sh) and is published to
+Cloudflare Pages from `web/`. Override behavior with `OURO_WB_REPO`,
+`OURO_WB_INSTALL_DIR`, or `OURO_WB_NO_OPEN=1`.
+
 The native boss dashboard also has a `Release Updates` row that checks the
 public GitHub Releases feed and opens the latest release page when a newer build
 exists.
