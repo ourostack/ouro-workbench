@@ -90,7 +90,9 @@ struct WorkbenchRootView: View {
             // Attach the menu bar controller to the live model so the
             // NSStatusItem reflects current state. Singleton ensures the
             // status item is created only once even if SwiftUI re-mounts.
+            // Honor the user's persisted "Show menu bar icon" setting.
             WorkbenchMenuBarController.shared.attach(model: model)
+            WorkbenchMenuBarController.shared.setVisible(model.showMenuBarStatusItem)
         }
         .sheet(isPresented: $model.isNewSessionSheetPresented) {
             NewTerminalSessionSheet(model: model)
@@ -109,6 +111,9 @@ struct WorkbenchRootView: View {
         }
         .sheet(isPresented: $model.isShortcutHelpPresented) {
             ShortcutHelpSheet()
+        }
+        .sheet(isPresented: $model.isSettingsSheetPresented) {
+            SettingsSheet(model: model)
         }
         .sheet(isPresented: $model.isRecoverySheetPresented) {
             RecoverySheet(model: model)
@@ -181,6 +186,14 @@ final class WorkbenchMenuBarController: NSObject, NSMenuDelegate {
     func attach(model: WorkbenchViewModel) {
         self.model = model
         refreshIcon()
+    }
+
+    /// Show or hide the NSStatusItem in the menu bar. The Settings sheet uses
+    /// this to honor the "Show menu bar icon" preference at runtime without
+    /// requiring a relaunch. The status item itself is retained either way so
+    /// flipping it back on is instantaneous.
+    func setVisible(_ visible: Bool) {
+        statusItem.isVisible = visible
     }
 
     /// Update the menu-bar icon based on current state. Called on attach and
@@ -680,6 +693,7 @@ struct ShortcutHelpSheet: View {
                 systemImage: "wand.and.stars",
                 rows: [
                     .init(shortcut: "⌘N", label: "New terminal"),
+                    .init(shortcut: "⌘,", label: "Open Settings"),
                     .init(shortcut: "⌘/", label: "Show this shortcut help")
                 ]
             )
@@ -735,6 +749,164 @@ struct ShortcutHelpSheet: View {
             }
         }
         .frame(width: 560, height: 540)
+    }
+}
+
+/// User preferences sheet, opened by ⌘, or the More menu's "Settings…"
+/// action. Consolidates settings that were previously scattered as raw
+/// UserDefaults reads — terminal font size, theme override, and menu-bar
+/// icon visibility — into a single discoverable surface. Every control
+/// binds directly to a `WorkbenchViewModel` setter so changes persist
+/// immediately; no Save button needed.
+struct SettingsSheet: View {
+    @ObservedObject var model: WorkbenchViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Label("Settings", systemImage: "gearshape")
+                    .font(.title3.weight(.semibold))
+                Spacer()
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 14)
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    terminalSection
+                    appearanceSection
+                    chromeSection
+                    advancedSection
+                }
+                .padding(20)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .frame(width: 520, height: 540)
+    }
+
+    private var fontSizeBounds: ClosedRange<Int> {
+        let lo = Int(WorkbenchViewModel.terminalFontSizeBounds.lowerBound)
+        let hi = Int(WorkbenchViewModel.terminalFontSizeBounds.upperBound)
+        return lo...hi
+    }
+
+    private var fontSizeBinding: Binding<Int> {
+        Binding(
+            get: { Int(model.terminalFontSize) },
+            set: { model.setTerminalFontSize(CGFloat($0)) }
+        )
+    }
+
+    @ViewBuilder
+    private var terminalSection: some View {
+        SettingsSection(title: "Terminal", systemImage: "terminal") {
+            HStack(spacing: 12) {
+                Text("Font size")
+                    .frame(width: 110, alignment: .leading)
+                Stepper(value: fontSizeBinding, in: fontSizeBounds) {
+                    fontSizeLabel
+                }
+                Button("Reset") {
+                    model.resetTerminalFontSize()
+                }
+                .help("Reset to macOS default (13pt). Also bound to ⌘0.")
+            }
+            Text("Also bound to ⌘+ / ⌘- / ⌘0 in any terminal.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var fontSizeLabel: some View {
+        let display = "\(Int(model.terminalFontSize))pt"
+        Text(display)
+            .monospacedDigit()
+            .frame(width: 50, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var appearanceSection: some View {
+        SettingsSection(title: "Appearance", systemImage: "paintpalette") {
+            HStack(spacing: 12) {
+                Text("Terminal theme")
+                    .frame(width: 110, alignment: .leading)
+                Picker(
+                    "",
+                    selection: Binding(
+                        get: { model.terminalThemeOverride },
+                        set: { model.setTerminalThemeOverride($0) }
+                    )
+                ) {
+                    ForEach(TerminalThemeOverride.allCases) { option in
+                        Text(option.label).tag(option)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+            }
+            Text("Follow System matches your macOS light/dark setting. Light or Dark pins the terminal palette regardless of the system appearance.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var chromeSection: some View {
+        SettingsSection(title: "Workbench Chrome", systemImage: "menubar.rectangle") {
+            Toggle(isOn: Binding(
+                get: { model.showMenuBarStatusItem },
+                set: { model.setShowMenuBarStatusItem($0) }
+            )) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Show menu bar icon")
+                    Text("Adds the ∞ status item with running-session count, jump-to-session menu, and Boss Watch toggle.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .toggleStyle(.switch)
+        }
+    }
+
+    @ViewBuilder
+    private var advancedSection: some View {
+        SettingsSection(title: "Advanced", systemImage: "wrench.and.screwdriver") {
+            HStack(spacing: 12) {
+                Button {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.notifications") {
+                        NSWorkspace.shared.open(url)
+                    }
+                } label: {
+                    Label("Notification Preferences…", systemImage: "bell.badge")
+                }
+                .help("Opens System Settings → Notifications so you can manage Workbench banners.")
+            }
+            Text("Notification permission is required for Boss-Watch needs-me pings and unexpected-exit alerts.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
+}
+
+/// A section within the Settings sheet — header + content slot — so each
+/// settings group renders the same way.
+private struct SettingsSection<Content: View>: View {
+    let title: String
+    let systemImage: String
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(title, systemImage: systemImage)
+                .font(.headline)
+            content()
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 }
 
@@ -1451,6 +1623,12 @@ struct HeaderView: View {
                     Label("Refresh Status", systemImage: "arrow.clockwise")
                 }
                 Divider()
+                Button {
+                    model.isSettingsSheetPresented = true
+                } label: {
+                    Label("Settings…", systemImage: "gearshape")
+                }
+                .keyboardShortcut(",", modifiers: [.command])
                 Button {
                     model.isShortcutHelpPresented = true
                 } label: {
@@ -5940,6 +6118,28 @@ final class WorkbenchViewModel: ObservableObject {
         UserDefaults.standard.stringArray(forKey: WorkbenchViewModel.recentWorkspacePathsDefaultsKey) ?? []
     }()
     @Published var isOuroAgentInstallSheetPresented = false
+    /// Settings sheet (⌘,) consolidates user prefs previously scattered as
+    /// raw UserDefaults reads — terminal font size, theme override, menu-bar
+    /// icon visibility, recents limit. Mounted once at the root via .sheet
+    /// like every other workbench sheet.
+    @Published var isSettingsSheetPresented = false
+    /// User's terminal-theme override. `.system` follows the macOS appearance
+    /// (current default); `.light`/`.dark` pin the terminal palette regardless
+    /// of system. Persisted in UserDefaults.
+    @Published var terminalThemeOverride: TerminalThemeOverride = {
+        let raw = UserDefaults.standard.string(forKey: WorkbenchViewModel.terminalThemeOverrideDefaultsKey) ?? ""
+        return TerminalThemeOverride(rawValue: raw) ?? .system
+    }()
+    /// Show the menubar status item? Defaults to true so existing users see
+    /// no change; toggling it off removes the NSStatusItem at the next
+    /// settings change. Persisted in UserDefaults.
+    @Published var showMenuBarStatusItem: Bool = {
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: WorkbenchViewModel.showMenuBarStatusItemDefaultsKey) == nil {
+            return true
+        }
+        return defaults.bool(forKey: WorkbenchViewModel.showMenuBarStatusItemDefaultsKey)
+    }()
     @Published var commandPaletteQuery = ""
     @Published var editingGroup: WorkbenchProject?
     @Published var pendingDeleteGroup: WorkbenchProject?
@@ -6020,6 +6220,10 @@ final class WorkbenchViewModel: ObservableObject {
         self.releaseUpdateChecker = releaseUpdateChecker
         self.externalActionQueue = WorkbenchActionRequestQueue(paths: paths)
         self.state = WorkspaceState()
+        // Seed the palette's static override from the persisted setting so
+        // every terminal view that asks for a theme honors the user's pin
+        // even before any view model property gets re-read.
+        WorkbenchTerminalPalette.currentOverride = self.terminalThemeOverride
         load()
         refreshOuroAgents()
         refreshWorkbenchMCPRegistration()
@@ -6593,6 +6797,16 @@ final class WorkbenchViewModel: ObservableObject {
 
         commands.append(
             command(
+                .openSettings,
+                "Open Settings",
+                "Adjust terminal font, theme, menubar icon, and other Workbench preferences",
+                "gearshape",
+                keywords: ["settings", "preferences", "config", "theme", "font", "menubar", "options"]
+            )
+        )
+
+        commands.append(
+            command(
                 .openWorkspaceConfig,
                 "Open Workspace…",
                 "Pick a directory containing a .workbench.json to spin up its declared terminals",
@@ -6915,6 +7129,37 @@ final class WorkbenchViewModel: ObservableObject {
     /// Reset the terminal font size to the macOS default. ⌘0.
     func resetTerminalFontSize() {
         setTerminalFontSize(Self.defaultTerminalFontSize)
+    }
+
+    /// Update the terminal theme override (system / light / dark), persist it,
+    /// and force every active SwiftTerm session to re-paint with the new
+    /// palette. Skips work when the value didn't actually change.
+    func setTerminalThemeOverride(_ override: TerminalThemeOverride) {
+        guard override != terminalThemeOverride else { return }
+        terminalThemeOverride = override
+        WorkbenchTerminalPalette.currentOverride = override
+        UserDefaults.standard.set(override.rawValue, forKey: Self.terminalThemeOverrideDefaultsKey)
+        for session in activeSessions.values {
+            session.terminal.applyWorkbenchTheme(
+                WorkbenchTerminalPalette.theme(for: session.terminal.effectiveAppearance)
+            )
+            session.terminal.needsDisplay = true
+        }
+    }
+
+    /// Toggle the menubar status item. When turned off, the controller is
+    /// detached and its NSStatusItem hidden; when turned back on, the
+    /// controller re-attaches to the live model.
+    func setShowMenuBarStatusItem(_ show: Bool) {
+        guard show != showMenuBarStatusItem else { return }
+        showMenuBarStatusItem = show
+        UserDefaults.standard.set(show, forKey: Self.showMenuBarStatusItemDefaultsKey)
+        if show {
+            WorkbenchMenuBarController.shared.attach(model: self)
+            WorkbenchMenuBarController.shared.setVisible(true)
+        } else {
+            WorkbenchMenuBarController.shared.setVisible(false)
+        }
     }
 
     /// Select the Nth terminal (1-indexed) in the currently-visible session
@@ -8665,6 +8910,8 @@ final class WorkbenchViewModel: ObservableObject {
             presentOpenWorkspacePanel()
         case .saveWorkspaceConfig:
             presentSaveWorkspacePanel()
+        case .openSettings:
+            isSettingsSheetPresented = true
         case .selectAgent,
              .useSelectedAgentAsBoss,
              .openSelectedAgentConfig,
@@ -9770,6 +10017,8 @@ final class WorkbenchViewModel: ObservableObject {
     private static let collapsedChromeMigrationKey = "ouro.workbench.collapsedChromeMigration.v17"
     static let terminalFontSizeDefaultsKey = "ouro.workbench.terminalFontSize"
     static let recentWorkspacePathsDefaultsKey = "ouro.workbench.recentWorkspacePaths"
+    static let terminalThemeOverrideDefaultsKey = "ouro.workbench.terminalThemeOverride"
+    static let showMenuBarStatusItemDefaultsKey = "ouro.workbench.showMenuBarStatusItem"
     static let maxRecentWorkspaces = 8
     /// Default terminal font size. Matches macOS Terminal's default.
     static let defaultTerminalFontSize: CGFloat = 13
@@ -9890,6 +10139,25 @@ private struct MailboxFetchResult<Value: Sendable>: Sendable {
 /// falls back to a black-and-white interpretation of SGR codes and reverse-
 /// video lands as a pure-white block ("white-highlighted text") which is the
 /// artifact Ari reported.
+/// User's chosen terminal theme. `.system` follows macOS appearance so the
+/// terminal palette flips with light/dark mode; `.light` and `.dark` pin
+/// the palette regardless of system. Stored as a raw string in UserDefaults.
+public enum TerminalThemeOverride: String, CaseIterable, Identifiable, Sendable {
+    case system
+    case light
+    case dark
+
+    public var id: String { rawValue }
+
+    public var label: String {
+        switch self {
+        case .system: return "Follow System"
+        case .light: return "Light"
+        case .dark: return "Dark"
+        }
+    }
+}
+
 enum WorkbenchTerminalPalette {
     /// A complete terminal theme. Builds dynamic NSColors so the SwiftUI
     /// host inset / focus mode pick up the right shade automatically when
@@ -9908,14 +10176,33 @@ enum WorkbenchTerminalPalette {
         var ansiPalette: [SwiftTerm.Color]
     }
 
+    /// User's theme override read from the view model on every theme lookup.
+    /// `.system` falls through to the appearance-driven choice; `.light` /
+    /// `.dark` pin the palette. Stored statically so even SwiftTerm subviews
+    /// that don't see the view model can pick it up. The Settings sheet
+    /// updates this through `WorkbenchViewModel.setTerminalThemeOverride`.
+    ///
+    /// `nonisolated(unsafe)` because dynamic NSColor providers may run off
+    /// the main actor (AppKit's appearance resolver), but in practice all
+    /// writers (view model setters, init) and the AppKit draw path are
+    /// main-actor-only. A stray non-main read still gets a valid enum value
+    /// and only races on which palette is in effect for a single frame.
+    nonisolated(unsafe) static var currentOverride: TerminalThemeOverride = .system
+
     /// Pick the right theme for the current effective appearance. Defaults to
-    /// dark when the appearance is `nil` (no window yet).
+    /// dark when the appearance is `nil` (no window yet). A non-`.system`
+    /// `currentOverride` short-circuits the appearance lookup.
     static func theme(for appearance: NSAppearance?) -> Theme {
-        let isLight = appearance?
-            .bestMatch(from: [.aqua, .darkAqua, .vibrantLight, .vibrantDark]) == .aqua
-            || appearance?
-            .bestMatch(from: [.aqua, .darkAqua, .vibrantLight, .vibrantDark]) == .vibrantLight
-        return isLight ? lightTheme : darkTheme
+        switch currentOverride {
+        case .light: return lightTheme
+        case .dark: return darkTheme
+        case .system:
+            let isLight = appearance?
+                .bestMatch(from: [.aqua, .darkAqua, .vibrantLight, .vibrantDark]) == .aqua
+                || appearance?
+                .bestMatch(from: [.aqua, .darkAqua, .vibrantLight, .vibrantDark]) == .vibrantLight
+            return isLight ? lightTheme : darkTheme
+        }
     }
 
     /// SwiftUI background color that auto-resolves to the dark or light theme

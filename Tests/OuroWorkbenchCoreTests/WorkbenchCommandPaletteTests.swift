@@ -123,4 +123,10 @@ final class WorkbenchCommandPaletteTests: XCTestCase {
             ["slugger"]
         )
     }
+
+    func testOpenSettingsCommandIDIsPresent() {
+        // The Settings sheet is reachable via the ⌘K palette as well as ⌘,
+        // so guard the command ID exists in the enum's case list.
+        XCTAssertTrue(WorkbenchCommandID.allCases.contains(.openSettings))
+    }
 }
