@@ -10,6 +10,7 @@ public struct BossAgentPromptBuilder: Sendable {
         dashboard: BossDashboardSnapshot? = nil,
         executableHealth: [UUID: ExecutableHealth] = [:],
         gitStatus: [UUID: GitSessionStatus] = [:],
+        machineFriend: SessionFriend? = nil,
         ouroAgents: [OuroAgentRecord] = [],
         recentChanges: [WorkspaceChangeSummary] = []
     ) -> String {
@@ -102,7 +103,7 @@ public struct BossAgentPromptBuilder: Sendable {
             let notes = entry?.trimmedNotes.map(Self.oneLine) ?? "none"
             let deskTask = entry?.deskTaskSlug ?? "none"
             let git = Self.gitDescription(gitStatus[snapshot.id])
-            let friend = entry.flatMap { state.effectiveFriend(for: $0) }
+            let friend = entry.flatMap { state.effectiveFriend(for: $0, fallback: machineFriend) }
                 .map { "\($0.name) (\($0.kind.rawValue), \($0.trust.rawValue))" } ?? "unassigned"
             lines.append("- \(snapshot.name) (id=\(snapshot.id.uuidString)): group=\(groupName), cli=\(agentKind), desk_task=\(deskTask), friend=\(friend), archived=\(archived), trust=\(trust), executable_health=\(executableStatus), executable_path=\(executablePath), git=\(git), status=\(snapshot.status.rawValue), attention=\(snapshot.attention.rawValue), transcript=\(transcriptPath), notes=\(notes), summary=\(snapshot.summary)")
         }

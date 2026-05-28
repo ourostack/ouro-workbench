@@ -9715,6 +9715,7 @@ final class WorkbenchViewModel: ObservableObject {
             dashboard: bossDashboard,
             executableHealth: executableHealthByEntryID,
             gitStatus: gitStatusByEntryID,
+            machineFriend: SessionFriend.machineOwner(),
             ouroAgents: ouroAgents,
             recentChanges: recentChanges
         )

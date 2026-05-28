@@ -67,12 +67,32 @@ gated only by a binary trusted/untrusted flag.
 - **Confidence**: how sure the boss is the friend would want this exact answer.
   Low confidence always degrades `auto-advance` → `escalate`.
 
+## 3a. Friend resolution (decided)
+
+A session's friend resolves the **same way the Ouro CLI already does it**
+(`src/mind/friends/resolver.ts`): a local session maps to
+`(provider: "local", externalId: <os username>)` → the owner's `FriendRecord`
+(created on first use). A given machine therefore maps to **its owner** — a
+specific human, usually `family` trust — with no manual picker.
+
+Workbench mirrors this: the effective friend for a session is its explicit
+assignment, else its group's default, else the **machine owner** (resolved from
+the OS user). The owner `SessionFriend.id` is the local username — the exact
+external id the boss resolves `(local, username)` against — so the boss can
+attach the real `FriendRecord` (and its preferences) without separate
+reconciliation. Explicit assignment is reserved for the exception: a session
+that belongs to a *different* friend (a delegated agent, a teammate).
+
 ## 4. Principles (safety rails)
 
 1. **Preference-driven, not allow-list.** The friend's notes are the policy. No
    global "these commands are safe" table.
-2. **Default to escalate.** Absent a clear, confident preference match, the boss
-   asks the human. A missed auto-advance is cheap; a wrong one is not.
+2. **Automate-first (TTFA), with total auditability.** The goal is the lowest
+   time-to-first-action: the boss auto-advances everything it can confidently
+   map to the friend's preferences, rather than escalating by default. The
+   safety budget is spent on the **decision log** — every decision recorded with
+   its full reasoning so the operator can *audit and tune*, not pre-approve.
+   (Destructive/secret prompts are the bounded exception below.)
 3. **Destructive/irreversible always escalates** regardless of preference,
    unless the friend's note *explicitly* pre-authorizes that exact class
    (`rm -rf`, force-push, `git reset --hard`, prod deploys, payments, accepting
@@ -202,40 +222,54 @@ Auto-advance is permitted **only** when **all** hold:
 
 Otherwise → **escalate** (or **hold** if Boss Watch is off).
 
-## 7. Open questions for Ari
+## 7. Decisions (resolved with Ari)
 
-- **Friend identity source of truth.** Should Workbench store a `friendId` per
-  session/group, or should the boss infer the friend from the working dir /
-  who launched it? (Proposal: Workbench stores an optional `friendId`; default
-  the operator; boss may refine.)
-- **Default posture.** Out of the box, should the boss *auto-advance where
-  preferences allow*, or *escalate-only until I opt into auto-advance per friend*?
-  (Proposal: escalate-only by default; opt into auto-advance explicitly — safest
-  start, matches "human is sovereign".)
-- **Where the decision runs.** Confirm the boss makes the call via its own
-  kept-notes/friend reasoning (Workbench just hands it prompt+friend+gate),
-  rather than Workbench reimplementing preference matching. (Proposal: yes.)
-- **Preference authoring.** Do we add a Workbench affordance to edit a friend's
-  advancing preferences, or keep that purely in the boss's notes tools?
-  (Proposal: phase 2 — start by consuming notes the boss already has.)
+- **Friend identity source of truth.** Mirror the CLI: auto-resolve the
+  **machine owner** (`local`/username → human/family) as the default friend; no
+  manual picker. Workbench stores an explicit `friend` only as an *override* for
+  the exception (a session belonging to a different friend). See §3a.
+- **Default posture.** **Automate-first (TTFA)** — the boss auto-advances
+  everything it can confidently map to the friend's preferences, *not*
+  escalate-only. The investment is in audit (every decision + reasoning logged
+  for tuning), not in gating. Destructive/secret prompts remain the bounded
+  exception (§D).
+- **Where the decision runs.** The **boss** decides via its own kept-notes /
+  friend reasoning; Workbench hands it prompt + resolved friend + gate and an
+  audited action channel, and never reimplements preference matching.
+- **Preference authoring.** Consume the notes the boss already has; a Workbench
+  authoring affordance is out of scope for now.
 
-## 8. Phased implementation (after sign-off)
+## 8. Phased implementation
 
-- **Phase 0 — identity:** add optional `friendId` (+ resolved friend name/kind/
-  trust) to sessions/groups; default the operator; show it in the UI. Pure
-  schema + UI, no behavior change.
-- **Phase 1 — escalate-only inbox:** when a session is `waitingOnHuman`, the boss
-  receives the prompt + friend + gate and produces a *suggestion*; Workbench
-  shows a prioritized escalation inbox with one-tap approve/answer/hold. No
-  auto-advance yet. Full audit.
-- **Phase 2 — opt-in auto-advance:** per-friend opt-in lets the boss auto-advance
-  when preferences clearly apply, behind the §6 gate, with kill-switch, undo, and
-  idempotency. Destructive/secret prompts always escalate.
+- **Phase 0 — identity (shipped, 0.1.91):** `SessionFriend` model + per-session
+  / group friend + `effectiveFriend` resolution + boss-prompt visibility. Pure
+  schema, no behavior change.
+- **Phase 0b — machine-owner resolution (this slice):** `effectiveFriend` falls
+  back to the auto-resolved machine owner (CLI-mirrored `local`/username), so a
+  session is owned by the machine's family member by default with no picker.
+  The owner is surfaced in the UI and the boss prompt. Still no advancing.
+- **Phase 1 — decision log + inbox:** when a session is `waitingOnHuman`, the
+  boss receives the prompt + resolved friend + gate and records a **decision**
+  (auto-advance intent / escalate / hold) with full reasoning into a durable,
+  reviewable **decision log** — the audit centerpiece. Workbench surfaces the
+  inbox and the log. (Suggestions visible; advancing wired but gated off until
+  the log is proven on real traffic.)
+- **Phase 2 — auto-advance on (automate-first):** the boss actually sends the
+  advance behind the §6 gate, with kill-switch, undo, and idempotency.
+  Destructive/secret prompts escalate. Every send is a decision-log entry.
 - **Phase 3 — learning:** "remember this" updates friend preferences; overrides
-  record corrections.
+  record corrections, tightening future decisions.
 
-Each phase is independently shippable and safe; we never enable auto-advance
-before the escalate-only loop and the audit trail are proven.
+Each phase is independently shippable. Auto-advance (Phase 2) does not land
+until the decision log (Phase 1) is proven, so there is always a complete audit
+trail of what the boss did and why.
+
+**On agent friends:** the friend model (`kind: human | agent`, per-friend trust
+and preferences) is agent-ready, so cluster H needs no separate schema — but
+behavior is validated with human friends first (that's the real traffic today).
+Agent-specific surfaces (structured preferences in §26, a2a escalation routing
+in §29) are deferred until there's an agent friend actually driving a session;
+we build the rails now and don't speculatively wire the agent-only paths.
 
 **On agent friends:** the friend model (`kind: human | agent`, per-friend trust
 and preferences) is agent-ready from Phase 0, so cluster H needs no separate
