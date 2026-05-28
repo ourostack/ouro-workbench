@@ -87,6 +87,10 @@ struct WorkbenchRootView: View {
             if model.bossWatchIsEnabled {
                 await model.runBossWatchTick(force: true)
             }
+            // Attach the menu bar controller to the live model so the
+            // NSStatusItem reflects current state. Singleton ensures the
+            // status item is created only once even if SwiftUI re-mounts.
+            WorkbenchMenuBarController.shared.attach(model: model)
         }
         .sheet(isPresented: $model.isNewSessionSheetPresented) {
             NewTerminalSessionSheet(model: model)
@@ -145,6 +149,217 @@ struct WorkbenchRootView: View {
         .task {
             await model.runBossWatchLoop()
         }
+    }
+}
+
+/// Owns the Workbench menu-bar status item so the user can see boss-watch
+/// state, jump to a running session, toggle Watch, ask the boss a quick
+/// question, and quit — all without bringing the main window forward.
+/// Singleton lifetime: created once at first access and held by the AppKit
+/// system menubar for the rest of the app's run.
+@MainActor
+final class WorkbenchMenuBarController: NSObject, NSMenuDelegate {
+    static let shared = WorkbenchMenuBarController()
+
+    private weak var model: WorkbenchViewModel?
+    private let statusItem: NSStatusItem
+    private let menu: NSMenu
+    private var watchObservation: NSObjectProtocol?
+
+    override private init() {
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        menu = NSMenu()
+        super.init()
+        menu.delegate = self
+        menu.autoenablesItems = false
+        statusItem.menu = menu
+        applyIcon(needsAttention: false)
+        statusItem.button?.image?.isTemplate = true
+        statusItem.button?.toolTip = "Ouro Workbench"
+    }
+
+    func attach(model: WorkbenchViewModel) {
+        self.model = model
+        refreshIcon()
+    }
+
+    /// Update the menu-bar icon based on current state. Called on attach and
+    /// whenever the menu opens. Cheap so we don't bother with KVO.
+    func refreshIcon() {
+        guard let model else {
+            applyIcon(needsAttention: false)
+            return
+        }
+        let recoverable = model.recoverableEntries.count
+        applyIcon(needsAttention: recoverable > 0)
+        // Surface the running session count directly on the menu-bar item
+        // for an at-a-glance signal that matches the Dock badge.
+        let activeCount = model.activeSessions.count
+        statusItem.button?.title = activeCount > 0 ? " \(activeCount)" : ""
+        statusItem.button?.toolTip = activeCount > 0
+            ? "Ouro Workbench — \(activeCount) running"
+            : "Ouro Workbench"
+    }
+
+    private func applyIcon(needsAttention: Bool) {
+        let symbol = needsAttention ? "exclamationmark.triangle.fill" : "infinity"
+        let image = NSImage(
+            systemSymbolName: symbol,
+            accessibilityDescription: needsAttention ? "Ouro Workbench needs attention" : "Ouro Workbench"
+        )
+        image?.isTemplate = !needsAttention
+        statusItem.button?.image = image
+    }
+
+    // MARK: - NSMenuDelegate
+
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        refreshIcon()
+        rebuildMenu()
+    }
+
+    private func rebuildMenu() {
+        menu.removeAllItems()
+        guard let model else {
+            let item = NSMenuItem(title: "Ouro Workbench", action: nil, keyEquivalent: "")
+            item.isEnabled = false
+            menu.addItem(item)
+            menu.addItem(NSMenuItem.separator())
+            menu.addItem(quitItem())
+            return
+        }
+
+        // Header: boss + autonomy
+        let bossLabel = "Boss: \(model.state.boss.agentName)"
+        let header = NSMenuItem(title: bossLabel, action: nil, keyEquivalent: "")
+        header.isEnabled = false
+        menu.addItem(header)
+        let autonomy = model.autonomyReadiness
+        let autonomyItem = NSMenuItem(
+            title: "TTFA · \(autonomy.state.displayName) — \(autonomy.headline)",
+            action: nil,
+            keyEquivalent: ""
+        )
+        autonomyItem.isEnabled = false
+        menu.addItem(autonomyItem)
+        menu.addItem(NSMenuItem.separator())
+
+        // Show Workbench
+        let show = NSMenuItem(title: "Show Workbench", action: #selector(showWorkbench), keyEquivalent: "")
+        show.target = self
+        menu.addItem(show)
+        menu.addItem(NSMenuItem.separator())
+
+        // Active sessions submenu — click to jump
+        let sessions = model.activeSessions
+        if sessions.isEmpty {
+            let none = NSMenuItem(title: "No running sessions", action: nil, keyEquivalent: "")
+            none.isEnabled = false
+            menu.addItem(none)
+        } else {
+            let header = NSMenuItem(
+                title: "\(sessions.count) running session\(sessions.count == 1 ? "" : "s")",
+                action: nil,
+                keyEquivalent: ""
+            )
+            header.isEnabled = false
+            menu.addItem(header)
+            // Iterate the visible session entries so the order matches the
+            // sidebar instead of being a dictionary-key dance.
+            for entry in model.state.processEntries where sessions[entry.id] != nil {
+                let row = NSMenuItem(
+                    title: "  · \(entry.name)",
+                    action: #selector(jumpToSession(_:)),
+                    keyEquivalent: ""
+                )
+                row.target = self
+                row.representedObject = entry.id.uuidString
+                menu.addItem(row)
+            }
+        }
+        menu.addItem(NSMenuItem.separator())
+
+        // Recovery — show count and shortcut into the sheet
+        let recoverable = model.recoverableEntries.count
+        if recoverable > 0 {
+            let recoverItem = NSMenuItem(
+                title: "Recovery: \(recoverable) waiting…",
+                action: #selector(openRecoverySheet),
+                keyEquivalent: ""
+            )
+            recoverItem.target = self
+            menu.addItem(recoverItem)
+            menu.addItem(NSMenuItem.separator())
+        }
+
+        // Watch toggle
+        let watchTitle = model.bossWatchIsEnabled ? "Stop Boss Watch" : "Start Boss Watch"
+        let watch = NSMenuItem(title: watchTitle, action: #selector(toggleBossWatch), keyEquivalent: "")
+        watch.target = self
+        menu.addItem(watch)
+
+        // Quick Ask Boss
+        let ask = NSMenuItem(
+            title: "Ask \(model.state.boss.agentName)…",
+            action: #selector(quickAskBoss),
+            keyEquivalent: ""
+        )
+        ask.target = self
+        ask.isEnabled = !model.bossCheckInIsRunning
+        menu.addItem(ask)
+
+        menu.addItem(NSMenuItem.separator())
+        menu.addItem(quitItem())
+    }
+
+    private func quitItem() -> NSMenuItem {
+        let quit = NSMenuItem(title: "Quit Ouro Workbench", action: #selector(quitApp), keyEquivalent: "q")
+        quit.target = self
+        return quit
+    }
+
+    // MARK: - Actions
+
+    @objc private func showWorkbench() {
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.unhide(nil)
+        for window in NSApp.windows where !window.isMiniaturized {
+            window.makeKeyAndOrderFront(nil)
+        }
+        for window in NSApp.windows where window.isMiniaturized {
+            window.deminiaturize(nil)
+        }
+    }
+
+    @objc private func jumpToSession(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let uuid = UUID(uuidString: raw) else {
+            return
+        }
+        model?.selectedEntryID = uuid
+        showWorkbench()
+    }
+
+    @objc private func openRecoverySheet() {
+        model?.isRecoverySheetPresented = true
+        showWorkbench()
+    }
+
+    @objc private func toggleBossWatch() {
+        guard let model else { return }
+        model.setBossWatchEnabled(!model.bossWatchIsEnabled)
+    }
+
+    @objc private func quickAskBoss() {
+        guard let model, !model.bossCheckInIsRunning else { return }
+        showWorkbench()
+        Task { @MainActor in
+            await model.runBossCheckIn()
+        }
+    }
+
+    @objc private func quitApp() {
+        NSApp.terminate(nil)
     }
 }
 
