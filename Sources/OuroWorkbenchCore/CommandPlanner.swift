@@ -3,6 +3,7 @@ import Foundation
 public enum CommandPlanningError: Error, Equatable, Sendable {
     case unknownTerminalAgentPreset(TerminalAgentKind)
     case missingSessionId(entryName: String)
+    case emptyExecutable(entryName: String)
 }
 
 public struct TerminalCommandPlan: Equatable, Identifiable, Sendable {
@@ -163,6 +164,13 @@ public struct WorkbenchCommandPlanner: Sendable {
     }
 
     public func launchPlan(for entry: ProcessEntry) throws -> TerminalCommandPlan {
+        // A blank executable would synthesize `/usr/bin/env ''`, which exits
+        // with an opaque "No such file or directory". Fail with a clear,
+        // actionable error instead. (UI session creation requires a command,
+        // but a hand-edited .workbench.json or malformed entry can reach here.)
+        guard !entry.executable.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw CommandPlanningError.emptyExecutable(entryName: entry.name)
+        }
         let runId = UUID()
         let transcriptPath = paths?.transcriptURL(entryId: entry.id, runId: runId).path
         return TerminalCommandPlan(
