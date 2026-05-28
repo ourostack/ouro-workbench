@@ -9,6 +9,7 @@ public struct BossAgentPromptBuilder: Sendable {
         summary: WorkspaceSummary,
         dashboard: BossDashboardSnapshot? = nil,
         executableHealth: [UUID: ExecutableHealth] = [:],
+        gitStatus: [UUID: GitSessionStatus] = [:],
         ouroAgents: [OuroAgentRecord] = [],
         recentChanges: [WorkspaceChangeSummary] = []
     ) -> String {
@@ -100,7 +101,8 @@ public struct BossAgentPromptBuilder: Sendable {
             let archived = entry?.isArchived ?? false
             let notes = entry?.trimmedNotes.map(Self.oneLine) ?? "none"
             let deskTask = entry?.deskTaskSlug ?? "none"
-            lines.append("- \(snapshot.name) (id=\(snapshot.id.uuidString)): group=\(groupName), cli=\(agentKind), desk_task=\(deskTask), archived=\(archived), trust=\(trust), executable_health=\(executableStatus), executable_path=\(executablePath), status=\(snapshot.status.rawValue), attention=\(snapshot.attention.rawValue), transcript=\(transcriptPath), notes=\(notes), summary=\(snapshot.summary)")
+            let git = Self.gitDescription(gitStatus[snapshot.id])
+            lines.append("- \(snapshot.name) (id=\(snapshot.id.uuidString)): group=\(groupName), cli=\(agentKind), desk_task=\(deskTask), archived=\(archived), trust=\(trust), executable_health=\(executableStatus), executable_path=\(executablePath), git=\(git), status=\(snapshot.status.rawValue), attention=\(snapshot.attention.rawValue), transcript=\(transcriptPath), notes=\(notes), summary=\(snapshot.summary)")
         }
         lines.append("")
         lines.append("Recovery:")
@@ -126,6 +128,19 @@ public struct BossAgentPromptBuilder: Sendable {
 
     private static func oneLine(_ text: String) -> String {
         text.components(separatedBy: .newlines).joined(separator: " ")
+    }
+
+    /// Compact git descriptor for a process line, e.g. `main (dirty, +2/-1)`,
+    /// `main (clean)`, or `none` when the working directory isn't a repo.
+    private static func gitDescription(_ status: GitSessionStatus?) -> String {
+        guard let status, status.isRepo, let branch = status.branchLabel else {
+            return "none"
+        }
+        var flags = [status.dirty ? "dirty" : "clean"]
+        if status.ahead > 0 || status.behind > 0 {
+            flags.append("+\(status.ahead)/-\(status.behind)")
+        }
+        return "\(branch) (\(flags.joined(separator: ", ")))"
     }
 
     private func selectedProjectName(in state: WorkspaceState) -> String {

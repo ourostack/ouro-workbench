@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.88 - Boss sees per-session Git status
+
+- The boss check-in prompt and the `workbench_status` MCP tool now report each session's git state inline (`git=<branch> (clean|dirty[, +ahead/-behind])`, or `none` for non-repos), so the boss can reason about which sessions have uncommitted work or have drifted from their upstream. The native check-in reuses the already-refreshed app state; the MCP server probes git read-only and watchdog-bounded per session.
+
 ## 0.1.87 - Per-session Git status in the sidebar
 
 - Each terminal session's sidebar row now shows the git status of its working directory: branch name (or `(detached)`), a dirty dot when the tree has uncommitted/untracked changes, and an `↑ahead↓behind` suffix versus its upstream. For an agent workbench where most sessions live in worktrees/branches, this is the "where am I" glance at a glance.

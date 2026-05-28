@@ -9684,6 +9684,7 @@ final class WorkbenchViewModel: ObservableObject {
             summary: summary,
             dashboard: bossDashboard,
             executableHealth: executableHealthByEntryID,
+            gitStatus: gitStatusByEntryID,
             ouroAgents: ouroAgents,
             recentChanges: recentChanges
         )

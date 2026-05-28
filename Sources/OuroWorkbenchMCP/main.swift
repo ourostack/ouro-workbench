@@ -18,6 +18,7 @@ final class WorkbenchMCPServer {
     private let bootstrapper = WorkbenchBootstrapper()
     private let authorizer = BossWorkbenchActionAuthorizer()
     private let executableHealthChecker = ExecutableHealthChecker()
+    private let gitStatusReader = GitStatusReader()
     private let transcriptSearcher = TranscriptSearcher()
     private let recoveryDrill = RecoveryDrill()
     private let senseRenderer = WorkbenchSenseRenderer()
@@ -115,11 +116,19 @@ final class WorkbenchMCPServer {
                 return (entry.id, executableHealthChecker.health(for: executable))
             }
         )
+        // Probe git per session (read-only, watchdog-bounded) so the boss's
+        // primary read tool reports each session's branch / dirty / ahead-behind.
+        let gitStatus = Dictionary(
+            uniqueKeysWithValues: state.processEntries.map { entry in
+                (entry.id, gitStatusReader.status(forDirectory: entry.workingDirectory))
+            }
+        )
         return promptBuilder.checkInPrompt(
             question: "What is currently going on in Ouro Workbench?",
             state: state,
             summary: summary,
-            executableHealth: executableHealth
+            executableHealth: executableHealth,
+            gitStatus: gitStatus
         )
     }
 

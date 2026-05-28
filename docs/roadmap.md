@@ -117,8 +117,9 @@ agent-aware terminal workbench rather than a launcher with terminal panes.
 - Add optional MCP setup snippets for Claude Code, Codex, and other tools.
 - Surface Git branch, PR, CI, and dirty-worktree status per session. Initial
   per-session branch, dirty-tree, and ahead/behind status exists in the native
-  sidebar (read-only, lock-free `git` probe with a watchdog). PR/CI status and
-  boss/MCP surfacing are still pending.
+  sidebar (read-only, lock-free `git` probe with a watchdog) and is reported to
+  the boss via the check-in prompt and the `workbench_status` MCP tool. PR/CI
+  status is still pending.
 - Add hooks for task docs and Desk summaries.
 - Keep Mailbox as read plane and Workbench MCP as local control/status plane.
 
