@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.56 - Per-group color tags
+
+- Groups can now be color-tagged so the sidebar is scannable at a glance. Pick a color from `Group Actions → Color Tag` (8 colors + None). The group's folder icon tints to match.
+- Stored as an optional `colorTag` on `WorkbenchProject` (synthesized Codable → existing state loads unchanged; new `WorkbenchGroupColor` enum in Core degrades gracefully if a future build adds colors an older build doesn't know).
+- 4 unit tests cover color parsing, unknown/nil fallback, and the project coding round-trip incl. backward-compat decode.
+
 ## 0.1.55 - Auto-launch resumable terminals on startup (opt-in)
 
 - New Settings → Startup toggle: **Auto-launch resumable terminals on startup** (default off). When on, reopening Workbench launches every terminal marked Auto Resume that isn't already running — so a `.workbench.json` workspace comes up with its agents waiting for you, not just on the first `Open Workspace…`.

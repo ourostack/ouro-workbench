@@ -45,19 +45,25 @@ public struct WorkbenchProject: Codable, Equatable, Identifiable, Sendable {
     public var rootPath: String
     public var boss: BossAgentSelection
     public var deskTrackSlug: String?
+    /// Optional color tag (raw value of `WorkbenchGroupColor`). Absent / nil
+    /// renders the group untagged. Synthesized Codable treats this as
+    /// decode-if-present, so existing persisted state loads unchanged.
+    public var colorTag: String?
 
     public init(
         id: UUID = UUID(),
         name: String,
         rootPath: String,
         boss: BossAgentSelection = BossAgentSelection(),
-        deskTrackSlug: String? = nil
+        deskTrackSlug: String? = nil,
+        colorTag: String? = nil
     ) {
         self.id = id
         self.name = name
         self.rootPath = rootPath
         self.boss = boss
         self.deskTrackSlug = deskTrackSlug
+        self.colorTag = colorTag
     }
 }
 

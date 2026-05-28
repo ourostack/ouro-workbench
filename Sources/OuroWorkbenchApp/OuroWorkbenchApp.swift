@@ -1276,6 +1276,9 @@ struct WorkbenchSidebarView: View {
                         },
                         delete: {
                             model.requestDeleteGroup(project)
+                        },
+                        setColorTag: { tag in
+                            model.setGroupColorTag(tag, for: project)
                         }
                     )
                 }
@@ -1371,13 +1374,21 @@ struct SidebarProjectRow: View {
     var select: () -> Void
     var rename: () -> Void
     var delete: () -> Void
+    var setColorTag: (String?) -> Void
+
+    /// The group's resolved accent color, or nil when untagged.
+    private var tagColor: SwiftUI.Color? {
+        WorkbenchGroupColor.from(tag: project.colorTag).map(\.swiftUIColor)
+    }
 
     var body: some View {
         HStack(spacing: 7) {
             Button(action: select) {
                 HStack(spacing: 6) {
                     Image(systemName: isSelected ? "folder.fill" : "folder")
-                        .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+                        // Tagged groups tint their folder icon; untagged keep
+                        // the accent/secondary convention.
+                        .foregroundStyle(tagColor ?? (isSelected ? Color.accentColor : Color.secondary))
                         .frame(width: 16)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(project.name)
@@ -1404,6 +1415,25 @@ struct SidebarProjectRow: View {
                 Button(action: rename) {
                     Label("Rename Group", systemImage: "pencil")
                 }
+                Menu {
+                    Button {
+                        setColor(nil)
+                    } label: {
+                        Label("None", systemImage: project.colorTag == nil ? "checkmark" : "circle")
+                    }
+                    ForEach(WorkbenchGroupColor.allCases) { color in
+                        Button {
+                            setColor(color)
+                        } label: {
+                            Label(
+                                color.label,
+                                systemImage: project.colorTag == color.rawValue ? "checkmark.circle.fill" : "circle.fill"
+                            )
+                        }
+                    }
+                } label: {
+                    Label("Color Tag", systemImage: "paintpalette")
+                }
                 Button(role: .destructive, action: delete) {
                     Label("Delete Empty Group", systemImage: "trash")
                 }
@@ -1420,6 +1450,10 @@ struct SidebarProjectRow: View {
         .help(project.rootPath)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(project.name), \(activeTerminalCount) active terminals, \(totalTerminalCount) total terminals, root \(project.rootPath)")
+    }
+
+    private func setColor(_ color: WorkbenchGroupColor?) {
+        setColorTag(color?.rawValue)
     }
 }
 
@@ -6545,6 +6579,16 @@ final class WorkbenchViewModel: ObservableObject {
         do { try store.save(state) } catch { errorMessage = String(describing: error) }
     }
 
+    /// Assign (or clear, when `tag` is nil) a color tag on a group and
+    /// persist. The sidebar row tints its folder icon to match.
+    func setGroupColorTag(_ tag: String?, for project: WorkbenchProject) {
+        guard let index = state.projects.firstIndex(where: { $0.id == project.id }) else {
+            return
+        }
+        state.projects[index].colorTag = tag
+        do { try store.save(state) } catch { errorMessage = String(describing: error) }
+    }
+
     var archivedSessionEntries: [ProcessEntry] {
         projectSessionEntries.filter(\.isArchived)
     }
@@ -10594,6 +10638,24 @@ public enum TerminalThemeOverride: String, CaseIterable, Identifiable, Sendable 
         case .system: return "Follow System"
         case .light: return "Light"
         case .dark: return "Dark"
+        }
+    }
+}
+
+extension WorkbenchGroupColor {
+    /// Map a stored group color to a concrete SwiftUI Color. Uses the system
+    /// semantic colors so each tag tracks light/dark appearance. Qualified
+    /// as `SwiftUI.Color` because this file also imports `SwiftTerm.Color`.
+    var swiftUIColor: SwiftUI.Color {
+        switch self {
+        case .gray: return .gray
+        case .blue: return .blue
+        case .green: return .green
+        case .orange: return .orange
+        case .red: return .red
+        case .purple: return .purple
+        case .pink: return .pink
+        case .teal: return .teal
         }
     }
 }
