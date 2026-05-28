@@ -10773,16 +10773,27 @@ final class WorkbenchViewModel: ObservableObject {
                 continue
             }
             let entryId = session.plan.entryId
-            Task.detached(priority: .utility) { [weak self] in
-                guard let tail = TranscriptTailReader(maxBytes: 4096).read(path: transcriptPath) else {
-                    return
-                }
-                let signal = AttentionSignalDetector.classify(tail: tail.text)
-                await MainActor.run {
-                    self?.applyAttentionSignal(signal, entryId: entryId, runId: runId)
-                }
+            // `Task` (not `.detached`) inherits this @MainActor context, so the
+            // result is applied main-isolated without sending `self` across an
+            // isolation boundary. The blocking read + classify happen in a
+            // nonisolated helper that captures only Sendable values.
+            Task { [weak self] in
+                let signal = await Self.classifyTranscriptTail(path: transcriptPath)
+                self?.applyAttentionSignal(signal, entryId: entryId, runId: runId)
             }
         }
+    }
+
+    /// Read a bounded transcript tail and classify it off the main actor.
+    /// Nonisolated and capturing only a `Sendable` path so it satisfies strict
+    /// concurrency; returns the `Sendable` `AttentionSignal`.
+    nonisolated private static func classifyTranscriptTail(path: String) async -> AttentionSignal {
+        await Task.detached(priority: .utility) {
+            guard let tail = TranscriptTailReader(maxBytes: 4096).read(path: path) else {
+                return AttentionSignal.unknown
+            }
+            return AttentionSignalDetector.classify(tail: tail.text)
+        }.value
     }
 
     /// Apply a detected attention signal, guarding that the run is still the
