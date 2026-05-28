@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.90 - Jump to the next session that needs you (⌘J)
+
+- `⌘J` jumps focus to the next session that needs the operator — waiting at a prompt, flagged for boss review, or blocked — across all groups, in sidebar order, wrapping around. This completes the attention loop the prior releases built: detection lights a session up, `⌘J` carries you straight to it without scanning panes. The binding is in the keyboard help (`⌘/`), and since it flows from the single-source `WorkbenchGuide` catalog it also reaches the boss `workbench_sense` and the inner-agent context. No-op when nothing needs you.
+
 ## 0.1.89 - Auto-detect when a session is waiting on you
 
 - Workbench now watches each running session's output and automatically flags it as `waiting on human` when it's sitting at a prompt that needs a decision — a Claude Code / Codex approval menu, a `y/N`, a selection list, "press enter", or a passphrase prompt. The session lights up in the sidebar (orange dot), the menubar, Boss Watch, and needs-me notifications without anyone polling it; when the agent resumes, the flag clears itself. This is the core of attention routing: knowing which of your agents needs you, across all of them, at a glance.
