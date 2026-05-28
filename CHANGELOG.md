@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.66 - Fix: stale search highlight when switching sessions
+
+- With the ⌘F search bar open, switching to another terminal left the previous session's match highlight stuck on screen. Switching sessions now clears the outgoing terminal's highlight and closes the search bar.
+
 ## 0.1.65 - Fix: re-selecting/resizing a shell no longer clears its screen
 
 - The redraw nudge that Workbench sends on attach/resize/appearance-change was a Ctrl-L (form-feed). In a full-screen TUI that means "repaint" (harmless), but in a plain shell sitting at a prompt it **clears the visible scrollback** — so clicking back to a shell terminal or resizing the window wiped what you were looking at.
