@@ -546,6 +546,13 @@ struct TerminalCyclingShortcuts: View {
             }
             .keyboardShortcut("t", modifiers: [.command])
             .hidden()
+            // ⌘J — jump to the next session that needs the operator (waiting /
+            // needs review / blocked), across all groups.
+            Button("Jump to Next Session Needing Me") {
+                model.jumpToNextAttentionSession()
+            }
+            .keyboardShortcut("j", modifiers: [.command])
+            .hidden()
         }
         .frame(width: 0, height: 0)
         .accessibilityHidden(true)
@@ -7743,6 +7750,29 @@ final class WorkbenchViewModel: ObservableObject {
                 : currentIndex + 1
         }
         selectedEntryID = active[nextIndex].id
+        return true
+    }
+
+    /// Jump focus to the next session that needs the operator — waiting at a
+    /// prompt, flagged for boss review, or blocked — across all groups, in
+    /// sidebar order, wrapping around. Completes the attention loop: detection
+    /// lights a session up, this carries you straight to it. No-op (returns
+    /// false) when nothing needs attention.
+    @discardableResult
+    func jumpToNextAttentionSession() -> Bool {
+        // Build the inbox in the order the operator scans: groups top-to-bottom,
+        // entries in their sidebar order within each group.
+        let inbox: [ProcessEntry] = state.projects.flatMap { project in
+            allSessionEntries.filter {
+                $0.projectId == project.id && !$0.isArchived && $0.attention.needsHuman
+            }
+        }
+        guard !inbox.isEmpty else {
+            return false
+        }
+        let currentIndex = inbox.firstIndex { $0.id == selectedEntryID } ?? -1
+        let nextIndex = currentIndex < 0 || currentIndex >= inbox.count - 1 ? 0 : currentIndex + 1
+        selectEntryAcrossGroups(inbox[nextIndex].id)
         return true
     }
 

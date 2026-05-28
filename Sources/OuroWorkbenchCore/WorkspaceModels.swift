@@ -53,6 +53,18 @@ public enum AttentionState: String, Codable, Sendable {
         let raw = try decoder.singleValueContainer().decode(String.self)
         self = AttentionState(rawValue: raw) ?? .idle
     }
+
+    /// Whether this state means the session is asking for the operator: it's
+    /// waiting at a prompt, the boss flagged it for review, or it's blocked.
+    /// Drives "jump to the next session that needs me" navigation.
+    public var needsHuman: Bool {
+        switch self {
+        case .waitingOnHuman, .needsBossReview, .blocked:
+            return true
+        case .idle, .active:
+            return false
+        }
+    }
 }
 
 public struct BossAgentSelection: Codable, Equatable, Sendable {

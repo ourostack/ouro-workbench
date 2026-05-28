@@ -77,6 +77,7 @@ public enum WorkbenchGuide {
             systemImage: "person.2.badge.gearshape",
             shortcuts: [
                 Shortcut(keys: "⌘I", summary: "Boss Check In"),
+                Shortcut(keys: "⌘J", summary: "Jump to the next session that needs you (waiting / needs review / blocked)"),
                 Shortcut(keys: "⌘K", summary: "Open the command palette"),
                 Shortcut(keys: "⌘K, type 'agent <name>'", summary: "Jump to that agent in the Agents pane"),
                 Shortcut(keys: "⌘K, type 'repair'", summary: "Run `ouro check` against the focused agent"),
