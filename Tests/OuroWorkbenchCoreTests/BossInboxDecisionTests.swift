@@ -70,4 +70,54 @@ final class BossInboxDecisionTests: XCTestCase {
         XCTAssertEqual(decoded.decisionLog.count, 1)
         XCTAssertEqual(decoded.decisionLog.first?.reasoning, "keep going")
     }
+
+    // MARK: - Dedup
+
+    func testRecordDecisionIfNewSkipsDuplicateForSameSessionAndPrompt() {
+        let entryId = UUID()
+        func d(_ kind: BossDecisionKind) -> BossInboxDecision {
+            BossInboxDecision(source: "boss", entryId: entryId, prompt: "Run tests? (y/N)", kind: kind, reasoning: "r")
+        }
+        var state = WorkspaceState()
+        XCTAssertTrue(state.recordDecisionIfNew(d(.autoAdvance)))
+        XCTAssertFalse(state.recordDecisionIfNew(d(.autoAdvance)), "same session+prompt+kind is a no-op")
+        XCTAssertEqual(state.decisionLog.count, 1)
+        // A different kind for the same prompt is a real change — record it.
+        XCTAssertTrue(state.recordDecisionIfNew(d(.escalate)))
+        XCTAssertEqual(state.decisionLog.count, 2)
+    }
+
+    // MARK: - Parser
+
+    func testParsesFencedDecisionsBlock() throws {
+        let reply = """
+        Here's my read.
+
+        ```ouro-workbench-decisions
+        [{"entry":"PROC-1","kind":"autoAdvance","proposedInput":"1","preferenceCited":"Ari: approve test runs","confidence":0.9,"reasoning":"test-run approval","prompt":"Run tests? (y/N)"},
+         {"entry":"PROC-2","kind":"escalate","reasoning":"no preference covers this"}]
+        ```
+        """
+        let decisions = try BossDecisionParser().parse(reply)
+        XCTAssertEqual(decisions.count, 2)
+        XCTAssertEqual(decisions[0].kind, .autoAdvance)
+        XCTAssertEqual(decisions[0].proposedInput, "1")
+        XCTAssertEqual(decisions[0].confidence, 0.9)
+        XCTAssertEqual(decisions[1].kind, .escalate)
+        XCTAssertNil(decisions[1].proposedInput)
+    }
+
+    func testParserDropsOneMalformedDecisionKeepsRest() throws {
+        let reply = """
+        ```ouro-workbench-decisions
+        [{"kind":"hold","reasoning":"ok"}, 42, {"entry":"P","kind":"escalate","reasoning":"x"}]
+        ```
+        """
+        let decisions = try BossDecisionParser().parse(reply)
+        XCTAssertEqual(decisions.count, 2, "the bare number is skipped; valid decisions survive")
+    }
+
+    func testParserReturnsEmptyWhenNoBlock() throws {
+        XCTAssertEqual(try BossDecisionParser().parse("just prose, no decisions").count, 0)
+    }
 }

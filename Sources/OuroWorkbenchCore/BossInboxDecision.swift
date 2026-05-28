@@ -97,6 +97,69 @@ public struct BossInboxDecision: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
+/// A decision as emitted by the boss in an `ouro-workbench-decisions` block,
+/// before Workbench resolves the session and friend. `entry` is a process id or
+/// unique session name; the app turns this into a full `BossInboxDecision`.
+public struct BossInboxDecisionInput: Codable, Sendable {
+    public var entry: String?
+    public var kind: BossDecisionKind
+    public var proposedInput: String?
+    public var preferenceCited: String?
+    public var confidence: Double?
+    public var reasoning: String?
+    /// The waiting prompt the boss is responding to, if it quotes it; the app
+    /// falls back to the session's transcript tail when absent.
+    public var prompt: String?
+
+    public init(
+        entry: String? = nil,
+        kind: BossDecisionKind,
+        proposedInput: String? = nil,
+        preferenceCited: String? = nil,
+        confidence: Double? = nil,
+        reasoning: String? = nil,
+        prompt: String? = nil
+    ) {
+        self.entry = entry
+        self.kind = kind
+        self.proposedInput = proposedInput
+        self.preferenceCited = preferenceCited
+        self.confidence = confidence
+        self.reasoning = reasoning
+        self.prompt = prompt
+    }
+}
+
+/// Extracts boss decisions from a check-in reply, mirroring
+/// `BossWorkbenchActionParser`: a fenced ```ouro-workbench-decisions``` JSON
+/// array (or an `OURO_WORKBENCH_DECISIONS:` marker), decoded leniently so one
+/// malformed decision never drops the rest of the batch.
+public struct BossDecisionParser: Sendable {
+    public init() {}
+
+    public func parse(_ text: String) throws -> [BossInboxDecisionInput] {
+        guard let json = fencedJSON(in: text) ?? markerJSON(in: text) else {
+            return []
+        }
+        let wrappers = try JSONDecoder().decode([FailableDecodable<BossInboxDecisionInput>].self, from: Data(json.utf8))
+        return wrappers.compactMap(\.base)
+    }
+
+    private func fencedJSON(in text: String) -> String? {
+        let fence = "```ouro-workbench-decisions"
+        guard let start = text.range(of: fence) else { return nil }
+        let remainder = text[start.upperBound...]
+        guard let end = remainder.range(of: "```") else { return nil }
+        return String(remainder[..<end.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func markerJSON(in text: String) -> String? {
+        let marker = "OURO_WORKBENCH_DECISIONS:"
+        guard let start = text.range(of: marker) else { return nil }
+        return String(text[start.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
 public extension WorkspaceState {
     /// Newest-first cap for the decision log, matching the action log.
     static let decisionLogCap = 200
@@ -109,5 +172,20 @@ public extension WorkspaceState {
         if decisionLog.count > Self.decisionLogCap {
             decisionLog.removeLast(decisionLog.count - Self.decisionLogCap)
         }
+    }
+
+    /// Record a decision unless the most recent decision for the same session
+    /// already has the same kind + prompt — so repeated Boss Watch ticks over a
+    /// still-waiting prompt don't flood the log with duplicates. Returns whether
+    /// it recorded.
+    @discardableResult
+    mutating func recordDecisionIfNew(_ decision: BossInboxDecision) -> Bool {
+        if let recent = decisionLog.first(where: { $0.entryId == decision.entryId }),
+           recent.kind == decision.kind,
+           recent.prompt == decision.prompt {
+            return false
+        }
+        recordDecision(decision)
+        return true
     }
 }
