@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.64 - Fix: disk-full no longer crashes during transcript writes
+
+- `TranscriptRecorder.append` used the deprecated `FileHandle.write(_:)`, which raises an *uncatchable* Objective-C exception on disk-full or a closed descriptor — crashing the whole app. Switched to the throwing `write(contentsOf:)`; a failed append now drops that slice and the session keeps running.
+
 ## 0.1.63 - Fix: jumping to a session in another group lands on the right one
 
 - Clicking a running session in the menu-bar list, an "Open" on the recovery sheet, or "Open" on the import summary banner now switches to the session's **group** before selecting it. Previously these set the selected entry without switching the project, so a target in another group silently fell back to the wrong terminal.
