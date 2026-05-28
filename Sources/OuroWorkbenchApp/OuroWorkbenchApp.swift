@@ -171,6 +171,9 @@ struct WorkbenchRootView: View {
         .sheet(isPresented: $model.isAboutSheetPresented) {
             AboutSheet()
         }
+        .sheet(isPresented: $model.isDecisionLogPresented) {
+            DecisionLogSheet(model: model)
+        }
         // Accept Finder folder drops on the window — same end state as
         // Open Workspace…, but with one less click for the muscle memory
         // path of "drag the project root onto Workbench."
@@ -1109,6 +1112,152 @@ struct AboutSheet: View {
         }
         .padding(20)
         .frame(width: 360, height: 320)
+    }
+}
+
+/// The boss decision-log review surface — a chronological audit of every call
+/// the boss made about a waiting session and *why*, for auditing and tuning.
+/// Reached from the boss pane and the ⌘K palette.
+struct DecisionLogSheet: View {
+    @ObservedObject var model: WorkbenchViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Boss Decision Log")
+                        .font(.title3.weight(.semibold))
+                    Text("Every decision the boss made about a waiting session, and why")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 18)
+            .padding(.bottom, 14)
+            Divider()
+            if model.state.decisionLog.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "checklist")
+                        .font(.largeTitle)
+                        .foregroundStyle(.secondary)
+                    Text("No decisions recorded yet")
+                        .font(.headline)
+                    Text("When a session is waiting on you, the boss records what it would do and why here.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 360)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding(40)
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 10) {
+                        ForEach(model.state.decisionLog) { decision in
+                            DecisionLogRow(decision: decision)
+                        }
+                    }
+                    .padding(20)
+                }
+            }
+        }
+        .frame(width: 640, height: 560)
+    }
+}
+
+private struct DecisionLogRow: View {
+    let decision: BossInboxDecision
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(kindLabel)
+                    .font(.caption.weight(.semibold))
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2)
+                    .background(kindColor.opacity(0.18), in: Capsule())
+                    .foregroundStyle(kindColor)
+                Text(decision.sessionName ?? "unknown session")
+                    .font(.callout.weight(.medium))
+                    .lineLimit(1)
+                if let friend = decision.friendName {
+                    Text("· \(friend)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer()
+                Text(decision.occurredAt.formatted(date: .abbreviated, time: .shortened))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            if !decision.prompt.isEmpty {
+                Text(decision.prompt)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.primary)
+                    .lineLimit(3)
+                    .padding(8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 6))
+            }
+            if let proposed = decision.proposedInput, !proposed.isEmpty {
+                rowDetail("Proposed input", proposed, mono: true)
+            }
+            if let pref = decision.preferenceCited, !pref.isEmpty {
+                rowDetail("Preference", pref)
+            }
+            if !decision.reasoning.isEmpty {
+                rowDetail("Reasoning", decision.reasoning)
+            }
+            HStack(spacing: 10) {
+                if let confidence = decision.confidence {
+                    Text("confidence \(Int((confidence * 100).rounded()))%")
+                }
+                Text("status: \(decision.status.rawValue)")
+                Text("source: \(decision.source)")
+            }
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.04)))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.primary.opacity(0.08), lineWidth: 1))
+    }
+
+    private func rowDetail(_ label: String, _ value: String, mono: Bool = false) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(label)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 92, alignment: .leading)
+            Text(value)
+                .font(mono ? .caption.monospaced() : .caption)
+                .foregroundStyle(.primary)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var kindLabel: String {
+        switch decision.kind {
+        case .autoAdvance: return "Auto-advance"
+        case .escalate: return "Escalate"
+        case .hold: return "Hold"
+        }
+    }
+
+    private var kindColor: SwiftUI.Color {
+        switch decision.kind {
+        case .autoAdvance: return .green
+        case .escalate: return .orange
+        case .hold: return .secondary
+        }
     }
 }
 
@@ -6459,6 +6608,9 @@ final class WorkbenchViewModel: ObservableObject {
     /// About sheet — discoverable home for app version, build hash, license
     /// links. Reached from the More menu and the ⌘K palette.
     @Published var isAboutSheetPresented = false
+    /// The boss decision-log review surface (audit of every inbox decision the
+    /// boss made and why). Reached from the boss pane and the ⌘K palette.
+    @Published var isDecisionLogPresented = false
     /// User's terminal-theme override. `.system` follows the macOS appearance
     /// (current default); `.light`/`.dark` pin the terminal palette regardless
     /// of system. Persisted in UserDefaults.
@@ -7321,6 +7473,16 @@ final class WorkbenchViewModel: ObservableObject {
                 "Adjust terminal font, theme, menubar icon, and other Workbench preferences",
                 "gearshape",
                 keywords: ["settings", "preferences", "config", "theme", "font", "menubar", "options"]
+            )
+        )
+
+        commands.append(
+            command(
+                .openDecisionLog,
+                "Boss Decision Log",
+                "Review every decision the boss made about a waiting session, and why",
+                "checklist",
+                keywords: ["decision", "log", "audit", "boss", "inbox", "why", "advance", "escalate"]
             )
         )
 
@@ -9574,6 +9736,8 @@ final class WorkbenchViewModel: ObservableObject {
             isSettingsSheetPresented = true
         case .openAbout:
             isAboutSheetPresented = true
+        case .openDecisionLog:
+            isDecisionLogPresented = true
         case .stopAllRunningSessions:
             stopAllRunningSessions()
         case .recoverAllCrashedSessions:

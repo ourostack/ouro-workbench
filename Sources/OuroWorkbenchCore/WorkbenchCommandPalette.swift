@@ -47,6 +47,7 @@ public enum WorkbenchCommandID: String, Codable, CaseIterable, Sendable {
     case saveWorkspaceConfig
     case openSettings
     case openAbout
+    case openDecisionLog
     case stopAllRunningSessions
     case recoverAllCrashedSessions
 }
