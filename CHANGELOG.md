@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.62 - Validate sessions before launch
+
+- Launching (or recovering / auto-resuming) a session now fails fast with a clear message when its **working directory doesn't exist** or its **command isn't found / isn't executable**, instead of silently spawning an instantly-dead session or running the agent in the app's own directory.
+- The check reuses the existing executable-health resolver (PATH-aware) and runs before any existing session is torn down. The failing entry is flagged `needs review` and the reason lands in the action log.
+
 ## 0.1.61 - Fix: ⌘K palette commands that open a sheet now work
 
 - Choosing **Open Settings**, **About**, **New Terminal**, **Install Agent**, or **Keyboard Shortcuts** from the ⌘K command palette previously often did nothing — the palette dismissed and the target sheet raced SwiftUI's single-presentation context and never appeared.
