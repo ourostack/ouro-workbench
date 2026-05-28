@@ -115,7 +115,10 @@ agent-aware terminal workbench rather than a launcher with terminal panes.
 - Wire Workbench MCP into Ouro agent setup.
   Initial native registration for the selected boss exists.
 - Add optional MCP setup snippets for Claude Code, Codex, and other tools.
-- Surface Git branch, PR, CI, and dirty-worktree status per session.
+- Surface Git branch, PR, CI, and dirty-worktree status per session. Initial
+  per-session branch, dirty-tree, and ahead/behind status exists in the native
+  sidebar (read-only, lock-free `git` probe with a watchdog). PR/CI status and
+  boss/MCP surfacing are still pending.
 - Add hooks for task docs and Desk summaries.
 - Keep Mailbox as read plane and Workbench MCP as local control/status plane.
 

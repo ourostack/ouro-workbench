@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.87 - Per-session Git status in the sidebar
+
+- Each terminal session's sidebar row now shows the git status of its working directory: branch name (or `(detached)`), a dirty dot when the tree has uncommitted/untracked changes, and an `↑ahead↓behind` suffix versus its upstream. For an agent workbench where most sessions live in worktrees/branches, this is the "where am I" glance at a glance.
+- Backed by a new `GitSessionStatus` + `GitStatusReader` in Core that parse `git status --porcelain=v2 --branch`. The probe is read-only and lock-free (`--no-optional-locks`), runs off the main actor, and is watchdog-bounded so a slow or locked repo can never stall the UI. Refreshed on launch, on app foreground, and from the Refresh Status button.
+- PR/CI status and surfacing git status to the boss/MCP are tracked as follow-ups.
+
 ## 0.1.86 - Single-source guide + inner-agent Workbench awareness
 
 - New `WorkbenchGuide` is the one catalog describing what Workbench is and how to drive it: keyboard shortcuts, the boss capability list, and the action verbs. The in-app `Command-/` shortcut sheet, `workbench_sense`, the boss check-in prompt, and the docs all render from it, so the surfaces can't drift. The action verbs are derived straight from `BossWorkbenchActionKind`, so what's advertised to the boss is exactly what the parser accepts.

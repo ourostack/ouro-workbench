@@ -126,6 +126,7 @@ struct WorkbenchRootView: View {
             model.launchAutoResumeSessionsOnStartup()
             model.launchDefaultShellIfNeeded()
             model.refreshExecutableHealth()
+            model.refreshGitStatus()
             model.refreshOnboardingReadiness()
             await model.refreshBossDashboard()
             if model.shouldPresentOnboardingOnLaunch {
@@ -1260,6 +1261,7 @@ struct WorkbenchSidebarView: View {
                         isSelected: model.selectedEntryID == entry.id,
                         cliName: model.cliName(for: entry),
                         health: model.executableHealth(for: entry),
+                        gitStatus: model.gitStatus(for: entry),
                         runningSince: model.runningStartDate(for: entry),
                         isPinned: entry.isPinned
                     )
@@ -1634,6 +1636,9 @@ struct TerminalAgentRow: View {
     var isSelected: Bool
     var cliName: String?
     var health: ExecutableHealth?
+    /// Git status of the session's working directory, when it's a repo. Drives
+    /// the branch chip under the name. `nil` (or not-a-repo) renders nothing.
+    var gitStatus: GitSessionStatus?
     /// When the entry has a currently-running process, the date it started.
     /// Drives the `5m` / `2h` elapsed-time pill in the row. `nil` skips the
     /// pill entirely — keeps the row uncluttered for idle / archived entries.
@@ -1672,6 +1677,9 @@ struct TerminalAgentRow: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
+                if let gitStatus, gitStatus.isRepo {
+                    GitBranchChip(status: gitStatus)
+                }
             }
             Spacer()
             if let runningSince {
@@ -1709,7 +1717,48 @@ struct TerminalAgentRow: View {
         if let health, health.status != .available {
             pieces.append(health.detail)
         }
+        if let gitStatus, gitStatus.isRepo, let label = gitStatus.branchLabel {
+            pieces.append("git \(label)\(gitStatus.dirty ? ", uncommitted changes" : "")")
+        }
         return pieces.joined(separator: ", ")
+    }
+}
+
+/// Compact git chip: branch name, a dirty dot when the tree has uncommitted
+/// changes, and an ↑ahead/↓behind suffix. Renders nothing for a non-repo.
+struct GitBranchChip: View {
+    var status: GitSessionStatus
+
+    var body: some View {
+        if let label = status.branchLabel {
+            HStack(spacing: 3) {
+                Image(systemName: "arrow.triangle.branch")
+                Text(label)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                if status.dirty {
+                    Circle()
+                        .fill(Color.orange)
+                        .frame(width: 5, height: 5)
+                }
+                if let aheadBehind = status.aheadBehindLabel {
+                    Text(aheadBehind)
+                        .monospacedDigit()
+                }
+            }
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .help(helpText)
+        }
+    }
+
+    private var helpText: String {
+        var parts: [String] = []
+        parts.append("Branch: \(status.branchLabel ?? "unknown")")
+        parts.append(status.dirty ? "uncommitted changes" : "clean")
+        if status.ahead > 0 { parts.append("\(status.ahead) ahead") }
+        if status.behind > 0 { parts.append("\(status.behind) behind") }
+        return parts.joined(separator: " · ")
     }
 }
 
@@ -1856,6 +1905,7 @@ struct HeaderView: View {
                 Button {
                     Task {
                         model.refreshExecutableHealth()
+                        model.refreshGitStatus()
                         await model.refreshBossDashboard()
                     }
                 } label: {
@@ -6442,6 +6492,7 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var bossWorkbenchMCPRegistration: BossWorkbenchMCPRegistrationSnapshot?
     @Published var bossWorkbenchMCPRegistrationByAgentName: [String: BossWorkbenchMCPRegistrationSnapshot] = [:]
     @Published var executableHealthByEntryID: [UUID: ExecutableHealth] = [:]
+    @Published var gitStatusByEntryID: [UUID: GitSessionStatus] = [:]
     @Published var releaseUpdateSnapshot: ReleaseUpdateSnapshot?
     @Published var releaseUpdateIsChecking = false
     @Published var supportDiagnosticsResult: SupportDiagnosticsResult?
@@ -6473,6 +6524,7 @@ final class WorkbenchViewModel: ObservableObject {
     private let ouroAgentInventory: OuroAgentInventory
     private let ouroAgentInstallCommandBuilder = OuroAgentInstallCommandBuilder()
     private let executableHealthChecker: ExecutableHealthChecker
+    private let gitStatusReader = GitStatusReader()
     private let bossActionParser = BossWorkbenchActionParser()
     private let bossActionAuthorizer = BossWorkbenchActionAuthorizer()
     private let terminationPolicy = ProcessTerminationPolicy()
@@ -6542,6 +6594,7 @@ final class WorkbenchViewModel: ObservableObject {
         refreshOuroAgents()
         refreshWorkbenchMCPRegistration()
         refreshExecutableHealth()
+        refreshGitStatus()
         refreshOnboardingReadiness()
         registerTerminationObserver()
     }
@@ -7411,6 +7464,10 @@ final class WorkbenchViewModel: ObservableObject {
 
     func executableHealth(for entry: ProcessEntry) -> ExecutableHealth? {
         executableHealthByEntryID[entry.id]
+    }
+
+    func gitStatus(for entry: ProcessEntry) -> GitSessionStatus? {
+        gitStatusByEntryID[entry.id]
     }
 
     func cliName(for entry: ProcessEntry) -> String? {
@@ -8347,6 +8404,26 @@ final class WorkbenchViewModel: ObservableObject {
                 return (entry.id, executableHealthChecker.health(for: executable))
             }
         )
+    }
+
+    /// Refresh per-session git status off the main actor. Each session's
+    /// working directory is probed with a watchdog-bounded `git` call (see
+    /// `GitStatusReader`), so a slow or locked repo can't stall the UI. Results
+    /// are applied back on the main actor. Mirrors `executableHealth`, but async
+    /// because it shells out. Stale entries are pruned so a deleted session
+    /// never leaves a dangling chip.
+    func refreshGitStatus() {
+        let targets: [(UUID, String)] = allSessionEntries.map { ($0.id, $0.workingDirectory) }
+        let reader = gitStatusReader
+        Task.detached(priority: .utility) {
+            var results: [UUID: GitSessionStatus] = [:]
+            for (id, dir) in targets {
+                results[id] = reader.status(forDirectory: dir)
+            }
+            await MainActor.run { [results] in
+                self.gitStatusByEntryID = results
+            }
+        }
     }
 
     func installWorkbenchMCPForBoss() {
