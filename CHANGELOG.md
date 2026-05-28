@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.71 - Onboarding no longer re-pops on every launch
+
+- A fully-configured machine no longer gets the onboarding sheet thrown at it on every launch. Provider *liveness* checks (`ouro check`) aren't persisted and start unrun each launch, which previously read as "not ready" and forced onboarding open before the checks could pass.
+- Onboarding now only auto-presents for a genuine **configuration** gap (no ready boss, an unconfigured provider lane, or unregistered Workbench MCP). When the only thing pending is a liveness check, Workbench runs it in the background and readiness resolves to ready silently — the check state still shows in the boss pane.
+
 ## 0.1.70 - Onboarding subprocess robustness
 
 - **The recent-work scan can no longer wedge on a busy Codex database.** The Codex history scan now opens the SQLite DB `-readonly` (never contends with a live Codex writer) and is bounded by a 5s watchdog — a WAL-locked or slow DB returns empty instead of hanging, which previously left the Scan/Arrange buttons permanently disabled.

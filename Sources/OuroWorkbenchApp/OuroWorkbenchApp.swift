@@ -113,6 +113,11 @@ struct WorkbenchRootView: View {
             await model.refreshBossDashboard()
             if model.shouldPresentOnboardingOnLaunch {
                 model.isOnboardingPresented = true
+            } else {
+                // Configured machine: run the provider liveness checks in the
+                // background so readiness resolves to ready without ever
+                // popping the onboarding sheet. (No-op if already passed.)
+                model.runOnboardingProviderChecksIfNeeded()
             }
             if model.bossWatchIsEnabled {
                 await model.runBossWatchTick(force: true)
@@ -6911,8 +6916,31 @@ final class WorkbenchViewModel: ObservableObject {
         supportDiagnosticsResult?.archiveURL
     }
 
+    /// Genuine *configuration* gaps (no ready boss, an unconfigured provider
+    /// lane, or unregistered Workbench MCP) that warrant the full onboarding
+    /// sheet. Provider *liveness* state (`check-*` / `repair-*-provider`) is
+    /// deliberately excluded — it's surfaced in the boss pane, so a configured
+    /// machine whose live check merely hasn't run (or transiently failed)
+    /// doesn't get the onboarding sheet thrown at it on every launch.
+    private static let onboardingConfigGapBlockerIDs: Set<String> = [
+        "repair-agent-config", "outward-lane", "inner-lane", "workbench-mcp"
+    ]
+
+    /// True when readiness is blocked by an actual configuration gap (above),
+    /// as opposed to a provider liveness check that simply hasn't run yet.
+    var onboardingHasConfigGap: Bool {
+        guard let readiness = onboardingReadiness else {
+            return false
+        }
+        return readiness.repairSteps.contains { Self.onboardingConfigGapBlockerIDs.contains($0.id) }
+    }
+
+    /// Only force onboarding at launch for a genuine config gap. A configured
+    /// machine pending a liveness check is handled by kicking the checks off
+    /// in the background (see the startup task) so readiness flips to ready
+    /// without the sheet ever appearing.
     var shouldPresentOnboardingOnLaunch: Bool {
-        onboardingReadiness?.isReady == false
+        onboardingReadiness?.isReady == false && onboardingHasConfigGap
     }
 
     var onboardingPhaseLabel: String {
