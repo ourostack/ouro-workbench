@@ -1784,6 +1784,12 @@ struct HeaderView: View {
                     Label("Stop All Running…", systemImage: "stop.circle")
                 }
                 .disabled(model.activeSessions.isEmpty)
+                Button {
+                    model.recoverAllCrashedSessions()
+                } label: {
+                    Label("Recover All Crashed…", systemImage: "arrow.clockwise.circle")
+                }
+                .disabled(model.recoverableEntries.isEmpty)
                 Divider()
                 Button {
                     model.isSettingsSheetPresented = true
@@ -7014,6 +7020,18 @@ final class WorkbenchViewModel: ObservableObject {
             )
         }
 
+        if !recoverableEntries.isEmpty {
+            commands.append(
+                command(
+                    .recoverAllCrashedSessions,
+                    "Recover All Crashed Terminals",
+                    "Re-launch every session currently flagged for recovery (\(recoverableEntries.count))",
+                    "arrow.clockwise.circle",
+                    keywords: ["recover", "restart", "relaunch", "all", "crashed", "fix", "resume", "respawn"]
+                )
+            )
+        }
+
         commands.append(
             command(
                 .openWorkspaceConfig,
@@ -9136,6 +9154,8 @@ final class WorkbenchViewModel: ObservableObject {
             isAboutSheetPresented = true
         case .stopAllRunningSessions:
             stopAllRunningSessions()
+        case .recoverAllCrashedSessions:
+            recoverAllCrashedSessions()
         case .selectAgent,
              .useSelectedAgentAsBoss,
              .openSelectedAgentConfig,
@@ -9428,6 +9448,27 @@ final class WorkbenchViewModel: ObservableObject {
             return
         }
         recover(entry, recoveryPlan: plan)
+    }
+
+    /// Run `recover(_:)` against every currently-recoverable session in one
+    /// pass. Mirrors `stopAllRunningSessions()`: useful after the user has
+    /// stepped away and several agents crashed; one click to relaunch them
+    /// all. Returns the count of sessions actually recovered.
+    @discardableResult
+    func recoverAllCrashedSessions() -> Int {
+        let candidates = recoverableEntries
+        guard !candidates.isEmpty else { return 0 }
+        for entry in candidates {
+            recover(entry)
+        }
+        recordActionLog(
+            source: "native",
+            action: "recoverAllCrashedSessions",
+            targetName: selectedProject?.name ?? WorkbenchRelease.appName,
+            result: "Recovered \(candidates.count) crashed session\(candidates.count == 1 ? "" : "s")",
+            succeeded: true
+        )
+        return candidates.count
     }
 
     func launch(_ entry: ProcessEntry) {
