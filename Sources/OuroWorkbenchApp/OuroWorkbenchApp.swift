@@ -1248,6 +1248,13 @@ struct WorkbenchSidebarView: View {
                             TerminalRowContextMenu(entry: entry, model: model)
                         }
                 }
+                .onMove { offsets, destination in
+                    // Drag-to-reorder within the current group. Persists
+                    // through the WorkbenchStore so the order survives a
+                    // relaunch and is honored by every list view that
+                    // sources from state.processEntries.
+                    model.moveSessionEntries(fromOffsets: offsets, toOffset: destination)
+                }
                 SidebarActionRow(title: "New Terminal", systemImage: "plus") {
                     model.isNewSessionSheetPresented = true
                 }
@@ -6430,6 +6437,22 @@ final class WorkbenchViewModel: ObservableObject {
 
     var sessionEntries: [ProcessEntry] {
         projectSessionEntries.filter { !$0.isArchived }
+    }
+
+    /// SwiftUI `.onMove` handler for the sidebar's non-archived rows. The
+    /// `offsets` and `destination` are indices into `sessionEntries`
+    /// (the filtered, project-scoped, non-archived view). We delegate the
+    /// actual index gymnastics to `WorkbenchEntryReorder` so the algorithm
+    /// is testable in isolation; this method just plumbs in the view and
+    /// persists the result.
+    func moveSessionEntries(fromOffsets offsets: IndexSet, toOffset destination: Int) {
+        state.processEntries = WorkbenchEntryReorder.move(
+            global: state.processEntries,
+            visible: sessionEntries,
+            fromOffsets: offsets,
+            toOffset: destination
+        )
+        do { try store.save(state) } catch { errorMessage = String(describing: error) }
     }
 
     var archivedSessionEntries: [ProcessEntry] {
