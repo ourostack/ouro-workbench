@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.47 - Drop-folder to open workspace + About sheet
+
+- **Drop a Finder folder onto the Workbench window** to open it as a workspace. If the folder contains a `.workbench.json`, Workbench arranges the declared terminals; otherwise the user gets the same error path as `Open Workspace…`. Closes the muscle-memory gap: "drag a project root into the app" should just work, like a code editor.
+- **About sheet**: `More → About Ouro Workbench…` (and `Open About` in the ⌘K palette) opens a compact info sheet with the app name, version + build hash (selectable + a Copy button), one-line tagline, and an "Open Repo" link. The hidden title bar prevents the system-provided About item from surfacing; this is the discoverable replacement.
+- Multi-folder drops are accepted; non-directory items in the drop are silently filtered rather than erroring loudly.
+
 ## 0.1.46 - Settings sheet (⌘,)
 
 - New `Settings…` sheet, reachable via `⌘,` (standard macOS shortcut), the More menu, and the ⌘K palette ("Open Settings"). Consolidates user preferences that used to be scattered across raw `UserDefaults` reads — terminal font size, theme override, menu-bar icon visibility — into a single discoverable surface.

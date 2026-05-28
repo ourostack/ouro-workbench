@@ -3,6 +3,7 @@ import AppKit
 import OuroWorkbenchCore
 import SwiftTerm
 import SwiftUI
+import UniformTypeIdentifiers
 import UserNotifications
 
 struct OuroWorkbenchApp: App {
@@ -115,6 +116,13 @@ struct WorkbenchRootView: View {
         .sheet(isPresented: $model.isSettingsSheetPresented) {
             SettingsSheet(model: model)
         }
+        .sheet(isPresented: $model.isAboutSheetPresented) {
+            AboutSheet()
+        }
+        // Accept Finder folder drops on the window — same end state as
+        // Open Workspace…, but with one less click for the muscle memory
+        // path of "drag the project root onto Workbench."
+        .onDrop(of: [.fileURL], delegate: WorkspaceFolderDropDelegate(model: model))
         .sheet(isPresented: $model.isRecoverySheetPresented) {
             RecoverySheet(model: model)
         }
@@ -752,6 +760,41 @@ struct ShortcutHelpSheet: View {
     }
 }
 
+/// SwiftUI drop delegate that accepts file-URL items dropped on the
+/// workbench window. Filters to directories — every other URL is
+/// declined — and dispatches each accepted folder through the standard
+/// `openWorkspaceConfig(at:)` path, so the result is identical to using
+/// the More menu's "Open Workspace…" panel. Multi-folder drops are
+/// allowed; the last one wins for focus and any non-directory items are
+/// silently dropped rather than erroring loudly.
+struct WorkspaceFolderDropDelegate: DropDelegate {
+    let model: WorkbenchViewModel
+
+    func validateDrop(info: DropInfo) -> Bool {
+        info.hasItemsConforming(to: [.fileURL])
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        let providers = info.itemProviders(for: [.fileURL])
+        guard !providers.isEmpty else { return false }
+        for provider in providers {
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                guard let url else { return }
+                // FileManager isn't Sendable, so resolve the singleton inside
+                // the closure rather than capturing it across the boundary.
+                var isDir: ObjCBool = false
+                guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir),
+                      isDir.boolValue else { return }
+                let path = url.path
+                Task { @MainActor in
+                    _ = model.openWorkspaceConfig(at: path)
+                }
+            }
+        }
+        return true
+    }
+}
+
 /// User preferences sheet, opened by ⌘, or the More menu's "Settings…"
 /// action. Consolidates settings that were previously scattered as raw
 /// UserDefaults reads — terminal font size, theme override, and menu-bar
@@ -982,6 +1025,73 @@ struct ImportSummaryBanner: View {
                 model.lastImportSummary = nil
             }
         }
+    }
+}
+
+/// Compact About sheet — app version, build hash, and a couple of useful
+/// pointers. Reached via the More menu and the ⌘K palette. The dedicated
+/// macOS About item under the app menu can also dispatch here but the
+/// hidden title bar prevents the system's built-in About from surfacing,
+/// so the More-menu route is the primary entry.
+struct AboutSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    private var buildHash: String {
+        // Bundle CFBundleVersion holds the build number / git short hash
+        // wired in by package-app.sh. Fall back to "dev" so a swift run
+        // build (no bundle) still renders.
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "dev"
+    }
+
+    private var versionLine: String {
+        "\(WorkbenchRelease.version) (build \(buildHash))"
+    }
+
+    var body: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "infinity")
+                .font(.system(size: 56, weight: .semibold))
+                .foregroundColor(.accentColor)
+                .padding(.top, 16)
+            VStack(spacing: 6) {
+                Text(WorkbenchRelease.appName)
+                    .font(.title2.weight(.semibold))
+                Text(versionLine)
+                    .font(.subheadline)
+                    .monospacedDigit()
+                    .foregroundColor(.secondary)
+                    .textSelection(.enabled)
+            }
+            Text("Terminal-first orchestrator for autonomous Ouro agents.")
+                .font(.callout)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 28)
+            HStack(spacing: 10) {
+                Button {
+                    if let url = URL(string: "https://github.com/ourostack/ouro-workbench") {
+                        NSWorkspace.shared.open(url)
+                    }
+                } label: {
+                    Label("Open Repo", systemImage: "arrow.up.right.square")
+                }
+                Button {
+                    let pasteboard = NSPasteboard.general
+                    pasteboard.clearContents()
+                    pasteboard.setString(versionLine, forType: .string)
+                } label: {
+                    Label("Copy Version", systemImage: "doc.on.doc")
+                }
+            }
+            Spacer(minLength: 0)
+            HStack {
+                Spacer()
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 360, height: 320)
     }
 }
 
@@ -1635,6 +1745,12 @@ struct HeaderView: View {
                     Label("Keyboard Shortcuts…", systemImage: "keyboard")
                 }
                 .keyboardShortcut("/", modifiers: [.command])
+                Divider()
+                Button {
+                    model.isAboutSheetPresented = true
+                } label: {
+                    Label("About Ouro Workbench…", systemImage: "info.circle")
+                }
             } label: {
                 Label("More", systemImage: "ellipsis.circle")
                     .labelStyle(.iconOnly)
@@ -6123,6 +6239,9 @@ final class WorkbenchViewModel: ObservableObject {
     /// icon visibility, recents limit. Mounted once at the root via .sheet
     /// like every other workbench sheet.
     @Published var isSettingsSheetPresented = false
+    /// About sheet — discoverable home for app version, build hash, license
+    /// links. Reached from the More menu and the ⌘K palette.
+    @Published var isAboutSheetPresented = false
     /// User's terminal-theme override. `.system` follows the macOS appearance
     /// (current default); `.light`/`.dark` pin the terminal palette regardless
     /// of system. Persisted in UserDefaults.
@@ -6802,6 +6921,16 @@ final class WorkbenchViewModel: ObservableObject {
                 "Adjust terminal font, theme, menubar icon, and other Workbench preferences",
                 "gearshape",
                 keywords: ["settings", "preferences", "config", "theme", "font", "menubar", "options"]
+            )
+        )
+
+        commands.append(
+            command(
+                .openAbout,
+                "About Ouro Workbench",
+                "Show the app version, build hash, and links",
+                "info.circle",
+                keywords: ["about", "version", "build", "info", "credits"]
             )
         )
 
@@ -8912,6 +9041,8 @@ final class WorkbenchViewModel: ObservableObject {
             presentSaveWorkspacePanel()
         case .openSettings:
             isSettingsSheetPresented = true
+        case .openAbout:
+            isAboutSheetPresented = true
         case .selectAgent,
              .useSelectedAgentAsBoss,
              .openSelectedAgentConfig,

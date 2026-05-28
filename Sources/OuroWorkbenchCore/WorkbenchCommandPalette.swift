@@ -46,6 +46,7 @@ public enum WorkbenchCommandID: String, Codable, CaseIterable, Sendable {
     case openWorkspaceConfig
     case saveWorkspaceConfig
     case openSettings
+    case openAbout
 }
 
 public struct WorkbenchCommandDescriptor: Codable, Equatable, Identifiable, Sendable {
