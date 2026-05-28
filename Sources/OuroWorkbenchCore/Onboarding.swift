@@ -1380,6 +1380,9 @@ public struct DeskMirrorWriter {
             let trackURL = deskRoot.appendingPathComponent(group.deskTrackSlug, isDirectory: true)
             try fileManager.createDirectory(at: trackURL, withIntermediateDirectories: true)
             let trackFile = trackURL.appendingPathComponent("track.md")
+            // Write track.md only if absent: it's a Desk artifact the user (or
+            // Desk tooling) may hand-edit, and clobbering those edits on a
+            // re-Arrange would be worse than a slightly stale terminal list.
             if !fileManager.fileExists(atPath: trackFile.path) {
                 try renderTrack(group).write(to: trackFile, atomically: true, encoding: .utf8)
                 changed.append(trackFile.path)
@@ -1398,7 +1401,11 @@ public struct DeskMirrorWriter {
     }
 
     private func renderTrack(_ group: ProposedWorkbenchGroup) -> String {
-        """
+        // List only the terminals that actually get a task.md written (the
+        // selected ones) so the track never references a task slug whose
+        // directory doesn't exist.
+        let listed = group.terminals.filter(\.selectedByDefault)
+        return """
         ---
         schema_version: 1
         title: \(group.deskTrackSlug)
@@ -1413,7 +1420,7 @@ public struct DeskMirrorWriter {
 
         ## Workbench terminals
 
-        \(group.terminals.map { "- `\($0.deskTaskSlug)` - \($0.name)" }.joined(separator: "\n"))
+        \(listed.map { "- `\($0.deskTaskSlug)` - \($0.name)" }.joined(separator: "\n"))
         """
     }
 

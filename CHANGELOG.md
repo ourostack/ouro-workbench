@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.80 - Desk mirror track lists only imported terminals
+
+- A Desk mirror `track.md` listed *every* proposed terminal, but only the selected ones get a `task.md` written — so the track referenced task slugs whose directories don't exist (dangling Desk references). The track now lists only the selected terminals, matching what's actually written. (track.md and task.md remain write-only-if-absent so user/Desk edits are never clobbered on a re-Arrange.)
+
 ## 0.1.79 - Deterministic "latest run" selection
 
 - The summary, recovery planner, recovery drill, startup reconciler, prompt builder, and transcript search all independently picked the "latest run" for an entry by `startedAt` alone — with no tiebreak. When two runs shared an identical timestamp (a tight create loop, or second-granularity restore), the winner depended on array order and the call sites could disagree about which run was current. A single `ProcessRun.isMoreRecent` comparator (newer `startedAt`, ties broken on `id`) now backs all of them.
