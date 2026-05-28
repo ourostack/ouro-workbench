@@ -10386,7 +10386,49 @@ final class WorkbenchViewModel: ObservableObject {
         return trimmed
     }
 
+    /// Pre-launch validation. Returns a human-readable problem if the session
+    /// can't run as configured — a missing working directory (which `screen`'s
+    /// `chdir` would silently ignore, running the agent in the app's cwd) or a
+    /// missing / non-executable command (which would launch an instantly-dead
+    /// session that looks "running"). Returns nil when it's safe to launch.
+    private func launchPreflightProblem(for entry: ProcessEntry) -> String? {
+        let workingDirectory = entry.workingDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !workingDirectory.isEmpty {
+            var isDirectory: ObjCBool = false
+            let exists = FileManager.default.fileExists(atPath: workingDirectory, isDirectory: &isDirectory)
+            if !exists || !isDirectory.boolValue {
+                return "\(entry.name): working directory doesn't exist — \(workingDirectory)"
+            }
+        }
+        let health = executableHealthChecker.health(for: ExecutableHealthTarget.executable(for: entry))
+        switch health.status {
+        case .available:
+            return nil
+        case .missing, .notExecutable:
+            return "\(entry.name): \(health.detail)"
+        }
+    }
+
     private func start(_ entry: ProcessEntry, with plan: TerminalCommandPlan) {
+        // Validate before we tear down any existing session or spawn a new
+        // one, so a misconfigured launch surfaces a clear error instead of a
+        // silent dead session or one running in the wrong directory.
+        if let problem = launchPreflightProblem(for: entry) {
+            errorMessage = problem
+            updateEntry(entry.id) { mutable in
+                mutable.attention = .needsBossReview
+                mutable.lastSummary = problem
+            }
+            recordActionLog(
+                source: "native",
+                action: "launchPreflightFailed",
+                targetEntryId: entry.id,
+                targetName: entry.name,
+                result: problem,
+                succeeded: false
+            )
+            return
+        }
         do {
             if let existingSession = activeSessions[entry.id] {
                 manuallyTerminatedRunIDs.insert(existingSession.plan.runId)
