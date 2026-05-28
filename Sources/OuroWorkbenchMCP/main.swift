@@ -38,12 +38,20 @@ final class WorkbenchMCPServer {
     }
 
     private func handle(line: String) -> [String: Any]? {
+        // Blank / whitespace keepalive lines carry no request — skip silently.
+        guard !line.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
         guard
             let data = line.data(using: .utf8),
             let request = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
             let method = request["method"] as? String
         else {
-            return nil
+            // A non-empty line we can't parse as a JSON-RPC request: reply with
+            // a parse error (id null) rather than silently dropping it, so the
+            // caller never hangs waiting for a response. (One JSON object per
+            // line is the contract — pretty-printed/batched input won't parse.)
+            return error(id: nil, code: -32700, message: "Parse error: expected a single JSON-RPC object per line")
         }
 
         let id = request["id"]
@@ -398,13 +406,17 @@ final class WorkbenchMCPServer {
     }
 
     private func write(_ object: [String: Any]) {
-        guard
-            let data = try? JSONSerialization.data(withJSONObject: object),
-            let text = String(data: data, encoding: .utf8)
-        else {
+        if let data = try? JSONSerialization.data(withJSONObject: object),
+           let text = String(data: data, encoding: .utf8) {
+            print(text)
+            fflush(stdout)
             return
         }
-        print(text)
+        // Serialization failed (should never happen for our String/Dict
+        // responses, but never hang the caller): emit a minimal, guaranteed
+        // valid reply. id is dropped to null since the unserializable value
+        // may be the id itself.
+        print(#"{"jsonrpc":"2.0","id":null,"error":{"code":-32603,"message":"Internal error: response could not be serialized"}}"#)
         fflush(stdout)
     }
 }

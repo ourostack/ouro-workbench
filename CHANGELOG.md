@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.81 - MCP server always answers a request
+
+- The `ouro-workbench` MCP server silently dropped any stdin line it couldn't parse as a single JSON-RPC object (e.g. pretty-printed or batched input), leaving the boss agent hanging forever waiting for a reply. It now responds with a JSON-RPC parse error (`-32700`, null id) for an unparseable non-empty line, while still skipping blank keepalive lines and genuine notifications.
+- If a response ever fails to serialize, the server now emits a minimal valid internal-error reply instead of writing nothing — so every request gets exactly one response.
+
 ## 0.1.80 - Desk mirror track lists only imported terminals
 
 - A Desk mirror `track.md` listed *every* proposed terminal, but only the selected ones get a `task.md` written — so the track referenced task slugs whose directories don't exist (dangling Desk references). The track now lists only the selected terminals, matching what's actually written. (track.md and task.md remain write-only-if-absent so user/Desk edits are never clobbered on a re-Arrange.)
