@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.49 - Stop All Running Terminals
+
+- `More → Stop All Running…` and `Stop All Running Terminals` in the ⌘K palette terminate every currently-running session in one click. End-of-day cleanup is now one action instead of N right-click / stop sequences.
+- Palette entry only surfaces when something is actually running so it doesn't bloat the empty-workbench palette. Disabled state on the menu mirrors that — greyed out when nothing's running.
+- Result lands in the action log (`Stopped 4 running sessions`) for auditability.
+
 ## 0.1.48 - Sidebar elapsed-time pill on running sessions
 
 - Every currently-running session in the sidebar now shows a small `5m` / `1h 14m` pill next to its row. Answers "how long has this Codex been running?" at a glance without clicking through to the transcript or the run log.

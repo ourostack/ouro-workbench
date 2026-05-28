@@ -136,4 +136,11 @@ final class WorkbenchCommandPaletteTests: XCTestCase {
         // catch as test failures, not runtime breakage.
         XCTAssertTrue(WorkbenchCommandID.allCases.contains(.openAbout))
     }
+
+    func testStopAllRunningCommandIDIsPresent() {
+        // End-of-day cleanup shortcut. The palette only surfaces this when
+        // sessions are actually running but the enum case must exist for
+        // performCommand to dispatch.
+        XCTAssertTrue(WorkbenchCommandID.allCases.contains(.stopAllRunningSessions))
+    }
 }

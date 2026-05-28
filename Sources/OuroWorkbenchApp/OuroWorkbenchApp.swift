@@ -1771,6 +1771,12 @@ struct HeaderView: View {
                 } label: {
                     Label("Refresh Status", systemImage: "arrow.clockwise")
                 }
+                Button {
+                    model.stopAllRunningSessions()
+                } label: {
+                    Label("Stop All Running…", systemImage: "stop.circle")
+                }
+                .disabled(model.activeSessions.isEmpty)
                 Divider()
                 Button {
                     model.isSettingsSheetPresented = true
@@ -6973,6 +6979,18 @@ final class WorkbenchViewModel: ObservableObject {
             )
         )
 
+        if !activeSessions.isEmpty {
+            commands.append(
+                command(
+                    .stopAllRunningSessions,
+                    "Stop All Running Terminals",
+                    "Terminate every currently-running session in this workbench (\(activeSessions.count))",
+                    "stop.circle",
+                    keywords: ["stop", "halt", "quit", "kill", "terminate", "all", "everything", "shutdown"]
+                )
+            )
+        }
+
         commands.append(
             command(
                 .openWorkspaceConfig,
@@ -9093,6 +9111,8 @@ final class WorkbenchViewModel: ObservableObject {
             isSettingsSheetPresented = true
         case .openAbout:
             isAboutSheetPresented = true
+        case .stopAllRunningSessions:
+            stopAllRunningSessions()
         case .selectAgent,
              .useSelectedAgentAsBoss,
              .openSelectedAgentConfig,
@@ -9584,6 +9604,30 @@ final class WorkbenchViewModel: ObservableObject {
         manuallyTerminatedRunIDs.insert(session.plan.runId)
         session.terminate()
         markTerminated(entryId: entry.id, runId: session.plan.runId, rawStatus: nil)
+    }
+
+    /// Terminate every currently-running session. Useful at end-of-day to
+    /// clean up Codex/Claude processes the user no longer needs. Returns the
+    /// number of sessions that were actually stopped so callers can render
+    /// confirmation ("Stopped 4 terminals"). Skipped silently when nothing
+    /// was running.
+    @discardableResult
+    func stopAllRunningSessions() -> Int {
+        let entries = activeSessions.compactMap { (entryId, _) -> ProcessEntry? in
+            state.processEntries.first { $0.id == entryId }
+        }
+        guard !entries.isEmpty else { return 0 }
+        for entry in entries {
+            terminate(entry)
+        }
+        recordActionLog(
+            source: "native",
+            action: "stopAllRunningSessions",
+            targetName: selectedProject?.name ?? WorkbenchRelease.appName,
+            result: "Stopped \(entries.count) running session\(entries.count == 1 ? "" : "s")",
+            succeeded: true
+        )
+        return entries.count
     }
 
     @discardableResult
