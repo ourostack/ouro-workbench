@@ -4841,14 +4841,8 @@ struct InactiveTerminalSurface: View {
                     .foregroundStyle(.orange)
             }
 
-            if model.transcriptTail(for: entry) != nil {
-                Button {
-                    onShowTranscript()
-                } label: {
-                    Label("View latest transcript", systemImage: "doc.text")
-                }
-                .buttonStyle(.borderless)
-                .controlSize(.small)
+            if let tail = model.transcriptTail(for: entry) {
+                TranscriptRehydrationPreview(tail: tail, onShowTranscript: onShowTranscript)
             }
         }
         .padding(16)
@@ -4861,6 +4855,77 @@ struct InactiveTerminalSurface: View {
             RoundedRectangle(cornerRadius: 10)
                 .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
         )
+    }
+}
+
+/// Compact "where was I" rehydration view for an inactive session — shows
+/// the last few lines of the most recent transcript inline so the user
+/// gets immediate context without clicking through to the full transcript
+/// sheet. The full sheet is still one tap away via the "View full
+/// transcript" button.
+struct TranscriptRehydrationPreview: View {
+    var tail: TranscriptTail
+    var onShowTranscript: () -> Void
+
+    /// How many trailing lines from the transcript we replay inline. Picked
+    /// for "you can see the last few exchanges with the agent" without
+    /// taking over the inactive surface.
+    private static let inlineLineLimit = 12
+
+    private var previewText: String {
+        let lines = tail.text.split(separator: "\n", omittingEmptySubsequences: false).suffix(Self.inlineLineLimit)
+        let joined = lines.joined(separator: "\n")
+        // Strip ANSI escape sequences so a TUI's cursor-control codes don't
+        // pollute the preview. We keep the text content but drop the styling
+        // — a small loss vs the full sheet's monospaced raw view.
+        return TranscriptRehydrationPreview.strippingAnsiEscapes(in: joined)
+    }
+
+    private static func strippingAnsiEscapes(in input: String) -> String {
+        // Matches CSI sequences (ESC[…final) and OSC sequences (ESC]…BEL or
+        // ESC]…ST). Covers the vast majority of what Codex / Claude emit;
+        // anything else just shows as visible bytes which is fine for a
+        // best-effort preview.
+        let pattern = "\u{1B}\\[[0-?]*[ -/]*[@-~]|\u{1B}\\][^\u{0007}\u{1B}]*(\u{0007}|\u{1B}\\\\)"
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return input
+        }
+        let range = NSRange(input.startIndex..<input.endIndex, in: input)
+        return regex.stringByReplacingMatches(in: input, range: range, withTemplate: "")
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Label("Where you left off", systemImage: "clock.arrow.circlepath")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if tail.truncated {
+                    Text("tail")
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(.secondary)
+                }
+                Button {
+                    onShowTranscript()
+                } label: {
+                    Label("View full transcript", systemImage: "doc.text")
+                }
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+            }
+            ScrollView {
+                Text(previewText.isEmpty ? "No transcript output yet." : previewText)
+                    .font(.system(.caption, design: .monospaced))
+                    .foregroundStyle(.primary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+            }
+            .frame(maxHeight: 180)
+            .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 6))
+        }
     }
 }
 
