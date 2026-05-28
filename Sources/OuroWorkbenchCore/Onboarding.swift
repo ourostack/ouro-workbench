@@ -1173,6 +1173,24 @@ public struct WorkbenchImportProposalBuilder: Sendable {
             return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
         }
 
+        // Distinct groups whose names slugify identically (e.g. "My Project"
+        // and "my-project", or two different rootPaths) would otherwise share
+        // an `id` / `deskTrackSlug`, which breaks SwiftUI's Identifiable
+        // ForEach (dropped/duplicated rows), makes selection toggles hit the
+        // wrong group, and merges their Desk mirror tracks. De-dupe across
+        // groups the same way task slugs are de-duped within a group.
+        var usedGroupSlugs = Set<String>()
+        groups = groups.map { group in
+            let uniqueGroupSlug = uniqueSlug(group.deskTrackSlug, used: &usedGroupSlugs)
+            guard uniqueGroupSlug != group.deskTrackSlug else {
+                return group
+            }
+            var deduped = group
+            deduped.id = uniqueGroupSlug
+            deduped.deskTrackSlug = uniqueGroupSlug
+            return deduped
+        }
+
         var totalSelected = 0
         for groupIndex in groups.indices {
             var groupSelected = 0
