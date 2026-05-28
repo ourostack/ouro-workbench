@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.84 - Update deep scenario verifier digest for pinned/colored coverage
+
+- 0.1.83 added `isPinned`/`colorTag` draws to the deep scenario generator, which (correctly) shifts the seeded corpus and its coverage digest. Update the expected deep-run digest (`scripts/preflight.sh --deep` and the deep-scenario-verifier CI workflow) from `0fd57795f807596d` to `83e10a2284896aea`, regenerated and verified by a full `./scripts/preflight.sh --deep` run. (The standard required digest is unchanged.)
+
 ## 0.1.83 - Scenario verifier exercises pinned + color-tagged states
 
 - The deep scenario generator (the CI verifier that renders thousands of synthetic layouts) never set `isPinned` or `colorTag`, so it gave green confidence for sidebar layouts that were never actually drawn. It now randomly pins entries (selected + peers, so pinned-first ordering is exercised with multiples) and color-tags some groups — closing the false-confidence gap on the two fields shipped in 0.1.56/0.1.57.
