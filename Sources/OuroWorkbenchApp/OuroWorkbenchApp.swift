@@ -10743,6 +10743,7 @@ final class WorkbenchViewModel: ObservableObject {
         outputFlushTask = nil
         guard !pendingOutputTimestamps.isEmpty else { return }
         var didMutate = false
+        let flushedRunIds = Array(pendingOutputTimestamps.keys)
         for (runId, date) in pendingOutputTimestamps {
             if let runIndex = state.processRuns.firstIndex(where: { $0.id == runId }) {
                 state.processRuns[runIndex].lastOutputAt = date
@@ -10751,6 +10752,57 @@ final class WorkbenchViewModel: ObservableObject {
         }
         pendingOutputTimestamps.removeAll()
         if didMutate {
+            save()
+        }
+        // Output for these runs has settled (the flush only fires after the
+        // debounce). Re-classify each session's transcript tail to detect a
+        // session now sitting at a human prompt — runs off the main actor and
+        // never touches the output hot path.
+        reclassifyAttentionForFlushedRuns(flushedRunIds)
+    }
+
+    /// For each run whose output just settled, read a bounded transcript tail
+    /// off the main actor and let `AttentionSignalDetector` decide whether the
+    /// session is waiting on the human. Conservatively transitions only
+    /// active/idle → waitingOnHuman and waitingOnHuman → active (when the agent
+    /// resumed), never disturbing `.needsBossReview` / `.blocked`.
+    private func reclassifyAttentionForFlushedRuns(_ runIds: [UUID]) {
+        for runId in runIds {
+            guard let session = activeSessions.values.first(where: { $0.plan.runId == runId }),
+                  let transcriptPath = session.plan.transcriptPath else {
+                continue
+            }
+            let entryId = session.plan.entryId
+            Task.detached(priority: .utility) { [weak self] in
+                guard let tail = TranscriptTailReader(maxBytes: 4096).read(path: transcriptPath) else {
+                    return
+                }
+                let signal = AttentionSignalDetector.classify(tail: tail.text)
+                await MainActor.run {
+                    self?.applyAttentionSignal(signal, entryId: entryId, runId: runId)
+                }
+            }
+        }
+    }
+
+    /// Apply a detected attention signal, guarding that the run is still the
+    /// entry's live session so a stale classification can't reanimate a session
+    /// that already moved on.
+    private func applyAttentionSignal(_ signal: AttentionSignal, entryId: UUID, runId: UUID) {
+        guard activeSessions[entryId]?.plan.runId == runId,
+              let entry = state.processEntries.first(where: { $0.id == entryId }),
+              !entry.isArchived else {
+            return
+        }
+        switch signal {
+        case .waitingOnHuman:
+            guard entry.attention == .active || entry.attention == .idle else { return }
+            updateEntry(entryId) { $0.attention = .waitingOnHuman }
+            save()
+        case .unknown:
+            // The agent produced output without a prompt: clear a stale wait.
+            guard entry.attention == .waitingOnHuman else { return }
+            updateEntry(entryId) { $0.attention = .active }
             save()
         }
     }
