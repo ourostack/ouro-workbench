@@ -1230,6 +1230,13 @@ struct WorkbenchSidebarView: View {
                         }
                     )
                 }
+                .onMove { offsets, destination in
+                    // Drag-to-reorder groups. Goes through the same
+                    // WorkbenchEntryReorder helper as terminal reordering;
+                    // group ordering is the simpler case where visible
+                    // equals global.
+                    model.moveGroups(fromOffsets: offsets, toOffset: destination)
+                }
                 SidebarActionRow(title: "New Group", systemImage: "folder.badge.plus") {
                     model.isNewGroupSheetPresented = true
                 }
@@ -6455,6 +6462,20 @@ final class WorkbenchViewModel: ObservableObject {
         state.processEntries = WorkbenchEntryReorder.move(
             global: state.processEntries,
             visible: sessionEntries,
+            fromOffsets: offsets,
+            toOffset: destination
+        )
+        do { try store.save(state) } catch { errorMessage = String(describing: error) }
+    }
+
+    /// SwiftUI `.onMove` handler for the Groups section. The Groups section
+    /// renders every project in `state.projects`, so the visible/global
+    /// distinction collapses; we still go through the helper so the move
+    /// algorithm has one canonical implementation.
+    func moveGroups(fromOffsets offsets: IndexSet, toOffset destination: Int) {
+        state.projects = WorkbenchEntryReorder.move(
+            global: state.projects,
+            visible: state.projects,
             fromOffsets: offsets,
             toOffset: destination
         )
