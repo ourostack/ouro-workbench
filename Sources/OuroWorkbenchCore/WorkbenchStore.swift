@@ -37,35 +37,48 @@ public final class WorkbenchStore {
         self.init(stateURL: paths.stateURL)
     }
 
-    public func load() throws -> WorkspaceState {
+    /// Load the workspace state.
+    ///
+    /// - Parameter quarantineCorruptFile: when `true` (the owning app), a file
+    ///   that can't be read/decoded is moved aside to a timestamped sibling so
+    ///   the app's empty-state fallback + auto-save can't clobber it. **Pass
+    ///   `false` for read-only consumers** (e.g. the MCP server): they share
+    ///   the same `stateURL` but don't own it, and must never move the live
+    ///   file out from under the running app — a transient read blip or a
+    ///   schema bump seen by a stale binary would otherwise destroy good state.
+    ///   In read-only mode a failure throws the underlying error without
+    ///   touching the file.
+    public func load(quarantineCorruptFile: Bool = true) throws -> WorkspaceState {
         guard FileManager.default.fileExists(atPath: stateURL.path) else {
             return WorkspaceState()
         }
 
-        // Quarantine on a read failure too (not just decode): the app's load
-        // catch resets to empty state and that reset auto-saves, which would
-        // clobber a still-present file. Moving it aside first guarantees the
-        // user's data is preserved at the quarantine path even on a transient
-        // read blip. (A preserved-but-not-loaded copy beats an overwrite.)
         let data: Data
         do {
             data = try Data(contentsOf: stateURL)
         } catch {
-            throw quarantine(reason: "read failed: \(error.localizedDescription)")
+            if quarantineCorruptFile {
+                throw quarantine(reason: "read failed: \(error.localizedDescription)")
+            }
+            throw error
         }
 
         do {
             let state = try decoder.decode(WorkspaceState.self, from: data)
             guard state.schemaVersion == 1 else {
-                // A version we don't understand: quarantine rather than risk
-                // mis-reading it, so the original is preserved for migration.
-                throw quarantine(reason: "unsupported schema version \(state.schemaVersion)")
+                if quarantineCorruptFile {
+                    throw quarantine(reason: "unsupported schema version \(state.schemaVersion)")
+                }
+                throw WorkbenchStoreError.unsupportedStateVersion(state.schemaVersion)
             }
             return state
         } catch let error as WorkbenchStoreError {
             throw error
         } catch {
-            throw quarantine(reason: "decode failed: \(error.localizedDescription)")
+            if quarantineCorruptFile {
+                throw quarantine(reason: "decode failed: \(error.localizedDescription)")
+            }
+            throw error
         }
     }
 

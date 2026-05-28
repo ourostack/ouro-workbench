@@ -131,6 +131,34 @@ final class WorkbenchStoreTests: XCTestCase {
         try? FileManager.default.removeItem(at: root)
     }
 
+    func testReadOnlyLoadDoesNotQuarantineCorruptFile() throws {
+        // A read-only consumer (e.g. the MCP server) must never move the
+        // owning app's live file aside. With quarantineCorruptFile: false a
+        // decode failure throws the underlying error and leaves the file in
+        // place.
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let stateURL = root.appendingPathComponent("workspace.json")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try "{ not valid json".data(using: .utf8)?.write(to: stateURL)
+
+        let store = WorkbenchStore(stateURL: stateURL)
+        do {
+            _ = try store.load(quarantineCorruptFile: false)
+            XCTFail("Expected load to throw on corrupt JSON")
+        } catch {
+            // Must NOT be the quarantine error, and the file must still exist.
+            if case WorkbenchStoreError.unreadableState = error {
+                XCTFail("read-only load must not quarantine")
+            }
+            XCTAssertTrue(FileManager.default.fileExists(atPath: stateURL.path))
+            // No .corrupt sibling created.
+            let siblings = try FileManager.default.contentsOfDirectory(atPath: root.path)
+            XCTAssertFalse(siblings.contains { $0.contains(".corrupt-") })
+        }
+        try? FileManager.default.removeItem(at: root)
+    }
+
     func testLenientDecodeSkipsCorruptElementsKeepsGoodOnes() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

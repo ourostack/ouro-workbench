@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.77 - MCP server never quarantines the app's live state file
+
+- The `ouro-workbench` MCP server reads the same workspace-state file the app owns. With the corrupt-file quarantine added in 0.1.60, a read-only consumer hitting a transient read error — or a schema bump seen by a stale MCP binary — could move the app's live state file aside, destroying good state. `WorkbenchStore.load` gains a `quarantineCorruptFile` flag (default true for the owning app); the MCP server now loads with it `false`, so it surfaces the error without ever touching the file. Quarantine remains the owning app's decision alone.
+
 ## 0.1.76 - Fix: first-run onboarding must still auto-present (regression in 0.1.71)
 
 - 0.1.71 narrowed the launch onboarding gate to "genuine config gap," but the blocker-ID set it checked didn't include the **no-agent / boss-not-installed / boss-not-selected** states (`hatch` / `clone` / `use-<agent>` steps). A brand-new machine with no Ouro agent would therefore never see onboarding on launch. The gate now also presents whenever readiness is `.needsAgent`.
