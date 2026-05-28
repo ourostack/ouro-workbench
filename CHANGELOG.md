@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.86 - Single-source guide + inner-agent Workbench awareness
+
+- New `WorkbenchGuide` is the one catalog describing what Workbench is and how to drive it: keyboard shortcuts, the boss capability list, and the action verbs. The in-app `Command-/` shortcut sheet, `workbench_sense`, the boss check-in prompt, and the docs all render from it, so the surfaces can't drift. The action verbs are derived straight from `BossWorkbenchActionKind`, so what's advertised to the boss is exactly what the parser accepts.
+- `workbench_sense` now doubles as an in-app help oracle: alongside the tool list it carries the `ouro-workbench-actions` protocol and the operator keyboard shortcuts, so the boss can answer "how do I switch terminals?" without leaving the tool.
+- Inner-agent awareness: every terminal Workbench launches now inherits `OURO_WORKBENCH=1`, `OURO_WORKBENCH_VERSION`, `OURO_WORKBENCH_GROUP`, `OURO_WORKBENCH_SESSION`, `OURO_WORKBENCH_BOSS`, and `OURO_WORKBENCH_CONTEXT_FILE` (plus the existing `TERM_PROGRAM=OuroWorkbench`). The context file is a rendered brief (`…/Application Support/OuroWorkbench/agent-context.md`, refreshed per launch) so a Claude Code, Codex, or shell agent can answer "what am I running in?" by reading one file. No files are written into project repositories.
+
 ## 0.1.85 - Automatic release on merge to main
 
 - New `auto-release.yml`: every push to `main` reads `VERSION` and, if no `v<VERSION>` release exists yet, builds + publishes a prerelease GitHub Release automatically. Since `VERSION` is bumped in each PR, every merge that changes it cuts exactly one release; merges that don't are no-ops.

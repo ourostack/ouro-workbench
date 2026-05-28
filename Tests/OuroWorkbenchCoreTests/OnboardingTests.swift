@@ -455,6 +455,12 @@ final class OnboardingTests: XCTestCase {
         XCTAssertTrue(rendered.contains("desk_track=ouro-workbench"))
         XCTAssertTrue(rendered.contains("workbench_request_action"))
         XCTAssertTrue(rendered.contains("workbench_sense"))
+        // Sense doubles as an in-app help oracle: it carries the action protocol
+        // and the operator keyboard shortcuts so the boss can answer how-do-I
+        // questions without leaving the tool.
+        XCTAssertTrue(rendered.contains("ouro-workbench-actions"))
+        XCTAssertTrue(rendered.contains("operator keyboard shortcuts"))
+        XCTAssertTrue(rendered.contains("Boss Check In"))
     }
 
     func testToggleSelectionFlipsTerminalSelectionAndCount() {

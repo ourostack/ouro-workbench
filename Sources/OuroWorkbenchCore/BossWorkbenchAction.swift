@@ -1,6 +1,6 @@
 import Foundation
 
-public enum BossWorkbenchActionKind: String, Codable, Sendable {
+public enum BossWorkbenchActionKind: String, Codable, Sendable, CaseIterable {
     case launch
     case recover
     case terminate

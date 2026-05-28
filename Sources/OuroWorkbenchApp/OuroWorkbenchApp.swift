@@ -691,73 +691,11 @@ private struct RecoverableEntryRow: View {
 struct ShortcutHelpSheet: View {
     @Environment(\.dismiss) private var dismiss
 
-    private struct ShortcutGroup: Identifiable {
-        let id: String
-        let title: String
-        let systemImage: String
-        let rows: [Row]
-
-        struct Row: Identifiable {
-            let id = UUID()
-            let shortcut: String
-            let label: String
-        }
-    }
-
-    private var groups: [ShortcutGroup] {
-        [
-            ShortcutGroup(
-                id: "navigate",
-                title: "Navigate",
-                systemImage: "arrow.left.arrow.right.circle",
-                rows: [
-                    .init(shortcut: "⌘1 … ⌘9", label: "Select the Nth terminal in the current group"),
-                    .init(shortcut: "⌘[", label: "Previous terminal (wraps)"),
-                    .init(shortcut: "⌘]", label: "Next terminal (wraps)"),
-                    .init(shortcut: "⇧⌘[", label: "Previous group"),
-                    .init(shortcut: "⇧⌘]", label: "Next group"),
-                    .init(shortcut: "⇧⌘F", label: "Full-screen the focused terminal (and back)")
-                ]
-            ),
-            ShortcutGroup(
-                id: "boss",
-                title: "Boss + Agents",
-                systemImage: "person.2.badge.gearshape",
-                rows: [
-                    .init(shortcut: "⌘I", label: "Boss Check In"),
-                    .init(shortcut: "⌘K", label: "Open the command palette"),
-                    .init(shortcut: "⌘K, type 'agent <name>'", label: "Jump to that agent in the Agents pane"),
-                    .init(shortcut: "⌘K, type 'repair'", label: "Run `ouro check` against the focused agent"),
-                    .init(shortcut: "⌘K, type 'manage agents'", label: "Open the Agents pane on the current boss")
-                ]
-            ),
-            ShortcutGroup(
-                id: "terminal",
-                title: "Terminal Signals",
-                systemImage: "terminal",
-                rows: [
-                    .init(shortcut: "⌘\u{21A9}", label: "Launch / Restart the selected terminal"),
-                    .init(shortcut: "⌘L", label: "Send Ctrl-L (redraw)"),
-                    .init(shortcut: "⌘.", label: "Stop the selected terminal"),
-                    .init(shortcut: "⌘F", label: "Find in the focused terminal"),
-                    .init(shortcut: "⌘G / ⇧⌘G", label: "Next / previous match in the search bar"),
-                    .init(shortcut: "⌘+ / ⌘=", label: "Increase terminal font size"),
-                    .init(shortcut: "⌘-", label: "Decrease terminal font size"),
-                    .init(shortcut: "⌘0", label: "Reset terminal font size")
-                ]
-            ),
-            ShortcutGroup(
-                id: "app",
-                title: "App",
-                systemImage: "wand.and.stars",
-                rows: [
-                    .init(shortcut: "⌘N", label: "New terminal"),
-                    .init(shortcut: "⌃⌘B", label: "Toggle sidebar visibility"),
-                    .init(shortcut: "⌘,", label: "Open Settings"),
-                    .init(shortcut: "⌘/", label: "Show this shortcut help")
-                ]
-            )
-        ]
+    // Single source of truth: the shortcut map lives in WorkbenchGuide so the
+    // in-app sheet, the boss `workbench_sense`, and the inner-agent context
+    // file can never drift apart. Edit shortcuts there, not here.
+    private var groups: [WorkbenchGuide.ShortcutCategory] {
+        WorkbenchGuide.shortcutCategories
     }
 
     var body: some View {
@@ -786,13 +724,13 @@ struct ShortcutHelpSheet: View {
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.secondary)
                             VStack(spacing: 4) {
-                                ForEach(group.rows) { row in
+                                ForEach(group.shortcuts) { row in
                                     HStack(alignment: .firstTextBaseline, spacing: 12) {
-                                        Text(row.shortcut)
+                                        Text(row.keys)
                                             .font(.callout.monospaced().weight(.semibold))
                                             .frame(minWidth: 170, alignment: .leading)
                                             .textSelection(.enabled)
-                                        Text(row.label)
+                                        Text(row.summary)
                                             .font(.callout)
                                             .foregroundStyle(.primary)
                                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -10614,6 +10552,25 @@ final class WorkbenchViewModel: ObservableObject {
         }
     }
 
+    /// Build the per-session Workbench context handed to a launching terminal
+    /// so the agent inside can detect and describe its host. Refreshes the
+    /// on-disk inner-agent context file (cheap, atomic) so the boss name stays
+    /// current; a write failure never blocks the launch.
+    private func workbenchSessionContext(for entry: ProcessEntry) -> WorkbenchSessionContext {
+        let bossName = state.boss.agentName
+        let contextURL = try? WorkbenchContextFile.write(
+            to: WorkbenchContextFile.defaultURL(paths: paths),
+            boss: bossName
+        )
+        let groupName = state.projects.first { $0.id == entry.projectId }?.name
+        return WorkbenchSessionContext(
+            contextFilePath: contextURL?.path,
+            group: groupName,
+            session: entry.name,
+            boss: bossName
+        )
+    }
+
     private func start(_ entry: ProcessEntry, with plan: TerminalCommandPlan) {
         // Validate before we tear down any existing session or spawn a new
         // one, so a misconfigured launch surfaces a clear error instead of a
@@ -10642,6 +10599,7 @@ final class WorkbenchViewModel: ObservableObject {
             }
             let session = try TerminalSessionController(
                 plan: plan,
+                workbenchContext: workbenchSessionContext(for: entry),
                 onStarted: { [weak self] pid in
                     self?.markStarted(plan: plan, pid: pid)
                 },
@@ -11430,6 +11388,7 @@ final class TerminalSessionController: NSObject, ObservableObject, Identifiable,
 
     init(
         plan: TerminalCommandPlan,
+        workbenchContext: WorkbenchSessionContext? = nil,
         onStarted: @escaping (Int32?) -> Void,
         onOutput: @escaping () -> Void,
         onTerminated: @escaping (Int32?) -> Void
@@ -11439,7 +11398,7 @@ final class TerminalSessionController: NSObject, ObservableObject, Identifiable,
         self.onOutput = onOutput
         self.onTerminated = onTerminated
         self.terminal = CapturingLocalProcessTerminalView(frame: Self.initialTerminalFrame)
-        self.environmentValues = TerminalEnvironment().valuesWithResolvedPath()
+        self.environmentValues = TerminalEnvironment(workbenchContext: workbenchContext).valuesWithResolvedPath()
         self.environment = environmentValues
             .sorted { $0.key < $1.key }
             .map { "\($0.key)=\($0.value)" }

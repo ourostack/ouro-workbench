@@ -345,7 +345,10 @@ install/refresh, release-page open, diagnostics reveal/copy/open-folder,
 selected-terminal Ask Boss, launch, focus, redraw, Ctrl-C, Esc, EOF, copy
 command, open working directory, reveal transcript, stop, and recover.
 
-Useful shortcuts:
+Useful shortcuts (the full, authoritative map lives in
+`Sources/OuroWorkbenchCore/WorkbenchGuide.swift` and is shown in-app with
+`Command-/`; the boss and inner agents read the same catalog — see
+[Agent Awareness](#agent-awareness)):
 
 | Shortcut | Action |
 | --- | --- |
@@ -357,6 +360,7 @@ Useful shortcuts:
 | `Command-L` | Redraw selected running terminal |
 | `Command-Shift-F` | Enter or exit terminal focus |
 | `Command-F` | Focus or run transcript search |
+| `Command-/` | Show the full keyboard shortcut reference |
 
 ## Daily Operating Loops
 
@@ -574,7 +578,7 @@ Workbench MCP exposes:
 | Tool | Purpose |
 | --- | --- |
 | `workbench_status` | Summarize persisted state, process entries, recovery plans, and transcript paths. |
-| `workbench_sense` | Render the Workbench sense contract: boss boundary, group/Desk mirror, and tool affordances. |
+| `workbench_sense` | Render the Workbench sense contract: boss boundary, group/Desk mirror, tool affordances, the action protocol, and the operator keyboard shortcuts (so the boss can answer how-do-I questions). |
 | `workbench_transcript_tail` | Read a bounded tail from the latest transcript for a session. |
 | `workbench_search_transcripts` | Search saved transcript lines across runs. |
 | `workbench_recovery_drill` | Dry-run restart recovery planning. |
@@ -590,6 +594,46 @@ session name in `entry`; group-scoped actions use a group id or unique group
 name in `group`. The optional `trust` field is the string enum `trusted` or
 `untrusted`; `autoResume` is a boolean. Invalid action payload types are
 rejected instead of silently defaulted.
+
+## Agent Awareness
+
+Workbench describes itself from one catalog,
+[`Sources/OuroWorkbenchCore/WorkbenchGuide.swift`](../Sources/OuroWorkbenchCore/WorkbenchGuide.swift),
+so every surface stays in lockstep. Edit shortcuts, the boss capability list, or
+the action verbs there and nowhere else:
+
+| Surface | Reads |
+| --- | --- |
+| In-app shortcut sheet (`Command-/`) | `WorkbenchGuide.shortcutCategories` |
+| Boss `workbench_sense` | tools, action protocol, and shortcuts from the same catalog |
+| Boss check-in prompt | tool names and action verbs from the same catalog |
+| Inner agents (Claude/Codex/shell) | the rendered context file (below) |
+
+The action verbs are derived directly from the `BossWorkbenchActionKind` enum, so
+the verbs advertised to the boss are exactly the verbs the parser accepts.
+
+### Inner-Agent Awareness
+
+Every terminal Workbench launches inherits environment markers so the agent
+inside can detect and describe its host:
+
+| Variable | Meaning |
+| --- | --- |
+| `OURO_WORKBENCH=1` | This session is running inside Ouro Workbench. |
+| `OURO_WORKBENCH_VERSION` | The Workbench version that launched it. |
+| `OURO_WORKBENCH_CONTEXT_FILE` | Path to a markdown brief the agent can `cat`. |
+| `OURO_WORKBENCH_GROUP` | The group the session lives in. |
+| `OURO_WORKBENCH_SESSION` | The terminal's display name. |
+| `OURO_WORKBENCH_BOSS` | The selected boss agent. |
+| `TERM_PROGRAM=OuroWorkbench` | Legacy marker, still set. |
+
+The context file (`…/Application Support/OuroWorkbench/agent-context.md`,
+refreshed on every launch) is the same `WorkbenchGuide` catalog rendered for the
+agent: what Workbench is, the keyboard map, the boss's tools, and a plain answer
+to "what am I running in?". So when you ask Claude Code, Codex, or a shell agent
+inside Workbench what it is running in, it can answer from `cat
+"$OURO_WORKBENCH_CONTEXT_FILE"` instead of guessing. No files are written into
+your project repositories.
 
 ## Restart Recovery Playbook
 

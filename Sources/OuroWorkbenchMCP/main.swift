@@ -311,7 +311,7 @@ final class WorkbenchMCPServer {
             ],
             [
                 "name": "workbench_sense",
-                "description": "Render the Workbench sense contract for the selected Ouro agent, including boss/terminal boundaries and available Workbench tools.",
+                "description": "Render the Workbench sense contract for the selected Ouro agent: boss/terminal boundaries, available Workbench tools, the ouro-workbench-actions protocol, and the operator keyboard shortcuts (so the boss can answer how-do-I questions).",
                 "inputSchema": [
                     "type": "object",
                     "properties": [:],

@@ -1352,12 +1352,15 @@ public struct WorkbenchSenseRenderer: Sendable {
         }
         lines.append("")
         lines.append("tools:")
-        lines.append("- workbench_status: read the whole machine workbench state")
-        lines.append("- workbench_transcript_tail: inspect one terminal's recent output")
-        lines.append("- workbench_search_transcripts: search remembered terminal output")
-        lines.append("- workbench_recovery_drill: simulate restart recovery")
-        lines.append("- workbench_request_action: queue auditable native actions")
-        lines.append("- workbench_sense: reread this sense contract")
+        for tool in WorkbenchGuide.bossTools {
+            lines.append("- \(tool.tool): \(tool.summary)")
+        }
+        lines.append("")
+        lines.append("action protocol:")
+        lines.append(WorkbenchGuide.actionProtocolMarkdown())
+        lines.append("")
+        lines.append("operator keyboard shortcuts (so I can answer how-do-I questions):")
+        lines.append(WorkbenchGuide.shortcutsMarkdown())
         return lines.joined(separator: "\n")
     }
 }

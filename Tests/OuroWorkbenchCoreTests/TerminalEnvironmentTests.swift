@@ -33,4 +33,37 @@ final class TerminalEnvironmentTests: XCTestCase {
         XCTAssertEqual(environment["PATH"]?.hasPrefix("/custom/bin"), true)
         XCTAssertEqual(environment["PATH"]?.contains("/opt/homebrew/bin"), true)
     }
+
+    func testAlwaysOnWorkbenchMarkersAreSetEvenWithoutContext() {
+        let environment = TerminalEnvironment(values: ["HOME": "/Users/test"]).valuesWithResolvedPath()
+
+        XCTAssertEqual(environment["OURO_WORKBENCH"], "1")
+        XCTAssertEqual(environment["OURO_WORKBENCH_VERSION"], WorkbenchRelease.version)
+        // No per-session context supplied: the contextual vars must be absent,
+        // never emitted empty.
+        XCTAssertNil(environment["OURO_WORKBENCH_GROUP"])
+        XCTAssertNil(environment["OURO_WORKBENCH_SESSION"])
+        XCTAssertNil(environment["OURO_WORKBENCH_CONTEXT_FILE"])
+        XCTAssertNil(environment["OURO_WORKBENCH_BOSS"])
+    }
+
+    func testWorkbenchContextInjectsOnlyPopulatedSessionVariables() {
+        let context = WorkbenchSessionContext(
+            contextFilePath: "/tmp/agent-context.md",
+            group: "ouro-workbench",
+            session: "Codex",
+            boss: ""
+        )
+        let environment = TerminalEnvironment(
+            values: ["HOME": "/Users/test"],
+            workbenchContext: context
+        ).valuesWithResolvedPath()
+
+        XCTAssertEqual(environment["OURO_WORKBENCH_CONTEXT_FILE"], "/tmp/agent-context.md")
+        XCTAssertEqual(environment["OURO_WORKBENCH_GROUP"], "ouro-workbench")
+        XCTAssertEqual(environment["OURO_WORKBENCH_SESSION"], "Codex")
+        // Empty boss is dropped rather than exported as an empty string.
+        XCTAssertNil(environment["OURO_WORKBENCH_BOSS"])
+        XCTAssertEqual(environment["OURO_WORKBENCH"], "1")
+    }
 }
