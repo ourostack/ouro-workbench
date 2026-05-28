@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.52 - Drag-to-reorder groups in the sidebar
+
+- Mirrors the terminal-row reorder added in 0.1.50: drag any project row in the Groups section to put it where you want. Order persists in `WorkbenchStore`.
+- Uses the same `WorkbenchEntryReorder` helper so the move algorithm has one canonical implementation.
+
 ## 0.1.51 - Recover All Crashed Terminals
 
 - Companion to `Stop All Running…`: `More → Recover All Crashed…` and `Recover All Crashed Terminals` in the ⌘K palette run the standard recovery plan against every session currently flagged for recovery. Useful after stepping away — one click rather than N right-click / recover sequences.

@@ -6,6 +6,6 @@ public enum WorkbenchRelease {
     public static let bundleExecutable = "OuroWorkbench"
     public static let mcpExecutable = "OuroWorkbenchMCP"
     public static let mcpServerName = "ouro-workbench"
-    public static let version = "0.1.51"
+    public static let version = "0.1.52"
     public static let minimumMacOSVersion = "14.0"
 }
