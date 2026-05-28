@@ -9715,24 +9715,42 @@ final class WorkbenchViewModel: ObservableObject {
 
     func runExternalActionPump() async {
         while !Task.isCancelled {
-            drainExternalActionRequests()
+            await drainExternalActionRequests()
             try? await Task.sleep(nanoseconds: 2_000_000_000)
         }
     }
 
-    func drainExternalActionRequests() {
-        do {
-            let requests = try externalActionQueue.drain()
-            guard !requests.isEmpty else {
-                return
+    /// Sendable result of an off-main queue drain.
+    private struct ExternalDrainOutcome: Sendable {
+        var requests: [WorkbenchActionRequest]
+        var errorText: String?
+    }
+
+    func drainExternalActionRequests() async {
+        // The drain does directory listing + per-file reads + deletes. Run it
+        // off the main actor so the every-2s pump never janks the UI (and so a
+        // large queue backlog can't block the main thread). Apply the decoded
+        // requests back on the main actor.
+        let directoryURL = externalActionQueue.directoryURL
+        let outcome = await Task.detached(priority: .utility) { () -> ExternalDrainOutcome in
+            do {
+                let queue = WorkbenchActionRequestQueue(directoryURL: directoryURL)
+                return ExternalDrainOutcome(requests: try queue.drain(), errorText: nil)
+            } catch {
+                return ExternalDrainOutcome(requests: [], errorText: error.localizedDescription)
             }
-            let results = requests.map { request in
-                "External \(request.source): \(applyBossAction(request.action, source: "external:\(request.source)"))"
-            }
-            bossAppliedActions = Array((results + bossAppliedActions).prefix(12))
-        } catch {
-            errorMessage = "External Workbench action queue failed: \(error.localizedDescription)"
+        }.value
+        if let errorText = outcome.errorText {
+            errorMessage = "External Workbench action queue failed: \(errorText)"
+            return
         }
+        guard !outcome.requests.isEmpty else {
+            return
+        }
+        let results = outcome.requests.map { request in
+            "External \(request.source): \(applyBossAction(request.action, source: "external:\(request.source)"))"
+        }
+        bossAppliedActions = Array((results + bossAppliedActions).prefix(12))
     }
 
     func recoverEligibleSessionsOnStartup() {

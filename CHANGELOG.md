@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.73 - Action-pump + mailbox/MCP timeout robustness
+
+- The external-action queue drain (directory listing + per-file reads + deletes), which runs every 2 seconds, now happens off the main thread — so it can't jank the UI under a queue backlog. Applying the decoded actions still happens on the main actor.
+- The mailbox and MCP request timeouts now cancel the in-flight sibling task on the timeout path too (a `defer`), instead of leaking the still-running request when the timeout fires first.
+
 ## 0.1.72 - De-duplicate import-proposal group IDs
 
 - Two distinct projects whose names slugify identically (e.g. `My Project` and `My-Project`) no longer collide on the same import-proposal group id. The collision previously caused SwiftUI to drop/duplicate rows, made a selection toggle on one group flip the other, and merged the two projects' Desk-mirror tracks. Group ids/slugs are now de-duplicated across groups the same way task slugs already are within a group.
