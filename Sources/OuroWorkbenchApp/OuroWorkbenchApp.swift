@@ -2491,7 +2491,10 @@ struct CommandPaletteSheet: View {
                     }
                     ForEach(model.filteredCommandPaletteItems) { command in
                         Button {
-                            model.performCommand(command)
+                            // Defer execution until the palette has dismissed
+                            // (see pendingPaletteCommand) so commands that open
+                            // another sheet present reliably.
+                            model.pendingPaletteCommand = command
                             dismiss()
                         } label: {
                             HStack(spacing: 10) {
@@ -2521,13 +2524,18 @@ struct CommandPaletteSheet: View {
             model.commandPaletteQuery = ""
             searchFocused = true
         }
+        .onDisappear {
+            // Run the chosen command now that the palette is fully gone, so a
+            // command that opens another sheet doesn't race the dismiss.
+            model.performPendingPaletteCommand()
+        }
     }
 
     private func runFirstCommand() {
         guard let command = model.filteredCommandPaletteItems.first else {
             return
         }
-        model.performCommand(command.id)
+        model.pendingPaletteCommand = command
         dismiss()
     }
 }
@@ -6448,6 +6456,13 @@ final class WorkbenchViewModel: ObservableObject {
         UserDefaults.standard.bool(forKey: WorkbenchViewModel.autoLaunchResumableOnStartupDefaultsKey)
     }()
     @Published var commandPaletteQuery = ""
+    /// Command chosen from the ⌘K palette, deferred until the palette sheet
+    /// has fully dismissed. Running a command that opens another sheet
+    /// (Settings, About, New Terminal) in the same runloop as the palette's
+    /// `dismiss()` races SwiftUI's single-presentation context and the target
+    /// sheet often never appears. The palette stashes the choice here and
+    /// `performPendingPaletteCommand()` runs it from `.onDisappear`.
+    @Published var pendingPaletteCommand: WorkbenchCommandDescriptor?
     @Published var editingGroup: WorkbenchProject?
     @Published var pendingDeleteGroup: WorkbenchProject?
     @Published var editingSession: ProcessEntry?
@@ -9120,6 +9135,15 @@ final class WorkbenchViewModel: ObservableObject {
     /// Dispatch a command palette item with full payload support. Routes
     /// payload-bearing commands (e.g. per-agent select / repair) through this
     /// path and falls back to the ID-only dispatcher for the rest.
+    /// Run the command stashed by the ⌘K palette, if any. Called from the
+    /// palette sheet's `.onDisappear` so any sheet the command opens presents
+    /// cleanly after the palette is gone.
+    func performPendingPaletteCommand() {
+        guard let pending = pendingPaletteCommand else { return }
+        pendingPaletteCommand = nil
+        performCommand(pending)
+    }
+
     func performCommand(_ descriptor: WorkbenchCommandDescriptor) {
         switch descriptor.id {
         case .selectAgent:
