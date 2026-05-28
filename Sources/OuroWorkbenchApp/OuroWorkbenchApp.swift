@@ -6538,6 +6538,11 @@ final class WorkbenchViewModel: ObservableObject {
     private var didAttemptStartupRecovery = false
     private var didAttemptDefaultShellLaunch = false
     private var didAttemptAutoResumeLaunch = false
+    /// Last time we posted an unexpected-exit notification per entry, to
+    /// throttle banner spam when a session crash-loops or several are
+    /// recovered at once.
+    private var lastExitNotificationByEntry: [UUID: Date] = [:]
+    private let exitNotificationThrottle: TimeInterval = 30
     /// Retained `willTerminate` observer token so `deinit` can remove it.
     /// `nonisolated(unsafe)` so the nonisolated `deinit` can read it; access
     /// is serialized (written once in init on the main actor, read once in
@@ -10745,7 +10750,7 @@ final class WorkbenchViewModel: ObservableObject {
             // anything the user deliberately stopped.
             if !manuallyTerminated {
                 let exitedCleanly = status.exitCode == 0
-                if !exitedCleanly {
+                if !exitedCleanly, shouldPostExitNotification(for: entryId) {
                     let entryName = state.processEntries.first(where: { $0.id == entryId })?.name
                         ?? "Terminal"
                     let needsAttention = nextRunStatus == .manualActionNeeded
@@ -10762,6 +10767,20 @@ final class WorkbenchViewModel: ObservableObject {
         state.processRuns[runIndex].exitCode = status.exitCode
         state.processRuns[runIndex].rawExitStatus = status.rawWaitStatus
         save()
+    }
+
+    /// Whether enough time has passed since the last unexpected-exit
+    /// notification for this entry to post another. Throttles per-entry so a
+    /// crash-looping session (or a "Recover All" over several flaky sessions)
+    /// can't stack a banner per exit.
+    private func shouldPostExitNotification(for entryId: UUID) -> Bool {
+        let now = Date()
+        if let last = lastExitNotificationByEntry[entryId],
+           now.timeIntervalSince(last) < exitNotificationThrottle {
+            return false
+        }
+        lastExitNotificationByEntry[entryId] = now
+        return true
     }
 
     /// Post a macOS user notification when a terminal session ends with a

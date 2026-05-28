@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.74 - Throttle unexpected-exit notifications
+
+- A crash-looping session, or a "Recover All" across several flaky sessions, no longer stacks one macOS banner per exit. Unexpected-exit notifications are now throttled per entry (at most one every 30s).
+
 ## 0.1.73 - Action-pump + mailbox/MCP timeout robustness
 
 - The external-action queue drain (directory listing + per-file reads + deletes), which runs every 2 seconds, now happens off the main thread — so it can't jank the UI under a queue backlog. Applying the decoded actions still happens on the main actor.
