@@ -6533,6 +6533,11 @@ final class WorkbenchViewModel: ObservableObject {
     private var didAttemptStartupRecovery = false
     private var didAttemptDefaultShellLaunch = false
     private var didAttemptAutoResumeLaunch = false
+    /// Retained `willTerminate` observer token so `deinit` can remove it.
+    /// `nonisolated(unsafe)` so the nonisolated `deinit` can read it; access
+    /// is serialized (written once in init on the main actor, read once in
+    /// deinit), so there's no real race.
+    nonisolated(unsafe) private var terminationObserver: NSObjectProtocol?
     /// Coalesced "last output at" timestamps awaiting a flush to `state`.
     /// Terminal output arrives hundreds of times per second from a busy TUI;
     /// applying each one to `@Published state` (and saving) per chunk thrashed
@@ -6576,11 +6581,20 @@ final class WorkbenchViewModel: ObservableObject {
         registerTerminationObserver()
     }
 
+    deinit {
+        if let terminationObserver {
+            NotificationCenter.default.removeObserver(terminationObserver)
+        }
+        outputFlushTask?.cancel()
+    }
+
     /// Observe app termination so we can record running sessions as cleanly
     /// detached before we go. `queue: .main` runs the block on the main
-    /// thread, so hopping to the main actor is safe.
+    /// thread, so hopping to the main actor is safe. The token is retained so
+    /// `deinit` can remove it — otherwise each view-model instance (tests,
+    /// previews) would leave a permanent observer that keeps firing.
     private func registerTerminationObserver() {
-        NotificationCenter.default.addObserver(
+        terminationObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification,
             object: nil,
             queue: .main
@@ -10461,12 +10475,24 @@ final class WorkbenchViewModel: ObservableObject {
         return trimmed
     }
 
-    /// Pre-launch validation. Returns a human-readable problem if the session
-    /// can't run as configured — a missing working directory (which `screen`'s
-    /// `chdir` would silently ignore, running the agent in the app's cwd) or a
-    /// missing / non-executable command (which would launch an instantly-dead
-    /// session that looks "running"). Returns nil when it's safe to launch.
-    private func launchPreflightProblem(for entry: ProcessEntry) -> String? {
+    /// Pre-launch validation. Returns a human-readable problem ONLY for
+    /// unambiguously-broken *fresh spawns* — a deleted working directory or a
+    /// command given as a concrete path that's missing / not executable.
+    ///
+    /// Deliberately conservative to avoid false-blocks:
+    /// - Recover / auto-resume plans (`recoveryAction != nil`) are skipped:
+    ///   `screen -D -RR` reattaches to a still-live session, where neither the
+    ///   original cwd nor a freshly-resolvable command is required.
+    /// - Bare-name commands (resolved via PATH) and shell-wrapped commands
+    ///   (`zsh -lc "agent …"`) are NOT blocked on a PATH miss, because the
+    ///   health checker can't see shell functions / aliases / login-shell PATH
+    ///   that the real launch would. We only hard-block a command that is an
+    ///   explicit path (`contains "/"`), which is unambiguous.
+    private func launchPreflightProblem(for entry: ProcessEntry, plan: TerminalCommandPlan) -> String? {
+        // A reattach/recover doesn't need the original cwd or command.
+        guard plan.recoveryAction == nil else {
+            return nil
+        }
         let workingDirectory = entry.workingDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
         if !workingDirectory.isEmpty {
             var isDirectory: ObjCBool = false
@@ -10475,7 +10501,15 @@ final class WorkbenchViewModel: ObservableObject {
                 return "\(entry.name): working directory doesn't exist — \(workingDirectory)"
             }
         }
-        let health = executableHealthChecker.health(for: ExecutableHealthTarget.executable(for: entry))
+        // Only validate a command that's an explicit path; bare names and
+        // shell-wrapped commands resolve through PATH / the shell at launch in
+        // ways the checker can't fully model, so blocking them risks false
+        // negatives (e.g. agents defined as shell functions).
+        let resolved = ExecutableHealthTarget.executable(for: entry)
+        guard resolved.contains("/") else {
+            return nil
+        }
+        let health = executableHealthChecker.health(for: resolved)
         switch health.status {
         case .available:
             return nil
@@ -10488,7 +10522,7 @@ final class WorkbenchViewModel: ObservableObject {
         // Validate before we tear down any existing session or spawn a new
         // one, so a misconfigured launch surfaces a clear error instead of a
         // silent dead session or one running in the wrong directory.
-        if let problem = launchPreflightProblem(for: entry) {
+        if let problem = launchPreflightProblem(for: entry, plan: plan) {
             errorMessage = problem
             updateEntry(entry.id) { mutable in
                 mutable.attention = .needsBossReview

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.68 - Fix launch-preflight false-blocks (self-review followups)
+
+- **Reattach/recover no longer blocked by a moved working directory.** The pre-launch validation added in 0.1.62 also ran on recover / auto-resume, which reattach to a still-live `screen` session where the original cwd is irrelevant — so a long-running session whose repo moved got wrongly blocked. Preflight now only validates fresh spawns (`recoveryAction == nil`).
+- **Agents defined as shell functions/aliases no longer false-blocked.** Preflight only hard-checks a command given as an explicit path (`contains "/"`); bare names and `zsh -lc "agent …"` wrappers resolve through PATH / the login shell at launch in ways the health checker can't model, so they're no longer pre-blocked.
+- Internal: the `willTerminate` observer token is now retained and removed in `deinit` (prevents observer accumulation across view-model instances in tests/previews).
+
 ## 0.1.67 - Quitting cleanly detaches sessions (no more phantom "needs recovery")
 
 - On quit, every still-running persistent session is now recorded as cleanly **detached** — accurate, since `screen` keeps it alive after Workbench closes. Previously `markTerminated` never ran on quit, so sessions stayed `.running` and the next launch's startup reconciler flipped them into an alarming "needs startup recovery" pile even though a single relaunch reattaches them.
