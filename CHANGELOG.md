@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.1.37 - `.workbench.json` declarative workspace config
+
+- New: a repo can commit a `.workbench.json` at its root to declare the group + terminals it wants Workbench to spin up. `Open Workspace…` (in the More menu, with `⌘O`, and in the ⌘K palette) opens a directory picker, reads the file, and reconciles the declared terminals against existing sessions — never duplicates.
+- File shape:
+  ```json
+  {
+    "group": "spoonjoy-v2",
+    "rootPath": "~/Projects/spoonjoy-v2",
+    "terminals": [
+      {
+        "name": "dev server",
+        "command": "npm run dev",
+        "workingDirectory": ".",
+        "trust": "trusted",
+        "autoResume": true,
+        "notes": "vite + tailwind"
+      }
+    ]
+  }
+  ```
+  All fields except `name` + `command` are optional. `rootPath` defaults to the picked directory; `group` defaults to the directory's last path component; `workingDirectory` accepts `~` expansion and treats relative paths as relative to the workspace root.
+- Terminals marked `autoResume: true` launch immediately after the workspace opens, so a `git clone && open .` flow can have a project's agents waiting for you in seconds.
+- Parser errors (missing file, malformed JSON, empty `terminals`) surface as user-facing error messages via the existing alert. The resulting summary banner ("Arranged N terminals…") matches the onboarding Arrange flow's idiom.
+- Adds 9 tests covering decode, error paths, root-path / working-directory / group-name resolution.
+
 ## 0.1.34 - Menubar status item
 
 - Workbench now installs an `NSStatusItem` in the macOS menu bar (`∞` icon, swaps to `⚠` when recovery is needed). Title shows the running session count next to the icon for at-a-glance signal that mirrors the Dock badge.
