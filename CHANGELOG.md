@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.67 - Quitting cleanly detaches sessions (no more phantom "needs recovery")
+
+- On quit, every still-running persistent session is now recorded as cleanly **detached** — accurate, since `screen` keeps it alive after Workbench closes. Previously `markTerminated` never ran on quit, so sessions stayed `.running` and the next launch's startup reconciler flipped them into an alarming "needs startup recovery" pile even though a single relaunch reattaches them.
+- Trusted auto-resume sessions still reattach automatically on the next launch; others show a calm "detached on quit; reattaches on next launch" instead of a false crash alarm.
+- Also flushes any pending output timestamps and saves state on quit.
+
 ## 0.1.66 - Fix: stale search highlight when switching sessions
 
 - With the ⌘F search bar open, switching to another terminal left the previous session's match highlight stuck on screen. Switching sessions now clears the outgoing terminal's highlight and closes the search bar.
