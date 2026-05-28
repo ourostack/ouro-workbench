@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.70 - Onboarding subprocess robustness
+
+- **The recent-work scan can no longer wedge on a busy Codex database.** The Codex history scan now opens the SQLite DB `-readonly` (never contends with a live Codex writer) and is bounded by a 5s watchdog — a WAL-locked or slow DB returns empty instead of hanging, which previously left the Scan/Arrange buttons permanently disabled.
+- **Provider checks no longer false-fail on chatty output.** `ouro check` output is now drained continuously rather than read after the process exits, so a check that prints more than the pipe buffer (~64KB) can't block itself into a bogus "did not finish."
+
 ## 0.1.69 - Lenient boss-action parsing
 
 - A boss reply containing one malformed action (e.g. an action type a newer build knows but this one doesn't) no longer discards the entire batch of valid actions. Actions decode element-by-element; bad ones are skipped, the rest apply. A payload that isn't an action array at all still surfaces as a parse error.
