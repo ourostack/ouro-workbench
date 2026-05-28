@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.34 - Menubar status item
+
+- Workbench now installs an `NSStatusItem` in the macOS menu bar (`∞` icon, swaps to `⚠` when recovery is needed). Title shows the running session count next to the icon for at-a-glance signal that mirrors the Dock badge.
+- Clicking the icon opens a menu with:
+  - Header: `Boss: <name>` plus the current TTFA state and one-line headline.
+  - `Show Workbench` — brings the main window forward (un-hides + de-miniaturizes if needed).
+  - List of running sessions, each clickable to jump to that terminal in the workbench.
+  - `Recovery: N waiting…` (only when N > 0) — opens the Recovery sheet on the focused window.
+  - `Start / Stop Boss Watch` toggle.
+  - `Ask <boss>…` — runs the standard boss check-in (disabled while one is in flight).
+  - `Quit Ouro Workbench`.
+- Lets you minimize Workbench and trust the menubar to be your jump-off point.
+
 ## 0.1.33 - Polish push: ⌘T, Dock badge, tail truncation, exit alerts
 
 - **⌘T** is now a second route to "new terminal" alongside ⌘N. Matches Terminal.app / iTerm2 / browser "new tab" muscle memory.
