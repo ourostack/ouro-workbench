@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.94 - Boss records inbox decisions (preference-driven inbox, phase 1b)
+
+- The boss now writes to the decision log. Its check-in / Boss Watch prompt asks it to emit, for every waiting session, an `ouro-workbench-decisions` JSON block — `kind` (autoAdvance/escalate/hold) + the proposed input, the friend preference it relied on, a confidence, and its reasoning — decided from that session's resolved friend. Workbench parses the block, resolves each session + friend, and records it.
+- **Dry-run by design:** this only *logs* what the boss decided and why — it never sends input, even for `autoAdvance`. The audit trail is built and proven before any execution lands (phase 2). Recordings are deduped per session so repeated Boss Watch ticks over a still-waiting prompt don't flood the log.
+- New `BossDecisionParser` (mirrors the action parser: lenient, one bad decision never drops the batch) and `recordDecisionIfNew`. No UI yet — the native review surface is next.
+
 ## 0.1.93 - Boss decision-log model (preference-driven inbox, phase 1a)
 
 - The durable audit contract for the inbox: a `BossInboxDecision` records, for every call the boss makes about a waiting session, **what** it decided (`autoAdvance` / `escalate` / `hold` + the proposed input), **why** (the friend preference cited, a confidence, and freeform reasoning), **for whom** (the resolved friend), **about what** (the session + the waiting prompt), **when**, and **how it turned out** (`recorded` / `applied` / `overridden`).

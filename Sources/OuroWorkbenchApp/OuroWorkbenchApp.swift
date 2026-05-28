@@ -6533,6 +6533,7 @@ final class WorkbenchViewModel: ObservableObject {
     private let executableHealthChecker: ExecutableHealthChecker
     private let gitStatusReader = GitStatusReader()
     private let bossActionParser = BossWorkbenchActionParser()
+    private let bossDecisionParser = BossDecisionParser()
     private let bossActionAuthorizer = BossWorkbenchActionAuthorizer()
     private let terminationPolicy = ProcessTerminationPolicy()
     private let customSessionFactory = CustomTerminalSessionFactory()
@@ -9783,6 +9784,7 @@ final class WorkbenchViewModel: ObservableObject {
             }
             bossCheckInAnswer = answer
             applyBossActions(from: answer)
+            recordBossDecisions(from: answer)
             bossWatchLastError = nil
         } catch {
             bossCheckInAnswer = "Check-in failed: \(error.localizedDescription)"
@@ -9801,6 +9803,44 @@ final class WorkbenchViewModel: ObservableObject {
             }
         } catch {
             bossAppliedActions = ["Failed to parse boss actions: \(error)"]
+        }
+    }
+
+    /// Record the boss's decisions about waiting sessions into the durable
+    /// decision log. Dry-run: this only *logs* what the boss decided (and why) —
+    /// it never sends input, even for `autoAdvance`. Executing decisions is a
+    /// later phase; this builds the audit trail first. Deduped per session so
+    /// repeated Boss Watch ticks over a still-waiting prompt don't flood the log.
+    func recordBossDecisions(from answer: String) {
+        let inputs = (try? bossDecisionParser.parse(answer)) ?? []
+        guard !inputs.isEmpty else {
+            return
+        }
+        let machineOwner = SessionFriend.machineOwner()
+        var recorded = 0
+        for input in inputs {
+            let entry = input.entry.flatMap { processEntry(matching: $0) }
+            let friend = entry.flatMap { state.effectiveFriend(for: $0, fallback: machineOwner) }
+            let decision = BossInboxDecision(
+                source: "boss:\(state.boss.agentName)",
+                entryId: entry?.id,
+                sessionName: entry?.name,
+                friendName: friend?.name,
+                friendId: friend?.id,
+                prompt: input.prompt ?? entry?.lastSummary ?? "",
+                kind: input.kind,
+                proposedInput: input.proposedInput,
+                preferenceCited: input.preferenceCited,
+                confidence: input.confidence,
+                reasoning: input.reasoning ?? "",
+                status: .recorded
+            )
+            if state.recordDecisionIfNew(decision) {
+                recorded += 1
+            }
+        }
+        if recorded > 0 {
+            save()
         }
     }
 
