@@ -6350,6 +6350,17 @@ final class WorkbenchViewModel: ObservableObject {
             guard selectedEntryID != oldValue else {
                 return
             }
+            // If ⌘F search is open, switching sessions must clear the
+            // outgoing terminal's SwiftTerm highlight (the bar re-targets the
+            // new session, so dismissing later would clear the wrong one) and
+            // close the bar.
+            if isTerminalSearchPresented {
+                if let oldValue, let session = activeSessions[oldValue] {
+                    session.terminal.clearSearch()
+                }
+                isTerminalSearchPresented = false
+                terminalSearchHasResult = true
+            }
             if selectedEntryID != nil {
                 // Selecting a terminal pulls focus off the Agents pane so the
                 // detail pane switches back to the live SessionDetailView.
