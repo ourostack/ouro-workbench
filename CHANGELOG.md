@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.95 - Decision log review surface (preference-driven inbox, phase 1c)
+
+- A native **Boss Decision Log** sheet to read the audit trail: each entry shows the decision (auto-advance / escalate / hold), the session and friend it was for, the waiting prompt, the proposed input, the preference cited, confidence, reasoning, time, and status. Newest-first, with an empty state explaining what will appear. Open it from the `⌘K` command palette ("Boss Decision Log").
+- Closes phase 1 of the [preference-driven inbox](docs/preference-driven-inbox.md): the boss records its decisions (1b) and you can now review *why* it made each call — the visibility you asked to prioritize, in place before any auto-advance executes.
+
 ## 0.1.94 - Boss records inbox decisions (preference-driven inbox, phase 1b)
 
 - The boss now writes to the decision log. Its check-in / Boss Watch prompt asks it to emit, for every waiting session, an `ouro-workbench-decisions` JSON block — `kind` (autoAdvance/escalate/hold) + the proposed input, the friend preference it relied on, a confidence, and its reasoning — decided from that session's resolved friend. Workbench parses the block, resolves each session + friend, and records it.
