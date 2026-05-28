@@ -87,7 +87,7 @@ if [[ "$RUN_DEEP" == "true" ]]; then
     --expect-matrix-rows 5000 \
     --expect-deep-rows 15000 \
     --expect-render-passes 100000 \
-    --expect-coverage-digest 0fd57795f807596d
+    --expect-coverage-digest 83e10a2284896aea
 fi
 
 run_step "Preflight complete"
