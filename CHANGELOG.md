@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.83 - Scenario verifier exercises pinned + color-tagged states
+
+- The deep scenario generator (the CI verifier that renders thousands of synthetic layouts) never set `isPinned` or `colorTag`, so it gave green confidence for sidebar layouts that were never actually drawn. It now randomly pins entries (selected + peers, so pinned-first ordering is exercised with multiples) and color-tags some groups — closing the false-confidence gap on the two fields shipped in 0.1.56/0.1.57.
+
 ## 0.1.82 - Small robustness: empty-command guard + diagnostics pipe drain
 
 - Launching an entry whose command is blank now fails with a clear "no command configured" error instead of synthesizing an opaque `/usr/bin/env ''` failure. (Can't happen via the UI, but a hand-edited `.workbench.json` could.)
