@@ -942,7 +942,7 @@ struct SettingsSheet: View {
             Toggle(isOn: $model.bossAutoAdvanceEnabled) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Let the boss auto-advance waiting sessions")
-                    Text("When a session is waiting, the boss may answer the prompt itself using that session's friend's preferences. Only fires on sessions you've marked Trusted, with a trusted friend, and never for destructive or secret prompts. Every decision — acted or not — is in the Boss Decision Log (⌘K).")
+                    Text("When a session is waiting, the boss may answer the prompt itself using that session's friend's preferences. The boss decides during check-ins, so turn on Boss Watch for hands-off operation. Only fires on sessions you've marked Trusted, with a trusted friend, and never for destructive or secret prompts. Every decision — acted or not — is in the Boss Decision Log (⌘K).")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -1162,7 +1162,7 @@ struct DecisionLogSheet: View {
                         .foregroundStyle(.secondary)
                     Text("No decisions recorded yet")
                         .font(.headline)
-                    Text("When a session is waiting on you, the boss records what it would do and why here.")
+                    Text("When a session is waiting on you, the boss records what it would do and why here. The boss decides during check-ins — turn on Boss Watch so it happens automatically.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
