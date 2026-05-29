@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.100 - Make the Boss Watch dependency discoverable
+
+- The Settings → Boss auto-advance toggle and the Boss Decision Log empty state now say the boss decides during check-ins, so you turn on **Boss Watch** for hands-off operation. Prevents the "I marked a session trusted and enabled auto-advance but nothing happened" confusion — the boss simply hadn't checked in yet.
+
 ## 0.1.99 - Give the boss the waiting prompt inline
 
 - The boss check-in prompt and `workbench_status` now inline the actual **waiting prompt text** for each session that needs a human (a bounded transcript-tail snippet), under a "Waiting prompts (decide each…)" section. Previously the boss only saw `attention=waitingOnHuman` and the transcript *path*, so it had to make a separate `workbench_transcript_tail` call per session to know what was being asked — extra latency it often wouldn't do. Now it can decide and propose the exact input in one turn, which is what makes auto-advance actually fire.
