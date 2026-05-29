@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.114 - No beachball on the import preview
+
+- Hardened the Codex import-preview lookup: it shells out to `sqlite3` against the live Codex DB from the (main-actor) preview view. It now opens the DB `-readonly` (no write-lock contention) and is bounded by a 1.5s watchdog, so a stuck database lock can't hang the app — it just falls back to the file-based preview.
+
 ## 0.1.113 - Persistence safety + sheet polish
 
 - Bounded run history: every launch/recovery appended a `ProcessRun` that was never pruned, so a long-lived or crash-looping session grew the persisted state forever and slowed every (synchronous) save. Workbench now keeps the newest 25 runs per session.
