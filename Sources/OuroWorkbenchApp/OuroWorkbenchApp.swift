@@ -6763,6 +6763,11 @@ final class WorkbenchViewModel: ObservableObject {
     private var bossWatchBaselineState: WorkspaceState?
     private var bossWatchTickIsRunning = false
     private var bossWatchLastPromptAt: Date?
+    /// When a session newly needs attention, the boss responds right then
+    /// (event-driven) instead of waiting up to a full poll interval. This caps
+    /// how often a burst of such events can kick a check-in.
+    private var lastEventDrivenCheckInAt: Date?
+    private let eventDrivenCheckInCooldown: TimeInterval = 15
     private var didAttemptStartupRecovery = false
     private var didAttemptDefaultShellLaunch = false
     private var didAttemptAutoResumeLaunch = false
@@ -8603,6 +8608,26 @@ final class WorkbenchViewModel: ObservableObject {
             }
             await runBossWatchTick(force: false)
         }
+    }
+
+    /// React to a session newly needing attention by asking the boss right
+    /// away, instead of waiting up to a full poll interval — the responsive,
+    /// only-when-there's-something-to-do path. Respects Boss Watch being on,
+    /// never overlaps a running check-in, and is rate-limited so a burst of
+    /// events coalesces into one ask.
+    private func triggerEventDrivenBossCheckIn() {
+        let now = Date()
+        guard BossWatchEventPolicy.shouldTriggerCheckIn(
+            watchEnabled: bossWatchIsEnabled,
+            busy: bossCheckInIsRunning || bossWatchTickIsRunning,
+            lastTriggerAt: lastEventDrivenCheckInAt,
+            now: now,
+            cooldown: eventDrivenCheckInCooldown
+        ) else {
+            return
+        }
+        lastEventDrivenCheckInAt = now
+        Task { await runBossWatchTick(force: true) }
     }
 
     func runBossWatchTick(force: Bool) async {
@@ -11199,12 +11224,14 @@ final class WorkbenchViewModel: ObservableObject {
             guard entry.attention == .active || entry.attention == .idle else { return }
             updateEntry(entryId) { $0.attention = .waitingOnHuman }
             save()
+            triggerEventDrivenBossCheckIn()
         case .blocked:
             // Stuck on a terminal error. Only escalate from active/idle; don't
             // override a waiting prompt or a boss-set review state.
             guard entry.attention == .active || entry.attention == .idle else { return }
             updateEntry(entryId) { $0.attention = .blocked }
             save()
+            triggerEventDrivenBossCheckIn()
         case .unknown:
             // The agent produced output that's neither a prompt nor a terminal
             // error: clear a stale detector-set wait/blocked back to active.

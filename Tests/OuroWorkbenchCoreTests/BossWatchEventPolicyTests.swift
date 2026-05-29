@@ -1,0 +1,38 @@
+import XCTest
+@testable import OuroWorkbenchCore
+
+final class BossWatchEventPolicyTests: XCTestCase {
+    private let now = Date(timeIntervalSince1970: 1_000)
+
+    func testTriggersWhenEnabledIdleAndNeverRunBefore() {
+        XCTAssertTrue(BossWatchEventPolicy.shouldTriggerCheckIn(
+            watchEnabled: true, busy: false, lastTriggerAt: nil, now: now, cooldown: 15
+        ))
+    }
+
+    func testDoesNotTriggerWhenWatchDisabled() {
+        XCTAssertFalse(BossWatchEventPolicy.shouldTriggerCheckIn(
+            watchEnabled: false, busy: false, lastTriggerAt: nil, now: now, cooldown: 15
+        ))
+    }
+
+    func testDoesNotTriggerWhenBusy() {
+        XCTAssertFalse(BossWatchEventPolicy.shouldTriggerCheckIn(
+            watchEnabled: true, busy: true, lastTriggerAt: nil, now: now, cooldown: 15
+        ))
+    }
+
+    func testRespectsCooldown() {
+        let recent = now.addingTimeInterval(-5)
+        XCTAssertFalse(BossWatchEventPolicy.shouldTriggerCheckIn(
+            watchEnabled: true, busy: false, lastTriggerAt: recent, now: now, cooldown: 15
+        ), "5s < 15s cooldown")
+    }
+
+    func testTriggersAfterCooldownElapsed() {
+        let old = now.addingTimeInterval(-20)
+        XCTAssertTrue(BossWatchEventPolicy.shouldTriggerCheckIn(
+            watchEnabled: true, busy: false, lastTriggerAt: old, now: now, cooldown: 15
+        ), "20s > 15s cooldown")
+    }
+}
