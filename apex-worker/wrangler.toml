@@ -1,0 +1,15 @@
+# Cloudflare Worker for the ouro.bot apex.
+# Deploy:  cd apex-worker && wrangler deploy
+#
+# The route only takes effect once the apex DNS record (ouro.bot CNAME →
+# uixie.porkbun.com) is set to PROXIED (orange cloud). Until then the Worker is
+# deployed and routed but receives no traffic — a safe no-op. Flipping the
+# proxy flag is the atomic cutover. See docs in the repo / project memory.
+name = "ouro-apex"
+main = "src/worker.js"
+compatibility_date = "2026-05-01"
+workers_dev = false
+
+routes = [
+  { pattern = "ouro.bot/*", zone_name = "ouro.bot" },
+]
