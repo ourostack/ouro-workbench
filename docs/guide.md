@@ -634,9 +634,10 @@ The inbox is the loop that lets you run many agents without babysitting each one
 1. **Detect.** Workbench watches each running session's output and flags it
    `waiting on you` when it's idle at a prompt that needs a decision. (Press
    **⌘J** to jump to the next one.)
-2. **Decide.** During a boss check-in, the boss reads each waiting prompt and
-   that session's **friend**, and decides from that friend's preferences:
-   *auto-advance* (answer it), *escalate* (leave it for you), or *hold*.
+2. **Decide.** The moment a session is flagged (and on a periodic backstop
+   poll), the boss reads its waiting prompt and that session's **friend**, and
+   decides from that friend's preferences: *auto-advance* (answer it),
+   *escalate* (leave it for you), or *hold*.
 3. **Act.** If the decision is auto-advance and it clears the gate (below), the
    boss sends the answer for you. Otherwise it's left for you.
 4. **Review.** Every decision — acted or not, with the reasoning — is in the

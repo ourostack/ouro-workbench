@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.103 - The boss reacts the moment a session needs you
+
+- Auto-advance and escalation now fire **event-driven**: the instant a session is flagged waiting or blocked, the boss is asked to decide right then, instead of waiting up to the ~60s Boss Watch poll. Much lower time-to-first-action, and the boss is called only when there's actually something to do rather than on every tick. The periodic poll stays as a backstop.
+- Rate-limited (a burst of events coalesces into one ask) and fully guarded — it never overlaps a running check-in and respects the Boss Watch switch. The throttle is the pure, tested `BossWatchEventPolicy`.
+
 ## 0.1.102 - The boss manages your sessions automatically (opt-out)
 
 - The inbox now works out of the box — no per-session setup. **Sessions are trusted by default** (mark one "hands off" / untrusted to exclude it), and **Boss Watch is on by default**, so the boss watches, decides, and auto-advances waiting prompts without you flipping anything. This replaces the previous opt-in (mark Trusted + turn on Boss Watch), which buried the feature behind setup.
