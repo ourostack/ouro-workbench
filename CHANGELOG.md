@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.110 - Boss reliability + safety
+
+- The boss never sends a destructive input on your behalf: boss-driven `sendInput` actions now pass the same safety floor (`PromptSafetyClassifier`) the auto-advance decisions path uses, so an obviously-dangerous, secret-bearing, financial, or agreement input is withheld and escalated even on a trusted session — closing a path where a confused/prompt-injected boss reply could have run, e.g., `rm -rf`.
+- An empty / "(empty response)" boss reply is now treated as an actionable failure instead of a blank "success" — it surfaces a real error ("check the agent is set up… run `ouro mcp-serve --agent <name>`") and no longer silently clears the Boss Watch error or shows an empty pane.
+- A down or misconfigured boss no longer gets re-invoked every poll interval forever: the automatic Boss Watch loop backs off exponentially (60s → … → 15m cap) after consecutive failures and resumes immediately on the next success. A manual Check In always tries.
+- Fixed a stale "dry-run" comment that claimed auto-advance never sends input.
+
 ## 0.1.109 - Bug report screenshots capture the app, not the form
 
 - Fixed: the bug report's `screenshot.png` captured the Report a Bug sheet itself (the key window while open) instead of the app behind it — so the screenshot showed the form, not the state you were reporting on. Capture now resolves through the sheet's parent window, so it grabs the actual workbench window.

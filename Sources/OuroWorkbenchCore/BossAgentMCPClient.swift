@@ -8,6 +8,10 @@ public enum BossAgentMCPClientError: Error, Equatable, LocalizedError, Sendable 
     case malformedResponse
     case rpcError(String)
     case toolError(String)
+    /// The boss returned a well-formed but empty / non-answer reply. Treated as
+    /// a failure (not a blank "success") so a misconfigured boss surfaces an
+    /// actionable error instead of an empty pane.
+    case emptyResult
 
     public var errorDescription: String? {
         switch self {
@@ -23,6 +27,8 @@ public enum BossAgentMCPClientError: Error, Equatable, LocalizedError, Sendable 
             return message
         case .toolError(let message):
             return message
+        case .emptyResult:
+            return "The boss returned an empty reply. Check that the agent is set up and responding — run `ouro mcp-serve --agent <name>` in a terminal, or use More ▸ Set Up Workbench."
         }
     }
 }
@@ -108,7 +114,22 @@ public final class BossAgentMCPClient: @unchecked Sendable {
         if result.isError {
             throw BossAgentMCPClientError.toolError(text)
         }
+        if isEmptyOrNonAnswer(text) {
+            throw BossAgentMCPClientError.emptyResult
+        }
         return text
+    }
+
+    /// True for a blank reply or a known runtime "no answer" sentinel (the
+    /// `ouro` runtime emits `(empty response)` when the agent produced nothing).
+    static func isEmptyOrNonAnswer(_ text: String) -> Bool {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if normalized.isEmpty {
+            return true
+        }
+        return normalized == "(empty response)"
+            || normalized == "(no response)"
+            || normalized == "(no output)"
     }
 
     private func readResponse(_ processBox: ProcessIOBox, id: Int, timeoutNanoseconds: UInt64) async throws -> String {
