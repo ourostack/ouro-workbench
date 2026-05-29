@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.104 - Test coverage on the auto-advance decision (hardening)
+
+- Extracted the "should this send input to a terminal, and how is it recorded" decision from `recordBossDecisions` into the pure, unit-tested `resolveAutoAdvanceOutcome`: only an `autoAdvance` that clears the gate executes (status `applied`); a blocked one is recorded with its reason; escalate/hold never execute. Behavior-preserving — the most consequential path now has regression protection it lacked. No functional change.
+
 ## 0.1.103 - The boss reacts the moment a session needs you
 
 - Auto-advance and escalation now fire **event-driven**: the instant a session is flagged waiting or blocked, the boss is asked to decide right then, instead of waiting up to the ~60s Boss Watch poll. Much lower time-to-first-action, and the boss is called only when there's actually something to do rather than on every tick. The periodic poll stays as a backstop.

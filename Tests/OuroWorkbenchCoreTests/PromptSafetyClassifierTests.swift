@@ -112,4 +112,30 @@ final class PromptSafetyClassifierTests: XCTestCase {
         XCTAssertEqual(gate(prompt: "?", input: "y").blockedReason, "prompt too short to classify safely")
         XCTAssertEqual(gate(prompt: "Run rm -rf build? (y/N)").blockedReason, "unsafe prompt: destructive command")
     }
+
+    // MARK: - Auto-advance outcome (what recordBossDecisions does)
+
+    func testAllowedAutoAdvanceExecutesAndIsApplied() {
+        let outcome = resolveAutoAdvanceOutcome(kind: .autoAdvance, gate: .allow)
+        XCTAssertTrue(outcome.execute)
+        XCTAssertEqual(outcome.status, .applied)
+        XCTAssertEqual(outcome.reasoningNote, "")
+    }
+
+    func testBlockedAutoAdvanceRecordsWithReasonAndDoesNotExecute() {
+        let outcome = resolveAutoAdvanceOutcome(kind: .autoAdvance, gate: .block("session not trusted"))
+        XCTAssertFalse(outcome.execute)
+        XCTAssertEqual(outcome.status, .recorded)
+        XCTAssertEqual(outcome.reasoningNote, "[not auto-advanced: session not trusted]")
+    }
+
+    func testEscalateAndHoldNeverExecute() {
+        for kind in [BossDecisionKind.escalate, .hold] {
+            // Even if a gate somehow says allow, a non-autoAdvance kind never sends.
+            let outcome = resolveAutoAdvanceOutcome(kind: kind, gate: .allow)
+            XCTAssertFalse(outcome.execute, "\(kind) must never execute")
+            XCTAssertEqual(outcome.status, .recorded)
+            XCTAssertEqual(outcome.reasoningNote, "")
+        }
+    }
 }

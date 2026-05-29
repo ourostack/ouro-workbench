@@ -159,3 +159,34 @@ public func evaluateAutoAdvanceGate(
     }
     return .allow
 }
+
+/// What recording a boss decision should do: whether to actually send the
+/// proposed input, what lifecycle status to stamp, and any note to append to
+/// the reasoning. Pure so the consequential "do we send input to a live
+/// terminal" decision is unit-tested, not buried in the view model.
+public struct AutoAdvanceOutcome: Equatable, Sendable {
+    public var execute: Bool
+    public var status: BossDecisionStatus
+    public var reasoningNote: String
+
+    public init(execute: Bool, status: BossDecisionStatus, reasoningNote: String) {
+        self.execute = execute
+        self.status = status
+        self.reasoningNote = reasoningNote
+    }
+}
+
+/// Resolve a decision's outcome. Only an `autoAdvance` that clears the gate
+/// executes (status `applied`); a blocked auto-advance is recorded with the
+/// reason; escalate / hold never execute.
+public func resolveAutoAdvanceOutcome(kind: BossDecisionKind, gate: AutoAdvanceGate) -> AutoAdvanceOutcome {
+    guard kind == .autoAdvance else {
+        return AutoAdvanceOutcome(execute: false, status: .recorded, reasoningNote: "")
+    }
+    switch gate {
+    case .allow:
+        return AutoAdvanceOutcome(execute: true, status: .applied, reasoningNote: "")
+    case let .block(reason):
+        return AutoAdvanceOutcome(execute: false, status: .recorded, reasoningNote: "[not auto-advanced: \(reason)]")
+    }
+}
