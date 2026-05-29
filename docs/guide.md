@@ -142,6 +142,11 @@ Trusted sessions may be launched, recovered, terminated, or sent input by the
 boss. Untrusted or archived sessions remain inspectable in the UI, but boss
 control is denied.
 
+Sessions are **trusted by default** — the boss manages everything unless you
+say otherwise. Mark a session untrusted ("hands off") when you want to drive it
+yourself. (Destructive and secret prompts are never auto-answered regardless of
+trust.)
+
 ### Friend
 
 A session's friend is the person or agent it acts for — a `human` or an `agent`,
@@ -640,20 +645,17 @@ The inbox is the loop that lets you run many agents without babysitting each one
    next time") or correct a wrong one ("always ask me"). The boss saves that as
    a standing preference for that friend, so it improves.
 
-### Turning on auto-advance
+### Auto-advance is on by default
 
-Auto-advance is off in effect until you opt a session in. To use it:
+You don't turn it on — it's automatic out of the box: sessions are **trusted by
+default**, **Boss Watch** is on, and **Settings → Boss → "Let the boss
+auto-advance"** defaults on. To exclude a session, mark it **untrusted**
+("hands off"); to stop all of it, flip the Settings toggle off (the boss then
+escalates everything).
 
-1. Mark the session **Trusted** (the per-session opt-in; untrusted is the default
-   and is never auto-advanced).
-2. Turn on **Boss Watch** so the boss checks in automatically — auto-advance
-   only happens during check-ins.
-3. Leave **Settings → Boss → "Let the boss auto-advance"** on (the global
-   kill-switch; flip it off to make the boss escalate everything).
-
-Day one is conservative by design: with no learned preferences yet, the boss has
-nothing to act on, so it escalates everything. You teach from the log, and it
-starts auto-advancing what you've approved.
+Day one is conservative by design even so: with no learned preferences yet, the
+boss has nothing to act on, so it escalates everything. You teach from the log,
+and it starts auto-advancing what you've approved.
 
 ### The gate (when the boss may actually send input)
 

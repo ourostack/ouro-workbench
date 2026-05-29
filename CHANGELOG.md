@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.102 - The boss manages your sessions automatically (opt-out)
+
+- The inbox now works out of the box — no per-session setup. **Sessions are trusted by default** (mark one "hands off" / untrusted to exclude it), and **Boss Watch is on by default**, so the boss watches, decides, and auto-advances waiting prompts without you flipping anything. This replaces the previous opt-in (mark Trusted + turn on Boss Watch), which buried the feature behind setup.
+- A one-time migration brings existing setups along: sessions that were untrusted only because that used to be the default are trusted, and Boss Watch is enabled, once. Both are reversible — mark a session hands-off or turn Boss Watch off and it sticks.
+- Safety is unchanged and stays fully automatic: destructive/secret prompts are never auto-answered, a cold start with no learned preferences escalates everything, the Settings → Boss kill-switch turns it all off, and every decision is in the Boss Decision Log.
+
 ## 0.1.101 - Detect blocked (stuck-on-error) sessions
 
 - Completes the attention model: Workbench now flags a session **blocked** (red dot) when it ends on a terminal, unrecoverable error and isn't at a prompt — `command not found`, `permission denied`, `fatal:`, a build/compilation failure, `module not found`, a segfault, and similar, checked only as the *last* line so an error the agent worked past never trips it. A prompt after an error still wins (that's waiting, the human can act). Reuses the same detection path as waiting; reverts to active when the session makes progress again.
