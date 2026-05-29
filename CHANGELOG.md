@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.108 - Bug reporter polish + stop the onboarding nag
+
+- Fixed the bug reporter's note field: the text caret rendered above the placeholder line, so typed text didn't land where you expected. The placeholder now sits behind a transparent editor with matched insets, so the caret and your text align exactly.
+- Onboarding no longer re-opens on every launch. A configured machine with a lingering config gap (e.g. TTFA blocked) was forced into the Welcome modal each time; it now auto-presents at most once, and the gap stays visible in the TTFA pill. Reopen setup anytime from the More menu.
+- (Carries the 0.1.107 fix so ⇧⌘B opens the reporter even when a terminal has keyboard focus.)
+
 ## 0.1.107 - ⇧⌘B opens the bug reporter even from a terminal
 
 - Fixed: pressing ⇧⌘B did nothing when a terminal had keyboard focus — the focused terminal view swallowed the chord, so the advertised shortcut only worked via the More menu or ⌘K palette. ⇧⌘B is now a real menu-bar command, which macOS matches before the event reaches the terminal, so it opens the bug reporter from anywhere. (Found while verifying the reporter end-to-end through the running app.)

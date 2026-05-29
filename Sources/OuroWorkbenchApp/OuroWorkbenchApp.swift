@@ -145,8 +145,9 @@ struct WorkbenchRootView: View {
             model.refreshGitStatus()
             model.refreshOnboardingReadiness()
             await model.refreshBossDashboard()
-            if model.shouldPresentOnboardingOnLaunch {
+            if model.shouldPresentOnboardingOnLaunch && !model.onboardingHasAutoPresented {
                 model.isOnboardingPresented = true
+                model.onboardingHasAutoPresented = true
             } else {
                 // Configured machine: run the provider liveness checks in the
                 // background so readiness resolves to ready without ever
@@ -1241,22 +1242,30 @@ struct ReportBugSheet: View {
                 Text("What happened?")
                     .font(.headline)
                 ZStack(alignment: .topLeading) {
-                    TextEditor(text: $model.bugReportNote)
-                        .font(.body)
-                        .frame(minHeight: 160)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .stroke(Color.secondary.opacity(0.25))
-                        )
+                    // Placeholder sits BEHIND a transparent TextEditor so the
+                    // caret and typed text land exactly on top of it — matched
+                    // insets keep them aligned (the editor's own line-fragment
+                    // padding is ~5pt, so editor leading 4 ≈ placeholder 9).
                     if model.bugReportNote.isEmpty {
                         Text("Describe what you were doing and what went wrong. Steps to reproduce help a lot.")
                             .font(.body)
                             .foregroundStyle(.secondary)
-                            .padding(.horizontal, 5)
+                            .padding(.horizontal, 9)
                             .padding(.vertical, 8)
                             .allowsHitTesting(false)
                     }
+                    TextEditor(text: $model.bugReportNote)
+                        .font(.body)
+                        .scrollContentBackground(.hidden)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 8)
                 }
+                .frame(minHeight: 160)
+                .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 6))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.secondary.opacity(0.25))
+                )
 
                 Label(
                     "Includes a window screenshot, a support diagnostics zip, and recent boss decisions + actions. No transcript contents.",
@@ -6935,6 +6944,18 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var bugReportIssueURL: String?
     @Published var bugReportIssueError: String?
     @Published var isOnboardingPresented = false
+    /// Whether the onboarding sheet has already been auto-presented once on this
+    /// machine. Persisted so a configured machine with a lingering config gap
+    /// isn't forced into the modal on *every* launch — the gap stays visible in
+    /// the TTFA pill, and the user can reopen setup from the More menu. Reset
+    /// only by clearing app defaults.
+    @Published var onboardingHasAutoPresented: Bool = {
+        UserDefaults.standard.bool(forKey: WorkbenchViewModel.onboardingAutoPresentedDefaultsKey)
+    }() {
+        didSet {
+            UserDefaults.standard.set(onboardingHasAutoPresented, forKey: Self.onboardingAutoPresentedDefaultsKey)
+        }
+    }
     @Published var onboardingReadiness: OnboardingReadiness?
     @Published var onboardingProviderChecks: [String: OnboardingProviderCheckResult] = [:]
     @Published var onboardingCandidates: [RecentSessionCandidate] = []
@@ -11909,6 +11930,7 @@ final class WorkbenchViewModel: ObservableObject {
     static let showMenuBarStatusItemDefaultsKey = "ouro.workbench.showMenuBarStatusItem"
     static let bossAutoAdvanceEnabledDefaultsKey = "ouro.workbench.bossAutoAdvanceEnabled"
     static let autoLaunchResumableOnStartupDefaultsKey = "ouro.workbench.autoLaunchResumableOnStartup"
+    static let onboardingAutoPresentedDefaultsKey = "ouro.workbench.onboardingAutoPresented"
     static let maxRecentWorkspaces = 8
     /// Default terminal font size. Matches macOS Terminal's default.
     static let defaultTerminalFontSize: CGFloat = 13
