@@ -1132,6 +1132,7 @@ struct ImportSummaryBanner: View {
 /// so the More-menu route is the primary entry.
 struct AboutSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @State private var copiedFeedback = false
 
     private var buildHash: String {
         // Bundle CFBundleVersion holds the build number / git short hash
@@ -1176,8 +1177,16 @@ struct AboutSheet: View {
                     let pasteboard = NSPasteboard.general
                     pasteboard.clearContents()
                     pasteboard.setString(versionLine, forType: .string)
+                    copiedFeedback = true
+                    Task {
+                        try? await Task.sleep(nanoseconds: 1_500_000_000)
+                        copiedFeedback = false
+                    }
                 } label: {
-                    Label("Copy Version", systemImage: "doc.on.doc")
+                    Label(
+                        copiedFeedback ? "Copied" : "Copy Version",
+                        systemImage: copiedFeedback ? "checkmark" : "doc.on.doc"
+                    )
                 }
             }
             Spacer(minLength: 0)
@@ -3052,6 +3061,31 @@ struct BossDashboardView: View {
     private var scrollBody: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
+                if let error = model.bossWatchLastError, model.bossWatchConsecutiveFailures >= 2 {
+                    // Surface the boss being down prominently (out of the
+                    // buried watch-status line), with the backoff state so the
+                    // user knows it'll keep retrying — not spamming.
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Boss is failing — backing off")
+                                .font(.callout.weight(.semibold))
+                            Text("\(model.bossWatchConsecutiveFailures) failed check-ins. Latest: \(error)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                                .textSelection(.enabled)
+                            Text("Boss Watch will keep trying with exponential backoff; press Check In to try now.")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                    }
+                    .padding(10)
+                    .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.orange.opacity(0.4)))
+                }
                 if model.bossCheckInIsRunning {
                     HStack(spacing: 6) {
                         ProgressView().controlSize(.small)
@@ -4495,6 +4529,9 @@ private struct OnboardingSessionPreviewSheet: View {
     var terminal: ProposedTerminalImport
     @ObservedObject var model: WorkbenchViewModel
     @Environment(\.dismiss) private var dismiss
+    /// Async-loaded so the sheet opens immediately with a "Loading…" placeholder
+    /// instead of stalling for the (watchdog-bounded) sqlite+file read.
+    @State private var previewText: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -4537,18 +4574,34 @@ private struct OnboardingSessionPreviewSheet: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Session Preview")
                             .font(.headline)
-                        Text(model.onboardingPreviewText(for: terminal))
-                            .font(.system(.body, design: .monospaced))
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(12)
-                            .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
+                        Group {
+                            if let previewText {
+                                Text(previewText)
+                                    .font(.system(.body, design: .monospaced))
+                                    .textSelection(.enabled)
+                            } else {
+                                HStack(spacing: 8) {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                    Text("Loading preview…")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(12)
+                        .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
                     }
                 }
                 .padding(20)
             }
         }
         .frame(width: 760, height: 620)
+        .task(id: terminal.id) {
+            // Defer the (bounded) preview load so the sheet renders immediately.
+            previewText = model.onboardingPreviewText(for: terminal)
+        }
     }
 }
 
@@ -8550,6 +8603,12 @@ final class WorkbenchViewModel: ObservableObject {
             return
         }
         state.boss.agentName = normalizedAgentName
+        // Per-project boss tracks the global selection — otherwise existing
+        // groups keep whichever agent was current when they were created, and
+        // any consumer reading project.boss diverges from state.boss.
+        for index in state.projects.indices {
+            state.projects[index].boss.agentName = normalizedAgentName
+        }
         bossDashboard = nil
         bossCheckInPrompt = nil
         bossCheckInAnswer = nil

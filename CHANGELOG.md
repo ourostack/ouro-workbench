@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.117 - Preview async + boss-watch banner + misc polish
+
+- The import-preview sheet now opens immediately with a "Loading preview…" placeholder while the (watchdog-bounded) transcript load runs, so opening a preview never feels janky.
+- A failing Boss Watch surfaces a **prominent banner** at the top of the boss pane after 2+ consecutive failures, explaining the backoff and that a manual Check In always tries — instead of burying the error in the Advanced status line.
+- `selectBoss` now updates every existing project's boss to match the global selection, so per-project `WorkbenchProject.boss` no longer drifts to a stale agent.
+- About sheet's "Copy Version" briefly flips to "Copied ✓" so you can tell it worked.
+
 ## 0.1.116 - Onboarding correctness: provider-check tasks + pending Run
 
 - A `check-*` row that was *pending* (not actually running) used to spin forever; it now shows a **Run** button that re-triggers the check. Genuine in-flight checks still show the spinner.
