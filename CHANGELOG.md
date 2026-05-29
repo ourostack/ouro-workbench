@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.97 - Teach the boss (preference-driven inbox, phase 3)
+
+- The learning loop closes the inbox. Each Boss Decision Log row now has a **Teach** control: for an escalate/hold, "auto-advance these next time"; for an auto-advance you disagree with, "always ask me instead". It hands the boss a standing preference for that decision's friend and asks it to persist it via its own notes tools (same conversation plane as check-ins, since the boss owns its memory), so future decisions improve.
+- Both the request and the boss's acknowledgement are written to the action log. New `FriendPreferenceTeaching` (Core) renders the directive and derives the reinforce/correct preference from a decision.
+- Completes the [preference-driven inbox](docs/preference-driven-inbox.md): detect → decide-from-friend-preferences → act (gated, audited) → review → **teach**.
+
 ## 0.1.96 - Boss auto-advances waiting sessions (preference-driven inbox, phase 2)
 
 - The boss now *acts*: when a session is waiting and the boss decides `autoAdvance`, Workbench sends the proposed input for it — closing the loop from detect → decide → act, for the lowest time-to-first-action.

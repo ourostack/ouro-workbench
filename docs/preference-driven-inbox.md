@@ -263,8 +263,12 @@ Otherwise → **escalate** (or **hold** if Boss Watch is off).
   auto-advances until the operator marks a session trusted — the per-session
   opt-in. Every attempt — sent or held, with the reason — is a decision-log
   entry (`applied` vs `recorded`).
-- **Phase 3 — learning:** "remember this" updates friend preferences; overrides
-  record corrections, tightening future decisions.
+- **Phase 3 — learning (shipped):** each decision-log row has a Teach control —
+  reinforce ("auto-advance these next time") or correct ("always ask me"). It
+  hands the boss a standing `FriendPreferenceTeaching` directive to persist
+  against that friend via its own notes tools (the boss owns its memory), and
+  logs both the request and the boss's acknowledgement. Future decisions improve
+  from the friend's growing preferences.
 
 Each phase is independently shippable. Auto-advance (Phase 2) does not land
 until the decision log (Phase 1) is proven, so there is always a complete audit

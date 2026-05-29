@@ -1174,7 +1174,9 @@ struct DecisionLogSheet: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 10) {
                         ForEach(model.state.decisionLog) { decision in
-                            DecisionLogRow(decision: decision)
+                            DecisionLogRow(decision: decision) { autoAdvance in
+                                Task { await model.teachBoss(from: decision, autoAdvance: autoAdvance) }
+                            }
                         }
                     }
                     .padding(20)
@@ -1187,6 +1189,10 @@ struct DecisionLogSheet: View {
 
 private struct DecisionLogRow: View {
     let decision: BossInboxDecision
+    /// Teach the boss from this decision. `true` = reinforce (auto-advance these
+    /// next time), `false` = correct (always ask me).
+    var onTeach: (Bool) -> Void
+    @State private var taught = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -1238,6 +1244,22 @@ private struct DecisionLogRow: View {
             }
             .font(.caption2)
             .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                if taught {
+                    Label("Taught the boss", systemImage: "checkmark.circle.fill")
+                        .font(.caption2)
+                        .foregroundStyle(.green)
+                } else {
+                    Button(teachLabel) {
+                        // autoAdvance reinforces an escalate/hold; corrects an auto-advance.
+                        onTeach(decision.kind != .autoAdvance)
+                        taught = true
+                    }
+                    .font(.caption2)
+                    .buttonStyle(.borderless)
+                    .help("Tell the boss to remember this preference for \(decision.friendName ?? "this friend"), so future decisions improve")
+                }
+            }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1265,6 +1287,12 @@ private struct DecisionLogRow: View {
         case .escalate: return "Escalate"
         case .hold: return "Hold"
         }
+    }
+
+    private var teachLabel: String {
+        decision.kind == .autoAdvance
+            ? "Teach: always ask me instead"
+            : "Teach: auto-advance these next time"
     }
 
     private var kindColor: SwiftUI.Color {
@@ -10066,6 +10094,42 @@ final class WorkbenchViewModel: ObservableObject {
         }
         if changed > 0 {
             save()
+        }
+    }
+
+    /// The learning loop: tell the boss to remember a standing preference for a
+    /// decision's friend, so future inbox decisions improve. `autoAdvance == true`
+    /// reinforces ("do this automatically next time"); `false` corrects ("always
+    /// ask me"). The boss owns its memory, so this hands it a directive to persist
+    /// via its own notes tools (same conversation plane as check-ins). Both the
+    /// request and the boss's acknowledgement are written to the action log.
+    func teachBoss(from decision: BossInboxDecision, autoAdvance: Bool) async {
+        let teaching = FriendPreferenceTeaching.reinforcement(for: decision, autoAdvance: autoAdvance)
+        let agent = state.boss.agentName
+        recordActionLog(
+            source: "operator",
+            action: "teachBoss",
+            targetName: teaching.friendName,
+            result: teaching.preference,
+            succeeded: true
+        )
+        do {
+            let reply = try await bossMCPClient.ask(agentName: agent, question: teaching.bossDirective())
+            recordActionLog(
+                source: "boss:\(agent)",
+                action: "teachBossAck",
+                targetName: teaching.friendName,
+                result: String(reply.trimmingCharacters(in: .whitespacesAndNewlines).prefix(200)),
+                succeeded: true
+            )
+        } catch {
+            recordActionLog(
+                source: "boss:\(agent)",
+                action: "teachBossAck",
+                targetName: teaching.friendName,
+                result: "failed: \(error.localizedDescription)",
+                succeeded: false
+            )
         }
     }
 
