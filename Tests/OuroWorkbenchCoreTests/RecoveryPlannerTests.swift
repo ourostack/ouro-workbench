@@ -159,6 +159,50 @@ final class RecoveryPlannerTests: XCTestCase {
         XCTAssertEqual(plan.first?.reason, "latest run status is exited")
     }
 
+    func testLiveSessionReattachesEvenWhenUntrustedAndNonAutoResume() {
+        let project = WorkbenchProject(name: "Harness", rootPath: "/repo")
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "Hands-off",
+            kind: .terminalAgent,
+            agentKind: .claudeCode,
+            executable: "claude",
+            workingDirectory: "/repo",
+            trust: .untrusted,
+            autoResume: false
+        )
+        let run = ProcessRun(entryId: entry.id, status: .needsRecovery)
+        let state = WorkspaceState(projects: [project], processEntries: [entry], processRuns: [run])
+        let live: Set<String> = [PersistentTerminalSession.sessionName(for: entry.id)]
+
+        let plan = RecoveryPlanner().planRecovery(for: state, liveSessionNames: live)
+
+        XCTAssertEqual(plan.first?.action, .reattach)
+        XCTAssertEqual(plan.first?.reason, "session still running — reconnect the terminal")
+    }
+
+    func testLiveSessionReattachBeatsNativeResume() {
+        let project = WorkbenchProject(name: "Harness", rootPath: "/repo")
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "Claude",
+            kind: .terminalAgent,
+            agentKind: .claudeCode,
+            executable: "claude",
+            workingDirectory: "/repo",
+            trust: .trusted,
+            autoResume: true
+        )
+        let run = ProcessRun(entryId: entry.id, status: .needsRecovery, terminalSessionId: "claude-session-123")
+        let state = WorkspaceState(projects: [project], processEntries: [entry], processRuns: [run])
+        let live: Set<String> = [PersistentTerminalSession.sessionName(for: entry.id)]
+
+        // A live session reattaches (lossless) instead of native-resuming a new one.
+        XCTAssertEqual(RecoveryPlanner().planRecovery(for: state, liveSessionNames: live).first?.action, .reattach)
+        // With no live session, the existing native-resume path is unchanged.
+        XCTAssertEqual(RecoveryPlanner().planRecovery(for: state).first?.action, .autoResume)
+    }
+
     func testArchivedEntryDoesNotRecoverEvenWithNeedsRecoveryRun() {
         let project = WorkbenchProject(name: "Harness", rootPath: "/repo")
         let entry = ProcessEntry(

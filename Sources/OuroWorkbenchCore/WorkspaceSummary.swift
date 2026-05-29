@@ -203,8 +203,8 @@ public struct WorkspaceSummarizer: Sendable {
         self.recoveryPlanner = recoveryPlanner
     }
 
-    public func summarize(_ state: WorkspaceState) -> WorkspaceSummary {
-        let recoveryPlans = recoveryPlanner.planRecovery(for: state)
+    public func summarize(_ state: WorkspaceState, liveSessionNames: Set<String> = []) -> WorkspaceSummary {
+        let recoveryPlans = recoveryPlanner.planRecovery(for: state, liveSessionNames: liveSessionNames)
         return WorkspaceSummary(
             boss: state.boss,
             processSnapshots: state.processEntries.map { entry in

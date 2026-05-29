@@ -138,6 +138,9 @@ struct WorkbenchRootView: View {
             Text(model.errorMessage ?? "Unknown error")
         }
         .task {
+            // Detect still-alive `screen` sessions first so startup recovery can
+            // reattach to running agents losslessly instead of respawning them.
+            await model.refreshLiveScreenSessions()
             model.recoverEligibleSessionsOnStartup()
             model.launchAutoResumeSessionsOnStartup()
             model.launchDefaultShellIfNeeded()
@@ -625,7 +628,7 @@ struct RecoverySheet: View {
                 ContentUnavailableView(
                     "Nothing to recover",
                     systemImage: "checkmark.seal.fill",
-                    description: Text("No sessions are currently waiting on recovery. Active terminals keep themselves running; exited sessions only show up here if the recovery planner can act on them.")
+                    description: Text("No sessions are waiting on recovery. Agents that were still running when you quit reconnect automatically on the next launch; only sessions that didn't survive a restart show up here.")
                 )
                 .frame(minHeight: 240)
             } else {
@@ -6926,6 +6929,11 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var bossWorkbenchMCPRegistrationByAgentName: [String: BossWorkbenchMCPRegistrationSnapshot] = [:]
     @Published var executableHealthByEntryID: [UUID: ExecutableHealth] = [:]
     @Published var gitStatusByEntryID: [UUID: GitSessionStatus] = [:]
+    /// Persistent `screen` sessions reported alive (Attached/Detached) at the
+    /// last refresh. A session in this set means the agent kept running while
+    /// the app was gone, so recovery becomes a lossless reattach rather than a
+    /// respawn. Refreshed at startup (before recovery runs) and on demand.
+    @Published var liveScreenSessionNames: Set<String> = []
     @Published var releaseUpdateSnapshot: ReleaseUpdateSnapshot?
     @Published var releaseUpdateIsChecking = false
     @Published var supportDiagnosticsResult: SupportDiagnosticsResult?
@@ -7284,7 +7292,7 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     var summary: WorkspaceSummary {
-        summarizer.summarize(state)
+        summarizer.summarize(state, liveSessionNames: liveScreenSessionNames)
     }
 
     var mailboxStatusLine: String {
@@ -9017,7 +9025,7 @@ final class WorkbenchViewModel: ObservableObject {
         guard let plan = recoveryPlan(for: entry) else {
             return false
         }
-        return plan.action == .autoResume || plan.action == .respawn
+        return plan.action == .reattach || plan.action == .autoResume || plan.action == .respawn
     }
 
     /// Title shown in the Dock window list, ⌘\` window switcher, and Mission
@@ -9083,6 +9091,8 @@ final class WorkbenchViewModel: ObservableObject {
             return "Recover"
         }
         switch plan.action {
+        case .reattach:
+            return "Reconnect"
         case .autoResume:
             return "Resume"
         case .respawn:
@@ -10755,11 +10765,56 @@ final class WorkbenchViewModel: ObservableObject {
         bossAppliedActions = Array((results + bossAppliedActions).prefix(12))
     }
 
+    /// Refresh the set of live persistent `screen` sessions so recovery can
+    /// reattach to still-running agents losslessly. Runs `screen -ls` off-main
+    /// with a watchdog; on any failure the set is left empty and recovery falls
+    /// back to the gated respawn path.
+    func refreshLiveScreenSessions() async {
+        let names = await Task.detached(priority: .userInitiated) { () -> Set<String> in
+            Self.listLiveScreenSessionNames()
+        }.value
+        liveScreenSessionNames = names
+    }
+
+    nonisolated private static func listLiveScreenSessionNames() -> Set<String> {
+        let process = Process()
+        let pipe = Pipe()
+        process.executableURL = URL(fileURLWithPath: PersistentTerminalSession.executable)
+        process.arguments = PersistentTerminalSession.listArguments()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        do {
+            try process.run()
+        } catch {
+            return []
+        }
+        let finished = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .userInitiated).async {
+            process.waitUntilExit()
+            finished.signal()
+        }
+        if finished.wait(timeout: .now() + .milliseconds(1500)) == .timedOut {
+            process.terminate()
+            return []
+        }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        let output = String(decoding: data, as: UTF8.self)
+        return PersistentTerminalSession.liveSessionNames(fromListOutput: output)
+    }
+
     func recoverEligibleSessionsOnStartup() {
         guard !didAttemptStartupRecovery else {
             return
         }
         didAttemptStartupRecovery = true
+        // Reattach first (lossless reconnect to live agents), then the gated
+        // respawn/auto-resume paths for sessions that didn't survive.
+        for plan in summary.recoveryPlans where plan.action == .reattach {
+            guard let entry = state.processEntries.first(where: { $0.id == plan.entryId }) else {
+                continue
+            }
+            recover(entry, recoveryPlan: plan)
+        }
         for plan in summary.recoveryPlans where plan.action == .autoResume || plan.action == .respawn {
             guard let entry = state.processEntries.first(where: { $0.id == plan.entryId }) else {
                 continue
@@ -11304,7 +11359,7 @@ final class WorkbenchViewModel: ObservableObject {
 
     private func recover(_ entry: ProcessEntry, recoveryPlan: RecoveryPlan) {
         do {
-            guard recoveryPlan.action == .autoResume || recoveryPlan.action == .respawn else {
+            guard recoveryPlan.action == .reattach || recoveryPlan.action == .autoResume || recoveryPlan.action == .respawn else {
                 errorMessage = "\(entry.name) is not eligible for automatic recovery: \(recoveryPlan.reason)"
                 return
             }

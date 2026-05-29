@@ -133,6 +133,32 @@ public enum PersistentTerminalSession: Sendable {
         ["-ls"]
     }
 
+    /// Parse `screen -ls` output into the set of *live* Workbench session names
+    /// (Attached or Detached). Dead sockets are excluded: a dead session must be
+    /// respawned (with its checkpoint context), not falsely "reattached" to
+    /// nothing. Each session line looks like `12345.ouro-wb-<id>\t(Detached)`.
+    public static func liveSessionNames(fromListOutput output: String) -> Set<String> {
+        var names: Set<String> = []
+        for rawLine in output.split(whereSeparator: \.isNewline) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            guard let firstField = line.split(whereSeparator: \.isWhitespace).first.map(String.init),
+                  let dot = firstField.firstIndex(of: ".") else {
+                continue
+            }
+            let name = String(firstField[firstField.index(after: dot)...])
+            guard name.hasPrefix("ouro-wb-") else {
+                continue
+            }
+            let lowered = line.lowercased()
+            // Only count sessions screen can actually reattach to.
+            guard lowered.contains("(detached)") || lowered.contains("(attached)") else {
+                continue
+            }
+            names.insert(name)
+        }
+        return names
+    }
+
     public static func terminateArguments(sessionName: String) -> [String] {
         ["-S", sessionName, "-X", "quit"]
     }
@@ -187,6 +213,14 @@ public struct WorkbenchCommandPlanner: Sendable {
 
     public func recoveryPlan(for entry: ProcessEntry, latestRun: ProcessRun?, action: RecoveryAction) throws -> TerminalCommandPlan {
         switch action {
+        case .reattach:
+            // The screen session is still alive; `screen -D -RR` reconnects to it
+            // and ignores the command, so a plain launch plan reattaches without
+            // a checkpoint prompt or native-resume command.
+            var plan = try launchPlan(for: entry)
+            plan.recoveryAction = action
+            plan.reason = "reconnect to running \(entry.name)"
+            return plan
         case .autoResume:
             return try nativeResumePlan(for: entry, latestRun: latestRun, action: action)
         case .respawn:
