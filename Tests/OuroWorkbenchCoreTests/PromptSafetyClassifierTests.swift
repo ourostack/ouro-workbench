@@ -61,27 +61,55 @@ final class PromptSafetyClassifierTests: XCTestCase {
 
     private let trustedFriend = SessionFriend(id: "ari", name: "Ari", kind: .human, trust: .family)
 
-    func testGateAllowsWhenEverythingTrustedAndSafe() {
-        let gate = evaluateAutoAdvanceGate(enabled: true, sessionTrusted: true, friend: trustedFriend, prompt: "Run tests? (y/N)", proposedInput: "y")
-        XCTAssertTrue(gate.allows)
+    private func gate(
+        enabled: Bool = true,
+        running: Bool = true,
+        waiting: Bool = true,
+        trusted: Bool = true,
+        friend: SessionFriend? = nil,
+        prompt: String = "Run tests? (y/N)",
+        input: String? = "y"
+    ) -> AutoAdvanceGate {
+        evaluateAutoAdvanceGate(
+            enabled: enabled,
+            sessionRunning: running,
+            sessionWaiting: waiting,
+            sessionTrusted: trusted,
+            friend: friend ?? trustedFriend,
+            prompt: prompt,
+            proposedInput: input
+        )
+    }
+
+    func testGateAllowsWhenEverythingTrustedRunningWaitingAndSafe() {
+        XCTAssertTrue(gate().allows)
     }
 
     func testGateBlocksWhenDisabled() {
-        XCTAssertEqual(evaluateAutoAdvanceGate(enabled: false, sessionTrusted: true, friend: trustedFriend, prompt: "ok?", proposedInput: "y").blockedReason, "auto-advance disabled")
+        XCTAssertEqual(gate(enabled: false).blockedReason, "auto-advance disabled")
+    }
+
+    func testGateBlocksWhenNotRunningOrNotWaiting() {
+        XCTAssertEqual(gate(running: false).blockedReason, "session not running")
+        XCTAssertEqual(gate(waiting: false).blockedReason, "session no longer waiting")
     }
 
     func testGateBlocksUntrustedSession() {
-        XCTAssertEqual(evaluateAutoAdvanceGate(enabled: true, sessionTrusted: false, friend: trustedFriend, prompt: "ok?", proposedInput: "y").blockedReason, "session not trusted")
+        XCTAssertEqual(gate(trusted: false).blockedReason, "session not trusted")
     }
 
     func testGateBlocksUntrustedFriendAndMissingFriend() {
         let acquaintance = SessionFriend(id: "x", name: "X", kind: .agent, trust: .acquaintance)
-        XCTAssertEqual(evaluateAutoAdvanceGate(enabled: true, sessionTrusted: true, friend: acquaintance, prompt: "ok?", proposedInput: "y").blockedReason, "friend trust is acquaintance")
-        XCTAssertEqual(evaluateAutoAdvanceGate(enabled: true, sessionTrusted: true, friend: nil, prompt: "ok?", proposedInput: "y").blockedReason, "session has no friend")
+        XCTAssertEqual(gate(friend: acquaintance).blockedReason, "friend trust is acquaintance")
+        XCTAssertEqual(
+            evaluateAutoAdvanceGate(enabled: true, sessionRunning: true, sessionWaiting: true, sessionTrusted: true, friend: nil, prompt: "ok?", proposedInput: "y").blockedReason,
+            "session has no friend"
+        )
     }
 
-    func testGateBlocksMissingInputAndUnsafePrompt() {
-        XCTAssertEqual(evaluateAutoAdvanceGate(enabled: true, sessionTrusted: true, friend: trustedFriend, prompt: "ok?", proposedInput: "  ").blockedReason, "no proposed input")
-        XCTAssertEqual(evaluateAutoAdvanceGate(enabled: true, sessionTrusted: true, friend: trustedFriend, prompt: "Run rm -rf build? (y/N)", proposedInput: "y").blockedReason, "unsafe prompt: destructive command")
+    func testGateBlocksMissingInputShortPromptAndUnsafePrompt() {
+        XCTAssertEqual(gate(input: "  ").blockedReason, "no proposed input")
+        XCTAssertEqual(gate(prompt: "?", input: "y").blockedReason, "prompt too short to classify safely")
+        XCTAssertEqual(gate(prompt: "Run rm -rf build? (y/N)").blockedReason, "unsafe prompt: destructive command")
     }
 }

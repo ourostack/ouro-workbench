@@ -1246,9 +1246,10 @@ private struct DecisionLogRow: View {
             .foregroundStyle(.secondary)
             HStack(spacing: 8) {
                 if taught {
-                    Label("Taught the boss", systemImage: "checkmark.circle.fill")
+                    Label("Sent to boss", systemImage: "paperplane.circle.fill")
                         .font(.caption2)
                         .foregroundStyle(.green)
+                        .help("Request sent. The boss's acknowledgement is in the action log.")
                 } else {
                     Button(teachLabel) {
                         // autoAdvance reinforces an escalate/hold; corrects an auto-advance.
@@ -10045,21 +10046,29 @@ final class WorkbenchViewModel: ObservableObject {
         for input in inputs {
             let entry = input.entry.flatMap { processEntry(matching: $0) }
             let friend = entry.flatMap { state.effectiveFriend(for: $0, fallback: machineOwner) }
-            let prompt = input.prompt ?? entry?.lastSummary ?? ""
+            // Cap persisted, boss-authored strings so a verbose reply can't bloat
+            // the saved workspace state.
+            let prompt = String((input.prompt ?? entry?.lastSummary ?? "").prefix(2000))
             // Idempotency: never act on (or re-log) a prompt we already decided.
             guard state.isNewDecision(entryId: entry?.id, prompt: prompt, kind: input.kind) else {
                 continue
             }
 
             var status: BossDecisionStatus = .recorded
-            var reasoning = input.reasoning ?? ""
+            var reasoning = String((input.reasoning ?? "").prefix(2000))
 
             // Execute only a fresh autoAdvance that clears the full gate; every
-            // other case is recorded as the boss's judgment without acting.
+            // other case is recorded as the boss's judgment without acting. The
+            // gate re-checks the *live* session (still running + still waiting)
+            // so a prompt that changed during the boss round-trip is never
+            // answered blindly.
             if input.kind == .autoAdvance, let entry {
+                let live = state.processEntries.first(where: { $0.id == entry.id })
                 let gate = evaluateAutoAdvanceGate(
                     enabled: bossAutoAdvanceEnabled,
-                    sessionTrusted: entry.trust == .trusted,
+                    sessionRunning: activeSessions[entry.id] != nil,
+                    sessionWaiting: (live ?? entry).attention == .waitingOnHuman,
+                    sessionTrusted: (live ?? entry).trust == .trusted,
                     friend: friend,
                     prompt: prompt,
                     proposedInput: input.proposedInput
@@ -10083,8 +10092,8 @@ final class WorkbenchViewModel: ObservableObject {
                     friendId: friend?.id,
                     prompt: prompt,
                     kind: input.kind,
-                    proposedInput: input.proposedInput,
-                    preferenceCited: input.preferenceCited,
+                    proposedInput: input.proposedInput.map { String($0.prefix(500)) },
+                    preferenceCited: input.preferenceCited.map { String($0.prefix(500)) },
                     confidence: input.confidence,
                     reasoning: reasoning,
                     status: status

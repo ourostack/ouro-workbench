@@ -112,11 +112,16 @@ public enum AutoAdvanceGate: Equatable, Sendable {
 
 /// Defense-in-depth decision for whether the boss may auto-advance a session.
 /// All conditions must hold, layered cheapest/most-explicit first: the global
-/// kill-switch, the session's own trust (untrusted is the default, so this is
-/// the operator's per-session opt-in), the friend's trust level, and the prompt
-/// safety floor. Pure so the whole gate is unit-tested rather than buried in UI.
+/// kill-switch; the session is still **running** and still **waiting** (so a
+/// prompt that changed during the boss's round-trip is never answered blindly);
+/// the session's own trust (untrusted is the default, so this is the operator's
+/// per-session opt-in); the friend's trust level; a non-empty prompt + input;
+/// and the prompt safety floor. Pure so the whole gate is unit-tested rather
+/// than buried in UI.
 public func evaluateAutoAdvanceGate(
     enabled: Bool,
+    sessionRunning: Bool,
+    sessionWaiting: Bool,
     sessionTrusted: Bool,
     friend: SessionFriend?,
     prompt: String,
@@ -124,6 +129,14 @@ public func evaluateAutoAdvanceGate(
 ) -> AutoAdvanceGate {
     guard enabled else {
         return .block("auto-advance disabled")
+    }
+    guard sessionRunning else {
+        return .block("session not running")
+    }
+    guard sessionWaiting else {
+        // The detector reverts waiting → active when new output arrives, so this
+        // catches a prompt that moved on between the boss deciding and us acting.
+        return .block("session no longer waiting")
     }
     guard sessionTrusted else {
         return .block("session not trusted")
@@ -136,6 +149,10 @@ public func evaluateAutoAdvanceGate(
     }
     guard let proposedInput, !proposedInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
         return .block("no proposed input")
+    }
+    // Never auto-answer with no idea what the prompt actually says.
+    guard prompt.trimmingCharacters(in: .whitespacesAndNewlines).count >= 3 else {
+        return .block("prompt too short to classify safely")
     }
     if case let .unsafe(reason) = PromptSafetyClassifier.classify(prompt: prompt, proposedInput: proposedInput) {
         return .block("unsafe prompt: \(reason)")
