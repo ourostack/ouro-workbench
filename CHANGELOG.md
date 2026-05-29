@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.113 - Persistence safety + sheet polish
+
+- Bounded run history: every launch/recovery appended a `ProcessRun` that was never pruned, so a long-lived or crash-looping session grew the persisted state forever and slowed every (synchronous) save. Workbench now keeps the newest 25 runs per session.
+- The five form sheets (New/Edit Terminal, New/Edit Group, Install Agent) can now be dismissed with **Escape**, and the terminal/group sheets submit with **Return** — previously you had to mouse to the button.
+- Minor: consistent ellipsis in "Use Other Boss…" and "Scanning recent local sessions…".
+
 ## 0.1.112 - Shortcuts work even when a terminal has focus
 
 - Every global/navigation shortcut is now a real **menu-bar command**, so it fires even while a SwiftTerm terminal has keyboard focus — previously these were view-level shortcuts the focused terminal swallowed, so ⌘K (command palette), ⌘I (check in), ⌘J, ⌘N/⌘T, ⌘[ / ⌘] (cycle terminals), ⇧⌘[ / ⇧⌘] (cycle groups), ⇧⌘F (focus), ⌃⌘B (sidebar), ⌘1–9, font ⌘= / ⌘- / ⌘0, ⌘L (redraw), ⌘. (stop), ⌘, , ⌘/ , and Find were dead in normal use. The same fix that made ⇧⌘B work, applied to the whole app — and the commands are now discoverable in the menu bar (File / View / Terminal / Boss).

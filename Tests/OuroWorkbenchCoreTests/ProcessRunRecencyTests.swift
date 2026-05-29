@@ -32,4 +32,32 @@ final class ProcessRunRecencyTests: XCTestCase {
         let reversedFirst = [c, b, a].sorted(by: ProcessRun.isMoreRecent).first
         XCTAssertEqual(first?.id, reversedFirst?.id, "latest run must not depend on input order")
     }
+
+    func testPruneProcessRunsKeepsNewestPerEntryAndDropsOlder() {
+        let entryA = UUID()
+        let entryB = UUID()
+        func r(_ entry: UUID, _ t: TimeInterval) -> ProcessRun {
+            ProcessRun(entryId: entry, status: .exited, startedAt: Date(timeIntervalSince1970: t))
+        }
+        var state = WorkspaceState(
+            processRuns: (0..<30).map { r(entryA, Double($0)) } + (0..<5).map { r(entryB, Double($0)) }
+        )
+
+        state.pruneProcessRuns(perEntryCap: 10)
+
+        XCTAssertEqual(state.processRuns.filter { $0.entryId == entryA }.count, 10)
+        XCTAssertEqual(state.processRuns.filter { $0.entryId == entryB }.count, 5)
+        // The newest A run (t=29) survives; the oldest (t=0) is dropped.
+        let aStarts = Set(state.processRuns.filter { $0.entryId == entryA }.map { $0.startedAt.timeIntervalSince1970 })
+        XCTAssertTrue(aStarts.contains(29))
+        XCTAssertFalse(aStarts.contains(0))
+    }
+
+    func testPruneProcessRunsNoOpUnderCap() {
+        let entry = UUID()
+        let runs = (0..<3).map { ProcessRun(entryId: entry, status: .running, startedAt: Date(timeIntervalSince1970: Double($0))) }
+        var state = WorkspaceState(processRuns: runs)
+        state.pruneProcessRuns(perEntryCap: 25)
+        XCTAssertEqual(state.processRuns.count, 3)
+    }
 }

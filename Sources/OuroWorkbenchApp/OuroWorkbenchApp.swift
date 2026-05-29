@@ -2481,7 +2481,7 @@ struct BossSelectorView: View {
                 draftAgentName = model.state.boss.agentName
                 customBossIsPresented = true
             } label: {
-                Label("Use Other Boss...", systemImage: "person.badge.plus")
+                Label("Use Other Boss…", systemImage: "person.badge.plus")
             }
             Divider()
             Button {
@@ -3498,6 +3498,7 @@ struct OuroAgentInstallSheet: View {
                 Button("Cancel") {
                     dismiss()
                 }
+                .keyboardShortcut(.cancelAction)
                 Button {
                     guard install() else {
                         return
@@ -4259,7 +4260,7 @@ private struct OnboardingBootstrapView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             } else if model.onboardingIsScanning {
-                Text("Scanning recent local sessions...")
+                Text("Scanning recent local sessions…")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -6196,6 +6197,7 @@ struct NewTerminalGroupSheet: View {
                 Button("Cancel") {
                     dismiss()
                 }
+                .keyboardShortcut(.cancelAction)
                 Button {
                     guard model.createGroup(name: name, rootPath: rootPath) else {
                         return
@@ -6205,6 +6207,7 @@ struct NewTerminalGroupSheet: View {
                     Label("Create", systemImage: "checkmark")
                 }
                 .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
                 .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || rootPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
@@ -6259,6 +6262,7 @@ struct EditTerminalGroupSheet: View {
                 Button("Cancel") {
                     dismiss()
                 }
+                .keyboardShortcut(.cancelAction)
                 Button {
                     guard model.renameGroup(project, name: name, rootPath: rootPath) else {
                         return
@@ -6268,6 +6272,7 @@ struct EditTerminalGroupSheet: View {
                     Label("Save", systemImage: "checkmark")
                 }
                 .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
                 .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || rootPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
@@ -6338,6 +6343,7 @@ struct NewTerminalSessionSheet: View {
                 Button("Cancel") {
                     dismiss()
                 }
+                .keyboardShortcut(.cancelAction)
                 Button {
                     create(launchAfterCreate: false)
                 } label: {
@@ -6350,6 +6356,7 @@ struct NewTerminalSessionSheet: View {
                     Label("Create & Launch", systemImage: "play.fill")
                 }
                 .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
                 .disabled(!canCreate)
             }
         }
@@ -6446,12 +6453,14 @@ struct EditTerminalSessionSheet: View {
                 Button("Cancel") {
                     dismiss()
                 }
+                .keyboardShortcut(.cancelAction)
                 Button {
                     save()
                 } label: {
                     Label("Save", systemImage: "checkmark")
                 }
                 .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
                 .disabled(!canSave)
             }
         }
@@ -11758,6 +11767,9 @@ final class WorkbenchViewModel: ObservableObject {
                 transcriptPath: plan.transcriptPath
             )
         )
+        // Cap retained runs per entry so processRuns can't grow without bound
+        // across relaunches/recoveries (and bloat every synchronous save).
+        state.pruneProcessRuns()
         save()
     }
 
