@@ -1,0 +1,3 @@
+# Wrangler local state / build cache — not source.
+.wrangler/
+node_modules/
