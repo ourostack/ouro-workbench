@@ -406,3 +406,216 @@ public enum BugReportWriter {
         )
     }
 }
+
+/// A GitHub issue ready to file: a one-line title and a Markdown body.
+public struct GitHubIssueDraft: Equatable, Sendable {
+    public var title: String
+    public var body: String
+
+    public init(title: String, body: String) {
+        self.title = title
+        self.body = body
+    }
+}
+
+/// Turns a bug report into a GitHub issue draft. Pure so the title derivation
+/// (which has to stay on one line and within GitHub's limits) and the body
+/// footer (which points back at the local bundle, since `gh issue create` can't
+/// upload the screenshot/zip) are unit-tested.
+public enum GitHubIssueComposer {
+    public static func draft(
+        note: String,
+        reportMarkdown: String,
+        bundlePath: String?,
+        titlePrefix: String = "Bug:"
+    ) -> GitHubIssueDraft {
+        GitHubIssueDraft(
+            title: title(note: note, prefix: titlePrefix),
+            body: body(reportMarkdown: reportMarkdown, bundlePath: bundlePath)
+        )
+    }
+
+    /// `Bug: <first meaningful line of the note>`, collapsed and length-capped;
+    /// falls back to a generic title when the note has nothing usable.
+    public static func title(note: String, prefix: String = "Bug:", maxLength: Int = 80) -> String {
+        let firstLine = note
+            .split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .first(where: { !$0.isEmpty }) ?? ""
+        let collapsed = firstLine
+            .split(separator: " ", omittingEmptySubsequences: true)
+            .joined(separator: " ")
+        let summary = collapsed.isEmpty ? "report from Ouro Workbench" : collapsed
+
+        let prefixed = "\(prefix) \(summary)"
+        if prefixed.count <= maxLength {
+            return prefixed
+        }
+        // Truncate the summary, not the prefix, and add an ellipsis.
+        let room = max(0, maxLength - prefix.count - 2) // space + ellipsis
+        return "\(prefix) \(summary.prefix(room))…"
+    }
+
+    public static func body(reportMarkdown: String, bundlePath: String?) -> String {
+        guard let bundlePath, !bundlePath.isEmpty else {
+            return reportMarkdown
+        }
+        let trimmed = reportMarkdown.hasSuffix("\n") ? String(reportMarkdown.dropLast()) : reportMarkdown
+        return trimmed
+            + "\n\n---\n"
+            + "The screenshot and diagnostics zip are in the local report bundle "
+            + "(not uploaded here): `\(bundlePath)`\n"
+    }
+}
+
+/// Failures specific to filing a bug report as a GitHub issue, with operator-
+/// readable guidance. The venue is best-effort — the local bundle always wins.
+public enum GitHubIssueFilingError: Error, Equatable, LocalizedError, Sendable {
+    case cliMissing
+    case readReportFailed(String)
+    case launchFailed(String)
+    case commandFailed(String)
+    case noURL(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .cliMissing:
+            return "GitHub CLI (gh) not found. Install it (brew install gh) and run gh auth login, then try again. Your local report is still saved."
+        case let .readReportFailed(message):
+            return "Could not read the report: \(message)"
+        case let .launchFailed(message):
+            return "Could not start gh: \(message)"
+        case let .commandFailed(output):
+            return "gh issue create failed: \(output)"
+        case let .noURL(output):
+            return "gh did not report an issue URL: \(output)"
+        }
+    }
+}
+
+/// Files a bug report bundle as a GitHub issue via the `gh` CLI. Lives in Core
+/// (not the app) so the exact production path — locate `gh`, build the issue,
+/// run `gh issue create`, parse the URL — is reused by any caller and is
+/// integration-testable. Pure helpers (`resolveCLI`, `parseIssueURL`) are unit
+/// tested; `file` performs the real subprocess.
+public enum GitHubIssueFiler {
+    /// Find the GitHub CLI without relying on a GUI app's minimal PATH: probe
+    /// common install locations, then fall back to anything on PATH.
+    public static func resolveCLI(
+        fileManager: FileManager = .default,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> URL? {
+        let candidates = [
+            "/opt/homebrew/bin/gh",
+            "/usr/local/bin/gh",
+            "/usr/bin/gh",
+            "/run/current-system/sw/bin/gh"
+        ]
+        for path in candidates where fileManager.isExecutableFile(atPath: path) {
+            return URL(fileURLWithPath: path)
+        }
+        if let pathEnv = environment["PATH"] {
+            for dir in pathEnv.split(separator: ":") {
+                let candidate = URL(fileURLWithPath: String(dir)).appendingPathComponent("gh")
+                if fileManager.isExecutableFile(atPath: candidate.path) {
+                    return candidate
+                }
+            }
+        }
+        return nil
+    }
+
+    /// The created issue URL is the last `https://…` token in `gh`'s output.
+    public static func parseIssueURL(from output: String) -> String? {
+        for rawLine in output.split(whereSeparator: \.isNewline).reversed() {
+            let line = String(rawLine).trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("https://") {
+                return line
+            }
+        }
+        return nil
+    }
+
+    /// File the report at `reportURL` as an issue on `repo`. The body is the
+    /// report markdown plus a footer pointing at the local bundle (the CLI can't
+    /// upload the screenshot/zip). A missing `bug` label transparently retries
+    /// without it. Returns the created issue URL.
+    public static func file(
+        reportURL: URL,
+        bundlePath: String,
+        note: String,
+        repo: String,
+        fileManager: FileManager = .default
+    ) -> Result<String, GitHubIssueFilingError> {
+        guard let gh = resolveCLI(fileManager: fileManager) else {
+            return .failure(.cliMissing)
+        }
+
+        let markdown: String
+        do {
+            markdown = try String(contentsOf: reportURL, encoding: .utf8)
+        } catch {
+            return .failure(.readReportFailed(error.localizedDescription))
+        }
+
+        let draft = GitHubIssueComposer.draft(note: note, reportMarkdown: markdown, bundlePath: bundlePath)
+        return run(gh: gh, draft: draft, repo: repo, withBugLabel: true, fileManager: fileManager)
+    }
+
+    private static func run(
+        gh: URL,
+        draft: GitHubIssueDraft,
+        repo: String,
+        withBugLabel: Bool,
+        fileManager: FileManager
+    ) -> Result<String, GitHubIssueFilingError> {
+        let bodyURL = fileManager.temporaryDirectory
+            .appendingPathComponent("ouro-workbench-issue-\(UUID().uuidString).md")
+        do {
+            try draft.body.write(to: bodyURL, atomically: true, encoding: .utf8)
+        } catch {
+            return .failure(.launchFailed(error.localizedDescription))
+        }
+        defer { try? fileManager.removeItem(at: bodyURL) }
+
+        var arguments = [
+            "issue", "create",
+            "--repo", repo,
+            "--title", draft.title,
+            "--body-file", bodyURL.path
+        ]
+        if withBugLabel {
+            arguments.append(contentsOf: ["--label", "bug"])
+        }
+
+        let process = Process()
+        let pipe = Pipe()
+        process.executableURL = gh
+        process.arguments = arguments
+        process.standardOutput = pipe
+        process.standardError = pipe
+        process.standardInput = FileHandle.nullDevice
+
+        do {
+            try process.run()
+        } catch {
+            return .failure(.launchFailed(error.localizedDescription))
+        }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        let output = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if process.terminationStatus != 0 {
+            // A missing `bug` label fails the whole call; retry once without it
+            // rather than make the venue depend on a label existing in the repo.
+            if withBugLabel, output.lowercased().contains("label") {
+                return run(gh: gh, draft: draft, repo: repo, withBugLabel: false, fileManager: fileManager)
+            }
+            return .failure(.commandFailed(output.isEmpty ? "gh exited with status \(process.terminationStatus)" : output))
+        }
+        guard let url = parseIssueURL(from: output) else {
+            return .failure(.noURL(output))
+        }
+        return .success(url)
+    }
+}

@@ -1279,6 +1279,42 @@ struct ReportBugSheet: View {
                                 Label("Copy Path", systemImage: "doc.on.doc")
                             }
                             .controlSize(.small)
+                            if model.bugReportIssueURL == nil {
+                                Button {
+                                    model.fileLastBugReportAsGitHubIssue()
+                                } label: {
+                                    Label("File as GitHub Issue", systemImage: "ladybug")
+                                }
+                                .controlSize(.small)
+                                .disabled(model.bugReportIssueIsFiling)
+                            }
+                            if model.bugReportIssueIsFiling {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                        }
+                        if let issueURL = model.bugReportIssueURL {
+                            HStack(spacing: 8) {
+                                Label("Filed: \(issueURL)", systemImage: "checkmark.seal.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.green)
+                                    .textSelection(.enabled)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                Button {
+                                    model.openLastBugReportIssue()
+                                } label: {
+                                    Label("Open Issue", systemImage: "arrow.up.right.square")
+                                }
+                                .controlSize(.small)
+                            }
+                        }
+                        if let issueError = model.bugReportIssueError {
+                            Label(issueError, systemImage: "exclamationmark.triangle")
+                                .font(.caption2)
+                                .foregroundStyle(.orange)
+                                .textSelection(.enabled)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                     .padding(10)
@@ -1306,9 +1342,13 @@ struct ReportBugSheet: View {
                     } label: {
                         Text("Create Report")
                     }
-                    .keyboardShortcut(.defaultAction)
+                    // ⌘↩ rather than plain Return: the note is a multi-line
+                    // TextEditor that swallows Return, so ⌘Return is the
+                    // reliable "submit the form" gesture.
+                    .keyboardShortcut(.return, modifiers: [.command])
                     .buttonStyle(.borderedProminent)
                     .disabled(model.bugReportIsSubmitting)
+                    .help("Create the report (⌘↩)")
                 }
             }
             .padding(20)
@@ -6864,6 +6904,15 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var bugReportError: String?
     @Published var lastBugReportURL: URL?
     @Published var lastBugReportWarnings: [String] = []
+    /// The note that produced the last bundle, kept after the editor clears so
+    /// the GitHub issue title can be derived from it.
+    @Published var lastBugReportNote = ""
+    /// Filing the last bug report as a GitHub issue (the "good venue" for
+    /// tracking): whether a `gh issue create` is in flight, the resulting issue
+    /// URL, and any error (e.g. `gh` missing or not authenticated).
+    @Published var bugReportIssueIsFiling = false
+    @Published var bugReportIssueURL: String?
+    @Published var bugReportIssueError: String?
     @Published var isOnboardingPresented = false
     @Published var onboardingReadiness: OnboardingReadiness?
     @Published var onboardingProviderChecks: [String: OnboardingProviderCheckResult] = [:]
@@ -7554,6 +7603,18 @@ final class WorkbenchViewModel: ObservableObject {
                     keywords: ["boss", "reply", "respond"]
                 )
             ], at: 2)
+        }
+
+        if lastBugReportURL != nil {
+            commands.append(
+                command(
+                    .fileBugReportIssue,
+                    "File Bug Report as GitHub Issue",
+                    "Open the latest bug report as a GitHub issue",
+                    "ladybug",
+                    keywords: ["bug", "report", "github", "issue", "file", "venue"]
+                )
+            )
         }
 
         if supportDiagnosticsURL != nil {
@@ -9231,7 +9292,11 @@ final class WorkbenchViewModel: ObservableObject {
             case let .success(bundle):
                 lastBugReportURL = bundle.directoryURL
                 lastBugReportWarnings = bundle.warnings
+                lastBugReportNote = note
                 bugReportNote = ""
+                // A new bundle invalidates any prior issue link.
+                bugReportIssueURL = nil
+                bugReportIssueError = nil
                 recordActionLog(
                     source: "native",
                     action: "submitBugReport",
@@ -9263,6 +9328,62 @@ final class WorkbenchViewModel: ObservableObject {
             return
         }
         copyToPasteboard(lastBugReportURL.path)
+    }
+
+    /// File the last bug report as a GitHub issue — a durable, searchable venue
+    /// the boss/Claude can read from anywhere via `gh`. Uses `report.md` as the
+    /// body (the screenshot + zip stay in the local bundle, referenced by path,
+    /// since `gh issue create` can't upload them). Degrades gracefully when `gh`
+    /// is missing or unauthenticated.
+    func fileLastBugReportAsGitHubIssue() {
+        guard !bugReportIssueIsFiling else {
+            return
+        }
+        guard let directory = lastBugReportURL else {
+            bugReportIssueError = "Create a bug report first."
+            return
+        }
+        bugReportIssueIsFiling = true
+        bugReportIssueError = nil
+        bugReportIssueURL = nil
+
+        let reportURL = directory.appendingPathComponent("report.md")
+        let bundlePath = directory.path
+        let note = lastBugReportNote
+        let repo = WorkbenchRelease.issueRepo
+
+        Task {
+            let outcome = await Task.detached(priority: .userInitiated) { () -> Result<String, GitHubIssueFilingError> in
+                GitHubIssueFiler.file(reportURL: reportURL, bundlePath: bundlePath, note: note, repo: repo)
+            }.value
+
+            bugReportIssueIsFiling = false
+            switch outcome {
+            case let .success(url):
+                bugReportIssueURL = url
+                recordActionLog(
+                    source: "native",
+                    action: "fileBugReportIssue",
+                    result: "Filed \(url)",
+                    succeeded: true
+                )
+            case let .failure(error):
+                bugReportIssueError = error.localizedDescription
+                recordActionLog(
+                    source: "native",
+                    action: "fileBugReportIssue",
+                    result: "Failed: \(error.localizedDescription)",
+                    succeeded: false
+                )
+            }
+        }
+    }
+
+    func openLastBugReportIssue() {
+        guard let bugReportIssueURL, let url = URL(string: bugReportIssueURL) else {
+            return
+        }
+        NSWorkspace.shared.open(url)
     }
 
     func revealBugReportsFolder() {
@@ -10129,6 +10250,8 @@ final class WorkbenchViewModel: ObservableObject {
             openSupportDiagnosticsFolder()
         case .reportBug:
             isReportBugPresented = true
+        case .fileBugReportIssue:
+            fileLastBugReportAsGitHubIssue()
         case .revealBugReportsFolder:
             revealBugReportsFolder()
         case .checkReleaseUpdates:

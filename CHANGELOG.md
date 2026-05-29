@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.106 - File a bug report straight to GitHub
+
+- The bug reporter can now file a report as a **GitHub issue** on `ourostack/ouro-workbench` (labelled `bug`) with one click — a durable, searchable venue the boss/Claude can read from anywhere. The issue body is `report.md`; the screenshot and diagnostics zip stay in the local bundle and are referenced by path (the CLI can't upload them).
+- Uses the GitHub CLI, resolved from the usual install locations so it works even from a GUI-launched app with a minimal PATH. If `gh` is missing or unauthenticated, the local bundle is still saved and the reporter says exactly what to fix; a missing `bug` label transparently retries without it.
+- Title/body composition is the pure, unit-tested `GitHubIssueComposer`.
+
 ## 0.1.105 - Report a bug from inside the app
 
 - New in-app bug reporter: press `⇧⌘B` (also `Report a Bug…` in the More menu and the `⌘K` palette), describe what happened, and `Create Report`. Each report is a self-contained, timestamped folder under `~/Library/Application Support/OuroWorkbench/bug-reports/` so it's trivial to find and hand off.
