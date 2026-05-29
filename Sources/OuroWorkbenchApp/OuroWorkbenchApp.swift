@@ -1246,9 +1246,10 @@ private struct DecisionLogRow: View {
             .foregroundStyle(.secondary)
             HStack(spacing: 8) {
                 if taught {
-                    Label("Taught the boss", systemImage: "checkmark.circle.fill")
+                    Label("Sent to boss", systemImage: "paperplane.circle.fill")
                         .font(.caption2)
                         .foregroundStyle(.green)
+                        .help("Request sent. The boss's acknowledgement is in the action log.")
                 } else {
                     Button(teachLabel) {
                         // autoAdvance reinforces an escalate/hold; corrects an auto-advance.
