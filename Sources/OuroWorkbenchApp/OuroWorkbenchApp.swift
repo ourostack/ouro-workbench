@@ -10099,17 +10099,18 @@ final class WorkbenchViewModel: ObservableObject {
                 continue
             }
 
-            var status: BossDecisionStatus = .recorded
             var reasoning = String((input.reasoning ?? "").prefix(2000))
 
             // Execute only a fresh autoAdvance that clears the full gate; every
             // other case is recorded as the boss's judgment without acting. The
             // gate re-checks the *live* session (still running + still waiting)
             // so a prompt that changed during the boss round-trip is never
-            // answered blindly.
+            // answered blindly. The execute/status/reason decision is the pure,
+            // tested resolveAutoAdvanceOutcome.
+            let gate: AutoAdvanceGate
             if input.kind == .autoAdvance, let entry {
                 let live = state.processEntries.first(where: { $0.id == entry.id })
-                let gate = evaluateAutoAdvanceGate(
+                gate = evaluateAutoAdvanceGate(
                     enabled: bossAutoAdvanceEnabled,
                     sessionRunning: activeSessions[entry.id] != nil,
                     sessionWaiting: (live ?? entry).attention == .waitingOnHuman,
@@ -10118,15 +10119,18 @@ final class WorkbenchViewModel: ObservableObject {
                     prompt: prompt,
                     proposedInput: input.proposedInput
                 )
-                switch gate {
-                case .allow:
-                    sendInput(input.proposedInput ?? "", to: entry, appendNewline: true)
-                    status = .applied
-                case let .block(reason):
-                    reasoning += reasoning.isEmpty ? "" : " "
-                    reasoning += "[not auto-advanced: \(reason)]"
-                }
+            } else {
+                gate = .block("not an auto-advance")
             }
+            let outcome = resolveAutoAdvanceOutcome(kind: input.kind, gate: gate)
+            if outcome.execute, let entry {
+                sendInput(input.proposedInput ?? "", to: entry, appendNewline: true)
+            }
+            if !outcome.reasoningNote.isEmpty {
+                reasoning += reasoning.isEmpty ? "" : " "
+                reasoning += outcome.reasoningNote
+            }
+            let status = outcome.status
 
             state.recordDecision(
                 BossInboxDecision(
