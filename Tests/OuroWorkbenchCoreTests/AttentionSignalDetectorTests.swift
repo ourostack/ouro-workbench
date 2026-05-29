@@ -75,13 +75,24 @@ final class AttentionSignalDetectorTests: XCTestCase {
         XCTAssertEqual(AttentionSignalDetector.classify(tail: "user@host project % "), .unknown)
     }
 
-    func testCompilerOutputIsNotWaiting() {
+    func testCompilerProgressIsNotWaiting() {
+        // Mid-compile progress (no terminal failure as the last line) is neither
+        // waiting nor blocked.
+        let tail = """
+        Compiling OuroWorkbenchCore (12 sources)
+        Linking OuroWorkbench
+        """
+        XCTAssertEqual(AttentionSignalDetector.classify(tail: tail), .unknown)
+    }
+
+    func testBuildFailureAsLastLineIsBlocked() {
+        // A build that ended on failure is stuck — correctly blocked, not waiting.
         let tail = """
         Compiling OuroWorkbenchCore (12 sources)
         error: cannot find 'foo' in scope
         Build failed after 3.2s
         """
-        XCTAssertEqual(AttentionSignalDetector.classify(tail: tail), .unknown)
+        XCTAssertEqual(AttentionSignalDetector.classify(tail: tail), .blocked)
     }
 
     func testProgressOutputIsNotWaiting() {
@@ -106,6 +117,38 @@ final class AttentionSignalDetectorTests: XCTestCase {
 
     func testEmptyTailIsUnknown() {
         XCTAssertEqual(AttentionSignalDetector.classify(tail: "   \n  \n"), .unknown)
+    }
+
+    // MARK: - Blocked (stuck on a terminal error)
+
+    func testTerminalErrorsAsLastLineAreBlocked() {
+        for tail in [
+            "Compiling...\nzsh: command not found: pnpm",
+            "$ ./deploy.sh\npermission denied",
+            "cloning...\nfatal: repository 'x' does not exist",
+            "running build\nbuild failed",
+            "node index.js\nError: Cannot find module 'express'\nmodule not found",
+            "git push\nfatal: Authentication failed for 'https://...'"
+        ] {
+            XCTAssertEqual(AttentionSignalDetector.classify(tail: tail), .blocked, "expected blocked for: \(tail)")
+        }
+    }
+
+    func testErrorFollowedByAPromptIsWaitingNotBlocked() {
+        // A prompt after an error means the human can still act → waiting wins.
+        let tail = "fatal: merge conflict\nResolve and retry? (y/N)"
+        XCTAssertEqual(AttentionSignalDetector.classify(tail: tail), .waitingOnHuman)
+    }
+
+    func testErrorMidProgressThatWorkProceededPastIsNotBlocked() {
+        // The error isn't the last thing said; the agent kept working.
+        let tail = "error: flaky test failed\nretrying...\nall tests passed\nDone in 4.1s"
+        XCTAssertEqual(AttentionSignalDetector.classify(tail: tail), .unknown)
+    }
+
+    func testBareErrorWordIsNotBlocked() {
+        // "error" alone is too noisy to flag.
+        XCTAssertEqual(AttentionSignalDetector.classify(tail: "WARN: error rate 0.2% nominal"), .unknown)
     }
 
     func testStaleMenuFarUpScrollbackIsNotWaiting() {

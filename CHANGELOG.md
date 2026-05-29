@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.101 - Detect blocked (stuck-on-error) sessions
+
+- Completes the attention model: Workbench now flags a session **blocked** (red dot) when it ends on a terminal, unrecoverable error and isn't at a prompt — `command not found`, `permission denied`, `fatal:`, a build/compilation failure, `module not found`, a segfault, and similar, checked only as the *last* line so an error the agent worked past never trips it. A prompt after an error still wins (that's waiting, the human can act). Reuses the same detection path as waiting; reverts to active when the session makes progress again.
+- Blocked sessions surface everywhere `needsHuman` already drives — the red sidebar dot, `⌘J`, and the boss check-in — so the boss can escalate or recover them. They're never auto-advanced (the gate requires a waiting prompt).
+
 ## 0.1.100 - Make the Boss Watch dependency discoverable
 
 - The Settings → Boss auto-advance toggle and the Boss Decision Log empty state now say the boss decides during check-ins, so you turn on **Boss Watch** for hands-off operation. Prevents the "I marked a session trusted and enabled auto-advance but nothing happened" confusion — the boss simply hadn't checked in yet.

@@ -11199,9 +11199,16 @@ final class WorkbenchViewModel: ObservableObject {
             guard entry.attention == .active || entry.attention == .idle else { return }
             updateEntry(entryId) { $0.attention = .waitingOnHuman }
             save()
+        case .blocked:
+            // Stuck on a terminal error. Only escalate from active/idle; don't
+            // override a waiting prompt or a boss-set review state.
+            guard entry.attention == .active || entry.attention == .idle else { return }
+            updateEntry(entryId) { $0.attention = .blocked }
+            save()
         case .unknown:
-            // The agent produced output without a prompt: clear a stale wait.
-            guard entry.attention == .waitingOnHuman else { return }
+            // The agent produced output that's neither a prompt nor a terminal
+            // error: clear a stale detector-set wait/blocked back to active.
+            guard entry.attention == .waitingOnHuman || entry.attention == .blocked else { return }
             updateEntry(entryId) { $0.attention = .active }
             save()
         }
