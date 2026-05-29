@@ -142,6 +142,18 @@ Trusted sessions may be launched, recovered, terminated, or sent input by the
 boss. Untrusted or archived sessions remain inspectable in the UI, but boss
 control is denied.
 
+### Friend
+
+A session's friend is the person or agent it acts for — a `human` or an `agent`,
+with a trust level (`family` / `friend` / `acquaintance` / `stranger`). It is
+whose preferences the boss applies when deciding what a waiting session needs.
+
+By default a session resolves to the **machine owner** (your local user account,
+family trust) — the same way the Ouro CLI resolves a local session — so you
+rarely set this. You only assign a friend explicitly when a session belongs to
+someone else (a teammate, or a delegated agent). `family` and `friend` are the
+trusted levels; `acquaintance` and `stranger` are never auto-advanced.
+
 ### Recovery
 
 Recovery is not magic process immortality. It is honest restoration.
@@ -375,10 +387,21 @@ the native app.
 
 ### Check Whether Anything Is Waiting
 
-Use `Waiting On Me?`.
+You don't have to ask. Workbench watches each running session's output and, when
+one goes idle at a prompt that needs a decision (an approval menu, a `y/N`, a
+selection list, "press enter"), it flags that session **waiting on you** on its
+own — the sidebar dot turns orange, and it surfaces in the menubar, Boss Watch,
+and notifications.
 
-This is the one-stop-shop question. It should tell you whether any terminal
-agent, Ouro mailbox item, recovery plan, or action log event needs human input.
+Press **⌘J** to jump straight to the next session that needs you (waiting,
+needs review, or blocked), across all groups. That's the core loop: the
+workbench tells you who needs you and takes you there, so you never scan panes.
+
+You can still ask the boss `Waiting On Me?` for a narrated summary that also
+folds in Ouro mailbox items, recovery plans, and the action log.
+
+See [The Attention Inbox](#the-attention-inbox) for letting the boss handle the
+routine ones for you.
 
 ### Keep Work Moving
 
@@ -595,6 +618,58 @@ name in `group`. The optional `trust` field is the string enum `trusted` or
 `untrusted`; `autoResume` is a boolean. Invalid action payload types are
 rejected instead of silently defaulted.
 
+## The Attention Inbox
+
+The inbox is the loop that lets you run many agents without babysitting each one:
+**detect → decide → act → review → teach.** Full design in
+[docs/preference-driven-inbox.md](preference-driven-inbox.md); here's how to drive it.
+
+### How it works
+
+1. **Detect.** Workbench watches each running session's output and flags it
+   `waiting on you` when it's idle at a prompt that needs a decision. (Press
+   **⌘J** to jump to the next one.)
+2. **Decide.** During a boss check-in, the boss reads each waiting prompt and
+   that session's **friend**, and decides from that friend's preferences:
+   *auto-advance* (answer it), *escalate* (leave it for you), or *hold*.
+3. **Act.** If the decision is auto-advance and it clears the gate (below), the
+   boss sends the answer for you. Otherwise it's left for you.
+4. **Review.** Every decision — acted or not, with the reasoning — is in the
+   **Boss Decision Log** (`⌘K` → "Boss Decision Log").
+5. **Teach.** From any log entry, reinforce a good call ("auto-advance these
+   next time") or correct a wrong one ("always ask me"). The boss saves that as
+   a standing preference for that friend, so it improves.
+
+### Turning on auto-advance
+
+Auto-advance is off in effect until you opt a session in. To use it:
+
+1. Mark the session **Trusted** (the per-session opt-in; untrusted is the default
+   and is never auto-advanced).
+2. Turn on **Boss Watch** so the boss checks in automatically — auto-advance
+   only happens during check-ins.
+3. Leave **Settings → Boss → "Let the boss auto-advance"** on (the global
+   kill-switch; flip it off to make the boss escalate everything).
+
+Day one is conservative by design: with no learned preferences yet, the boss has
+nothing to act on, so it escalates everything. You teach from the log, and it
+starts auto-advancing what you've approved.
+
+### The gate (when the boss may actually send input)
+
+Auto-advance fires only when **all** hold:
+
+- the global kill-switch is on, and
+- the session is still **running** and still **waiting** at send time (so a
+  prompt that changed while the boss was thinking is never answered blindly), and
+- the session is **Trusted**, and
+- the friend's trust is **family** or **friend**, and
+- the prompt is **not** destructive, secret-bearing, financial, a deploy, or an
+  agreement — those **always** escalate, even if a preference seems to allow it.
+
+Anything that doesn't clear the gate is recorded in the log with the reason and
+left for you. Nothing is ever sent twice for the same prompt.
+
 ## Agent Awareness
 
 Workbench describes itself from one catalog,
@@ -673,6 +748,15 @@ and visible:
 - `createTerminal` and `createGroup` require explicit names.
 - `moveSession`, `archive`, and `restore` only operate when the session state is safe for that change.
 - Every applied or denied action is logged.
+
+Auto-advance (the boss answering a waiting prompt for you) adds a second layer
+on top of those rules: the session must be running and still waiting, the
+session's friend must be trusted (`family`/`friend`), the global kill-switch must
+be on, and the prompt must clear the safety floor — destructive, secret,
+financial, deploy, and agreement prompts always escalate, never auto-answered.
+Every auto-advance decision, acted or held with its reason, is in the Boss
+Decision Log (`⌘K`), and you tune it by teaching from there. See
+[The Attention Inbox](#the-attention-inbox).
 
 This is TTFA in product form: trust the agent, keep the trail.
 
