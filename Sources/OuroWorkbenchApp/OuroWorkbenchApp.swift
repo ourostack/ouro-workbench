@@ -6809,6 +6809,13 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var bossWatchIsEnabled = false
     @Published var bossWatchLastRunAt: Date?
     @Published var bossWatchLastError: String?
+    /// Consecutive automatic/manual check-in failures, driving exponential
+    /// backoff of the automatic Boss Watch loop so a down/misconfigured boss
+    /// isn't re-invoked every poll interval forever. Reset on any success.
+    @Published var bossWatchConsecutiveFailures = 0
+    /// Earliest time the automatic loop may attempt the next check-in after a
+    /// failure (nil = no backoff). A manual check-in ignores this.
+    private var bossWatchNextRetryAt: Date?
     @Published var bossWatchChangeSummaries: [WorkspaceChangeSummary] = []
     @Published var transcriptSearchQuery = ""
     @Published var transcriptSearchResults: [TranscriptSearchMatch] = []
@@ -8897,6 +8904,12 @@ final class WorkbenchViewModel: ObservableObject {
         guard bossWatchIsEnabled, !bossCheckInIsRunning, !bossWatchTickIsRunning else {
             return
         }
+        // Back off the automatic loop while the boss keeps failing, so a down
+        // boss isn't re-invoked every interval. A manual check-in (the Check In
+        // button) calls runBossCheckIn directly and is never gated here.
+        guard BossWatchBackoff.mayAttempt(now: Date(), nextRetryAt: bossWatchNextRetryAt) else {
+            return
+        }
         bossWatchTickIsRunning = true
         defer {
             bossWatchTickIsRunning = false
@@ -10558,9 +10571,17 @@ final class WorkbenchViewModel: ObservableObject {
             applyBossActions(from: answer)
             recordBossDecisions(from: answer)
             bossWatchLastError = nil
+            // Boss responded — clear any backoff so the automatic loop resumes
+            // its normal cadence immediately.
+            bossWatchConsecutiveFailures = 0
+            bossWatchNextRetryAt = nil
         } catch {
             bossCheckInAnswer = "Check-in failed: \(error.localizedDescription)"
             bossAppliedActions = []
+            bossWatchConsecutiveFailures += 1
+            bossWatchNextRetryAt = Date().addingTimeInterval(
+                BossWatchBackoff.delay(consecutiveFailures: bossWatchConsecutiveFailures)
+            )
             if bossWatchIsEnabled {
                 bossWatchLastError = error.localizedDescription
             }
@@ -10579,10 +10600,11 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     /// Record the boss's decisions about waiting sessions into the durable
-    /// decision log. Dry-run: this only *logs* what the boss decided (and why) —
-    /// it never sends input, even for `autoAdvance`. Executing decisions is a
-    /// later phase; this builds the audit trail first. Deduped per session so
-    /// repeated Boss Watch ticks over a still-waiting prompt don't flood the log.
+    /// decision log AND, for an `autoAdvance` that clears the defense-in-depth
+    /// gate (`resolveAutoAdvanceOutcome`), send the proposed input to the live
+    /// session. Every decision — sent, blocked, escalated, or held — is logged
+    /// with its reason for audit. Deduped per session so repeated Boss Watch
+    /// ticks over a still-waiting prompt don't flood the log or re-send input.
     func recordBossDecisions(from answer: String) {
         let inputs = (try? bossDecisionParser.parse(answer)) ?? []
         guard !inputs.isEmpty else {

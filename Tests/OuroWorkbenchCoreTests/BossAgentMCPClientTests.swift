@@ -109,6 +109,33 @@ final class BossAgentMCPClientTests: XCTestCase {
         }
     }
 
+    func testEmptyToolTextSurfacesAsEmptyResult() {
+        let line = """
+        {"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":"   "}],"isError":false}}
+        """
+        XCTAssertThrowsError(try BossAgentMCPClient.extractText(fromJSONLine: line)) { error in
+            XCTAssertEqual(error as? BossAgentMCPClientError, .emptyResult)
+        }
+    }
+
+    func testEmptyResponseSentinelSurfacesAsEmptyResult() {
+        let line = """
+        {"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":"(empty response)"}],"isError":false}}
+        """
+        XCTAssertThrowsError(try BossAgentMCPClient.extractText(fromJSONLine: line)) { error in
+            XCTAssertEqual(error as? BossAgentMCPClientError, .emptyResult)
+        }
+    }
+
+    func testNonAnswerDetector() {
+        XCTAssertTrue(BossAgentMCPClient.isEmptyOrNonAnswer(""))
+        XCTAssertTrue(BossAgentMCPClient.isEmptyOrNonAnswer("  \n "))
+        XCTAssertTrue(BossAgentMCPClient.isEmptyOrNonAnswer("(empty response)"))
+        XCTAssertTrue(BossAgentMCPClient.isEmptyOrNonAnswer("(No Response)"))
+        XCTAssertFalse(BossAgentMCPClient.isEmptyOrNonAnswer("ok"))
+        XCTAssertFalse(BossAgentMCPClient.isEmptyOrNonAnswer("(empty response) but here is more"))
+    }
+
     func testExtractsToolResponseFromWholeMCPOutput() throws {
         let output = """
         local boot line
