@@ -391,6 +391,32 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
 }
 
 public extension WorkspaceState {
+    /// Newest-first cap on retained runs per entry. Every launch / recovery /
+    /// auto-resume appends a new `ProcessRun`, and nothing pruned them — so a
+    /// long-lived or crash-looping session accumulated runs forever, bloating
+    /// the persisted state and slowing every (synchronous, main-thread) save.
+    static let processRunsPerEntryCap = 25
+
+    /// Keep only the newest `perEntryCap` runs for each entry; drop older
+    /// history. Consumers always resolve "latest" via `ProcessRun.isMoreRecent`,
+    /// so array order isn't load-bearing. Pure mutation (no persistence).
+    mutating func pruneProcessRuns(perEntryCap: Int = WorkspaceState.processRunsPerEntryCap) {
+        guard perEntryCap > 0, !processRuns.isEmpty else {
+            return
+        }
+        var keptByEntry: [UUID: Int] = [:]
+        var kept: [ProcessRun] = []
+        for run in processRuns.sorted(by: ProcessRun.isMoreRecent) {
+            let count = keptByEntry[run.entryId, default: 0]
+            guard count < perEntryCap else {
+                continue
+            }
+            kept.append(run)
+            keptByEntry[run.entryId] = count + 1
+        }
+        processRuns = kept
+    }
+
     /// One-time opt-out migration to the automate-first posture: trust every
     /// session that isn't deliberately hands-off (sessions were only untrusted
     /// because that used to be the default — never a real choice), and turn on
