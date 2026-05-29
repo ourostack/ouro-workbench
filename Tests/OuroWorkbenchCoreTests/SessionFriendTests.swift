@@ -122,6 +122,29 @@ final class SessionFriendTests: XCTestCase {
         XCTAssertTrue(prompt.contains("friend=unassigned"))
     }
 
+    func testBossPromptInlinesWaitingPromptsForDecisioning() {
+        let project = WorkbenchProject(name: "P", rootPath: "/tmp/p")
+        let waiter = ProcessEntry(projectId: project.id, name: "Codex", kind: .terminalAgent, agentKind: .openAICodex, executable: "codex", workingDirectory: "/tmp/p", attention: .waitingOnHuman)
+        let run = ProcessRun(entryId: waiter.id, status: .running)
+        let state = WorkspaceState(projects: [project], processEntries: [waiter], processRuns: [run])
+        let prompt = BossAgentPromptBuilder().checkInPrompt(
+            question: "status?",
+            state: state,
+            summary: WorkspaceSummarizer().summarize(state),
+            waitingPrompts: [waiter.id: "Do you want to proceed? 1. Yes  2. No"]
+        )
+        XCTAssertTrue(prompt.contains("Waiting prompts (decide each via ouro-workbench-decisions):"))
+        XCTAssertTrue(prompt.contains("Do you want to proceed? 1. Yes  2. No"))
+    }
+
+    func testBossPromptOmitsWaitingSectionWhenNonePending() {
+        let project = WorkbenchProject(name: "P", rootPath: "/tmp/p")
+        let active = ProcessEntry(projectId: project.id, name: "A", kind: .shell, executable: "zsh", workingDirectory: "/tmp/p", attention: .active)
+        let state = WorkspaceState(projects: [project], processEntries: [active])
+        let prompt = BossAgentPromptBuilder().checkInPrompt(question: "s", state: state, summary: WorkspaceSummarizer().summarize(state))
+        XCTAssertFalse(prompt.contains("Waiting prompts"))
+    }
+
     func testBossPromptResolvesUnassignedToMachineOwnerWhenProvided() {
         let project = WorkbenchProject(name: "P", rootPath: "/tmp/p")
         let orphan = ProcessEntry(projectId: project.id, name: "Orphan", kind: .shell, executable: "zsh", workingDirectory: "/tmp/p")

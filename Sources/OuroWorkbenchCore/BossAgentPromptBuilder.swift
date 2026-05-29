@@ -11,6 +11,7 @@ public struct BossAgentPromptBuilder: Sendable {
         executableHealth: [UUID: ExecutableHealth] = [:],
         gitStatus: [UUID: GitSessionStatus] = [:],
         machineFriend: SessionFriend? = nil,
+        waitingPrompts: [UUID: String] = [:],
         ouroAgents: [OuroAgentRecord] = [],
         recentChanges: [WorkspaceChangeSummary] = []
     ) -> String {
@@ -111,6 +112,18 @@ public struct BossAgentPromptBuilder: Sendable {
             let friend = entry.flatMap { state.effectiveFriend(for: $0, fallback: machineFriend) }
                 .map { "\($0.name) (\($0.kind.rawValue), \($0.trust.rawValue))" } ?? "unassigned"
             lines.append("- \(snapshot.name) (id=\(snapshot.id.uuidString)): group=\(groupName), cli=\(agentKind), desk_task=\(deskTask), friend=\(friend), archived=\(archived), trust=\(trust), executable_health=\(executableStatus), executable_path=\(executablePath), git=\(git), status=\(snapshot.status.rawValue), attention=\(snapshot.attention.rawValue), transcript=\(transcriptPath), notes=\(notes), summary=\(snapshot.summary)")
+        }
+        // Inline the actual waiting prompt text for sessions that need a human,
+        // so you can decide (and propose the exact input) without first calling
+        // workbench_transcript_tail on each one.
+        let waiting = summary.processSnapshots.filter { waitingPrompts[$0.id] != nil }
+        if !waiting.isEmpty {
+            lines.append("")
+            lines.append("Waiting prompts (decide each via ouro-workbench-decisions):")
+            for snapshot in waiting {
+                let snippet = Self.oneLine(waitingPrompts[snapshot.id] ?? "")
+                lines.append("- \(snapshot.name) (id=\(snapshot.id.uuidString)): \(snippet)")
+            }
         }
         lines.append("")
         lines.append("Recovery:")
