@@ -809,6 +809,14 @@ The bundle deliberately excludes terminal transcript contents. After it saves,
 use `Reveal in Finder` or `Copy Path` to hand the folder off — it's laid out so
 the boss agent (or Claude) can read it directly.
 
+You can also click `File as GitHub Issue` to open the report as an issue on
+`ourostack/ouro-workbench` (labelled `bug`) — a durable, searchable venue the
+boss/Claude can read from anywhere. The issue body is `report.md`; the
+screenshot and diagnostics zip stay in the local bundle, referenced by path
+(the CLI can't upload them). This needs the GitHub CLI installed and
+authenticated (`brew install gh` then `gh auth login`); if it isn't, the local
+bundle is still saved and the reporter tells you what's missing.
+
 ## What Good Looks Like
 
 A healthy Workbench has this shape:
