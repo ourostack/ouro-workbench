@@ -9457,13 +9457,23 @@ final class WorkbenchViewModel: ObservableObject {
             }
     }
 
-    /// Snapshot the key window into PNG data using the view's own backing store
-    /// (`cacheDisplay`), which renders in-process and needs no screen-recording
-    /// permission. Returns nil if there's no visible window to capture.
+    /// Snapshot the main app window into PNG data using the view's own backing
+    /// store (`cacheDisplay`), which renders in-process and needs no
+    /// screen-recording permission. Returns nil if there's no visible window.
+    ///
+    /// The Report a Bug sheet is itself a (key) window while open, so capturing
+    /// `keyWindow` would screenshot the report form, not the app being reported
+    /// on. Resolve through `sheetParent` so we always capture the window the
+    /// sheet is attached to — the actual workbench state.
     private func captureKeyWindowPNG() -> Data? {
-        let window = NSApp.keyWindow
+        let candidate = NSApp.keyWindow
             ?? NSApp.mainWindow
             ?? NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil })
+        // Walk up any chain of attached sheets to the underlying app window.
+        var window = candidate
+        while let parent = window?.sheetParent {
+            window = parent
+        }
         guard let view = window?.contentView else {
             return nil
         }
