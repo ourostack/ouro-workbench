@@ -6,7 +6,7 @@ public enum WorkbenchRelease {
     public static let bundleExecutable = "OuroWorkbench"
     public static let mcpExecutable = "OuroWorkbenchMCP"
     public static let mcpServerName = "ouro-workbench"
-    public static let version = "0.1.106"
+    public static let version = "0.1.107"
     public static let minimumMacOSVersion = "14.0"
     /// Where in-app bug reports are filed when the operator chooses the GitHub
     /// Issue venue (`owner/repo`).

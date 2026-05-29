@@ -32,8 +32,24 @@ struct OuroWorkbenchApp: App {
         .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(replacing: .newItem) {}
+            // Register ⇧⌘B as a real menu-bar command. A toolbar Menu's
+            // keyboardShortcut is a local shortcut the focused SwiftTerm view
+            // swallows first; a menu-bar key equivalent is matched before the
+            // event reaches the first responder, so the bug reporter opens even
+            // when a terminal has focus.
+            CommandGroup(after: .help) {
+                Button("Report a Bug…") {
+                    NotificationCenter.default.post(name: .workbenchReportBug, object: nil)
+                }
+                .keyboardShortcut("b", modifiers: [.command, .shift])
+            }
         }
     }
+}
+
+extension Notification.Name {
+    /// Posted by the ⇧⌘B menu-bar command; the root view opens the reporter.
+    static let workbenchReportBug = Notification.Name("workbenchReportBug")
 }
 
 struct WorkbenchRootView: View {
@@ -176,6 +192,9 @@ struct WorkbenchRootView: View {
         }
         .sheet(isPresented: $model.isReportBugPresented) {
             ReportBugSheet(model: model)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .workbenchReportBug)) { _ in
+            model.isReportBugPresented = true
         }
         // Accept Finder folder drops on the window — same end state as
         // Open Workspace…, but with one less click for the muscle memory
@@ -2312,7 +2331,9 @@ struct HeaderView: View {
                 } label: {
                     Label("Report a Bug…", systemImage: "ladybug")
                 }
-                .keyboardShortcut("b", modifiers: [.command, .shift])
+                // ⇧⌘B is registered as a menu-bar command (see OuroWorkbenchApp
+                // .commands) so it fires even when a terminal has focus; the
+                // shortcut isn't repeated here to avoid a duplicate binding.
                 Button {
                     model.isAboutSheetPresented = true
                 } label: {
