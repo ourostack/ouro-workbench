@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.109 - Bug report screenshots capture the app, not the form
+
+- Fixed: the bug report's `screenshot.png` captured the Report a Bug sheet itself (the key window while open) instead of the app behind it — so the screenshot showed the form, not the state you were reporting on. Capture now resolves through the sheet's parent window, so it grabs the actual workbench window.
+
 ## 0.1.108 - Bug reporter polish + stop the onboarding nag
 
 - Fixed the bug reporter's note field: the text caret rendered above the placeholder line, so typed text didn't land where you expected. The placeholder now sits behind a transparent editor with matched insets, so the caret and your text align exactly.
