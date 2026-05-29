@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.98 - Harden auto-advance against stale prompts
+
+- Auto-advance now re-checks the **live** session before sending: the gate refuses unless the session is still running **and** still `waitingOnHuman` at execution time. An LLM check-in round-trip takes seconds, during which the session may move past the prompt; this prevents injecting an answer into a session that already advanced. The detector reverts `waiting → active` on new output, so "still waiting" is an accurate guard.
+- The gate also refuses to auto-answer a prompt shorter than 3 characters (no real context to classify). Persisted decision strings (prompt / reasoning / proposed input / preference) are length-capped so a verbose boss reply can't bloat saved workspace state.
+- These conditions live in the pure, unit-tested `evaluateAutoAdvanceGate`, so they can't be bypassed.
+
 ## 0.1.97 - Teach the boss (preference-driven inbox, phase 3)
 
 - The learning loop closes the inbox. Each Boss Decision Log row now has a **Teach** control: for an escalate/hold, "auto-advance these next time"; for an auto-advance you disagree with, "always ask me instead". It hands the boss a standing preference for that decision's friend and asks it to persist it via its own notes tools (same conversation plane as check-ins, since the boss owns its memory), so future decisions improve.
