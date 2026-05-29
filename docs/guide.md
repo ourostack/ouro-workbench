@@ -358,9 +358,10 @@ The palette is token-aware and understands operator aliases. Queries like
 `diag folder`, `boss selected`, `mcp refresh`, `signal eof`, and `copy command`
 find the relevant actions even when the visible title uses different wording.
 It includes boss quick asks, workspace refresh, Ouro-agent refresh, Workbench MCP
-install/refresh, release-page open, diagnostics reveal/copy/open-folder,
-selected-terminal Ask Boss, launch, focus, redraw, Ctrl-C, Esc, EOF, copy
-command, open working directory, reveal transcript, stop, and recover.
+install/refresh, release-page open, diagnostics reveal/copy/open-folder, report a
+bug, open the bug-reports folder, selected-terminal Ask Boss, launch, focus,
+redraw, Ctrl-C, Esc, EOF, copy command, open working directory, reveal
+transcript, stop, and recover.
 
 Useful shortcuts (the full, authoritative map lives in
 `Sources/OuroWorkbenchCore/WorkbenchGuide.swift` and is shown in-app with
@@ -377,6 +378,7 @@ Useful shortcuts (the full, authoritative map lives in
 | `Command-L` | Redraw selected running terminal |
 | `Command-Shift-F` | Enter or exit terminal focus |
 | `Command-F` | Focus or run transcript search |
+| `Command-Shift-B` | Report a bug (bundles screenshot, diagnostics, and recent activity) |
 | `Command-/` | Show the full keyboard shortcut reference |
 
 ## Daily Operating Loops
@@ -777,8 +779,35 @@ This is TTFA in product form: trust the agent, keep the trail.
 | A boss action is skipped | The action violated a local trust gate or current runtime state. | Check `Action Log` for the exact result. |
 | The app did not reopen after restart | Login item state may be off or stale. | Toggle `Open at Login` off and back on, then refresh. |
 | Release update check is unavailable | GitHub Releases could not be reached or no release exists yet. | Use the current installed build, then check again when online. |
-| A bug report needs evidence | The app can collect a safe diagnostics bundle without transcript contents. | Use `Support Diagnostics` in the boss dashboard, then reveal the zip, copy its path, or open the output folder from the command palette. |
+| You hit a bug and want to report it | The app can bundle everything needed to debug into one folder. | Press `⇧⌘B` (or `Report a Bug…` in the More menu / `⌘K` palette), describe what happened, and click `Create Report`. |
+| You need a safe diagnostics bundle only | The app can collect logs/crash reports without transcript contents. | Use `Support Diagnostics` in the boss dashboard, then reveal the zip, copy its path, or open the output folder from the command palette. |
 | Transcript search finds nothing | The session may not have produced a persisted run transcript yet. | Launch the session, produce output, stop or switch, then search again. |
+
+## Reporting Bugs
+
+When something misbehaves, file a report from inside the app rather than
+reconstructing the situation later. Press `⇧⌘B` (also `Report a Bug…` in the
+**More** menu and the `⌘K` palette), write what you were doing and what went
+wrong, and click `Create Report`.
+
+Each report is a self-contained folder under
+`~/Library/Application Support/OuroWorkbench/bug-reports/`, named with a
+timestamp and a slug of your note (e.g. `20260528-140322-terminal-froze/`). It
+bundles:
+
+- `report.md` — app + macOS version, boss/Boss Watch/auto-advance posture, every
+  current session (status, attention, trust, friend, branch, directory), the
+  recent boss decision log (what the boss decided and *why*), and the recent
+  action log.
+- `screenshot.png` — a snapshot of the Workbench window, captured in-process so
+  it never triggers a screen-recording permission prompt.
+- `diagnostics.zip` — the support diagnostics bundle (logs and crash reports),
+  collected automatically. If it fails, the report still writes and notes the
+  failure under **Collection warnings**.
+
+The bundle deliberately excludes terminal transcript contents. After it saves,
+use `Reveal in Finder` or `Copy Path` to hand the folder off — it's laid out so
+the boss agent (or Claude) can read it directly.
 
 ## What Good Looks Like
 

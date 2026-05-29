@@ -33,6 +33,8 @@ public enum WorkbenchCommandID: String, Codable, CaseIterable, Sendable {
     case revealSupportDiagnostics
     case copySupportDiagnosticsPath
     case openSupportDiagnosticsFolder
+    case reportBug
+    case revealBugReportsFolder
     case checkReleaseUpdates
     case openReleaseUpdate
     case manageAgents

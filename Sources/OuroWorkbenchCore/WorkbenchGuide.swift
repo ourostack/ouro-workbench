@@ -107,6 +107,7 @@ public enum WorkbenchGuide {
                 Shortcut(keys: "⌘N", summary: "New terminal"),
                 Shortcut(keys: "⌃⌘B", summary: "Toggle sidebar visibility"),
                 Shortcut(keys: "⌘,", summary: "Open Settings"),
+                Shortcut(keys: "⇧⌘B", summary: "Report a bug (bundles a screenshot, diagnostics, and recent activity)"),
                 Shortcut(keys: "⌘/", summary: "Show the keyboard shortcut help")
             ]
         )
