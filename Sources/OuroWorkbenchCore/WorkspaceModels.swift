@@ -165,7 +165,7 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         executable: String,
         arguments: [String] = [],
         workingDirectory: String,
-        trust: ProcessTrust = .untrusted,
+        trust: ProcessTrust = .trusted,
         autoResume: Bool = false,
         isArchived: Bool = false,
         isPinned: Bool = false,
@@ -343,7 +343,7 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
     public init(
         schemaVersion: Int = 1,
         boss: BossAgentSelection = BossAgentSelection(),
-        bossWatchEnabled: Bool = false,
+        bossWatchEnabled: Bool = true,
         bossPaneCollapsed: Bool = true,
         selectedProjectId: UUID? = nil,
         selectedEntryId: UUID? = nil,
@@ -372,7 +372,7 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
         self.boss = try container.decode(BossAgentSelection.self, forKey: .boss)
-        self.bossWatchEnabled = try container.decodeIfPresent(Bool.self, forKey: .bossWatchEnabled) ?? false
+        self.bossWatchEnabled = try container.decodeIfPresent(Bool.self, forKey: .bossWatchEnabled) ?? true
         self.bossPaneCollapsed = try container.decodeIfPresent(Bool.self, forKey: .bossPaneCollapsed) ?? false
         self.selectedProjectId = try container.decodeIfPresent(UUID.self, forKey: .selectedProjectId)
         self.selectedEntryId = try container.decodeIfPresent(UUID.self, forKey: .selectedEntryId)
@@ -387,5 +387,19 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         self.actionLog = try container.decodeLenientArray(WorkbenchActionLogEntry.self, forKey: .actionLog, skipped: &skipped)
         self.decisionLog = try container.decodeLenientArray(BossInboxDecision.self, forKey: .decisionLog, skipped: &skipped)
         self.updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+    }
+}
+
+public extension WorkspaceState {
+    /// One-time opt-out migration to the automate-first posture: trust every
+    /// session that isn't deliberately hands-off (sessions were only untrusted
+    /// because that used to be the default — never a real choice), and turn on
+    /// Boss Watch so the boss is awake to act. The operator opts a session back
+    /// out by marking it untrusted. Idempotent given the caller's run-once gate.
+    mutating func applyAutomaticBossDefaults() {
+        for index in processEntries.indices where processEntries[index].trust == .untrusted {
+            processEntries[index].trust = .trusted
+        }
+        bossWatchEnabled = true
     }
 }

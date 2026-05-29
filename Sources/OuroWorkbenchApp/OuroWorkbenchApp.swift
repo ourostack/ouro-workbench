@@ -942,7 +942,7 @@ struct SettingsSheet: View {
             Toggle(isOn: $model.bossAutoAdvanceEnabled) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Let the boss auto-advance waiting sessions")
-                    Text("When a session is waiting, the boss may answer the prompt itself using that session's friend's preferences. The boss decides during check-ins, so turn on Boss Watch for hands-off operation. Only fires on sessions you've marked Trusted, with a trusted friend, and never for destructive or secret prompts. Every decision — acted or not — is in the Boss Decision Log (⌘K).")
+                    Text("When a session is waiting, the boss answers the prompt for you using that session's friend's preferences — automatically (Boss Watch is on by default). Mark a session \u{201C}hands off\u{201D} (untrusted) to exclude it. It never auto-answers destructive or secret prompts, and every decision — acted or not — is in the Boss Decision Log (⌘K). Turn this off to make the boss escalate everything instead.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -1162,7 +1162,7 @@ struct DecisionLogSheet: View {
                         .foregroundStyle(.secondary)
                     Text("No decisions recorded yet")
                         .font(.headline)
-                    Text("When a session is waiting on you, the boss records what it would do and why here. The boss decides during check-ins — turn on Boss Watch so it happens automatically.")
+                    Text("When a session is waiting on you, the boss records what it would do and why here — automatically, as it checks in.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -11400,6 +11400,7 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     private static let collapsedChromeMigrationKey = "ouro.workbench.collapsedChromeMigration.v17"
+    private static let automaticBossMigrationKey = "ouro.workbench.automaticBossDefaults.v1"
     static let terminalFontSizeDefaultsKey = "ouro.workbench.terminalFontSize"
     static let recentWorkspacePathsDefaultsKey = "ouro.workbench.recentWorkspacePaths"
     static let terminalThemeOverrideDefaultsKey = "ouro.workbench.terminalThemeOverride"
@@ -11418,6 +11419,7 @@ final class WorkbenchViewModel: ObservableObject {
             let loaded = try store.load()
             state = startupRecoveryReconciler.reconcile(bootstrapper.bootstrappedState(from: loaded))
             applyCollapsedChromeMigrationIfNeeded()
+            applyAutomaticBossDefaultsMigrationIfNeeded()
             bossWatchIsEnabled = state.bossWatchEnabled
             bossWatchBaselineState = bossWatchIsEnabled ? state : nil
             selectedProjectID = state.selectedProjectId.flatMap { id in
@@ -11460,6 +11462,20 @@ final class WorkbenchViewModel: ObservableObject {
         }
         state.bossPaneCollapsed = true
         defaults.set(true, forKey: Self.collapsedChromeMigrationKey)
+    }
+
+    /// One-time migration to the automate-first posture (opt-out): trust the
+    /// existing sessions the boss should manage and turn on Boss Watch, so the
+    /// inbox just works without per-session setup. Runs once; the operator can
+    /// mark any session hands-off (untrusted) or turn Boss Watch back off
+    /// afterward and that sticks.
+    private func applyAutomaticBossDefaultsMigrationIfNeeded() {
+        let defaults = UserDefaults.standard
+        guard !defaults.bool(forKey: Self.automaticBossMigrationKey) else {
+            return
+        }
+        state.applyAutomaticBossDefaults()
+        defaults.set(true, forKey: Self.automaticBossMigrationKey)
     }
 
     private func updateEntry(_ entryId: UUID, mutate: (inout ProcessEntry) -> Void) {

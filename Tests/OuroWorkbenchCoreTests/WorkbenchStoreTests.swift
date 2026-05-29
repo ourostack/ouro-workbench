@@ -103,7 +103,9 @@ final class WorkbenchStoreTests: XCTestCase {
         XCTAssertNil(loaded.processEntries.first?.lastSummary)
         XCTAssertNil(loaded.processEntries.first?.notes)
         XCTAssertEqual(loaded.actionLog, [])
-        XCTAssertEqual(loaded.bossWatchEnabled, false)
+        // Absent bossWatchEnabled defaults on (automate-first posture); the
+        // one-time migration also turns it on for existing state.
+        XCTAssertEqual(loaded.bossWatchEnabled, true)
         XCTAssertEqual(loaded.bossPaneCollapsed, false)
         XCTAssertNil(loaded.selectedProjectId)
         XCTAssertNil(loaded.selectedEntryId)
