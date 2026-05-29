@@ -2920,6 +2920,9 @@ struct CommandPaletteSheet: View {
     @ObservedObject var model: WorkbenchViewModel
     @Environment(\.dismiss) private var dismiss
     @FocusState private var searchFocused: Bool
+    /// Keyboard-highlighted row. ↑/↓ move it, Return runs it (not just the
+    /// first), and clicking a row runs that one directly.
+    @State private var selectedIndex = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -2929,55 +2932,69 @@ struct CommandPaletteSheet: View {
                 TextField("Run command", text: $model.commandPaletteQuery)
                     .textFieldStyle(.plain)
                     .focused($searchFocused)
-                    .onSubmit(runFirstCommand)
+                    .onSubmit(runSelectedCommand)
+                    .onKeyPress(.downArrow) { moveSelection(by: 1); return .handled }
+                    .onKeyPress(.upArrow) { moveSelection(by: -1); return .handled }
             }
             .padding(10)
             .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 6))
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 4) {
-                    if model.filteredCommandPaletteItems.isEmpty {
-                        ContentUnavailableView(
-                            "No Commands",
-                            systemImage: "command",
-                            description: Text("Try another action, terminal name, or alias.")
-                        )
-                        .frame(maxWidth: .infinity, minHeight: 220)
-                    }
-                    ForEach(model.filteredCommandPaletteItems) { command in
-                        Button {
-                            // Defer execution until the palette has dismissed
-                            // (see pendingPaletteCommand) so commands that open
-                            // another sheet present reliably.
-                            model.pendingPaletteCommand = command
-                            dismiss()
-                        } label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: command.systemImage)
-                                    .frame(width: 20)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(command.title)
-                                        .font(.body.weight(.semibold))
-                                    Text(command.detail)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(8)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 4) {
+                        if model.filteredCommandPaletteItems.isEmpty {
+                            ContentUnavailableView(
+                                "No Commands",
+                                systemImage: "command",
+                                description: Text("Try another action, terminal name, or alias.")
+                            )
+                            .frame(maxWidth: .infinity, minHeight: 220)
                         }
-                        .buttonStyle(.plain)
+                        ForEach(Array(model.filteredCommandPaletteItems.enumerated()), id: \.element.id) { index, command in
+                            Button {
+                                run(command)
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: command.systemImage)
+                                        .frame(width: 20)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(command.title)
+                                            .font(.body.weight(.semibold))
+                                        Text(command.detail)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(8)
+                                .background(
+                                    index == selectedIndex ? Color.accentColor.opacity(0.18) : Color.clear,
+                                    in: RoundedRectangle(cornerRadius: 6)
+                                )
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .id(index)
+                        }
                     }
                 }
+                .frame(minHeight: 240, maxHeight: 360)
+                .onChange(of: selectedIndex) { _, newValue in
+                    withAnimation(.easeOut(duration: 0.1)) { proxy.scrollTo(newValue, anchor: .center) }
+                }
             }
-            .frame(minHeight: 240, maxHeight: 360)
         }
         .padding()
         .frame(width: 560)
         .onAppear {
             model.commandPaletteQuery = ""
+            selectedIndex = 0
             searchFocused = true
+        }
+        .onChange(of: model.commandPaletteQuery) { _, _ in
+            // Filtering changes the list; reset the highlight to the top.
+            selectedIndex = 0
         }
         .onDisappear {
             // Run the chosen command now that the palette is fully gone, so a
@@ -2986,10 +3003,24 @@ struct CommandPaletteSheet: View {
         }
     }
 
-    private func runFirstCommand() {
-        guard let command = model.filteredCommandPaletteItems.first else {
+    private func moveSelection(by delta: Int) {
+        let count = model.filteredCommandPaletteItems.count
+        guard count > 0 else { return }
+        selectedIndex = min(max(selectedIndex + delta, 0), count - 1)
+    }
+
+    private func runSelectedCommand() {
+        let items = model.filteredCommandPaletteItems
+        guard selectedIndex >= 0, selectedIndex < items.count else {
             return
         }
+        run(items[selectedIndex])
+    }
+
+    private func run(_ command: WorkbenchCommandDescriptor) {
+        // Defer execution until the palette has dismissed (see
+        // pendingPaletteCommand) so commands that open another sheet present
+        // reliably.
         model.pendingPaletteCommand = command
         dismiss()
     }
@@ -3006,6 +3037,19 @@ struct BossDashboardView: View {
     @State private var showsAdvanced = false
 
     var body: some View {
+        advancedExpandingScrollView
+    }
+
+    private var advancedExpandingScrollView: some View {
+        scrollBody
+            .onChange(of: model.transcriptSearchFocusToken) { _, _ in
+                // The ⌘K "Search Transcripts" command lives behind Advanced;
+                // reveal it so the focused field is visible.
+                showsAdvanced = true
+            }
+    }
+
+    private var scrollBody: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
                 if model.bossCheckInIsRunning {
@@ -4675,6 +4719,9 @@ struct TranscriptSearchView: View {
                     .focused($searchFocused)
                     .onChange(of: model.transcriptSearchQuery) {
                         model.transcriptSearchQueryDidChange()
+                    }
+                    .onChange(of: model.transcriptSearchFocusToken) { _, _ in
+                        searchFocused = true
                     }
                     .onSubmit {
                         model.searchTranscripts()
@@ -6868,6 +6915,10 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var bossWatchChangeSummaries: [WorkspaceChangeSummary] = []
     @Published var transcriptSearchQuery = ""
     @Published var transcriptSearchResults: [TranscriptSearchMatch] = []
+    /// Bumped to request the transcript-search field expand + take focus (e.g.
+    /// from the ⌘K "Search Transcripts" command when there's no query yet, so
+    /// it puts the cursor in the field instead of doing nothing).
+    @Published var transcriptSearchFocusToken = 0
     @Published var transcriptSearchLastQuery: String?
     @Published var recoveryDrillResult: RecoveryDrillResult?
     @Published var bossAppliedActions: [String] = []
@@ -7608,13 +7659,6 @@ final class WorkbenchViewModel: ObservableObject {
                 keywords: ["mcp", "boss", "registration"]
             ),
             command(
-                .installWorkbenchMCPForBoss,
-                "Install Workbench MCP",
-                "Register or update Workbench MCP for the selected boss",
-                "wrench.and.screwdriver",
-                keywords: ["mcp", "boss", "register", "bridge"]
-            ),
-            command(
                 .searchTranscripts,
                 "Search Transcripts",
                 "Run the current transcript search query",
@@ -7706,6 +7750,20 @@ final class WorkbenchViewModel: ObservableObject {
                     keywords: ["boss", "reply", "respond"]
                 )
             ], at: 2)
+        }
+
+        // Only offer the MCP install when it would actually do something (not
+        // already registered/current) — mirrors the header/agent buttons.
+        if bossWorkbenchMCPRegistration?.isActionable == true {
+            commands.append(
+                command(
+                    .installWorkbenchMCPForBoss,
+                    "Install Workbench MCP",
+                    "Register or update Workbench MCP for the selected boss",
+                    "wrench.and.screwdriver",
+                    keywords: ["mcp", "boss", "register", "bridge"]
+                )
+            )
         }
 
         if lastBugReportURL != nil {
@@ -10371,7 +10429,12 @@ final class WorkbenchViewModel: ObservableObject {
             recover(selectedEntry)
         case .searchTranscripts:
             setBossPaneCollapsed(false)
-            searchTranscripts()
+            // Expand Advanced + focus the field so an empty query isn't a no-op;
+            // run the search when there's already a query to run.
+            transcriptSearchFocusToken += 1
+            if !transcriptSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                searchTranscripts()
+            }
         case .runRecoveryDrill:
             runRecoveryDrill()
         case .collectSupportDiagnostics:

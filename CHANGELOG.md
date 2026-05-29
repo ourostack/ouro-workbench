@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.115 - Command palette keyboard navigation
+
+- The ⌘K command palette now supports **↑/↓ to move the selection** (highlighted row, auto-scrolls) and **Return runs the highlighted command**, not just the first match.
+- "Search Transcripts" from the palette no longer no-ops on an empty query — it reveals the search field and focuses it.
+- "Install Workbench MCP" only appears in the palette when it would actually do something (not already registered), matching its buttons.
+
 ## 0.1.114 - No beachball on the import preview
 
 - Hardened the Codex import-preview lookup: it shells out to `sqlite3` against the live Codex DB from the (main-actor) preview view. It now opens the DB `-readonly` (no write-lock contention) and is bounded by a 1.5s watchdog, so a stuck database lock can't hang the app — it just falls back to the file-based preview.
