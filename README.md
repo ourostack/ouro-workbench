@@ -26,8 +26,9 @@ moving.
 ## Guide
 
 Read [docs/guide.md](docs/guide.md) for the operator mental model, first-run
-checklist, daily control loops, boss/Ouro integration, restart recovery
-playbook, trust model, and troubleshooting.
+checklist, daily control loops, the attention inbox (the boss handling waiting
+prompts for you, preference-driven and audited), boss/Ouro integration, restart
+recovery playbook, trust model, and troubleshooting.
 
 Read [docs/product-tour.md](docs/product-tour.md) for the product/investor tour,
 release-state summary, and screenshot evidence workflow.
