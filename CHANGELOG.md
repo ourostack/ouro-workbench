@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.105 - Report a bug from inside the app
+
+- New in-app bug reporter: press `⇧⌘B` (also `Report a Bug…` in the More menu and the `⌘K` palette), describe what happened, and `Create Report`. Each report is a self-contained, timestamped folder under `~/Library/Application Support/OuroWorkbench/bug-reports/` so it's trivial to find and hand off.
+- Every bundle gathers everything needed to debug: a `report.md` (app + macOS version, boss/Boss Watch/auto-advance posture, all current sessions with status/attention/trust/friend/branch, the recent boss decision log with *why*, and the recent action log), a `screenshot.png` captured in-process (no screen-recording prompt), and the support `diagnostics.zip`. A failed screenshot or diagnostics run is recorded as a warning instead of sinking the report. No terminal transcript contents are included.
+- The report layout and bundle assembly are the pure, unit-tested `BugReportComposer` / `BugReportWriter`; the reporter folder is reachable any time via `Open Bug Reports Folder`.
+
 ## 0.1.104 - Test coverage on the auto-advance decision (hardening)
 
 - Extracted the "should this send input to a terminal, and how is it recorded" decision from `recordBossDecisions` into the pure, unit-tested `resolveAutoAdvanceOutcome`: only an `autoAdvance` that clears the gate executes (status `applied`); a blocked one is recorded with its reason; escalate/hold never execute. Behavior-preserving — the most consequential path now has regression protection it lacked. No functional change.

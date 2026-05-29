@@ -174,6 +174,9 @@ struct WorkbenchRootView: View {
         .sheet(isPresented: $model.isDecisionLogPresented) {
             DecisionLogSheet(model: model)
         }
+        .sheet(isPresented: $model.isReportBugPresented) {
+            ReportBugSheet(model: model)
+        }
         // Accept Finder folder drops on the window — same end state as
         // Open Workspace…, but with one less click for the muscle memory
         // path of "drag the project root onto Workbench."
@@ -1187,6 +1190,133 @@ struct DecisionLogSheet: View {
     }
 }
 
+/// The in-app bug reporter. The operator types what went wrong; submitting
+/// bundles a window screenshot, the support diagnostics zip, and a `report.md`
+/// (app/OS version, sessions, recent boss decisions + actions) into a stable,
+/// timestamped folder under the app-support root. Reached from the More menu
+/// (⌘⇧B) and the ⌘K palette.
+struct ReportBugSheet: View {
+    @ObservedObject var model: WorkbenchViewModel
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Report a Bug")
+                        .font(.title3.weight(.semibold))
+                    Text("Bundles a screenshot, diagnostics, and recent activity for debugging")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Cancel") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 18)
+            .padding(.bottom, 14)
+            Divider()
+
+            VStack(alignment: .leading, spacing: 12) {
+                Text("What happened?")
+                    .font(.headline)
+                ZStack(alignment: .topLeading) {
+                    TextEditor(text: $model.bugReportNote)
+                        .font(.body)
+                        .frame(minHeight: 160)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color.secondary.opacity(0.25))
+                        )
+                    if model.bugReportNote.isEmpty {
+                        Text("Describe what you were doing and what went wrong. Steps to reproduce help a lot.")
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 8)
+                            .allowsHitTesting(false)
+                    }
+                }
+
+                Label(
+                    "Includes a window screenshot, a support diagnostics zip, and recent boss decisions + actions. No transcript contents.",
+                    systemImage: "info.circle"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+                if let error = model.bugReportError {
+                    Label(error, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                if let url = model.lastBugReportURL {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("Saved bug report: \(url.lastPathComponent)", systemImage: "checkmark.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.green)
+                        ForEach(model.lastBugReportWarnings, id: \.self) { warning in
+                            Label(warning, systemImage: "exclamationmark.triangle")
+                                .font(.caption2)
+                                .foregroundStyle(.orange)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        HStack(spacing: 8) {
+                            Button {
+                                model.revealLastBugReport()
+                            } label: {
+                                Label("Reveal in Finder", systemImage: "folder")
+                            }
+                            .controlSize(.small)
+                            Button {
+                                model.copyBugReportPath()
+                            } label: {
+                                Label("Copy Path", systemImage: "doc.on.doc")
+                            }
+                            .controlSize(.small)
+                        }
+                    }
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.green.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+                }
+
+                Spacer(minLength: 0)
+
+                HStack {
+                    Button {
+                        model.revealBugReportsFolder()
+                    } label: {
+                        Label("Open Reports Folder", systemImage: "ladybug")
+                    }
+                    .controlSize(.small)
+                    Spacer()
+                    if model.bugReportIsSubmitting {
+                        ProgressView()
+                            .controlSize(.small)
+                            .padding(.trailing, 4)
+                    }
+                    Button {
+                        model.submitBugReport()
+                    } label: {
+                        Text("Create Report")
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .buttonStyle(.borderedProminent)
+                    .disabled(model.bugReportIsSubmitting)
+                }
+            }
+            .padding(20)
+        }
+        .frame(width: 560, height: 520)
+    }
+}
+
 private struct DecisionLogRow: View {
     let decision: BossInboxDecision
     /// Teach the boss from this decision. `true` = reinforce (auto-advance these
@@ -2137,6 +2267,12 @@ struct HeaderView: View {
                 }
                 .keyboardShortcut("/", modifiers: [.command])
                 Divider()
+                Button {
+                    model.isReportBugPresented = true
+                } label: {
+                    Label("Report a Bug…", systemImage: "ladybug")
+                }
+                .keyboardShortcut("b", modifiers: [.command, .shift])
                 Button {
                     model.isAboutSheetPresented = true
                 } label: {
@@ -6718,6 +6854,16 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var supportDiagnosticsResult: SupportDiagnosticsResult?
     @Published var supportDiagnosticsIsCollecting = false
     @Published var supportDiagnosticsError: String?
+    /// The in-app bug reporter. The note the operator types; whether a bundle is
+    /// being assembled; the last bundle's folder + any non-fatal warnings (e.g.
+    /// screenshot/diagnostics gathering failed but the report was still written);
+    /// and any fatal error. Reached from the More menu (⌘⇧B) and the ⌘K palette.
+    @Published var isReportBugPresented = false
+    @Published var bugReportNote = ""
+    @Published var bugReportIsSubmitting = false
+    @Published var bugReportError: String?
+    @Published var lastBugReportURL: URL?
+    @Published var lastBugReportWarnings: [String] = []
     @Published var isOnboardingPresented = false
     @Published var onboardingReadiness: OnboardingReadiness?
     @Published var onboardingProviderChecks: [String: OnboardingProviderCheckResult] = [:]
@@ -7343,6 +7489,20 @@ final class WorkbenchViewModel: ObservableObject {
                 "Open the support diagnostics output folder",
                 "folder",
                 keywords: ["diag", "diagnostic", "support", "finder"]
+            ),
+            command(
+                .reportBug,
+                "Report a Bug…",
+                "Bundle a note, screenshot, diagnostics, and logs into a report",
+                "ladybug",
+                keywords: ["bug", "report", "issue", "feedback", "diagnostic", "screenshot", "broken"]
+            ),
+            command(
+                .revealBugReportsFolder,
+                "Open Bug Reports Folder",
+                "Open the folder where bug reports are saved",
+                "ladybug.fill",
+                keywords: ["bug", "report", "folder", "finder", "issue"]
             ),
             command(
                 .checkReleaseUpdates,
@@ -8998,6 +9158,169 @@ final class WorkbenchViewModel: ObservableObject {
         }
     }
 
+    /// Assemble a self-contained bug report bundle: the operator's note, a
+    /// window screenshot (captured in-process, so no screen-recording prompt),
+    /// the support diagnostics zip, and a `report.md` summarizing app version,
+    /// OS, sessions, recent boss decisions, and recent actions. Lands in a
+    /// stable, timestamped folder under the app-support root so it's trivial to
+    /// open — and for the boss/Claude to read.
+    func submitBugReport() {
+        guard !bugReportIsSubmitting else {
+            return
+        }
+        bugReportIsSubmitting = true
+        bugReportError = nil
+
+        // Gather everything that needs the main actor / live window up front,
+        // then do subprocess + file IO off-main.
+        let note = bugReportNote
+        let screenshotPNG = captureKeyWindowPNG()
+        let sessions = bugReportSessions()
+        let decisions = state.decisionLog
+        let actions = state.actionLog
+        let bossName = state.boss.agentName
+        let bossWatchEnabled = state.bossWatchEnabled
+        let autoAdvanceEnabled = bossAutoAdvanceEnabled
+        let osVersion = Self.osVersionString()
+        let buildHash = Self.buildHashString()
+        let directory = paths.bugReportsURL.appendingPathComponent(
+            BugReportComposer.directoryName(date: Date(), note: note),
+            isDirectory: true
+        )
+        let runner = SupportDiagnosticsRunner(resourceDirectory: Bundle.main.resourceURL)
+
+        Task {
+            let bundle = await Task.detached(priority: .userInitiated) { () -> Result<BugReportBundle, Error> in
+                // Best-effort diagnostics: a failure becomes a warning in the
+                // report rather than sinking the whole submission.
+                var diagnosticsArchive: URL?
+                var diagnosticsError: String?
+                do {
+                    diagnosticsArchive = try runner.run().archiveURL
+                } catch {
+                    diagnosticsError = error.localizedDescription
+                }
+
+                do {
+                    let bundle = try BugReportWriter.write(
+                        into: directory,
+                        note: note,
+                        appName: WorkbenchRelease.appName,
+                        appVersion: WorkbenchRelease.version,
+                        buildHash: buildHash,
+                        osVersion: osVersion,
+                        generatedAt: Date(),
+                        bossName: bossName,
+                        bossWatchEnabled: bossWatchEnabled,
+                        autoAdvanceEnabled: autoAdvanceEnabled,
+                        sessions: sessions,
+                        recentDecisions: decisions,
+                        recentActions: actions,
+                        screenshotPNG: screenshotPNG,
+                        diagnosticsArchiveURL: diagnosticsArchive,
+                        diagnosticsError: diagnosticsError
+                    )
+                    return .success(bundle)
+                } catch {
+                    return .failure(error)
+                }
+            }.value
+
+            bugReportIsSubmitting = false
+            switch bundle {
+            case let .success(bundle):
+                lastBugReportURL = bundle.directoryURL
+                lastBugReportWarnings = bundle.warnings
+                bugReportNote = ""
+                recordActionLog(
+                    source: "native",
+                    action: "submitBugReport",
+                    result: "Wrote \(bundle.directoryURL.lastPathComponent)",
+                    succeeded: true
+                )
+            case let .failure(error):
+                bugReportError = error.localizedDescription
+                recordActionLog(
+                    source: "native",
+                    action: "submitBugReport",
+                    result: "Failed: \(error.localizedDescription)",
+                    succeeded: false
+                )
+            }
+        }
+    }
+
+    func revealLastBugReport() {
+        guard let lastBugReportURL else {
+            revealBugReportsFolder()
+            return
+        }
+        NSWorkspace.shared.activateFileViewerSelecting([lastBugReportURL])
+    }
+
+    func copyBugReportPath() {
+        guard let lastBugReportURL else {
+            return
+        }
+        copyToPasteboard(lastBugReportURL.path)
+    }
+
+    func revealBugReportsFolder() {
+        let folder = paths.bugReportsURL
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            NSWorkspace.shared.open(folder)
+        } catch {
+            errorMessage = "Bug reports folder could not be opened: \(error.localizedDescription)"
+        }
+    }
+
+    /// Flatten the live workspace into render-ready report rows. Skips archived
+    /// sessions; status comes from the latest run, attention/trust/friend from
+    /// the entry, and the branch from the cached git status.
+    private func bugReportSessions() -> [BugReportSession] {
+        state.processEntries
+            .filter { !$0.isArchived }
+            .map { entry in
+                BugReportSession(
+                    name: entry.name,
+                    status: latestRun(for: entry)?.status.rawValue ?? ProcessStatus.configured.rawValue,
+                    attention: entry.attention.rawValue,
+                    trust: entry.trust.rawValue,
+                    friend: entry.friend?.name,
+                    workingDirectory: entry.workingDirectory,
+                    gitBranch: gitStatus(for: entry)?.branchLabel
+                )
+            }
+    }
+
+    /// Snapshot the key window into PNG data using the view's own backing store
+    /// (`cacheDisplay`), which renders in-process and needs no screen-recording
+    /// permission. Returns nil if there's no visible window to capture.
+    private func captureKeyWindowPNG() -> Data? {
+        let window = NSApp.keyWindow
+            ?? NSApp.mainWindow
+            ?? NSApp.windows.first(where: { $0.isVisible && $0.contentView != nil })
+        guard let view = window?.contentView else {
+            return nil
+        }
+        let bounds = view.bounds
+        guard bounds.width > 1, bounds.height > 1,
+              let rep = view.bitmapImageRepForCachingDisplay(in: bounds) else {
+            return nil
+        }
+        view.cacheDisplay(in: bounds, to: rep)
+        return rep.representation(using: .png, properties: [:])
+    }
+
+    private static func osVersionString() -> String {
+        "macOS " + ProcessInfo.processInfo.operatingSystemVersionString
+    }
+
+    private static func buildHashString() -> String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "dev"
+    }
+
     func refreshWorkspace() async {
         refreshOuroAgents()
         refreshWorkbenchMCPRegistration()
@@ -9804,6 +10127,10 @@ final class WorkbenchViewModel: ObservableObject {
             copySupportDiagnosticsPath()
         case .openSupportDiagnosticsFolder:
             openSupportDiagnosticsFolder()
+        case .reportBug:
+            isReportBugPresented = true
+        case .revealBugReportsFolder:
+            revealBugReportsFolder()
         case .checkReleaseUpdates:
             Task {
                 await checkForReleaseUpdate()
