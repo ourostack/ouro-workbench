@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.111 - Restart recovery reconnects to running agents
+
+- App restart is now lossless: agents that kept running under `screen` while the app was gone are **reattached** — Workbench reconnects to the exact live process instead of respawning it. This applies to every still-alive session, even untrusted / non-auto-resume ones (reattaching a viewer is always safe), so nothing is orphaned and no work is lost. Reattached sessions come back running and no longer show up as "needs recovery."
+- Only sessions that didn't survive a restart go through the (gated) respawn / native-resume path — so the Recovery sheet shows what genuinely needs attention, not everything that was open. Startup detects live sessions (`screen -ls`) before recovery runs, off-main with a watchdog.
+- The recovery drill still simulates a full computer restart (nothing alive) so it remains a worst-case preview.
+
 ## 0.1.110 - Boss reliability + safety
 
 - The boss never sends a destructive input on your behalf: boss-driven `sendInput` actions now pass the same safety floor (`PromptSafetyClassifier`) the auto-advance decisions path uses, so an obviously-dangerous, secret-bearing, financial, or agreement input is withheld and escalated even on a trusted session — closing a path where a confused/prompt-injected boss reply could have run, e.g., `rm -rf`.

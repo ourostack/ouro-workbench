@@ -201,6 +201,50 @@ final class CommandPlannerTests: XCTestCase {
         XCTAssertFalse(PersistentTerminalSession.listOutput(output, contains: "ouro-wb-abc12"))
     }
 
+    func testLiveSessionNamesIncludesAttachedDetachedAndExcludesDead() {
+        let output = """
+        There are screens on:
+        \t12345.ouro-wb-aaa\t(Detached)
+        \t12346.ouro-wb-bbb\t(Attached)
+        \t12347.ouro-wb-ccc\t(Dead ???)
+        \t12348.some-other-screen\t(Detached)
+        4 Sockets in /var/folders/example.
+        """
+
+        let live = PersistentTerminalSession.liveSessionNames(fromListOutput: output)
+
+        XCTAssertEqual(live, ["ouro-wb-aaa", "ouro-wb-bbb"])
+        XCTAssertFalse(live.contains("ouro-wb-ccc"), "dead sessions must be excluded")
+        XCTAssertFalse(live.contains("some-other-screen"), "non-Workbench sessions ignored")
+    }
+
+    func testLiveSessionNamesEmptyWhenNoScreens() {
+        XCTAssertEqual(
+            PersistentTerminalSession.liveSessionNames(fromListOutput: "No Sockets found in /var/folders/example.\n"),
+            []
+        )
+    }
+
+    func testReattachRecoveryPlanIsAPlainReconnectLaunch() throws {
+        let entry = ProcessEntry(
+            projectId: UUID(),
+            name: "Claude",
+            kind: .terminalAgent,
+            agentKind: .claudeCode,
+            executable: "claude",
+            workingDirectory: "/repo",
+            trust: .untrusted
+        )
+        let run = ProcessRun(entryId: entry.id, status: .needsRecovery)
+        let plan = try WorkbenchCommandPlanner().recoveryPlan(for: entry, latestRun: run, action: .reattach)
+
+        XCTAssertEqual(plan.recoveryAction, .reattach)
+        XCTAssertEqual(plan.reason, "reconnect to running Claude")
+        // No checkpoint prompt appended — screen reattaches and ignores the command.
+        XCTAssertEqual(plan.arguments, entry.arguments)
+        XCTAssertEqual(plan.persistentSessionName, PersistentTerminalSession.sessionName(for: entry.id))
+    }
+
     func testPersistentTerminalSessionPrefersBundledScreenExecutable() throws {
         let bundleURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("OuroWorkbenchBundle-\(UUID().uuidString)")

@@ -1,6 +1,11 @@
 import Foundation
 
 public enum RecoveryAction: String, Codable, Sendable {
+    /// The persistent terminal session is still alive (the app restarted but the
+    /// computer didn't) — reconnecting the viewer reattaches to the live agent
+    /// with zero loss. Always safe, so it bypasses the trust / auto-resume gates
+    /// that guard the side-effectful respawn path.
+    case reattach
     case autoResume
     case respawn
     case manualActionNeeded
@@ -24,17 +29,26 @@ public struct RecoveryPlan: Codable, Equatable, Sendable {
 public struct RecoveryPlanner: Sendable {
     public init() {}
 
-    public func planRecovery(for state: WorkspaceState) -> [RecoveryPlan] {
+    /// `liveSessionNames` is the set of `PersistentTerminalSession` names that
+    /// `screen` reports as still alive (Attached/Detached). When an entry's
+    /// session is in this set, recovery becomes a lossless reattach instead of a
+    /// respawn. Defaults to empty (e.g. the recovery *drill*, which simulates a
+    /// full computer restart where nothing is alive).
+    public func planRecovery(for state: WorkspaceState, liveSessionNames: Set<String> = []) -> [RecoveryPlan] {
         state.processEntries.map { entry in
             let latestRun = state.processRuns
                 .filter { $0.entryId == entry.id }
                 .sorted(by: ProcessRun.isMoreRecent)
                 .first
-            return planRecovery(for: entry, latestRun: latestRun)
+            return planRecovery(for: entry, latestRun: latestRun, liveSessionNames: liveSessionNames)
         }
     }
 
-    public func planRecovery(for entry: ProcessEntry, latestRun: ProcessRun?) -> RecoveryPlan {
+    public func planRecovery(
+        for entry: ProcessEntry,
+        latestRun: ProcessRun?,
+        liveSessionNames: Set<String> = []
+    ) -> RecoveryPlan {
         guard !entry.isArchived else {
             return RecoveryPlan(
                 entryId: entry.id,
@@ -67,6 +81,19 @@ public struct RecoveryPlanner: Sendable {
                 runId: latestRun.id,
                 action: .noAction,
                 reason: "latest run status is \(latestRun.status.rawValue)"
+            )
+        }
+
+        // The persistent terminal session is still alive — the app restarted but
+        // the agent kept running under `screen`. Reattaching reconnects the
+        // viewer losslessly, so it's always safe and bypasses the trust /
+        // auto-resume gates that only the side-effectful respawn path needs.
+        if liveSessionNames.contains(PersistentTerminalSession.sessionName(for: entry.id)) {
+            return RecoveryPlan(
+                entryId: entry.id,
+                runId: latestRun.id,
+                action: .reattach,
+                reason: "session still running — reconnect the terminal"
             )
         }
 

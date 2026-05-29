@@ -732,10 +732,16 @@ Use this to verify the restart promise.
 Expected behavior:
 
 - Prior transcripts remain discoverable.
-- Trusted sessions with supported resume strategies recover automatically.
-- Respawnable sessions relaunch with checkpoint context.
-- Unsafe sessions are marked for manual action instead of being silently
-  restarted.
+- **Agents that were still running reconnect automatically and losslessly.**
+  When only the app restarted (not the computer), each agent's `screen` session
+  is still alive, so Workbench reattaches to the *exact* running process — no
+  respawn, no lost work — for every live session, even untrusted / non-auto-resume
+  ones (reattaching a viewer is always safe). These never appear as "needs
+  recovery"; they just come back running.
+- After a full computer restart (sessions gone): trusted sessions with supported
+  resume strategies recover automatically; respawnable sessions relaunch with
+  checkpoint context; unsafe sessions are marked for manual action instead of
+  being silently restarted.
 - The boss can inspect the recovery picture through MCP.
 
 ## Trust And Audit Rules
