@@ -123,13 +123,28 @@ final class WorkbenchMCPServer {
                 (entry.id, gitStatusReader.status(forDirectory: entry.workingDirectory))
             }
         )
+        // Inline the waiting prompt for each session that needs a human, so the
+        // boss can decide without a separate workbench_transcript_tail call.
+        let waitingPrompts = Dictionary(
+            uniqueKeysWithValues: state.processEntries
+                .filter { !$0.isArchived && $0.attention == .waitingOnHuman }
+                .compactMap { entry -> (UUID, String)? in
+                    guard let path = latestRun(for: entry.id, state: state)?.transcriptPath,
+                          let tail = TranscriptTailReader(maxBytes: 1200).read(path: path) else {
+                        return nil
+                    }
+                    let snippet = String(tail.text.suffix(600)).trimmingCharacters(in: .whitespacesAndNewlines)
+                    return snippet.isEmpty ? nil : (entry.id, snippet)
+                }
+        )
         return promptBuilder.checkInPrompt(
             question: "What is currently going on in Ouro Workbench?",
             state: state,
             summary: summary,
             executableHealth: executableHealth,
             gitStatus: gitStatus,
-            machineFriend: SessionFriend.machineOwner()
+            machineFriend: SessionFriend.machineOwner(),
+            waitingPrompts: waitingPrompts
         )
     }
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.99 - Give the boss the waiting prompt inline
+
+- The boss check-in prompt and `workbench_status` now inline the actual **waiting prompt text** for each session that needs a human (a bounded transcript-tail snippet), under a "Waiting prompts (decide each…)" section. Previously the boss only saw `attention=waitingOnHuman` and the transcript *path*, so it had to make a separate `workbench_transcript_tail` call per session to know what was being asked — extra latency it often wouldn't do. Now it can decide and propose the exact input in one turn, which is what makes auto-advance actually fire.
+- Bounded, read-only tail reads; only the handful of currently-waiting, running sessions.
+
 ## 0.1.98 - Harden auto-advance against stale prompts
 
 - Auto-advance now re-checks the **live** session before sending: the gate refuses unless the session is still running **and** still `waitingOnHuman` at execution time. An LLM check-in round-trip takes seconds, during which the session may move past the prompt; this prevents injecting an answer into a session that already advanced. The detector reverts `waiting → active` on new output, so "still waiting" is an accurate guard.
