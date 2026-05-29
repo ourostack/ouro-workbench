@@ -10018,7 +10018,9 @@ final class WorkbenchViewModel: ObservableObject {
         let pipe = Pipe()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/sqlite3")
         let escapedSessionId = sessionId.replacingOccurrences(of: "'", with: "''")
+        // `-readonly` avoids contending for a write lock on the live Codex DB.
         process.arguments = [
+            "-readonly",
             sqlitePath,
             "select rollout_path from threads where id='\(escapedSessionId)' limit 1;"
         ]
@@ -10026,17 +10028,28 @@ final class WorkbenchViewModel: ObservableObject {
         process.standardError = Pipe()
         do {
             try process.run()
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            process.waitUntilExit()
-            guard process.terminationStatus == 0 else {
-                return nil
-            }
-            let path = String(decoding: data, as: UTF8.self)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            return path.isEmpty ? nil : path
         } catch {
             return nil
         }
+        // This can run on the main actor (the import-preview view calls it), so
+        // bound the wait with a watchdog: a stuck DB lock must not beachball the
+        // app. Terminating closes the pipe so the subsequent read returns.
+        let finished = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .userInitiated).async {
+            process.waitUntilExit()
+            finished.signal()
+        }
+        if finished.wait(timeout: .now() + .milliseconds(1500)) == .timedOut {
+            process.terminate()
+            return nil
+        }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        guard process.terminationStatus == 0 else {
+            return nil
+        }
+        let path = String(decoding: data, as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return path.isEmpty ? nil : path
     }
 
     private func previewText(fromEvidencePath path: String) -> String? {
