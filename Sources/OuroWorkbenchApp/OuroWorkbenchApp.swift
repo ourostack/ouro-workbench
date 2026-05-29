@@ -30,14 +30,54 @@ struct OuroWorkbenchApp: App {
                 .frame(minWidth: 1100, minHeight: 700)
         }
         .windowStyle(.hiddenTitleBar)
+        // Every global/navigation shortcut is registered here as a real
+        // menu-bar key equivalent, NOT as a SwiftUI view `.keyboardShortcut`.
+        // macOS matches menu key equivalents before the event reaches the first
+        // responder, so these fire even while a SwiftTerm terminal has focus —
+        // which a view-level shortcut would let the terminal swallow. Each item
+        // posts a `WorkbenchMenuCommand`; the root view dispatches it.
         .commands {
-            CommandGroup(replacing: .newItem) {}
-            // Register ⇧⌘B as a real menu-bar command. A toolbar Menu's
-            // keyboardShortcut is a local shortcut the focused SwiftTerm view
-            // swallows first; a menu-bar key equivalent is matched before the
-            // event reaches the first responder, so the bug reporter opens even
-            // when a terminal has focus.
+            CommandGroup(replacing: .newItem) {
+                menuCommand("New Terminal", .newTerminal, "n")
+                menuCommand("New Terminal Tab", .newTerminal, "t")
+                Divider()
+                menuCommand("Open Workspace…", .openWorkspace, "o")
+                menuCommand("Save Workspace As…", .saveWorkspace, "s", [.command, .shift])
+            }
+            CommandGroup(after: .sidebar) {
+                menuCommand("Toggle Sidebar", .toggleSidebar, "b", [.command, .control])
+                menuCommand("Enter / Exit Focus", .toggleFocus, "f", [.command, .shift])
+                Divider()
+                menuCommand("Increase Terminal Font", .fontIncrease, "=")
+                menuCommand("Decrease Terminal Font", .fontDecrease, "-")
+                menuCommand("Reset Terminal Font", .fontReset, "0")
+            }
+            CommandMenu("Terminal") {
+                menuCommand("Find in Terminal", .findInTerminal, "f")
+                menuCommand("Redraw", .redraw, "l")
+                menuCommand("Stop", .stopSelected, ".")
+                Divider()
+                menuCommand("Previous Terminal", .prevTerminal, "[")
+                menuCommand("Next Terminal", .nextTerminal, "]")
+                menuCommand("Previous Group", .prevGroup, "[", [.command, .shift])
+                menuCommand("Next Group", .nextGroup, "]", [.command, .shift])
+                Divider()
+                Menu("Select Terminal") {
+                    ForEach(1...9, id: \.self) { index in
+                        menuCommand("Terminal \(index)", .selectTerminal(index), KeyEquivalent(Character("\(index)")))
+                    }
+                }
+            }
+            CommandMenu("Boss") {
+                menuCommand("Check In", .bossCheckIn, "i")
+                menuCommand("Command Palette", .commandPalette, "k")
+                menuCommand("Jump to Next Needing Me", .jumpToAttention, "j")
+            }
+            CommandGroup(after: .appSettings) {
+                menuCommand("Settings…", .settings, ",")
+            }
             CommandGroup(after: .help) {
+                menuCommand("Keyboard Shortcuts", .shortcutsHelp, "/")
                 Button("Report a Bug…") {
                     NotificationCenter.default.post(name: .workbenchReportBug, object: nil)
                 }
@@ -45,11 +85,40 @@ struct OuroWorkbenchApp: App {
             }
         }
     }
+
+    @ViewBuilder
+    private func menuCommand(
+        _ title: String,
+        _ command: WorkbenchMenuCommand,
+        _ key: KeyEquivalent,
+        _ modifiers: EventModifiers = .command
+    ) -> some View {
+        Button(title) {
+            NotificationCenter.default.post(name: .workbenchMenuCommand, object: command)
+        }
+        .keyboardShortcut(key, modifiers: modifiers)
+    }
+}
+
+/// A global/navigation command issued from the menu bar. Posted via
+/// `.workbenchMenuCommand` and dispatched by the root view to the model — this
+/// keeps the shortcut as a real menu key equivalent (which beats the focused
+/// terminal) while reusing the existing model methods.
+enum WorkbenchMenuCommand {
+    case commandPalette, bossCheckIn, jumpToAttention
+    case newTerminal, openWorkspace, saveWorkspace
+    case toggleSidebar, toggleFocus, fontIncrease, fontDecrease, fontReset
+    case prevTerminal, nextTerminal, prevGroup, nextGroup
+    case findInTerminal, redraw, stopSelected
+    case settings, shortcutsHelp
+    case selectTerminal(Int)
 }
 
 extension Notification.Name {
     /// Posted by the ⇧⌘B menu-bar command; the root view opens the reporter.
     static let workbenchReportBug = Notification.Name("workbenchReportBug")
+    /// Posted by every other menu-bar command (object: `WorkbenchMenuCommand`).
+    static let workbenchMenuCommand = Notification.Name("workbenchMenuCommand")
 }
 
 struct WorkbenchRootView: View {
@@ -69,6 +138,57 @@ struct WorkbenchRootView: View {
             columnVisibility = .automatic
         default:
             columnVisibility = .detailOnly
+        }
+    }
+
+    /// Dispatch a menu-bar command to the model. Centralizes the global/
+    /// navigation shortcuts so they're real menu key equivalents (which fire
+    /// even when a terminal has keyboard focus) routed to the existing methods.
+    private func handleMenuCommand(_ command: WorkbenchMenuCommand) {
+        switch command {
+        case .commandPalette:
+            model.isCommandPalettePresented = true
+        case .bossCheckIn:
+            guard !model.bossCheckInIsRunning else { return }
+            Task { await model.runBossCheckIn() }
+        case .jumpToAttention:
+            _ = model.jumpToNextAttentionSession()
+        case .newTerminal:
+            model.isNewSessionSheetPresented = true
+        case .openWorkspace:
+            model.presentOpenWorkspacePanel()
+        case .saveWorkspace:
+            model.presentSaveWorkspacePanel()
+        case .toggleSidebar:
+            toggleSidebarVisibility()
+        case .toggleFocus:
+            model.toggleTerminalFocus()
+        case .fontIncrease:
+            model.bumpTerminalFontSize(by: 1)
+        case .fontDecrease:
+            model.bumpTerminalFontSize(by: -1)
+        case .fontReset:
+            model.resetTerminalFontSize()
+        case .prevTerminal:
+            _ = model.cycleTerminal(direction: .previous)
+        case .nextTerminal:
+            _ = model.cycleTerminal(direction: .next)
+        case .prevGroup:
+            _ = model.cycleGroup(direction: .previous)
+        case .nextGroup:
+            _ = model.cycleGroup(direction: .next)
+        case .findInTerminal:
+            model.presentTerminalSearch()
+        case .redraw:
+            if let entry = model.selectedEntry { model.redrawTerminal(entry) }
+        case .stopSelected:
+            if let entry = model.selectedEntry { model.terminate(entry) }
+        case .settings:
+            model.isSettingsSheetPresented = true
+        case .shortcutsHelp:
+            model.isShortcutHelpPresented = true
+        case let .selectTerminal(index):
+            _ = model.selectTerminal(atOneIndexedPosition: index)
         }
     }
 
@@ -100,7 +220,6 @@ struct WorkbenchRootView: View {
                             }
                         }
                         ImportSummaryBanner(model: model)
-                        TerminalCyclingShortcuts(model: model)
                         // ⌃⌘B — toggle sidebar visibility. Invisible button
                         // so the shortcut works regardless of focus; matches
                         // VSCode's `cmd-b` muscle memory adjusted to also
@@ -199,6 +318,10 @@ struct WorkbenchRootView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .workbenchReportBug)) { _ in
             model.isReportBugPresented = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .workbenchMenuCommand)) { note in
+            guard let command = note.object as? WorkbenchMenuCommand else { return }
+            handleMenuCommand(command)
         }
         // Accept Finder folder drops on the window — same end state as
         // Open Workspace…, but with one less click for the muscle memory
@@ -498,93 +621,6 @@ private struct WindowChromeConfigurator: NSViewRepresentable {
         window.styleMask.insert(.fullSizeContentView)
         window.minSize = NSSize(width: 1100, height: 700)
         window.setFrameAutosaveName(Self.frameAutosaveName)
-    }
-}
-
-/// Invisible view that owns the global terminal-cycling keyboard shortcuts:
-/// ⌘1..⌘9 jump to the Nth terminal in the current group, ⌘[ / ⌘] cycle the
-/// previous / next terminal, and ⇧⌘[ / ⇧⌘] cycle previous / next group. Lives
-/// inside the root view so SwiftUI keeps it in the responder chain and never
-/// shows pixels.
-struct TerminalCyclingShortcuts: View {
-    @ObservedObject var model: WorkbenchViewModel
-
-    var body: some View {
-        ZStack {
-            ForEach(1...9, id: \.self) { index in
-                Button("Select Terminal \(index)") {
-                    model.selectTerminal(atOneIndexedPosition: index)
-                }
-                .keyboardShortcut(KeyEquivalent(Character("\(index)")), modifiers: [.command])
-                .hidden()
-            }
-            Button("Previous Terminal") {
-                model.cycleTerminal(direction: .previous)
-            }
-            .keyboardShortcut("[", modifiers: [.command])
-            .hidden()
-            Button("Next Terminal") {
-                model.cycleTerminal(direction: .next)
-            }
-            .keyboardShortcut("]", modifiers: [.command])
-            .hidden()
-            Button("Previous Group") {
-                model.cycleGroup(direction: .previous)
-            }
-            .keyboardShortcut("[", modifiers: [.command, .shift])
-            .hidden()
-            Button("Next Group") {
-                model.cycleGroup(direction: .next)
-            }
-            .keyboardShortcut("]", modifiers: [.command, .shift])
-            .hidden()
-            Button("Find in Terminal") {
-                model.presentTerminalSearch()
-            }
-            .keyboardShortcut("f", modifiers: [.command])
-            .hidden()
-            Button("Increase Terminal Font Size") {
-                model.bumpTerminalFontSize(by: 1)
-            }
-            .keyboardShortcut("+", modifiers: [.command])
-            .hidden()
-            // Cmd+= without shift produces "=" on US keyboards. Bind it as a
-            // second route to "bigger" so the user doesn't have to hold shift
-            // for the common case, matching browser and Terminal.app convention.
-            Button("Increase Terminal Font Size (=)") {
-                model.bumpTerminalFontSize(by: 1)
-            }
-            .keyboardShortcut("=", modifiers: [.command])
-            .hidden()
-            Button("Decrease Terminal Font Size") {
-                model.bumpTerminalFontSize(by: -1)
-            }
-            .keyboardShortcut("-", modifiers: [.command])
-            .hidden()
-            Button("Reset Terminal Font Size") {
-                model.resetTerminalFontSize()
-            }
-            .keyboardShortcut("0", modifiers: [.command])
-            .hidden()
-            // ⌘T mirrors Terminal.app / iTerm2 / browser "new tab" convention.
-            // ⌘N already does the same; binding both means the user gets the
-            // shortcut from their muscle memory regardless of which app
-            // shaped it.
-            Button("New Terminal (⌘T)") {
-                model.isNewSessionSheetPresented = true
-            }
-            .keyboardShortcut("t", modifiers: [.command])
-            .hidden()
-            // ⌘J — jump to the next session that needs the operator (waiting /
-            // needs review / blocked), across all groups.
-            Button("Jump to Next Session Needing Me") {
-                model.jumpToNextAttentionSession()
-            }
-            .keyboardShortcut("j", modifiers: [.command])
-            .hidden()
-        }
-        .frame(width: 0, height: 0)
-        .accessibilityHidden(true)
     }
 }
 
@@ -4647,7 +4683,8 @@ struct TranscriptSearchView: View {
                 } label: {
                     Label("Search", systemImage: "magnifyingglass")
                 }
-                .keyboardShortcut("f", modifiers: [.command])
+                // ⌘F is the menu-bar "Find in Terminal" command; this transcript
+                // search has its own button (and the ⌘F here collided with it).
                 .fixedSize()
             }
             if !model.transcriptSearchResults.isEmpty {
@@ -10944,6 +10981,16 @@ final class WorkbenchViewModel: ObservableObject {
 
     func exitTerminalFocus() {
         terminalFocusEntryID = nil
+    }
+
+    /// Toggle full-screen focus for the ⇧⌘F menu command: exit if focused,
+    /// otherwise focus the selected running terminal.
+    func toggleTerminalFocus() {
+        if terminalFocusEntryID != nil {
+            exitTerminalFocus()
+        } else if let entry = selectedEntry {
+            focusTerminal(entry)
+        }
     }
 
     func sendInput(_ text: String, to entry: ProcessEntry, appendNewline: Bool) {
