@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.116 - Onboarding correctness: provider-check tasks + pending Run
+
+- A `check-*` row that was *pending* (not actually running) used to spin forever; it now shows a **Run** button that re-triggers the check. Genuine in-flight checks still show the spinner.
+- Provider-check `Task`s are now tracked, cancelled on sheet dismiss, and generation-stamped — so a late completion from a previous run can no longer overwrite cleaned-up state and flip a repaired lane back to a stale failure.
+
 ## 0.1.115 - Command palette keyboard navigation
 
 - The ⌘K command palette now supports **↑/↓ to move the selection** (highlighted row, auto-scrolls) and **Return runs the highlighted command**, not just the first match.

@@ -3699,6 +3699,11 @@ struct WorkbenchOnboardingSheet: View {
             model.refreshOnboardingReadiness()
             model.runOnboardingProviderChecksIfNeeded()
         }
+        .onDisappear {
+            // Cancel in-flight provider checks so a late completion can't
+            // overwrite cleaned state after the sheet closes.
+            model.cancelOnboardingProviderChecks()
+        }
     }
 
     private func handleInstruction() {
@@ -4207,8 +4212,22 @@ private struct OnboardingRepairStepRow: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
             } else if step.id.hasPrefix("check-") {
-                ProgressView()
+                // A check-* step carrying a commandLine means the provider check
+                // hasn't actually started yet (pending) — show a Run button so
+                // the row isn't an indefinite spinner; absent commandLine means
+                // it's currently running, so the spinner is genuine.
+                if step.commandLine != nil {
+                    Button {
+                        model.runOnboardingProviderChecksIfNeeded()
+                    } label: {
+                        Label("Run", systemImage: "play.fill")
+                    }
+                    .buttonStyle(.bordered)
                     .controlSize(.small)
+                } else {
+                    ProgressView()
+                        .controlSize(.small)
+                }
             } else if step.commandLine != nil {
                 Button {
                     model.openOnboardingRepair(step)
@@ -7070,6 +7089,11 @@ final class WorkbenchViewModel: ObservableObject {
     }
     @Published var onboardingReadiness: OnboardingReadiness?
     @Published var onboardingProviderChecks: [String: OnboardingProviderCheckResult] = [:]
+    /// Per-lane generation so a late completion from a previous run doesn't
+    /// overwrite the state after the user has moved on / dismissed onboarding;
+    /// and tracked Tasks so we can cancel them on dismiss.
+    private var onboardingProviderCheckGeneration: [String: Int] = [:]
+    private var onboardingProviderCheckTasks: [String: Task<Void, Never>] = [:]
     @Published var onboardingCandidates: [RecentSessionCandidate] = []
     @Published var onboardingProposal: WorkbenchImportProposal?
     @Published var onboardingIsScanning = false
@@ -9684,14 +9708,37 @@ final class WorkbenchViewModel: ObservableObject {
                 detail: "Checking \(laneConfiguration.lane) provider..."
             )
             refreshOnboardingReadiness()
-            Task {
-                let result = await runOnboardingProviderCheck(agentName: selectedAgent.name, lane: laneConfiguration.lane)
-                onboardingProviderChecks[laneConfiguration.lane] = result
+            // Track + generation-stamp so cancelling on dismiss is real, and a
+            // late completion from a previous run can't overwrite freshly-
+            // cleaned state (flipping a repaired lane back to a stale failure).
+            let lane = laneConfiguration.lane
+            let agentName = selectedAgent.name
+            let generation = (onboardingProviderCheckGeneration[lane] ?? 0) + 1
+            onboardingProviderCheckGeneration[lane] = generation
+            onboardingProviderCheckTasks[lane]?.cancel()
+            onboardingProviderCheckTasks[lane] = Task {
+                let result = await runOnboardingProviderCheck(agentName: agentName, lane: lane)
+                guard !Task.isCancelled,
+                      onboardingProviderCheckGeneration[lane] == generation else {
+                    return
+                }
+                onboardingProviderChecks[lane] = result
                 refreshOuroAgents()
                 refreshWorkbenchMCPRegistration()
                 refreshOnboardingReadiness()
             }
         }
+    }
+
+    /// Cancel in-flight onboarding provider checks (called when the onboarding
+    /// sheet dismisses). Bumping the generation also ensures any completion
+    /// that races the cancel is discarded.
+    func cancelOnboardingProviderChecks() {
+        for (lane, task) in onboardingProviderCheckTasks {
+            task.cancel()
+            onboardingProviderCheckGeneration[lane, default: 0] += 1
+        }
+        onboardingProviderCheckTasks.removeAll()
     }
 
     private func runOnboardingProviderCheck(agentName: String, lane: String) async -> OnboardingProviderCheckResult {
