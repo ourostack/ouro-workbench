@@ -5,6 +5,9 @@ public enum AttentionSignal: Equatable, Sendable {
     /// The session appears to be sitting at a prompt that needs a human
     /// decision (approval, y/n, a selection menu, "press enter").
     case waitingOnHuman
+    /// The session appears stuck on a terminal error and isn't making progress
+    /// (a fatal/unrecoverable failure as the last thing it printed).
+    case blocked
     /// No confident signal — leave the session's attention unchanged.
     case unknown
 }
@@ -54,6 +57,15 @@ public enum AttentionSignalDetector {
         //    a plain shell prompt (which is merely idle, not waiting-on-human).
         if let last = recentLower.last, isTrailingReadPrompt(last) {
             return .waitingOnHuman
+        }
+
+        // 4. The session ended on a terminal error and isn't at a prompt — it's
+        //    stuck. Checked last so a prompt (even after an error) wins:
+        //    "error... (y/N)" is waiting, not blocked. Only the final line is
+        //    inspected, so an error mid-progress that the agent kept working
+        //    past never trips it.
+        if let last = recentLower.last, isTerminalError(last) {
+            return .blocked
         }
 
         return .unknown
@@ -112,6 +124,33 @@ public enum AttentionSignalDetector {
             return starts.contains { lower.hasPrefix($0) }
         }
         return false
+    }
+
+    /// A final line that reads like a terminal/unrecoverable failure — high
+    /// confidence only, because it's checked as the *last* thing the session
+    /// printed (an error mid-progress that the agent worked past never reaches
+    /// here). Bare "error" is deliberately excluded as too noisy.
+    static func isTerminalError(_ lower: String) -> Bool {
+        let needles = [
+            "command not found",
+            "permission denied",
+            "no such file or directory",
+            "fatal:",
+            "fatal error",
+            "panic:",
+            "segmentation fault",
+            "core dumped",
+            "cannot find module",
+            "module not found",
+            "could not resolve host",
+            "connection refused",
+            "build failed",
+            "compilation failed",
+            "npm err!",
+            "killed: 9",
+            "traceback (most recent call last)"
+        ]
+        return needles.contains { lower.contains($0) }
     }
 
     /// Remove ANSI CSI/OSC escape sequences and carriage returns so matching
