@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.107 - ⇧⌘B opens the bug reporter even from a terminal
+
+- Fixed: pressing ⇧⌘B did nothing when a terminal had keyboard focus — the focused terminal view swallowed the chord, so the advertised shortcut only worked via the More menu or ⌘K palette. ⇧⌘B is now a real menu-bar command, which macOS matches before the event reaches the terminal, so it opens the bug reporter from anywhere. (Found while verifying the reporter end-to-end through the running app.)
+
 ## 0.1.106 - File a bug report straight to GitHub
 
 - The bug reporter can now file a report as a **GitHub issue** on `ourostack/ouro-workbench` (labelled `bug`) with one click — a durable, searchable venue the boss/Claude can read from anywhere. The issue body is `report.md`; the screenshot and diagnostics zip stay in the local bundle and are referenced by path (the CLI can't upload them).
