@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.112 - Shortcuts work even when a terminal has focus
+
+- Every global/navigation shortcut is now a real **menu-bar command**, so it fires even while a SwiftTerm terminal has keyboard focus — previously these were view-level shortcuts the focused terminal swallowed, so ⌘K (command palette), ⌘I (check in), ⌘J, ⌘N/⌘T, ⌘[ / ⌘] (cycle terminals), ⇧⌘[ / ⇧⌘] (cycle groups), ⇧⌘F (focus), ⌃⌘B (sidebar), ⌘1–9, font ⌘= / ⌘- / ⌘0, ⌘L (redraw), ⌘. (stop), ⌘, , ⌘/ , and Find were dead in normal use. The same fix that made ⇧⌘B work, applied to the whole app — and the commands are now discoverable in the menu bar (File / View / Terminal / Boss).
+- Resolved a ⌘F collision (terminal Find vs. transcript search) — ⌘F is now unambiguously "Find in Terminal."
+
 ## 0.1.111 - Restart recovery reconnects to running agents
 
 - App restart is now lossless: agents that kept running under `screen` while the app was gone are **reattached** — Workbench reconnects to the exact live process instead of respawning it. This applies to every still-alive session, even untrusted / non-auto-resume ones (reattaching a viewer is always safe), so nothing is orphaned and no work is lost. Reattached sessions come back running and no longer show up as "needs recovery."
