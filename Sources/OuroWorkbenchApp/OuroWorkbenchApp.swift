@@ -373,6 +373,14 @@ struct WorkbenchRootView: View {
                 Text("This removes the empty group \(project.name). Groups with terminals cannot be deleted.")
             }
         }
+        .confirmationDialog("Reset to First Run?", isPresented: $model.isResetFirstRunConfirmationPresented, titleVisibility: .visible) {
+            Button("Reset & Relaunch", role: .destructive) {
+                model.resetToFirstRun()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Stops running terminals, clears your groups/sessions and Workbench preferences, and relaunches into the fresh onboarding flow. Your current workspace is backed up to a file and your Ouro agent setup is left untouched.")
+        }
         .task {
             await model.runExternalActionPump()
         }
@@ -2416,6 +2424,12 @@ struct HeaderView: View {
                     model.isAboutSheetPresented = true
                 } label: {
                     Label("About Ouro Workbench…", systemImage: "info.circle")
+                }
+                Divider()
+                Button(role: .destructive) {
+                    model.isResetFirstRunConfirmationPresented = true
+                } label: {
+                    Label("Reset to First Run…", systemImage: "arrow.counterclockwise.circle")
                 }
             } label: {
                 Label("More", systemImage: "ellipsis.circle")
@@ -7134,6 +7148,9 @@ final class WorkbenchViewModel: ObservableObject {
     /// screenshot/diagnostics gathering failed but the report was still written);
     /// and any fatal error. Reached from the More menu (⌘⇧B) and the ⌘K palette.
     @Published var isReportBugPresented = false
+    /// Drives the "Reset to First Run" confirmation dialog. Set true by the
+    /// More menu / ⌘K command; the dialog calls `resetToFirstRun()` on confirm.
+    @Published var isResetFirstRunConfirmationPresented = false
     @Published var bugReportNote = ""
     @Published var bugReportIsSubmitting = false
     @Published var bugReportError: String?
@@ -7168,6 +7185,9 @@ final class WorkbenchViewModel: ObservableObject {
     /// and tracked Tasks so we can cancel them on dismiss.
     private var onboardingProviderCheckGeneration: [String: Int] = [:]
     private var onboardingProviderCheckTasks: [String: Task<Void, Never>] = [:]
+    /// Set once `resetToFirstRun()` begins; suppresses all persistence so the
+    /// wiped state file isn't rewritten before the relaunch.
+    private var isResettingToFirstRun = false
     @Published var onboardingCandidates: [RecentSessionCandidate] = []
     @Published var onboardingProposal: WorkbenchImportProposal?
     @Published var onboardingIsScanning = false
@@ -7304,6 +7324,11 @@ final class WorkbenchViewModel: ObservableObject {
     /// next launch, even though one relaunch would reattach it. Reuses the
     /// same detach framing as the live detach path.
     func prepareForTermination() {
+        // During a first-run reset the state file is intentionally gone; don't
+        // resurrect it on the way out.
+        guard !isResettingToFirstRun else {
+            return
+        }
         flushPendingOutput()
         for (entryId, session) in activeSessions {
             guard let persistentName = session.plan.persistentSessionName,
@@ -7325,6 +7350,74 @@ final class WorkbenchViewModel: ObservableObject {
             }
         }
         save()
+    }
+
+    /// Wipe this machine's Workbench state and relaunch into a pristine
+    /// first-run (onboarding auto-presents). For iterating on the first-run
+    /// experience. Reversible: the workspace state is backed up to a
+    /// timestamped sibling file, and `ouro`/agent config is never touched —
+    /// it's *your* first run, not a no-agent simulation.
+    func resetToFirstRun() {
+        // Suppress all persistence for the rest of this process's life so the
+        // wipe below isn't undone by a save (notably prepareForTermination on
+        // the NSApp.terminate path).
+        isResettingToFirstRun = true
+        // 1) Tear down live agent terminals + their persistent screen sessions
+        //    so a fresh launch can't reattach ghosts.
+        for entry in state.processEntries where activeSessions[entry.id] != nil {
+            terminate(entry)
+        }
+        let backupSuffix = String(Int(Date().timeIntervalSince1970))
+        Self.killAllPersistentScreens()
+
+        // 2) Back up + remove the workspace state so the next launch bootstraps
+        //    fresh (the bootstrapper treats a missing file as first run).
+        let stateURL = paths.stateURL
+        let backupURL = stateURL.deletingLastPathComponent()
+            .appendingPathComponent("workspace-state.\(backupSuffix).bak.json")
+        try? FileManager.default.removeItem(at: backupURL)
+        try? FileManager.default.moveItem(at: stateURL, to: backupURL)
+
+        // 3) Clear the flags that gate the first-run experience so onboarding
+        //    auto-presents and the one-time migrations re-evaluate cleanly.
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: Self.onboardingAutoPresentedDefaultsKey)
+        defaults.removeObject(forKey: Self.collapsedChromeMigrationKey)
+        defaults.removeObject(forKey: Self.automaticBossMigrationKey)
+
+        // 4) Relaunch a fresh instance once this one exits, then quit.
+        Self.relaunchAfterExit()
+        NSApp.terminate(nil)
+    }
+
+    /// Quit every live `ouro-wb-*` persistent screen session (best-effort,
+    /// off the reset path's critical correctness — orphans just waste nothing).
+    nonisolated private static func killAllPersistentScreens() {
+        for name in listLiveScreenSessionNames() {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: PersistentTerminalSession.executable)
+            process.arguments = PersistentTerminalSession.terminateArguments(sessionName: name)
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = FileHandle.nullDevice
+            try? process.run()
+            process.waitUntilExit()
+        }
+    }
+
+    /// Spawn a detached shell that waits for this process to exit, then reopens
+    /// the app bundle — a clean relaunch with no overlapping instance.
+    nonisolated private static func relaunchAfterExit() {
+        let bundlePath = Bundle.main.bundlePath
+        let pid = ProcessInfo.processInfo.processIdentifier
+        let script = "while kill -0 \(pid) 2>/dev/null; do sleep 0.2; done; /usr/bin/open \(shellQuoted(bundlePath))"
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/sh")
+        task.arguments = ["-c", script]
+        try? task.run()
+    }
+
+    nonisolated private static func shellQuoted(_ value: String) -> String {
+        "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
     var errorIsPresented: Binding<Bool> {
@@ -8039,6 +8132,16 @@ final class WorkbenchViewModel: ObservableObject {
                 "Show the app version, build hash, and links",
                 "info.circle",
                 keywords: ["about", "version", "build", "info", "credits"]
+            )
+        )
+
+        commands.append(
+            command(
+                .resetToFirstRun,
+                "Reset to First Run…",
+                "Wipe groups, sessions, and preferences (backed up) and relaunch into onboarding",
+                "arrow.counterclockwise.circle",
+                keywords: ["reset", "first run", "onboarding", "fresh", "clean", "start over", "wipe", "factory"]
             )
         )
 
@@ -10602,6 +10705,8 @@ final class WorkbenchViewModel: ObservableObject {
             stopAllRunningSessions()
         case .recoverAllCrashedSessions:
             recoverAllCrashedSessions()
+        case .resetToFirstRun:
+            isResetFirstRunConfirmationPresented = true
         case .selectAgent,
              .useSelectedAgentAsBoss,
              .openSelectedAgentConfig,
@@ -12389,6 +12494,13 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     private func save() {
+        // While resetting to first run we've deliberately removed the state
+        // file; any save here (including the one in prepareForTermination at
+        // quit) would re-create it with the old in-memory state and undo the
+        // wipe. Suppress saves for the brief reset-then-relaunch window.
+        guard !isResettingToFirstRun else {
+            return
+        }
         do {
             try store.save(state)
         } catch {
