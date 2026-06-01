@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.118 - Fix the blank/wrecked window (the dogfooding showstopper)
+
+- Fixed the bug where selecting a group with no terminals (or restoring that selection on launch) blanked the **entire window** — both sidebar and detail — and stayed blank across restarts. Root cause: the no-selection empty state used a greedy `maxHeight:.infinity` VStack as the NavigationSplitView detail, which made the whole split view lay out ~2.5× the window height and shift off-screen, so the visible area landed on an empty region with the header pushed out of view. The empty-state content is now in a height-bounded `ScrollView`, and the header is pinned so it can never be starved. Verified on a real window: the empty group now shows the proper "Pick a terminal" home, and selecting a populated group still renders its terminal.
+
 ## 0.1.117 - Preview async + boss-watch banner + misc polish
 
 - The import-preview sheet now opens immediately with a "Loading preview…" placeholder while the (watchdog-bounded) transcript load runs, so opening a preview never feels janky.
