@@ -204,21 +204,34 @@ struct WorkbenchRootView: View {
                 } detail: {
                     ZStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 0) {
+                            // Header is pinned to its natural height so a greedy
+                            // fill-content view (e.g. the empty state's
+                            // maxHeight:.infinity) can't starve it to zero —
+                            // which previously collapsed the whole pane.
                             HeaderView(model: model)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .layoutPriority(1)
                             Divider()
                             if !model.state.bossPaneCollapsed {
                                 BossDashboardView(model: model)
                                 Divider()
                             }
-                            if let agentName = model.selectedAgentName,
-                               let agent = model.ouroAgent(named: agentName) {
-                                AgentDetailView(agent: agent, model: model)
-                            } else if let entry = model.selectedEntry {
-                                SessionDetailView(entry: entry, model: model)
-                            } else {
-                                AgentHomeEmptyState(model: model)
+                            // Every detail branch fills the remaining space
+                            // identically and pins to the top, so layout is
+                            // deterministic regardless of which view is shown.
+                            Group {
+                                if let agentName = model.selectedAgentName,
+                                   let agent = model.ouroAgent(named: agentName) {
+                                    AgentDetailView(agent: agent, model: model)
+                                } else if let entry = model.selectedEntry {
+                                    SessionDetailView(entry: entry, model: model)
+                                } else {
+                                    AgentHomeEmptyState(model: model)
+                                }
                             }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                         }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                         ImportSummaryBanner(model: model)
                         // ⌃⌘B — toggle sidebar visibility. Invisible button
                         // so the shortcut works regardless of focus; matches
@@ -1557,89 +1570,97 @@ struct AgentHomeEmptyState: View {
     @ObservedObject var model: WorkbenchViewModel
 
     var body: some View {
-        VStack(alignment: .center, spacing: 22) {
-            VStack(spacing: 10) {
-                Image(systemName: "infinity")
-                    .font(.system(size: 38, weight: .semibold))
-                    .foregroundStyle(Color.accentColor)
-                Text("Pick a terminal — or hatch a new one")
-                    .font(.title2.weight(.semibold))
-                    .multilineTextAlignment(.center)
-                Text("Ouro Workbench is a calm home for your terminal agents. Choose one on the left to open its live session, or set up a fresh Ouro agent below.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: 540)
-            }
-            HStack(spacing: 12) {
-                Button {
-                    model.isOuroAgentInstallSheetPresented = true
-                } label: {
-                    Label("Hatch an Agent", systemImage: "sparkles")
-                        .frame(minWidth: 160)
+        // The content lives in a ScrollView so its height is bounded by the
+        // detail viewport. A bare greedy VStack (.frame(maxHeight:.infinity,
+        // alignment:.top)) here made the NavigationSplitView lay out ~2.5x the
+        // window height and shift, blanking BOTH columns — a SwiftUI sizing
+        // pathology. The ScrollView clamps it and can't propagate an over-tall
+        // ideal to the split view.
+        ScrollView {
+            VStack(alignment: .center, spacing: 22) {
+                VStack(spacing: 10) {
+                    Image(systemName: "infinity")
+                        .font(.system(size: 38, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                    Text("Pick a terminal — or hatch a new one")
+                        .font(.title2.weight(.semibold))
+                        .multilineTextAlignment(.center)
+                    Text("Ouro Workbench is a calm home for your terminal agents. Choose one on the left to open its live session, or set up a fresh Ouro agent below.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: 540)
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .help("Install or refresh an Ouro agent bundle on this Mac.")
-
-                Button {
-                    model.presentOnboarding()
-                } label: {
-                    Label("Set Up Workbench", systemImage: "wand.and.stars")
-                        .frame(minWidth: 160)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-                .help("Choose a boss, connect MCP tools, and import recent terminals.")
-
-                Button {
-                    model.isNewSessionSheetPresented = true
-                } label: {
-                    Label("New Terminal", systemImage: "plus")
-                        .frame(minWidth: 140)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-                .help("Open a blank terminal session.")
-            }
-            if !model.ouroAgents.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "person.crop.circle")
-                            .foregroundStyle(.secondary)
-                        Text("Installed agents")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
+                HStack(spacing: 12) {
+                    Button {
+                        model.isOuroAgentInstallSheetPresented = true
+                    } label: {
+                        Label("Hatch an Agent", systemImage: "sparkles")
+                            .frame(minWidth: 160)
                     }
-                    ForEach(model.ouroAgents) { agent in
-                        HStack(spacing: 8) {
-                            Circle()
-                                .fill(agent.status == .ready ? Color.green : Color.orange)
-                                .frame(width: 7, height: 7)
-                            Text(agent.name)
-                                .font(.callout.monospaced())
-                            Spacer()
-                            if agent.name == model.state.boss.agentName {
-                                Text("boss")
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(Color.accentColor)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(Color.accentColor.opacity(0.12), in: Capsule())
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .help("Install or refresh an Ouro agent bundle on this Mac.")
+
+                    Button {
+                        model.presentOnboarding()
+                    } label: {
+                        Label("Set Up Workbench", systemImage: "wand.and.stars")
+                            .frame(minWidth: 160)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                    .help("Choose a boss, connect MCP tools, and import recent terminals.")
+
+                    Button {
+                        model.isNewSessionSheetPresented = true
+                    } label: {
+                        Label("New Terminal", systemImage: "plus")
+                            .frame(minWidth: 140)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                    .help("Open a blank terminal session.")
+                }
+                if !model.ouroAgents.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "person.crop.circle")
+                                .foregroundStyle(.secondary)
+                            Text("Installed agents")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        ForEach(model.ouroAgents) { agent in
+                            HStack(spacing: 8) {
+                                Circle()
+                                    .fill(agent.status == .ready ? Color.green : Color.orange)
+                                    .frame(width: 7, height: 7)
+                                Text(agent.name)
+                                    .font(.callout.monospaced())
+                                Spacer()
+                                if agent.name == model.state.boss.agentName {
+                                    Text("boss")
+                                        .font(.caption2.weight(.semibold))
+                                        .foregroundStyle(Color.accentColor)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(Color.accentColor.opacity(0.12), in: Capsule())
+                                }
                             }
                         }
                     }
+                    .padding(14)
+                    .frame(maxWidth: 440)
+                    .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 10))
                 }
-                .padding(14)
-                .frame(maxWidth: 440)
-                .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 10))
             }
-            Spacer(minLength: 0)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 32)
+            .padding(.top, 60)
         }
-        .padding(.horizontal, 32)
-        .padding(.top, 60)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
