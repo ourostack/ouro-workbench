@@ -204,21 +204,34 @@ struct WorkbenchRootView: View {
                 } detail: {
                     ZStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 0) {
+                            // Header is pinned to its natural height so a greedy
+                            // fill-content view (e.g. the empty state's
+                            // maxHeight:.infinity) can't starve it to zero —
+                            // which previously collapsed the whole pane.
                             HeaderView(model: model)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .layoutPriority(1)
                             Divider()
                             if !model.state.bossPaneCollapsed {
                                 BossDashboardView(model: model)
                                 Divider()
                             }
-                            if let agentName = model.selectedAgentName,
-                               let agent = model.ouroAgent(named: agentName) {
-                                AgentDetailView(agent: agent, model: model)
-                            } else if let entry = model.selectedEntry {
-                                SessionDetailView(entry: entry, model: model)
-                            } else {
-                                AgentHomeEmptyState(model: model)
+                            // Every detail branch fills the remaining space
+                            // identically and pins to the top, so layout is
+                            // deterministic regardless of which view is shown.
+                            Group {
+                                if let agentName = model.selectedAgentName,
+                                   let agent = model.ouroAgent(named: agentName) {
+                                    AgentDetailView(agent: agent, model: model)
+                                } else if let entry = model.selectedEntry {
+                                    SessionDetailView(entry: entry, model: model)
+                                } else {
+                                    AgentHomeEmptyState(model: model)
+                                }
                             }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                         }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                         ImportSummaryBanner(model: model)
                         // ⌃⌘B — toggle sidebar visibility. Invisible button
                         // so the shortcut works regardless of focus; matches
