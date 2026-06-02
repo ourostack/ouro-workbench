@@ -332,6 +332,89 @@ final class OnboardingTests: XCTestCase {
         XCTAssertEqual(proposal.selectedTerminalCount, 1)
     }
 
+    func testRepositoryRootWalksUpToGitMarker() {
+        let gitRoots: Set<String> = ["/Users/ari/code/myrepo"]
+        let resolved = WorkspaceGrouping.repositoryRoot(
+            for: "/Users/ari/code/myrepo/web/src/components"
+        ) { gitRoots.contains($0) }
+        XCTAssertEqual(resolved, "/Users/ari/code/myrepo")
+    }
+
+    func testRepositoryRootReturnsNilOutsideAnyRepo() {
+        let resolved = WorkspaceGrouping.repositoryRoot(for: "/Users/ari/Downloads/scratch") { _ in false }
+        XCTAssertNil(resolved)
+    }
+
+    func testRepositoryRootReturnsDirectoryItselfWhenItIsTheRoot() {
+        let resolved = WorkspaceGrouping.repositoryRoot(for: "/Users/ari/code/myrepo/") { $0 == "/Users/ari/code/myrepo" }
+        XCTAssertEqual(resolved, "/Users/ari/code/myrepo")
+    }
+
+    func testImportProposalGroupsSameRepoDifferentSubdirsIntoOneGroup() {
+        // Two sessions in the SAME repo, launched from different subdirectories.
+        // The old path heuristic split these into separate groups; git-root
+        // grouping puts them in one group named after the repo.
+        let base = "/Users/ari/code/myrepo"
+        let candidates = [
+            RecentSessionCandidate(
+                id: "a", source: .claudeCode, agentKind: .claudeCode, title: "frontend work",
+                workingDirectory: base + "/web/src", lastActiveAt: Date(timeIntervalSince1970: 200),
+                resumeCommand: ["claude"], summary: "", evidencePaths: [], confidence: 0.9,
+                repositoryRoot: base
+            ),
+            RecentSessionCandidate(
+                id: "b", source: .openAICodex, agentKind: .openAICodex, title: "api work",
+                workingDirectory: base + "/server", lastActiveAt: Date(timeIntervalSince1970: 100),
+                resumeCommand: ["codex"], summary: "", evidencePaths: [], confidence: 0.9,
+                repositoryRoot: base
+            ),
+        ]
+        let groups = WorkbenchImportProposalBuilder().build(candidates: candidates).groups
+        XCTAssertEqual(groups.count, 1)
+        XCTAssertEqual(groups.first?.name, "myrepo")
+        XCTAssertEqual(groups.first?.rootPath, base)
+        XCTAssertEqual(groups.first?.terminals.count, 2)
+    }
+
+    func testImportProposalSeparatesDistinctRepos() {
+        let candidates = [
+            RecentSessionCandidate(
+                id: "a", source: .claudeCode, agentKind: .claudeCode, title: "x",
+                workingDirectory: "/Users/ari/code/alpha/src", lastActiveAt: Date(),
+                resumeCommand: ["claude"], summary: "", evidencePaths: [], confidence: 0.9,
+                repositoryRoot: "/Users/ari/code/alpha"
+            ),
+            RecentSessionCandidate(
+                id: "b", source: .claudeCode, agentKind: .claudeCode, title: "y",
+                workingDirectory: "/Users/ari/code/beta", lastActiveAt: Date(),
+                resumeCommand: ["claude"], summary: "", evidencePaths: [], confidence: 0.9,
+                repositoryRoot: "/Users/ari/code/beta"
+            ),
+        ]
+        let groups = WorkbenchImportProposalBuilder().build(candidates: candidates).groups
+        XCTAssertEqual(Set(groups.map(\.name)), ["alpha", "beta"])
+    }
+
+    func testImportProposalPreferredGroupNameOverridesRepoGrouping() {
+        let candidates = [
+            RecentSessionCandidate(
+                id: "a", source: .claudeCode, agentKind: .claudeCode, title: "x",
+                workingDirectory: "/Users/ari/code/alpha", lastActiveAt: Date(),
+                resumeCommand: ["claude"], summary: "", evidencePaths: [], confidence: 0.9,
+                preferredGroupName: "My Cmux Space", repositoryRoot: "/Users/ari/code/alpha"
+            ),
+            RecentSessionCandidate(
+                id: "b", source: .claudeCode, agentKind: .claudeCode, title: "y",
+                workingDirectory: "/Users/ari/code/beta", lastActiveAt: Date(),
+                resumeCommand: ["claude"], summary: "", evidencePaths: [], confidence: 0.9,
+                preferredGroupName: "My Cmux Space", repositoryRoot: "/Users/ari/code/beta"
+            ),
+        ]
+        let groups = WorkbenchImportProposalBuilder().build(candidates: candidates).groups
+        XCTAssertEqual(groups.count, 1)
+        XCTAssertEqual(groups.first?.name, "My Cmux Space")
+    }
+
     func testImportProposalKeepsDeskTaskSlugsUniqueWithinGroup() {
         let candidates = (1...2).map { index in
             RecentSessionCandidate(

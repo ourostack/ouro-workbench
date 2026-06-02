@@ -288,6 +288,12 @@ public struct RecentSessionCandidate: Codable, Equatable, Identifiable, Sendable
     public var evidencePaths: [String]
     public var confidence: Double
     public var preferredGroupName: String?
+    /// The git repository root that `workingDirectory` lives in, if any —
+    /// resolved against the filesystem by the scanner. This is the natural
+    /// grouping unit: every session in a repo (whatever subdirectory it was
+    /// launched from) belongs to one group. `nil` when the directory isn't in
+    /// a git repo, in which case grouping falls back to a path heuristic.
+    public var repositoryRoot: String?
 
     public init(
         id: String,
@@ -300,7 +306,8 @@ public struct RecentSessionCandidate: Codable, Equatable, Identifiable, Sendable
         summary: String,
         evidencePaths: [String],
         confidence: Double,
-        preferredGroupName: String? = nil
+        preferredGroupName: String? = nil,
+        repositoryRoot: String? = nil
     ) {
         self.id = id
         self.source = source
@@ -313,6 +320,7 @@ public struct RecentSessionCandidate: Codable, Equatable, Identifiable, Sendable
         self.evidencePaths = evidencePaths
         self.confidence = min(1, max(0, confidence))
         self.preferredGroupName = preferredGroupName
+        self.repositoryRoot = repositoryRoot
     }
 
     public var resumeCommandLine: String {
@@ -370,7 +378,32 @@ public struct RecentSessionScanner {
             + scanCodex()
             + scanShellHistory()
 
-        return dedupe(candidates)
+        return resolveRepositoryRoots(dedupe(candidates))
+    }
+
+    /// Fill in each candidate's git repository root (the natural grouping unit)
+    /// by walking up from its working directory. Cheap — a few `stat`s per
+    /// candidate — and cached per directory so repeated cwds aren't re-walked.
+    private func resolveRepositoryRoots(_ candidates: [RecentSessionCandidate]) -> [RecentSessionCandidate] {
+        var cache: [String: String?] = [:]
+        return candidates.map { candidate in
+            guard candidate.repositoryRoot == nil else {
+                return candidate
+            }
+            let directory = candidate.workingDirectory
+            let resolved: String?
+            if let cached = cache[directory] {
+                resolved = cached
+            } else {
+                resolved = WorkspaceGrouping.repositoryRoot(for: directory) { dir in
+                    self.fileManager.fileExists(atPath: dir + "/.git")
+                }
+                cache[directory] = resolved
+            }
+            var updated = candidate
+            updated.repositoryRoot = resolved
+            return updated
+        }
             .sorted { left, right in
                 switch (left.lastActiveAt, right.lastActiveAt) {
                 case let (leftDate?, rightDate?) where leftDate != rightDate:
@@ -1117,9 +1150,55 @@ public struct WorkbenchImportProposal: Codable, Equatable, Sendable {
     }
 }
 
-private struct WorkbenchImportGroupKey: Hashable {
-    var rootPath: String
-    var preferredName: String?
+/// How a candidate is bucketed into a group. An explicit name (e.g. a cmux
+/// workspace title) always wins; otherwise sessions group by their git repo
+/// root, so every terminal opened anywhere inside a repo lands in one group.
+private enum WorkbenchImportGroupKey: Hashable {
+    case named(String)
+    case root(String)
+}
+
+/// Resolve a directory to its enclosing git repository root, by walking up the
+/// path until a `.git` entry is found. Pure: the filesystem check is injected,
+/// so it's unit-testable against synthetic trees.
+public enum WorkspaceGrouping {
+    public static func repositoryRoot(
+        for path: String,
+        hasGitEntry: (String) -> Bool
+    ) -> String? {
+        var dir = standardizedDirectory(path)
+        guard !dir.isEmpty else {
+            return nil
+        }
+        var hops = 0
+        while hops < 64 {
+            hops += 1
+            if hasGitEntry(dir) {
+                return dir
+            }
+            guard let parent = parentDirectory(of: dir), parent != dir else {
+                return nil
+            }
+            dir = parent
+        }
+        return nil
+    }
+
+    static func standardizedDirectory(_ path: String) -> String {
+        var trimmed = path
+        while trimmed.count > 1, trimmed.hasSuffix("/") {
+            trimmed.removeLast()
+        }
+        return trimmed
+    }
+
+    static func parentDirectory(of path: String) -> String? {
+        guard path != "/", !path.isEmpty else {
+            return nil
+        }
+        let parent = URL(fileURLWithPath: path).deletingLastPathComponent().path
+        return parent.isEmpty ? "/" : parent
+    }
 }
 
 public struct WorkbenchImportProposalBuilder: Sendable {
@@ -1134,14 +1213,21 @@ public struct WorkbenchImportProposalBuilder: Sendable {
     public func build(candidates: [RecentSessionCandidate], now: Date = Date()) -> WorkbenchImportProposal {
         let importable = candidates.filter { $0.confidence >= 0.50 }
         let ignored = candidates.filter { $0.confidence < 0.50 }
-        let grouped = Dictionary(grouping: importable) { candidate in
-            WorkbenchImportGroupKey(
-                rootPath: workspaceRoot(for: candidate.workingDirectory),
-                preferredName: candidate.preferredGroupName
-            )
-        }
-        var groups = grouped.map { groupKey, groupCandidates in
-            let groupName = groupKey.preferredName ?? displayName(for: groupKey.rootPath)
+        let grouped = Dictionary(grouping: importable) { groupKey(for: $0) }
+        var groups = grouped.map { key, groupCandidates in
+            let newest = groupCandidates.max {
+                ($0.lastActiveAt ?? .distantPast) < ($1.lastActiveAt ?? .distantPast)
+            }
+            let groupName: String
+            let groupRootPath: String
+            switch key {
+            case let .named(name):
+                groupName = name
+                groupRootPath = newest?.repositoryRoot ?? newest?.workingDirectory ?? ""
+            case let .root(root):
+                groupName = displayName(for: root)
+                groupRootPath = root
+            }
             let trackSlug = slug(groupName)
             var usedTaskSlugs = Set<String>()
             let terminals = groupCandidates
@@ -1159,7 +1245,7 @@ public struct WorkbenchImportProposalBuilder: Sendable {
             return ProposedWorkbenchGroup(
                 id: trackSlug,
                 name: groupName,
-                rootPath: groupKey.rootPath,
+                rootPath: groupRootPath,
                 deskTrackSlug: trackSlug,
                 terminals: terminals
             )
@@ -1207,6 +1293,21 @@ public struct WorkbenchImportProposalBuilder: Sendable {
         }
 
         return WorkbenchImportProposal(generatedAt: now, groups: groups, ignoredCandidates: ignored)
+    }
+
+    /// Bucket a candidate: an explicit group name (cmux workspace title, etc.)
+    /// wins; otherwise group by the git repo root the session lives in, falling
+    /// back to the path heuristic when the directory isn't in a repo.
+    private func groupKey(for candidate: RecentSessionCandidate) -> WorkbenchImportGroupKey {
+        if let name = candidate.preferredGroupName,
+           !name.trimmingCharacters(in: .whitespaces).isEmpty {
+            return .named(name)
+        }
+        if let repositoryRoot = candidate.repositoryRoot,
+           !repositoryRoot.isEmpty {
+            return .root(repositoryRoot)
+        }
+        return .root(workspaceRoot(for: candidate.workingDirectory))
     }
 
     public func workspaceRoot(for workingDirectory: String) -> String {

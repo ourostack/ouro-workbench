@@ -16,8 +16,10 @@ final class TerminalEnvironmentTests: XCTestCase {
     func testMergedEnvironmentIncludesPathAndTerminalDefaults() {
         let environment = TerminalEnvironment(values: ["HOME": "/Users/test"]).mergedWithTerminalDefaults()
 
+        // 256-color, with NO truecolor claim — advertising COLORTERM=truecolor
+        // makes agent TUIs emit 24-bit sequences that screen 4.00.03 mangles.
         XCTAssertTrue(environment.contains("TERM=xterm-256color"))
-        XCTAssertTrue(environment.contains("COLORTERM=truecolor"))
+        XCTAssertFalse(environment.contains { $0.hasPrefix("COLORTERM=") })
         XCTAssertTrue(environment.contains("LANG=en_US.UTF-8"))
         XCTAssertTrue(environment.contains("TERM_PROGRAM=OuroWorkbench"))
         XCTAssertTrue(environment.contains { $0.hasPrefix("PATH=") && $0.contains("/Users/test/.local/bin") })
@@ -26,9 +28,12 @@ final class TerminalEnvironmentTests: XCTestCase {
     }
 
     func testDictionaryEnvironmentIncludesResolvedPathAndInteractiveTerminalType() {
-        let environment = TerminalEnvironment(values: ["PATH": "/custom/bin", "TERM": "dumb"]).valuesWithResolvedPath()
+        let environment = TerminalEnvironment(values: ["PATH": "/custom/bin", "TERM": "dumb", "COLORTERM": "truecolor"]).valuesWithResolvedPath()
 
         XCTAssertEqual(environment["TERM"], "xterm-256color")
+        // Inherited COLORTERM=truecolor must be stripped — the screen 4.00.03
+        // transport can't carry truecolor, and advertising it mangles TUIs.
+        XCTAssertNil(environment["COLORTERM"])
         XCTAssertEqual(environment["TERM_PROGRAM"], "OuroWorkbench")
         XCTAssertEqual(environment["PATH"]?.hasPrefix("/custom/bin"), true)
         XCTAssertEqual(environment["PATH"]?.contains("/opt/homebrew/bin"), true)
