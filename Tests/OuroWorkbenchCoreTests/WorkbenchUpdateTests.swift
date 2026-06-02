@@ -163,6 +163,54 @@ final class WorkbenchUpdateTests: XCTestCase {
         XCTAssertEqual(failure, .notNewerThanCurrent(current: "0.1.120", candidate: "0.1.120"))
     }
 
+    // MARK: - Auto-update policy
+
+    func testAutoUpdatePolicyChecksWhenNeverCheckedBefore() {
+        XCTAssertTrue(
+            WorkbenchAutoUpdatePolicy.shouldCheck(
+                now: Date(timeIntervalSince1970: 1000),
+                lastCheck: nil,
+                minimumInterval: 3600,
+                enabled: true
+            )
+        )
+    }
+
+    func testAutoUpdatePolicySkipsWhenDisabled() {
+        XCTAssertFalse(
+            WorkbenchAutoUpdatePolicy.shouldCheck(
+                now: Date(timeIntervalSince1970: 100_000),
+                lastCheck: nil,
+                minimumInterval: 3600,
+                enabled: false
+            )
+        )
+    }
+
+    func testAutoUpdatePolicyThrottlesWithinInterval() {
+        let last = Date(timeIntervalSince1970: 100_000)
+        XCTAssertFalse(
+            WorkbenchAutoUpdatePolicy.shouldCheck(
+                now: last.addingTimeInterval(1800), // 30 min < 1h
+                lastCheck: last,
+                minimumInterval: 3600,
+                enabled: true
+            )
+        )
+    }
+
+    func testAutoUpdatePolicyChecksAfterInterval() {
+        let last = Date(timeIntervalSince1970: 100_000)
+        XCTAssertTrue(
+            WorkbenchAutoUpdatePolicy.shouldCheck(
+                now: last.addingTimeInterval(3600), // exactly 1h
+                lastCheck: last,
+                minimumInterval: 3600,
+                enabled: true
+            )
+        )
+    }
+
     func testManifestDecodesFromReleaseJSON() throws {
         let json = """
         {

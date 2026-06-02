@@ -95,6 +95,21 @@ public enum WorkbenchUpdatePlanner {
     }
 }
 
+/// When the background auto-updater should hit the network. Pure + testable so
+/// the throttle (don't re-check on every rapid relaunch) is deterministic.
+public enum WorkbenchAutoUpdatePolicy {
+    public static func shouldCheck(
+        now: Date,
+        lastCheck: Date?,
+        minimumInterval: TimeInterval,
+        enabled: Bool
+    ) -> Bool {
+        guard enabled else { return false }
+        guard let lastCheck else { return true }
+        return now.timeIntervalSince(lastCheck) >= minimumInterval
+    }
+}
+
 /// Pure verification of a *downloaded* archive against its manifest and the
 /// running install — no IO. The caller computes the archive's SHA-256 + byte
 /// count and reads the running bundle identity; this decides go/no-go so the

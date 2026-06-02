@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.124 - Automatic updates (check in background, install on quit, "Update" badge)
+
+- Workbench now keeps itself up to date the way Codex / Claude Code do, **on by default**: it quietly checks GitHub for a newer release on launch (throttled to ~once/hour), downloads + verifies it in the background, and **applies it the next time you quit** — never a surprise relaunch while it's babysitting live agents.
+- An **"Update vX" badge** appears in the header as soon as a verified update is staged. Click it to install + relaunch immediately instead of waiting for quit.
+- Opt out anytime: **Settings → Startup → "Automatically check for updates and install on quit."** With it off, nothing hits the network until you run "Check for Updates…" yourself.
+- The background check uses the same verified pipeline as the manual install (SHA-256 + byte count vs the release manifest, bundle-id match, strictly-newer version, `codesign --verify`). The quit-time swap keeps a rollback copy until it succeeds. New pure `WorkbenchAutoUpdatePolicy` (the throttle) is unit-tested.
+
 ## 0.1.123 - One-click in-app updates (no more re-running the installer)
 
 - **You no longer have to re-run the `curl | bash` installer to update.** When a newer release is available, the About sheet's Release Updates row now shows **"Install & Relaunch"**: it downloads the new release's app archive + manifest straight from GitHub, verifies the archive's **SHA-256 and byte count against the published manifest**, checks the bundle identifier and **code signature**, swaps the running app in place (keeping a rollback copy until the move succeeds), refreshes Launch Services, and relaunches. Same trust chain as the installer — HTTPS + the release's own SHA-256 — with nothing moved unless every check passes.

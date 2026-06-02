@@ -399,6 +399,9 @@ struct WorkbenchRootView: View {
         .task {
             await model.runBossWatchLoop()
         }
+        .task {
+            await model.runAutoUpdateCheckIfDue()
+        }
     }
 }
 
@@ -1024,6 +1027,18 @@ struct SettingsSheet: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Auto-launch resumable terminals on startup")
                     Text("On launch, start every terminal marked Auto Resume that isn't already running. Lets a `.workbench.json` workspace come up with its agents waiting for you.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .toggleStyle(.switch)
+            Toggle(isOn: Binding(
+                get: { model.autoUpdateEnabled },
+                set: { model.setAutoUpdateEnabled($0) }
+            )) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Automatically check for updates and install on quit")
+                    Text("Quietly checks GitHub on launch and downloads + verifies a newer release in the background. The update applies the next time you quit Workbench — never a surprise relaunch. An \u{201C}Update\u{201D} badge appears in the header when one is ready; click it to install immediately.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -2317,6 +2332,17 @@ struct HeaderView: View {
                 .truncationMode(.tail)
                 .help(model.summary.oneLineStatus)
             Spacer(minLength: 8)
+            if let badge = model.updateBadgeText {
+                Button {
+                    model.presentUpdatePrompt()
+                } label: {
+                    Label(badge, systemImage: "arrow.down.circle.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .help("A new version of Ouro Workbench is ready — installs on quit, or click to install now.")
+                .fixedSize()
+            }
             AutonomyStatusButton(model: model)
                 .fixedSize()
             Button {
@@ -7247,6 +7273,26 @@ final class WorkbenchViewModel: ObservableObject {
     /// Drives the "Software Update" confirmation dialog reached from the More
     /// menu / ⌘K: installable → offer Install & Relaunch; otherwise inform.
     @Published var updatePrompt: WorkbenchUpdatePrompt?
+    /// Auto-update (Codex/Claude-Code style): quietly check on launch, stage the
+    /// download in the background, and apply it on quit. Default on; opt out in
+    /// Settings. Persisted.
+    @Published var autoUpdateEnabled: Bool = {
+        UserDefaults.standard.object(forKey: WorkbenchViewModel.autoUpdateEnabledDefaultsKey) as? Bool ?? true
+    }() {
+        didSet {
+            UserDefaults.standard.set(autoUpdateEnabled, forKey: Self.autoUpdateEnabledDefaultsKey)
+        }
+    }
+    /// A background-staged update ready to apply on quit (drives the header
+    /// "Update" badge). The downloaded + verified bundle is held in
+    /// `pendingStagedUpdate`.
+    @Published var stagedUpdateVersion: String?
+    private var pendingStagedUpdate: WorkbenchUpdateInstaller.Staged?
+    /// Set while a *manual* "Install & Relaunch" is mid-flight so the quit-time
+    /// hook doesn't also try to apply (which would double-swap / fight the
+    /// relaunch helper).
+    private var isApplyingManualUpdate = false
+    private var autoUpdateCheckStartedThisSession = false
     @Published var supportDiagnosticsResult: SupportDiagnosticsResult?
     @Published var supportDiagnosticsIsCollecting = false
     @Published var supportDiagnosticsError: String?
@@ -7457,6 +7503,9 @@ final class WorkbenchViewModel: ObservableObject {
             }
         }
         save()
+        // Quiet "install on quit": if a verified update was staged in the
+        // background, swap it in now that we're exiting (no reopen).
+        applyStagedUpdateOnQuitIfNeeded()
     }
 
     /// Reset this machine's Workbench to factory defaults and relaunch into a
@@ -9664,6 +9713,25 @@ final class WorkbenchViewModel: ObservableObject {
         guard !releaseUpdateIsInstalling else {
             return
         }
+        // Fast path: the background auto-updater already downloaded + verified
+        // this version, so installing is just the swap + relaunch.
+        if let staged = pendingStagedUpdate {
+            releaseUpdateInstallStatus = "Installing \(staged.version) and relaunching…"
+            isApplyingManualUpdate = true
+            recordActionLog(
+                source: "native",
+                action: "installReleaseUpdate",
+                result: "Applying staged \(staged.version); relaunching",
+                succeeded: true
+            )
+            WorkbenchUpdateInstaller.applyAndRelaunch(
+                staged: staged,
+                destinationBundle: Bundle.main.bundleURL
+            )
+            NSApp.terminate(nil)
+            return
+        }
+
         guard let snapshot = releaseUpdateSnapshot else {
             releaseUpdateInstallError = "Check for an update first."
             return
@@ -9690,6 +9758,7 @@ final class WorkbenchViewModel: ObservableObject {
                 await MainActor.run { self?.releaseUpdateInstallStatus = line }
             }
             releaseUpdateInstallStatus = "Installing \(staged.version) and relaunching…"
+            isApplyingManualUpdate = true
             recordActionLog(
                 source: "native",
                 action: "installReleaseUpdate",
@@ -9713,6 +9782,105 @@ final class WorkbenchViewModel: ObservableObject {
                 succeeded: false
             )
         }
+    }
+
+    func setAutoUpdateEnabled(_ enabled: Bool) {
+        autoUpdateEnabled = enabled
+    }
+
+    /// The header "Update" badge label, or `nil` when there's nothing to offer.
+    /// Prefers a fully-staged version (ready to install instantly) but also
+    /// shows as soon as an installable update is merely *known*.
+    var updateBadgeText: String? {
+        if let version = stagedUpdateVersion {
+            return "Update \(version)"
+        }
+        if let snapshot = releaseUpdateSnapshot,
+           snapshot.status == .updateAvailable,
+           snapshot.hasInstallableAssets,
+           let version = snapshot.latestVersion {
+            return "Update \(version)"
+        }
+        return nil
+    }
+
+    /// Badge tap / "review update" → reuse the Software Update dialog.
+    func presentUpdatePrompt() {
+        if let version = stagedUpdateVersion {
+            updatePrompt = .installable(version: version)
+        } else if let snapshot = releaseUpdateSnapshot,
+                  snapshot.status == .updateAvailable,
+                  snapshot.hasInstallableAssets,
+                  let version = snapshot.latestVersion {
+            updatePrompt = .installable(version: version)
+        }
+    }
+
+    /// Launch-time auto-update: if enabled and not throttled, check GitHub and
+    /// (when an installable update exists) stage it in the background so it's
+    /// ready to apply on quit. Runs at most once per session.
+    func runAutoUpdateCheckIfDue() async {
+        guard !autoUpdateCheckStartedThisSession else { return }
+        autoUpdateCheckStartedThisSession = true
+        let now = Date()
+        let lastCheck = UserDefaults.standard.object(forKey: Self.lastUpdateCheckAtDefaultsKey) as? Date
+        guard WorkbenchAutoUpdatePolicy.shouldCheck(
+            now: now,
+            lastCheck: lastCheck,
+            minimumInterval: 3600,
+            enabled: autoUpdateEnabled
+        ) else {
+            return
+        }
+        UserDefaults.standard.set(now, forKey: Self.lastUpdateCheckAtDefaultsKey)
+        await checkForReleaseUpdate()
+        guard autoUpdateEnabled,
+              let snapshot = releaseUpdateSnapshot,
+              snapshot.status == .updateAvailable,
+              snapshot.hasInstallableAssets else {
+            return
+        }
+        await stagePendingUpdate(from: snapshot)
+    }
+
+    /// Download + verify the update in the background and hold it for apply-on-
+    /// quit. Failures are intentionally quiet — the manual "Check for Updates…"
+    /// flow surfaces errors; the badge just won't appear.
+    private func stagePendingUpdate(from snapshot: ReleaseUpdateSnapshot) async {
+        guard pendingStagedUpdate == nil else { return }
+        guard case let .success(plan) = WorkbenchUpdatePlanner.plan(from: snapshot) else { return }
+        let installer = WorkbenchUpdateInstaller(
+            bundleIdentifier: WorkbenchRelease.bundleIdentifier,
+            currentVersion: WorkbenchRelease.version
+        )
+        do {
+            let staged = try await installer.stage(plan: plan) { _ in }
+            pendingStagedUpdate = staged
+            stagedUpdateVersion = staged.version
+            recordActionLog(
+                source: "native",
+                action: "autoStageUpdate",
+                result: "Staged \(staged.version) in background; will install on quit",
+                succeeded: true
+            )
+        } catch {
+            // Quiet: leave the badge off; manual check still reports the reason.
+        }
+    }
+
+    /// Apply a background-staged update during quit — the quiet "install on
+    /// quit" path. Skipped during a factory reset (the early return in
+    /// `prepareForTermination`) and when a manual Install & Relaunch is already
+    /// applying.
+    private func applyStagedUpdateOnQuitIfNeeded() {
+        guard autoUpdateEnabled, !isApplyingManualUpdate, let staged = pendingStagedUpdate else {
+            return
+        }
+        pendingStagedUpdate = nil
+        WorkbenchUpdateInstaller.applyOnQuit(
+            staged: staged,
+            destinationBundle: Bundle.main.bundleURL
+        )
     }
 
     func collectSupportDiagnostics() {
@@ -12593,6 +12761,8 @@ final class WorkbenchViewModel: ObservableObject {
     static let showMenuBarStatusItemDefaultsKey = "ouro.workbench.showMenuBarStatusItem"
     static let bossAutoAdvanceEnabledDefaultsKey = "ouro.workbench.bossAutoAdvanceEnabled"
     static let autoLaunchResumableOnStartupDefaultsKey = "ouro.workbench.autoLaunchResumableOnStartup"
+    static let autoUpdateEnabledDefaultsKey = "ouro.workbench.autoUpdateEnabled"
+    static let lastUpdateCheckAtDefaultsKey = "ouro.workbench.lastUpdateCheckAt"
     static let onboardingAutoPresentedDefaultsKey = "ouro.workbench.onboardingAutoPresented"
     static let maxRecentWorkspaces = 8
     /// Default terminal font size. Matches macOS Terminal's default.
