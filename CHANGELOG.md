@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.126 - Harden the boss auto-answer safety floor
+
+- Audited the defense-in-depth `PromptSafetyClassifier` — the hard floor that withholds the boss from auto-answering destructive/secret/financial prompts even on a trusted session — and closed real coverage gaps. Newly escalated to a human instead of auto-answered: the `rm -fr` flag-order variant of `rm -rf`; infrastructure teardown (`terraform destroy`, `kubectl delete`, `docker system prune`, `docker volume rm`); system power (`shutdown`, `reboot`); and crypto/private-key secrets (`private key`, `seed phrase`, `recovery phrase`, `mnemonic`). The floor still errs toward escalate (a blocked mundane prompt just becomes a human decision), and false-positive guards keep everyday prompts auto-advancing. 21 classifier tests.
+
 ## 0.1.125 - God-tier agent TUIs (correct colors) + git-repo onboarding groups
 
 **Agent CLIs now render correctly.** Claude Code and Codex TUIs were showing garish green/black background "chips" behind text — the "awful terminal rendering." Root cause: Workbench advertised `TERM=xterm-256color` + `COLORTERM=truecolor` to the inner shell, so the agents emitted 24-bit truecolor escape sequences — but the persistent sessions run inside GNU `screen` 4.00.03 (the build bundled with macOS), which predates truecolor and *mangles* those sequences into background-color garbage. The fix is to stop advertising truecolor — Workbench no longer sets `COLORTERM`, so agents emit 256-color, which `screen` relays faithfully and renders cleanly. Verified live in a fresh session: Claude Code's welcome screen, logo, headings, and inline code all render correctly now. (Truecolor can return if Workbench ever ships a `screen` ≥ 5.0.)
