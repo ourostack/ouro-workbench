@@ -381,6 +381,18 @@ struct WorkbenchRootView: View {
         } message: {
             Text("Clears all of Workbench's own data — your groups, the session list, and every preference — and relaunches into the fresh first-run setup. Running terminals are stopped cleanly. Your agents' session histories (Claude, Codex, …) are stored by those tools, not Workbench, so they stay put — relaunch and resume them anytime. Your previous workspace is backed up to a file first.")
         }
+        .confirmationDialog("Software Update", isPresented: model.updatePromptIsPresented, titleVisibility: .visible) {
+            if model.updatePrompt?.isInstallable == true {
+                Button("Install & Relaunch") {
+                    Task { await model.installReleaseUpdate() }
+                }
+                Button("Later", role: .cancel) {}
+            } else {
+                Button("OK", role: .cancel) {}
+            }
+        } message: {
+            Text(model.updatePrompt?.message ?? "")
+        }
         .task {
             await model.runExternalActionPump()
         }
@@ -2424,6 +2436,11 @@ struct HeaderView: View {
                     model.isAboutSheetPresented = true
                 } label: {
                     Label("About Ouro Workbench…", systemImage: "info.circle")
+                }
+                Button {
+                    Task { await model.checkForUpdatesAndPromptInstall() }
+                } label: {
+                    Label("Check for Updates…", systemImage: "arrow.down.app")
                 }
                 Divider()
                 Button(role: .destructive) {
@@ -6834,6 +6851,24 @@ struct ReleaseUpdateView: View {
                 .controlSize(.small)
                 .disabled(model.releaseUpdateIsChecking)
                 .fixedSize()
+                if let snapshot = model.releaseUpdateSnapshot,
+                   snapshot.status == .updateAvailable,
+                   snapshot.hasInstallableAssets {
+                    Button {
+                        Task { await model.installReleaseUpdate() }
+                    } label: {
+                        Label("Install & Relaunch", systemImage: "arrow.down.app.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .disabled(model.releaseUpdateIsInstalling)
+                    .fixedSize()
+                }
+                if model.releaseUpdateIsInstalling {
+                    ProgressView()
+                        .controlSize(.small)
+                        .fixedSize()
+                }
                 if model.releaseUpdateURL != nil {
                     Button {
                         model.openReleaseUpdate()
@@ -6845,8 +6880,19 @@ struct ReleaseUpdateView: View {
                     .fixedSize()
                 }
             }
+            if let status = model.releaseUpdateInstallStatus, model.releaseUpdateIsInstalling {
+                Text(status)
+                    .font(.caption)
+                    .foregroundStyle(SwiftUI.Color.secondary)
+            }
+            if let error = model.releaseUpdateInstallError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(SwiftUI.Color.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if let snapshot = model.releaseUpdateSnapshot, snapshot.status == .updateAvailable {
-                Text(snapshot.hasInstallableAssets ? "Release assets include a verified app zip and manifest." : "Release is published, but installable app assets were not found.")
+                Text(snapshot.hasInstallableAssets ? "Verified against the release's SHA-256 manifest + code signature before installing. Your running terminals keep running across the update." : "Release is published, but installable app assets were not found.")
                     .font(.caption)
                     .foregroundStyle(snapshot.hasInstallableAssets ? SwiftUI.Color.secondary : SwiftUI.Color.orange)
             }
@@ -7193,6 +7239,14 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var liveScreenSessionNames: Set<String> = []
     @Published var releaseUpdateSnapshot: ReleaseUpdateSnapshot?
     @Published var releaseUpdateIsChecking = false
+    /// In-app one-click update: whether a download/verify/install is in flight,
+    /// the current progress line, and any error from the last attempt.
+    @Published var releaseUpdateIsInstalling = false
+    @Published var releaseUpdateInstallStatus: String?
+    @Published var releaseUpdateInstallError: String?
+    /// Drives the "Software Update" confirmation dialog reached from the More
+    /// menu / ⌘K: installable → offer Install & Relaunch; otherwise inform.
+    @Published var updatePrompt: WorkbenchUpdatePrompt?
     @Published var supportDiagnosticsResult: SupportDiagnosticsResult?
     @Published var supportDiagnosticsIsCollecting = false
     @Published var supportDiagnosticsError: String?
@@ -7953,10 +8007,10 @@ final class WorkbenchViewModel: ObservableObject {
             ),
             command(
                 .checkReleaseUpdates,
-                "Check Release Updates",
-                "Look for the latest published Workbench release",
+                "Check for Updates…",
+                "Check for a newer release and install it in place (with relaunch)",
                 "arrow.down.app",
-                keywords: ["version", "update", "release"]
+                keywords: ["version", "update", "upgrade", "release", "install"]
             )
         ]
 
@@ -9566,6 +9620,101 @@ final class WorkbenchViewModel: ObservableObject {
         NSWorkspace.shared.open(releaseUpdateURL)
     }
 
+    var updatePromptIsPresented: Binding<Bool> {
+        Binding(
+            get: { self.updatePrompt != nil },
+            set: { newValue in
+                if !newValue {
+                    self.updatePrompt = nil
+                }
+            }
+        )
+    }
+
+    /// Reachable from the More menu / ⌘K: check GitHub for a newer release and
+    /// drive the "Software Update" dialog — offering Install & Relaunch when an
+    /// installable update exists, or telling the user they're current / why the
+    /// check failed otherwise.
+    func checkForUpdatesAndPromptInstall() async {
+        await checkForReleaseUpdate()
+        guard let snapshot = releaseUpdateSnapshot else {
+            updatePrompt = .failed(detail: "Could not check for updates right now.")
+            return
+        }
+        switch snapshot.status {
+        case .updateAvailable:
+            if snapshot.hasInstallableAssets, let version = snapshot.latestVersion {
+                updatePrompt = .installable(version: version)
+            } else {
+                updatePrompt = .failed(detail: "A newer version is published but has no installable assets yet — try the release page.")
+            }
+        case .current:
+            updatePrompt = .upToDate(version: snapshot.currentVersion)
+        case .unavailable:
+            updatePrompt = .failed(detail: snapshot.detail)
+        }
+    }
+
+    /// One-click in-app update: download the latest release's app archive +
+    /// manifest, verify SHA-256 / byte count / bundle id / signature, then swap
+    /// the running bundle in place and relaunch. Running `screen` sessions are
+    /// left alive (this is a normal quit, not a teardown), so agents survive the
+    /// update and reattach on the new version.
+    func installReleaseUpdate() async {
+        guard !releaseUpdateIsInstalling else {
+            return
+        }
+        guard let snapshot = releaseUpdateSnapshot else {
+            releaseUpdateInstallError = "Check for an update first."
+            return
+        }
+        let plan: WorkbenchUpdatePlan
+        switch WorkbenchUpdatePlanner.plan(from: snapshot) {
+        case let .success(value):
+            plan = value
+        case let .failure(error):
+            releaseUpdateInstallError = error.errorDescription
+            return
+        }
+
+        releaseUpdateIsInstalling = true
+        releaseUpdateInstallError = nil
+        releaseUpdateInstallStatus = "Starting…"
+
+        let installer = WorkbenchUpdateInstaller(
+            bundleIdentifier: WorkbenchRelease.bundleIdentifier,
+            currentVersion: WorkbenchRelease.version
+        )
+        do {
+            let staged = try await installer.stage(plan: plan) { [weak self] line in
+                await MainActor.run { self?.releaseUpdateInstallStatus = line }
+            }
+            releaseUpdateInstallStatus = "Installing \(staged.version) and relaunching…"
+            recordActionLog(
+                source: "native",
+                action: "installReleaseUpdate",
+                result: "Staged \(staged.version); swapping bundle and relaunching",
+                succeeded: true
+            )
+            WorkbenchUpdateInstaller.applyAndRelaunch(
+                staged: staged,
+                destinationBundle: Bundle.main.bundleURL
+            )
+            NSApp.terminate(nil)
+        } catch {
+            let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            releaseUpdateInstallError = message
+            releaseUpdateInstallStatus = nil
+            releaseUpdateIsInstalling = false
+            recordActionLog(
+                source: "native",
+                action: "installReleaseUpdate",
+                result: message,
+                succeeded: false
+            )
+        }
+    }
+
     func collectSupportDiagnostics() {
         guard !supportDiagnosticsIsCollecting else {
             return
@@ -10743,7 +10892,7 @@ final class WorkbenchViewModel: ObservableObject {
             revealBugReportsFolder()
         case .checkReleaseUpdates:
             Task {
-                await checkForReleaseUpdate()
+                await checkForUpdatesAndPromptInstall()
             }
         case .openReleaseUpdate:
             openReleaseUpdate()
