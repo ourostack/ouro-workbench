@@ -373,13 +373,13 @@ struct WorkbenchRootView: View {
                 Text("This removes the empty group \(project.name). Groups with terminals cannot be deleted.")
             }
         }
-        .confirmationDialog("Reset to First Run?", isPresented: $model.isResetFirstRunConfirmationPresented, titleVisibility: .visible) {
+        .confirmationDialog("Reset to Factory Defaults?", isPresented: $model.isResetFirstRunConfirmationPresented, titleVisibility: .visible) {
             Button("Reset & Relaunch", role: .destructive) {
                 model.resetToFirstRun()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Stops running terminals, clears your groups/sessions and Workbench preferences, and relaunches into the fresh onboarding flow. Your current workspace is backed up to a file and your Ouro agent setup is left untouched.")
+            Text("Clears all of Workbench's own data — your groups, the session list, and every preference — and relaunches into the fresh first-run setup. Running terminals are stopped cleanly. Your agents' session histories (Claude, Codex, …) are stored by those tools, not Workbench, so they stay put — relaunch and resume them anytime. Your previous workspace is backed up to a file first.")
         }
         .task {
             await model.runExternalActionPump()
@@ -2429,7 +2429,7 @@ struct HeaderView: View {
                 Button(role: .destructive) {
                     model.isResetFirstRunConfirmationPresented = true
                 } label: {
-                    Label("Reset to First Run…", systemImage: "arrow.counterclockwise.circle")
+                    Label("Reset to Factory Defaults…", systemImage: "arrow.counterclockwise.circle")
                 }
             } label: {
                 Label("More", systemImage: "ellipsis.circle")
@@ -7201,8 +7201,8 @@ final class WorkbenchViewModel: ObservableObject {
     /// screenshot/diagnostics gathering failed but the report was still written);
     /// and any fatal error. Reached from the More menu (⌘⇧B) and the ⌘K palette.
     @Published var isReportBugPresented = false
-    /// Drives the "Reset to First Run" confirmation dialog. Set true by the
-    /// More menu / ⌘K command; the dialog calls `resetToFirstRun()` on confirm.
+    /// Drives the "Reset to Factory Defaults" confirmation dialog. Set true by
+    /// the More menu / ⌘K command; the dialog calls `resetToFirstRun()` on confirm.
     @Published var isResetFirstRunConfirmationPresented = false
     @Published var bugReportNote = ""
     @Published var bugReportIsSubmitting = false
@@ -7405,18 +7405,29 @@ final class WorkbenchViewModel: ObservableObject {
         save()
     }
 
-    /// Wipe this machine's Workbench state and relaunch into a pristine
-    /// first-run (onboarding auto-presents). For iterating on the first-run
-    /// experience. Reversible: the workspace state is backed up to a
-    /// timestamped sibling file, and `ouro`/agent config is never touched —
-    /// it's *your* first run, not a no-agent simulation.
+    /// Reset this machine's Workbench to factory defaults and relaunch into a
+    /// pristine first-run (onboarding auto-presents). For iterating on the
+    /// first-run experience.
+    ///
+    /// Scope is deliberately *Workbench's own data only*:
+    ///   - Running terminals are stopped cleanly (no invisible orphans left
+    ///     burning tokens), and their persistent `screen` sessions are quit.
+    ///   - The workspace state file is backed up to a timestamped sibling, then
+    ///     removed, and *all* Workbench preferences are cleared.
+    ///
+    /// What is **not** touched: each agent's own session history — the Claude /
+    /// Codex / cmux conversation + resume state — lives with that harness's
+    /// storage, never inside Workbench. Stopping a terminal kills the process
+    /// but not its history, so you relaunch and resume after the reset.
     func resetToFirstRun() {
         // Suppress all persistence for the rest of this process's life so the
         // wipe below isn't undone by a save (notably prepareForTermination on
         // the NSApp.terminate path).
         isResettingToFirstRun = true
-        // 1) Tear down live agent terminals + their persistent screen sessions
-        //    so a fresh launch can't reattach ghosts.
+        // 1) Stop live agent terminals + their persistent screen sessions so a
+        //    fresh launch starts clean and nothing is left running unattended.
+        //    Non-destructive to the agents' histories (those live with their
+        //    harness); the process can be relaunched and resumed afterward.
         for entry in state.processEntries where activeSessions[entry.id] != nil {
             terminate(entry)
         }
@@ -7431,12 +7442,13 @@ final class WorkbenchViewModel: ObservableObject {
         try? FileManager.default.removeItem(at: backupURL)
         try? FileManager.default.moveItem(at: stateURL, to: backupURL)
 
-        // 3) Clear the flags that gate the first-run experience so onboarding
-        //    auto-presents and the one-time migrations re-evaluate cleanly.
+        // 3) Clear *all* Workbench preferences (font, theme, menubar, recents,
+        //    onboarding + one-time migration flags, …) so the relaunch is a true
+        //    factory state, not a half-reset. Removing the whole persistent
+        //    domain falls back to the registered defaults on next launch.
         let defaults = UserDefaults.standard
-        defaults.removeObject(forKey: Self.onboardingAutoPresentedDefaultsKey)
-        defaults.removeObject(forKey: Self.collapsedChromeMigrationKey)
-        defaults.removeObject(forKey: Self.automaticBossMigrationKey)
+        defaults.removePersistentDomain(forName: WorkbenchRelease.bundleIdentifier)
+        defaults.synchronize()
 
         // 4) Relaunch a fresh instance once this one exits, then quit.
         Self.relaunchAfterExit()
@@ -8191,10 +8203,10 @@ final class WorkbenchViewModel: ObservableObject {
         commands.append(
             command(
                 .resetToFirstRun,
-                "Reset to First Run…",
-                "Wipe groups, sessions, and preferences (backed up) and relaunch into onboarding",
+                "Reset to Factory Defaults…",
+                "Clear all Workbench data (groups, sessions, preferences — backed up) and relaunch into first-run",
                 "arrow.counterclockwise.circle",
-                keywords: ["reset", "first run", "onboarding", "fresh", "clean", "start over", "wipe", "factory"]
+                keywords: ["reset", "factory", "factory defaults", "first run", "onboarding", "fresh", "clean", "start over", "wipe", "defaults"]
             )
         )
 
