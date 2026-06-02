@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.122 - Test the factory-reset data wipe
+
+- Extracted the *data* half of Reset to Factory Defaults — back up the workspace state to a timestamped sibling, then clear the whole preference domain — into `WorkbenchFactoryReset.wipeData`, and unit-tested it against a real temp directory + a real `UserDefaults` suite. Proves the state file is moved aside intact, **all** preferences (font, theme, onboarding flag) are cleared, the no-state-file case still clears prefs, and a same-second double reset doesn't throw. No behavior change — same wipe, now verified deterministically instead of by eyeball.
+
 ## 0.1.121 - Rename to "Reset to Factory Defaults" + full preference wipe
 
 - Renamed **Reset to First Run** → **Reset to Factory Defaults** (More menu and ⌘K) to match what it actually does: a clean reset of *Workbench's own data*, not your work. The confirmation dialog now spells this out plainly.
