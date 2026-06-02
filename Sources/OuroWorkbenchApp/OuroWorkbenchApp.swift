@@ -402,6 +402,9 @@ struct WorkbenchRootView: View {
         .task {
             await model.runAutoUpdateCheckIfDue()
         }
+        .onAppear {
+            TerminalEscapeKeyForwarder.installIfNeeded()
+        }
     }
 }
 
@@ -13453,6 +13456,38 @@ final class CapturingLocalProcessTerminalView: LocalProcessTerminalView {
         true
     }
 
+    /// Escape must reach the terminal, not be swallowed by SwiftUI.
+    ///
+    /// Every `.keyboardShortcut(.cancelAction)` in the app (every sheet's
+    /// Cancel button, the command palette, etc.) installs a window-wide key
+    /// *equivalent* for Escape. Key equivalents are dispatched in
+    /// `performKeyEquivalent(with:)` — which runs BEFORE `keyDown` is delivered
+    /// to the focused view — so a focused terminal otherwise never sees Escape.
+    /// That silently breaks every modal TUI: vim/less can't leave insert/pager
+    /// mode, and Claude Code's TUI (which leans on Escape to cancel/clear)
+    /// becomes unusable. When we're the key window's first responder, claim
+    /// Escape ourselves and forward it so SwiftTerm emits `0x1b`. When a sheet
+    /// is up the terminal isn't first responder, so its Cancel/Escape still
+    /// works normally.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.keyCode == 53, // kVK_Escape
+           event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
+           isFocusedTerminal {
+            keyDown(with: event)
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+
+    /// True when this terminal (or one of its descendants) holds keyboard focus
+    /// in its window — i.e. the user is typing into this terminal right now.
+    private var isFocusedTerminal: Bool {
+        guard let responder = window?.firstResponder as? NSView else {
+            return false
+        }
+        return responder === self || responder.isDescendant(of: self)
+    }
+
     override func dataReceived(slice: ArraySlice<UInt8>) {
         onOutput?(slice)
         super.dataReceived(slice: slice)
@@ -13460,6 +13495,50 @@ final class CapturingLocalProcessTerminalView: LocalProcessTerminalView {
 
     func claimKeyboardFocus() {
         window?.makeFirstResponder(self)
+    }
+}
+
+/// Forwards a focused terminal's Escape key past SwiftUI's grasp.
+///
+/// SwiftUI handles every `.keyboardShortcut(.cancelAction)` (Escape) at the
+/// hosting-view level, *before* AppKit's `performKeyEquivalent` traversal can
+/// reach a deeply-nested terminal `NSView` — so overriding the view isn't
+/// enough; SwiftUI wins the race and a focused terminal never receives Escape.
+/// A local `keyDown` monitor runs in `sendEvent` *before* that dispatch, so it
+/// reliably claims Escape for the focused terminal (forwarding it as a real key
+/// event → SwiftTerm emits `0x1b`) and swallows it so the global cancel doesn't
+/// also fire. When the first responder isn't a terminal (e.g. a sheet is up),
+/// the event passes through untouched and Escape still cancels as normal.
+@MainActor
+enum TerminalEscapeKeyForwarder {
+    private static var monitor: Any?
+
+    static func installIfNeeded() {
+        guard monitor == nil else { return }
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard event.keyCode == 53, // kVK_Escape
+                  event.modifierFlags.intersection([.command, .control, .option, .function]).isEmpty,
+                  let responder = NSApp.keyWindow?.firstResponder as? NSView,
+                  let terminal = responder.enclosingCapturingTerminal else {
+                return event
+            }
+            terminal.keyDown(with: event)
+            return nil
+        }
+    }
+}
+
+private extension NSView {
+    /// This view or its nearest ancestor that is a capturing terminal view.
+    var enclosingCapturingTerminal: CapturingLocalProcessTerminalView? {
+        var view: NSView? = self
+        while let current = view {
+            if let terminal = current as? CapturingLocalProcessTerminalView {
+                return terminal
+            }
+            view = current.superview
+        }
+        return nil
     }
 }
 
