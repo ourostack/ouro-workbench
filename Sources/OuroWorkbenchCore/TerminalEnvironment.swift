@@ -63,7 +63,17 @@ public struct TerminalEnvironment: Equatable, Sendable {
     public func valuesWithResolvedPath() -> [String: String] {
         var merged = values
         merged["TERM"] = "xterm-256color"
-        merged["COLORTERM"] = merged["COLORTERM"] ?? "truecolor"
+        // Do NOT advertise truecolor. The persistent sessions run inside GNU
+        // `screen` 4.00.03 (the build bundled with macOS), which predates 24-bit
+        // truecolor and MANGLES `\e[38;2;r;g;b` / `\e[48;2;…` sequences. Agent
+        // TUIs (Claude Code, Codex) emit exactly those when they see
+        // `COLORTERM=truecolor`, and the mangled bytes render as garish
+        // background "chips" — the awful terminal rendering. Removing COLORTERM
+        // drops them to 256-color, which `screen` relays faithfully and which
+        // renders cleanly (verified: Claude Code's welcome screen, logo, and
+        // headings all correct). Revisit if Workbench ever ships a
+        // truecolor-capable `screen` (≥ 5.0) or switches multiplexer.
+        merged.removeValue(forKey: "COLORTERM")
         merged["LANG"] = merged["LANG"] ?? "en_US.UTF-8"
         merged["TERM_PROGRAM"] = "OuroWorkbench"
         // Always-on markers so any session Workbench launches can detect its host.
