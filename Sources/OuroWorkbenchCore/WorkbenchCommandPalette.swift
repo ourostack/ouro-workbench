@@ -53,6 +53,7 @@ public enum WorkbenchCommandID: String, Codable, CaseIterable, Sendable {
     case openDecisionLog
     case stopAllRunningSessions
     case recoverAllCrashedSessions
+    case resetToFirstRun
 }
 
 public struct WorkbenchCommandDescriptor: Codable, Equatable, Identifiable, Sendable {

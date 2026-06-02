@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.119 - One-click "Reset to First Run"
+
+- Added **Reset to First Run** (More menu and ⌘K palette) for cleanly re-experiencing onboarding while iterating on it. It stops running terminals, kills their persistent screen sessions, backs up the workspace state to a timestamped file, clears the onboarding-shown + migration flags, and relaunches into the fresh onboarding flow. Your `ouro`/agent setup is left untouched, so it's *your* first run — and it's reversible via the backup. Saves are suppressed during the reset so the wipe can't be undone by the quit-time save.
+
 ## 0.1.118 - Fix the blank/wrecked window (the dogfooding showstopper)
 
 - Fixed the bug where selecting a group with no terminals (or restoring that selection on launch) blanked the **entire window** — both sidebar and detail — and stayed blank across restarts. Root cause: the no-selection empty state used a greedy `maxHeight:.infinity` VStack as the NavigationSplitView detail, which made the whole split view lay out ~2.5× the window height and shift off-screen, so the visible area landed on an empty region with the header pushed out of view. The empty-state content is now in a height-bounded `ScrollView`, and the header is pinned so it can never be starved. Verified on a real window: the empty group now shows the proper "Pick a terminal" home, and selecting a populated group still renders its terminal.
