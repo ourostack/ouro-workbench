@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.121 - Rename to "Reset to Factory Defaults" + full preference wipe
+
+- Renamed **Reset to First Run** → **Reset to Factory Defaults** (More menu and ⌘K) to match what it actually does: a clean reset of *Workbench's own data*, not your work. The confirmation dialog now spells this out plainly.
+- The reset now clears **all** Workbench preferences (font, theme, menubar, recents, onboarding + one-time migration flags) by removing the whole preference domain — a true factory state on relaunch, not a half-reset that left font/theme behind.
+- Clarified the model in code + copy: running terminals are stopped *cleanly* (no invisible orphaned agents left burning tokens), and each agent's session history (Claude, Codex, cmux …) lives with that harness's own storage — never inside Workbench — so it's untouched. Relaunch and resume any agent after a reset. The workspace state is still backed up to a timestamped file first.
+
 ## 0.1.120 - Render boss replies as Markdown
 
 - Boss/agent replies now render as proper Markdown — **bold**, *italic*, `code`, links, `##` headings, and `-`/`*` bullets — instead of showing the raw `**` and `-` characters. Applied to the boss-pane "Boss Reply" and the onboarding Setup Assistant reply. Block structure is parsed by a small tested `BossMessageMarkdown` parser; inline marks render via `AttributedString`.
