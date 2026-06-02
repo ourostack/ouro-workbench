@@ -201,7 +201,7 @@ private struct GitHubReleaseAsset: Decodable {
     }
 }
 
-private struct SemanticVersion: Comparable {
+struct SemanticVersion: Comparable {
     var major: Int
     var minor: Int
     var patch: Int

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.123 - One-click in-app updates (no more re-running the installer)
+
+- **You no longer have to re-run the `curl | bash` installer to update.** When a newer release is available, the About sheet's Release Updates row now shows **"Install & Relaunch"**: it downloads the new release's app archive + manifest straight from GitHub, verifies the archive's **SHA-256 and byte count against the published manifest**, checks the bundle identifier and **code signature**, swaps the running app in place (keeping a rollback copy until the move succeeds), refreshes Launch Services, and relaunches. Same trust chain as the installer — HTTPS + the release's own SHA-256 — with nothing moved unless every check passes.
+- Running terminals **survive the update**: it's a normal quit (sessions detach, not killed), so your agents reattach on the new version.
+- New `WorkbenchUpdatePlanner` + `WorkbenchUpdateVerification` in Core are pure and unit-tested (planning picks the zip/manifest assets; verification rejects SHA/byte/bundle-id/downgrade mismatches).
+
 ## 0.1.122 - Test the factory-reset data wipe
 
 - Extracted the *data* half of Reset to Factory Defaults — back up the workspace state to a timestamped sibling, then clear the whole preference domain — into `WorkbenchFactoryReset.wipeData`, and unit-tested it against a real temp directory + a real `UserDefaults` suite. Proves the state file is moved aside intact, **all** preferences (font, theme, onboarding flag) are cleared, the no-state-file case still clears prefs, and a same-second double reset doesn't throw. No behavior change — same wipe, now verified deterministically instead of by eyeball.
