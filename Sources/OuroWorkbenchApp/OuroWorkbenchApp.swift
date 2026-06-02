@@ -7431,26 +7431,21 @@ final class WorkbenchViewModel: ObservableObject {
         for entry in state.processEntries where activeSessions[entry.id] != nil {
             terminate(entry)
         }
-        let backupSuffix = String(Int(Date().timeIntervalSince1970))
         Self.killAllPersistentScreens()
 
-        // 2) Back up + remove the workspace state so the next launch bootstraps
-        //    fresh (the bootstrapper treats a missing file as first run).
-        let stateURL = paths.stateURL
-        let backupURL = stateURL.deletingLastPathComponent()
-            .appendingPathComponent("workspace-state.\(backupSuffix).bak.json")
-        try? FileManager.default.removeItem(at: backupURL)
-        try? FileManager.default.moveItem(at: stateURL, to: backupURL)
+        // 2) Back up + remove the workspace state (so the next launch bootstraps
+        //    fresh — the bootstrapper treats a missing file as first run) and
+        //    clear *all* Workbench preferences for a true factory state, not a
+        //    half-reset. This data wipe is unit-tested via `WorkbenchFactoryReset`.
+        WorkbenchFactoryReset.wipeData(
+            stateURL: paths.stateURL,
+            defaults: .standard,
+            defaultsDomain: WorkbenchRelease.bundleIdentifier,
+            timestamp: Date()
+        )
+        UserDefaults.standard.synchronize()
 
-        // 3) Clear *all* Workbench preferences (font, theme, menubar, recents,
-        //    onboarding + one-time migration flags, …) so the relaunch is a true
-        //    factory state, not a half-reset. Removing the whole persistent
-        //    domain falls back to the registered defaults on next launch.
-        let defaults = UserDefaults.standard
-        defaults.removePersistentDomain(forName: WorkbenchRelease.bundleIdentifier)
-        defaults.synchronize()
-
-        // 4) Relaunch a fresh instance once this one exits, then quit.
+        // 3) Relaunch a fresh instance once this one exits, then quit.
         Self.relaunchAfterExit()
         NSApp.terminate(nil)
     }
