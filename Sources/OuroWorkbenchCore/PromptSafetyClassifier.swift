@@ -52,8 +52,13 @@ public enum PromptSafetyClassifier {
         ("2fa", "authentication prompt"),
         ("one-time code", "authentication prompt"),
         ("verification code", "authentication prompt"),
+        ("private key", "credential prompt"),
+        ("seed phrase", "secret recovery phrase"),
+        ("recovery phrase", "secret recovery phrase"),
+        ("mnemonic", "secret recovery phrase"),
         // Destructive / irreversible filesystem + VCS.
         ("rm -rf", "destructive command"),
+        ("rm -fr", "destructive command"),
         ("rm -r ", "destructive command"),
         ("reset --hard", "destructive git reset"),
         ("git clean", "destructive git clean"),
@@ -69,6 +74,14 @@ public enum PromptSafetyClassifier {
         ("truncate table", "destructive database operation"),
         ("permanently delete", "permanent deletion"),
         ("delete all", "bulk deletion"),
+        // Infrastructure teardown.
+        ("terraform destroy", "infrastructure teardown"),
+        ("kubectl delete", "kubernetes deletion"),
+        ("docker system prune", "container/data prune"),
+        ("docker volume rm", "container volume deletion"),
+        // System power.
+        ("shutdown", "system power-off"),
+        ("reboot", "system reboot"),
         // Privilege escalation.
         ("sudo ", "privileged command"),
         // Deploys / publishing to production.

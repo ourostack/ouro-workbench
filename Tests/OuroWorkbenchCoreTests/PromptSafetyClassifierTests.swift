@@ -51,6 +51,37 @@ final class PromptSafetyClassifierTests: XCTestCase {
         assertUnsafe("What should I run next?", input: "rm -rf /tmp/cache")
     }
 
+    func testFlagOrderVariantOfRmIsEscalated() {
+        // `rm -fr` is exactly as destructive as `rm -rf` and trivially missed.
+        assertUnsafe("Run `rm -fr ~/build`? (y/N)")
+        assertUnsafe("Proceed?", input: "rm -fr /")
+    }
+
+    func testInfrastructureTeardownEscalates() {
+        assertUnsafe("Run `terraform destroy`? This tears down prod.")
+        assertUnsafe("kubectl delete namespace payments — proceed?")
+        assertUnsafe("Run docker system prune -af? (y/N)")
+        assertUnsafe("docker volume rm app_data — confirm?")
+    }
+
+    func testSystemPowerEscalates() {
+        assertUnsafe("Run `sudo shutdown -h now`?")
+        assertUnsafe("Reboot the build host now? (y/N)")
+    }
+
+    func testCryptoAndPrivateKeySecretsEscalate() {
+        assertUnsafe("Paste your wallet seed phrase to continue:")
+        assertUnsafe("Enter your 12-word recovery phrase:")
+        assertUnsafe("Confirm your mnemonic to unlock the wallet")
+        assertUnsafe("Paste the contents of your private key:")
+    }
+
+    func testInfraWordsInProseStillSafeWhenNotTheDangerousForm() {
+        // Guard against over-eager matching of the new needles on benign prose.
+        assertSafe("Add a deploy step to CI later? (y/N)", input: "y")
+        assertSafe("Rename the kubernetes-config folder? (y/N)", input: "y")
+    }
+
     func testReasonAccompaniesUnsafe() {
         let result = PromptSafetyClassifier.classify(prompt: "Force push? ", proposedInput: nil)
         XCTAssertFalse(result.isSafe)
