@@ -158,4 +158,69 @@ final class BossAgentMCPClientTests: XCTestCase {
 
         XCTAssertEqual(text, "string id ok")
     }
+
+    // MARK: - retryingOnEmpty
+
+    func testRetryingOnEmptyReturnsFirstSuccessWithoutRetry() async throws {
+        let calls = CallRecorder()
+        let result = try await BossAgentMCPClient.retryingOnEmpty {
+            _ = await calls.increment()
+            return "first answer"
+        }
+        let count = await calls.count
+        XCTAssertEqual(result, "first answer")
+        XCTAssertEqual(count, 1, "a non-empty first answer must not retry")
+    }
+
+    func testRetryingOnEmptyRetriesOnceThenSucceeds() async throws {
+        let calls = CallRecorder()
+        let result = try await BossAgentMCPClient.retryingOnEmpty {
+            let attempt = await calls.increment()
+            if attempt == 1 { throw BossAgentMCPClientError.emptyResult }
+            return "answer on attempt \(attempt)"
+        }
+        let count = await calls.count
+        XCTAssertEqual(result, "answer on attempt 2")
+        XCTAssertEqual(count, 2, "an empty first answer must retry exactly once")
+    }
+
+    func testRetryingOnEmptyRethrowsWhenRetryAlsoEmpty() async {
+        let calls = CallRecorder()
+        do {
+            _ = try await BossAgentMCPClient.retryingOnEmpty {
+                _ = await calls.increment()
+                throw BossAgentMCPClientError.emptyResult
+            }
+            XCTFail("Expected emptyResult to propagate when both attempts are empty")
+        } catch {
+            XCTAssertEqual(error as? BossAgentMCPClientError, .emptyResult)
+        }
+        let count = await calls.count
+        XCTAssertEqual(count, 2, "retry once, then give up (→ backoff)")
+    }
+
+    func testRetryingOnEmptyDoesNotRetryNonEmptyError() async {
+        let calls = CallRecorder()
+        do {
+            _ = try await BossAgentMCPClient.retryingOnEmpty {
+                _ = await calls.increment()
+                throw BossAgentMCPClientError.rpcError("boss is down")
+            }
+            XCTFail("Expected rpcError to propagate")
+        } catch {
+            XCTAssertEqual(error as? BossAgentMCPClientError, .rpcError("boss is down"))
+        }
+        let count = await calls.count
+        XCTAssertEqual(count, 1, "real errors must fail straight through, no retry")
+    }
+}
+
+private actor CallRecorder {
+    private(set) var count = 0
+
+    @discardableResult
+    func increment() -> Int {
+        count += 1
+        return count
+    }
 }

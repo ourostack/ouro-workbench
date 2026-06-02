@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.127 - Boss check-in retries once on an empty reply
+
+- The automatic Boss Watch check-in no longer fails (and trips exponential backoff) when a reasoning-model boss intermittently spends its token budget on reasoning and returns an empty final answer. `BossAgentMCPClient.retryingOnEmpty` re-asks exactly once on `(empty response)` / `(no response)` / blank; only a genuinely-empty *retry* counts as a failure. Real errors (boss process unavailable, RPC/tool error, timeout) still fail straight through and surface immediately. 4 new tests.
+
 ## 0.1.126 - Harden the boss auto-answer safety floor
 
 - Audited the defense-in-depth `PromptSafetyClassifier` — the hard floor that withholds the boss from auto-answering destructive/secret/financial prompts even on a trusted session — and closed real coverage gaps. Newly escalated to a human instead of auto-answered: the `rm -fr` flag-order variant of `rm -rf`; infrastructure teardown (`terraform destroy`, `kubectl delete`, `docker system prune`, `docker volume rm`); system power (`shutdown`, `reboot`); and crypto/private-key secrets (`private key`, `seed phrase`, `recovery phrase`, `mnemonic`). The floor still errs toward escalate (a blocked mundane prompt just becomes a human decision), and false-positive guards keep everyday prompts auto-advancing. 21 classifier tests.
