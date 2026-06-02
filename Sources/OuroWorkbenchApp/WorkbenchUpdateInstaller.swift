@@ -152,12 +152,21 @@ struct WorkbenchUpdateInstaller: Sendable {
 
     /// Spawn a detached helper that waits for this process to exit, swaps the
     /// staged bundle over the running install (keeping a rollback copy until the
-    /// move succeeds), refreshes Launch Services, and reopens the app. The
-    /// caller terminates immediately after.
-    static func applyAndRelaunch(staged: Staged, destinationBundle: URL) {
+    /// move succeeds), refreshes Launch Services, and — when `relaunch` is true —
+    /// reopens the app. The caller terminates immediately after.
+    ///
+    /// `relaunch: true` is the explicit "Install & Relaunch now" path.
+    /// `relaunch: false` is the quiet "install on quit" path: the user already
+    /// chose to quit, so the swap just lands and the *next* launch is the new
+    /// version — no surprise reopen.
+    static func applyAndRelaunch(staged: Staged, destinationBundle: URL, relaunch: Bool = true) {
         let pid = ProcessInfo.processInfo.processIdentifier
         let dest = destinationBundle.path
         let lsregister = "/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister"
+        // On the relaunch path, a failed swap should still reopen the (unchanged)
+        // app so the user isn't left with nothing; on the quit path, do nothing.
+        let reopenOnFailure = relaunch ? "/usr/bin/open \"$DEST\"\n" : ""
+        let reopenOnSuccess = relaunch ? "/usr/bin/open \"$DEST\"\n" : ""
         let script = """
         while kill -0 \(pid) 2>/dev/null; do sleep 0.2; done
         DEST=\(shellQuoted(dest))
@@ -165,8 +174,7 @@ struct WorkbenchUpdateInstaller: Sendable {
         STAGING_ROOT=\(shellQuoted(staged.stagingRoot.path))
         /bin/rm -rf "$DEST.update-new" "$DEST.update-bak"
         if ! /usr/bin/ditto "$STAGED" "$DEST.update-new"; then
-          /usr/bin/open "$DEST"
-          exit 1
+          \(reopenOnFailure)exit 1
         fi
         /bin/mv "$DEST" "$DEST.update-bak" 2>/dev/null
         if /bin/mv "$DEST.update-new" "$DEST"; then
@@ -176,13 +184,18 @@ struct WorkbenchUpdateInstaller: Sendable {
         fi
         /usr/bin/xattr -dr com.apple.quarantine "$DEST" 2>/dev/null
         \(shellQuoted(lsregister)) -f "$DEST" 2>/dev/null
-        /usr/bin/open "$DEST"
-        /bin/rm -rf "$STAGING_ROOT" 2>/dev/null
+        \(reopenOnSuccess)/bin/rm -rf "$STAGING_ROOT" 2>/dev/null
         """
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/bin/sh")
         task.arguments = ["-c", script]
         try? task.run()
+    }
+
+    /// Quiet "install on quit": swap the staged bundle into place after this
+    /// process exits, without reopening. The next launch is the new version.
+    static func applyOnQuit(staged: Staged, destinationBundle: URL) {
+        applyAndRelaunch(staged: staged, destinationBundle: destinationBundle, relaunch: false)
     }
 
     // MARK: - IO helpers
