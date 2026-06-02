@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.120 - Render boss replies as Markdown
+
+- Boss/agent replies now render as proper Markdown — **bold**, *italic*, `code`, links, `##` headings, and `-`/`*` bullets — instead of showing the raw `**` and `-` characters. Applied to the boss-pane "Boss Reply" and the onboarding Setup Assistant reply. Block structure is parsed by a small tested `BossMessageMarkdown` parser; inline marks render via `AttributedString`.
+
 ## 0.1.119 - One-click "Reset to First Run"
 
 - Added **Reset to First Run** (More menu and ⌘K palette) for cleanly re-experiencing onboarding while iterating on it. It stops running terminals, kills their persistent screen sessions, backs up the workspace state to a timestamped file, clears the onboarding-shown + migration flags, and relaunches into the fresh onboarding flow. Your `ouro`/agent setup is left untouched, so it's *your* first run — and it's reversible via the backup. Saves are suppressed during the reset so the wipe can't be undone by the quit-time save.

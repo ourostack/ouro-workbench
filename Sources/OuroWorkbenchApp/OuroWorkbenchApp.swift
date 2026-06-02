@@ -3142,11 +3142,11 @@ struct BossDashboardView: View {
                         Text("Boss Reply")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
-                        Text(answer)
-                            .font(.callout)
-                            .textSelection(.enabled)
-                            .lineLimit(4)
-                            .truncationMode(.tail)
+                        ScrollView {
+                            MarkdownMessageView(text: answer, font: .callout)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .frame(maxHeight: 180)
                     }
                     .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -3983,6 +3983,61 @@ private struct OnboardingProgressDots: View {
     }
 }
 
+/// Renders a boss/agent message as proper Markdown — headings, bullets, and
+/// inline `**bold**` / `*italic*` / `` `code` `` / links — instead of showing
+/// the raw marker characters. Block structure comes from the tested
+/// `BossMessageMarkdown` parser; inline marks render via `AttributedString`.
+struct MarkdownMessageView: View {
+    let text: String
+    var font: Font = .callout
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(Array(BossMessageMarkdown.blocks(from: text).enumerated()), id: \.offset) { _, block in
+                switch block {
+                case .blank:
+                    Color.clear.frame(height: 3)
+                case let .heading(level, headingText):
+                    inline(headingText)
+                        .font(headingFont(level))
+                        .fontWeight(.semibold)
+                        .padding(.top, 2)
+                case let .bullet(indent, bulletText):
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text("•").foregroundStyle(.secondary)
+                        inline(bulletText).font(font)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.leading, CGFloat(indent) * 14)
+                case let .paragraph(paragraphText):
+                    inline(paragraphText)
+                        .font(font)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+        .textSelection(.enabled)
+    }
+
+    private func inline(_ string: String) -> Text {
+        if let attributed = try? AttributedString(
+            markdown: string,
+            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        ) {
+            return Text(attributed)
+        }
+        return Text(string)
+    }
+
+    private func headingFont(_ level: Int) -> Font {
+        switch level {
+        case 1: return .headline
+        case 2: return .subheadline
+        default: return .callout
+        }
+    }
+}
+
 private struct OnboardingAssistantBox: View {
     @ObservedObject var model: WorkbenchViewModel
     @Binding var instruction: String
@@ -4030,12 +4085,10 @@ private struct OnboardingAssistantBox: View {
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                     ScrollView {
-                        Text(answer)
-                            .font(.caption)
+                        MarkdownMessageView(text: answer, font: .caption)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .textSelection(.enabled)
                     }
-                    .frame(maxHeight: 88)
+                    .frame(maxHeight: 120)
                 }
                 .padding(10)
                 .background {
