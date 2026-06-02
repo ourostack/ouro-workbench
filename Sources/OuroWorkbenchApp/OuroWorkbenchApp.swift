@@ -11301,10 +11301,15 @@ final class WorkbenchViewModel: ObservableObject {
             return
         }
         do {
-            let answer = try await bossMCPClient.ask(
-                agentName: requestedBoss,
-                question: bossCheckInPrompt
-            )
+            // Reasoning-model bosses intermittently return an empty final
+            // answer; one fresh retry almost always succeeds, so a transient
+            // empty no longer fails the check-in and trips Boss Watch backoff.
+            let answer = try await BossAgentMCPClient.retryingOnEmpty {
+                try await bossMCPClient.ask(
+                    agentName: requestedBoss,
+                    question: bossCheckInPrompt
+                )
+            }
             guard state.boss.agentName == requestedBoss else {
                 return
             }

@@ -48,6 +48,25 @@ public final class BossAgentMCPClient: @unchecked Sendable {
         try await callTool(agentName: agentName, name: "status", arguments: [:])
     }
 
+    /// Runs `body`, retrying it exactly once if it throws `.emptyResult`.
+    ///
+    /// Reasoning-model bosses intermittently spend their token budget on
+    /// reasoning and emit empty final content; the `ouro` runtime then returns
+    /// `(empty response)` and `ask` throws `.emptyResult`. A single fresh retry
+    /// almost always yields a real answer, so a transient empty no longer fails
+    /// the check-in (and trips backoff). ONLY `.emptyResult` is retried — real
+    /// failures (process unavailable, RPC/tool error, timeout, malformed) fall
+    /// straight through so a genuinely-down boss still surfaces and backs off.
+    public static func retryingOnEmpty(
+        _ body: sending () async throws -> String
+    ) async throws -> String {
+        do {
+            return try await body()
+        } catch BossAgentMCPClientError.emptyResult {
+            return try await body()
+        }
+    }
+
     public func callTool(agentName: String, name: String, arguments: [String: String]) async throws -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
