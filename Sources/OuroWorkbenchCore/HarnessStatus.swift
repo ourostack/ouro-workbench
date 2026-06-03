@@ -56,12 +56,110 @@ public struct HarnessStatus: Equatable, Sendable {
         }
         return .healthy
     }
+
+    /// Which confirm-gated control actions the Harness Status view should offer,
+    /// and how prominently. Pure: derived only from the current status.
+    ///
+    /// - Repair daemon is *always* available (restarting a running daemon is
+    ///   harmless) but only *urgent* when the daemon isn't reachable.
+    /// - Register the Workbench MCP is available only when a registration could
+    ///   actually land — the selected boss's MCP status is `notRegistered` /
+    ///   `needsUpdate` (mirroring `BossWorkbenchMCPRegistrationSnapshot`'s own
+    ///   `isActionable`). Statuses like `agentMissing` / `executableMissing` /
+    ///   `invalidConfig` aren't one-click-fixable from here (you must install
+    ///   the bundle or the app first), so the action is hidden rather than
+    ///   offered-and-doomed. When available it's always urgent.
+    public var controlOffer: HarnessControlOffer {
+        let registerActionable = boss.mcpIsActionable
+        return HarnessControlOffer(
+            repairDaemonAvailable: true,
+            repairDaemonIsUrgent: !daemon.isReachable,
+            registerWorkbenchMCPAvailable: registerActionable,
+            registerWorkbenchMCPIsUrgent: registerActionable
+        )
+    }
 }
 
 public enum HarnessHealthState: String, Equatable, Sendable {
     case healthy
     case attention
     case blocked
+}
+
+// MARK: - Control actions
+
+/// A confirm-gated control the operator can fire from the Harness Status view
+/// to fix a degraded harness. Deliberately small and non-destructive: each
+/// either heals the local daemon or (re)registers the Workbench MCP — both are
+/// idempotent, user-clicked, and reversible.
+public enum HarnessControlAction: String, Equatable, Sendable, CaseIterable {
+    /// Run the ouro daemon heal/start command (`ouro up`). The natural fix when
+    /// the daemon is down or unreachable; harmless when it's already running.
+    case repairDaemon
+    /// Register (or refresh) the Workbench MCP with the selected boss. The fix
+    /// when the boss's MCP registration is `notRegistered` / `needsUpdate`.
+    case registerWorkbenchMCP
+}
+
+/// What the Harness Status view should offer the operator: which actions are
+/// *available* at all, and which one (if any) is the *urgent* one to surface
+/// prominently because the harness is degraded in a way that action fixes.
+///
+/// Pure derivation from a `HarnessStatus` so the App's button placement /
+/// prominence is testable without SwiftUI. The two actions map 1:1 to the two
+/// reused execution paths in the App (the ouro-command runner + the MCP
+/// registrar) — this type only decides *whether* and *how prominently* to show
+/// them.
+public struct HarnessControlOffer: Equatable, Sendable {
+    /// Repair/start the daemon. Always available (you can always (re)start it),
+    /// but only *urgent* when the daemon isn't reachable.
+    public var repairDaemonAvailable: Bool
+    public var repairDaemonIsUrgent: Bool
+    /// Register the Workbench MCP. Available only when registration could
+    /// actually succeed for the selected boss (its bundle is installed) AND it
+    /// isn't already registered-and-current. Urgent whenever it's available,
+    /// since an unregistered/stale boss can't be driven hands-off.
+    public var registerWorkbenchMCPAvailable: Bool
+    public var registerWorkbenchMCPIsUrgent: Bool
+
+    public init(
+        repairDaemonAvailable: Bool,
+        repairDaemonIsUrgent: Bool,
+        registerWorkbenchMCPAvailable: Bool,
+        registerWorkbenchMCPIsUrgent: Bool
+    ) {
+        self.repairDaemonAvailable = repairDaemonAvailable
+        self.repairDaemonIsUrgent = repairDaemonIsUrgent
+        self.registerWorkbenchMCPAvailable = registerWorkbenchMCPAvailable
+        self.registerWorkbenchMCPIsUrgent = registerWorkbenchMCPIsUrgent
+    }
+
+    /// Whether `action` should be shown at all.
+    public func isAvailable(_ action: HarnessControlAction) -> Bool {
+        switch action {
+        case .repairDaemon:
+            return repairDaemonAvailable
+        case .registerWorkbenchMCP:
+            return registerWorkbenchMCPAvailable
+        }
+    }
+
+    /// Whether `action` should be surfaced prominently (the harness is degraded
+    /// in a way this action fixes) rather than as a secondary control.
+    public func isUrgent(_ action: HarnessControlAction) -> Bool {
+        switch action {
+        case .repairDaemon:
+            return repairDaemonIsUrgent
+        case .registerWorkbenchMCP:
+            return registerWorkbenchMCPIsUrgent
+        }
+    }
+
+    /// True when at least one action is urgent — i.e. the operator has a clear
+    /// next step to un-degrade the harness from this view.
+    public var hasUrgentAction: Bool {
+        repairDaemonIsUrgent || registerWorkbenchMCPIsUrgent
+    }
 }
 
 // MARK: - Daemon
@@ -221,6 +319,15 @@ public struct HarnessBossReachability: Equatable, Sendable {
     /// driven hands-off.
     public var isReachable: Bool {
         bundleIsReady && mcpStatus == .registered
+    }
+
+    /// Whether a one-click "register Workbench MCP" would actually do something
+    /// useful for this boss: its registration is missing or stale. Mirrors
+    /// `BossWorkbenchMCPRegistrationSnapshot.isActionable`. Statuses where the
+    /// registrar can't succeed (no bundle, no app, bad config) are *not*
+    /// actionable from the status view — those need a different fix first.
+    public var mcpIsActionable: Bool {
+        mcpStatus == .notRegistered || mcpStatus == .needsUpdate
     }
 
     public var state: HarnessHealthState {

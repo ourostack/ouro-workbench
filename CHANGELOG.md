@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.137 - Harness control actions
+
+- The Harness Status view gains confirm-gated actions: Repair/start the ouro daemon when it's degraded, and register the Workbench MCP with the selected boss when it isn't. Workbench is now a control panel for the harness, not just a viewer — reusing the existing ouro-command runner and MCP registration; no destructive operations.
+
 ## 0.1.136 - Sidebar session filter
 
 - A filter field at the top of the sidebar narrows the session list as you type — matches session name or group, with `owner:human` / `owner:agent` / `owner:<name>` tokens to filter by who owns a session (and status tokens). Empty filter shows everything as before. Complements the in-terminal ⌘F search; doesn't replace it.

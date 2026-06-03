@@ -242,4 +242,159 @@ final class HarnessStatusTests: XCTestCase {
 
         XCTAssertEqual(status.headline, "Daemon up · 1 of 1 agent ready · boss slugger reachable")
     }
+
+    // MARK: - Control-action offer (W3 harness control panel)
+
+    func testHealthyHarnessOffersRepairButNotUrgentAndNoRegister() {
+        let status = HarnessStatusBuilder().build(
+            boss: BossAgentSelection(agentName: "slugger"),
+            dashboard: dashboard(daemonStatus: "running"),
+            agents: [agent("slugger")],
+            bossRegistration: registration("slugger", status: .registered),
+            registrationByAgentName: ["slugger": registration("slugger", status: .registered)]
+        )
+
+        let offer = status.controlOffer
+        // Repair is always available (restarting a running daemon is harmless)
+        // but NOT urgent when the daemon is reachable.
+        XCTAssertTrue(offer.isAvailable(.repairDaemon))
+        XCTAssertFalse(offer.isUrgent(.repairDaemon))
+        // Register isn't offered at all — the boss is already registered.
+        XCTAssertFalse(offer.isAvailable(.registerWorkbenchMCP))
+        XCTAssertFalse(offer.isUrgent(.registerWorkbenchMCP))
+        XCTAssertFalse(offer.hasUrgentAction)
+    }
+
+    func testDaemonDownMakesRepairUrgent() {
+        let status = HarnessStatusBuilder().build(
+            boss: BossAgentSelection(agentName: "slugger"),
+            dashboard: dashboard(
+                daemonStatus: "unknown",
+                machineAvailable: false,
+                issues: ["machine: The Ouro mailbox did not answer before the Workbench timeout."]
+            ),
+            agents: [agent("slugger")],
+            bossRegistration: registration("slugger", status: .registered),
+            registrationByAgentName: ["slugger": registration("slugger", status: .registered)]
+        )
+
+        let offer = status.controlOffer
+        XCTAssertTrue(offer.isAvailable(.repairDaemon))
+        XCTAssertTrue(offer.isUrgent(.repairDaemon))
+        XCTAssertTrue(offer.hasUrgentAction)
+    }
+
+    func testDaemonRespondingButNotRunningMakesRepairUrgent() {
+        // Machine read succeeded but the daemon reports a non-running status:
+        // still not reachable, so repair should be offered urgently.
+        let status = HarnessStatusBuilder().build(
+            boss: BossAgentSelection(agentName: "slugger"),
+            dashboard: dashboard(daemonStatus: "stopped"),
+            agents: [agent("slugger")],
+            bossRegistration: registration("slugger", status: .registered),
+            registrationByAgentName: ["slugger": registration("slugger", status: .registered)]
+        )
+
+        XCTAssertFalse(status.daemon.isReachable)
+        XCTAssertTrue(status.controlOffer.isUrgent(.repairDaemon))
+    }
+
+    func testNotRegisteredBossOffersRegisterUrgently() {
+        let status = HarnessStatusBuilder().build(
+            boss: BossAgentSelection(agentName: "slugger"),
+            dashboard: dashboard(daemonStatus: "running"),
+            agents: [agent("slugger")],
+            bossRegistration: registration("slugger", status: .notRegistered),
+            registrationByAgentName: ["slugger": registration("slugger", status: .notRegistered)]
+        )
+
+        let offer = status.controlOffer
+        XCTAssertTrue(status.boss.mcpIsActionable)
+        XCTAssertTrue(offer.isAvailable(.registerWorkbenchMCP))
+        XCTAssertTrue(offer.isUrgent(.registerWorkbenchMCP))
+        XCTAssertTrue(offer.hasUrgentAction)
+    }
+
+    func testNeedsUpdateBossOffersRegisterUrgently() {
+        let status = HarnessStatusBuilder().build(
+            boss: BossAgentSelection(agentName: "slugger"),
+            dashboard: dashboard(daemonStatus: "running"),
+            agents: [agent("slugger")],
+            bossRegistration: registration("slugger", status: .needsUpdate),
+            registrationByAgentName: ["slugger": registration("slugger", status: .needsUpdate)]
+        )
+
+        let offer = status.controlOffer
+        XCTAssertTrue(status.boss.mcpIsActionable)
+        XCTAssertTrue(offer.isAvailable(.registerWorkbenchMCP))
+        XCTAssertTrue(offer.isUrgent(.registerWorkbenchMCP))
+    }
+
+    func testBossBundleMissingDoesNotOfferRegister() {
+        // agentMissing / executableMissing / invalidConfig aren't one-click
+        // fixable from the status view — registration would just fail — so the
+        // Register action must be hidden rather than offered-and-doomed.
+        for badStatus in [
+            BossWorkbenchMCPRegistrationStatus.agentMissing,
+            .executableMissing,
+            .invalidConfig
+        ] {
+            let status = HarnessStatusBuilder().build(
+                boss: BossAgentSelection(agentName: "ghost"),
+                dashboard: dashboard(daemonStatus: "running"),
+                agents: [agent("slugger")],
+                bossRegistration: registration("ghost", status: badStatus),
+                registrationByAgentName: ["slugger": registration("slugger", status: .registered)]
+            )
+
+            let offer = status.controlOffer
+            XCTAssertFalse(
+                status.boss.mcpIsActionable,
+                "\(badStatus) should not be MCP-actionable"
+            )
+            XCTAssertFalse(
+                offer.isAvailable(.registerWorkbenchMCP),
+                "\(badStatus) should not offer Register"
+            )
+        }
+    }
+
+    func testDaemonDownAndUnregisteredBossOffersBothUrgently() {
+        // The worst case: both actions are the operator's next steps.
+        let status = HarnessStatusBuilder().build(
+            boss: BossAgentSelection(agentName: "slugger"),
+            dashboard: dashboard(
+                daemonStatus: "unknown",
+                machineAvailable: false,
+                issues: ["machine: timeout"]
+            ),
+            agents: [agent("slugger")],
+            bossRegistration: registration("slugger", status: .notRegistered),
+            registrationByAgentName: ["slugger": registration("slugger", status: .notRegistered)]
+        )
+
+        let offer = status.controlOffer
+        XCTAssertTrue(offer.isUrgent(.repairDaemon))
+        XCTAssertTrue(offer.isUrgent(.registerWorkbenchMCP))
+        XCTAssertEqual(
+            HarnessControlAction.allCases.filter { offer.isUrgent($0) }.count,
+            2
+        )
+    }
+
+    func testPreFirstRefreshOffersRepairUrgently() {
+        // No dashboard yet ⇒ daemon "not checked" ⇒ not reachable ⇒ repair
+        // should already be urgent so the operator can kick the daemon.
+        let status = HarnessStatusBuilder().build(
+            boss: BossAgentSelection(agentName: "slugger"),
+            dashboard: nil,
+            agents: [],
+            bossRegistration: nil
+        )
+
+        let offer = status.controlOffer
+        XCTAssertTrue(offer.isUrgent(.repairDaemon))
+        // Register requires a known-actionable MCP status; nil isn't actionable.
+        XCTAssertFalse(offer.isAvailable(.registerWorkbenchMCP))
+    }
 }

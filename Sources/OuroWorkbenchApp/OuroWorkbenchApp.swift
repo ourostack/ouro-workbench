@@ -796,22 +796,35 @@ private struct RecoverableEntryRow: View {
     }
 }
 
-/// Read-only, refreshable consolidation of the ouro-harness state an operator
-/// cares about, in one place: daemon health, the local agent inventory (with
-/// the selected boss marked), and boss MCP-registration / reachability. The
-/// first W3 step toward Workbench being the human GUI over the harness.
+/// The transient result of a Harness Status control action, shown as a banner
+/// in the sheet until the next refresh. `kind` ties it back to the Core action
+/// enum so the banner can phrase itself; `succeeded` picks the tint/icon.
+struct HarnessActionResult: Equatable {
+    var kind: HarnessControlAction
+    var succeeded: Bool
+    var message: String
+}
+
+/// Refreshable consolidation of the ouro-harness state an operator cares about,
+/// in one place: daemon health, the local agent inventory (with the selected
+/// boss marked), and boss MCP-registration / reachability. The first W3 step
+/// toward Workbench being the human control panel over the harness.
 ///
-/// Display-only by design — the only action is Refresh. All three sections are
-/// built from reads that already exist elsewhere in the model (the boss
-/// dashboard, the onboarding agent scan, the MCP registrar); this sheet just
-/// presents them together. Reached from the More menu ("Harness Status…") and
-/// the ⌘K palette.
+/// All three sections are built from reads that already exist elsewhere in the
+/// model (the boss dashboard, the onboarding agent scan, the MCP registrar);
+/// this sheet presents them together. Beyond Refresh, it offers two confirm-gated
+/// control actions so the operator can fix a degraded harness without dropping to
+/// a terminal: Repair/start the ouro daemon, and register the Workbench MCP with
+/// the selected boss. Which action is surfaced prominently is driven by
+/// `HarnessStatus.controlOffer`. Reached from the More menu ("Harness Status…")
+/// and the ⌘K palette.
 struct HarnessStatusSheet: View {
     @ObservedObject var model: WorkbenchViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var isRefreshing = false
 
     private var status: HarnessStatus { model.harnessStatus }
+    private var offer: HarnessControlOffer { status.controlOffer }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -830,11 +843,7 @@ struct HarnessStatusSheet: View {
                 }
                 Spacer()
                 Button {
-                    Task {
-                        isRefreshing = true
-                        await model.refreshHarnessStatus()
-                        isRefreshing = false
-                    }
+                    refresh()
                 } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
@@ -849,6 +858,11 @@ struct HarnessStatusSheet: View {
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
+                    if let result = model.harnessActionResult {
+                        HarnessActionResultBanner(result: result) {
+                            model.harnessActionResult = nil
+                        }
+                    }
                     daemonSection
                     agentSection
                     bossSection
@@ -863,9 +877,47 @@ struct HarnessStatusSheet: View {
             }
         }
         .frame(width: 640, height: 540)
+        .animation(.easeInOut(duration: 0.2), value: model.harnessActionResult)
+        .confirmationDialog(
+            "Repair harness daemon?",
+            isPresented: $model.isRepairHarnessDaemonConfirmationPresented,
+            titleVisibility: .visible
+        ) {
+            Button("Run ouro up") {
+                model.repairHarnessDaemon()
+                refresh()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Starts and refreshes the ouro background runtime by running `ouro up` in a Workbench terminal. Safe to run when the daemon is already up — it just re-checks what this machine needs. The terminal stays open so you can watch progress.")
+        }
+        .confirmationDialog(
+            "Register Workbench MCP?",
+            isPresented: $model.isRegisterHarnessMCPConfirmationPresented,
+            titleVisibility: .visible
+        ) {
+            Button("Register with \(status.boss.agentName)") {
+                model.registerHarnessWorkbenchMCP()
+                refresh()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Registers (or refreshes) the Workbench MCP server in \(status.boss.agentName)'s agent config so the boss can drive Workbench. Writes only that one MCP entry; existing config is preserved.")
+        }
         .task {
             // Refresh on open so the sheet always reflects current state — the
-            // dashboard/agent reads may be stale from an earlier tick.
+            // dashboard/agent reads may be stale from an earlier tick. Clear any
+            // stale action banner from a previous opening.
+            model.harnessActionResult = nil
+            refresh()
+        }
+    }
+
+    /// Refresh the consolidated status, toggling the local spinner. Shared by
+    /// the Refresh button, the on-open task, and the post-action refresh so a
+    /// fired control action's effect shows up without a manual click.
+    private func refresh() {
+        Task {
             isRefreshing = true
             await model.refreshHarnessStatus()
             isRefreshing = false
@@ -883,6 +935,19 @@ struct HarnessStatusSheet: View {
             HarnessDetailRow(label: "Status", value: status.daemon.statusText, valueColor: status.daemon.state.tint)
             HarnessDetailRow(label: "Mode", value: status.daemon.modeText)
             HarnessDetailRow(label: "Version", value: status.daemon.versionText)
+            if offer.isAvailable(.repairDaemon) {
+                HarnessActionRow(
+                    title: "Repair Daemon",
+                    systemImage: "wrench.and.screwdriver",
+                    help: offer.isUrgent(.repairDaemon)
+                        ? "The daemon isn't reachable. Run `ouro up` to start and refresh it."
+                        : "Restart and refresh the ouro daemon (runs `ouro up`).",
+                    isUrgent: offer.isUrgent(.repairDaemon),
+                    isBusy: isRefreshing
+                ) {
+                    model.isRepairHarnessDaemonConfirmationPresented = true
+                }
+            }
         }
     }
 
@@ -932,6 +997,17 @@ struct HarnessStatusSheet: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if offer.isAvailable(.registerWorkbenchMCP) {
+                HarnessActionRow(
+                    title: status.boss.mcpStatus == .needsUpdate ? "Update Workbench MCP" : "Register Workbench MCP",
+                    systemImage: "antenna.radiowaves.left.and.right",
+                    help: "Write the Workbench MCP entry into \(status.boss.agentName)'s agent config so the boss can drive Workbench.",
+                    isUrgent: offer.isUrgent(.registerWorkbenchMCP),
+                    isBusy: isRefreshing
+                ) {
+                    model.isRegisterHarnessMCPConfirmationPresented = true
+                }
             }
         }
     }
@@ -1033,6 +1109,87 @@ private struct HarnessAgentRow: View {
                 StatusPill(text: "mcp \(mcpStatus.harnessShortLabel)", color: mcpStatus.harnessTint)
             }
         }
+    }
+}
+
+/// A confirm-gated control button inside a harness section. Renders prominently
+/// (filled, default keyboard action) when the action is urgent — the harness is
+/// degraded in a way this action fixes — and as a quiet bordered button
+/// otherwise, so a healthy harness still exposes the control without shouting.
+/// Disabled while a refresh is in flight so it can't be double-fired.
+private struct HarnessActionRow: View {
+    var title: String
+    var systemImage: String
+    var help: String
+    var isUrgent: Bool
+    var isBusy: Bool
+    var action: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            // Urgent → filled/prominent so it stands out in a degraded harness.
+            // Otherwise → quiet bordered button (still present: Workbench is a
+            // control panel even when healthy).
+            if isUrgent {
+                button.buttonStyle(.borderedProminent)
+            } else {
+                button.buttonStyle(.bordered)
+            }
+            if isBusy {
+                ProgressView()
+                    .controlSize(.small)
+                    .accessibilityHidden(true)
+            }
+            Spacer()
+        }
+        .padding(.top, 2)
+    }
+
+    private var button: some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+        }
+        .controlSize(.small)
+        .disabled(isBusy)
+        .help(help)
+    }
+}
+
+/// Transient banner reporting the outcome of a harness control action. Green
+/// check on success, orange warning on failure, with a dismiss affordance.
+private struct HarnessActionResultBanner: View {
+    var result: HarnessActionResult
+    var onDismiss: () -> Void
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: result.succeeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                .foregroundStyle(result.succeeded ? Color.green : Color.orange)
+            Text(result.message)
+                .font(.caption)
+                .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .textSelection(.enabled)
+            Button {
+                onDismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.caption2)
+            }
+            .buttonStyle(.borderless)
+            .help("Dismiss")
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill((result.succeeded ? Color.green : Color.orange).opacity(0.12))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder((result.succeeded ? Color.green : Color.orange).opacity(0.3), lineWidth: 1)
+        )
     }
 }
 
@@ -7588,6 +7745,17 @@ final class WorkbenchViewModel: ObservableObject {
     /// reachability. Reached from the More menu and the ⌘K palette. The first
     /// W3 step toward Workbench being the human control panel for the harness.
     @Published var isHarnessStatusPresented = false
+    /// Drives the "Repair harness daemon?" confirmation dialog raised from the
+    /// Harness Status sheet's daemon section. The action itself reuses the
+    /// existing ouro-command runner (`openOnboardingRepair`) to run `ouro up`.
+    @Published var isRepairHarnessDaemonConfirmationPresented = false
+    /// Drives the "Register Workbench MCP?" confirmation dialog raised from the
+    /// Harness Status sheet's boss section. Reuses `registerWorkbenchForBossChoice`.
+    @Published var isRegisterHarnessMCPConfirmationPresented = false
+    /// Last result of a Harness Status control action (daemon repair / MCP
+    /// registration), shown as a transient banner in the sheet. Cleared when the
+    /// sheet refreshes or the user dismisses it.
+    @Published var harnessActionResult: HarnessActionResult?
     /// The boss decision-log review surface (audit of every inbox decision the
     /// boss made and why). Reached from the boss pane and the ⌘K palette.
     @Published var isDecisionLogPresented = false
@@ -9927,6 +10095,67 @@ final class WorkbenchViewModel: ObservableObject {
             detail: "selected boss"
         )
         installWorkbenchMCP(for: selectedAgent)
+    }
+
+    // MARK: - Harness Status control actions
+
+    /// Heal/start the ouro daemon from the Harness Status sheet. Reuses the
+    /// existing ouro-command runner (`openOnboardingRepair`) — which spawns a
+    /// trusted Workbench terminal that streams the command's live output and is
+    /// captured in transcripts — to run `ouro up`, the daemon heal/start command
+    /// surfaced by `ouro --help` (it brings up the background runtime and
+    /// refreshes what the machine needs; `--no-repair` is the opt-out, so plain
+    /// `ouro up` is the repair path). Non-destructive and idempotent: starting
+    /// an already-running daemon is a no-op. After spawning, the caller refreshes
+    /// status so the daemon section reflects the new state.
+    ///
+    /// Called only behind the "Repair harness daemon?" confirmation.
+    func repairHarnessDaemon() {
+        let step = OnboardingRepairStep(
+            id: "harness-daemon-repair",
+            actor: .agentRunnable,
+            title: "Repair harness daemon",
+            detail: "Start and refresh the ouro background runtime (ouro up).",
+            command: ["ouro", "up"]
+        )
+        // Reuse the established runner: builds a trusted CustomTerminalSessionDraft
+        // and launches it. We don't reimplement subprocess spawning here.
+        openOnboardingRepair(step)
+        let result = "Started ouro up in a Workbench terminal — watch it for progress, then Refresh."
+        harnessActionResult = HarnessActionResult(kind: .repairDaemon, succeeded: true, message: result)
+        recordActionLog(
+            source: "native",
+            action: "repairHarnessDaemon",
+            targetName: state.boss.agentName,
+            result: result,
+            succeeded: true
+        )
+    }
+
+    /// Register (or refresh) the Workbench MCP with the selected boss from the
+    /// Harness Status sheet. Reuses the existing `registerWorkbenchForBossChoice`
+    /// path (which drives the MCP registrar + refreshes registration), then reads
+    /// back the resulting status to report success/failure into the sheet banner.
+    ///
+    /// Called only behind the "Register Workbench MCP?" confirmation.
+    func registerHarnessWorkbenchMCP() {
+        let bossName = state.boss.agentName
+        registerWorkbenchForBossChoice(bossName)
+        let status = bossWorkbenchMCPRegistration?.status
+        let succeeded = status == .registered
+        let message: String
+        if succeeded {
+            message = "Registered Workbench MCP with \(bossName)."
+        } else if let detail = bossWorkbenchMCPRegistration?.detail, !detail.isEmpty {
+            message = "Could not register Workbench MCP with \(bossName): \(detail)"
+        } else {
+            message = "Could not register Workbench MCP with \(bossName)."
+        }
+        harnessActionResult = HarnessActionResult(
+            kind: .registerWorkbenchMCP,
+            succeeded: succeeded,
+            message: message
+        )
     }
 
     func launchCommand(for entry: ProcessEntry) -> String {
