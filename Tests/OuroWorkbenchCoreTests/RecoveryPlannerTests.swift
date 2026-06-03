@@ -203,6 +203,188 @@ final class RecoveryPlannerTests: XCTestCase {
         XCTAssertEqual(RecoveryPlanner().planRecovery(for: state).first?.action, .autoResume)
     }
 
+    // MARK: - Auto-launch-on-startup eligibility
+
+    /// The original bug: a fresh `autoResume` shell with no prior run gets a
+    /// `.noAction` ("no prior run to recover") plan, which is inert. Deduping
+    /// against *all* plans excluded it; it must stay eligible to auto-launch.
+    func testFreshAutoResumeEntryWithNoPriorRunIsEligibleToAutoLaunch() {
+        let project = WorkbenchProject(name: "Harness", rootPath: "/repo")
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "Fresh shell",
+            kind: .shell,
+            executable: "/bin/zsh",
+            workingDirectory: "/repo",
+            trust: .trusted,
+            autoResume: true
+        )
+        let state = WorkspaceState(projects: [project], processEntries: [entry])
+        let plans = RecoveryPlanner().planRecovery(for: state)
+        // Sanity: the plan for this entry really is the inert no-op.
+        XCTAssertEqual(plans.first?.action, .noAction)
+
+        let eligible = RecoveryPlanner.autoLaunchEligibleEntries(
+            entries: state.processEntries,
+            recoveryPlans: plans,
+            activeEntryIDs: []
+        )
+
+        XCTAssertEqual(eligible.map(\.id), [entry.id])
+    }
+
+    /// An entry whose live `screen` session survived gets a `.reattach` plan —
+    /// startup recovery reconnects it losslessly, so auto-launch must NOT also
+    /// launch it (that would double-launch / spawn a duplicate).
+    func testEntryHandledByRecoveryReattachIsExcludedFromAutoLaunch() {
+        let project = WorkbenchProject(name: "Harness", rootPath: "/repo")
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "Live agent",
+            kind: .terminalAgent,
+            agentKind: .claudeCode,
+            executable: "claude",
+            workingDirectory: "/repo",
+            trust: .trusted,
+            autoResume: true
+        )
+        let run = ProcessRun(entryId: entry.id, status: .needsRecovery)
+        let state = WorkspaceState(projects: [project], processEntries: [entry], processRuns: [run])
+        let live: Set<String> = [PersistentTerminalSession.sessionName(for: entry.id)]
+        let plans = RecoveryPlanner().planRecovery(for: state, liveSessionNames: live)
+        XCTAssertEqual(plans.first?.action, .reattach)
+
+        let eligible = RecoveryPlanner.autoLaunchEligibleEntries(
+            entries: state.processEntries,
+            recoveryPlans: plans,
+            activeEntryIDs: []
+        )
+
+        XCTAssertTrue(eligible.isEmpty)
+    }
+
+    /// A respawn plan is also a launch recovery performs, so it's deduped out.
+    func testEntryHandledByRecoveryRespawnIsExcludedFromAutoLaunch() {
+        let project = WorkbenchProject(name: "Harness", rootPath: "/repo")
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "Copilot",
+            kind: .terminalAgent,
+            agentKind: .githubCopilotCLI,
+            executable: "copilot",
+            workingDirectory: "/repo",
+            trust: .trusted,
+            autoResume: true
+        )
+        let run = ProcessRun(entryId: entry.id, status: .needsRecovery)
+        let state = WorkspaceState(projects: [project], processEntries: [entry], processRuns: [run])
+        let plans = RecoveryPlanner().planRecovery(for: state)
+        XCTAssertEqual(plans.first?.action, .respawn)
+
+        let eligible = RecoveryPlanner.autoLaunchEligibleEntries(
+            entries: state.processEntries,
+            recoveryPlans: plans,
+            activeEntryIDs: []
+        )
+
+        XCTAssertTrue(eligible.isEmpty)
+    }
+
+    func testAlreadyRunningEntryIsExcludedFromAutoLaunch() {
+        let project = WorkbenchProject(name: "Harness", rootPath: "/repo")
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "Already up",
+            kind: .shell,
+            executable: "/bin/zsh",
+            workingDirectory: "/repo",
+            trust: .trusted,
+            autoResume: true
+        )
+        let state = WorkspaceState(projects: [project], processEntries: [entry])
+        let plans = RecoveryPlanner().planRecovery(for: state)
+
+        let eligible = RecoveryPlanner.autoLaunchEligibleEntries(
+            entries: state.processEntries,
+            recoveryPlans: plans,
+            activeEntryIDs: [entry.id]
+        )
+
+        XCTAssertTrue(eligible.isEmpty)
+    }
+
+    func testNonAutoResumeArchivedAndNonLaunchableKindsAreExcludedFromAutoLaunch() {
+        let project = WorkbenchProject(name: "Harness", rootPath: "/repo")
+        let notAutoResume = ProcessEntry(
+            projectId: project.id,
+            name: "Manual shell",
+            kind: .shell,
+            executable: "/bin/zsh",
+            workingDirectory: "/repo",
+            trust: .trusted,
+            autoResume: false
+        )
+        let archived = ProcessEntry(
+            projectId: project.id,
+            name: "Archived shell",
+            kind: .shell,
+            executable: "/bin/zsh",
+            workingDirectory: "/repo",
+            trust: .trusted,
+            autoResume: true,
+            isArchived: true
+        )
+        // A one-shot command is not a resumable terminal, so it never auto-launches.
+        let command = ProcessEntry(
+            projectId: project.id,
+            name: "One-shot",
+            kind: .command,
+            executable: "ls",
+            workingDirectory: "/repo",
+            trust: .trusted,
+            autoResume: true
+        )
+        let eligibleShell = ProcessEntry(
+            projectId: project.id,
+            name: "Eligible shell",
+            kind: .shell,
+            executable: "/bin/zsh",
+            workingDirectory: "/repo",
+            trust: .trusted,
+            autoResume: true
+        )
+        let entries = [notAutoResume, archived, command, eligibleShell]
+        let state = WorkspaceState(projects: [project], processEntries: entries)
+        let plans = RecoveryPlanner().planRecovery(for: state)
+
+        let eligible = RecoveryPlanner.autoLaunchEligibleEntries(
+            entries: state.processEntries,
+            recoveryPlans: plans,
+            activeEntryIDs: []
+        )
+
+        XCTAssertEqual(eligible.map(\.id), [eligibleShell.id])
+    }
+
+    func testStartupRecoveryHandledEntryIDsExcludesInertPlans() {
+        let reattachId = UUID()
+        let autoResumeId = UUID()
+        let respawnId = UUID()
+        let manualId = UUID()
+        let noActionId = UUID()
+        let plans = [
+            RecoveryPlan(entryId: reattachId, runId: nil, action: .reattach, reason: ""),
+            RecoveryPlan(entryId: autoResumeId, runId: nil, action: .autoResume, reason: ""),
+            RecoveryPlan(entryId: respawnId, runId: nil, action: .respawn, reason: ""),
+            RecoveryPlan(entryId: manualId, runId: nil, action: .manualActionNeeded, reason: ""),
+            RecoveryPlan(entryId: noActionId, runId: nil, action: .noAction, reason: ""),
+        ]
+
+        let handled = RecoveryPlanner.startupRecoveryHandledEntryIDs(plans)
+
+        XCTAssertEqual(handled, [reattachId, autoResumeId, respawnId])
+    }
+
     func testArchivedEntryDoesNotRecoverEvenWithNeedsRecoveryRun() {
         let project = WorkbenchProject(name: "Harness", rootPath: "/repo")
         let entry = ProcessEntry(

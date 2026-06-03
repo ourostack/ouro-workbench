@@ -12275,14 +12275,17 @@ final class WorkbenchViewModel: ObservableObject {
         guard autoLaunchResumableOnStartup else {
             return
         }
-        let recoveryEntryIDs = Set(summary.recoveryPlans.map(\.entryId))
-        let candidates = state.processEntries.filter { entry in
-            entry.autoResume
-                && !entry.isArchived
-                && (entry.kind == .terminalAgent || entry.kind == .shell)
-                && activeSessions[entry.id] == nil
-                && !recoveryEntryIDs.contains(entry.id)
-        }
+        // Dedup only against entries startup recovery actually *launches*
+        // (reattach / auto-resume / respawn). Recovery returns a plan per
+        // entry — including inert `.noAction` / `.manualActionNeeded` ones — so
+        // deduping against every plan would exclude every entry and never
+        // launch anything, including a fresh `autoResume` shell/agent with no
+        // prior run. See `RecoveryPlanner.autoLaunchEligibleEntries`.
+        let candidates = RecoveryPlanner.autoLaunchEligibleEntries(
+            entries: state.processEntries,
+            recoveryPlans: summary.recoveryPlans,
+            activeEntryIDs: Set(activeSessions.keys)
+        )
         guard !candidates.isEmpty else { return }
         for entry in candidates {
             launch(entry)
@@ -14241,9 +14244,23 @@ final class TerminalSessionController: NSObject, ObservableObject, Identifiable,
             process.environment = environment
             do {
                 try process.run()
-                process.waitUntilExit()
             } catch {
                 // The attached terminal process may already be gone.
+                return
+            }
+            // Bound the wait like the other `screen` call sites
+            // (`listLiveScreenSessionNames`, `persistentSessionIsListed`): a
+            // wedged `screen` socket (e.g. an NFS home dir) can hang
+            // `waitUntilExit()` forever, which would leak this stuck `Process`
+            // and park this worker thread for the app's whole life. If `screen`
+            // doesn't finish within the deadline, kill it and move on.
+            let finished = DispatchSemaphore(value: 0)
+            DispatchQueue.global(qos: .userInitiated).async {
+                process.waitUntilExit()
+                finished.signal()
+            }
+            if finished.wait(timeout: .now() + .milliseconds(1500)) == .timedOut {
+                process.terminate()
             }
         }
     }

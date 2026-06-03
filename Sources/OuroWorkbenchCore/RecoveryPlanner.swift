@@ -10,6 +10,21 @@ public enum RecoveryAction: String, Codable, Sendable {
     case respawn
     case manualActionNeeded
     case noAction
+
+    /// Whether startup recovery actually *launches* something for this action.
+    /// `manualActionNeeded` and `noAction` are inert (a never-run entry, an
+    /// already-exited run, an untrusted respawn that needs a human, …), so they
+    /// must not be treated as "this entry is being recovered" — otherwise the
+    /// auto-launch-on-startup path would dedup against them and skip a fresh
+    /// `autoResume` session that has no prior run.
+    public var isStartupRecoveryLaunch: Bool {
+        switch self {
+        case .reattach, .autoResume, .respawn:
+            return true
+        case .manualActionNeeded, .noAction:
+            return false
+        }
+    }
 }
 
 public struct RecoveryPlan: Codable, Equatable, Sendable {
@@ -41,6 +56,37 @@ public struct RecoveryPlanner: Sendable {
                 .sorted(by: ProcessRun.isMoreRecent)
                 .first
             return planRecovery(for: entry, latestRun: latestRun, liveSessionNames: liveSessionNames)
+        }
+    }
+
+    /// The set of entry ids that startup *recovery* will actually launch
+    /// (reattach / auto-resume / respawn). The auto-launch-on-startup path
+    /// dedups against this so it doesn't double-launch a session recovery is
+    /// already handling — but it must exclude the inert `.noAction` /
+    /// `.manualActionNeeded` plans (recovery emits one plan per entry,
+    /// including no-ops), or the dedup set would be *every* entry and a fresh
+    /// `autoResume` session with no prior run would never launch.
+    public static func startupRecoveryHandledEntryIDs(_ plans: [RecoveryPlan]) -> Set<UUID> {
+        Set(plans.filter { $0.action.isStartupRecoveryLaunch }.map(\.entryId))
+    }
+
+    /// Which `autoResume` entries the "auto-launch resumable terminals on
+    /// startup" preference should launch: every non-archived shell / terminal
+    /// agent that isn't already running and isn't being handled by startup
+    /// recovery. Pure (entries + plans + active ids → eligible entries) so the
+    /// dedup logic is unit-testable without the live app.
+    public static func autoLaunchEligibleEntries(
+        entries: [ProcessEntry],
+        recoveryPlans: [RecoveryPlan],
+        activeEntryIDs: Set<UUID>
+    ) -> [ProcessEntry] {
+        let handled = startupRecoveryHandledEntryIDs(recoveryPlans)
+        return entries.filter { entry in
+            entry.autoResume
+                && !entry.isArchived
+                && (entry.kind == .terminalAgent || entry.kind == .shell)
+                && !activeEntryIDs.contains(entry.id)
+                && !handled.contains(entry.id)
         }
     }
 
