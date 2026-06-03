@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.141 - MCP server hardening
+
+- `workbench_status` (and transcript search) no longer crash the MCP server when the workspace state contains duplicate session IDs — entries are de-duplicated by id during bootstrap, and the affected dictionaries use a collision-safe builder. Keeps the read-only server resilient to a malformed/torn state file.
+- `workbench_sense` now lists the `workbench_sessions` tool (shipped in 0.1.138) so a boss relying on the sense contract knows the machine-readable session query exists.
+
 ## 0.1.139 - Owner-aware boss check-in
 
 - The boss check-in now surfaces each session's owner and treats agent-owned sessions (owner:agent:<name>) as driven by their owning agent — the boss no longer proposes advancing them, and `workbench_status` no longer inlines their waiting prompts for the boss to act on. Correctness groundwork for coding-session unification, where agents create sessions via `workbench_create_session`. Human-owned sessions are unaffected.

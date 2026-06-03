@@ -46,7 +46,12 @@ public struct TranscriptSearcher {
             return []
         }
 
-        let entriesByID = Dictionary(uniqueKeysWithValues: state.processEntries.map { ($0.id, $0) })
+        // Collision-safe (keep first): a duplicate entry id in a malformed
+        // state file must not trap and crash the MCP server's search tool.
+        let entriesByID = Dictionary(
+            state.processEntries.map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
         let runs = state.processRuns
             .filter { $0.transcriptPath?.isEmpty == false }
             .sorted(by: ProcessRun.isMoreRecent)
