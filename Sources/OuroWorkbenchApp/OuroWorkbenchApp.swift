@@ -4557,7 +4557,7 @@ private struct OnboardingGroupProposalView: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(group.name)
                         .font(.subheadline.weight(.semibold))
-                    Text("Desk track: \(group.deskTrackSlug) - \(group.rootPath)")
+                    Text(group.rootPath)
                         .font(.caption.monospaced())
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -10470,7 +10470,7 @@ final class WorkbenchViewModel: ObservableObject {
             firstImportedProjectID = firstImportedProjectID ?? project.id
             var groupCreated = false
             for terminal in group.terminals where terminal.selectedByDefault {
-                guard !state.processEntries.contains(where: { $0.deskTaskSlug == terminal.deskTaskSlug && $0.projectId == project.id }) else {
+                guard !state.processEntries.contains(where: { $0.name == terminal.name && $0.projectId == project.id }) else {
                     continue
                 }
                 let draft = CustomTerminalSessionDraft(
@@ -10479,11 +10479,10 @@ final class WorkbenchViewModel: ObservableObject {
                     workingDirectory: terminal.candidate.workingDirectory,
                     trust: .trusted,
                     autoResume: true,
-                    notes: onboardingNotes(for: terminal, group: group)
+                    notes: onboardingNotes(for: terminal)
                 )
                 do {
-                    var entry = try customSessionFactory.makeEntry(projectId: project.id, draft: draft)
-                    entry.deskTaskSlug = terminal.deskTaskSlug
+                    let entry = try customSessionFactory.makeEntry(projectId: project.id, draft: draft)
                     state.processEntries.append(entry)
                     createdEntries.append(entry)
                     groupCreated = true
@@ -10561,30 +10560,22 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     private func ensureProject(for group: ProposedWorkbenchGroup) -> WorkbenchProject {
-        if let existing = state.projects.first(where: { $0.deskTrackSlug == group.deskTrackSlug || $0.rootPath == group.rootPath || $0.name == group.name }) {
-            var updated = existing
-            updated.deskTrackSlug = updated.deskTrackSlug ?? group.deskTrackSlug
-            if let index = state.projects.firstIndex(where: { $0.id == existing.id }) {
-                state.projects[index] = updated
-            }
-            return updated
+        if let existing = state.projects.first(where: { $0.rootPath == group.rootPath || $0.name == group.name }) {
+            return existing
         }
         let project = WorkbenchProject(
             name: group.name,
             rootPath: group.rootPath,
-            boss: state.boss,
-            deskTrackSlug: group.deskTrackSlug
+            boss: state.boss
         )
         state.projects.append(project)
         return project
     }
 
-    private func onboardingNotes(for terminal: ProposedTerminalImport, group: ProposedWorkbenchGroup) -> String {
+    private func onboardingNotes(for terminal: ProposedTerminalImport) -> String {
         let candidate = terminal.candidate
         var lines = [
             "Imported by Workbench onboarding.",
-            "Desk track: \(group.deskTrackSlug)",
-            "Desk task: \(terminal.deskTaskSlug)",
             "Source: \(candidate.source.rawValue)",
             "Confidence: \(Int(candidate.confidence * 100))%",
             "Summary: \(candidate.summary)"

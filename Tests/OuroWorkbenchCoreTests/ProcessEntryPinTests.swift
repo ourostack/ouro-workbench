@@ -52,6 +52,28 @@ final class ProcessEntryPinTests: XCTestCase {
         XCTAssertEqual(decoded.name, "legacy")
     }
 
+    func testDecodesIgnoringStaleDeskTaskSlugKey() throws {
+        // The Workbench->desk mirror (and its `deskTaskSlug` field) was removed.
+        // Workspace state persisted before that removal still carries the stale
+        // key; decode must ignore it rather than throwing.
+        let legacyJSON = """
+        {
+            "id": "00000000-0000-0000-0000-000000000009",
+            "projectId": "00000000-0000-0000-0000-0000000000aa",
+            "name": "legacy",
+            "kind": "terminalAgent",
+            "executable": "/bin/zsh",
+            "arguments": [],
+            "workingDirectory": "/tmp",
+            "trust": "untrusted",
+            "autoResume": false,
+            "deskTaskSlug": "ship-the-thing"
+        }
+        """.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(ProcessEntry.self, from: legacyJSON)
+        XCTAssertEqual(decoded.name, "legacy")
+    }
+
     /// Mirrors the WorkbenchViewModel.sessionEntries partition: pinned float
     /// to the top, preserving stored order within each partition.
     func testPinnedPartitionIsStableAndPinnedFirst() {

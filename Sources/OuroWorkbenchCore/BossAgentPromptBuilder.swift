@@ -85,8 +85,7 @@ public struct BossAgentPromptBuilder: Sendable {
                 .filter { $0.projectId == project.id && !$0.isArchived }
                 .map(\.name)
                 .joined(separator: ", ")
-            let deskTrack = project.deskTrackSlug.map { ", desk_track=\($0)" } ?? ""
-            lines.append("\(marker) \(project.name) (id=\(project.id.uuidString), root=\(project.rootPath)\(deskTrack)): \(entries.isEmpty ? "no active terminals" : entries)")
+            lines.append("\(marker) \(project.name) (id=\(project.id.uuidString), root=\(project.rootPath)): \(entries.isEmpty ? "no active terminals" : entries)")
         }
         lines.append("")
         lines.append("Processes:")
@@ -107,11 +106,10 @@ public struct BossAgentPromptBuilder: Sendable {
             let executablePath = health?.resolvedPath ?? "none"
             let archived = entry?.isArchived ?? false
             let notes = entry?.trimmedNotes.map(Self.oneLine) ?? "none"
-            let deskTask = entry?.deskTaskSlug ?? "none"
             let git = Self.gitDescription(gitStatus[snapshot.id])
             let friend = entry.flatMap { state.effectiveFriend(for: $0, fallback: machineFriend) }
                 .map { "\($0.name) (\($0.kind.rawValue), \($0.trust.rawValue))" } ?? "unassigned"
-            lines.append("- \(snapshot.name) (id=\(snapshot.id.uuidString)): group=\(groupName), cli=\(agentKind), desk_task=\(deskTask), friend=\(friend), archived=\(archived), trust=\(trust), executable_health=\(executableStatus), executable_path=\(executablePath), git=\(git), status=\(snapshot.status.rawValue), attention=\(snapshot.attention.rawValue), transcript=\(transcriptPath), notes=\(notes), summary=\(snapshot.summary)")
+            lines.append("- \(snapshot.name) (id=\(snapshot.id.uuidString)): group=\(groupName), cli=\(agentKind), friend=\(friend), archived=\(archived), trust=\(trust), executable_health=\(executableStatus), executable_path=\(executablePath), git=\(git), status=\(snapshot.status.rawValue), attention=\(snapshot.attention.rawValue), transcript=\(transcriptPath), notes=\(notes), summary=\(snapshot.summary)")
         }
         // Inline the actual waiting prompt text for sessions that need a human,
         // so you can decide (and propose the exact input) without first calling

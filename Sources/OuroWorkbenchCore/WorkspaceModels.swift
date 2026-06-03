@@ -82,7 +82,6 @@ public struct WorkbenchProject: Codable, Equatable, Identifiable, Sendable {
     public var name: String
     public var rootPath: String
     public var boss: BossAgentSelection
-    public var deskTrackSlug: String?
     /// Optional color tag (raw value of `WorkbenchGroupColor`). Absent / nil
     /// renders the group untagged. Synthesized Codable treats this as
     /// decode-if-present, so existing persisted state loads unchanged.
@@ -97,7 +96,6 @@ public struct WorkbenchProject: Codable, Equatable, Identifiable, Sendable {
         name: String,
         rootPath: String,
         boss: BossAgentSelection = BossAgentSelection(),
-        deskTrackSlug: String? = nil,
         colorTag: String? = nil,
         defaultFriend: SessionFriend? = nil
     ) {
@@ -105,7 +103,6 @@ public struct WorkbenchProject: Codable, Equatable, Identifiable, Sendable {
         self.name = name
         self.rootPath = rootPath
         self.boss = boss
-        self.deskTrackSlug = deskTrackSlug
         self.colorTag = colorTag
         self.defaultFriend = defaultFriend
     }
@@ -181,7 +178,6 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
     public var attention: AttentionState
     public var lastSummary: String?
     public var notes: String?
-    public var deskTaskSlug: String?
     /// The friend (human or agent) this session acts for / as, governing whose
     /// preferences the boss applies. Absent / nil means unassigned — the boss
     /// never auto-advances an unassigned session. Decoded if-present so
@@ -208,7 +204,6 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         case attention
         case lastSummary
         case notes
-        case deskTaskSlug
         case friend
         case owner
     }
@@ -229,7 +224,6 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         attention: AttentionState = .idle,
         lastSummary: String? = nil,
         notes: String? = nil,
-        deskTaskSlug: String? = nil,
         friend: SessionFriend? = nil,
         owner: SessionOwner = .human
     ) {
@@ -248,7 +242,6 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         self.attention = attention
         self.lastSummary = lastSummary
         self.notes = notes
-        self.deskTaskSlug = deskTaskSlug
         self.friend = friend
         self.owner = owner
     }
@@ -278,7 +271,6 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         self.attention = try container.decodeIfPresent(AttentionState.self, forKey: .attention) ?? .idle
         self.lastSummary = try container.decodeIfPresent(String.self, forKey: .lastSummary)
         self.notes = try container.decodeIfPresent(String.self, forKey: .notes)
-        self.deskTaskSlug = try container.decodeIfPresent(String.self, forKey: .deskTaskSlug)
         self.friend = try container.decodeIfPresent(SessionFriend.self, forKey: .friend)
         self.owner = try container.decodeIfPresent(SessionOwner.self, forKey: .owner) ?? .human
     }
