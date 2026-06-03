@@ -29,7 +29,14 @@ public enum PromptSafety: Equatable, Sendable {
 /// plus the input the boss proposes to send.
 public enum PromptSafetyClassifier {
     public static func classify(prompt: String, proposedInput: String?) -> PromptSafety {
-        let haystack = (prompt + "\n" + (proposedInput ?? "")).lowercased()
+        // Normalize whitespace before matching so a confused/injected source
+        // can't dodge a needle by padding the command — `rm  -rf` (double
+        // space), `rm\t-rf`, `sudo\tapt remove`, or a newline-split `rm\n-rf`
+        // must all read the same as `rm -rf` / `sudo `. Runs of any whitespace
+        // (spaces, tabs, newlines) collapse to a single space; the literal
+        // needles all use single-space separators, so every existing one keeps
+        // working.
+        let haystack = normalizedWhitespace(prompt + " " + (proposedInput ?? "")).lowercased()
 
         for (needle, reason) in dangerousNeedles {
             if haystack.contains(needle) {
@@ -37,6 +44,27 @@ public enum PromptSafetyClassifier {
             }
         }
         return .safe
+    }
+
+    /// Collapse every run of whitespace (spaces, tabs, newlines, etc.) to a
+    /// single ASCII space. Keeps matching robust to whitespace-variant evasion
+    /// while leaving non-whitespace characters untouched.
+    private static func normalizedWhitespace(_ text: String) -> String {
+        var result = ""
+        result.reserveCapacity(text.count)
+        var lastWasWhitespace = false
+        for scalar in text.unicodeScalars {
+            if CharacterSet.whitespacesAndNewlines.contains(scalar) {
+                if !lastWasWhitespace {
+                    result.append(" ")
+                    lastWasWhitespace = true
+                }
+            } else {
+                result.unicodeScalars.append(scalar)
+                lastWasWhitespace = false
+            }
+        }
+        return result
     }
 
     /// High-confidence dangerous substrings → escalate. Kept focused so mundane

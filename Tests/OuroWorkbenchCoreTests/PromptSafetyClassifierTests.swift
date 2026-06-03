@@ -57,6 +57,19 @@ final class PromptSafetyClassifierTests: XCTestCase {
         assertUnsafe("Proceed?", input: "rm -fr /")
     }
 
+    func testWhitespaceVariantsDoNotEvadeTheFloor() {
+        // Literal-substring matching used to be fooled by padding the command
+        // with extra / non-space whitespace. After normalization these must all
+        // read the same as the canonical single-space forms.
+        assertUnsafe("Run `rm  -rf /`? (y/N)")          // double space
+        assertUnsafe("Run `rm\t-rf /`? (y/N)")          // tab
+        assertUnsafe("rm   -rf /tmp", input: "y")        // many spaces
+        assertUnsafe("Run `sudo\tapt remove nginx`?")   // tab after sudo
+        assertUnsafe("Proceed?", input: "rm\t-rf /")     // danger in the input
+        // Whitespace straddling the prompt/input boundary still matches.
+        assertUnsafe("Run rm", input: "-rf /")
+    }
+
     func testInfrastructureTeardownEscalates() {
         assertUnsafe("Run `terraform destroy`? This tears down prod.")
         assertUnsafe("kubectl delete namespace payments — proceed?")

@@ -11992,15 +11992,29 @@ final class WorkbenchViewModel: ObservableObject {
         for input in inputs {
             let entry = input.entry.flatMap { processEntry(matching: $0) }
             let friend = entry.flatMap { state.effectiveFriend(for: $0, fallback: machineOwner) }
-            // Cap persisted, boss-authored strings so a verbose reply can't bloat
-            // the saved workspace state.
-            let prompt = String((input.prompt ?? entry?.lastSummary ?? "").prefix(2000))
+            // Canonical prompt = the session's live waiting prompt (transcript
+            // tail), the SAME source the actions channel keys on, so a reply that
+            // emits both a sendInput action and an autoAdvance decision for this
+            // entry shares one dedup key and the keystroke is sent at most once.
+            // Fall back to the boss's quoted prompt / last summary when there's
+            // no live transcript (e.g. an entry that isn't running). Capped so a
+            // verbose reply can't bloat the saved workspace state.
+            let livePrompt = entry.map { bossActionLivePrompt(for: $0) } ?? ""
+            let prompt = String((livePrompt.isEmpty ? (input.prompt ?? entry?.lastSummary ?? "") : livePrompt).prefix(2000))
             // Idempotency: never act on (or re-log) a prompt we already decided.
             guard state.isNewDecision(entryId: entry?.id, prompt: prompt, kind: input.kind) else {
                 continue
             }
 
             var reasoning = String((input.reasoning ?? "").prefix(2000))
+            // Preserve the boss's own quoted prompt for the audit trail when it
+            // differs from the live terminal text we keyed/classified on.
+            if let quoted = input.prompt?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !quoted.isEmpty,
+               quoted != prompt {
+                let note = "[boss-quoted prompt: \(String(quoted.prefix(500)))]"
+                reasoning += reasoning.isEmpty ? note : " \(note)"
+            }
 
             // Execute only a fresh autoAdvance that clears the full gate; every
             // other case is recorded as the boss's judgment without acting. The
@@ -12838,8 +12852,30 @@ final class WorkbenchViewModel: ObservableObject {
                 result: "Skipped \(action.action.rawValue): no unique process entry matches \(action.entry ?? "missing entry")"
             )
         }
-        let authorization = bossActionAuthorizer.authorize(action, for: entry)
+        // For `sendInput`, the danger is in the PROMPT the session is showing,
+        // not the bare input — so the safety floor must classify the live
+        // waiting prompt (the same transcript-tail source the decisions /
+        // auto-advance gate reads), not just the input text. Read it once here
+        // and reuse it for both the authorization floor and the cross-channel
+        // dedup below. (Empty for non-sendInput actions, where it's ignored.)
+        let livePrompt = action.action == .sendInput
+            ? bossActionLivePrompt(for: entry)
+            : ""
+        let authorization = bossActionAuthorizer.authorize(action, for: entry, livePrompt: livePrompt)
         guard authorization.isAllowed else {
+            // An unsafe sendInput is withheld AND escalated to a human, mirroring
+            // the decisions channel: record an `escalate` decision so the held
+            // prompt surfaces in the same inbox the operator already reviews —
+            // not just buried in the action log.
+            if action.action == .sendInput {
+                escalateWithheldBossInput(
+                    entry: entry,
+                    source: source,
+                    prompt: livePrompt,
+                    proposedInput: action.text,
+                    reason: authorization.reason ?? "withheld unsafe input — escalated to a human"
+                )
+            }
             return finishBossAction(
                 source: source,
                 action: action,
@@ -12874,7 +12910,31 @@ final class WorkbenchViewModel: ObservableObject {
             guard let text = action.text, !text.isEmpty else {
                 return finishBossAction(source: source, action: action, entry: entry, result: "Skipped sendInput for \(entry.name): missing text")
             }
+            // Single per-(entry, prompt) guard shared with the decisions channel.
+            // A boss reply commonly emits BOTH a `sendInput` action and an
+            // `autoAdvance` decision for the same waiting prompt ("act and log");
+            // without a shared guard the keystroke is sent twice (here, then
+            // again in `recordBossDecisions`). We record this send as an
+            // `autoAdvance` decision keyed on the *live prompt*, and skip if the
+            // decisions channel (or a duplicate action) already handled it — so
+            // each (entry, prompt) is acted on at most once per reply.
+            guard state.isNewDecision(entryId: entry.id, prompt: livePrompt, kind: .autoAdvance) else {
+                return finishBossAction(source: source, action: action, entry: entry, result: "Skipped sendInput for \(entry.name): already handled this prompt")
+            }
             sendInput(text, to: entry, appendNewline: action.appendNewline)
+            state.recordDecision(
+                BossInboxDecision(
+                    source: source,
+                    entryId: entry.id,
+                    sessionName: entry.name,
+                    prompt: livePrompt,
+                    kind: .autoAdvance,
+                    proposedInput: String(text.prefix(500)),
+                    reasoning: "boss sendInput action (actions channel)",
+                    status: .applied
+                )
+            )
+            save()
             return finishBossAction(source: source, action: action, entry: entry, result: "Sent input to \(entry.name)")
         case .moveSession:
             guard let project = project(matching: action.group) else {
@@ -12922,6 +12982,58 @@ final class WorkbenchViewModel: ObservableObject {
             return finishBossAction(source: source, action: action, entry: entry, result: "Restored \(entry.name)")
         case .createGroup, .createTerminal, .createSession:
             return finishBossAction(source: source, action: action, entry: entry, result: "Skipped \(action.action.rawValue): already handled")
+        }
+    }
+
+    /// The target session's current waiting-prompt text, for the boss-driven
+    /// `sendInput` safety floor and the cross-channel dedup key. Sourced from the
+    /// live transcript tail — the same place the decisions / auto-advance gate
+    /// looks — so the actions path classifies (and dedups against) exactly the
+    /// terminal text the operator would see, not the bare input. Returns the
+    /// last ~20 non-empty lines (bounded) so the key stays stable and small.
+    func bossActionLivePrompt(for entry: ProcessEntry) -> String {
+        guard let tail = transcriptTail(for: entry)?.text else {
+            return ""
+        }
+        let lines = tail
+            .split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        return String(lines.suffix(20).joined(separator: "\n").prefix(2000))
+    }
+
+    /// Withhold + escalate an unsafe boss `sendInput` from the actions channel,
+    /// mirroring how the decisions channel surfaces a blocked auto-advance:
+    /// record an `escalate` decision into the same inbox the operator reviews
+    /// (the action log already captured the "Skipped" line via `finishBossAction`).
+    private func escalateWithheldBossInput(
+        entry: ProcessEntry,
+        source: String,
+        prompt: String,
+        proposedInput: String?,
+        reason: String
+    ) {
+        let machineOwner = SessionFriend.machineOwner()
+        let friend = state.effectiveFriend(for: entry, fallback: machineOwner)
+        // Deduped like the decisions channel: a repeated boss-watch tick over the
+        // same still-unanswered prompt re-proposes the same withheld input, so
+        // don't flood the inbox with identical escalations.
+        let recorded = state.recordDecisionIfNew(
+            BossInboxDecision(
+                source: source,
+                entryId: entry.id,
+                sessionName: entry.name,
+                friendName: friend?.name,
+                friendId: friend?.id,
+                prompt: String(prompt.prefix(2000)),
+                kind: .escalate,
+                proposedInput: proposedInput.map { String($0.prefix(500)) },
+                reasoning: "[withheld: \(reason)]",
+                status: .recorded
+            )
+        )
+        if recorded {
+            save()
         }
     }
 
