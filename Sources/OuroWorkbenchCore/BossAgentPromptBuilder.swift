@@ -29,7 +29,7 @@ public struct BossAgentPromptBuilder: Sendable {
         lines.append("[{\"action\":\"recover\",\"entry\":\"PROCESS-ID\"},{\"action\":\"sendInput\",\"entry\":\"PROCESS-ID\",\"text\":\"continue\",\"appendNewline\":true}]")
         lines.append("```")
         lines.append("")
-        lines.append("For every session that is waiting on the human, record an auditable decision in exactly one fenced JSON block labeled ouro-workbench-decisions. This is the decision log for tuning — recording does NOT act yet. Decide using that session's friend (shown per process) and what you know of that friend's preferences/notes: \(BossDecisionKind.allCases.map(\.rawValue).joined(separator: ", ")). Choose autoAdvance only when the friend's preference clearly covers this prompt and it is not destructive or secret-bearing; otherwise escalate (or hold if there is nothing to do yet). Always include your reasoning and the preference you relied on. Use the process id in entry. Example:")
+        lines.append("For every session that is waiting on the human, record an auditable decision in exactly one fenced JSON block labeled ouro-workbench-decisions. This is the decision log for tuning — recording does NOT act yet. Decide using that session's friend (shown per process) and what you know of that friend's preferences/notes: \(BossDecisionKind.allCases.map(\.rawValue).joined(separator: ", ")). Choose autoAdvance only when the friend's preference clearly covers this prompt and it is not destructive or secret-bearing; otherwise escalate (or hold if there is nothing to do yet). Sessions owned by an agent (owner=agent:<name>) are driven by that agent's own loop — do NOT record autoAdvance or sendInput for them; treat them as informational (hold). Always include your reasoning and the preference you relied on. Use the process id in entry. Example:")
         lines.append("```ouro-workbench-decisions")
         lines.append("[{\"entry\":\"PROCESS-ID\",\"kind\":\"autoAdvance\",\"proposedInput\":\"1\",\"preferenceCited\":\"Ari: approve test runs\",\"confidence\":0.9,\"reasoning\":\"prompt is a test-run approval; friend pre-approves these\",\"prompt\":\"Run tests? (y/N)\"}]")
         lines.append("```")
@@ -109,7 +109,8 @@ public struct BossAgentPromptBuilder: Sendable {
             let git = Self.gitDescription(gitStatus[snapshot.id])
             let friend = entry.flatMap { state.effectiveFriend(for: $0, fallback: machineFriend) }
                 .map { "\($0.name) (\($0.kind.rawValue), \($0.trust.rawValue))" } ?? "unassigned"
-            lines.append("- \(snapshot.name) (id=\(snapshot.id.uuidString)): group=\(groupName), cli=\(agentKind), friend=\(friend), archived=\(archived), trust=\(trust), executable_health=\(executableStatus), executable_path=\(executablePath), git=\(git), status=\(snapshot.status.rawValue), attention=\(snapshot.attention.rawValue), transcript=\(transcriptPath), notes=\(notes), summary=\(snapshot.summary)")
+            let owner = entry.map { Self.ownerLabel($0.owner) } ?? "unknown"
+            lines.append("- \(snapshot.name) (id=\(snapshot.id.uuidString)): group=\(groupName), cli=\(agentKind), owner=\(owner), friend=\(friend), archived=\(archived), trust=\(trust), executable_health=\(executableStatus), executable_path=\(executablePath), git=\(git), status=\(snapshot.status.rawValue), attention=\(snapshot.attention.rawValue), transcript=\(transcriptPath), notes=\(notes), summary=\(snapshot.summary)")
         }
         // Inline the actual waiting prompt text for sessions that need a human,
         // so you can decide (and propose the exact input) without first calling
@@ -167,7 +168,7 @@ public struct BossAgentPromptBuilder: Sendable {
         lines.append("")
         lines.append("Take auditable actions with the workbench_request_action tool (use the process id from workbench_status in its `entry` argument). Supported actions: \(WorkbenchGuide.actionVerbs.joined(separator: ", ")). You may instead return exactly one fenced JSON block labeled ouro-workbench-actions with the same fields; both paths are honored.")
         lines.append("")
-        lines.append("For every session waiting on a human, record an auditable decision in exactly one fenced JSON block labeled ouro-workbench-decisions (recording does NOT act yet — it is the tuning log). Decide using that session's friend and preferences: \(BossDecisionKind.allCases.map(\.rawValue).joined(separator: ", ")). Choose autoAdvance only when the friend's preference clearly covers this prompt and it is not destructive or secret-bearing; otherwise escalate (or hold). Always include reasoning and the preference relied on. Example:")
+        lines.append("For every session waiting on a human, record an auditable decision in exactly one fenced JSON block labeled ouro-workbench-decisions (recording does NOT act yet — it is the tuning log). Decide using that session's friend and preferences: \(BossDecisionKind.allCases.map(\.rawValue).joined(separator: ", ")). Choose autoAdvance only when the friend's preference clearly covers this prompt and it is not destructive or secret-bearing; otherwise escalate (or hold). Sessions owned by an agent (owner=agent:<name>) are driven by that agent's own loop — do NOT record autoAdvance or sendInput for them; treat them as informational (hold). Always include reasoning and the preference relied on. Example:")
         lines.append("```ouro-workbench-decisions")
         lines.append("[{\"entry\":\"PROCESS-ID\",\"kind\":\"autoAdvance\",\"proposedInput\":\"1\",\"preferenceCited\":\"Ari: approve test runs\",\"confidence\":0.9,\"reasoning\":\"prompt is a test-run approval; friend pre-approves these\",\"prompt\":\"Run tests? (y/N)\"}]")
         lines.append("```")
@@ -179,6 +180,15 @@ public struct BossAgentPromptBuilder: Sendable {
 
     private static func oneLine(_ text: String) -> String {
         text.components(separatedBy: .newlines).joined(separator: " ")
+    }
+
+    /// Compact owner label for a process line: `human` for the operator,
+    /// `agent:<name>` for an agent-owned (agent-driven) session.
+    private static func ownerLabel(_ owner: SessionOwner) -> String {
+        switch owner {
+        case .human: return "human"
+        case let .agent(name): return "agent:\(name)"
+        }
     }
 
     /// Compact git descriptor for a process line, e.g. `main (dirty, +2/-1)`,

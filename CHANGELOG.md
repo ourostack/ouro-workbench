@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.139 - Owner-aware boss check-in
+
+- The boss check-in now surfaces each session's owner and treats agent-owned sessions (owner:agent:<name>) as driven by their owning agent — the boss no longer proposes advancing them, and `workbench_status` no longer inlines their waiting prompts for the boss to act on. Correctness groundwork for coding-session unification, where agents create sessions via `workbench_create_session`. Human-owned sessions are unaffected.
+
 ## 0.1.138 - Machine-readable session contract (coding-session unification)
 
 - New `workbench_sessions` MCP tool returns structured JSON for programmatic clients — `{sessions:[{id,name,group,owner,kind,status,attention,needsHuman,trust,pid,exitCode,workingDirectory,startedAt,…}]}` — so an outbound client (the Ouro harness driving coding sessions through Workbench terminals) can resolve a freshly-created session's id by `name` and poll its `status`/`attention`/`needsHuman` without scraping the boss's human-readable `workbench_status` prompt. Supports `owner` / `name` / `includeArchived` filters.
