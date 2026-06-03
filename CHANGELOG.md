@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.129 - Tool-grounded boss check-in (thin trigger)
+
+- The automatic boss check-in now sends a thin trigger instead of a ~174-line embedded state dump. The boss fetches live state through its registered Workbench MCP tools (`workbench_status` for the full per-session view, `workbench_sense`, transcript/search/recovery tools) and acts via `workbench_request_action` — reasoning is tool-grounded, not prompt-only. This enforces the harness↔Workbench boundary and makes the empty-reply failure mode far less likely (the boss's first step is a tool call, not a one-shot over a huge prompt). A one-line pulse stays in the trigger so a boss that skips its tools still reports and escalates rather than going blind; the existing retry-on-empty remains as a safety net. The reply-side action/decision JSON protocol is unchanged.
+
 ## 0.1.128 - Stop mirroring Workbench groups into the desk
 
 - Workbench no longer writes `track.md`/`task.md` into `~/desk` during onboarding import (removed `DeskMirrorWriter`). GUI groups/terminals are organization state, not desk work-state — the desk is owned by its principal and will be surfaced later as a read viewer over the desk MCP, never mirrored into. Onboarding still imports recent sessions as terminals/groups.

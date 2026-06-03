@@ -147,6 +147,38 @@ public struct BossAgentPromptBuilder: Sendable {
         return lines.joined(separator: "\n")
     }
 
+    /// A thin check-in trigger: the boss fetches live state through its
+    /// registered Workbench MCP tools (workbench_status etc.) rather than
+    /// receiving a ~174-line embed. Keeps the action/decision protocol and a
+    /// one-line pulse (so a boss that skips its tools still reports + escalates
+    /// rather than going blind), but drops the per-session state dump — which
+    /// is what triggered intermittent empty replies and violated the
+    /// harness/Workbench boundary.
+    public func checkInTrigger(question: String, summary: WorkspaceSummary) -> String {
+        var lines: [String] = []
+        lines.append("You are the selected Ouro boss agent for Ouro Workbench.")
+        lines.append("Workbench is your local machine sense: a living view of terminal/TUI agents, transcripts, recovery state, and auditable native controls.")
+        lines.append("Boss agent: \(summary.boss.agentName)")
+        lines.append("Question: \(question)")
+        lines.append("")
+        lines.append("Your live Workbench state is NOT inlined here — fetch it through your registered Workbench MCP tools:")
+        for tool in WorkbenchGuide.bossTools {
+            lines.append("- \(tool.tool): \(tool.summary)")
+        }
+        lines.append("Start by calling workbench_status for the full per-session view (process ids, waiting prompts, git, recovery, recent action log); use workbench_sense for a quick pulse and the transcript tools to dig into a specific session.")
+        lines.append("")
+        lines.append("Take auditable actions with the workbench_request_action tool (use the process id from workbench_status in its `entry` argument). Supported actions: \(WorkbenchGuide.actionVerbs.joined(separator: ", ")). You may instead return exactly one fenced JSON block labeled ouro-workbench-actions with the same fields; both paths are honored.")
+        lines.append("")
+        lines.append("For every session waiting on a human, record an auditable decision in exactly one fenced JSON block labeled ouro-workbench-decisions (recording does NOT act yet — it is the tuning log). Decide using that session's friend and preferences: \(BossDecisionKind.allCases.map(\.rawValue).joined(separator: ", ")). Choose autoAdvance only when the friend's preference clearly covers this prompt and it is not destructive or secret-bearing; otherwise escalate (or hold). Always include reasoning and the preference relied on. Example:")
+        lines.append("```ouro-workbench-decisions")
+        lines.append("[{\"entry\":\"PROCESS-ID\",\"kind\":\"autoAdvance\",\"proposedInput\":\"1\",\"preferenceCited\":\"Ari: approve test runs\",\"confidence\":0.9,\"reasoning\":\"prompt is a test-run approval; friend pre-approves these\",\"prompt\":\"Run tests? (y/N)\"}]")
+        lines.append("```")
+        lines.append("")
+        lines.append("Current pulse (call workbench_status for detail): \(summary.oneLineStatus)")
+        lines.append("Then reply with a concise summary of what is going on, what is waiting on Ari, and what you did.")
+        return lines.joined(separator: "\n")
+    }
+
     private static func oneLine(_ text: String) -> String {
         text.components(separatedBy: .newlines).joined(separator: " ")
     }

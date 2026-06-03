@@ -11186,37 +11186,7 @@ final class WorkbenchViewModel: ObservableObject {
         recentChanges: [WorkspaceChangeSummary] = []
     ) {
         let question = question ?? bossBridgePlanner.checkInQuestion()
-        bossCheckInPrompt = bossPromptBuilder.checkInPrompt(
-            question: question,
-            state: state,
-            summary: summary,
-            dashboard: bossDashboard,
-            executableHealth: executableHealthByEntryID,
-            gitStatus: gitStatusByEntryID,
-            machineFriend: SessionFriend.machineOwner(),
-            waitingPrompts: waitingPromptSnippets(),
-            ouroAgents: ouroAgents,
-            recentChanges: recentChanges
-        )
-    }
-
-    /// The trailing prompt text for each session that's waiting on a human, so
-    /// the boss can decide (and propose the exact input) inline without first
-    /// calling `workbench_transcript_tail` on each. Bounded reads; only the
-    /// handful of currently-waiting, running sessions.
-    private func waitingPromptSnippets() -> [UUID: String] {
-        var result: [UUID: String] = [:]
-        for entry in allSessionEntries where !entry.isArchived && entry.attention == .waitingOnHuman {
-            guard let path = activeSessions[entry.id]?.plan.transcriptPath,
-                  let tail = TranscriptTailReader(maxBytes: 1200).read(path: path) else {
-                continue
-            }
-            let snippet = String(tail.text.suffix(600)).trimmingCharacters(in: .whitespacesAndNewlines)
-            if !snippet.isEmpty {
-                result[entry.id] = snippet
-            }
-        }
-        return result
+        bossCheckInPrompt = bossPromptBuilder.checkInTrigger(question: question, summary: summary)
     }
 
     func runBossCheckIn() async {
