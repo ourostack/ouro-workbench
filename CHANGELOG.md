@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.146 - Sync MCP tools doc table
+
+- `docs/guide.md`'s "Workbench MCP exposes" table now lists `workbench_sessions` and `workbench_create_session` (it had drifted), with a test (`WorkbenchGuideTests.testGuideDocListsEveryBossTool`) guarding against future drift from `WorkbenchGuide.bossTools`. The table is hand-maintained, not generated; the `WorkbenchGuide` doc-comment no longer claims the doc renders from the shared markdown.
+
 ## 0.1.143 - Boss auto-advance safety hardening
 
 - The boss can no longer auto-answer a destructive/secret-bearing terminal prompt via the actions channel: `applyBossAction`'s sendInput now classifies the live terminal prompt (not just the input text) through the same safety gate the decisions channel uses, withholding + escalating unsafe inputs. Fixes a hole where `{"action":"sendInput","text":"y"}` to a `rm -rf? [y/N]` prompt sailed through.

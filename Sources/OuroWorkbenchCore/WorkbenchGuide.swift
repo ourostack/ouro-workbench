@@ -11,8 +11,12 @@ import Foundation
 ///     "how do I switch terminals?" or "what can you do here?",
 ///   - the inner-agent context file (`WorkbenchContextFile`), so a Claude Code,
 ///     Codex, Copilot, or shell session launched *inside* Workbench can explain
-///     where it is running and what the operator's controls are,
-///   - `docs/guide.md`, via the same rendered markdown.
+///     where it is running and what the operator's controls are.
+///
+/// `docs/guide.md` keeps a hand-maintained mirror of this catalog (its
+/// "Workbench MCP exposes" table). It is *not* generated from here, so it can
+/// drift; `WorkbenchGuideTests.testGuideDocListsEveryBossTool` guards against
+/// that by asserting every `bossTools` tool name appears in the doc.
 public enum WorkbenchGuide {
     /// One keyboard shortcut: the key combo and what it does.
     public struct Shortcut: Sendable, Identifiable, Equatable {
