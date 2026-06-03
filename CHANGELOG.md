@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.146 - Sync MCP tools doc table
+
+- `docs/guide.md`'s "Workbench MCP exposes" table now lists `workbench_sessions` and `workbench_create_session` (it had drifted), with a test (`WorkbenchGuideTests.testGuideDocListsEveryBossTool`) guarding against future drift from `WorkbenchGuide.bossTools`. The table is hand-maintained, not generated; the `WorkbenchGuide` doc-comment no longer claims the doc renders from the shared markdown.
+
 ## 0.1.145 - Decision marker parse robustness
 
 - The boss decision marker fallback (`OURO_WORKBENCH_DECISIONS:` without a fenced block) now parses only the balanced JSON value, so trailing prose after the JSON no longer silently drops the whole decision batch — matching the fix already applied to the action marker in 0.1.142.
@@ -8,6 +12,7 @@
 
 - A boss reply that comes back empty after the boss already queued actions is no longer retried into duplicate actions: the action-request queue de-duplicates identical pending requests, and the check-in only retries an empty reply when the turn queued nothing.
 - Queued boss actions are no longer lost if the app crashes between draining and applying them: `drain()` moves requests to a `processing/` holding area and they're deleted only after the app confirms it applied them, with unconfirmed actions recovered on next launch (at-least-once instead of at-most-once).
+>>>>>>> origin/main
 
 ## 0.1.143 - Boss auto-advance safety hardening
 

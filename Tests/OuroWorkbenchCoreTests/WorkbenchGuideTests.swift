@@ -33,6 +33,24 @@ final class WorkbenchGuideTests: XCTestCase {
         ])
     }
 
+    func testGuideDocListsEveryBossTool() throws {
+        // `docs/guide.md` hand-maintains a "Workbench MCP exposes" table that
+        // mirrors `WorkbenchGuide.bossTools`. It is not generated, so it can
+        // drift. Guard the next drift: every advertised tool must appear in the
+        // doc, with its name fenced in the table as `workbench_*`.
+        let guideURL = repoRoot()
+            .appendingPathComponent("docs", isDirectory: true)
+            .appendingPathComponent("guide.md")
+        let guide = try String(contentsOf: guideURL, encoding: .utf8)
+
+        for tool in WorkbenchGuide.bossTools {
+            XCTAssertTrue(
+                guide.contains("`\(tool.tool)`"),
+                "docs/guide.md is missing the `\(tool.tool)` MCP tool — sync its 'Workbench MCP exposes' table with WorkbenchGuide.bossTools"
+            )
+        }
+    }
+
     func testSenseListsWorkbenchSessionsTool() {
         // `workbench_sense` is the boss's self-description of available tools; it
         // renders straight from `WorkbenchGuide.bossTools`. A boss relying on the
@@ -86,5 +104,13 @@ final class WorkbenchGuideTests: XCTestCase {
         XCTAssertTrue(contents.contains("running inside Ouro Workbench"))
         XCTAssertTrue(contents.contains("2.3.4"))
         XCTAssertTrue(contents.contains("slugger"))
+    }
+
+    /// Repo root from this test file: Tests/OuroWorkbenchCoreTests/<file> → up 3.
+    private func repoRoot() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
     }
 }
