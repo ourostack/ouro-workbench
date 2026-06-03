@@ -137,9 +137,11 @@ final class WorkbenchMCPServer {
         )
         // Inline the waiting prompt for each session that needs a human, so the
         // boss can decide without a separate workbench_transcript_tail call.
+        // Only human-owned sessions: agent-owned sessions are driven by their
+        // owning agent's loop, so the boss shouldn't be fed their prompts to act on.
         let waitingPrompts = Dictionary(
             uniqueKeysWithValues: state.processEntries
-                .filter { !$0.isArchived && $0.attention == .waitingOnHuman }
+                .filter { !$0.isArchived && $0.attention == .waitingOnHuman && $0.owner.agentName == nil }
                 .compactMap { entry -> (UUID, String)? in
                     guard let path = latestRun(for: entry.id, state: state)?.transcriptPath,
                           let tail = TranscriptTailReader(maxBytes: 1200).read(path: path) else {

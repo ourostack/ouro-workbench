@@ -44,6 +44,62 @@ final class BossAgentPromptBuilderTests: XCTestCase {
         XCTAssertTrue(trigger.contains(summary.oneLineStatus))
     }
 
+    func testCheckInPromptSurfacesSessionOwnerAndAgentGuidance() {
+        // A workspace with both a human-owned waiting session and an
+        // agent-owned (agent-driven) session.
+        let project = WorkbenchProject(name: "Project", rootPath: "/tmp/project")
+        let humanEntry = ProcessEntry(
+            projectId: project.id,
+            name: "Codex",
+            kind: .terminalAgent,
+            agentKind: .openAICodex,
+            executable: "codex",
+            workingDirectory: "/tmp/project",
+            trust: .trusted,
+            attention: .waitingOnHuman,
+            lastSummary: "Codex wants a product decision",
+            owner: .human
+        )
+        let agentEntry = ProcessEntry(
+            projectId: project.id,
+            name: "Slugger coding session",
+            kind: .terminalAgent,
+            agentKind: .openAICodex,
+            executable: "codex",
+            workingDirectory: "/tmp/project",
+            trust: .trusted,
+            attention: .waitingOnHuman,
+            lastSummary: "Slugger is iterating on a fix",
+            owner: .agent(name: "slugger")
+        )
+        let state = WorkspaceState(
+            projects: [project],
+            processEntries: [humanEntry, agentEntry],
+            processRuns: [
+                ProcessRun(entryId: humanEntry.id, status: .waitingForInput),
+                ProcessRun(entryId: agentEntry.id, status: .waitingForInput)
+            ]
+        )
+        let summary = WorkspaceSummarizer().summarize(state)
+
+        // Mirrors how workbenchStatus() invokes the builder.
+        let prompt = BossAgentPromptBuilder().checkInPrompt(
+            question: "What is currently going on in Ouro Workbench?",
+            state: state,
+            summary: summary,
+            executableHealth: [:],
+            gitStatus: [:],
+            machineFriend: SessionFriend.machineOwner(),
+            waitingPrompts: [:]
+        )
+
+        // (a) The per-session listing labels each session's owner.
+        XCTAssertTrue(prompt.contains("owner=agent:slugger"))
+        XCTAssertTrue(prompt.contains("owner=human"))
+        // (b) The decision protocol tells the boss to hold agent-owned sessions.
+        XCTAssertTrue(prompt.contains("Sessions owned by an agent (owner=agent:<name>) are driven by that agent's own loop"))
+    }
+
     func testCheckInTriggerIsSubstantiallyShorterThanFullPrompt() {
         let (state, summary) = makeFixture()
         let question = "is anything waiting on me?"
