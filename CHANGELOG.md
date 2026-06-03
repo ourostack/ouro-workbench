@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.148 - Split panes (increment 1)
+
+- The detail pane can now be split two-up (Split Right / Split Down) to watch two agent terminals side-by-side, with Close Pane and Focus Other Pane; the focused pane receives keyboard input and is the target of selected-session commands. A session shows in at most one pane. (In-memory for now; layout persistence and recursive/multi-window splits are follow-ups — see `_planning/w5-split-panes-multiwindow.md`.)
+
 ## 0.1.147 - Terminal & startup reliability
 
 - Transcript writes no longer block the main actor on the PTY output hot-path: `TranscriptRecorder` now writes on a private serial queue (order preserved, flushed on close), so a chatty agent TUI or slow disk can't jank the UI.
