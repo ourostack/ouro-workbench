@@ -122,25 +122,30 @@ final class WorkbenchMCPServer {
     private func workbenchStatus() throws -> String {
         let state = try currentState()
         let summary = summarizer.summarize(state)
+        // Collision-safe builders (keep first): `bootstrappedState` already
+        // de-dups entries by id, but guard here too so a duplicate id can never
+        // trap and crash the long-lived read-only server.
         let executableHealth = Dictionary(
-            uniqueKeysWithValues: state.processEntries.map { entry in
+            state.processEntries.map { entry in
                 let executable = ExecutableHealthTarget.executable(for: entry)
                 return (entry.id, executableHealthChecker.health(for: executable))
-            }
+            },
+            uniquingKeysWith: { first, _ in first }
         )
         // Probe git per session (read-only, watchdog-bounded) so the boss's
         // primary read tool reports each session's branch / dirty / ahead-behind.
         let gitStatus = Dictionary(
-            uniqueKeysWithValues: state.processEntries.map { entry in
+            state.processEntries.map { entry in
                 (entry.id, gitStatusReader.status(forDirectory: entry.workingDirectory))
-            }
+            },
+            uniquingKeysWith: { first, _ in first }
         )
         // Inline the waiting prompt for each session that needs a human, so the
         // boss can decide without a separate workbench_transcript_tail call.
         // Only human-owned sessions: agent-owned sessions are driven by their
         // owning agent's loop, so the boss shouldn't be fed their prompts to act on.
         let waitingPrompts = Dictionary(
-            uniqueKeysWithValues: state.processEntries
+            state.processEntries
                 .filter { !$0.isArchived && $0.attention == .waitingOnHuman && $0.owner.agentName == nil }
                 .compactMap { entry -> (UUID, String)? in
                     guard let path = latestRun(for: entry.id, state: state)?.transcriptPath,
@@ -149,7 +154,8 @@ final class WorkbenchMCPServer {
                     }
                     let snippet = String(tail.text.suffix(600)).trimmingCharacters(in: .whitespacesAndNewlines)
                     return snippet.isEmpty ? nil : (entry.id, snippet)
-                }
+                },
+            uniquingKeysWith: { first, _ in first }
         )
         return promptBuilder.checkInPrompt(
             question: "What is currently going on in Ouro Workbench?",

@@ -1,10 +1,20 @@
 # Changelog
 
-## 0.1.140 - Boss auto-advance safety hardening
+## 0.1.143 - Boss auto-advance safety hardening
 
 - The boss can no longer auto-answer a destructive/secret-bearing terminal prompt via the actions channel: `applyBossAction`'s sendInput now classifies the live terminal prompt (not just the input text) through the same safety gate the decisions channel uses, withholding + escalating unsafe inputs. Fixes a hole where `{"action":"sendInput","text":"y"}` to a `rm -rf? [y/N]` prompt sailed through.
 - A boss reply that emits both a sendInput action and an autoAdvance decision for the same session no longer double-sends the keystroke.
 - The prompt safety classifier now normalizes whitespace before matching, so `rm  -rf` / tab-separated variants can't evade the destructive-command floor.
+
+## 0.1.142 - Schema & parse robustness
+
+- A session whose persisted `owner` has an unrecognized kind (forward schema drift) now decodes to the human operator instead of throwing — which previously dropped the entire session row via the failable decoder. Brings `SessionOwner` in line with every other persisted enum's unknown-value fallback.
+- The boss action/decision marker fallback (`OURO_WORKBENCH_ACTIONS:` without a fenced block) now parses only the balanced JSON value, so trailing prose after the JSON no longer silently drops the whole batch.
+
+## 0.1.141 - MCP server hardening
+
+- `workbench_status` (and transcript search) no longer crash the MCP server when the workspace state contains duplicate session IDs — entries are de-duplicated by id during bootstrap, and the affected dictionaries use a collision-safe builder. Keeps the read-only server resilient to a malformed/torn state file.
+- `workbench_sense` now lists the `workbench_sessions` tool (shipped in 0.1.138) so a boss relying on the sense contract knows the machine-readable session query exists.
 
 ## 0.1.139 - Owner-aware boss check-in
 

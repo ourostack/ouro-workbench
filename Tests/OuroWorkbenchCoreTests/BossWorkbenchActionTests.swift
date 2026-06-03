@@ -178,4 +178,58 @@ final class BossWorkbenchActionTests: XCTestCase {
 
         XCTAssertNoThrow(try action.validateForQueueing())
     }
+
+    // MARK: - Marker fallback (no fenced block)
+
+    func testParsesMarkerActionsWithTrailingProse() throws {
+        // The marker fallback (no ```ouro-workbench-actions fence) must capture
+        // only the balanced JSON array — trailing prose after it used to make
+        // the payload invalid JSON and silently drop the whole batch.
+        let reply = """
+        OURO_WORKBENCH_ACTIONS: [{ "action": "recover", "entry": "OpenAI Codex" }]
+        Some trailing explanation about why I did that.
+        """
+
+        let actions = try BossWorkbenchActionParser().parse(reply)
+
+        XCTAssertEqual(actions, [
+            BossWorkbenchAction(action: .recover, entry: "OpenAI Codex"),
+        ])
+    }
+
+    func testParsesMarkerActionsWithLeadingAndTrailingProse() throws {
+        // Prose on both sides of the marker line, multiple actions, and a
+        // string value containing a `]` that must not be mistaken for the
+        // array's close.
+        let reply = """
+        Here is my plan for the waiting sessions.
+        OURO_WORKBENCH_ACTIONS: [
+          { "action": "recover", "entry": "OpenAI Codex" },
+          { "action": "sendInput", "entry": "Claude Code", "text": "done [ok]", "appendNewline": true }
+        ]
+        I'll check back in a bit.
+        """
+
+        let actions = try BossWorkbenchActionParser().parse(reply)
+
+        XCTAssertEqual(actions, [
+            BossWorkbenchAction(action: .recover, entry: "OpenAI Codex"),
+            BossWorkbenchAction(action: .sendInput, entry: "Claude Code", text: "done [ok]", appendNewline: true),
+        ])
+    }
+
+    func testFencedBlockTakesPrecedenceOverMarker() throws {
+        // When both a fence and a marker are present the fenced block wins
+        // (unchanged behavior) — guards against the marker change regressing it.
+        let reply = """
+        ```ouro-workbench-actions
+        [ { "action": "recover", "entry": "Fenced" } ]
+        ```
+        OURO_WORKBENCH_ACTIONS: [ { "action": "recover", "entry": "Marker" } ]
+        """
+
+        let actions = try BossWorkbenchActionParser().parse(reply)
+
+        XCTAssertEqual(actions, [BossWorkbenchAction(action: .recover, entry: "Fenced")])
+    }
 }

@@ -138,13 +138,34 @@ public enum SessionOwner: Codable, Equatable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey { case kind, name }
-    private enum Kind: String, Codable { case human, agent }
+    private enum Kind: String, Codable {
+        case human, agent
+
+        // Unknown `kind` (forward schema drift — a future build adds an owner
+        // kind) decodes to `.human` rather than throwing. A throw here is
+        // worse than a wrong field: `ProcessEntry` is decoded via
+        // `FailableDecodable`, so the throw drops the ENTIRE session row, not
+        // just the owner. Matches every other persisted enum in this file
+        // (`ProcessKind`, `ProcessStatus`, `AttentionState`, `ProcessTrust`).
+        init(from decoder: Decoder) throws {
+            let raw = try decoder.singleValueContainer().decode(String.self)
+            self = Kind(rawValue: raw) ?? .human
+        }
+    }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         switch try c.decode(Kind.self, forKey: .kind) {
         case .human: self = .human
-        case .agent: self = .agent(name: try c.decode(String.self, forKey: .name))
+        case .agent:
+            // A malformed agent owner missing its `name` falls back to the
+            // human operator rather than throwing — same don't-drop-the-row
+            // policy as an unknown kind.
+            if let name = try c.decodeIfPresent(String.self, forKey: .name) {
+                self = .agent(name: name)
+            } else {
+                self = .human
+            }
         }
     }
 
