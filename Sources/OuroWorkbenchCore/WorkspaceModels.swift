@@ -381,6 +381,107 @@ public struct WorkbenchActionLogEntry: Codable, Equatable, Identifiable, Sendabl
     }
 }
 
+/// Persisted shape of the detail pane's split (W5 increment 2). Mirrors the
+/// App target's in-memory `DetailSplitState` + `activePaneID`, but lives in
+/// Core so it can ride on `WorkspaceState` and be unit-tested without the App
+/// target. The App maps its `DetailSplitAxis` / `DetailPaneID` to/from these
+/// Core enums on save/restore.
+///
+/// Increment 2 persists exactly one split (no recursive nesting / tabs /
+/// multi-window — those remain follow-ups, see
+/// `_planning/w5-split-panes-multiwindow.md`). The primary pane always shows
+/// the workspace's `selectedEntryId`, so only the *secondary* pane's session
+/// needs storing; `secondaryEntryID == nil` means the secondary pane was an
+/// empty picker.
+///
+/// Pure value type → trivially `Sendable`; no actor isolation, no reference
+/// semantics. `WorkspaceState.detailLayout` is `nil` for the classic
+/// single-pane layout (and for every pre-increment-2 state file).
+public struct PaneLayoutState: Codable, Equatable, Sendable {
+    /// Orientation of the single split. Mirrors the App's `DetailSplitAxis`.
+    public enum Axis: String, Codable, Sendable {
+        /// Side-by-side panes, vertical divider ("Split Right").
+        case vertical
+        /// Stacked panes, horizontal divider ("Split Down").
+        case horizontal
+
+        // Unknown raw value (a future axis) decodes to `.vertical` rather than
+        // throwing and dropping the whole layout — matches the lenient-enum
+        // posture of every other persisted enum in this file.
+        public init(from decoder: Decoder) throws {
+            let raw = try decoder.singleValueContainer().decode(String.self)
+            self = Axis(rawValue: raw) ?? .vertical
+        }
+    }
+
+    /// Which pane held logical focus. Mirrors the App's `DetailPaneID`.
+    public enum Focus: String, Codable, Sendable {
+        case primary
+        case secondary
+
+        // Unknown raw value decodes to `.primary` (the always-valid pane).
+        public init(from decoder: Decoder) throws {
+            let raw = try decoder.singleValueContainer().decode(String.self)
+            self = Focus(rawValue: raw) ?? .primary
+        }
+    }
+
+    public var axis: Axis
+    /// The session shown in the secondary pane, or `nil` for an empty picker.
+    public var secondaryEntryID: UUID?
+    /// Which pane was focused when the layout was saved.
+    public var activePane: Focus
+
+    public init(axis: Axis, secondaryEntryID: UUID?, activePane: Focus) {
+        self.axis = axis
+        self.secondaryEntryID = secondaryEntryID
+        self.activePane = activePane
+    }
+
+    /// Resolve a restored layout against the sessions that actually exist in
+    /// the loaded workspace, returning the layout to apply or `nil` to start
+    /// single-pane. This is the pure heart of "restore degrades gracefully":
+    ///
+    /// - If the secondary pane references a session that no longer exists, is
+    ///   archived, or equals the restored primary selection (`selectedEntryId`
+    ///   — the one-session-per-pane invariant), the stored `secondaryEntryID`
+    ///   is dropped (set to `nil`), leaving the split open with an empty
+    ///   secondary picker rather than a duplicate/dangling pane. The split
+    ///   itself is preserved because the operator deliberately opened it.
+    /// - If the focus pointed at a secondary pane that just lost its session,
+    ///   focus falls back to `.primary` (the always-valid pane).
+    /// - The axis is always preserved.
+    ///
+    /// Returning the split (with a cleared secondary) rather than `nil` keeps
+    /// the operator's chosen two-up layout across relaunch even when the
+    /// secondary agent's pty is gone — the empty picker lets them re-pick.
+    ///
+    /// - Parameters:
+    ///   - selectedEntryId: the restored primary selection (already validated
+    ///     against existing entries by the caller).
+    ///   - liveEntryIDs: ids of sessions eligible to mount in a pane — present
+    ///     in the workspace and not archived. A secondary not in this set is
+    ///     treated as missing.
+    public func resolved(
+        selectedEntryId: UUID?,
+        liveEntryIDs: Set<UUID>
+    ) -> PaneLayoutState {
+        var resolved = self
+        if let secondary = secondaryEntryID,
+           secondary == selectedEntryId || !liveEntryIDs.contains(secondary) {
+            // Stale, archived, or collides with the primary pane — drop it to
+            // an empty picker rather than mounting a dangling/duplicate pane.
+            resolved.secondaryEntryID = nil
+        }
+        if resolved.secondaryEntryID == nil, resolved.activePane == .secondary {
+            // The focused pane just lost its session; fall back to the
+            // always-valid primary so the focus ring lands somewhere real.
+            resolved.activePane = .primary
+        }
+        return resolved
+    }
+}
+
 public struct WorkspaceState: Codable, Equatable, Sendable {
     public var schemaVersion: Int
     public var boss: BossAgentSelection
@@ -396,6 +497,11 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
     /// what the boss decided and why. Bounded like `actionLog`; decoded
     /// leniently and present-or-empty so existing state loads unchanged.
     public var decisionLog: [BossInboxDecision]
+    /// Persisted detail-pane split (W5 increment 2). `nil` = classic single
+    /// pane (and every pre-increment-2 state file, which lacks the key).
+    /// Additive, decoded if-present — no `schemaVersion` bump, so existing
+    /// operators' state loads unchanged. See `PaneLayoutState`.
+    public var detailLayout: PaneLayoutState?
     public var updatedAt: Date
 
     private enum CodingKeys: String, CodingKey {
@@ -410,6 +516,7 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         case processRuns
         case actionLog
         case decisionLog
+        case detailLayout
         case updatedAt
     }
 
@@ -425,6 +532,7 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         processRuns: [ProcessRun] = [],
         actionLog: [WorkbenchActionLogEntry] = [],
         decisionLog: [BossInboxDecision] = [],
+        detailLayout: PaneLayoutState? = nil,
         updatedAt: Date = Date()
     ) {
         self.schemaVersion = schemaVersion
@@ -438,6 +546,7 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         self.processRuns = processRuns
         self.actionLog = actionLog
         self.decisionLog = decisionLog
+        self.detailLayout = detailLayout
         self.updatedAt = updatedAt
     }
 
@@ -459,6 +568,9 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         self.processRuns = try container.decodeLenientArray(ProcessRun.self, forKey: .processRuns, skipped: &skipped)
         self.actionLog = try container.decodeLenientArray(WorkbenchActionLogEntry.self, forKey: .actionLog, skipped: &skipped)
         self.decisionLog = try container.decodeLenientArray(BossInboxDecision.self, forKey: .decisionLog, skipped: &skipped)
+        // Additive (W5 increment 2). Absent in every pre-increment-2 state
+        // file → `nil` → classic single-pane behavior, no schema bump.
+        self.detailLayout = try container.decodeIfPresent(PaneLayoutState.self, forKey: .detailLayout)
         self.updatedAt = try container.decode(Date.self, forKey: .updatedAt)
     }
 }

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.149 - Split layout persistence
+
+- A two-up detail split now survives relaunch: the split axis + the secondary pane's session are saved in workspace state (additive, no schema change) and restored on launch, degrading gracefully to a single pane if the secondary session is gone. (Multi-window and recursive splits remain follow-ups — see `_planning/w5-split-panes-multiwindow.md`.)
+
 ## 0.1.148 - Split panes (increment 1)
 
 - The detail pane can now be split two-up (Split Right / Split Down) to watch two agent terminals side-by-side, with Close Pane and Focus Other Pane; the focused pane receives keyboard input and is the target of selected-session commands. A session shows in at most one pane. (In-memory for now; layout persistence and recursive/multi-window splits are follow-ups — see `_planning/w5-split-panes-multiwindow.md`.)

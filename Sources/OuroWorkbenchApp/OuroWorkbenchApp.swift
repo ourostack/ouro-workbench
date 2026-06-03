@@ -163,6 +163,40 @@ struct DetailSplitState: Equatable {
     var secondaryEntryID: UUID?
 }
 
+// MARK: - W5 increment 2: in-memory split <-> persisted `PaneLayoutState`
+
+extension DetailSplitAxis {
+    init(_ persisted: PaneLayoutState.Axis) {
+        switch persisted {
+        case .vertical: self = .vertical
+        case .horizontal: self = .horizontal
+        }
+    }
+
+    var persisted: PaneLayoutState.Axis {
+        switch self {
+        case .vertical: return .vertical
+        case .horizontal: return .horizontal
+        }
+    }
+}
+
+extension DetailPaneID {
+    init(_ persisted: PaneLayoutState.Focus) {
+        switch persisted {
+        case .primary: self = .primary
+        case .secondary: self = .secondary
+        }
+    }
+
+    var persisted: PaneLayoutState.Focus {
+        switch self {
+        case .primary: return .primary
+        case .secondary: return .secondary
+        }
+    }
+}
+
 extension Notification.Name {
     /// Posted by the ⇧⌘B menu-bar command; the root view opens the reporter.
     static let workbenchReportBug = Notification.Name("workbenchReportBug")
@@ -7939,17 +7973,30 @@ final class WorkbenchViewModel: ObservableObject {
     }
     @Published var activeSessions: [UUID: TerminalSessionController] = [:]
     @Published var terminalFocusEntryID: UUID?
-    /// W5 increment 1 — the detail pane's single split, or `nil` for the
-    /// classic single-pane layout. In-memory only this increment (not in
-    /// `WorkspaceState`), so the app always launches single-pane. See
+    /// W5 — the detail pane's single split, or `nil` for the classic
+    /// single-pane layout. Increment 2 persists this to
+    /// `WorkspaceState.detailLayout` (additive, no schema bump): the `didSet`
+    /// mirrors it into `state` and saves, so split / unsplit / assign-secondary
+    /// and the auto-clear of a colliding secondary all survive relaunch. See
     /// `_planning/w5-split-panes-multiwindow.md`.
-    @Published var detailSplit: DetailSplitState?
+    @Published var detailSplit: DetailSplitState? {
+        didSet {
+            guard detailSplit != oldValue else { return }
+            persistDetailLayout()
+        }
+    }
     /// Which pane currently has logical focus when a split is active. Drives
     /// the focus ring and the retargeting of selected-session commands
     /// (Stop / Redraw / Find) to the focused pane's session. Reset to
     /// `.primary` whenever the split opens or closes. Ignored when
-    /// `detailSplit` is `nil` (single pane is always "active").
-    @Published var activePaneID: DetailPaneID = .primary
+    /// `detailSplit` is `nil` (single pane is always "active"). Persisted with
+    /// the split so the focused pane is restored on relaunch.
+    @Published var activePaneID: DetailPaneID = .primary {
+        didSet {
+            guard activePaneID != oldValue else { return }
+            persistDetailLayout()
+        }
+    }
     @Published var errorMessage: String?
     @Published var bossDashboard: BossDashboardSnapshot?
     @Published var bossCheckInPrompt: String?
@@ -9983,6 +10030,33 @@ final class WorkbenchViewModel: ObservableObject {
         guard detailSplit != nil else { return }
         guard activePaneID != pane else { return }
         activePaneID = pane
+    }
+
+    /// The current in-memory split as its persisted shape, or `nil` when not
+    /// split (single pane writes no `detailLayout`). Used by
+    /// `persistDetailLayout()` to mirror live split state into `WorkspaceState`.
+    private var detailLayoutSnapshot: PaneLayoutState? {
+        guard let split = detailSplit else { return nil }
+        return PaneLayoutState(
+            axis: split.axis.persisted,
+            secondaryEntryID: split.secondaryEntryID,
+            activePane: activePaneID.persisted
+        )
+    }
+
+    /// Mirror the live split (`detailSplit` + `activePaneID`) into
+    /// `state.detailLayout` and persist, so the layout survives relaunch.
+    /// Called from the `detailSplit` / `activePaneID` `didSet`s, so every
+    /// split / unsplit / assign-secondary / focus change — including the
+    /// auto-clear of a secondary that collides with the new primary selection
+    /// — is written through the normal `save()` path. A no-op write when the
+    /// snapshot already matches `state.detailLayout` (avoids redundant disk
+    /// writes when an unrelated change fires the observer with no net effect).
+    private func persistDetailLayout() {
+        let snapshot = detailLayoutSnapshot
+        guard state.detailLayout != snapshot else { return }
+        state.detailLayout = snapshot
+        save()
     }
 
     /// Resolve or create the group used by an opened workspace config. If a
@@ -14039,6 +14113,11 @@ final class WorkbenchViewModel: ObservableObject {
             selectedEntryID = state.selectedEntryId.flatMap { id in
                 projectSessionEntries.contains(where: { $0.id == id }) ? id : nil
             } ?? sessionEntries.first?.id ?? archivedSessionEntries.first?.id
+            // W5 increment 2: rebuild the detail split from the persisted
+            // layout, degrading gracefully (see `restoreDetailLayout`). Done
+            // after `selectedEntryID` is finalized so the one-session-per-pane
+            // check resolves against the actual restored primary selection.
+            restoreDetailLayout()
             try store.save(state)
         } catch {
             // The store quarantines an unreadable file before we get here, so
@@ -14059,7 +14138,45 @@ final class WorkbenchViewModel: ObservableObject {
             bossWatchBaselineState = nil
             selectedProjectID = state.projects.first?.id
             selectedEntryID = sessionEntries.first?.id ?? archivedSessionEntries.first?.id
+            // No persisted layout survives a failed/quarantined load; stay
+            // single-pane (the published defaults already are).
         }
+    }
+
+    /// Rebuild the in-memory detail split from `state.detailLayout` on launch,
+    /// degrading gracefully so a stale layout never crashes or mounts a
+    /// dangling/duplicate pane. Layout restore is orthogonal to pty lifetime:
+    /// it only re-establishes which pane shows which *entry id*; the recovery
+    /// reconciler independently reattaches live `screen` sessions by id, and a
+    /// restored pane whose session isn't running renders the existing inactive
+    /// surface exactly as single-pane does.
+    ///
+    /// The pure `PaneLayoutState.resolved(...)` decides validity: a secondary
+    /// that no longer exists, is archived, or collides with the restored
+    /// primary selection is dropped to an empty picker (and focus falls back to
+    /// the primary). The split itself is preserved when present — the operator
+    /// chose it — so they relaunch into their two-up layout and re-pick the
+    /// secondary if its agent is gone.
+    private func restoreDetailLayout() {
+        guard let layout = state.detailLayout else {
+            // No persisted split → classic single pane (the defaults).
+            detailSplit = nil
+            activePaneID = .primary
+            return
+        }
+        // Sessions eligible to mount in a pane: terminal/shell entries that
+        // exist and aren't archived, across all groups (the secondary pane can
+        // show a cross-group session, mirroring `secondaryPaneEntry`).
+        let liveEntryIDs = Set(allSessionEntries.filter { !$0.isArchived }.map(\.id))
+        let resolved = layout.resolved(
+            selectedEntryId: selectedEntryID,
+            liveEntryIDs: liveEntryIDs
+        )
+        detailSplit = DetailSplitState(
+            axis: DetailSplitAxis(resolved.axis),
+            secondaryEntryID: resolved.secondaryEntryID
+        )
+        activePaneID = DetailPaneID(resolved.activePane)
     }
 
     /// One-time migration: the Workbench 0.1.17 redesign defaults the boss
