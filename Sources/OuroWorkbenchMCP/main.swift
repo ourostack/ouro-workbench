@@ -22,6 +22,14 @@ final class WorkbenchMCPServer {
     private let transcriptSearcher = TranscriptSearcher()
     private let recoveryDrill = RecoveryDrill()
     private let senseRenderer = WorkbenchSenseRenderer()
+    private let sessionsRenderer = WorkbenchSessionsRenderer()
+    private let jsonEncoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        // Deterministic key order (stable tests / diffs) + readable timestamps.
+        encoder.outputFormatting = [.sortedKeys]
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }()
 
     init(paths: WorkbenchPaths = .defaultPaths()) {
         self.paths = paths
@@ -92,6 +100,8 @@ final class WorkbenchMCPServer {
         switch name {
         case "workbench_status":
             return try workbenchStatus()
+        case "workbench_sessions":
+            return try sessionsList(arguments: arguments)
         case "workbench_sense":
             return try workbenchSense()
         case "workbench_transcript_tail":
@@ -148,6 +158,23 @@ final class WorkbenchMCPServer {
             machineFriend: SessionFriend.machineOwner(),
             waitingPrompts: waitingPrompts
         )
+    }
+
+    /// Machine-readable list of sessions for an outbound MCP client (the
+    /// harness driving coding sessions through Workbench terminals). Returns
+    /// `{"sessions": [SessionSnapshot, ...]}`. Unlike `workbench_status` (the
+    /// boss's human-readable check-in prompt), this is structured JSON a client
+    /// can parse to resolve a freshly-created session's id by `name` and to poll
+    /// its `status` / `attention` / `needsHuman`.
+    private func sessionsList(arguments: [String: Any]) throws -> String {
+        let state = try currentState()
+        let snapshots = sessionsRenderer.snapshots(
+            state: state,
+            owner: try optionalString(arguments, key: "owner"),
+            name: try optionalString(arguments, key: "name"),
+            includeArchived: (try optionalBool(arguments, key: "includeArchived")) ?? false
+        )
+        return try encodeJSON(["sessions": snapshots])
     }
 
     private func workbenchSense() throws -> String {
@@ -246,10 +273,16 @@ final class WorkbenchMCPServer {
             action: action
         )
         try queue.enqueue(request)
+        let message: String
         if let entry = resolvedEntry {
-            return "Queued \(actionKind.rawValue) for \(entry.name) as \(request.id.uuidString)."
+            message = "Queued \(actionKind.rawValue) for \(entry.name) as \(request.id.uuidString)."
+        } else {
+            message = "Queued \(actionKind.rawValue) as \(request.id.uuidString)."
         }
-        return "Queued \(actionKind.rawValue) as \(request.id.uuidString)."
+        if try wantsJSON(arguments) {
+            return try encodeJSON(ActionAck(ok: true, message: message, requestId: request.id.uuidString))
+        }
+        return message
     }
 
     /// Create and launch a coding session through Workbench, attributed to the
@@ -301,7 +334,21 @@ final class WorkbenchMCPServer {
         try queue.enqueue(request)
         let ownerName = action.owner ?? ""
         let groupSuffix = resolvedGroup.map { " in \($0.name)" } ?? ""
-        return "Queued createSession \(action.name ?? "session")\(groupSuffix) owned by \(ownerName) as \(request.id.uuidString)."
+        let message = "Queued createSession \(action.name ?? "session")\(groupSuffix) owned by \(ownerName) as \(request.id.uuidString)."
+        if try wantsJSON(arguments) {
+            // The create is queued — the running app builds the session and
+            // assigns its id. Poll `workbench_sessions` with this `name` to
+            // resolve the id once the app's pump has drained the request.
+            return try encodeJSON(CreateAck(
+                queued: true,
+                name: action.name,
+                group: resolvedGroup?.name,
+                owner: action.owner,
+                requestId: request.id.uuidString,
+                message: message
+            ))
+        }
+        return message
     }
 
     /// Resolve a target group (project) by UUID or unique name for createSession.
@@ -395,6 +442,40 @@ final class WorkbenchMCPServer {
         return nil
     }
 
+    /// Whether the caller asked for a structured JSON result (`format: "json"`).
+    /// Default is the human-readable text the boss has always received, so
+    /// opting in never regresses an existing caller.
+    private func wantsJSON(_ arguments: [String: Any]) throws -> Bool {
+        (try optionalString(arguments, key: "format"))?.lowercased() == "json"
+    }
+
+    private func encodeJSON<T: Encodable>(_ value: T) throws -> String {
+        let data = try jsonEncoder.encode(value)
+        guard let text = String(data: data, encoding: .utf8) else {
+            throw MCPToolFailure("Failed to encode JSON response")
+        }
+        return text
+    }
+
+    /// `format: "json"` acknowledgement for `workbench_request_action`.
+    private struct ActionAck: Encodable {
+        let ok: Bool
+        let message: String
+        let requestId: String
+    }
+
+    /// `format: "json"` acknowledgement for `workbench_create_session`. The
+    /// create is queued (the running app's pump builds the session), so this
+    /// carries the `name` to poll `workbench_sessions` for, not a session id.
+    private struct CreateAck: Encodable {
+        let queued: Bool
+        let name: String?
+        let group: String?
+        let owner: String?
+        let requestId: String
+        let message: String
+    }
+
     private func toolDefinitions() -> [[String: Any]] {
         [
             [
@@ -403,6 +484,19 @@ final class WorkbenchMCPServer {
                 "inputSchema": [
                     "type": "object",
                     "properties": [:],
+                    "additionalProperties": false
+                ]
+            ],
+            [
+                "name": "workbench_sessions",
+                "description": "Machine-readable JSON list of Workbench sessions for programmatic clients (use workbench_status for the human-readable check-in prompt). Returns {\"sessions\":[{id,name,group,owner:{kind,name},kind,status,attention,needsHuman,trust,autoResume,isArchived,isPinned,pid,exitCode,workingDirectory,transcriptPath,startedAt,lastOutputAt}]}. status is the latest run's state (configured|running|exited|waitingForInput|needsRecovery|manualActionNeeded); attention is idle|active|waitingOnHuman|blocked|needsBossReview. Optional fields are omitted when not applicable. After workbench_create_session, poll this with `name` set to your unique session name to resolve the new session's id and watch its status.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "owner": ["type": "string", "description": "Return only sessions owned by this agent name (owner:agent:<name>). Omit for all owners."],
+                        "name": ["type": "string", "description": "Return only sessions whose name matches case-insensitively. Use to resolve the id of a session you just created."],
+                        "includeArchived": ["type": "boolean", "description": "Include archived sessions. Defaults to false."]
+                    ],
                     "additionalProperties": false
                 ]
             ],
@@ -474,7 +568,8 @@ final class WorkbenchMCPServer {
                         "workingDirectory": ["type": "string", "description": "Group root path or terminal working directory."],
                         "trust": ["type": "string", "enum": ["trusted", "untrusted"]],
                         "autoResume": ["type": "boolean"],
-                        "source": ["type": "string", "description": "Agent or tool requesting the action."]
+                        "source": ["type": "string", "description": "Agent or tool requesting the action."],
+                        "format": ["type": "string", "enum": ["text", "json"], "description": "Response format. \"json\" returns {ok,message,requestId} for programmatic callers; default \"text\" returns a human-readable confirmation."]
                     ],
                     "required": ["action"],
                     "additionalProperties": false
@@ -494,7 +589,8 @@ final class WorkbenchMCPServer {
                         "trust": ["type": "string", "enum": ["trusted", "untrusted"], "description": "Session trust. Defaults to untrusted; an untrusted session is created but not auto-driven by the boss."],
                         "autoResume": ["type": "boolean", "description": "Whether the session auto-resumes after a crash / restart. Defaults to false."],
                         "notes": ["type": "string", "description": "Optional notes attached to the session."],
-                        "source": ["type": "string", "description": "Agent or tool requesting the action (for the audit log)."]
+                        "source": ["type": "string", "description": "Agent or tool requesting the action (for the audit log)."],
+                        "format": ["type": "string", "enum": ["text", "json"], "description": "Response format. \"json\" returns {queued,name,group,owner,requestId,message} — poll workbench_sessions with `name` to resolve the new session id. Default \"text\" returns a human-readable confirmation."]
                     ],
                     "required": ["owner", "name", "command"],
                     "additionalProperties": false

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.138 - Machine-readable session contract (coding-session unification)
+
+- New `workbench_sessions` MCP tool returns structured JSON for programmatic clients — `{sessions:[{id,name,group,owner,kind,status,attention,needsHuman,trust,pid,exitCode,workingDirectory,startedAt,…}]}` — so an outbound client (the Ouro harness driving coding sessions through Workbench terminals) can resolve a freshly-created session's id by `name` and poll its `status`/`attention`/`needsHuman` without scraping the boss's human-readable `workbench_status` prompt. Supports `owner` / `name` / `includeArchived` filters.
+- `workbench_request_action` and `workbench_create_session` gain an opt-in `format:"json"` for structured acknowledgements (`{ok,message,requestId}` / `{queued,name,group,owner,requestId}`). The boss still receives human-readable text by default — no regression.
+- Foundation for routing the harness's `coding_*` tools through Workbench terminals (boundary B3, unified sessions): one session model, one set of tools, every coding session first-class and human-visible.
+
 ## 0.1.137 - Harness control actions
 
 - The Harness Status view gains confirm-gated actions: Repair/start the ouro daemon when it's degraded, and register the Workbench MCP with the selected boss when it isn't. Workbench is now a control panel for the harness, not just a viewer — reusing the existing ouro-command runner and MCP registration; no destructive operations.
