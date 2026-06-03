@@ -87,6 +87,66 @@ final class BossWorkbenchActionTests: XCTestCase {
         }
     }
 
+    func testCreateSessionRequiresNameCommandAndOwnerBeforeQueueing() {
+        // A well-formed createSession (name + command + owner) validates.
+        let valid = BossWorkbenchAction(
+            action: .createSession,
+            group: "Harness",
+            name: "Release Codex",
+            command: "codex --yolo",
+            workingDirectory: "/repo",
+            trust: .trusted,
+            owner: "slugger"
+        )
+        XCTAssertNoThrow(try valid.validateForQueueing())
+
+        // Missing each required field is rejected with the matching error.
+        let missingName = BossWorkbenchAction(action: .createSession, command: "codex", owner: "slugger")
+        XCTAssertThrowsError(try missingName.validateForQueueing()) { error in
+            XCTAssertEqual(error as? BossWorkbenchActionValidationError, .missingName(.createSession))
+        }
+
+        let missingCommand = BossWorkbenchAction(action: .createSession, name: "Codex", owner: "slugger")
+        XCTAssertThrowsError(try missingCommand.validateForQueueing()) { error in
+            XCTAssertEqual(error as? BossWorkbenchActionValidationError, .missingCommandForCreateSession)
+        }
+
+        let missingOwner = BossWorkbenchAction(action: .createSession, name: "Codex", command: "codex")
+        XCTAssertThrowsError(try missingOwner.validateForQueueing()) { error in
+            XCTAssertEqual(error as? BossWorkbenchActionValidationError, .missingOwnerForCreateSession)
+        }
+
+        let blankOwner = BossWorkbenchAction(action: .createSession, name: "Codex", command: "codex", owner: "   ")
+        XCTAssertThrowsError(try blankOwner.validateForQueueing()) { error in
+            XCTAssertEqual(error as? BossWorkbenchActionValidationError, .missingOwnerForCreateSession)
+        }
+    }
+
+    func testCreateSessionParsesAndCarriesOwner() throws {
+        let reply = """
+        ```ouro-workbench-actions
+        [
+          { "action": "createSession", "group": "Harness", "name": "Boss Codex", "command": "codex --yolo", "workingDirectory": "/repo", "trust": "trusted", "owner": "slugger" }
+        ]
+        ```
+        """
+
+        let actions = try BossWorkbenchActionParser().parse(reply)
+
+        XCTAssertEqual(actions, [
+            BossWorkbenchAction(
+                action: .createSession,
+                group: "Harness",
+                name: "Boss Codex",
+                command: "codex --yolo",
+                workingDirectory: "/repo",
+                trust: .trusted,
+                owner: "slugger"
+            ),
+        ])
+        XCTAssertEqual(actions.first?.owner, "slugger")
+    }
+
     func testParsesWorkspaceManagementActions() throws {
         let reply = """
         ```ouro-workbench-actions

@@ -27,7 +27,8 @@ final class WorkbenchGuideTests: XCTestCase {
             "workbench_transcript_tail",
             "workbench_search_transcripts",
             "workbench_recovery_drill",
-            "workbench_request_action"
+            "workbench_request_action",
+            "workbench_create_session"
         ])
     }
 

@@ -7,6 +7,7 @@ public enum BossWorkbenchActionKind: String, Codable, Sendable, CaseIterable {
     case sendInput
     case createGroup
     case createTerminal
+    case createSession
     case moveSession
     case setTrust
     case setAutoResume
@@ -25,6 +26,12 @@ public struct BossWorkbenchAction: Codable, Equatable, Sendable {
     public var workingDirectory: String?
     public var trust: ProcessTrust?
     public var autoResume: Bool?
+    /// The owning agent's name for `createSession`. Stamped onto the new
+    /// `ProcessEntry` as `owner: .agent(<name>)` so an agent-initiated session
+    /// is a first-class, attributed Workbench session. The Workbench MCP is
+    /// registered with no agent identity in its command/env, so the calling
+    /// agent must pass its own name; the server validates it non-empty.
+    public var owner: String?
 
     private enum CodingKeys: String, CodingKey {
         case action
@@ -37,6 +44,7 @@ public struct BossWorkbenchAction: Codable, Equatable, Sendable {
         case workingDirectory
         case trust
         case autoResume
+        case owner
     }
 
     public init(
@@ -49,7 +57,8 @@ public struct BossWorkbenchAction: Codable, Equatable, Sendable {
         command: String? = nil,
         workingDirectory: String? = nil,
         trust: ProcessTrust? = nil,
-        autoResume: Bool? = nil
+        autoResume: Bool? = nil,
+        owner: String? = nil
     ) {
         self.action = action
         self.entry = entry
@@ -61,6 +70,7 @@ public struct BossWorkbenchAction: Codable, Equatable, Sendable {
         self.workingDirectory = workingDirectory
         self.trust = trust
         self.autoResume = autoResume
+        self.owner = owner
     }
 
     public init(from decoder: Decoder) throws {
@@ -75,6 +85,7 @@ public struct BossWorkbenchAction: Codable, Equatable, Sendable {
         self.workingDirectory = try container.decodeIfPresent(String.self, forKey: .workingDirectory)
         self.trust = try container.decodeIfPresent(ProcessTrust.self, forKey: .trust)
         self.autoResume = try container.decodeIfPresent(Bool.self, forKey: .autoResume)
+        self.owner = try container.decodeIfPresent(String.self, forKey: .owner)
     }
 }
 
@@ -83,6 +94,8 @@ public enum BossWorkbenchActionValidationError: LocalizedError, Equatable, Senda
     case missingTextForSendInput
     case missingName(BossWorkbenchActionKind)
     case missingCommandForCreateTerminal
+    case missingCommandForCreateSession
+    case missingOwnerForCreateSession
     case missingWorkingDirectoryForCreateGroup
     case missingGroupForMoveSession
     case missingTrustForSetTrust
@@ -98,6 +111,10 @@ public enum BossWorkbenchActionValidationError: LocalizedError, Equatable, Senda
             return "\(action.rawValue) requires a non-empty name"
         case .missingCommandForCreateTerminal:
             return "createTerminal requires a non-empty command"
+        case .missingCommandForCreateSession:
+            return "createSession requires a non-empty command"
+        case .missingOwnerForCreateSession:
+            return "createSession requires a non-empty owner (the agent name)"
         case .missingWorkingDirectoryForCreateGroup:
             return "createGroup requires a non-empty workingDirectory"
         case .missingGroupForMoveSession:
@@ -117,7 +134,7 @@ public extension BossWorkbenchAction {
             guard entry?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
                 throw BossWorkbenchActionValidationError.missingEntry(action)
             }
-        case .createGroup, .createTerminal:
+        case .createGroup, .createTerminal, .createSession:
             break
         }
 
@@ -139,6 +156,16 @@ public extension BossWorkbenchAction {
             }
             guard command?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
                 throw BossWorkbenchActionValidationError.missingCommandForCreateTerminal
+            }
+        case .createSession:
+            guard name?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+                throw BossWorkbenchActionValidationError.missingName(action)
+            }
+            guard command?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+                throw BossWorkbenchActionValidationError.missingCommandForCreateSession
+            }
+            guard owner?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+                throw BossWorkbenchActionValidationError.missingOwnerForCreateSession
             }
         case .moveSession:
             guard group?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
