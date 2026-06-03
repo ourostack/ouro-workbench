@@ -70,6 +70,46 @@ final class WorkbenchActionRequestQueueTests: XCTestCase {
         try? FileManager.default.removeItem(at: root)
     }
 
+    func testCreateSessionRequestRoundTripsCarryingOwnerAndParams() throws {
+        // The agent-initiated createSession request must survive the
+        // enqueue → file → drain → decode trip with its owner (agent name) and
+        // every launch parameter intact, since the running app reconstructs the
+        // ProcessEntry from exactly this payload.
+        let root = try temporaryDirectory()
+        let queue = WorkbenchActionRequestQueue(directoryURL: root)
+        let request = WorkbenchActionRequest(
+            id: UUID(uuidString: "00000000-0000-0000-0000-0000000000c5")!,
+            createdAt: Date(timeIntervalSince1970: 5),
+            source: "ouro-workbench-mcp",
+            action: BossWorkbenchAction(
+                action: .createSession,
+                group: "Harness",
+                name: "Boss Codex",
+                command: "codex --yolo",
+                workingDirectory: "/repo",
+                trust: .trusted,
+                autoResume: true,
+                owner: "slugger"
+            )
+        )
+
+        try queue.enqueue(request)
+        let drained = try queue.drain()
+
+        XCTAssertEqual(drained, [request])
+        let action = try XCTUnwrap(drained.first?.action)
+        XCTAssertEqual(action.action, .createSession)
+        XCTAssertEqual(action.owner, "slugger")
+        XCTAssertEqual(action.group, "Harness")
+        XCTAssertEqual(action.name, "Boss Codex")
+        XCTAssertEqual(action.command, "codex --yolo")
+        XCTAssertEqual(action.workingDirectory, "/repo")
+        XCTAssertEqual(action.trust, .trusted)
+        XCTAssertEqual(action.autoResume, true)
+        XCTAssertEqual(try queue.drain(), [])
+        try? FileManager.default.removeItem(at: root)
+    }
+
     private func temporaryDirectory() throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

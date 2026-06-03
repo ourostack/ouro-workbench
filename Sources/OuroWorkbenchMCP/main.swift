@@ -102,6 +102,8 @@ final class WorkbenchMCPServer {
             return try recoveryDrillReport()
         case "workbench_request_action":
             return try requestAction(arguments: arguments)
+        case "workbench_create_session":
+            return try createSession(arguments: arguments)
         default:
             throw MCPToolFailure("Unknown tool: \(name)")
         }
@@ -248,6 +250,76 @@ final class WorkbenchMCPServer {
             return "Queued \(actionKind.rawValue) for \(entry.name) as \(request.id.uuidString)."
         }
         return "Queued \(actionKind.rawValue) as \(request.id.uuidString)."
+    }
+
+    /// Create and launch a coding session through Workbench, attributed to the
+    /// calling agent. Queues a `createSession` action that the running app
+    /// executes: it constructs a `ProcessEntry` with `owner: .agent(<owner>)`
+    /// in the target group and launches it under the same trust gating and
+    /// launch validation as a human-created terminal.
+    ///
+    /// The Workbench MCP is registered for the boss with no agent identity in
+    /// its command/env (`BossWorkbenchMCPRegistrar` writes empty args + no env),
+    /// so the calling agent must pass its own name as `owner`. We validate it
+    /// non-empty here; the app stamps it as the session owner.
+    private func createSession(arguments: [String: Any]) throws -> String {
+        let state = try currentState()
+        let trust: ProcessTrust?
+        if let rawTrust = try optionalString(arguments, key: "trust") {
+            guard let parsedTrust = ProcessTrust(rawValue: rawTrust) else {
+                throw MCPToolFailure("Invalid trust value: \(rawTrust)")
+            }
+            trust = parsedTrust
+        } else {
+            trust = nil
+        }
+        let action = BossWorkbenchAction(
+            action: .createSession,
+            text: try optionalString(arguments, key: "notes"),
+            group: try optionalString(arguments, key: "group"),
+            name: try optionalString(arguments, key: "name"),
+            command: try optionalString(arguments, key: "command"),
+            workingDirectory: try optionalString(arguments, key: "workingDirectory"),
+            trust: trust,
+            autoResume: try optionalBool(arguments, key: "autoResume"),
+            owner: try optionalString(arguments, key: "owner")
+        )
+        // Surfaces missing name / command / owner as a clear tool error before
+        // anything is queued (the app re-validates on drain).
+        try action.validateForQueueing()
+
+        // Resolve the target group now so the caller gets immediate feedback
+        // instead of a silent app-side skip. The group must already exist —
+        // create one first via `workbench_request_action` (action createGroup)
+        // if needed. A nil/empty group defers to the app's selected group.
+        let resolvedGroup = try resolveGroup(action.group, state: state)
+
+        let request = WorkbenchActionRequest(
+            source: (arguments["source"] as? String) ?? "ouro-workbench-mcp",
+            action: action
+        )
+        try queue.enqueue(request)
+        let ownerName = action.owner ?? ""
+        let groupSuffix = resolvedGroup.map { " in \($0.name)" } ?? ""
+        return "Queued createSession \(action.name ?? "session")\(groupSuffix) owned by \(ownerName) as \(request.id.uuidString)."
+    }
+
+    /// Resolve a target group (project) by UUID or unique name for createSession.
+    /// A nil/empty value defers to the app (it uses the selected/first group),
+    /// so this returns nil in that case. A non-empty value that doesn't match a
+    /// unique existing group throws so the caller learns the group is missing.
+    private func resolveGroup(_ value: String?, state: WorkspaceState) throws -> WorkbenchProject? {
+        guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        if let id = UUID(uuidString: value), let project = state.projects.first(where: { $0.id == id }) {
+            return project
+        }
+        let matches = state.projects.filter { $0.name.caseInsensitiveCompare(value) == .orderedSame }
+        guard matches.count == 1, let project = matches.first else {
+            throw MCPToolFailure("No unique group matches \(value). Create it first via workbench_request_action (createGroup).")
+        }
+        return project
     }
 
     private func optionalString(_ arguments: [String: Any], key: String) throws -> String? {
@@ -405,6 +477,26 @@ final class WorkbenchMCPServer {
                         "source": ["type": "string", "description": "Agent or tool requesting the action."]
                     ],
                     "required": ["action"],
+                    "additionalProperties": false
+                ]
+            ],
+            [
+                "name": "workbench_create_session",
+                "description": "Create and launch a coding session through Workbench, owned by the calling agent. The session appears as a first-class Workbench session tagged owner:agent:<owner>, with the same trust gating and launch validation as a human-created terminal. The Workbench MCP is registered without an agent identity, so you must pass your own agent name as `owner`. The target `group` must already exist (create one first via workbench_request_action with action createGroup if needed); omit it to use the currently-selected group.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "owner": ["type": "string", "description": "Your agent name. Stamped as the session owner (owner:agent:<owner>). Required, non-empty."],
+                        "name": ["type": "string", "description": "Session name shown in the Workbench sidebar. Required."],
+                        "command": ["type": "string", "description": "The shell command / coding agent to run (e.g. \"codex --yolo\" or \"claude\"). Required."],
+                        "group": ["type": "string", "description": "Target group UUID or unique group name. Must already exist. Omit to use the selected group."],
+                        "workingDirectory": ["type": "string", "description": "Working directory for the session. Defaults to the group's root path."],
+                        "trust": ["type": "string", "enum": ["trusted", "untrusted"], "description": "Session trust. Defaults to untrusted; an untrusted session is created but not auto-driven by the boss."],
+                        "autoResume": ["type": "boolean", "description": "Whether the session auto-resumes after a crash / restart. Defaults to false."],
+                        "notes": ["type": "string", "description": "Optional notes attached to the session."],
+                        "source": ["type": "string", "description": "Agent or tool requesting the action (for the audit log)."]
+                    ],
+                    "required": ["owner", "name", "command"],
                     "additionalProperties": false
                 ]
             ]

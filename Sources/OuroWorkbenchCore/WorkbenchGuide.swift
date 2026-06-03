@@ -122,7 +122,8 @@ public enum WorkbenchGuide {
         Capability(tool: "workbench_transcript_tail", summary: "inspect one terminal's recent output"),
         Capability(tool: "workbench_search_transcripts", summary: "search remembered terminal output"),
         Capability(tool: "workbench_recovery_drill", summary: "simulate restart recovery"),
-        Capability(tool: "workbench_request_action", summary: "queue auditable native actions")
+        Capability(tool: "workbench_request_action", summary: "queue auditable native actions"),
+        Capability(tool: "workbench_create_session", summary: "create and launch an agent-owned coding session")
     ]
 
     /// Every action verb the boss may put in an `ouro-workbench-actions` block.

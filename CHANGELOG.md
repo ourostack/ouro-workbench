@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.131 - Agents can create sessions through Workbench (workbench_create_session)
+
+- New Workbench MCP tool `workbench_create_session`: an agent (the boss, via its registered `ouro_workbench` MCP) can create and launch a coding session through Workbench. The session appears as a first-class Workbench session tagged `owner: agent:<name>`, with the same trust gating and launch validation as a human-created terminal. A step toward unified sessions — agent- and human-initiated sessions in one list.
+
 ## 0.1.130 - Session ownership model (toward unified sessions)
 
 - Sessions now carry an `owner` (the human operator or a named agent) on `ProcessEntry`, the foundation for unified sessions where agent-initiated and human-initiated coding sessions are both first-class. Back-compatible: existing state decodes as human-owned. No behavior change yet — the MCP create/launch tools that set agent ownership, and the sidebar rendering, land in follow-ups.

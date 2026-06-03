@@ -11861,7 +11861,12 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     @discardableResult
-    private func createCustomSession(_ draft: CustomTerminalSessionDraft, in projectId: UUID?, launchAfterCreate: Bool) -> ProcessEntry? {
+    private func createCustomSession(
+        _ draft: CustomTerminalSessionDraft,
+        in projectId: UUID?,
+        launchAfterCreate: Bool,
+        owner: SessionOwner = .human
+    ) -> ProcessEntry? {
         do {
             if state.projects.isEmpty {
                 state = bootstrapper.bootstrappedState(from: state)
@@ -11870,7 +11875,12 @@ final class WorkbenchViewModel: ObservableObject {
                 errorMessage = "No workbench project is available"
                 return nil
             }
-            let entry = try customSessionFactory.makeEntry(projectId: project.id, draft: draft)
+            var entry = try customSessionFactory.makeEntry(projectId: project.id, draft: draft)
+            // Stamp ownership: human-created sessions stay `.human` (the factory
+            // default); an agent-initiated session through `createSession`
+            // carries `owner: .agent(<name>)` so it's a first-class, attributed
+            // Workbench session.
+            entry.owner = owner
             state.processEntries.append(entry)
             selectedProjectID = project.id
             selectedEntryID = entry.id
@@ -12099,6 +12109,32 @@ final class WorkbenchViewModel: ObservableObject {
                 return finishBossAction(source: source, action: action, entry: nil, result: "Failed createTerminal: \(errorMessage ?? "invalid terminal")")
             }
             return finishBossAction(source: source, action: action, entry: entry, result: "Created terminal \(entry.name) in \(project.name)")
+        case .createSession:
+            // Agent-initiated unified session: create a first-class Workbench
+            // session attributed to the calling agent and launch it. Same
+            // trust/validation path as a human-created terminal — the launch
+            // runs through `launch(...)`, which applies `launchPreflightProblem`
+            // (working-dir + explicit-path executable checks). Trust gating is
+            // unchanged: an untrusted session is created but the boss won't
+            // auto-drive it.
+            guard let ownerName = nonEmpty(action.owner) else {
+                return finishBossAction(source: source, action: action, entry: nil, result: "Skipped createSession: missing owner (agent name)")
+            }
+            guard let project = project(matching: action.group) else {
+                return finishBossAction(source: source, action: action, entry: nil, result: "Skipped createSession: no unique group matches \(action.group ?? "selected group")")
+            }
+            let draft = CustomTerminalSessionDraft(
+                name: action.name ?? "",
+                command: action.command ?? "",
+                workingDirectory: nonEmpty(action.workingDirectory) ?? project.rootPath,
+                trust: action.trust ?? .untrusted,
+                autoResume: action.autoResume ?? false,
+                notes: nonEmpty(action.text) ?? "Created by \(source)"
+            )
+            guard let entry = createCustomSession(draft, in: project.id, launchAfterCreate: true, owner: .agent(name: ownerName)) else {
+                return finishBossAction(source: source, action: action, entry: nil, result: "Failed createSession: \(errorMessage ?? "invalid session")")
+            }
+            return finishBossAction(source: source, action: action, entry: entry, result: "Created session \(entry.name) in \(project.name) owned by \(ownerName)")
         case .launch, .recover, .terminate, .sendInput, .moveSession, .setTrust, .setAutoResume, .archive, .restore:
             break
         }
@@ -12194,7 +12230,7 @@ final class WorkbenchViewModel: ObservableObject {
                 return finishBossAction(source: source, action: action, entry: entry, result: "Failed restore for \(entry.name): \(errorMessage ?? "not restorable")")
             }
             return finishBossAction(source: source, action: action, entry: entry, result: "Restored \(entry.name)")
-        case .createGroup, .createTerminal:
+        case .createGroup, .createTerminal, .createSession:
             return finishBossAction(source: source, action: action, entry: entry, result: "Skipped \(action.action.rawValue): already handled")
         }
     }
