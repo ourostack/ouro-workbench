@@ -110,6 +110,153 @@ final class WorkbenchActionRequestQueueTests: XCTestCase {
         try? FileManager.default.removeItem(at: root)
     }
 
+    func testEnqueueDropsDuplicateFingerprintWhilePendingSoDrainReturnsOne() throws {
+        // A reasoning boss can return an empty FINAL reply *after* it already
+        // called workbench_request_action; the empty-retry then runs a fresh
+        // turn that re-enqueues the same action. The queue must treat the second
+        // (identical-fingerprint) enqueue as a no-op so the action drains once.
+        let root = try temporaryDirectory()
+        let queue = WorkbenchActionRequestQueue(directoryURL: root)
+        let first = WorkbenchActionRequest(
+            id: UUID(uuidString: "00000000-0000-0000-0000-0000000000a1")!,
+            createdAt: Date(timeIntervalSince1970: 1),
+            source: "ouro-workbench-mcp",
+            action: BossWorkbenchAction(action: .sendInput, entry: "Claude Code", text: "continue")
+        )
+        // Same effect, different id/createdAt/source — the dup the retry would write.
+        let duplicate = WorkbenchActionRequest(
+            id: UUID(uuidString: "00000000-0000-0000-0000-0000000000a2")!,
+            createdAt: Date(timeIntervalSince1970: 2),
+            source: "boss:slugger",
+            action: BossWorkbenchAction(action: .sendInput, entry: "Claude Code", text: "continue")
+        )
+
+        try queue.enqueue(first)
+        try queue.enqueue(duplicate)
+
+        let drained = try queue.drain()
+        XCTAssertEqual(drained.count, 1)
+        XCTAssertEqual(drained.first?.id, first.id)
+        XCTAssertEqual(try queue.drain(), [])
+        try? FileManager.default.removeItem(at: root)
+    }
+
+    func testEnqueueKeepsRequestsThatDifferOnlyByAFingerprintField() throws {
+        // Dedup must key on the *effect*: a one-character difference in any
+        // fingerprint field (here `text`) is a genuinely different action and
+        // must NOT be dropped.
+        let root = try temporaryDirectory()
+        let queue = WorkbenchActionRequestQueue(directoryURL: root)
+        let sendContinue = WorkbenchActionRequest(
+            id: UUID(uuidString: "00000000-0000-0000-0000-0000000000b1")!,
+            createdAt: Date(timeIntervalSince1970: 1),
+            source: "ouro-workbench-mcp",
+            action: BossWorkbenchAction(action: .sendInput, entry: "Claude Code", text: "continue")
+        )
+        let sendStop = WorkbenchActionRequest(
+            id: UUID(uuidString: "00000000-0000-0000-0000-0000000000b2")!,
+            createdAt: Date(timeIntervalSince1970: 2),
+            source: "ouro-workbench-mcp",
+            action: BossWorkbenchAction(action: .sendInput, entry: "Claude Code", text: "stop")
+        )
+
+        try queue.enqueue(sendContinue)
+        try queue.enqueue(sendStop)
+
+        XCTAssertEqual(try queue.drain().count, 2)
+        try? FileManager.default.removeItem(at: root)
+    }
+
+    func testDrainMovesFilesToProcessingAndConfirmApplyDeletesThem() throws {
+        // drain() converts at-most-once-with-loss to at-least-once: it MOVES
+        // each request file into processing/ (queue empties, processing holds
+        // them) instead of deleting, so a crash before apply can recover. Only
+        // confirmApplied(id) — called after the app applies a request — deletes
+        // the processing/ file. A request enqueued after the drain is untouched.
+        let root = try temporaryDirectory()
+        let queue = WorkbenchActionRequestQueue(directoryURL: root)
+        let launch = WorkbenchActionRequest(
+            id: UUID(uuidString: "00000000-0000-0000-0000-0000000000c1")!,
+            createdAt: Date(timeIntervalSince1970: 1),
+            source: "ouro-workbench-mcp",
+            action: BossWorkbenchAction(action: .launch, entry: "Claude Code")
+        )
+        let sendInput = WorkbenchActionRequest(
+            id: UUID(uuidString: "00000000-0000-0000-0000-0000000000c2")!,
+            createdAt: Date(timeIntervalSince1970: 2),
+            source: "ouro-workbench-mcp",
+            action: BossWorkbenchAction(action: .sendInput, entry: "Claude Code", text: "go")
+        )
+        try queue.enqueue(launch)
+        try queue.enqueue(sendInput)
+
+        let drained = try queue.drain()
+        XCTAssertEqual(drained.map(\.id), [launch.id, sendInput.id])
+
+        // Queue dir holds no pending .json; processing/ holds both, named by id.
+        XCTAssertEqual(pendingJSONFileNames(in: root), [])
+        XCTAssertEqual(
+            Set(processingJSONFileNames(in: queue)),
+            ["\(launch.id.uuidString).json", "\(sendInput.id.uuidString).json"]
+        )
+        // Draining again returns nothing (files are in processing, not pending).
+        XCTAssertEqual(try queue.drain(), [])
+
+        // Confirm one applied → only its processing file is removed; the other
+        // remains as still-unconfirmed.
+        queue.confirmApplied(launch.id)
+        XCTAssertEqual(
+            processingJSONFileNames(in: queue),
+            ["\(sendInput.id.uuidString).json"]
+        )
+        XCTAssertEqual(queue.recoverUnconfirmed().map(\.id), [sendInput.id])
+
+        // A distinct request enqueued after the drain is unaffected by the
+        // processing/recover machinery: it drains normally.
+        let later = WorkbenchActionRequest(
+            id: UUID(uuidString: "00000000-0000-0000-0000-0000000000c3")!,
+            createdAt: Date(timeIntervalSince1970: 3),
+            source: "ouro-workbench-mcp",
+            action: BossWorkbenchAction(action: .launch, entry: "OpenAI Codex")
+        )
+        try queue.enqueue(later)
+        XCTAssertEqual(try queue.drain().map(\.id), [later.id])
+        // recoverUnconfirmed still surfaces the earlier unconfirmed sendInput
+        // plus the just-drained `later` (both now in processing).
+        XCTAssertEqual(
+            Set(queue.recoverUnconfirmed().map(\.id)),
+            [sendInput.id, later.id]
+        )
+
+        // Confirming the remaining two empties processing/ entirely.
+        queue.confirmApplied(sendInput.id)
+        queue.confirmApplied(later.id)
+        XCTAssertEqual(queue.recoverUnconfirmed(), [])
+        try? FileManager.default.removeItem(at: root)
+    }
+
+    func testRecoverUnconfirmedReturnsNothingWhenProcessingIsEmptyOrAbsent() throws {
+        let root = try temporaryDirectory()
+        let queue = WorkbenchActionRequestQueue(directoryURL: root)
+        // No drain has happened, so processing/ doesn't exist yet.
+        XCTAssertEqual(queue.recoverUnconfirmed(), [])
+        try? FileManager.default.removeItem(at: root)
+    }
+
+    private func pendingJSONFileNames(in root: URL) -> [String] {
+        ((try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? [])
+            .filter { $0.pathExtension == "json" }
+            .map(\.lastPathComponent)
+            .sorted()
+    }
+
+    private func processingJSONFileNames(in queue: WorkbenchActionRequestQueue) -> [String] {
+        ((try? FileManager.default.contentsOfDirectory(at: queue.processingDirectoryURL, includingPropertiesForKeys: nil)) ?? [])
+            .filter { $0.pathExtension == "json" }
+            .map(\.lastPathComponent)
+            .sorted()
+    }
+
     private func temporaryDirectory() throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

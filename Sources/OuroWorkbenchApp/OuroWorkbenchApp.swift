@@ -11935,7 +11935,27 @@ final class WorkbenchViewModel: ObservableObject {
             // Reasoning-model bosses intermittently return an empty final
             // answer; one fresh retry almost always succeeds, so a transient
             // empty no longer fails the check-in and trips Boss Watch backoff.
-            let answer = try await BossAgentMCPClient.retryingOnEmpty {
+            //
+            // BUT a reasoning boss may emit an empty FINAL reply *after* it
+            // already called its Workbench MCP tools during that turn — e.g.
+            // `workbench_request_action`, which enqueues a request file. A fresh
+            // retry would run another turn that re-enqueues the same actions.
+            // The core queue de-dups identical pending requests, but as
+            // defense-in-depth we also refuse to retry an empty turn that grew
+            // the queue: snapshot the pending depth before the ask and only
+            // retry when the turn queued nothing.
+            let queueDepthBeforeAsk = externalActionQueue.pendingCount()
+            // Re-read the depth through a fresh queue built from the directory
+            // URL (a Sendable value), mirroring the off-main drain, so this
+            // guard crosses the isolation boundary without capturing the
+            // non-Sendable queue instance.
+            let actionRequestsURL = externalActionQueue.directoryURL
+            let answer = try await BossAgentMCPClient.retryingOnEmpty(
+                canRetry: {
+                    WorkbenchActionRequestQueue(directoryURL: actionRequestsURL)
+                        .pendingCount() <= queueDepthBeforeAsk
+                }
+            ) {
                 try await bossMCPClient.ask(
                     agentName: requestedBoss,
                     question: bossCheckInPrompt
@@ -12107,6 +12127,12 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     func runExternalActionPump() async {
+        // Before the steady-state drain loop, replay any requests a previous
+        // run drained but crashed before confirming applied. `drain()` moves
+        // request files into `processing/` and they're deleted only after the
+        // app confirms it applied them (at-least-once), so anything still in
+        // `processing/` at launch is a crashed-mid-apply action to recover.
+        await recoverUnconfirmedExternalActionRequests()
         while !Task.isCancelled {
             await drainExternalActionRequests()
             try? await Task.sleep(nanoseconds: 2_000_000_000)
@@ -12120,10 +12146,11 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     func drainExternalActionRequests() async {
-        // The drain does directory listing + per-file reads + deletes. Run it
-        // off the main actor so the every-2s pump never janks the UI (and so a
-        // large queue backlog can't block the main thread). Apply the decoded
-        // requests back on the main actor.
+        // The drain does directory listing + per-file reads + moves into
+        // `processing/`. Run it off the main actor so the every-2s pump never
+        // janks the UI (and so a large queue backlog can't block the main
+        // thread). Apply the decoded requests back on the main actor, then
+        // confirm each applied request so its `processing/` file is deleted.
         let directoryURL = externalActionQueue.directoryURL
         let outcome = await Task.detached(priority: .utility) { () -> ExternalDrainOutcome in
             do {
@@ -12140,10 +12167,40 @@ final class WorkbenchViewModel: ObservableObject {
         guard !outcome.requests.isEmpty else {
             return
         }
-        let results = outcome.requests.map { request in
+        applyExternalActionRequests(outcome.requests)
+    }
+
+    /// Replay requests left unconfirmed in `processing/` by a prior crash. Same
+    /// apply + confirm path as a fresh drain; the core queue's de-dup already
+    /// kept the originals distinct, and confirming deletes the `processing/`
+    /// file so a recovered action isn't replayed again on the next launch.
+    private func recoverUnconfirmedExternalActionRequests() async {
+        let directoryURL = externalActionQueue.directoryURL
+        let requests = await Task.detached(priority: .utility) { () -> [WorkbenchActionRequest] in
+            WorkbenchActionRequestQueue(directoryURL: directoryURL).recoverUnconfirmed()
+        }.value
+        guard !requests.isEmpty else {
+            return
+        }
+        applyExternalActionRequests(requests)
+    }
+
+    /// Apply each drained/recovered request on the main actor, surface the
+    /// results in the boss activity feed, then confirm them off-main so their
+    /// `processing/` files are deleted (at-least-once → applied-and-cleared).
+    private func applyExternalActionRequests(_ requests: [WorkbenchActionRequest]) {
+        let results = requests.map { request in
             "External \(request.source): \(applyBossAction(request.action, source: "external:\(request.source)"))"
         }
         bossAppliedActions = Array((results + bossAppliedActions).prefix(12))
+        let appliedIDs = requests.map(\.id)
+        let directoryURL = externalActionQueue.directoryURL
+        Task.detached(priority: .utility) {
+            let queue = WorkbenchActionRequestQueue(directoryURL: directoryURL)
+            for id in appliedIDs {
+                queue.confirmApplied(id)
+            }
+        }
     }
 
     /// Refresh the set of live persistent `screen` sessions so recovery can

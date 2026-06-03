@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.144 - Boss action exactly-once durability
+
+- A boss reply that comes back empty after the boss already queued actions is no longer retried into duplicate actions: the action-request queue de-duplicates identical pending requests, and the check-in only retries an empty reply when the turn queued nothing.
+- Queued boss actions are no longer lost if the app crashes between draining and applying them: `drain()` moves requests to a `processing/` holding area and they're deleted only after the app confirms it applied them, with unconfirmed actions recovered on next launch (at-least-once instead of at-most-once).
+
 ## 0.1.143 - Boss auto-advance safety hardening
 
 - The boss can no longer auto-answer a destructive/secret-bearing terminal prompt via the actions channel: `applyBossAction`'s sendInput now classifies the live terminal prompt (not just the input text) through the same safety gate the decisions channel uses, withholding + escalating unsafe inputs. Fixes a hole where `{"action":"sendInput","text":"y"}` to a `rm -rf? [y/N]` prompt sailed through.
