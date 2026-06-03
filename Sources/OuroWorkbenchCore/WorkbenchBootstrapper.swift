@@ -24,6 +24,12 @@ public struct WorkbenchBootstrapper: Sendable {
 
     public func bootstrappedState(from state: WorkspaceState, defaults: WorkbenchDefaults = WorkbenchDefaults()) -> WorkspaceState {
         var next = state
+        // De-duplicate process entries by id (keep the first occurrence). A
+        // malformed or torn state file with two entries sharing an id would
+        // otherwise trap any consumer that builds `Dictionary(uniqueKeysWithValues:)`
+        // keyed on the entry id — crashing the long-lived MCP server. Every load
+        // path (app and MCP server) runs through here, so this protects them all.
+        next.processEntries = dedupedByID(next.processEntries)
         if next.projects.isEmpty {
             let project = WorkbenchProject(
                 name: defaults.projectName,
@@ -69,6 +75,14 @@ public struct WorkbenchBootstrapper: Sendable {
 
         next.updatedAt = Date()
         return next
+    }
+
+    /// Returns the entries in order with any duplicate `id` after the first
+    /// dropped. Order-preserving so the existing local-shell-at-front and
+    /// selection invariants are unaffected for well-formed input.
+    private func dedupedByID(_ entries: [ProcessEntry]) -> [ProcessEntry] {
+        var seen = Set<UUID>()
+        return entries.filter { seen.insert($0.id).inserted }
     }
 
     private func removeUntouchedLegacyScaffolds(from state: inout WorkspaceState) {

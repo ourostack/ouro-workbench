@@ -23,6 +23,7 @@ final class WorkbenchGuideTests: XCTestCase {
         let tools = Set(WorkbenchGuide.bossTools.map(\.tool))
         XCTAssertEqual(tools, [
             "workbench_status",
+            "workbench_sessions",
             "workbench_sense",
             "workbench_transcript_tail",
             "workbench_search_transcripts",
@@ -30,6 +31,21 @@ final class WorkbenchGuideTests: XCTestCase {
             "workbench_request_action",
             "workbench_create_session"
         ])
+    }
+
+    func testSenseListsWorkbenchSessionsTool() {
+        // `workbench_sense` is the boss's self-description of available tools; it
+        // renders straight from `WorkbenchGuide.bossTools`. A boss relying on the
+        // sense contract must learn the machine-readable session query exists.
+        XCTAssertTrue(
+            WorkbenchGuide.bossTools.contains { $0.tool == "workbench_sessions" },
+            "bossTools should advertise workbench_sessions"
+        )
+        let sense = WorkbenchSenseRenderer().render(
+            state: WorkspaceState(),
+            summary: WorkspaceSummarizer().summarize(WorkspaceState())
+        )
+        XCTAssertTrue(sense.contains("workbench_sessions"), "sense output should list workbench_sessions")
     }
 
     func testShortcutsMarkdownRendersKnownBindings() {
