@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.136 - Sidebar session filter
+
+- A filter field at the top of the sidebar narrows the session list as you type — matches session name or group, with `owner:human` / `owner:agent` / `owner:<name>` tokens to filter by who owns a session (and status tokens). Empty filter shows everything as before. Complements the in-terminal ⌘F search; doesn't replace it.
+
 ## 0.1.135 - Reliability pass (harden 0.1.127→0.1.134)
 
 - Editing a session no longer wipes its non-draft identity. The Edit Session sheet rebuilds the entry from the editable draft, which doesn't carry `owner` / `isPinned` / `friend`; `CustomTerminalSessionManager.updatedEntry` only copied id/archive/attention back, so an agent-created session (`owner: agent:<name>`, new in 0.1.130–0.1.132) silently reverted to human-owned on any edit (losing its sidebar badge), a pinned session lost its pin, and an assigned friend was dropped (which also stops the boss from auto-advancing it). `updatedEntry` now preserves all three. Regression test added.
