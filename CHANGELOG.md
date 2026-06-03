@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.130 - Session ownership model (toward unified sessions)
+
+- Sessions now carry an `owner` (the human operator or a named agent) on `ProcessEntry`, the foundation for unified sessions where agent-initiated and human-initiated coding sessions are both first-class. Back-compatible: existing state decodes as human-owned. No behavior change yet — the MCP create/launch tools that set agent ownership, and the sidebar rendering, land in follow-ups.
+
 ## 0.1.129 - Tool-grounded boss check-in (thin trigger)
 
 - The automatic boss check-in now sends a thin trigger instead of a ~174-line embedded state dump. The boss fetches live state through its registered Workbench MCP tools (`workbench_status` for the full per-session view, `workbench_sense`, transcript/search/recovery tools) and acts via `workbench_request_action` — reasoning is tool-grounded, not prompt-only. This enforces the harness↔Workbench boundary and makes the empty-reply failure mode far less likely (the boss's first step is a tool call, not a one-shot over a huge prompt). A one-line pulse stays in the trigger so a boss that skips its tools still reports and escalates rather than going blind; the existing retry-on-empty remains as a safety net. The reply-side action/decision JSON protocol is unchanged.
