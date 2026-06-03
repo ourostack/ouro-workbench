@@ -1064,20 +1064,17 @@ public struct ProposedTerminalImport: Codable, Equatable, Identifiable, Sendable
     public var id: String
     public var candidate: RecentSessionCandidate
     public var name: String
-    public var deskTaskSlug: String
     public var selectedByDefault: Bool
 
     public init(
         id: String,
         candidate: RecentSessionCandidate,
         name: String,
-        deskTaskSlug: String,
         selectedByDefault: Bool
     ) {
         self.id = id
         self.candidate = candidate
         self.name = name
-        self.deskTaskSlug = deskTaskSlug
         self.selectedByDefault = selectedByDefault
     }
 }
@@ -1086,20 +1083,17 @@ public struct ProposedWorkbenchGroup: Codable, Equatable, Identifiable, Sendable
     public var id: String
     public var name: String
     public var rootPath: String
-    public var deskTrackSlug: String
     public var terminals: [ProposedTerminalImport]
 
     public init(
         id: String,
         name: String,
         rootPath: String,
-        deskTrackSlug: String,
         terminals: [ProposedTerminalImport]
     ) {
         self.id = id
         self.name = name
         self.rootPath = rootPath
-        self.deskTrackSlug = deskTrackSlug
         self.terminals = terminals
     }
 }
@@ -1229,16 +1223,13 @@ public struct WorkbenchImportProposalBuilder: Sendable {
                 groupRootPath = root
             }
             let trackSlug = slug(groupName)
-            var usedTaskSlugs = Set<String>()
             let terminals = groupCandidates
                 .sorted { ($0.lastActiveAt ?? .distantPast) > ($1.lastActiveAt ?? .distantPast) }
                 .map { candidate in
-                    let taskSlug = uniqueSlug(slug(candidate.title), used: &usedTaskSlugs)
-                    return ProposedTerminalImport(
+                    ProposedTerminalImport(
                         id: candidate.id,
                         candidate: candidate,
                         name: terminalName(for: candidate),
-                        deskTaskSlug: taskSlug,
                         selectedByDefault: false
                     )
                 }
@@ -1246,7 +1237,6 @@ public struct WorkbenchImportProposalBuilder: Sendable {
                 id: trackSlug,
                 name: groupName,
                 rootPath: groupRootPath,
-                deskTrackSlug: trackSlug,
                 terminals: terminals
             )
         }
@@ -1261,19 +1251,17 @@ public struct WorkbenchImportProposalBuilder: Sendable {
 
         // Distinct groups whose names slugify identically (e.g. "My Project"
         // and "my-project", or two different rootPaths) would otherwise share
-        // an `id` / `deskTrackSlug`, which breaks SwiftUI's Identifiable
-        // ForEach (dropped/duplicated rows) and makes selection toggles hit
-        // the wrong group. De-dupe across groups the same way task slugs are
-        // de-duped within a group.
+        // an `id`, which breaks SwiftUI's Identifiable ForEach
+        // (dropped/duplicated rows) and makes selection toggles hit the wrong
+        // group. De-dupe the slug-derived `id` across groups.
         var usedGroupSlugs = Set<String>()
         groups = groups.map { group in
-            let uniqueGroupSlug = uniqueSlug(group.deskTrackSlug, used: &usedGroupSlugs)
-            guard uniqueGroupSlug != group.deskTrackSlug else {
+            let uniqueGroupSlug = uniqueSlug(group.id, used: &usedGroupSlugs)
+            guard uniqueGroupSlug != group.id else {
                 return group
             }
             var deduped = group
             deduped.id = uniqueGroupSlug
-            deduped.deskTrackSlug = uniqueGroupSlug
             return deduped
         }
 
@@ -1447,9 +1435,8 @@ public struct WorkbenchSenseRenderer: Sendable {
         lines.append("")
         lines.append("organization:")
         for project in state.projects {
-            let track = project.deskTrackSlug.map { " desk_track=\($0)" } ?? ""
             let entries = state.processEntries.filter { $0.projectId == project.id && !$0.isArchived }
-            lines.append("- \(project.name)\(track): \(entries.count) active terminal\(entries.count == 1 ? "" : "s")")
+            lines.append("- \(project.name): \(entries.count) active terminal\(entries.count == 1 ? "" : "s")")
         }
         lines.append("")
         lines.append("tools:")

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.133 - Remove inert desk-slug fields (B2 cleanup)
+
+- Removed the now-vestigial `deskTrackSlug` / `deskTaskSlug` fields (and the `desk_track`/`desk_task` labels in the boss view + sense) left over from the removed Workbench→desk mirror. Back-compatible: existing workspace state loads unchanged (the stale keys are ignored).
+
 ## 0.1.132 - Agent-owned sessions are first-class in the sidebar
 
 - Sessions an agent created through Workbench (`workbench_create_session`) now show a subtle owner badge (agent name) in the sidebar, so agent-initiated and human-initiated sessions sit side by side as equal citizens. Human-owned sessions are unchanged.

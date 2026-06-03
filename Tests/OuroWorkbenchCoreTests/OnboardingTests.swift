@@ -327,7 +327,7 @@ final class OnboardingTests: XCTestCase {
 
         XCTAssertEqual(proposal.groups.map(\.name), ["ouro-workbench"])
         XCTAssertEqual(proposal.groups.first?.rootPath, "/Users/ari/Projects/ouro-workbench")
-        XCTAssertEqual(proposal.groups.first?.deskTrackSlug, "ouro-workbench")
+        XCTAssertEqual(proposal.groups.first?.id, "ouro-workbench")
         XCTAssertEqual(proposal.groups.first?.terminals.first?.name, "Claude: Ship the onboarding concierge")
         XCTAssertEqual(proposal.selectedTerminalCount, 1)
     }
@@ -415,37 +415,10 @@ final class OnboardingTests: XCTestCase {
         XCTAssertEqual(groups.first?.name, "My Cmux Space")
     }
 
-    func testImportProposalKeepsDeskTaskSlugsUniqueWithinGroup() {
-        let candidates = (1...2).map { index in
-            RecentSessionCandidate(
-                id: "codex:\(index)",
-                source: .openAICodex,
-                agentKind: .openAICodex,
-                title: "Same title",
-                workingDirectory: "/Users/ari/Projects/ouro-workbench",
-                lastActiveAt: Date(timeIntervalSince1970: TimeInterval(index)),
-                resumeCommand: ["codex", "resume", "\(index)"],
-                summary: "Same",
-                evidencePaths: [],
-                confidence: 0.9
-            )
-        }
-
-        let slugs = WorkbenchImportProposalBuilder()
-            .build(candidates: candidates)
-            .groups
-            .flatMap(\.terminals)
-            .map(\.deskTaskSlug)
-
-        XCTAssertEqual(Set(slugs).count, 2)
-        XCTAssertTrue(slugs.contains("same-title"))
-        XCTAssertTrue(slugs.contains("same-title-2"))
-    }
-
     func testImportProposalKeepsGroupIDsUniqueAcrossGroups() {
         // Two distinct roots whose display names slugify identically
         // ("My Project" vs "My-Project" -> "my-project"). Without de-duping,
-        // both groups would share an id/deskTrackSlug, breaking Identifiable
+        // both groups would share a slug-derived id, breaking Identifiable
         // ForEach + selection.
         let candidates = [
             RecentSessionCandidate(
@@ -477,9 +450,7 @@ final class OnboardingTests: XCTestCase {
         let groups = WorkbenchImportProposalBuilder().build(candidates: candidates).groups
         XCTAssertEqual(groups.count, 2)
         let ids = groups.map(\.id)
-        let slugs = groups.map(\.deskTrackSlug)
         XCTAssertEqual(Set(ids).count, 2, "group ids must be unique: \(ids)")
-        XCTAssertEqual(Set(slugs).count, 2, "desk track slugs must be unique: \(slugs)")
     }
 
     func testImportProposalCuratesDefaultSelectionsInsteadOfStampedingTabs() {
@@ -510,8 +481,7 @@ final class OnboardingTests: XCTestCase {
     func testWorkbenchSenseRendererExposesSenseContractAndTools() {
         let project = WorkbenchProject(
             name: "ouro-workbench",
-            rootPath: "/Users/ari/Projects/ouro-workbench",
-            deskTrackSlug: "ouro-workbench"
+            rootPath: "/Users/ari/Projects/ouro-workbench"
         )
         let entry = ProcessEntry(
             projectId: project.id,
@@ -535,7 +505,7 @@ final class OnboardingTests: XCTestCase {
         )
 
         XCTAssertTrue(rendered.contains("## workbench sense"))
-        XCTAssertTrue(rendered.contains("desk_track=ouro-workbench"))
+        XCTAssertTrue(rendered.contains("- ouro-workbench: 1 active terminal"))
         XCTAssertTrue(rendered.contains("workbench_request_action"))
         XCTAssertTrue(rendered.contains("workbench_sense"))
         // Sense doubles as an in-app help oracle: it carries the action protocol
@@ -596,7 +566,6 @@ final class OnboardingTests: XCTestCase {
                 confidence: 0.9
             ),
             name: "Codex: First",
-            deskTaskSlug: "first",
             selectedByDefault: true
         )
         let second = ProposedTerminalImport(
@@ -614,7 +583,6 @@ final class OnboardingTests: XCTestCase {
                 confidence: 0.8
             ),
             name: "Codex: Second",
-            deskTaskSlug: "second",
             selectedByDefault: false
         )
         return WorkbenchImportProposal(
@@ -624,7 +592,6 @@ final class OnboardingTests: XCTestCase {
                     id: "g",
                     name: "g",
                     rootPath: "/tmp/g",
-                    deskTrackSlug: "g",
                     terminals: [first, second]
                 )
             ],
