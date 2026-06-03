@@ -141,6 +141,15 @@ public struct CustomTerminalSessionManager: Sendable {
         next.id = entry.id
         next.isArchived = entry.isArchived
         next.attention = entry.attention
+        // Carry over the entry-identity fields that aren't part of the editable
+        // draft. `makeEntry` defaults each of these (owner: .human, isPinned:
+        // false, friend: nil), so without this an edit silently wipes them —
+        // e.g. an agent-created session (owner: .agent) reverts to human, a
+        // pinned session loses its pin, and an assigned friend is dropped
+        // (which also stops the boss from auto-advancing it).
+        next.owner = entry.owner
+        next.isPinned = entry.isPinned
+        next.friend = entry.friend
         return next
     }
 

@@ -175,6 +175,46 @@ final class CustomTerminalSessionTests: XCTestCase {
         XCTAssertEqual(updated.notes, "Scratch lane.")
     }
 
+    func testManagerUpdatePreservesOwnerPinAndFriend() throws {
+        // Regression: editing an agent-created (owner: .agent) session through
+        // the Edit Session sheet rebuilds the entry from the draft, which
+        // doesn't carry owner / isPinned / friend. Before the fix `updatedEntry`
+        // only copied id/isArchived/attention back, so these fields silently
+        // reverted to their factory defaults (owner -> .human, pin lost, friend
+        // dropped). Each must survive an edit.
+        var original = try CustomTerminalSessionFactory().makeEntry(
+            projectId: UUID(),
+            draft: CustomTerminalSessionDraft(
+                name: "Agent Lane",
+                command: "codex --yolo",
+                workingDirectory: "/repo",
+                trust: .trusted,
+                autoResume: false
+            )
+        )
+        original.owner = .agent(name: "codex")
+        original.isPinned = true
+        let friend = SessionFriend(name: "Ari", kind: .human, trust: .family)
+        original.friend = friend
+
+        let updated = try CustomTerminalSessionManager().updatedEntry(
+            original,
+            draft: CustomTerminalSessionDraft(
+                name: "Agent Lane (renamed)",
+                command: "codex --yolo",
+                workingDirectory: "/repo",
+                trust: .trusted,
+                autoResume: false
+            )
+        )
+
+        XCTAssertEqual(updated.name, "Agent Lane (renamed)")
+        XCTAssertEqual(updated.owner, .agent(name: "codex"))
+        XCTAssertEqual(updated.owner.agentName, "codex")
+        XCTAssertTrue(updated.isPinned)
+        XCTAssertEqual(updated.friend, friend)
+    }
+
     func testManagerDuplicatesCustomSessionWithRequestedName() throws {
         let original = try CustomTerminalSessionFactory().makeEntry(
             projectId: UUID(),
