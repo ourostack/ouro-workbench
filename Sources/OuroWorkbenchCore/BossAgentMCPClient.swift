@@ -48,7 +48,8 @@ public final class BossAgentMCPClient: @unchecked Sendable {
         try await callTool(agentName: agentName, name: "status", arguments: [:])
     }
 
-    /// Runs `body`, retrying it exactly once if it throws `.emptyResult`.
+    /// Runs `body`, retrying it exactly once if it throws `.emptyResult` AND the
+    /// optional `canRetry` guard permits it.
     ///
     /// Reasoning-model bosses intermittently spend their token budget on
     /// reasoning and emit empty final content; the `ouro` runtime then returns
@@ -57,12 +58,23 @@ public final class BossAgentMCPClient: @unchecked Sendable {
     /// the check-in (and trips backoff). ONLY `.emptyResult` is retried — real
     /// failures (process unavailable, RPC/tool error, timeout, malformed) fall
     /// straight through so a genuinely-down boss still surfaces and backs off.
+    ///
+    /// `canRetry` lets the caller veto the retry when the first (empty) turn had
+    /// observable side effects — e.g. it already enqueued Workbench actions via
+    /// the boss's MCP tools. Re-running `body` would queue those actions a second
+    /// time, so on a side-effecting empty turn we surface the empty instead of
+    /// retrying. Defaults to always-retry to preserve the original behaviour for
+    /// callers with no side effects to protect.
     public static func retryingOnEmpty(
+        canRetry: @Sendable () -> Bool = { true },
         _ body: sending () async throws -> String
     ) async throws -> String {
         do {
             return try await body()
         } catch BossAgentMCPClientError.emptyResult {
+            guard canRetry() else {
+                throw BossAgentMCPClientError.emptyResult
+            }
             return try await body()
         }
     }
