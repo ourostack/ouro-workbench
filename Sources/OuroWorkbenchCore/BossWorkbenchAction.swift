@@ -218,6 +218,55 @@ public struct BossWorkbenchActionParser: Sendable {
         guard let start = text.range(of: marker) else {
             return nil
         }
-        return String(text[start.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        // Capture only the balanced JSON value after the marker, not everything
+        // to EOF — otherwise trailing prose ("OURO_WORKBENCH_ACTIONS: [...] and
+        // I'll check back later.") makes the whole payload invalid JSON and
+        // silently drops the entire batch.
+        return balancedJSONValue(in: text[start.upperBound...])
     }
+}
+
+/// Extracts the first complete, balanced JSON value (object or array) from a
+/// substring — the first `{`/`[` to its matching close, tracking nesting depth
+/// and ignoring brackets that appear inside string literals (and their escapes).
+/// Returns nil if there's no opener or the value never closes. Shared by the
+/// `OURO_WORKBENCH_ACTIONS:` marker fallback so trailing prose after the JSON
+/// doesn't break decoding.
+func balancedJSONValue(in text: Substring) -> String? {
+    guard let openIndex = text.firstIndex(where: { $0 == "{" || $0 == "[" }) else {
+        return nil
+    }
+    var depth = 0
+    var inString = false
+    var escaped = false
+    var index = openIndex
+    while index < text.endIndex {
+        let char = text[index]
+        if inString {
+            if escaped {
+                escaped = false
+            } else if char == "\\" {
+                escaped = true
+            } else if char == "\"" {
+                inString = false
+            }
+        } else {
+            switch char {
+            case "\"":
+                inString = true
+            case "{", "[":
+                depth += 1
+            case "}", "]":
+                depth -= 1
+                if depth == 0 {
+                    let end = text.index(after: index)
+                    return String(text[openIndex..<end])
+                }
+            default:
+                break
+            }
+        }
+        index = text.index(after: index)
+    }
+    return nil
 }

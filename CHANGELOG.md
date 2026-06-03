@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.142 - Schema & parse robustness
+
+- A session whose persisted `owner` has an unrecognized kind (forward schema drift) now decodes to the human operator instead of throwing — which previously dropped the entire session row via the failable decoder. Brings `SessionOwner` in line with every other persisted enum's unknown-value fallback.
+- The boss action/decision marker fallback (`OURO_WORKBENCH_ACTIONS:` without a fenced block) now parses only the balanced JSON value, so trailing prose after the JSON no longer silently drops the whole batch.
+
 ## 0.1.139 - Owner-aware boss check-in
 
 - The boss check-in now surfaces each session's owner and treats agent-owned sessions (owner:agent:<name>) as driven by their owning agent — the boss no longer proposes advancing them, and `workbench_status` no longer inlines their waiting prompts for the boss to act on. Correctness groundwork for coding-session unification, where agents create sessions via `workbench_create_session`. Human-owned sessions are unaffected.
