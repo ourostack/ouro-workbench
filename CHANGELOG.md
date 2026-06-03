@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.142 - Schema & parse robustness
+
+- A session whose persisted `owner` has an unrecognized kind (forward schema drift) now decodes to the human operator instead of throwing — which previously dropped the entire session row via the failable decoder. Brings `SessionOwner` in line with every other persisted enum's unknown-value fallback.
+- The boss action/decision marker fallback (`OURO_WORKBENCH_ACTIONS:` without a fenced block) now parses only the balanced JSON value, so trailing prose after the JSON no longer silently drops the whole batch.
+
 ## 0.1.141 - MCP server hardening
 
 - `workbench_status` (and transcript search) no longer crash the MCP server when the workspace state contains duplicate session IDs — entries are de-duplicated by id during bootstrap, and the affected dictionaries use a collision-safe builder. Keeps the read-only server resilient to a malformed/torn state file.
