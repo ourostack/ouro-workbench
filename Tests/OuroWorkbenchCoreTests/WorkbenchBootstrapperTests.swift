@@ -130,6 +130,48 @@ final class WorkbenchBootstrapperTests: XCTestCase {
         XCTAssertEqual(detected.autoResume, true)
     }
 
+    func testBootstrapDeduplicatesEntriesSharingAnID() {
+        // A malformed / torn state file with two entries under the same id must
+        // not trap a downstream `Dictionary(uniqueKeysWithValues:)` keyed on the
+        // entry id (which would crash the long-lived MCP server). Bootstrap keeps
+        // the first occurrence per id.
+        let project = WorkbenchProject(name: "Existing", rootPath: "/tmp/existing")
+        let sharedId = UUID()
+        let first = ProcessEntry(
+            id: sharedId,
+            projectId: project.id,
+            name: "First",
+            kind: .terminalAgent,
+            agentKind: .claudeCode,
+            executable: "claude",
+            workingDirectory: "/tmp/existing"
+        )
+        let duplicate = ProcessEntry(
+            id: sharedId,
+            projectId: project.id,
+            name: "Duplicate",
+            kind: .terminalAgent,
+            agentKind: .openAICodex,
+            executable: "codex",
+            workingDirectory: "/tmp/existing"
+        )
+        let state = WorkspaceState(
+            projects: [project],
+            processEntries: [first, duplicate]
+        )
+
+        let bootstrapped = WorkbenchBootstrapper().bootstrappedState(from: state)
+
+        // Exactly one entry per id (no trap), and it's the first occurrence.
+        XCTAssertEqual(bootstrapped.processEntries.filter { $0.id == sharedId }.count, 1)
+        let kept = bootstrapped.processEntries.first { $0.id == sharedId }
+        XCTAssertEqual(kept?.name, "First")
+        // Ids are unique across the whole entry list, so any id-keyed dictionary
+        // a consumer builds (executableHealth / gitStatus / search) is safe.
+        let ids = bootstrapped.processEntries.map(\.id)
+        XCTAssertEqual(ids.count, Set(ids).count)
+    }
+
     func testBootstrapRepairsAndDoesNotDuplicateExistingLocalShell() {
         let project = WorkbenchProject(name: "Existing", rootPath: "/tmp/existing")
         let existing = ProcessEntry(

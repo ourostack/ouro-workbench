@@ -118,6 +118,7 @@ public enum WorkbenchGuide {
     /// the MCP server advertises and the boss check-in prompt references.
     public static let bossTools: [Capability] = [
         Capability(tool: "workbench_status", summary: "read the whole machine workbench state"),
+        Capability(tool: "workbench_sessions", summary: "machine-readable JSON list of sessions (filters: owner / name / includeArchived)"),
         Capability(tool: "workbench_sense", summary: "reread this sense contract, tools, shortcuts, and action protocol"),
         Capability(tool: "workbench_transcript_tail", summary: "inspect one terminal's recent output"),
         Capability(tool: "workbench_search_transcripts", summary: "search remembered terminal output"),
