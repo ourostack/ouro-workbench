@@ -111,6 +111,49 @@ public struct WorkbenchProject: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
+/// Who owns / drives a session — the human operator, or a named agent that
+/// spawned it through Workbench. Distinct from `friend` (whose *preferences*
+/// the boss applies): `owner` is who controls the session.
+public enum SessionOwner: Codable, Equatable, Sendable {
+    case human
+    case agent(name: String)
+
+    public var agentName: String? {
+        if case let .agent(name) = self { return name }
+        return nil
+    }
+
+    /// Short label for the UI ("You" for human, the agent name otherwise).
+    public var displayName: String {
+        switch self {
+        case .human: return "You"
+        case let .agent(name): return name
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey { case kind, name }
+    private enum Kind: String, Codable { case human, agent }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        switch try c.decode(Kind.self, forKey: .kind) {
+        case .human: self = .human
+        case .agent: self = .agent(name: try c.decode(String.self, forKey: .name))
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .human:
+            try c.encode(Kind.human, forKey: .kind)
+        case let .agent(name):
+            try c.encode(Kind.agent, forKey: .kind)
+            try c.encode(name, forKey: .name)
+        }
+    }
+}
+
 public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
     public var id: UUID
     public var projectId: UUID
@@ -135,6 +178,10 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
     /// never auto-advances an unassigned session. Decoded if-present so
     /// pre-friend state loads unchanged.
     public var friend: SessionFriend?
+    /// Who owns / drives this session — the human operator or a named agent.
+    /// Defaults to `.human`; decoded if-present so pre-owner state loads
+    /// unchanged.
+    public var owner: SessionOwner
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -154,6 +201,7 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         case notes
         case deskTaskSlug
         case friend
+        case owner
     }
 
     public init(
@@ -173,7 +221,8 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         lastSummary: String? = nil,
         notes: String? = nil,
         deskTaskSlug: String? = nil,
-        friend: SessionFriend? = nil
+        friend: SessionFriend? = nil,
+        owner: SessionOwner = .human
     ) {
         self.id = id
         self.projectId = projectId
@@ -192,6 +241,7 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         self.notes = notes
         self.deskTaskSlug = deskTaskSlug
         self.friend = friend
+        self.owner = owner
     }
 
     public var trimmedNotes: String? {
@@ -221,6 +271,7 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         self.notes = try container.decodeIfPresent(String.self, forKey: .notes)
         self.deskTaskSlug = try container.decodeIfPresent(String.self, forKey: .deskTaskSlug)
         self.friend = try container.decodeIfPresent(SessionFriend.self, forKey: .friend)
+        self.owner = try container.decodeIfPresent(SessionOwner.self, forKey: .owner) ?? .human
     }
 }
 
