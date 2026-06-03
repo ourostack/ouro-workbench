@@ -2167,6 +2167,14 @@ struct TerminalAgentRow: View {
                                 .foregroundStyle(.secondary)
                                 .help("Pinned to top")
                         }
+                        if let badge = entry.owner.sidebarBadge {
+                            Label(badge.label, systemImage: badge.symbol)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                                .help("Owned by \(badge.label)")
+                        }
                     }
                 } icon: {
                     Image(systemName: rowIcon)
@@ -2208,6 +2216,9 @@ struct TerminalAgentRow: View {
 
     private var accessibilityLabel: String {
         var pieces = [entry.name]
+        if let badge = entry.owner.sidebarBadge {
+            pieces.append("owned by \(badge.label)")
+        }
         if let cliName {
             pieces.append(cliName)
         }
@@ -5835,6 +5846,9 @@ private struct SessionInspectorPanel: View {
                 }
                 if let cliName = model.cliName(for: entry) {
                     StatusPill(text: cliName, color: .purple)
+                }
+                if let badge = entry.owner.sidebarBadge {
+                    StatusPill(text: badge.label, color: .teal)
                 }
                 StatusPill(
                     text: entry.trust == .trusted ? "trusted" : "untrusted",

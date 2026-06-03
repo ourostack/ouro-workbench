@@ -131,6 +131,15 @@ public enum SessionOwner: Codable, Equatable, Sendable {
         }
     }
 
+    /// Sidebar indicator for an agent-owned session — nil for the human operator
+    /// (no badge), an SF Symbol + the agent name for an agent.
+    public var sidebarBadge: (symbol: String, label: String)? {
+        switch self {
+        case .human: return nil
+        case let .agent(name): return ("cpu", name)
+        }
+    }
+
     private enum CodingKeys: String, CodingKey { case kind, name }
     private enum Kind: String, Codable { case human, agent }
 

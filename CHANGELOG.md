@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.132 - Agent-owned sessions are first-class in the sidebar
+
+- Sessions an agent created through Workbench (`workbench_create_session`) now show a subtle owner badge (agent name) in the sidebar, so agent-initiated and human-initiated sessions sit side by side as equal citizens. Human-owned sessions are unchanged.
+
 ## 0.1.131 - Agents can create sessions through Workbench (workbench_create_session)
 
 - New Workbench MCP tool `workbench_create_session`: an agent (the boss, via its registered `ouro_workbench` MCP) can create and launch a coding session through Workbench. The session appears as a first-class Workbench session tagged `owner: agent:<name>`, with the same trust gating and launch validation as a human-created terminal. A step toward unified sessions — agent- and human-initiated sessions in one list.
