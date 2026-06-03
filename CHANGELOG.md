@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.145 - Decision marker parse robustness
+
+- The boss decision marker fallback (`OURO_WORKBENCH_DECISIONS:` without a fenced block) now parses only the balanced JSON value, so trailing prose after the JSON no longer silently drops the whole decision batch — matching the fix already applied to the action marker in 0.1.142.
+
 ## 0.1.143 - Boss auto-advance safety hardening
 
 - The boss can no longer auto-answer a destructive/secret-bearing terminal prompt via the actions channel: `applyBossAction`'s sendInput now classifies the live terminal prompt (not just the input text) through the same safety gate the decisions channel uses, withholding + escalating unsafe inputs. Fixes a hole where `{"action":"sendInput","text":"y"}` to a `rm -rf? [y/N]` prompt sailed through.

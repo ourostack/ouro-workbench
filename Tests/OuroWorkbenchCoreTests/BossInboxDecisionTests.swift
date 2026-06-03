@@ -223,4 +223,44 @@ final class BossInboxDecisionTests: XCTestCase {
     func testParserReturnsEmptyWhenNoBlock() throws {
         XCTAssertEqual(try BossDecisionParser().parse("just prose, no decisions").count, 0)
     }
+
+    func testParsesMarkerDecisionsWithTrailingProse() throws {
+        // The marker fallback (no ```ouro-workbench-decisions fence) must capture
+        // only the balanced JSON array — trailing prose after it used to make
+        // the payload invalid JSON and silently drop the whole batch.
+        let reply = """
+        OURO_WORKBENCH_DECISIONS: [{"entry":"PROC-1","kind":"autoAdvance","proposedInput":"y","preferenceCited":"Ari: approve test runs","confidence":0.9,"reasoning":"pre-approved test run","prompt":"Run tests? (y/N)"}]
+        Some trailing explanation about why I did that.
+        """
+
+        let decisions = try BossDecisionParser().parse(reply)
+
+        XCTAssertEqual(decisions.count, 1, "trailing prose after the JSON is ignored, not fatal")
+        XCTAssertEqual(decisions[0].entry, "PROC-1")
+        XCTAssertEqual(decisions[0].kind, .autoAdvance)
+        XCTAssertEqual(decisions[0].proposedInput, "y")
+        XCTAssertEqual(decisions[0].confidence, 0.9)
+    }
+
+    func testParsesMarkerDecisionsWithLeadingAndTrailingProse() throws {
+        // Prose on both sides of the marker line, multiple decisions, and a
+        // string value containing a `]` that must not be mistaken for the
+        // array's close.
+        let reply = """
+        Here's my read on the waiting sessions.
+        OURO_WORKBENCH_DECISIONS: [
+          {"entry":"PROC-1","kind":"autoAdvance","proposedInput":"1","reasoning":"pick option [1]","prompt":"Choose? (1/2)"},
+          {"entry":"PROC-2","kind":"escalate","reasoning":"no preference covers this"}
+        ]
+        I'll check back in a bit.
+        """
+
+        let decisions = try BossDecisionParser().parse(reply)
+
+        XCTAssertEqual(decisions.count, 2)
+        XCTAssertEqual(decisions[0].kind, .autoAdvance)
+        XCTAssertEqual(decisions[0].proposedInput, "1")
+        XCTAssertEqual(decisions[0].reasoning, "pick option [1]")
+        XCTAssertEqual(decisions[1].kind, .escalate)
+    }
 }
