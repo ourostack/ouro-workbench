@@ -2032,10 +2032,57 @@ struct AgentHomeEmptyState: View {
     }
 }
 
+/// The persistent filter field at the top of the sidebar. Narrows the visible
+/// session list as the operator types (matches name / group, plus `owner:` and
+/// `status:` tokens — see `SidebarSessionFilter`). Distinct from the
+/// in-terminal ⌘F search and the ⌘K command palette. Empty = everything shown.
+struct SidebarFilterField: View {
+    @ObservedObject var model: WorkbenchViewModel
+    @FocusState private var fieldIsFocused: Bool
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            TextField("Filter sessions", text: $model.sidebarFilter)
+                .textFieldStyle(.plain)
+                .font(.callout)
+                .focused($fieldIsFocused)
+                .help("Filter the session list: matches name or group; try owner:agent, owner:human, owner:<name>, or status:waiting")
+            if !model.sidebarFilter.isEmpty {
+                Button {
+                    model.sidebarFilter = ""
+                    fieldIsFocused = true
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Clear filter")
+                .accessibilityLabel("Clear session filter")
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .padding(.horizontal, 10)
+    }
+}
+
 struct WorkbenchSidebarView: View {
     @ObservedObject var model: WorkbenchViewModel
 
     var body: some View {
+        VStack(spacing: 6) {
+            SidebarFilterField(model: model)
+                .padding(.top, 28)
+            sessionList
+        }
+    }
+
+    private var sessionList: some View {
         List(selection: $model.selectedEntryID) {
             Section("Agents") {
                 ForEach(model.ouroAgents) { agent in
@@ -2159,7 +2206,6 @@ struct WorkbenchSidebarView: View {
                       : "\(model.recoverableEntries.count) session\(model.recoverableEntries.count == 1 ? "" : "s") waiting on recovery. Click to inspect.")
             }
         }
-        .padding(.top, 28)
     }
 }
 
@@ -7587,6 +7633,13 @@ final class WorkbenchViewModel: ObservableObject {
         UserDefaults.standard.bool(forKey: WorkbenchViewModel.autoLaunchResumableOnStartupDefaultsKey)
     }()
     @Published var commandPaletteQuery = ""
+    /// Free-text filter for the sidebar session list (the field at the top of
+    /// `WorkbenchSidebarView`). Empty = show everything (current behavior).
+    /// Session-scoped only — deliberately not part of the Codable workspace
+    /// state, so it resets on relaunch rather than persisting a stale filter.
+    /// Distinct from `terminalSearchQuery` (in-terminal ⌘F) and
+    /// `commandPaletteQuery` (⌘K launcher); see `SidebarSessionFilter`.
+    @Published var sidebarFilter = ""
     /// Command chosen from the ⌘K palette, deferred until the palette sheet
     /// has fully dismissed. Running a command that opens another sheet
     /// (Settings, About, New Terminal) in the same runloop as the palette's
@@ -7962,11 +8015,27 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     var sessionEntries: [ProcessEntry] {
-        let visible = projectSessionEntries.filter { !$0.isArchived }
+        let visible = applySidebarFilter(projectSessionEntries.filter { !$0.isArchived })
         // Pinned entries float to the top, preserving stored order within
         // each partition (stable). Concatenation keeps the partition stable
         // where `sorted(by:)` would not, and keeps ID-based reorder coherent.
         return visible.filter(\.isPinned) + visible.filter { !$0.isPinned }
+    }
+
+    /// Narrow a project-scoped list to the rows matching `sidebarFilter`. An
+    /// empty filter is a no-op (returns the input unchanged), so the sidebar's
+    /// pinned / archived / reorder behavior is untouched until the operator
+    /// types. The match is delegated to the pure `SidebarSessionFilter` helper
+    /// (tested in Core); the group name comes from the currently selected
+    /// project, which is the group these rows belong to.
+    private func applySidebarFilter(_ entries: [ProcessEntry]) -> [ProcessEntry] {
+        let query = sidebarFilter.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            return entries
+        }
+        let groupName = selectedProject?.name ?? ""
+        let filter = SidebarSessionFilter()
+        return entries.filter { filter.matches($0, groupName: groupName, query: query) }
     }
 
     /// SwiftUI `.onMove` handler for the sidebar's non-archived rows. The
@@ -7976,6 +8045,13 @@ final class WorkbenchViewModel: ObservableObject {
     /// is testable in isolation; this method just plumbs in the view and
     /// persists the result.
     func moveSessionEntries(fromOffsets offsets: IndexSet, toOffset destination: Int) {
+        // Reordering against a filtered view would move rows relative only to
+        // their visible neighbors, scrambling the global order in surprising
+        // ways. Drag-to-reorder is only meaningful over the full list, so it's
+        // a no-op while a sidebar filter is active.
+        guard sidebarFilter.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
         state.processEntries = WorkbenchEntryReorder.move(
             global: state.processEntries,
             visible: sessionEntries,
@@ -8026,7 +8102,7 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     var archivedSessionEntries: [ProcessEntry] {
-        projectSessionEntries.filter(\.isArchived)
+        applySidebarFilter(projectSessionEntries.filter(\.isArchived))
     }
 
     private var allSessionEntries: [ProcessEntry] {
