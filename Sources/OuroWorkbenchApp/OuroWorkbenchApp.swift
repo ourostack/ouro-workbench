@@ -323,6 +323,9 @@ struct WorkbenchRootView: View {
         .sheet(isPresented: $model.isAboutSheetPresented) {
             AboutSheet()
         }
+        .sheet(isPresented: $model.isHarnessStatusPresented) {
+            HarnessStatusSheet(model: model)
+        }
         .sheet(isPresented: $model.isDecisionLogPresented) {
             DecisionLogSheet(model: model)
         }
@@ -790,6 +793,336 @@ private struct RecoverableEntryRow: View {
             RoundedRectangle(cornerRadius: 8)
                 .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
         )
+    }
+}
+
+/// Read-only, refreshable consolidation of the ouro-harness state an operator
+/// cares about, in one place: daemon health, the local agent inventory (with
+/// the selected boss marked), and boss MCP-registration / reachability. The
+/// first W3 step toward Workbench being the human GUI over the harness.
+///
+/// Display-only by design — the only action is Refresh. All three sections are
+/// built from reads that already exist elsewhere in the model (the boss
+/// dashboard, the onboarding agent scan, the MCP registrar); this sheet just
+/// presents them together. Reached from the More menu ("Harness Status…") and
+/// the ⌘K palette.
+struct HarnessStatusSheet: View {
+    @ObservedObject var model: WorkbenchViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var isRefreshing = false
+
+    private var status: HarnessStatus { model.harnessStatus }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 8) {
+                        Text("Harness Status")
+                            .font(.title3.weight(.semibold))
+                        StatusPill(text: status.overallState.displayName, color: status.overallState.tint)
+                    }
+                    Text(status.headline)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+                }
+                Spacer()
+                Button {
+                    Task {
+                        isRefreshing = true
+                        await model.refreshHarnessStatus()
+                        isRefreshing = false
+                    }
+                } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
+                .disabled(isRefreshing)
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 18)
+            .padding(.bottom, 14)
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    daemonSection
+                    agentSection
+                    bossSection
+                    if let observedAt = status.observedAt {
+                        Text("Daemon observed at \(observedAt)")
+                            .font(.caption2.monospaced())
+                            .foregroundStyle(.tertiary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .padding(20)
+            }
+        }
+        .frame(width: 640, height: 540)
+        .task {
+            // Refresh on open so the sheet always reflects current state — the
+            // dashboard/agent reads may be stale from an earlier tick.
+            isRefreshing = true
+            await model.refreshHarnessStatus()
+            isRefreshing = false
+        }
+    }
+
+    // MARK: - Daemon
+
+    private var daemonSection: some View {
+        HarnessSection(
+            title: "ouro daemon",
+            systemImage: "bolt.horizontal.circle",
+            state: status.daemon.state
+        ) {
+            HarnessDetailRow(label: "Status", value: status.daemon.statusText, valueColor: status.daemon.state.tint)
+            HarnessDetailRow(label: "Mode", value: status.daemon.modeText)
+            HarnessDetailRow(label: "Version", value: status.daemon.versionText)
+        }
+    }
+
+    // MARK: - Agents
+
+    private var agentSection: some View {
+        HarnessSection(
+            title: "Local agents",
+            systemImage: "person.2",
+            state: status.agents.hasUnready ? .attention : .healthy,
+            trailingText: status.agents.summaryLine
+        ) {
+            if status.agents.isEmpty {
+                Text("No Ouro agent bundles found in ~/AgentBundles.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                ForEach(status.agents.entries) { entry in
+                    HarnessAgentRow(entry: entry)
+                }
+            }
+        }
+    }
+
+    // MARK: - Boss
+
+    private var bossSection: some View {
+        HarnessSection(
+            title: "Boss reachability",
+            systemImage: "crown",
+            state: status.boss.state
+        ) {
+            HarnessDetailRow(label: "Selected boss", value: status.boss.agentName)
+            HarnessDetailRow(
+                label: "Bundle",
+                value: status.boss.bundleText,
+                valueColor: status.boss.bundleIsReady ? .green : .orange
+            )
+            HarnessDetailRow(
+                label: "Workbench MCP",
+                value: status.boss.mcpStatusText,
+                valueColor: status.boss.mcpStatus.harnessTint
+            )
+            if let detail = status.boss.mcpDetail, !detail.isEmpty {
+                Text(detail)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+}
+
+/// A bordered card grouping one harness section, with a state-tinted header
+/// dot. Mirrors the recovery-row card chrome so the sheet sits visually with
+/// the rest of the app.
+private struct HarnessSection<Content: View>: View {
+    var title: String
+    var systemImage: String
+    var state: HarnessHealthState
+    var trailingText: String?
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(state.tint)
+                    .frame(width: 8, height: 8)
+                    .accessibilityHidden(true)
+                Label(title, systemImage: systemImage)
+                    .font(.subheadline.weight(.semibold))
+                    .labelStyle(.titleAndIcon)
+                Spacer()
+                if let trailingText {
+                    Text(trailingText)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
+            content
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.primary.opacity(0.04))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+        )
+    }
+}
+
+private struct HarnessDetailRow: View {
+    var label: String
+    var value: String
+    var valueColor: SwiftUI.Color = .primary
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(label)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 120, alignment: .leading)
+            Text(value)
+                .font(.caption.monospaced())
+                .foregroundStyle(valueColor)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+private struct HarnessAgentRow: View {
+    var entry: HarnessAgentEntry
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: entry.isReady ? "person.crop.circle" : "person.crop.circle.badge.exclamationmark")
+                .foregroundStyle(entry.status.harnessTint)
+                .font(.system(size: 13))
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(entry.name)
+                        .font(.subheadline.weight(.medium))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    if entry.isSelectedBoss {
+                        StatusPill(text: "boss", color: .blue)
+                    }
+                }
+                Text(entry.detail)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            Spacer()
+            StatusPill(text: entry.status.harnessLabel, color: entry.status.harnessTint)
+            if let mcpStatus = entry.mcpStatus {
+                StatusPill(text: "mcp \(mcpStatus.harnessShortLabel)", color: mcpStatus.harnessTint)
+            }
+        }
+    }
+}
+
+// MARK: - Harness state styling
+
+private extension HarnessHealthState {
+    var tint: SwiftUI.Color {
+        switch self {
+        case .healthy:
+            return .green
+        case .attention:
+            return .orange
+        case .blocked:
+            return .red
+        }
+    }
+
+    var displayName: String {
+        switch self {
+        case .healthy:
+            return "healthy"
+        case .attention:
+            return "attention"
+        case .blocked:
+            return "blocked"
+        }
+    }
+}
+
+private extension OuroAgentBundleStatus {
+    var harnessTint: SwiftUI.Color {
+        switch self {
+        case .ready:
+            return .green
+        case .disabled, .missingConfig:
+            return .orange
+        case .invalidConfig:
+            return .red
+        }
+    }
+
+    var harnessLabel: String {
+        switch self {
+        case .ready:
+            return "ready"
+        case .disabled:
+            return "disabled"
+        case .missingConfig:
+            return "no config"
+        case .invalidConfig:
+            return "bad config"
+        }
+    }
+}
+
+private extension BossWorkbenchMCPRegistrationStatus {
+    var harnessTint: SwiftUI.Color {
+        switch self {
+        case .registered:
+            return .green
+        case .notRegistered, .needsUpdate:
+            return .orange
+        case .agentMissing, .executableMissing, .invalidConfig:
+            return .red
+        }
+    }
+
+    var harnessShortLabel: String {
+        switch self {
+        case .registered:
+            return "on"
+        case .notRegistered:
+            return "off"
+        case .needsUpdate:
+            return "stale"
+        case .agentMissing:
+            return "no agent"
+        case .executableMissing:
+            return "no app"
+        case .invalidConfig:
+            return "bad cfg"
+        }
+    }
+}
+
+private extension Optional where Wrapped == BossWorkbenchMCPRegistrationStatus {
+    /// Tint for a possibly-unknown registration status; unknown reads as
+    /// secondary so the row doesn't imply a problem before the check runs.
+    var harnessTint: SwiftUI.Color {
+        self?.harnessTint ?? .secondary
     }
 }
 
@@ -2434,6 +2767,11 @@ struct HeaderView: View {
                     }
                 } label: {
                     Label("Refresh Status", systemImage: "arrow.clockwise")
+                }
+                Button {
+                    model.isHarnessStatusPresented = true
+                } label: {
+                    Label("Harness Status…", systemImage: "waveform.path.ecg")
                 }
                 Button {
                     model.stopAllRunningSessions()
@@ -7199,6 +7537,11 @@ final class WorkbenchViewModel: ObservableObject {
     /// About sheet — discoverable home for app version, build hash, license
     /// links. Reached from the More menu and the ⌘K palette.
     @Published var isAboutSheetPresented = false
+    /// Harness Status sheet — a read-only, consolidated view of ouro daemon
+    /// health, the local agent inventory, and boss MCP-registration /
+    /// reachability. Reached from the More menu and the ⌘K palette. The first
+    /// W3 step toward Workbench being the human control panel for the harness.
+    @Published var isHarnessStatusPresented = false
     /// The boss decision-log review surface (audit of every inbox decision the
     /// boss made and why). Reached from the boss pane and the ⌘K palette.
     @Published var isDecisionLogPresented = false
@@ -7358,6 +7701,7 @@ final class WorkbenchViewModel: ObservableObject {
     private let bossBridgePlanner = BossAgentBridgePlanner()
     private let bossPromptBuilder = BossAgentPromptBuilder()
     private let autonomyReadinessBuilder = AutonomyReadinessBuilder()
+    private let harnessStatusBuilder = HarnessStatusBuilder()
     private let changeSummarizer = WorkspaceChangeSummarizer()
     private let commandPalette = WorkbenchCommandPalette()
     private let bossMCPClient: BossAgentMCPClient
@@ -7763,6 +8107,30 @@ final class WorkbenchViewModel: ObservableObject {
             executableHealth: executableHealthByEntryID,
             bossWatchIsEnabled: bossWatchIsEnabled
         )
+    }
+
+    /// Read-only, consolidated harness status for the Harness Status sheet.
+    /// Purely aggregates the snapshots the model already publishes — the boss
+    /// dashboard (daemon health, observed-at), the local agent inventory, and
+    /// the per-agent MCP-registration map — so it stays live as those refresh.
+    /// No IO here; `refreshHarnessStatus()` drives the underlying reads.
+    var harnessStatus: HarnessStatus {
+        harnessStatusBuilder.build(
+            boss: state.boss,
+            dashboard: bossDashboard,
+            agents: ouroAgents,
+            bossRegistration: bossWorkbenchMCPRegistration,
+            registrationByAgentName: bossWorkbenchMCPRegistrationByAgentName
+        )
+    }
+
+    /// Refresh every read the Harness Status sheet consolidates, reusing the
+    /// existing refresh paths: the on-disk agent scan + MCP-registration check
+    /// (synchronous), then the watchdog-bounded daemon/mailbox read. Bounded by
+    /// `MailboxClient`'s per-request timeout so a down daemon can't hang the UI.
+    func refreshHarnessStatus() async {
+        refreshOuroAgents()
+        await refreshBossDashboard()
     }
 
     var recentActionLogEntries: [WorkbenchActionLogEntry] {
@@ -8286,6 +8654,16 @@ final class WorkbenchViewModel: ObservableObject {
                 "Review every decision the boss made about a waiting session, and why",
                 "checklist",
                 keywords: ["decision", "log", "audit", "boss", "inbox", "why", "advance", "escalate"]
+            )
+        )
+
+        commands.append(
+            command(
+                .openHarnessStatus,
+                "Harness Status",
+                "Consolidated read-only view of ouro daemon health, local agents, and boss reachability",
+                "waveform.path.ecg",
+                keywords: ["harness", "status", "daemon", "ouro", "health", "agents", "inventory", "boss", "reachable", "mcp", "diagnostics"]
             )
         )
 
@@ -11052,6 +11430,8 @@ final class WorkbenchViewModel: ObservableObject {
             isSettingsSheetPresented = true
         case .openAbout:
             isAboutSheetPresented = true
+        case .openHarnessStatus:
+            isHarnessStatusPresented = true
         case .openDecisionLog:
             isDecisionLogPresented = true
         case .stopAllRunningSessions:
