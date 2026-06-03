@@ -32,6 +32,18 @@ final class SessionOwnerTests: XCTestCase {
         XCTAssertEqual(decoded.displayName, "slugger")
     }
 
+    // MARK: - Sidebar badge
+
+    func testHumanHasNoSidebarBadge() {
+        XCTAssertNil(SessionOwner.human.sidebarBadge)
+    }
+
+    func testAgentHasSidebarBadge() throws {
+        let badge = try XCTUnwrap(SessionOwner.agent(name: "slugger").sidebarBadge)
+        XCTAssertEqual(badge.label, "slugger")
+        XCTAssertFalse(badge.symbol.isEmpty)
+    }
+
     // MARK: - ProcessEntry integration
 
     func testOwnerDefaultsHuman() {
