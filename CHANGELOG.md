@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.147 - Terminal & startup reliability
+
+- Transcript writes no longer block the main actor on the PTY output hot-path: `TranscriptRecorder` now writes on a private serial queue (order preserved, flushed on close), so a chatty agent TUI or slow disk can't jank the UI.
+- "Auto-launch resumable terminals on startup" now actually launches: the eligibility filter excluded every entry (it deduped against all recovery plans, including no-op ones); it now dedups only against entries startup-recovery handled, so a fresh autoResume session launches as intended.
+- `screen -X quit` on session termination is now bounded by the same 1.5s watchdog as the other `screen` calls, so a wedged screen socket can't leak a stuck process.
+
 ## 0.1.146 - Sync MCP tools doc table
 
 - `docs/guide.md`'s "Workbench MCP exposes" table now lists `workbench_sessions` and `workbench_create_session` (it had drifted), with a test (`WorkbenchGuideTests.testGuideDocListsEveryBossTool`) guarding against future drift from `WorkbenchGuide.bossTools`. The table is hand-maintained, not generated; the `WorkbenchGuide` doc-comment no longer claims the doc renders from the shared markdown.
@@ -12,7 +18,6 @@
 
 - A boss reply that comes back empty after the boss already queued actions is no longer retried into duplicate actions: the action-request queue de-duplicates identical pending requests, and the check-in only retries an empty reply when the turn queued nothing.
 - Queued boss actions are no longer lost if the app crashes between draining and applying them: `drain()` moves requests to a `processing/` holding area and they're deleted only after the app confirms it applied them, with unconfirmed actions recovered on next launch (at-least-once instead of at-most-once).
->>>>>>> origin/main
 
 ## 0.1.143 - Boss auto-advance safety hardening
 
