@@ -137,18 +137,31 @@ public struct MailboxMachineOverview: Decodable, Equatable, Sendable {
     public var observedAt: String?
     public var primaryEntryPoint: String?
     public var daemon: MailboxMachineDaemonSummary?
+    public var runtime: MailboxRuntimeSummary?
     public var totals: MailboxMachineTotals?
 
     public init(
         observedAt: String?,
         primaryEntryPoint: String?,
         daemon: MailboxMachineDaemonSummary?,
+        runtime: MailboxRuntimeSummary? = nil,
         totals: MailboxMachineTotals?
     ) {
         self.observedAt = observedAt
         self.primaryEntryPoint = primaryEntryPoint
         self.daemon = daemon
+        self.runtime = runtime
         self.totals = totals
+    }
+}
+
+/// The harness runtime block from `/api/machine` — carries the installed ouro
+/// version. Decoded if-present so older daemons that omit it still parse.
+public struct MailboxRuntimeSummary: Decodable, Equatable, Sendable {
+    public var version: String?
+
+    public init(version: String?) {
+        self.version = version
     }
 }
 

@@ -4,6 +4,9 @@ public struct BossDashboardSnapshot: Equatable, Sendable {
     public var agentName: String
     public var daemonStatus: String
     public var daemonMode: String
+    /// The installed ouro runtime version from `/api/machine`, when surfaced.
+    /// Display-only; `nil` when the machine read failed or omitted it.
+    public var daemonVersion: String?
     public var attentionLabel: String
     public var openObligations: Int
     public var activeCodingAgents: Int
@@ -18,6 +21,7 @@ public struct BossDashboardSnapshot: Equatable, Sendable {
         agentName: String,
         daemonStatus: String,
         daemonMode: String,
+        daemonVersion: String? = nil,
         attentionLabel: String,
         openObligations: Int,
         activeCodingAgents: Int,
@@ -31,6 +35,7 @@ public struct BossDashboardSnapshot: Equatable, Sendable {
         self.agentName = agentName
         self.daemonStatus = daemonStatus
         self.daemonMode = daemonMode
+        self.daemonVersion = daemonVersion
         self.attentionLabel = attentionLabel
         self.openObligations = openObligations
         self.activeCodingAgents = activeCodingAgents
@@ -101,6 +106,7 @@ public struct BossDashboardBuilder: Sendable {
             agentName: boss.agentName,
             daemonStatus: machine?.overview?.daemon?.status ?? "unknown",
             daemonMode: machine?.overview?.daemon?.mode ?? "unknown",
+            daemonVersion: machine?.overview?.runtime?.version,
             attentionLabel: selectedAgent?.attention?.label ?? "unknown",
             openObligations: selectedAgent?.obligations?.openCount ?? totals?.openObligations ?? 0,
             activeCodingAgents: selectedAgent?.coding?.activeCount ?? coding?.activeCount ?? totals?.activeCodingAgents ?? 0,

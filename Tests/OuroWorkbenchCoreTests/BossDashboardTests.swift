@@ -8,6 +8,7 @@ final class BossDashboardTests: XCTestCase {
                 observedAt: "2026-05-23T00:00:00Z",
                 primaryEntryPoint: "http://127.0.0.1:6876",
                 daemon: MailboxMachineDaemonSummary(status: "running", mode: "dev", mailboxUrl: "http://127.0.0.1:6876"),
+                runtime: MailboxRuntimeSummary(version: "0.1.0-alpha.657"),
                 totals: MailboxMachineTotals(openObligations: 4, activeCodingAgents: 2, blockedCodingAgents: 1)
             ),
             agents: [
@@ -61,6 +62,7 @@ final class BossDashboardTests: XCTestCase {
         )
 
         XCTAssertEqual(snapshot.daemonStatus, "running")
+        XCTAssertEqual(snapshot.daemonVersion, "0.1.0-alpha.657")
         XCTAssertEqual(snapshot.openObligations, 2)
         XCTAssertEqual(snapshot.activeCodingAgents, 1)
         XCTAssertEqual(snapshot.needsMeItems.map(\.label), ["Needs review"])

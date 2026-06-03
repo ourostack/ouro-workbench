@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.134 - Harness Status view (GUI over the ouro harness)
+
+- New read-only Harness Status view consolidating ouro daemon health, the local agent inventory (with the selected boss marked), and boss MCP-registration / reachability — reachable from the menu bar. A first step toward Workbench being the human control panel for the harness. Reuses the existing dashboard / onboarding / registration reads; refresh on demand.
+
 ## 0.1.133 - Remove inert desk-slug fields (B2 cleanup)
 
 - Removed the now-vestigial `deskTrackSlug` / `deskTaskSlug` fields (and the `desk_track`/`desk_task` labels in the boss view + sense) left over from the removed Workbench→desk mirror. Back-compatible: existing workspace state loads unchanged (the stale keys are ignored).
