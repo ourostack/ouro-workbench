@@ -87,6 +87,109 @@ final class BossInboxDecisionTests: XCTestCase {
         XCTAssertEqual(state.decisionLog.count, 2)
     }
 
+    // MARK: - Cross-channel double-send unification (P0)
+
+    /// A boss reply often emits BOTH a `sendInput` action AND an `autoAdvance`
+    /// decision for the same waiting prompt ("act and log"). The two channels
+    /// (`applyBossActions` → sendInput, then `recordBossDecisions` → sendInput)
+    /// share ONE per-(entry, prompt) guard via the decision log, so the
+    /// keystroke is sent exactly once. This models that shared guard: the
+    /// actions channel runs first and records the send; the decisions channel
+    /// then keys on the *same* (entryId, live prompt) and is a no-op.
+    func testActionAndDecisionForSameEntryAndPromptSendInputOnce() throws {
+        // One reply, both blocks, same entry + same waiting prompt.
+        let entryToken = "PROC-1"
+        let entryId = UUID()
+        let livePrompt = "Run tests? (y/N)"
+        let reply = """
+        I'll approve the test run and log it.
+
+        ```ouro-workbench-actions
+        [{"action":"sendInput","entry":"\(entryToken)","text":"y"}]
+        ```
+
+        ```ouro-workbench-decisions
+        [{"entry":"\(entryToken)","kind":"autoAdvance","proposedInput":"y","reasoning":"pre-approved test run","prompt":"\(livePrompt)"}]
+        ```
+        """
+        let actions = try BossWorkbenchActionParser().parse(reply)
+        let decisions = try BossDecisionParser().parse(reply)
+        XCTAssertEqual(actions.count, 1)
+        XCTAssertEqual(decisions.count, 1)
+
+        var state = WorkspaceState()
+        var sendCount = 0
+
+        // Channel 1 (actions): both channels key on the live transcript-tail
+        // prompt, so they share a dedup key. Send + record under that guard.
+        for action in actions where action.action == .sendInput {
+            if state.isNewDecision(entryId: entryId, prompt: livePrompt, kind: .autoAdvance) {
+                sendCount += 1 // sendInput(...)
+                state.recordDecision(
+                    BossInboxDecision(
+                        source: "boss",
+                        entryId: entryId,
+                        prompt: livePrompt,
+                        kind: .autoAdvance,
+                        proposedInput: action.text,
+                        reasoning: "actions channel",
+                        status: .applied
+                    )
+                )
+            }
+        }
+
+        // Channel 2 (decisions): same (entryId, prompt, autoAdvance) — the guard
+        // already saw it, so this is a no-op (no second keystroke).
+        for input in decisions where input.kind == .autoAdvance {
+            guard state.isNewDecision(entryId: entryId, prompt: livePrompt, kind: .autoAdvance) else {
+                continue
+            }
+            sendCount += 1 // sendInput(...) — must NOT happen
+            state.recordDecision(
+                BossInboxDecision(
+                    source: "boss",
+                    entryId: entryId,
+                    prompt: livePrompt,
+                    kind: .autoAdvance,
+                    proposedInput: input.proposedInput,
+                    reasoning: "decisions channel",
+                    status: .applied
+                )
+            )
+        }
+
+        XCTAssertEqual(sendCount, 1, "the keystroke must be sent exactly once across both channels")
+        XCTAssertEqual(state.decisionLog.count, 1, "only one decision is recorded for the shared (entry, prompt)")
+        XCTAssertEqual(state.decisionLog.first?.reasoning, "actions channel", "the actions channel acted; decisions channel was the no-op")
+    }
+
+    /// The reverse case must keep working: a reply with an `autoAdvance`
+    /// decision for one entry and a `sendInput` action for a DIFFERENT entry
+    /// sends both — the guard is per-(entry, prompt), not a blanket lock.
+    func testActionAndDecisionForDifferentEntriesBothSend() {
+        let entryA = UUID()
+        let entryB = UUID()
+        let promptA = "Run tests? (y/N)"
+        let promptB = "Apply the migration? (y/N)"
+        var state = WorkspaceState()
+        var sendCount = 0
+
+        // Actions channel: send to entryA.
+        if state.isNewDecision(entryId: entryA, prompt: promptA, kind: .autoAdvance) {
+            sendCount += 1
+            state.recordDecision(BossInboxDecision(source: "boss", entryId: entryA, prompt: promptA, kind: .autoAdvance, proposedInput: "y", reasoning: "actions", status: .applied))
+        }
+        // Decisions channel: autoAdvance for entryB — different entry, must send.
+        if state.isNewDecision(entryId: entryB, prompt: promptB, kind: .autoAdvance) {
+            sendCount += 1
+            state.recordDecision(BossInboxDecision(source: "boss", entryId: entryB, prompt: promptB, kind: .autoAdvance, proposedInput: "y", reasoning: "decisions", status: .applied))
+        }
+
+        XCTAssertEqual(sendCount, 2, "independent entries each get their keystroke")
+        XCTAssertEqual(state.decisionLog.count, 2)
+    }
+
     // MARK: - Parser
 
     func testParsesFencedDecisionsBlock() throws {

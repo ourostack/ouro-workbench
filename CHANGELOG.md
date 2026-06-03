@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.140 - Boss auto-advance safety hardening
+
+- The boss can no longer auto-answer a destructive/secret-bearing terminal prompt via the actions channel: `applyBossAction`'s sendInput now classifies the live terminal prompt (not just the input text) through the same safety gate the decisions channel uses, withholding + escalating unsafe inputs. Fixes a hole where `{"action":"sendInput","text":"y"}` to a `rm -rf? [y/N]` prompt sailed through.
+- A boss reply that emits both a sendInput action and an autoAdvance decision for the same session no longer double-sends the keystroke.
+- The prompt safety classifier now normalizes whitespace before matching, so `rm  -rf` / tab-separated variants can't evade the destructive-command floor.
+
 ## 0.1.139 - Owner-aware boss check-in
 
 - The boss check-in now surfaces each session's owner and treats agent-owned sessions (owner:agent:<name>) as driven by their owning agent — the boss no longer proposes advancing them, and `workbench_status` no longer inlines their waiting prompts for the boss to act on. Correctness groundwork for coding-session unification, where agents create sessions via `workbench_create_session`. Human-owned sessions are unaffected.
