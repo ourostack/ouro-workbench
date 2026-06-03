@@ -156,7 +156,12 @@ public struct BossDecisionParser: Sendable {
     private func markerJSON(in text: String) -> String? {
         let marker = "OURO_WORKBENCH_DECISIONS:"
         guard let start = text.range(of: marker) else { return nil }
-        return String(text[start.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        // Capture only the balanced JSON value after the marker, not everything
+        // to EOF — otherwise trailing prose ("OURO_WORKBENCH_DECISIONS: [...] and
+        // I'll check back later.") makes the whole payload invalid JSON and
+        // silently drops the entire batch. Reuses the shared helper from
+        // `BossWorkbenchAction.swift` (same fix applied to the action marker).
+        return balancedJSONValue(in: text[start.upperBound...])
     }
 }
 

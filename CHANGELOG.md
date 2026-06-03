@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.145 - Decision marker parse robustness
+
+- The boss decision marker fallback (`OURO_WORKBENCH_DECISIONS:` without a fenced block) now parses only the balanced JSON value, so trailing prose after the JSON no longer silently drops the whole decision batch — matching the fix already applied to the action marker in 0.1.142.
+
 ## 0.1.144 - Boss action exactly-once durability
 
 - A boss reply that comes back empty after the boss already queued actions is no longer retried into duplicate actions: the action-request queue de-duplicates identical pending requests, and the check-in only retries an empty reply when the turn queued nothing.
