@@ -67,6 +67,17 @@ struct OuroWorkbenchApp: App {
                         menuCommand("Terminal \(index)", .selectTerminal(index), KeyEquivalent(Character("\(index)")))
                     }
                 }
+                Divider()
+                // Split-pane (W5 increment 1). ⌥⌘ combos are chosen because
+                // nothing else in the app uses the Option modifier (verified by
+                // grep), so these compose cleanly with the existing ⌘-key
+                // equivalents and don't shadow ⌘F/⌘K/⌘J/⌘1-9/⌘T/⌘W/⇧⌘B etc.
+                // They stay menu key equivalents (not view shortcuts) so they
+                // fire even while a SwiftTerm terminal holds keyboard focus.
+                menuCommand("Split Right", .splitRight, .rightArrow, [.command, .option])
+                menuCommand("Split Down", .splitDown, .downArrow, [.command, .option])
+                menuCommand("Focus Other Pane", .focusOtherPane, "]", [.command, .option])
+                menuCommand("Close Pane", .closePane, "w", [.command, .option])
             }
             CommandMenu("Boss") {
                 menuCommand("Check In", .bossCheckIn, "i")
@@ -112,6 +123,44 @@ enum WorkbenchMenuCommand {
     case findInTerminal, redraw, stopSelected
     case settings, shortcutsHelp
     case selectTerminal(Int)
+    case splitRight, splitDown, closePane, focusOtherPane
+}
+
+/// Which of the two detail panes is meant when a split is active. Increment 1
+/// of W5 supports exactly one split (no recursive nesting), so the model is a
+/// flat two-case enum rather than a tree. `primary` is the original detail
+/// pane (driven by `selectedEntryID`, exactly as before the split); `secondary`
+/// is the second pane opened by Split Right / Split Down.
+enum DetailPaneID: Hashable {
+    case primary
+    case secondary
+}
+
+/// Orientation of the single detail split. `vertical` lays the two panes out
+/// side-by-side (a vertical divider — "Split Right"); `horizontal` stacks them
+/// (a horizontal divider — "Split Down"). Mirrors AppKit's `HSplitView` /
+/// `VSplitView` axis naming so the rendering site reads straight across.
+enum DetailSplitAxis: Hashable {
+    /// Side-by-side panes, vertical divider. "Split Right."
+    case vertical
+    /// Stacked panes, horizontal divider. "Split Down."
+    case horizontal
+}
+
+/// In-memory description of the detail pane's single split (Increment 1).
+/// `nil` on the view model means "single pane" — the exact pre-W5 behavior.
+/// When present, the primary pane shows `selectedEntry` and the secondary pane
+/// shows the session identified by `secondaryEntryID` (or an empty picker when
+/// that is `nil`). Not persisted this increment: relaunch comes up single-pane.
+///
+/// The one-NSView-per-session invariant (a session's terminal view lives in
+/// exactly one superview) is enforced by the view model: `secondaryEntryID` is
+/// never allowed to equal `selectedEntryID`, so the same session can never be
+/// mounted in both panes simultaneously.
+struct DetailSplitState: Equatable {
+    var axis: DetailSplitAxis
+    /// The session shown in the secondary pane, or `nil` for an empty picker.
+    var secondaryEntryID: UUID?
 }
 
 extension Notification.Name {
@@ -180,9 +229,19 @@ struct WorkbenchRootView: View {
         case .findInTerminal:
             model.presentTerminalSearch()
         case .redraw:
-            if let entry = model.selectedEntry { model.redrawTerminal(entry) }
+            // Targets the *active* pane's session, not just the sidebar
+            // selection, so ⌘L hits whichever terminal you're focused on.
+            if let entry = model.activeEntry { model.redrawTerminal(entry) }
         case .stopSelected:
-            if let entry = model.selectedEntry { model.terminate(entry) }
+            if let entry = model.activeEntry { model.terminate(entry) }
+        case .splitRight:
+            model.splitDetail(axis: .vertical)
+        case .splitDown:
+            model.splitDetail(axis: .horizontal)
+        case .closePane:
+            model.closeActivePane()
+        case .focusOtherPane:
+            model.focusOtherPane()
         case .settings:
             model.isSettingsSheetPresented = true
         case .shortcutsHelp:
@@ -224,7 +283,11 @@ struct WorkbenchRootView: View {
                                    let agent = model.ouroAgent(named: agentName) {
                                     AgentDetailView(agent: agent, model: model)
                                 } else if let entry = model.selectedEntry {
-                                    SessionDetailView(entry: entry, model: model)
+                                    // The session-detail branch is the one that
+                                    // can split two-up (W5). The container shows
+                                    // the single SessionDetailView when no split
+                                    // is active — identical to before.
+                                    DetailSplitContainer(primaryEntry: entry, model: model)
                                 } else {
                                     AgentHomeEmptyState(model: model)
                                 }
@@ -6072,7 +6135,10 @@ struct SessionDetailView: View {
                     TerminalPane(session: session)
                         .id(session.id)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    if model.isTerminalSearchPresented {
+                    // The search bar targets the active pane (model.activeEntry),
+                    // so render it only over that pane — otherwise a split would
+                    // draw two bars, one over a terminal it isn't searching.
+                    if model.isTerminalSearchPresented, model.activeEntry?.id == entry.id {
                         TerminalSearchBar(model: model)
                             .padding(.top, 10)
                             .padding(.horizontal, 14)
@@ -6092,6 +6158,199 @@ struct SessionDetailView: View {
         .sheet(isPresented: $showsTranscriptSheet) {
             SessionTranscriptSheet(entry: entry, model: model)
         }
+    }
+}
+
+/// Hosts the detail pane's session view, optionally split two-up (W5
+/// increment 1). With no split it renders the single `SessionDetailView`,
+/// byte-for-byte the pre-W5 behavior. With a split it lays the primary and
+/// secondary panes out via `HSplitView` (side-by-side / "Split Right") or
+/// `VSplitView` (stacked / "Split Down"), each wrapped in `DetailPaneChrome`
+/// for the focus ring + click-to-focus + Close-Pane affordance.
+///
+/// The same session is never mounted in both panes: the view model guarantees
+/// `detailSplit.secondaryEntryID != selectedEntryID`, so the one-NSView-per-
+/// session terminal can only ever live in one pane at a time.
+struct DetailSplitContainer: View {
+    var primaryEntry: ProcessEntry
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        if let split = model.detailSplit {
+            switch split.axis {
+            case .vertical:
+                HSplitView {
+                    primaryPane
+                    secondaryPane
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .horizontal:
+                VSplitView {
+                    primaryPane
+                    secondaryPane
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        } else {
+            SessionDetailView(entry: primaryEntry, model: model)
+        }
+    }
+
+    private var primaryPane: some View {
+        DetailPaneChrome(
+            pane: .primary,
+            title: primaryEntry.name,
+            model: model
+        ) {
+            SessionDetailView(entry: primaryEntry, model: model)
+        }
+        .frame(minWidth: 280, minHeight: 160)
+    }
+
+    @ViewBuilder
+    private var secondaryPane: some View {
+        DetailPaneChrome(
+            pane: .secondary,
+            title: model.secondaryPaneEntry?.name ?? "Pick a session",
+            model: model
+        ) {
+            if let entry = model.secondaryPaneEntry {
+                SessionDetailView(entry: entry, model: model)
+            } else {
+                EmptyPanePicker(excluding: primaryEntry.id, model: model)
+            }
+        }
+        .frame(minWidth: 280, minHeight: 160)
+    }
+}
+
+/// Wraps a pane's content with the split chrome: a slim header bar (pane label
+/// + Close button) and a focus ring that brightens the active pane. The whole
+/// pane is a click-to-focus target via a *simultaneous* tap gesture so the
+/// click still reaches the SwiftTerm view underneath (which claims keyboard
+/// focus itself) — tapping anywhere in the pane sets `activePaneID` for the
+/// ring and for retargeting Stop / Redraw / Find to this pane's session.
+private struct DetailPaneChrome<Content: View>: View {
+    var pane: DetailPaneID
+    var title: String
+    @ObservedObject var model: WorkbenchViewModel
+    @ViewBuilder var content: Content
+
+    private var isActive: Bool { model.activePaneID == pane }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Image(systemName: isActive ? "largecircle.fill.circle" : "circle")
+                    .font(.caption2)
+                    .foregroundStyle(isActive ? Color.accentColor : .secondary)
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .foregroundStyle(isActive ? .primary : .secondary)
+                Spacer(minLength: 6)
+                Button {
+                    model.focusPane(pane)
+                    model.closeActivePane()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.caption2.weight(.semibold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .help("Close this pane (⌥⌘W)")
+                .accessibilityLabel("Close Pane")
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(isActive ? Color.accentColor.opacity(0.12) : Color.clear)
+            Divider()
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .strokeBorder(
+                    isActive ? Color.accentColor.opacity(0.85) : Color.secondary.opacity(0.18),
+                    lineWidth: isActive ? 2 : 1
+                )
+        )
+        .contentShape(Rectangle())
+        // Simultaneous so the tap also reaches the terminal NSView beneath —
+        // the terminal claims keyboard focus; this just syncs activePaneID.
+        .simultaneousGesture(TapGesture().onEnded {
+            model.focusPane(pane)
+        })
+    }
+}
+
+/// Shown in the secondary pane when it has no assigned session. Lists the
+/// current group's other sessions (the primary pane's session is excluded so
+/// the operator can't pick the same session into both panes) and assigns the
+/// tapped one to the secondary pane.
+private struct EmptyPanePicker: View {
+    var excluding: UUID
+    @ObservedObject var model: WorkbenchViewModel
+
+    private var candidates: [ProcessEntry] {
+        model.sessionEntries.filter { $0.id != excluding }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Pick a session for this pane")
+                    .font(.headline)
+                Text("Choose a terminal to watch alongside the other pane. The same session can't be shown in both panes at once.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if candidates.isEmpty {
+                Text("No other sessions in this group yet. Create another terminal, then pick it here.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 4)
+            } else {
+                ScrollView {
+                    VStack(spacing: 6) {
+                        ForEach(candidates) { entry in
+                            Button {
+                                model.assignSecondaryPane(to: entry.id)
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Circle()
+                                        .fill(model.activeSession(for: entry) != nil ? Color.green : Color.secondary.opacity(0.5))
+                                        .frame(width: 7, height: 7)
+                                    Text(entry.name)
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                    if let cliName = model.cliName(for: entry) {
+                                        Text(cliName)
+                                            .font(.caption2.monospaced().weight(.semibold))
+                                            .foregroundStyle(.secondary)
+                                            .padding(.horizontal, 5)
+                                            .padding(.vertical, 1)
+                                            .background(.quaternary.opacity(0.6), in: Capsule())
+                                    }
+                                    Spacer(minLength: 0)
+                                }
+                                .contentShape(Rectangle())
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 7)
+                                .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 6))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .padding(16)
     }
 }
 
@@ -7653,6 +7912,15 @@ final class WorkbenchViewModel: ObservableObject {
                 // detail pane switches back to the live SessionDetailView.
                 selectedAgentName = nil
             }
+            // One-session-per-pane (W5): if the new primary selection is the
+            // same session the secondary pane is showing, clear the secondary
+            // pane back to an empty picker so the session's single terminal
+            // view is never asked to mount in two panes at once. The session
+            // "moves" to the primary pane (which the operator just selected).
+            if let selectedEntryID, detailSplit?.secondaryEntryID == selectedEntryID {
+                detailSplit?.secondaryEntryID = nil
+                activePaneID = .primary
+            }
             state.selectedEntryId = selectedEntryID
             save()
         }
@@ -7671,6 +7939,17 @@ final class WorkbenchViewModel: ObservableObject {
     }
     @Published var activeSessions: [UUID: TerminalSessionController] = [:]
     @Published var terminalFocusEntryID: UUID?
+    /// W5 increment 1 — the detail pane's single split, or `nil` for the
+    /// classic single-pane layout. In-memory only this increment (not in
+    /// `WorkspaceState`), so the app always launches single-pane. See
+    /// `_planning/w5-split-panes-multiwindow.md`.
+    @Published var detailSplit: DetailSplitState?
+    /// Which pane currently has logical focus when a split is active. Drives
+    /// the focus ring and the retargeting of selected-session commands
+    /// (Stop / Redraw / Find) to the focused pane's session. Reset to
+    /// `.primary` whenever the split opens or closes. Ignored when
+    /// `detailSplit` is `nil` (single pane is always "active").
+    @Published var activePaneID: DetailPaneID = .primary
     @Published var errorMessage: String?
     @Published var bossDashboard: BossDashboardSnapshot?
     @Published var bossCheckInPrompt: String?
@@ -8329,6 +8608,25 @@ final class WorkbenchViewModel: ObservableObject {
             return nil
         }
         return allSessionEntries.first { $0.id == terminalFocusEntryID }
+    }
+
+    /// The entry shown in the secondary detail pane while a split is active,
+    /// or `nil` when there's no split or the secondary pane is an unassigned
+    /// picker / its session no longer resolves to a known entry.
+    var secondaryPaneEntry: ProcessEntry? {
+        guard let id = detailSplit?.secondaryEntryID else { return nil }
+        return allSessionEntries.first { $0.id == id }
+    }
+
+    /// The entry that "selected-session" commands (Stop, Redraw, Find) act on.
+    /// When a split is active and the secondary pane is focused, that's the
+    /// secondary pane's entry; otherwise it's the sidebar selection (the
+    /// pre-split behavior, so single-pane is unchanged).
+    var activeEntry: ProcessEntry? {
+        if detailSplit != nil, activePaneID == .secondary, let entry = secondaryPaneEntry {
+            return entry
+        }
+        return selectedEntry
     }
 
     var summary: WorkspaceSummary {
@@ -9202,7 +9500,9 @@ final class WorkbenchViewModel: ObservableObject {
     /// If no session is selected the call is a no-op so the shortcut feels
     /// inert rather than launching a useless empty bar.
     func presentTerminalSearch() {
-        guard let entry = selectedEntry, activeSession(for: entry) != nil else {
+        // Targets the active pane's session so ⌘F finds inside the terminal
+        // you're focused on (the focused pane when split, else the selection).
+        guard let entry = activeEntry, activeSession(for: entry) != nil else {
             return
         }
         terminalSearchHasResult = true
@@ -9215,7 +9515,7 @@ final class WorkbenchViewModel: ObservableObject {
     /// Hide the search bar and clear any selection highlight SwiftTerm left
     /// behind. Bound to Esc inside the search bar and to the Done button.
     func dismissTerminalSearch() {
-        guard let entry = selectedEntry, let session = activeSession(for: entry) else {
+        guard let entry = activeEntry, let session = activeSession(for: entry) else {
             isTerminalSearchPresented = false
             return
         }
@@ -9237,7 +9537,7 @@ final class WorkbenchViewModel: ObservableObject {
     /// so the search bar can render its "No matches" state.
     @discardableResult
     func stepTerminalSearch(direction: WorkbenchCycleDirection) -> Bool {
-        guard let entry = selectedEntry, let session = activeSession(for: entry) else {
+        guard let entry = activeEntry, let session = activeSession(for: entry) else {
             terminalSearchHasResult = false
             return false
         }
@@ -9573,6 +9873,116 @@ final class WorkbenchViewModel: ObservableObject {
             selectedProjectID = entry.projectId
         }
         selectedEntryID = entryId
+    }
+
+    // MARK: - Detail split (W5 increment 1)
+
+    /// Open (or re-orient) the single detail split. The primary pane keeps the
+    /// current sidebar selection; the secondary pane is auto-filled with the
+    /// next session in the same group that isn't already the primary (so
+    /// "Split Right" on a project's first agent immediately shows its second
+    /// agent side-by-side). If there's no such sibling the secondary pane opens
+    /// as an empty picker. Re-running while already split just changes the axis
+    /// (and re-fills an empty secondary pane if a sibling is now available),
+    /// keeping the depth-1 invariant.
+    ///
+    /// The one-NSView-per-session invariant is preserved by construction here:
+    /// the chosen `secondaryEntryID` is always `!= selectedEntryID`.
+    func splitDetail(axis: DetailSplitAxis) {
+        guard let primary = selectedEntry else {
+            // Nothing selected to anchor a split on (e.g. empty workspace or
+            // the Agents pane is focused) — splitting would have no primary
+            // pane, so it's a no-op.
+            return
+        }
+        // Keep an existing secondary assignment if it's still valid (and not
+        // the primary); otherwise pick the next sibling, else leave empty.
+        let existing = detailSplit?.secondaryEntryID
+        let keepExisting = existing.map { id in
+            id != primary.id && allSessionEntries.contains { $0.id == id }
+        } ?? false
+        let secondary = keepExisting ? existing : nextSiblingEntryID(excluding: primary.id)
+        detailSplit = DetailSplitState(axis: axis, secondaryEntryID: secondary)
+        activePaneID = .primary
+    }
+
+    /// The next session to auto-fill the secondary pane with: the entry after
+    /// `primaryID` in the current group's visible session list (wrapping), or
+    /// the first other entry if `primaryID` isn't in the list. Returns `nil`
+    /// when the group has no other session — the secondary pane then opens as
+    /// an empty picker. Never returns `primaryID` (one-session-per-pane).
+    private func nextSiblingEntryID(excluding primaryID: UUID) -> UUID? {
+        let siblings = sessionEntries
+        guard siblings.contains(where: { $0.id != primaryID }) else { return nil }
+        if let index = siblings.firstIndex(where: { $0.id == primaryID }) {
+            // Start just after the primary and take the first different entry.
+            for offset in 1...siblings.count {
+                let candidate = siblings[(index + offset) % siblings.count]
+                if candidate.id != primaryID { return candidate.id }
+            }
+        }
+        return siblings.first { $0.id != primaryID }?.id
+    }
+
+    /// Assign a session to the secondary pane, enforcing one-session-per-pane.
+    /// If the session is already the primary (sidebar) selection, this swaps:
+    /// the primary becomes what the secondary was showing, so the session the
+    /// operator picked for the secondary pane ends up there alone. Passing
+    /// `nil` clears the secondary pane back to the empty picker.
+    func assignSecondaryPane(to entryID: UUID?) {
+        guard detailSplit != nil else { return }
+        guard let entryID else {
+            detailSplit?.secondaryEntryID = nil
+            return
+        }
+        // Reassigning to the same session is a no-op.
+        guard entryID != detailSplit?.secondaryEntryID else { return }
+        // Compare against the *displayed* primary (selectedEntry), which is
+        // what pane A actually mounts — it can differ from the raw
+        // selectedEntryID only in the pre-selection startup state.
+        if entryID == selectedEntry?.id {
+            // Would duplicate the primary pane's session. Swap the two panes
+            // so each still shows a distinct session (the old secondary,
+            // possibly nil, moves to the primary).
+            let oldSecondary = detailSplit?.secondaryEntryID
+            detailSplit?.secondaryEntryID = entryID
+            selectedEntryID = oldSecondary
+        } else {
+            detailSplit?.secondaryEntryID = entryID
+        }
+    }
+
+    /// Close whichever pane is focused, collapsing back to a single pane.
+    /// Closing the secondary pane simply drops the split. Closing the primary
+    /// pane promotes the secondary's session into the (single) pane — matching
+    /// the tree-collapse behavior the design calls for at depth 1. Closing a
+    /// pane never kills the underlying pty (the session and its
+    /// `TerminalSessionController` outlive the pane, exactly like deselecting).
+    func closeActivePane() {
+        guard detailSplit != nil else { return }
+        if activePaneID == .primary, let promoted = detailSplit?.secondaryEntryID {
+            // The secondary's session becomes the sole pane's selection.
+            selectEntryAcrossGroups(promoted)
+        }
+        detailSplit = nil
+        activePaneID = .primary
+    }
+
+    /// Toggle logical focus between the two panes (no-op when not split).
+    /// Clicking a pane already routes keyboard input via AppKit's first
+    /// responder; this command-driven toggle keeps the focus ring and
+    /// command-retargeting in sync for keyboard-only navigation.
+    func focusOtherPane() {
+        guard detailSplit != nil else { return }
+        activePaneID = activePaneID == .primary ? .secondary : .primary
+    }
+
+    /// Mark a pane as focused (driven by a tap on the pane chrome). Ignored
+    /// when not split so single-pane stays trivially "primary."
+    func focusPane(_ pane: DetailPaneID) {
+        guard detailSplit != nil else { return }
+        guard activePaneID != pane else { return }
+        activePaneID = pane
     }
 
     /// Resolve or create the group used by an opened workspace config. If a
