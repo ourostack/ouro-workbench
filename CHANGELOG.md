@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.128 - Stop mirroring Workbench groups into the desk
+
+- Workbench no longer writes `track.md`/`task.md` into `~/desk` during onboarding import (removed `DeskMirrorWriter`). GUI groups/terminals are organization state, not desk work-state — the desk is owned by its principal and will be surfaced later as a read viewer over the desk MCP, never mirrored into. Onboarding still imports recent sessions as terminals/groups.
+
 ## 0.1.127 - Boss check-in retries once on an empty reply
 
 - The automatic Boss Watch check-in no longer fails (and trips exponential backoff) when a reasoning-model boss intermittently spends its token budget on reasoning and returns an empty final answer. `BossAgentMCPClient.retryingOnEmpty` re-asks exactly once on `(empty response)` / `(no response)` / blank; only a genuinely-empty *retry* counts as a failure. Real errors (boss process unavailable, RPC/tool error, timeout) still fail straight through and surface immediately. 4 new tests.

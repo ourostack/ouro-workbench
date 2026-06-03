@@ -4503,14 +4503,6 @@ private struct OnboardingBootstrapView: View {
                     ForEach(proposal.groups) { group in
                         OnboardingGroupProposalView(group: group, model: model)
                     }
-                    if !model.onboardingDeskChanges.isEmpty {
-                        OnboardingStatusRow(
-                            systemImage: "checkmark.seal.fill",
-                            title: "Desk mirror updated",
-                            detail: "Mirrored \(model.onboardingDeskChanges.count) Desk file\(model.onboardingDeskChanges.count == 1 ? "" : "s").",
-                            color: .green
-                        )
-                    }
                 }
                 .frame(maxWidth: 700)
             } else {
@@ -7039,7 +7031,6 @@ final class LoginItemController: ObservableObject {
 struct WorkbenchImportApplyResult: Equatable {
     var createdCount: Int
     var groupNames: [String]
-    var deskChangeCount: Int
     var skippedNames: [String]
     var firstSelectedEntryID: UUID?
 
@@ -7062,9 +7053,6 @@ struct WorkbenchImportApplyResult: Equatable {
         var parts: [String] = []
         if !groupNames.isEmpty {
             parts.append(groupNames.joined(separator: ", "))
-        }
-        if deskChangeCount > 0 {
-            parts.append("Desk mirror updated (\(deskChangeCount) file\(deskChangeCount == 1 ? "" : "s"))")
         }
         if !skippedNames.isEmpty {
             parts.append("Skipped: \(skippedNames.joined(separator: ", "))")
@@ -7344,7 +7332,6 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var onboardingCandidates: [RecentSessionCandidate] = []
     @Published var onboardingProposal: WorkbenchImportProposal?
     @Published var onboardingIsScanning = false
-    @Published var onboardingDeskChanges: [String] = []
     @Published var lastImportSummary: WorkbenchImportApplyResult?
 
     private let paths: WorkbenchPaths
@@ -7897,7 +7884,7 @@ final class WorkbenchViewModel: ObservableObject {
         if onboardingProposal == nil {
             return "ready to scan"
         }
-        if onboardingDeskChanges.isEmpty {
+        if lastImportSummary?.hasImports != true {
             return "ready to arrange"
         }
         return "ready"
@@ -7910,17 +7897,17 @@ final class WorkbenchViewModel: ObservableObject {
         if onboardingProposal == nil {
             return .blue
         }
-        return onboardingDeskChanges.isEmpty ? .purple : .green
+        return lastImportSummary?.hasImports == true ? .green : .purple
     }
 
     var onboardingOpeningLine: String {
         if onboardingReadiness?.isReady == true {
-            return "\(state.boss.agentName) is selected as this Mac's boss. Workbench can now scan recent terminal-agent work and arrange it into Desk-shaped groups."
+            return "\(state.boss.agentName) is selected as this Mac's boss. Workbench can now scan recent terminal-agent work and arrange it into terminals and groups."
         }
         if ouroAgents.count > 1 {
             return "This Mac has multiple Ouro agents. Choose the one that should be boss for Workbench before importing sessions."
         }
-        return "First choose or repair this Mac's Ouro boss, then Workbench can scan recent sessions and create a clean Desk mirror."
+        return "First choose or repair this Mac's Ouro boss, then Workbench can scan recent sessions and import them as terminals and groups."
     }
 
     var onboardingBossChoices: [OnboardingBossChoice] {
@@ -8905,7 +8892,6 @@ final class WorkbenchViewModel: ObservableObject {
         bossWatchChangeSummaries = []
         onboardingProposal = nil
         onboardingCandidates = []
-        onboardingDeskChanges = []
         onboardingProviderChecks = [:]
         save()
         refreshWorkbenchMCPRegistration()
@@ -9029,7 +9015,6 @@ final class WorkbenchViewModel: ObservableObject {
         let result = WorkbenchImportApplyResult(
             createdCount: createdEntries.count,
             groupNames: createdEntries.isEmpty ? [] : [groupName],
-            deskChangeCount: 0,
             skippedNames: skippedNames,
             firstSelectedEntryID: createdEntries.first?.id
         )
@@ -10410,7 +10395,6 @@ final class WorkbenchViewModel: ObservableObject {
             return
         }
         onboardingIsScanning = true
-        onboardingDeskChanges = []
         let currentState = state
         Task {
             let candidates = await Task.detached(priority: .userInitiated) {
@@ -10504,18 +10488,6 @@ final class WorkbenchViewModel: ObservableObject {
             }
         }
 
-        do {
-            onboardingDeskChanges = try DeskMirrorWriter().apply(proposal)
-        } catch {
-            onboardingDeskChanges = []
-            recordActionLog(
-                source: "native",
-                action: "mirrorDesk",
-                result: "Desk mirror failed: \(error.localizedDescription)",
-                succeeded: false
-            )
-        }
-
         selectedProjectID = firstImportedProjectID ?? state.projects.first?.id
         selectedEntryID = createdEntries.first?.id ?? selectedEntryID
         save()
@@ -10526,13 +10498,12 @@ final class WorkbenchViewModel: ObservableObject {
         recordActionLog(
             source: "native",
             action: "applyOnboardingProposal",
-            result: "Created \(createdEntries.count) terminals, mirrored \(onboardingDeskChanges.count) Desk files",
+            result: "Created \(createdEntries.count) terminals",
             succeeded: true
         )
         let result = WorkbenchImportApplyResult(
             createdCount: createdEntries.count,
             groupNames: importedGroupNames,
-            deskChangeCount: onboardingDeskChanges.count,
             skippedNames: skipped,
             firstSelectedEntryID: createdEntries.first?.id
         )

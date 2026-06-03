@@ -1262,9 +1262,9 @@ public struct WorkbenchImportProposalBuilder: Sendable {
         // Distinct groups whose names slugify identically (e.g. "My Project"
         // and "my-project", or two different rootPaths) would otherwise share
         // an `id` / `deskTrackSlug`, which breaks SwiftUI's Identifiable
-        // ForEach (dropped/duplicated rows), makes selection toggles hit the
-        // wrong group, and merges their Desk mirror tracks. De-dupe across
-        // groups the same way task slugs are de-duped within a group.
+        // ForEach (dropped/duplicated rows) and makes selection toggles hit
+        // the wrong group. De-dupe across groups the same way task slugs are
+        // de-duped within a group.
         var usedGroupSlugs = Set<String>()
         groups = groups.map { group in
             let uniqueGroupSlug = uniqueSlug(group.deskTrackSlug, used: &usedGroupSlugs)
@@ -1463,101 +1463,5 @@ public struct WorkbenchSenseRenderer: Sendable {
         lines.append("operator keyboard shortcuts (so I can answer how-do-I questions):")
         lines.append(WorkbenchGuide.shortcutsMarkdown())
         return lines.joined(separator: "\n")
-    }
-}
-
-public struct DeskMirrorWriter {
-    public var deskRoot: URL
-    public var fileManager: FileManager
-
-    public init(
-        deskRoot: URL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("desk", isDirectory: true),
-        fileManager: FileManager = .default
-    ) {
-        self.deskRoot = deskRoot
-        self.fileManager = fileManager
-    }
-
-    public func apply(_ proposal: WorkbenchImportProposal) throws -> [String] {
-        var changed: [String] = []
-        for group in proposal.groups {
-            let trackURL = deskRoot.appendingPathComponent(group.deskTrackSlug, isDirectory: true)
-            try fileManager.createDirectory(at: trackURL, withIntermediateDirectories: true)
-            let trackFile = trackURL.appendingPathComponent("track.md")
-            // Write track.md only if absent: it's a Desk artifact the user (or
-            // Desk tooling) may hand-edit, and clobbering those edits on a
-            // re-Arrange would be worse than a slightly stale terminal list.
-            if !fileManager.fileExists(atPath: trackFile.path) {
-                try renderTrack(group).write(to: trackFile, atomically: true, encoding: .utf8)
-                changed.append(trackFile.path)
-            }
-            for terminal in group.terminals where terminal.selectedByDefault {
-                let taskURL = trackURL.appendingPathComponent(terminal.deskTaskSlug, isDirectory: true)
-                try fileManager.createDirectory(at: taskURL, withIntermediateDirectories: true)
-                let taskFile = taskURL.appendingPathComponent("task.md")
-                if !fileManager.fileExists(atPath: taskFile.path) {
-                    try renderTask(terminal, group: group).write(to: taskFile, atomically: true, encoding: .utf8)
-                    changed.append(taskFile.path)
-                }
-            }
-        }
-        return changed
-    }
-
-    private func renderTrack(_ group: ProposedWorkbenchGroup) -> String {
-        // List only the terminals that actually get a task.md written (the
-        // selected ones) so the track never references a task slug whose
-        // directory doesn't exist.
-        let listed = group.terminals.filter(\.selectedByDefault)
-        return """
-        ---
-        schema_version: 1
-        title: \(group.deskTrackSlug)
-        status: active
-        created: \(Date().ISO8601Format())
-        updated: \(Date().ISO8601Format())
-        ---
-
-        # \(group.name)
-
-        Workbench mirror track for \(group.rootPath).
-
-        ## Workbench terminals
-
-        \(listed.map { "- `\($0.deskTaskSlug)` - \($0.name)" }.joined(separator: "\n"))
-        """
-    }
-
-    private func renderTask(_ terminal: ProposedTerminalImport, group: ProposedWorkbenchGroup) -> String {
-        let candidate = terminal.candidate
-        return """
-        ---
-        schema_version: 1
-        title: \(terminal.deskTaskSlug)
-        status: drafting
-        created: \(Date().ISO8601Format())
-        updated: \(Date().ISO8601Format())
-        track: \(group.deskTrackSlug)
-        source: ouro-workbench
-        ---
-
-        # \(terminal.name)
-
-        Imported from \(candidate.source.rawValue) by Ouro Workbench onboarding.
-
-        ## Summary
-
-        \(candidate.summary)
-
-        ## Resume
-
-        ```bash
-        \(candidate.resumeCommandLine)
-        ```
-
-        ## Evidence
-
-        \(candidate.evidencePaths.map { "- `\($0)`" }.joined(separator: "\n"))
-        """
     }
 }
