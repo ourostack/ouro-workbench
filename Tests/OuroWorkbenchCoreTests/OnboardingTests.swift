@@ -446,7 +446,7 @@ final class OnboardingTests: XCTestCase {
         // Two distinct roots whose display names slugify identically
         // ("My Project" vs "My-Project" -> "my-project"). Without de-duping,
         // both groups would share an id/deskTrackSlug, breaking Identifiable
-        // ForEach + selection + the Desk mirror.
+        // ForEach + selection.
         let candidates = [
             RecentSessionCandidate(
                 id: "codex:a",
@@ -632,97 +632,4 @@ final class OnboardingTests: XCTestCase {
         )
     }
 
-    func testDeskMirrorWriterCreatesTracksAndTasksWithoutOverwriting() throws {
-        let proposal = WorkbenchImportProposal(
-            generatedAt: Date(),
-            groups: [
-                ProposedWorkbenchGroup(
-                    id: "ouro-workbench",
-                    name: "ouro-workbench",
-                    rootPath: "/Users/ari/Projects/ouro-workbench",
-                    deskTrackSlug: "ouro-workbench",
-                    terminals: [
-                        ProposedTerminalImport(
-                            id: "codex:1",
-                            candidate: RecentSessionCandidate(
-                                id: "codex:1",
-                                source: .openAICodex,
-                                agentKind: .openAICodex,
-                                title: "Onboarding",
-                                workingDirectory: "/Users/ari/Projects/ouro-workbench",
-                                lastActiveAt: Date(),
-                                resumeCommand: ["codex", "resume", "1"],
-                                summary: "Implement onboarding.",
-                                evidencePaths: ["/tmp/state.sqlite"],
-                                confidence: 0.94
-                            ),
-                            name: "Codex: Onboarding",
-                            deskTaskSlug: "onboarding",
-                            selectedByDefault: true
-                        )
-                    ]
-                )
-            ],
-            ignoredCandidates: []
-        )
-        let writer = DeskMirrorWriter(deskRoot: temporaryDirectory)
-        let changed = try writer.apply(proposal)
-
-        XCTAssertTrue(changed.contains(temporaryDirectory.appendingPathComponent("ouro-workbench/track.md").path))
-        XCTAssertTrue(changed.contains(temporaryDirectory.appendingPathComponent("ouro-workbench/onboarding/task.md").path))
-
-        let trackURL = temporaryDirectory.appendingPathComponent("ouro-workbench/track.md")
-        try "custom".write(to: trackURL, atomically: true, encoding: .utf8)
-        _ = try writer.apply(proposal)
-        XCTAssertEqual(try String(contentsOf: trackURL), "custom")
-    }
-
-    func testDeskMirrorTrackListsOnlySelectedTerminals() throws {
-        // Only selected terminals get a task.md, so the track must list only
-        // those — otherwise it references task slugs whose directories don't
-        // exist (dangling Desk references).
-        let proposal = WorkbenchImportProposal(
-            generatedAt: Date(),
-            groups: [
-                ProposedWorkbenchGroup(
-                    id: "proj",
-                    name: "proj",
-                    rootPath: "/Users/ari/proj",
-                    deskTrackSlug: "proj",
-                    terminals: [
-                        ProposedTerminalImport(
-                            id: "a",
-                            candidate: RecentSessionCandidate(
-                                id: "a", source: .openAICodex, agentKind: .openAICodex,
-                                title: "Selected", workingDirectory: "/Users/ari/proj",
-                                lastActiveAt: Date(), resumeCommand: ["codex", "resume", "a"],
-                                summary: "s", evidencePaths: [], confidence: 0.9
-                            ),
-                            name: "Selected one", deskTaskSlug: "selected-one", selectedByDefault: true
-                        ),
-                        ProposedTerminalImport(
-                            id: "b",
-                            candidate: RecentSessionCandidate(
-                                id: "b", source: .openAICodex, agentKind: .openAICodex,
-                                title: "Unselected", workingDirectory: "/Users/ari/proj",
-                                lastActiveAt: Date(), resumeCommand: ["codex", "resume", "b"],
-                                summary: "s", evidencePaths: [], confidence: 0.9
-                            ),
-                            name: "Unselected one", deskTaskSlug: "unselected-one", selectedByDefault: false
-                        )
-                    ]
-                )
-            ],
-            ignoredCandidates: []
-        )
-        let writer = DeskMirrorWriter(deskRoot: temporaryDirectory)
-        _ = try writer.apply(proposal)
-
-        let track = try String(contentsOf: temporaryDirectory.appendingPathComponent("proj/track.md"))
-        XCTAssertTrue(track.contains("selected-one"), "track should list the selected terminal")
-        XCTAssertFalse(track.contains("unselected-one"), "track must not reference an unwritten task slug")
-        // The selected terminal's task.md exists; the unselected one's does not.
-        XCTAssertTrue(FileManager.default.fileExists(atPath: temporaryDirectory.appendingPathComponent("proj/selected-one/task.md").path))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: temporaryDirectory.appendingPathComponent("proj/unselected-one/task.md").path))
-    }
 }
