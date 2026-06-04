@@ -375,6 +375,7 @@ struct WorkbenchRootView: View {
             model.launchDefaultShellIfNeeded()
             model.refreshExecutableHealth()
             model.refreshGitStatus()
+            model.refreshSessionActivity()
             model.refreshOnboardingReadiness()
             await model.refreshBossDashboard()
             if model.shouldPresentOnboardingOnLaunch && !model.onboardingHasAutoPresented {
@@ -2581,6 +2582,19 @@ struct WorkbenchSidebarView: View {
                 .padding(.top, 28)
             sessionList
         }
+        // Keep the per-session chips live while the sidebar is on screen. The
+        // refresh is cheap and self-throttling — it only re-tails transcripts
+        // for sessions with recent output (dormant ones are carried forward) —
+        // so a slow tick is enough to feel current without hammering the disk.
+        // Timer-free (a sleeping Task), matching the app's existing
+        // TimelineView-driven refresh posture and staying @MainActor-clean.
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: SessionChip.refreshIntervalNanoseconds)
+                if Task.isCancelled { break }
+                model.refreshSessionActivity()
+            }
+        }
     }
 
     private var sessionList: some View {
@@ -2646,7 +2660,9 @@ struct WorkbenchSidebarView: View {
                         health: model.executableHealth(for: entry),
                         gitStatus: model.gitStatus(for: entry),
                         runningSince: model.runningStartDate(for: entry),
-                        isPinned: entry.isPinned
+                        isPinned: entry.isPinned,
+                        activity: model.sessionActivity(for: entry),
+                        isStalled: model.isStalled(entry)
                     )
                         .tag(entry.id)
                         .contextMenu {
@@ -3028,6 +3044,12 @@ struct TerminalAgentRow: View {
     /// Whether the entry is pinned to the top of its group. Shows a small
     /// pin glyph next to the name.
     var isPinned: Bool = false
+    /// Derived activity (todo progress, current step, token/$) from the agent's
+    /// structured transcript. `nil` → the chip shows only the free health facet.
+    var activity: SessionActivity?
+    /// Whether the session looks busy but its output has gone quiet (drives the
+    /// chip's amber "stalled" glyph). Derived from `ProcessRun.lastOutputAt`.
+    var isStalled: Bool = false
 
     var body: some View {
         HStack {
@@ -3069,6 +3091,13 @@ struct TerminalAgentRow: View {
                 }
                 if let gitStatus, gitStatus.isRepo {
                     GitBranchChip(status: gitStatus)
+                }
+                // Glanceable per-session chip: health glyph + todo-progress +
+                // token/$. Only rendered when it adds something beyond the
+                // trailing StatusDot — i.e. there's derived activity to show or
+                // the session is stalled. A plain idle shell shows nothing extra.
+                if !entry.isArchived, activity != nil || isStalled {
+                    SessionChip(attention: entry.attention, activity: activity, isStalled: isStalled)
                 }
             }
             Spacer()
@@ -3183,29 +3212,147 @@ struct ElapsedTimePill: View {
     }
 }
 
+/// Shared health color/label/glyph for an `AttentionState`, so the sidebar's
+/// `StatusDot` and the new `SessionChip` health glyph render from one source of
+/// truth (DRY). `Color` is SwiftUI, so this lives App-side rather than on the
+/// Core enum.
+extension AttentionState {
+    var healthColor: SwiftUI.Color {
+        switch self {
+        case .idle: return .secondary
+        case .active: return .green
+        case .waitingOnHuman: return .orange
+        case .blocked: return .red
+        case .needsBossReview: return .blue
+        }
+    }
+
+    /// SF Symbol that reads at a glance for each health state.
+    var healthSymbol: String {
+        switch self {
+        case .idle: return "moon.zzz.fill"
+        case .active: return "bolt.fill"
+        case .waitingOnHuman: return "hand.raised.fill"
+        case .blocked: return "exclamationmark.octagon.fill"
+        case .needsBossReview: return "eye.fill"
+        }
+    }
+
+    /// Short human label for tooltips / accessibility.
+    var healthLabel: String {
+        switch self {
+        case .idle: return "Idle"
+        case .active: return "Active"
+        case .waitingOnHuman: return "Waiting on human"
+        case .blocked: return "Blocked"
+        case .needsBossReview: return "Needs boss review"
+        }
+    }
+}
+
 struct StatusDot: View {
     var attention: AttentionState
 
     var body: some View {
         Circle()
-            .fill(color)
+            .fill(attention.healthColor)
             .frame(width: 8, height: 8)
             .accessibilityLabel(attention.rawValue)
     }
+}
 
-    private var color: SwiftUI.Color {
-        switch attention {
-        case .idle:
-            return .secondary
-        case .active:
-            return .green
-        case .waitingOnHuman:
-            return .orange
-        case .blocked:
-            return .red
-        case .needsBossReview:
-            return .blue
+/// Glanceable per-session chip distilled from the agent's structured transcript
+/// (`SessionActivity`) plus the free `AttentionState` health facet: a health
+/// glyph (amber "stalled" when the session looks busy but its output has gone
+/// quiet), a `done/total · current-step` todo mini, and a token/$ `MetricChip`.
+///
+/// Composed entirely from existing primitives (`MetricChip`, the shared
+/// `AttentionState.health*` helpers). When there's no `SessionActivity` (a plain
+/// shell, or a transcript that doesn't map), it renders just the health glyph
+/// (+ "stalled") — never empty or broken.
+struct SessionChip: View {
+    var attention: AttentionState
+    var activity: SessionActivity?
+    var isStalled: Bool
+
+    /// A session is "stalled" once its running output has been quiet this long.
+    static let stalledThreshold: TimeInterval = 90
+    /// Sessions whose latest run hasn't been active within this window are
+    /// dormant — `refreshSessionActivity` skips re-tailing them.
+    static let dormantThreshold: TimeInterval = 5 * 60
+    /// How often the sidebar re-runs the (throttled) activity refresh.
+    static let refreshIntervalNanoseconds: UInt64 = 15 * 1_000_000_000
+
+    var body: some View {
+        HStack(spacing: 6) {
+            healthGlyph
+            if let activity, let todoLabel = activity.todoLabel {
+                todoMini(label: todoLabel, activeForm: activity.activeForm)
+            }
+            if let activity, let usd = activity.usdLabel {
+                MetricChip(label: "tok", value: usd)
+                    .help(tokenHelp(activity))
+            }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var effectiveColor: SwiftUI.Color {
+        isStalled ? .yellow : attention.healthColor
+    }
+
+    private var effectiveSymbol: String {
+        isStalled ? "zzz" : attention.healthSymbol
+    }
+
+    private var healthGlyph: some View {
+        Image(systemName: effectiveSymbol)
+            .font(.caption2)
+            .foregroundStyle(effectiveColor)
+            .help(isStalled ? "Stalled — running but output has gone quiet" : attention.healthLabel)
+    }
+
+    private func todoMini(label: String, activeForm: String?) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "checklist")
+            Text(label)
+                .monospacedDigit()
+            if let activeForm, !activeForm.isEmpty {
+                Text("· \(activeForm)")
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .font(.caption2)
+        .help(activeForm.map { "\(label) todos · \($0)" } ?? "\(label) todos")
+    }
+
+    private func tokenHelp(_ activity: SessionActivity) -> String {
+        var parts: [String] = []
+        if let usd = activity.usdLabel { parts.append("~\(usd) (recent window)") }
+        parts.append("out \(compact(activity.outputTokens)) · in \(compact(activity.inputTokens)) · cache \(compact(activity.cacheReadTokens))")
+        if let model = activity.model { parts.append(model) }
+        return parts.joined(separator: "\n")
+    }
+
+    private func compact(_ n: Int) -> String {
+        if n >= 1_000_000 { return String(format: "%.1fM", Double(n) / 1_000_000) }
+        if n >= 1_000 { return String(format: "%.1fk", Double(n) / 1_000) }
+        return "\(n)"
+    }
+
+    private var accessibilityLabel: String {
+        var pieces: [String] = [isStalled ? "stalled" : attention.healthLabel]
+        if let activity {
+            if let todoLabel = activity.todoLabel {
+                pieces.append("\(todoLabel) todos")
+                if let activeForm = activity.activeForm { pieces.append(activeForm) }
+            }
+            if let usd = activity.usdLabel { pieces.append("about \(usd) tokens") }
+        }
+        return pieces.joined(separator: ", ")
     }
 }
 
@@ -3310,6 +3457,7 @@ struct HeaderView: View {
                     Task {
                         model.refreshExecutableHealth()
                         model.refreshGitStatus()
+                        model.refreshSessionActivity()
                         await model.refreshBossDashboard()
                     }
                 } label: {
@@ -8398,6 +8546,12 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var bossWorkbenchMCPRegistrationByAgentName: [String: BossWorkbenchMCPRegistrationSnapshot] = [:]
     @Published var executableHealthByEntryID: [UUID: ExecutableHealth] = [:]
     @Published var gitStatusByEntryID: [UUID: GitSessionStatus] = [:]
+    /// Per-session activity (todo progress, current step, last tool, token/$)
+    /// derived from each agent's structured JSONL transcript. Mirrors
+    /// `gitStatusByEntryID`: refreshed off-main by `refreshSessionActivity()`,
+    /// read by the sidebar row's `SessionChip`. Absent → the chip shows only the
+    /// free facets (health + last-activity).
+    @Published var sessionActivityByEntryID: [UUID: SessionActivity] = [:]
     /// Persistent `screen` sessions reported alive (Attached/Detached) at the
     /// last refresh. A session in this set means the agent kept running while
     /// the app was gone, so recovery becomes a lossless reattach rather than a
@@ -8505,6 +8659,7 @@ final class WorkbenchViewModel: ObservableObject {
     private let ouroAgentInstallCommandBuilder = OuroAgentInstallCommandBuilder()
     private let executableHealthChecker: ExecutableHealthChecker
     private let gitStatusReader = GitStatusReader()
+    private let sessionActivityReader = SessionActivityReader()
     private let bossActionParser = BossWorkbenchActionParser()
     private let bossDecisionParser = BossDecisionParser()
     private let bossActionAuthorizer = BossWorkbenchActionAuthorizer()
@@ -8581,6 +8736,7 @@ final class WorkbenchViewModel: ObservableObject {
         refreshWorkbenchMCPRegistration()
         refreshExecutableHealth()
         refreshGitStatus()
+        refreshSessionActivity()
         refreshOnboardingReadiness()
         registerTerminationObserver()
     }
@@ -9666,6 +9822,22 @@ final class WorkbenchViewModel: ObservableObject {
 
     func gitStatus(for entry: ProcessEntry) -> GitSessionStatus? {
         gitStatusByEntryID[entry.id]
+    }
+
+    func sessionActivity(for entry: ProcessEntry) -> SessionActivity? {
+        sessionActivityByEntryID[entry.id]
+    }
+
+    /// "Stalled" = the session is in an `.active` health state but its latest
+    /// run hasn't produced output for a while — it looks busy but may be wedged.
+    /// Drives the chip's amber "stalled" health glyph. Derived from the free
+    /// `ProcessRun.lastOutputAt` facet; idle/non-active sessions are never
+    /// stalled.
+    func isStalled(_ entry: ProcessEntry) -> Bool {
+        guard entry.attention == .active else { return false }
+        guard let run = latestRun(for: entry), run.status == .running else { return false }
+        guard let lastOutput = run.lastOutputAt else { return false }
+        return Date().timeIntervalSince(lastOutput) > SessionChip.stalledThreshold
     }
 
     func cliName(for entry: ProcessEntry) -> String? {
@@ -10842,6 +11014,54 @@ final class WorkbenchViewModel: ObservableObject {
                 self.gitStatusByEntryID = results
             }
         }
+    }
+
+    /// Refresh per-session activity (todo/step/tool/token-$) off the main actor,
+    /// mirroring `refreshGitStatus`'s posture: snapshot the targets on the main
+    /// actor, do all disk I/O on a detached utility task, publish back on main.
+    ///
+    /// Tuned for ~10 mostly-dormant sessions: only sessions with *recent* output
+    /// are re-read (a dormant terminal's chip stays put rather than paying a
+    /// disk tail every tick). Existing activity for skipped sessions is carried
+    /// forward so the chip doesn't flicker empty. The reader itself is bounded
+    /// (byte-tail), so even the refreshed set is cheap.
+    func refreshSessionActivity() {
+        let reader = sessionActivityReader
+        let now = Date()
+        let previous = sessionActivityByEntryID
+        // (id, dir, agentKind, shouldRefresh). Skip shells with no agent kind
+        // and sessions whose latest run hasn't been active recently.
+        let targets: [(id: UUID, dir: String, kind: TerminalAgentKind?, refresh: Bool)] =
+            allSessionEntries.map { entry in
+                let kind = entry.agentKind
+                let refresh = kind != nil && isSessionRecentlyActive(entry, now: now)
+                return (entry.id, entry.workingDirectory, kind, refresh)
+            }
+        Task.detached(priority: .utility) {
+            var results: [UUID: SessionActivity] = [:]
+            for target in targets {
+                if target.refresh {
+                    results[target.id] = reader.activity(forDirectory: target.dir, agentKind: target.kind)
+                } else {
+                    // Carry forward the last known value for dormant/non-agent
+                    // sessions instead of re-reading or dropping it.
+                    results[target.id] = previous[target.id]
+                }
+            }
+            await MainActor.run { [results] in
+                self.sessionActivityByEntryID = results
+            }
+        }
+    }
+
+    /// Whether an entry's latest run produced output (or started) recently
+    /// enough to warrant re-tailing its transcript. Dormant sessions fall out of
+    /// this window so the timer doesn't hammer the disk for them.
+    private func isSessionRecentlyActive(_ entry: ProcessEntry, now: Date) -> Bool {
+        guard let run = latestRun(for: entry) else { return false }
+        if run.status == .running { return true }
+        let reference = run.lastOutputAt ?? run.endedAt ?? run.startedAt
+        return now.timeIntervalSince(reference) < SessionChip.dormantThreshold
     }
 
     func installWorkbenchMCPForBoss() {

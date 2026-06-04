@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.151 - Glanceable per-session chip
+
+- Each sidebar session row now carries a glanceable chip so the operator can tell what an agent is doing without opening its terminal: a health glyph (with an amber "stalled" state when a session looks busy but its output has gone quiet), a `done/total · current-step` todo mini, and a token/$ metric. The structured facets are derived from the agent's own JSONL transcript — not by scraping the PTY — via a new bounded, redacted `SessionActivityReader` (Claude Code `~/.claude/projects/<encoded-cwd>/<session>.jsonl`, with Codex rollout coverage for tokens/last-activity). It tails only the last ~256 KB, de-duplicates token usage by assistant message id, and never surfaces raw tool inputs/outputs. Refresh mirrors the git-status plumbing (off the main actor, throttled to skip dormant sessions); sessions with no mapped transcript render only the free health facet, never empty.
+
 ## 0.1.150 - Decision inbox
 
 - The boss decision log is now a prioritized, triageable **decision inbox**: ⌘K → "Decision Inbox" (and the boss pane) open a focused queue of only the sessions that need you — escalations, holds, and blocked auto-advances — grouped by severity (critical/destructive-or-secret first, then routine escalations) and capped at the few open items, never the full 200-row log. Each item gains **Acknowledge / Snooze (1h, end of day, 1 day) / Resolve** controls next to the existing Teach control; a snoozed item resurfaces on its own when the snooze elapses. A toggle drops to the full chronological log for auditing. ⌘J now walks the inbox in priority order (most severe first, snoozed/resolved skipped), falling through to any live waiting session the boss hasn't recorded a decision for yet. Triage state is additive in workspace state (decoded if-present, no schema bump), so existing state loads with everything open.
