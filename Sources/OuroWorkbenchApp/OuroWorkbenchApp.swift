@@ -424,7 +424,9 @@ struct WorkbenchRootView: View {
             HarnessStatusSheet(model: model)
         }
         .sheet(isPresented: $model.isDecisionLogPresented) {
-            DecisionLogSheet(model: model)
+            // The prioritized triageable inbox (with a toggle down to the raw
+            // chronological log). Same entry points as before — ⌘K + boss pane.
+            DecisionInboxSheet(model: model)
         }
         .sheet(isPresented: $model.isReportBugPresented) {
             ReportBugSheet(model: model)
@@ -1893,6 +1895,167 @@ struct DecisionLogSheet: View {
     }
 }
 
+/// The prioritized, triageable **decision inbox** — the queue of waiting
+/// sessions that actually need the operator, grouped by severity and walkable
+/// with ⌘J. A focused variant of `DecisionLogSheet`: it shows only OPEN items
+/// (`openInboxGroups`) — typically 1–2 even with ~10 mostly-dormant sessions —
+/// reusing `DecisionLogRow` in `.inbox` mode (severity accent + Ack / Snooze /
+/// Resolve next to the existing Teach control). A toggle drops to the full raw
+/// log for auditing. `now` is refreshed periodically so a snooze that elapses
+/// while the sheet is open resurfaces on its own.
+struct DecisionInboxSheet: View {
+    @ObservedObject var model: WorkbenchViewModel
+    @Environment(\.dismiss) private var dismiss
+    /// Inbox (open queue) vs the full chronological log. Defaults to the inbox;
+    /// the toggle keeps the raw log reachable without a second entry point.
+    @State private var showFullLog = false
+
+    var body: some View {
+        // Re-evaluate every 30s so an elapsed snooze drops back into the queue
+        // without the operator reopening the sheet.
+        TimelineView(.periodic(from: .now, by: 30)) { context in
+            content(now: context.date)
+        }
+        .frame(width: 640, height: 560)
+    }
+
+    @ViewBuilder
+    private func content(now: Date) -> some View {
+        let groups = model.state.openInboxGroups(now: now)
+        let openCount = groups.reduce(0) { $0 + $1.decisions.count }
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(showFullLog ? "Boss Decision Log" : "Decision Inbox")
+                        .font(.title3.weight(.semibold))
+                    Text(showFullLog
+                        ? "Every decision the boss made about a waiting session, and why"
+                        : inboxSubtitle(openCount))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Picker("", selection: $showFullLog) {
+                    Text("Inbox").tag(false)
+                    Text("Log").tag(true)
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 18)
+            .padding(.bottom, 14)
+            Divider()
+            if showFullLog {
+                fullLog
+            } else if groups.isEmpty {
+                inboxZero
+            } else {
+                inboxQueue(groups)
+            }
+        }
+    }
+
+    private func inboxSubtitle(_ count: Int) -> String {
+        switch count {
+        case 0: return "Nothing needs you right now"
+        case 1: return "1 session needs a decision"
+        default: return "\(count) sessions need a decision"
+        }
+    }
+
+    /// The prioritized, severity-grouped open queue. Each row is the shared
+    /// `DecisionLogRow` in `.inbox` mode, wired to the model's triage actions.
+    private func inboxQueue(_ groups: [InboxSeverityGroup]) -> some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 14) {
+                ForEach(groups) { group in
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(group.severity.label.uppercased())
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.leading, 2)
+                        ForEach(group.decisions) { decision in
+                            DecisionLogRow(
+                                decision: decision,
+                                mode: .inbox,
+                                onTeach: { autoAdvance in
+                                    Task { await model.teachBoss(from: decision, autoAdvance: autoAdvance) }
+                                },
+                                onAcknowledge: { model.acknowledgeDecision(decision) },
+                                onSnooze: { model.snoozeDecision(decision, for: $0) },
+                                onResolve: { model.resolveDecision(decision) }
+                            )
+                        }
+                    }
+                }
+            }
+            .padding(20)
+        }
+    }
+
+    /// "Inbox zero" — distinct from the log's "no decisions yet": here the boss
+    /// has decided things, they're just all handled / snoozed.
+    private var inboxZero: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "checkmark.circle")
+                .font(.largeTitle)
+                .foregroundStyle(.green)
+            Text("Inbox zero")
+                .font(.headline)
+            Text("No session needs a decision right now. When the boss escalates one, it shows here — most urgent first — and ⌘J jumps you to it.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 380)
+            if !model.state.decisionLog.isEmpty {
+                Button("View full decision log") { showFullLog = true }
+                    .buttonStyle(.borderless)
+                    .font(.caption)
+                    .padding(.top, 4)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(40)
+    }
+
+    /// The full chronological audit — identical to `DecisionLogSheet`'s body,
+    /// in `.log` mode (Teach only, no triage controls).
+    @ViewBuilder
+    private var fullLog: some View {
+        if model.state.decisionLog.isEmpty {
+            VStack(spacing: 8) {
+                Image(systemName: "checklist")
+                    .font(.largeTitle)
+                    .foregroundStyle(.secondary)
+                Text("No decisions recorded yet")
+                    .font(.headline)
+                Text("When a session is waiting on you, the boss records what it would do and why here — automatically, as it checks in.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 360)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(40)
+        } else {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 10) {
+                    ForEach(model.state.decisionLog) { decision in
+                        DecisionLogRow(decision: decision) { autoAdvance in
+                            Task { await model.teachBoss(from: decision, autoAdvance: autoAdvance) }
+                        }
+                    }
+                }
+                .padding(20)
+            }
+        }
+    }
+}
+
 /// The in-app bug reporter. The operator types what went wrong; submitting
 /// bundles a window screenshot, the support diagnostics zip, and a `report.md`
 /// (app/OS version, sessions, recent boss decisions + actions) into a stable,
@@ -2069,11 +2232,26 @@ struct ReportBugSheet: View {
 }
 
 private struct DecisionLogRow: View {
+    /// How the row renders. `.log` is the flat reverse-chron audit row (Teach
+    /// only). `.inbox` is the prioritized-queue variant: a severity accent plus
+    /// Ack / Snooze / Resolve triage controls next to Teach. ~90% of the row is
+    /// shared between the two modes — only the accent and the footer differ.
+    enum Mode: Equatable { case log, inbox }
+
     let decision: BossInboxDecision
+    var mode: Mode = .log
     /// Teach the boss from this decision. `true` = reinforce (auto-advance these
     /// next time), `false` = correct (always ask me).
     var onTeach: (Bool) -> Void
+    /// Inbox-mode triage actions (nil in `.log` mode). Acknowledge / snooze for
+    /// an interval / resolve — wired to the pure `WorkspaceState` mutations.
+    var onAcknowledge: (() -> Void)?
+    var onSnooze: ((TimeInterval) -> Void)?
+    var onResolve: (() -> Void)?
     @State private var taught = false
+
+    /// The severity tier of this decision, for the inbox accent + label.
+    private var severity: DecisionSeverity { DecisionSeverity.of(decision) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -2126,6 +2304,44 @@ private struct DecisionLogRow: View {
             .font(.caption2)
             .foregroundStyle(.secondary)
             HStack(spacing: 8) {
+                // Inbox mode adds triage controls next to Teach: clear an item
+                // without leaving the queue (Ack), defer it (Snooze), or close
+                // it (Resolve). All three are no-ops in `.log` mode (closures nil).
+                if mode == .inbox {
+                    if let onResolve {
+                        Button {
+                            onResolve()
+                        } label: {
+                            Label("Resolve", systemImage: "checkmark.circle")
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Mark this handled and remove it from the inbox")
+                    }
+                    if let onSnooze {
+                        Menu {
+                            Button("1 hour") { onSnooze(3600) }
+                            // Computed at tap time, not render time, so "end of
+                            // day" is measured from when the operator chooses it.
+                            Button("Until end of day") { onSnooze(WorkbenchTriageInterval.untilEndOfDay()) }
+                            Button("1 day") { onSnooze(86_400) }
+                        } label: {
+                            Label("Snooze", systemImage: "clock")
+                        }
+                        .menuStyle(.borderlessButton)
+                        .fixedSize()
+                        .help("Hide this from the inbox until later; it resurfaces when the snooze elapses")
+                    }
+                    if let onAcknowledge {
+                        Button {
+                            onAcknowledge()
+                        } label: {
+                            Label("Ack", systemImage: "eye")
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Acknowledge — seen and parked, removed from the open queue")
+                    }
+                    Divider().frame(height: 12)
+                }
                 if taught {
                     Label("Sent to boss", systemImage: "paperplane.circle.fill")
                         .font(.caption2)
@@ -2142,11 +2358,42 @@ private struct DecisionLogRow: View {
                     .help("Tell the boss to remember this preference for \(decision.friendName ?? "this friend"), so future decisions improve")
                 }
             }
+            .font(.caption2)
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.04)))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.primary.opacity(0.08), lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: 10).fill(rowFill))
+        // Inbox mode adds a leading severity accent stripe + a tinted border so
+        // a critical item reads as urgent at a glance; the log keeps its neutral
+        // chrome.
+        .overlay(alignment: .leading) {
+            if mode == .inbox {
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(severityColor)
+                    .frame(width: 4)
+                    .padding(.vertical, 6)
+                    .padding(.leading, 2)
+            }
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .strokeBorder(mode == .inbox ? severityColor.opacity(0.35) : Color.primary.opacity(0.08), lineWidth: 1)
+        )
+    }
+
+    /// Background fill — neutral for the log; a faint severity tint for the inbox.
+    private var rowFill: SwiftUI.Color {
+        mode == .inbox ? severityColor.opacity(0.06) : Color.primary.opacity(0.04)
+    }
+
+    /// Accent color per severity tier, reused for the stripe and border.
+    private var severityColor: SwiftUI.Color {
+        switch severity {
+        case .critical: return .red
+        case .elevated: return .orange
+        case .normal: return .blue
+        case .low: return .secondary
+        }
     }
 
     private func rowDetail(_ label: String, _ value: String, mono: Bool = false) -> some View {
@@ -8082,8 +8329,9 @@ final class WorkbenchViewModel: ObservableObject {
     /// registration), shown as a transient banner in the sheet. Cleared when the
     /// sheet refreshes or the user dismisses it.
     @Published var harnessActionResult: HarnessActionResult?
-    /// The boss decision-log review surface (audit of every inbox decision the
-    /// boss made and why). Reached from the boss pane and the ⌘K palette.
+    /// The decision **inbox** surface — the prioritized triageable queue of
+    /// sessions that need the operator, with the full chronological decision log
+    /// a toggle away. Reached from the boss pane and the ⌘K palette.
     @Published var isDecisionLogPresented = false
     /// User's terminal-theme override. `.system` follows the macOS appearance
     /// (current default); `.light`/`.dark` pin the terminal palette regardless
@@ -9239,10 +9487,10 @@ final class WorkbenchViewModel: ObservableObject {
         commands.append(
             command(
                 .openDecisionLog,
-                "Boss Decision Log",
-                "Review every decision the boss made about a waiting session, and why",
-                "checklist",
-                keywords: ["decision", "log", "audit", "boss", "inbox", "why", "advance", "escalate"]
+                "Decision Inbox",
+                "Triage the sessions that need you — prioritized, with the full decision log a toggle away",
+                "tray.full",
+                keywords: ["decision", "inbox", "triage", "log", "audit", "boss", "why", "advance", "escalate", "snooze", "resolve", "queue"]
             )
         )
 
@@ -9698,26 +9946,54 @@ final class WorkbenchViewModel: ObservableObject {
         return true
     }
 
-    /// Jump focus to the next session that needs the operator — waiting at a
-    /// prompt, flagged for boss review, or blocked — across all groups, in
-    /// sidebar order, wrapping around. Completes the attention loop: detection
-    /// lights a session up, this carries you straight to it. No-op (returns
-    /// false) when nothing needs attention.
-    @discardableResult
-    func jumpToNextAttentionSession() -> Bool {
-        // Build the inbox in the order the operator scans: groups top-to-bottom,
-        // entries in their sidebar order within each group.
-        let inbox: [ProcessEntry] = state.projects.flatMap { project in
-            allSessionEntries.filter {
-                $0.projectId == project.id && !$0.isArchived && $0.attention.needsHuman
+    /// The ordered list of sessions ⌘J walks: the prioritized open **inbox**
+    /// first (the boss's escalations etc., severity-ranked + triage-aware — a
+    /// snoozed/resolved item is already filtered out by `openInbox`), then any
+    /// live session that needs the operator but has no open decision yet (in
+    /// sidebar order), so a freshly-waiting session the boss hasn't weighed in on
+    /// is still reachable. De-duplicated, archived sessions excluded.
+    func attentionJumpOrder(now: Date = Date()) -> [UUID] {
+        var order: [UUID] = []
+        var seen = Set<UUID>()
+        // Live, non-archived entry ids — the inbox can only land you on a session
+        // that still exists in the sidebar.
+        let liveIDs = Set(allSessionEntries.filter { !$0.isArchived }.map(\.id))
+
+        // 1) Prioritized inbox order (severity → recency, snoozed/resolved hidden).
+        for decision in state.openInbox(now: now) {
+            guard let id = decision.entryId, liveIDs.contains(id), seen.insert(id).inserted else {
+                continue
+            }
+            order.append(id)
+        }
+        // 2) Preserve the original behavior as a superset: any session that needs
+        // the human but isn't already queued from a decision, in sidebar order.
+        for project in state.projects {
+            for entry in allSessionEntries where entry.projectId == project.id
+                && !entry.isArchived
+                && entry.attention.needsHuman
+                && seen.insert(entry.id).inserted {
+                order.append(entry.id)
             }
         }
-        guard !inbox.isEmpty else {
+        return order
+    }
+
+    /// Jump focus to the next session that needs the operator, in **inbox
+    /// priority order** (most severe first), wrapping around — then falling
+    /// through to any live session needing a human that the boss hasn't recorded
+    /// a decision for yet. Completes the attention loop: detection lights a
+    /// session up, this carries you straight to it, prioritized + triage-aware.
+    /// No-op (returns false) when nothing needs attention.
+    @discardableResult
+    func jumpToNextAttentionSession() -> Bool {
+        let order = attentionJumpOrder()
+        guard !order.isEmpty else {
             return false
         }
-        let currentIndex = inbox.firstIndex { $0.id == selectedEntryID } ?? -1
-        let nextIndex = currentIndex < 0 || currentIndex >= inbox.count - 1 ? 0 : currentIndex + 1
-        selectEntryAcrossGroups(inbox[nextIndex].id)
+        let currentIndex = order.firstIndex(of: selectedEntryID ?? UUID()) ?? -1
+        let nextIndex = currentIndex < 0 || currentIndex >= order.count - 1 ? 0 : currentIndex + 1
+        selectEntryAcrossGroups(order[nextIndex])
         return true
     }
 
@@ -12608,6 +12884,46 @@ final class WorkbenchViewModel: ObservableObject {
                 succeeded: false
             )
         }
+    }
+
+    // MARK: - Inbox triage (read-side; the boss's recording paths are untouched)
+
+    /// Acknowledge an inbox item — the operator has seen it and parks it out of
+    /// the open queue. Pure Core mutation + audit log + save.
+    func acknowledgeDecision(_ decision: BossInboxDecision) {
+        state.acknowledge(decisionID: decision.id)
+        recordTriageAction("acknowledge", decision)
+        save()
+    }
+
+    /// Snooze an inbox item for `interval` (e.g. 1h, or "until I'm done" via a
+    /// long interval). It leaves the open queue and resurfaces once the snooze
+    /// elapses. Pure Core mutation + audit log + save.
+    func snoozeDecision(_ decision: BossInboxDecision, for interval: TimeInterval) {
+        let until = Date().addingTimeInterval(interval)
+        state.snooze(decisionID: decision.id, until: until)
+        recordTriageAction("snooze until \(until.formatted(date: .omitted, time: .shortened))", decision)
+        save()
+    }
+
+    /// Resolve an inbox item — dealt with, permanently out of the open queue.
+    /// Pure Core mutation + audit log + save.
+    func resolveDecision(_ decision: BossInboxDecision) {
+        state.resolve(decisionID: decision.id)
+        recordTriageAction("resolve", decision)
+        save()
+    }
+
+    /// One audit line per triage action, mirroring `teachBoss`'s logging so the
+    /// operator's inbox actions are as traceable as the boss's decisions.
+    private func recordTriageAction(_ action: String, _ decision: BossInboxDecision) {
+        recordActionLog(
+            source: "operator",
+            action: "inbox:\(action)",
+            targetName: decision.sessionName,
+            result: String(decision.prompt.prefix(200)),
+            succeeded: true
+        )
     }
 
     func runExternalActionPump() async {
