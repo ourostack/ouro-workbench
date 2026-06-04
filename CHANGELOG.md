@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.150 - Decision inbox
+
+- The boss decision log is now a prioritized, triageable **decision inbox**: ⌘K → "Decision Inbox" (and the boss pane) open a focused queue of only the sessions that need you — escalations, holds, and blocked auto-advances — grouped by severity (critical/destructive-or-secret first, then routine escalations) and capped at the few open items, never the full 200-row log. Each item gains **Acknowledge / Snooze (1h, end of day, 1 day) / Resolve** controls next to the existing Teach control; a snoozed item resurfaces on its own when the snooze elapses. A toggle drops to the full chronological log for auditing. ⌘J now walks the inbox in priority order (most severe first, snoozed/resolved skipped), falling through to any live waiting session the boss hasn't recorded a decision for yet. Triage state is additive in workspace state (decoded if-present, no schema bump), so existing state loads with everything open.
+
 ## 0.1.149 - Split layout persistence
 
 - A two-up detail split now survives relaunch: the split axis + the secondary pane's session are saved in workspace state (additive, no schema change) and restored on launch, degrading gracefully to a single pane if the secondary session is gone. (Multi-window and recursive splits remain follow-ups — see `_planning/w5-split-panes-multiwindow.md`.)

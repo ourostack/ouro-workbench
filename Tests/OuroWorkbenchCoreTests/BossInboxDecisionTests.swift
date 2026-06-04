@@ -263,4 +263,252 @@ final class BossInboxDecisionTests: XCTestCase {
         XCTAssertEqual(decisions[0].reasoning, "pick option [1]")
         XCTAssertEqual(decisions[1].kind, .escalate)
     }
+
+    // MARK: - Human triage transitions
+
+    /// A fresh escalate has nil triage → open. Acknowledge / snooze / resolve
+    /// each set the right state, and a later transition overwrites the earlier.
+    func testTriageTransitionsSetState() {
+        var state = WorkspaceState()
+        let d = BossInboxDecision(source: "boss", entryId: UUID(), prompt: "Run tests? (y/N)", kind: .escalate, reasoning: "no pref")
+        state.recordDecision(d)
+        XCTAssertNil(state.decisionLog[0].triage, "a fresh decision is open (nil triage)")
+
+        let t0 = Date()
+        state.acknowledge(decisionID: d.id, at: t0)
+        XCTAssertEqual(state.decisionLog[0].triage, .acknowledged(at: t0))
+
+        let until = t0.addingTimeInterval(3600)
+        state.snooze(decisionID: d.id, until: until)
+        XCTAssertEqual(state.decisionLog[0].triage, .snoozed(until: until), "snooze overwrites acknowledged")
+
+        let t1 = t0.addingTimeInterval(10)
+        state.resolve(decisionID: d.id, at: t1)
+        XCTAssertEqual(state.decisionLog[0].triage, .resolved(at: t1), "resolve overwrites snooze")
+    }
+
+    func testTriageMutationForUnknownIDIsNoOp() {
+        var state = WorkspaceState()
+        state.recordDecision(BossInboxDecision(source: "boss", entryId: UUID(), prompt: "p", kind: .escalate, reasoning: "r"))
+        state.acknowledge(decisionID: UUID()) // id not in the log
+        XCTAssertNil(state.decisionLog[0].triage, "an unknown id leaves the log untouched")
+    }
+
+    func testIsOpenForTriageHelper() {
+        let now = Date()
+        let open = BossInboxDecision(source: "b", prompt: "p", kind: .escalate, reasoning: "r")
+        XCTAssertTrue(open.isOpenForTriage(at: now), "nil triage is open")
+        let ack = BossInboxDecision(source: "b", prompt: "p", kind: .escalate, reasoning: "r", triage: .acknowledged(at: now))
+        XCTAssertFalse(ack.isOpenForTriage(at: now))
+        let snoozedActive = BossInboxDecision(source: "b", prompt: "p", kind: .escalate, reasoning: "r", triage: .snoozed(until: now.addingTimeInterval(60)))
+        XCTAssertFalse(snoozedActive.isOpenForTriage(at: now), "an active snooze is hidden")
+        let snoozedElapsed = BossInboxDecision(source: "b", prompt: "p", kind: .escalate, reasoning: "r", triage: .snoozed(until: now.addingTimeInterval(-60)))
+        XCTAssertTrue(snoozedElapsed.isOpenForTriage(at: now), "an elapsed snooze is open again")
+    }
+
+    // MARK: - Severity
+
+    func testSeverityFromKindAndPrompt() {
+        let escalate = BossInboxDecision(source: "b", prompt: "Choose an option (1/2)", kind: .escalate, reasoning: "r")
+        XCTAssertEqual(DecisionSeverity.of(escalate), .elevated, "a plain escalate is elevated")
+
+        let hold = BossInboxDecision(source: "b", prompt: "Working…", kind: .hold, reasoning: "r")
+        XCTAssertEqual(DecisionSeverity.of(hold), .low)
+
+        let blockedAuto = BossInboxDecision(source: "b", prompt: "Continue? (y/N)", kind: .autoAdvance, reasoning: "r")
+        XCTAssertEqual(DecisionSeverity.of(blockedAuto), .normal)
+
+        // A destructive prompt is critical regardless of kind (PromptSafetyClassifier floor).
+        let destructive = BossInboxDecision(source: "b", prompt: "rm -rf the build dir? (y/N)", kind: .escalate, reasoning: "r")
+        XCTAssertEqual(DecisionSeverity.of(destructive), .critical)
+        let secret = BossInboxDecision(source: "b", prompt: "Enter your password:", kind: .hold, reasoning: "r")
+        XCTAssertEqual(DecisionSeverity.of(secret), .critical, "a secret prompt outranks even a hold's low tier")
+    }
+
+    func testSeverityIsAtMostFourTiers() {
+        XCTAssertLessThanOrEqual(DecisionSeverity.allCases.count, 4, "anti-alarm-fatigue: keep severity tiers ≤4")
+    }
+
+    // MARK: - openInbox filtering & ordering
+
+    private func escalate(entryId: UUID = UUID(), prompt: String, at: Date) -> BossInboxDecision {
+        BossInboxDecision(occurredAt: at, source: "boss", entryId: entryId, sessionName: "s", prompt: prompt, kind: .escalate, reasoning: "r")
+    }
+
+    func testOpenInboxExcludesResolvedAndCurrentlySnoozed() {
+        let now = Date()
+        var state = WorkspaceState()
+        let openD = escalate(prompt: "Choose? (1/2)", at: now)
+        let resolvedD = escalate(prompt: "Already handled? (y/N)", at: now)
+        let snoozedD = escalate(prompt: "Later? (y/N)", at: now)
+        // Insert oldest-first via recordDecision (which prepends), so all three land.
+        state.recordDecision(openD)
+        state.recordDecision(resolvedD)
+        state.recordDecision(snoozedD)
+        state.resolve(decisionID: resolvedD.id, at: now)
+        state.snooze(decisionID: snoozedD.id, until: now.addingTimeInterval(3600))
+
+        let inbox = state.openInbox(now: now)
+        XCTAssertEqual(inbox.map(\.id), [openD.id], "resolved + actively-snoozed are filtered out")
+    }
+
+    func testOpenInboxResurfacesExpiredSnooze() {
+        let now = Date()
+        var state = WorkspaceState()
+        let d = escalate(prompt: "Resurface me? (y/N)", at: now)
+        state.recordDecision(d)
+        state.snooze(decisionID: d.id, until: now.addingTimeInterval(3600))
+
+        XCTAssertTrue(state.openInbox(now: now).isEmpty, "hidden while the snooze is active")
+        let later = now.addingTimeInterval(3601)
+        XCTAssertEqual(state.openInbox(now: later).map(\.id), [d.id], "an expired snooze resurfaces in the queue")
+    }
+
+    func testOpenInboxOrdersBySeverityThenRecency() {
+        let now = Date()
+        var state = WorkspaceState()
+        // Recorded oldest→newest. Severity should dominate recency.
+        let oldDestructive = escalate(prompt: "rm -rf node_modules? (y/N)", at: now.addingTimeInterval(-100)) // critical, oldest
+        let newPlain = escalate(prompt: "Choose? (1/2)", at: now)                                            // elevated, newest
+        let midPlain = escalate(prompt: "Proceed? (y/N)", at: now.addingTimeInterval(-50))                   // elevated, middle
+        state.recordDecision(oldDestructive)
+        state.recordDecision(midPlain)
+        state.recordDecision(newPlain)
+
+        let inbox = state.openInbox(now: now)
+        XCTAssertEqual(
+            inbox.map(\.id),
+            [oldDestructive.id, newPlain.id, midPlain.id],
+            "critical first despite being oldest; within the elevated tier, newer before older"
+        )
+    }
+
+    func testOpenInboxIncludesHoldAndBlockedAutoAdvanceButNotAppliedAutoAdvance() {
+        let now = Date()
+        var state = WorkspaceState()
+        let held = BossInboxDecision(occurredAt: now, source: "b", entryId: UUID(), prompt: "Parked", kind: .hold, reasoning: "r")
+        let blockedAuto = BossInboxDecision(occurredAt: now, source: "b", entryId: UUID(), prompt: "Continue? (y/N)", kind: .autoAdvance, reasoning: "r", status: .recorded)
+        let appliedAuto = BossInboxDecision(occurredAt: now, source: "b", entryId: UUID(), prompt: "Run tests? (y/N)", kind: .autoAdvance, reasoning: "r", status: .applied)
+        state.recordDecision(held)
+        state.recordDecision(blockedAuto)
+        state.recordDecision(appliedAuto)
+
+        let ids = Set(state.openInbox(now: now).map(\.id))
+        XCTAssertTrue(ids.contains(held.id), "a held decision needs the human")
+        XCTAssertTrue(ids.contains(blockedAuto.id), "a blocked/recorded auto-advance fell back to the human")
+        XCTAssertFalse(ids.contains(appliedAuto.id), "an applied auto-advance was handled — audit-only, not in the inbox")
+    }
+
+    func testOpenInboxDeduplicatesPerSessionKeepingNewest() {
+        let now = Date()
+        let entry = UUID()
+        var state = WorkspaceState()
+        let older = escalate(entryId: entry, prompt: "Old prompt? (y/N)", at: now.addingTimeInterval(-100))
+        let newer = escalate(entryId: entry, prompt: "New prompt? (y/N)", at: now)
+        state.recordDecision(older)
+        state.recordDecision(newer)
+
+        let inbox = state.openInbox(now: now)
+        XCTAssertEqual(inbox.map(\.id), [newer.id], "one open row per session — the newest wins")
+    }
+
+    func testOpenInboxKeepsEntrylessDecisionsSeparately() {
+        let now = Date()
+        var state = WorkspaceState()
+        let a = BossInboxDecision(occurredAt: now, source: "b", entryId: nil, prompt: "A? (y/N)", kind: .escalate, reasoning: "r")
+        let b = BossInboxDecision(occurredAt: now.addingTimeInterval(-1), source: "b", entryId: nil, prompt: "B? (y/N)", kind: .escalate, reasoning: "r")
+        state.recordDecision(b)
+        state.recordDecision(a)
+        XCTAssertEqual(Set(state.openInbox(now: now).map(\.id)), [a.id, b.id], "entry-less decisions aren't collapsed together")
+    }
+
+    func testOpenInboxGroupsAndCount() {
+        let now = Date()
+        var state = WorkspaceState()
+        let crit = escalate(prompt: "git push --force? (y/N)", at: now)
+        let plain = escalate(prompt: "Choose? (1/2)", at: now)
+        state.recordDecision(crit)
+        state.recordDecision(plain)
+
+        XCTAssertEqual(state.openInboxCount(now: now), 2)
+        let groups = state.openInboxGroups(now: now)
+        XCTAssertEqual(groups.map(\.severity), [.critical, .elevated], "groups are most-severe first, empty tiers omitted")
+        XCTAssertEqual(groups.first?.decisions.map(\.id), [crit.id])
+        XCTAssertEqual(groups.last?.decisions.map(\.id), [plain.id])
+    }
+
+    // MARK: - Lenient decode of triage (no schemaVersion bump)
+
+    func testDecisionWithoutTriageDecodesToOpen() throws {
+        // A pre-triage persisted decision (no `triage` key) loads with nil triage
+        // → open. Mirrors how `friend` / `detailLayout` were added additively.
+        let json = """
+        {"id":"\(UUID().uuidString)","occurredAt":0,"source":"boss","prompt":"Run tests? (y/N)","kind":"escalate","reasoning":"r","status":"recorded"}
+        """
+        let decoded = try JSONDecoder().decode(BossInboxDecision.self, from: Data(json.utf8))
+        XCTAssertNil(decoded.triage)
+        XCTAssertTrue(decoded.isOpenForTriage(at: Date()))
+    }
+
+    func testWorkspaceStateWithPreTriageDecisionLogLoadsAsOpenInbox() throws {
+        // An entire persisted workspace whose decisionLog rows predate triage
+        // loads with every escalate open in the inbox — old state → open.
+        let entryId = UUID().uuidString
+        let json = """
+        {"schemaVersion":1,"boss":{"agentName":"slugger","scope":"machine"},"projects":[],"processEntries":[],"processRuns":[],"actionLog":[],"decisionLog":[{"id":"\(UUID().uuidString)","occurredAt":0,"source":"boss","entryId":"\(entryId)","sessionName":"Codex","prompt":"Choose? (1/2)","kind":"escalate","reasoning":"no pref","status":"recorded"}],"updatedAt":0}
+        """
+        let state = try JSONDecoder().decode(WorkspaceState.self, from: Data(json.utf8))
+        XCTAssertEqual(state.decisionLog.count, 1)
+        XCTAssertNil(state.decisionLog[0].triage)
+        XCTAssertEqual(state.openInbox(now: Date()).count, 1, "a pre-triage escalation is open in the inbox")
+    }
+
+    func testTriageRoundTripsThroughWorkspaceState() throws {
+        let now = Date(timeIntervalSinceReferenceDate: 1000)
+        var state = WorkspaceState()
+        let d = escalate(prompt: "Snooze me? (y/N)", at: now)
+        state.recordDecision(d)
+        state.snooze(decisionID: d.id, until: now.addingTimeInterval(3600))
+
+        let data = try JSONEncoder().encode(state)
+        let decoded = try JSONDecoder().decode(WorkspaceState.self, from: data)
+        XCTAssertEqual(decoded.decisionLog.first?.triage, .snoozed(until: now.addingTimeInterval(3600)), "triage survives a persistence round-trip")
+    }
+
+    // MARK: - Snooze interval helper
+
+    func testUntilEndOfDayReturnsSecondsToNextMidnight() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        // 2026-06-03 22:00:00 UTC → next midnight is 2026-06-04 00:00:00 UTC = 2h.
+        var comps = DateComponents()
+        comps.year = 2026; comps.month = 6; comps.day = 3
+        comps.hour = 22; comps.minute = 0; comps.second = 0
+        comps.timeZone = TimeZone(identifier: "UTC")
+        let now = calendar.date(from: comps)!
+        let interval = WorkbenchTriageInterval.untilEndOfDay(now: now, calendar: calendar)
+        XCTAssertEqual(interval, 2 * 3600, accuracy: 1, "two hours until the next midnight")
+    }
+
+    func testUntilEndOfDayIsAtLeastAMinute() {
+        // Right before midnight, the interval is clamped so a snooze isn't a no-op.
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        var comps = DateComponents()
+        comps.year = 2026; comps.month = 6; comps.day = 3
+        comps.hour = 23; comps.minute = 59; comps.second = 30
+        comps.timeZone = TimeZone(identifier: "UTC")
+        let now = calendar.date(from: comps)!
+        XCTAssertGreaterThanOrEqual(WorkbenchTriageInterval.untilEndOfDay(now: now, calendar: calendar), 60)
+    }
+
+    func testDecisionTriageCorruptStateDecodesToResolved() throws {
+        // A triage blob with an unrecognized `state` decodes to resolved
+        // (out-of-queue, safe) rather than throwing and dropping the whole row.
+        let json = """
+        {"id":"\(UUID().uuidString)","occurredAt":0,"source":"boss","prompt":"p","kind":"escalate","reasoning":"r","status":"recorded","triage":{"state":"teleported","at":0}}
+        """
+        let decoded = try JSONDecoder().decode(BossInboxDecision.self, from: Data(json.utf8))
+        XCTAssertFalse(decoded.isOpenForTriage(at: Date()), "an unknown triage state is treated as out-of-queue, not a crash")
+    }
 }

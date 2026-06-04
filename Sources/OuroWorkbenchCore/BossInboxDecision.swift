@@ -34,6 +34,163 @@ public enum BossDecisionStatus: String, Codable, Sendable {
     }
 }
 
+/// Where a decision sits in the operator's **human triage** flow — orthogonal to
+/// `BossDecisionStatus` (the boss-side lifecycle). `nil` triage = open / untriaged
+/// (the default, and what every pre-triage persisted decision decodes to). A
+/// decision the boss *escalated* starts open and stays in the inbox until the
+/// operator acts on it.
+public enum DecisionTriage: Codable, Equatable, Sendable {
+    /// The operator has seen it and acknowledges it, but isn't acting yet. Kept
+    /// out of the open queue (the operator chose to park it).
+    case acknowledged(at: Date)
+    /// Hidden from the open queue until `until`; it resurfaces once `now` passes
+    /// that instant (e.g. "remind me in 1h" / "until I'm done").
+    case snoozed(until: Date)
+    /// Dealt with — permanently out of the open queue.
+    case resolved(at: Date)
+
+    /// Whether a decision in this triage state should still appear in the open
+    /// inbox at `now`: an elapsed snooze qualifies; acknowledged, resolved, and a
+    /// still-active snooze do not. (Open / `nil` triage is handled by the caller.)
+    /// One definition shared by the openInbox filter and any UI badge.
+    public func isOpen(at now: Date) -> Bool {
+        switch self {
+        case .acknowledged, .resolved:
+            return false
+        case let .snoozed(until):
+            // A snooze that has elapsed resurfaces as open.
+            return until <= now
+        }
+    }
+
+    private enum CodingKeys: String, CodingKey { case state, at, until }
+    private enum State: String, Codable { case acknowledged, snoozed, resolved }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        // Unknown / corrupt state decodes to `.resolved(at: .distantPast)` — the
+        // safe non-queue choice — rather than throwing and dropping the whole
+        // decision row via the lenient array decoder. (An open item needs no
+        // recovery: the field is simply absent, which Swift maps to `nil`.)
+        guard let state = try? c.decode(State.self, forKey: .state) else {
+            self = .resolved(at: .distantPast)
+            return
+        }
+        switch state {
+        case .acknowledged:
+            self = .acknowledged(at: try c.decodeIfPresent(Date.self, forKey: .at) ?? Date())
+        case .snoozed:
+            self = .snoozed(until: try c.decodeIfPresent(Date.self, forKey: .until) ?? Date())
+        case .resolved:
+            self = .resolved(at: try c.decodeIfPresent(Date.self, forKey: .at) ?? Date())
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case let .acknowledged(at):
+            try c.encode(State.acknowledged, forKey: .state)
+            try c.encode(at, forKey: .at)
+        case let .snoozed(until):
+            try c.encode(State.snoozed, forKey: .state)
+            try c.encode(until, forKey: .until)
+        case let .resolved(at):
+            try c.encode(State.resolved, forKey: .state)
+            try c.encode(at, forKey: .at)
+        }
+    }
+}
+
+/// Priority tier for an open inbox item — a small, fixed set (anti-alarm-fatigue:
+/// ≤4 tiers). Derived from the decision `kind` plus the `PromptSafetyClassifier`
+/// read of the prompt, so a destructive/secret escalation sorts above a plain
+/// one. Higher `rawValue` sorts first.
+public enum DecisionSeverity: Int, Codable, Sendable, CaseIterable, Comparable {
+    /// Hold / informational — the boss is parked, nothing pressing.
+    case low = 0
+    /// A routine attention item with no destructive/secret signal — e.g. a
+    /// blocked auto-advance that fell back to the human.
+    case normal = 1
+    /// An escalation the boss surfaced because it genuinely needs the human.
+    case elevated = 2
+    /// The prompt is destructive/irreversible or touches secrets — top of queue,
+    /// always shown first.
+    case critical = 3
+
+    public static func < (lhs: DecisionSeverity, rhs: DecisionSeverity) -> Bool {
+        lhs.rawValue < rhs.rawValue
+    }
+
+    /// Short human label for the severity accent / grouping header.
+    public var label: String {
+        switch self {
+        case .low: return "Low"
+        case .normal: return "Normal"
+        case .elevated: return "Needs you"
+        case .critical: return "Critical"
+        }
+    }
+
+    /// Severity for a decision: a destructive/secret prompt is always `critical`
+    /// (the `PromptSafetyClassifier` floor — the same one the auto-advance gate
+    /// uses), regardless of kind; otherwise it follows the kind — `escalate` →
+    /// `elevated`, `autoAdvance` (when it still surfaces, e.g. a blocked one) →
+    /// `normal`, `hold` → `low`. Pure so it's unit-testable and shared by the
+    /// queue sort and the row accent.
+    public static func of(_ decision: BossInboxDecision) -> DecisionSeverity {
+        if case .unsafe = PromptSafetyClassifier.classify(
+            prompt: decision.prompt,
+            proposedInput: decision.proposedInput
+        ) {
+            return .critical
+        }
+        switch decision.kind {
+        case .escalate:
+            return .elevated
+        case .autoAdvance:
+            return .normal
+        case .hold:
+            return .low
+        }
+    }
+}
+
+/// Snooze-interval helpers for the inbox triage menu. Pure (clock + calendar
+/// injected) so the "until end of day" arithmetic is unit-testable.
+public enum WorkbenchTriageInterval {
+    /// Seconds from `now` to the start of the next day in `calendar` — the
+    /// "until end of day" snooze. Falls back to 24h if the calendar can't
+    /// compute a next day (it always can in practice).
+    public static func untilEndOfDay(
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> TimeInterval {
+        guard let nextDay = calendar.nextDate(
+            after: now,
+            matching: DateComponents(hour: 0, minute: 0, second: 0),
+            matchingPolicy: .nextTime
+        ) else {
+            return 86_400
+        }
+        return max(60, nextDay.timeIntervalSince(now))
+    }
+}
+
+/// One severity-grouped section of the open inbox: a tier and the decisions in
+/// it (already in queue order). Lets the UI render headed groups without
+/// re-deriving severity per row.
+public struct InboxSeverityGroup: Equatable, Sendable, Identifiable {
+    public var severity: DecisionSeverity
+    public var decisions: [BossInboxDecision]
+    public var id: Int { severity.rawValue }
+
+    public init(severity: DecisionSeverity, decisions: [BossInboxDecision]) {
+        self.severity = severity
+        self.decisions = decisions
+    }
+}
+
 /// One auditable record of a boss decision about a waiting session — the
 /// centerpiece of the preference-driven inbox. It answers, for every call the
 /// boss made: **what** (kind + proposedInput), **why** (preferenceCited +
@@ -63,6 +220,12 @@ public struct BossInboxDecision: Codable, Equatable, Identifiable, Sendable {
     /// Freeform reasoning, for the human to read during audit / tuning.
     public var reasoning: String
     public var status: BossDecisionStatus
+    /// The operator's **human triage** state for this decision (orthogonal to
+    /// `status`, which is the boss-side lifecycle). `nil` = open / untriaged —
+    /// the default, and what every pre-triage persisted decision decodes to
+    /// (synthesized Codable treats this optional as decode-if-present, mirroring
+    /// how `friend` / `detailLayout` were added with no `schemaVersion` bump).
+    public var triage: DecisionTriage?
 
     public init(
         id: UUID = UUID(),
@@ -78,7 +241,8 @@ public struct BossInboxDecision: Codable, Equatable, Identifiable, Sendable {
         preferenceCited: String? = nil,
         confidence: Double? = nil,
         reasoning: String,
-        status: BossDecisionStatus = .recorded
+        status: BossDecisionStatus = .recorded,
+        triage: DecisionTriage? = nil
     ) {
         self.id = id
         self.occurredAt = occurredAt
@@ -94,6 +258,13 @@ public struct BossInboxDecision: Codable, Equatable, Identifiable, Sendable {
         self.confidence = confidence
         self.reasoning = reasoning
         self.status = status
+        self.triage = triage
+    }
+
+    /// Convenience: whether this decision is still open in the inbox at `now`
+    /// (no triage, or a snooze that has elapsed). `nil` triage → open.
+    public func isOpenForTriage(at now: Date) -> Bool {
+        triage?.isOpen(at: now) ?? true
     }
 }
 
@@ -200,5 +371,105 @@ public extension WorkspaceState {
             return true
         }
         return !(recent.kind == kind && recent.prompt == prompt)
+    }
+
+    // MARK: - Human triage
+
+    /// Set a decision's triage state (pure mutation, no persistence — mirrors
+    /// `recordDecision`, so the model layer controls when to save). No-op if the
+    /// id isn't in the log.
+    private mutating func setTriage(_ triage: DecisionTriage?, forID id: UUID) {
+        guard let index = decisionLog.firstIndex(where: { $0.id == id }) else {
+            return
+        }
+        decisionLog[index].triage = triage
+    }
+
+    /// Operator acknowledges a decision — seen, parked, out of the open queue.
+    mutating func acknowledge(decisionID id: UUID, at date: Date = Date()) {
+        setTriage(.acknowledged(at: date), forID: id)
+    }
+
+    /// Snooze a decision until `date`; it stays out of the open queue until then
+    /// and resurfaces once `now` passes it.
+    mutating func snooze(decisionID id: UUID, until date: Date) {
+        setTriage(.snoozed(until: date), forID: id)
+    }
+
+    /// Resolve a decision — dealt with, permanently out of the open queue.
+    mutating func resolve(decisionID id: UUID, at date: Date = Date()) {
+        setTriage(.resolved(at: date), forID: id)
+    }
+
+    // MARK: - Prioritized open inbox (read-side)
+
+    /// Whether a decision belongs in the open inbox at all (independent of
+    /// triage): the ones that actually need the human. An `escalate` always does;
+    /// a `hold` does (the boss parked it for the operator to look at); an
+    /// `autoAdvance` only does when it was NOT actually sent — a `recorded`/
+    /// `overridden` auto-advance is a blocked or corrected one that fell back to
+    /// the human, whereas an `applied` one was handled and is audit-only.
+    private static func needsHuman(_ decision: BossInboxDecision) -> Bool {
+        switch decision.kind {
+        case .escalate, .hold:
+            return true
+        case .autoAdvance:
+            return decision.status != .applied
+        }
+    }
+
+    /// The prioritized open inbox at `now`: decisions that need the human and are
+    /// neither resolved nor currently snoozed, sorted by **severity then
+    /// recency** (most severe first; within a tier, newest first). This is the
+    /// queue ⌘J walks and the Inbox view renders — typically 1–2 items even with
+    /// ~10 mostly-dormant sessions, never the full 200-row log.
+    ///
+    /// De-duplicated per session (newest open decision per `entryId` wins) so a
+    /// session that ticked several escalations shows once; decisions with no
+    /// `entryId` are each kept (they can't be collapsed safely).
+    func openInbox(now: Date = Date()) -> [BossInboxDecision] {
+        var seenEntryIDs = Set<UUID>()
+        // decisionLog is already newest-first, so the first open decision we see
+        // for an entry is its newest — keep that one, drop older same-entry ones.
+        let candidates = decisionLog.filter { decision in
+            guard Self.needsHuman(decision), decision.isOpenForTriage(at: now) else {
+                return false
+            }
+            guard let entryId = decision.entryId else {
+                return true
+            }
+            return seenEntryIDs.insert(entryId).inserted
+        }
+        // Stable sort by severity desc, then recency desc. `enumerated` index is
+        // the tie-breaker so equal (severity, occurredAt) keeps newest-first
+        // log order deterministically.
+        return candidates.enumerated().sorted { lhs, rhs in
+            let ls = DecisionSeverity.of(lhs.element)
+            let rs = DecisionSeverity.of(rhs.element)
+            if ls != rs {
+                return ls > rs
+            }
+            if lhs.element.occurredAt != rhs.element.occurredAt {
+                return lhs.element.occurredAt > rhs.element.occurredAt
+            }
+            return lhs.offset < rhs.offset
+        }.map(\.element)
+    }
+
+    /// `openInbox(now:)` partitioned into severity-headed groups (most severe
+    /// first), each preserving queue order. Empty tiers are omitted. Lets the
+    /// Inbox view render sections without re-deriving severity per row.
+    func openInboxGroups(now: Date = Date()) -> [InboxSeverityGroup] {
+        let queue = openInbox(now: now)
+        return DecisionSeverity.allCases.reversed().compactMap { severity in
+            let items = queue.filter { DecisionSeverity.of($0) == severity }
+            return items.isEmpty ? nil : InboxSeverityGroup(severity: severity, decisions: items)
+        }
+    }
+
+    /// Count of open inbox items at `now` — for the ⌘K subtitle / badge ("2
+    /// sessions need a decision") without materializing the full sort.
+    func openInboxCount(now: Date = Date()) -> Int {
+        openInbox(now: now).count
     }
 }
