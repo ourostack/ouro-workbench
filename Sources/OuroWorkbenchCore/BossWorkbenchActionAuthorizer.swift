@@ -171,6 +171,12 @@ public struct BossWorkbenchActionAuthorizer: Sendable {
                 return .denied("repairAgent requires an explicit agent name")
             }
             return .allowed(posture: .trustedOnboarding)
+        case .requestProviderConfig:
+            // Non-secret-bearing, non-executing UI signal: it carries no credential and runs no
+            // command — its sole effect is asking the app to open the native provider form (the
+            // one human gate). Allowed entry-less under `trustedOnboarding`; it needs no explicit
+            // agent name (the form resolves/labels the target itself).
+            return .allowed(posture: .trustedOnboarding)
         case .createGroup, .createTerminal, .createSession:
             return .allowed(posture: .knownEntryless)
         case .launch, .recover, .terminate, .sendInput, .moveSession,

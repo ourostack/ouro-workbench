@@ -8641,6 +8641,14 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var onboardingProposal: WorkbenchImportProposal?
     @Published var onboardingIsScanning = false
     @Published var lastImportSummary: WorkbenchImportApplyResult?
+    /// Whether the native provider-config form (the one human gate) is presented. Flipped true
+    /// by `requestProviderConfig` (and the native onboarding provider-setup affordance).
+    /// NON-SECRET-BEARING: this flag only opens the form; the credential is entered natively in
+    /// the form and flows to `ouro hatch` argv — never through the agent's context.
+    @Published var isProviderConfigPresented = false
+    /// The agent name the provider form is connecting a provider for (label/seed only — never a
+    /// credential). Defaults to the selected boss when the request named no explicit agent.
+    @Published var providerConfigAgentName: String = ""
 
     private let paths: WorkbenchPaths
     private let store: WorkbenchStore
@@ -13921,7 +13929,7 @@ final class WorkbenchViewModel: ObservableObject {
         // `authorize(_:for:livePrompt:)` sendInput safety floor + escalateWithheldBossInput
         // path — is left UNTOUCHED.
         switch action.action {
-        case .createGroup, .createTerminal, .createSession, .repairAgent:
+        case .createGroup, .createTerminal, .createSession, .repairAgent, .requestProviderConfig:
             let authorization = bossActionAuthorizer.authorizeEntryless(action)
             guard authorization.isAllowed else {
                 return finishBossAction(
@@ -13985,6 +13993,8 @@ final class WorkbenchViewModel: ObservableObject {
             return finishBossAction(source: source, action: action, entry: entry, result: "Created session \(entry.name) in \(project.name) owned by \(ownerName)")
         case .repairAgent:
             return startRepairAgent(action: action, source: source)
+        case .requestProviderConfig:
+            return openProviderConfig(action: action, source: source)
         case .launch, .recover, .terminate, .sendInput, .moveSession, .setTrust, .setAutoResume, .archive, .restore:
             break
         }
@@ -14126,7 +14136,7 @@ final class WorkbenchViewModel: ObservableObject {
                 return finishBossAction(source: source, action: action, entry: entry, result: "Failed restore for \(entry.name): \(errorMessage ?? "not restorable")")
             }
             return finishBossAction(source: source, action: action, entry: entry, result: "Restored \(entry.name)")
-        case .createGroup, .createTerminal, .createSession, .repairAgent:
+        case .createGroup, .createTerminal, .createSession, .repairAgent, .requestProviderConfig:
             return finishBossAction(source: source, action: action, entry: entry, result: "Skipped \(action.action.rawValue): already handled")
         }
     }
@@ -14181,6 +14191,36 @@ final class WorkbenchViewModel: ObservableObject {
         if recorded {
             save()
         }
+    }
+
+    /// Present the native provider-config form for `agentName`. The single place the form is
+    /// opened — from the `requestProviderConfig` action OR a native onboarding provider-setup
+    /// affordance. Sets only the label/seed and the presentation flag; carries no credential.
+    func presentProviderConfigForm(agentName: String) {
+        let trimmed = agentName.trimmingCharacters(in: .whitespacesAndNewlines)
+        providerConfigAgentName = trimmed.isEmpty ? state.boss.agentName : trimmed
+        isProviderConfigPresented = true
+    }
+
+    /// Open the native provider-config form in response to a non-secret-bearing
+    /// `requestProviderConfig` onboarding action.
+    ///
+    /// NON-EXECUTING by contract: this runs NO command and carries NO credential. The agent can
+    /// only ASK the app to open the form; the human supplies the credential inside the native
+    /// form, which never routes through the agent's context/transcript. The effect here is a
+    /// single published flag flip that presents the form — the one human touchpoint.
+    private func openProviderConfig(action: BossWorkbenchAction, source: String) -> String {
+        // Seed the form with the explicit agent name if the action named one (never relied on
+        // for credentials — only to label which agent the form is connecting a provider for).
+        let agentName = (action.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let target = agentName.isEmpty ? state.boss.agentName : agentName
+        presentProviderConfigForm(agentName: target)
+        return finishBossAction(
+            source: source,
+            action: action,
+            entry: nil,
+            result: "Opened the provider setup form for \(target)."
+        )
     }
 
     /// Kick off a headless `repairAgent` remediation.

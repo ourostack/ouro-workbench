@@ -271,4 +271,81 @@ final class BossWorkbenchActionTests: XCTestCase {
             BossWorkbenchAction(action: .repairAgent, name: "slugger"),
         ])
     }
+
+    // MARK: - requestProviderConfig (non-secret-bearing, UI-opening, non-executing)
+
+    func testRequestProviderConfigCarriesNoCredentialField() throws {
+        // PROOF: routing a secret through the agent's action/context is forbidden. The
+        // BossWorkbenchAction shape (the agent-issuable surface) has no credential-bearing
+        // key at all — there is no field whose value could ever be an API key / token /
+        // secret. Encode an action and assert its on-the-wire keys are exactly the known,
+        // non-secret structural keys.
+        let action = BossWorkbenchAction(action: .requestProviderConfig, name: "slugger")
+        let data = try JSONEncoder().encode(action)
+        let object = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let keys = Set(object.keys)
+
+        // Exactly the live, non-secret structural keys of BossWorkbenchAction — no credential
+        // sink exists. (`owner` is the createSession agent-name label; not a secret.)
+        let allowedKeys: Set<String> = [
+            "action", "entry", "text", "appendNewline", "group",
+            "name", "command", "workingDirectory", "trust", "autoResume",
+            "owner",
+        ]
+        XCTAssertTrue(keys.isSubset(of: allowedKeys), "unexpected keys on the wire: \(keys.subtracting(allowedKeys))")
+
+        // None of the keys is named like a credential sink.
+        let secretLike = ["apiKey", "api_key", "token", "secret", "credential", "password", "key"]
+        for key in keys {
+            for needle in secretLike {
+                XCTAssertFalse(
+                    key.lowercased().contains(needle.lowercased()),
+                    "requestProviderConfig must carry no credential-bearing field; found \(key)"
+                )
+            }
+        }
+    }
+
+    func testRequestProviderConfigIsNonExecutingUITrigger() throws {
+        // It only OPENS the native form — it does not run a command. The kind classifies as
+        // a UI trigger / non-executing, distinguishing it from command-executing onboarding
+        // actions like repairAgent.
+        XCTAssertTrue(BossWorkbenchActionKind.requestProviderConfig.opensProviderForm)
+        XCTAssertFalse(BossWorkbenchActionKind.requestProviderConfig.executesCommand)
+
+        // repairAgent, by contrast, DOES execute a command and does NOT open the form.
+        XCTAssertFalse(BossWorkbenchActionKind.repairAgent.opensProviderForm)
+        XCTAssertTrue(BossWorkbenchActionKind.repairAgent.executesCommand)
+
+        // Every other kind is command-executing and never opens the form (exhaustive guard so a
+        // future kind can't silently become a second UI-opener / non-executing action).
+        for kind in BossWorkbenchActionKind.allCases where kind != .requestProviderConfig {
+            XCTAssertFalse(kind.opensProviderForm, "\(kind.rawValue) must not open the provider form")
+            XCTAssertTrue(kind.executesCommand, "\(kind.rawValue) must execute a command")
+        }
+    }
+
+    func testRequestProviderConfigDoesNotRequireAnEntryOrNameBeforeQueueing() throws {
+        // Entry-less by design and carries no required payload: the human gate lives inside
+        // the form, not in the action approval.
+        let action = BossWorkbenchAction(action: .requestProviderConfig)
+
+        XCTAssertNoThrow(try action.validateForQueueing())
+    }
+
+    func testParsesRequestProviderConfigOnboardingAction() throws {
+        let reply = """
+        ```ouro-workbench-actions
+        [
+          { "action": "requestProviderConfig", "name": "slugger" }
+        ]
+        ```
+        """
+
+        let actions = try BossWorkbenchActionParser().parse(reply)
+
+        XCTAssertEqual(actions, [
+            BossWorkbenchAction(action: .requestProviderConfig, name: "slugger"),
+        ])
+    }
 }

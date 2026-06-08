@@ -20,6 +20,29 @@ public enum BossWorkbenchActionKind: String, Codable, Sendable, CaseIterable {
     /// executed headlessly with a post-command verify probe (recovery truth from the
     /// probe, never the exit code).
     case repairAgent
+    /// Onboarding UI signal: open the native provider-config form (the one human touchpoint).
+    ///
+    /// NON-SECRET-BEARING by construction: it carries NO credential — routing a secret through
+    /// the agent's action/context/transcript is catastrophically wrong. Its ONLY effect is to
+    /// signal the native app to open the provider form; it does NOT run a command. The human
+    /// gate (and the actual credential entry) lives inside the native form, never in this action.
+    /// Entry-less and authorized under the `trustedOnboarding` posture (entry-less).
+    case requestProviderConfig
+
+    /// Whether this kind's effect is to OPEN the native provider-config form rather than
+    /// execute a command. Only `requestProviderConfig` is a UI-opening signal: it shows UI and
+    /// runs nothing. This is what makes it non-executing — a hard guarantee that no command (and
+    /// therefore no credential) is ever spawned from the agent-issued request.
+    public var opensProviderForm: Bool {
+        self == .requestProviderConfig
+    }
+
+    /// Whether applying this kind executes a command / mutates state (vs. only opening UI). The
+    /// non-secret-bearing `requestProviderConfig` opens the form and executes nothing; every
+    /// other kind drives a concrete app effect.
+    public var executesCommand: Bool {
+        self != .requestProviderConfig
+    }
 }
 
 public struct BossWorkbenchAction: Codable, Equatable, Sendable {
@@ -141,7 +164,7 @@ public extension BossWorkbenchAction {
             guard entry?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
                 throw BossWorkbenchActionValidationError.missingEntry(action)
             }
-        case .createGroup, .createTerminal, .createSession, .repairAgent:
+        case .createGroup, .createTerminal, .createSession, .repairAgent, .requestProviderConfig:
             break
         }
 
@@ -193,7 +216,10 @@ public extension BossWorkbenchAction {
             guard name?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
                 throw BossWorkbenchActionValidationError.missingName(action)
             }
-        case .launch, .recover, .terminate, .archive, .restore:
+        case .launch, .recover, .terminate, .archive, .restore, .requestProviderConfig:
+            // requestProviderConfig carries no required payload: it only signals the app to
+            // open the native form. The human gate (and the credential) lives inside the form,
+            // never in this non-secret-bearing action.
             break
         }
     }
