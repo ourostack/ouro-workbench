@@ -99,7 +99,7 @@ public enum BossWorkbenchMCPRegistrationError: Error, Equatable, LocalizedError,
     }
 }
 
-public struct BossWorkbenchMCPRegistrar {
+public struct BossWorkbenchMCPRegistrar: @unchecked Sendable {
     public var agentBundlesURL: URL
     public var mcpExecutableURL: URL
     public var serverName: String
