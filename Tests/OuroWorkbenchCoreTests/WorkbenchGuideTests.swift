@@ -24,6 +24,7 @@ final class WorkbenchGuideTests: XCTestCase {
         XCTAssertEqual(tools, [
             "workbench_status",
             "workbench_sessions",
+            "workbench_visibility",
             "workbench_sense",
             "workbench_transcript_tail",
             "workbench_search_transcripts",

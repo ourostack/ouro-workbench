@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.152 - Workbench visibility plane
+
+- Adds a read-only `workbench_visibility` MCP tool and native boss-pane visibility strip that combine Workbench session/decision counts with the selected Ouro agent's durable Work Card. Unknown claim verification state is represented explicitly as unavailable/unknown rather than false zeroes, and redacted Work Card next-action summaries are not expanded in Workbench output.
+
 ## 0.1.151 - Glanceable per-session chip
 
 - Each sidebar session row now carries a glanceable chip so the operator can tell what an agent is doing without opening its terminal: a health glyph (with an amber "stalled" state when a session looks busy but its output has gone quiet), a `done/total · current-step` todo mini, and a token/$ metric. The structured facets are derived from the agent's own JSONL transcript — not by scraping the PTY — via a new bounded, redacted `SessionActivityReader` (Claude Code `~/.claude/projects/<encoded-cwd>/<session>.jsonl`, with Codex rollout coverage for tokens/last-activity). It tails only the last ~256 KB, de-duplicates token usage by assistant message id, and never surfaces raw tool inputs/outputs. Refresh mirrors the git-status plumbing (off the main actor, throttled to skip dormant sessions); sessions with no mapped transcript render only the free health facet, never empty.

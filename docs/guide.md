@@ -609,6 +609,7 @@ Workbench MCP exposes:
 | --- | --- |
 | `workbench_status` | Summarize persisted state, process entries, recovery plans, and transcript paths. |
 | `workbench_sessions` | Machine-readable JSON list of sessions for programmatic clients (filters: `owner` / `name` / `includeArchived`). |
+| `workbench_visibility` | Read Workbench session counts, boss-decision counts, and Ouro Work Card state with typed unknown/unavailable fields instead of false zeroes. |
 | `workbench_sense` | Render the Workbench sense contract: boss boundary, group/Desk mirror, tool affordances, the action protocol, and the operator keyboard shortcuts (so the boss can answer how-do-I questions). |
 | `workbench_transcript_tail` | Read a bounded tail from the latest transcript for a session. |
 | `workbench_search_transcripts` | Search saved transcript lines across runs. |

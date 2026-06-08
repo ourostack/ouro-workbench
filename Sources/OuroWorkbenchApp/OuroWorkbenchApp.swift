@@ -4219,6 +4219,9 @@ struct BossDashboardView: View {
                 if let dashboard = model.bossDashboard {
                     DashboardMetricsStrip(dashboard: dashboard)
                 }
+                if let visibility = model.workbenchVisibility {
+                    WorkbenchVisibilityStrip(snapshot: visibility)
+                }
                 if let dashboard = model.bossDashboard,
                    !dashboard.availability.issues.isEmpty {
                     MailboxWarningView(issues: dashboard.availability.issues)
@@ -4342,6 +4345,33 @@ struct DashboardMetricsStrip: View {
                 MetricChip(label: "mode", value: dashboard.daemonMode)
             }
         }
+    }
+}
+
+struct WorkbenchVisibilityStrip: View {
+    var snapshot: WorkbenchVisibilitySnapshot
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                MetricChip(label: "visibility", value: snapshot.readiness.status.rawValue)
+                MetricChip(label: "owed", value: render(snapshot.agentWork.counts.owed))
+                MetricChip(label: "returns", value: render(snapshot.agentWork.counts.returnObligations))
+                MetricChip(label: "claims", value: snapshot.agentWork.claims.available ? "ok" : "unknown")
+                MetricChip(label: "inbox", value: "\(snapshot.decisions.openInbox)")
+                MetricChip(label: "recover", value: "\(snapshot.workspace.recoverableSessions)")
+            }
+        }
+        .help(helpText)
+    }
+
+    private var helpText: String {
+        let issueText = snapshot.readiness.issues.map { "\($0.code): \($0.detail)" }.joined(separator: "\n")
+        return issueText.isEmpty ? "Workbench visibility is available." : issueText
+    }
+
+    private func render(_ value: Int?) -> String {
+        value.map(String.init) ?? "?"
     }
 }
 
@@ -8394,6 +8424,7 @@ final class WorkbenchViewModel: ObservableObject {
     }
     @Published var errorMessage: String?
     @Published var bossDashboard: BossDashboardSnapshot?
+    @Published var workbenchVisibility: WorkbenchVisibilitySnapshot?
     @Published var bossCheckInPrompt: String?
     @Published var bossCheckInAnswer: String?
     @Published var bossCheckInIsRunning = false
@@ -8647,6 +8678,8 @@ final class WorkbenchViewModel: ObservableObject {
     private let summarizer = WorkspaceSummarizer()
     private let mailboxClient: MailboxClient
     private let bossDashboardBuilder = BossDashboardBuilder()
+    private let visibilityBuilder = WorkbenchVisibilityBuilder()
+    private let workCardReader: OuroWorkCardReader
     private let bossBridgePlanner = BossAgentBridgePlanner()
     private let bossPromptBuilder = BossAgentPromptBuilder()
     private let autonomyReadinessBuilder = AutonomyReadinessBuilder()
@@ -8715,7 +8748,8 @@ final class WorkbenchViewModel: ObservableObject {
         bossWorkbenchMCPRegistrar: BossWorkbenchMCPRegistrar = BossWorkbenchMCPRegistrar(),
         ouroAgentInventory: OuroAgentInventory = OuroAgentInventory(),
         executableHealthChecker: ExecutableHealthChecker = ExecutableHealthChecker(),
-        releaseUpdateChecker: ReleaseUpdateChecker = ReleaseUpdateChecker()
+        releaseUpdateChecker: ReleaseUpdateChecker = ReleaseUpdateChecker(),
+        workCardReader: OuroWorkCardReader = OuroWorkCardReader()
     ) {
         self.paths = paths
         self.store = WorkbenchStore(paths: paths)
@@ -8725,6 +8759,7 @@ final class WorkbenchViewModel: ObservableObject {
         self.ouroAgentInventory = ouroAgentInventory
         self.executableHealthChecker = executableHealthChecker
         self.releaseUpdateChecker = releaseUpdateChecker
+        self.workCardReader = workCardReader
         self.externalActionQueue = WorkbenchActionRequestQueue(paths: paths)
         self.state = WorkspaceState()
         // Seed the palette's static override from the persisted setting so
@@ -12768,6 +12803,20 @@ final class WorkbenchViewModel: ObservableObject {
         bossDashboard = snapshot
         mailboxError = issues.isEmpty ? nil : "Mailbox warnings: \(issues.joined(separator: "; "))"
         notifyAboutNewNeedsMeItems(previous: previousDashboard, current: snapshot)
+        await refreshWorkbenchVisibility()
+    }
+
+    func refreshWorkbenchVisibility() async {
+        let snapshotState = state
+        let agentName = snapshotState.boss.agentName
+        let reader = workCardReader
+        let workCard = await Task.detached(priority: .utility) {
+            reader.read(agent: agentName)
+        }.value
+        workbenchVisibility = visibilityBuilder.build(
+            state: snapshotState,
+            workCard: workCard
+        )
     }
 
     /// IDs of needs-me items we've already notified the user about. We never
