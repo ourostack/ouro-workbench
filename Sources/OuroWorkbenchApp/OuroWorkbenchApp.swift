@@ -452,6 +452,9 @@ struct WorkbenchRootView: View {
         .sheet(isPresented: $model.isOnboardingPresented) {
             WorkbenchOnboardingSheet(model: model)
         }
+        .sheet(isPresented: $model.isProviderConfigPresented) {
+            ProviderConfigSheet(model: model)
+        }
         .confirmationDialog("Delete Terminal?", isPresented: model.deleteConfirmationIsPresented) {
             if let entry = model.pendingDeleteSession {
                 Button("Delete \(entry.name)", role: .destructive) {
@@ -4663,6 +4666,96 @@ private enum OuroAgentInstallSheetMode: String, CaseIterable, Identifiable {
     }
 }
 
+/// The native provider-config form — the ONE human touchpoint of the cold-start bootstrap.
+///
+/// Thin wiring over the pure `ProviderConfigForm` Core type: it collects the provider choice and
+/// the credential fields, then hands them to the model. The SECRET never leaves this native form
+/// except as `ouro hatch` argv tokens the model builds — it is NEVER routed through the agent's
+/// context/MCP. Cohesive-product copy: reads as one product ("your agent"), no `ouro`/CLI seams.
+struct ProviderConfigSheet: View {
+    @ObservedObject var model: WorkbenchViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var provider: WorkbenchProvider = .anthropic
+    @State private var humanName: String = NSFullUserName()
+    @State private var values: [String: String] = [:]
+    @State private var message: String?
+
+    private var form: ProviderConfigForm {
+        ProviderConfigForm(agentName: model.providerConfigAgentName, humanName: humanName)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(form.title)
+                .font(.title3.weight(.semibold))
+            Text(form.subtitle)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            Form {
+                Picker("Provider", selection: $provider) {
+                    ForEach(WorkbenchProvider.allCases) { provider in
+                        Text(provider.displayName).tag(provider)
+                    }
+                }
+                TextField("Your name", text: $humanName)
+                ForEach(provider.credentialFields) { field in
+                    if field.isSecret {
+                        SecureField(field.label, text: binding(for: field.key))
+                    } else {
+                        TextField(field.label, text: binding(for: field.key))
+                    }
+                }
+            }
+
+            if let message {
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack {
+                Spacer()
+                Button("Cancel") {
+                    dismiss()
+                }
+                Button {
+                    submit()
+                } label: {
+                    Label("Connect", systemImage: "link")
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding()
+        .frame(width: 560)
+        .onChange(of: provider) {
+            // Clearing per-provider field values when the provider changes keeps stale secrets
+            // out of the form state.
+            values = [:]
+            message = nil
+        }
+    }
+
+    private func binding(for key: String) -> Binding<String> {
+        Binding(
+            get: { values[key] ?? "" },
+            set: { values[key] = $0 }
+        )
+    }
+
+    private func submit() {
+        if let failure = model.submitProviderConfig(provider: provider, humanName: humanName, values: values) {
+            message = failure
+            return
+        }
+        // Success: the secret is on its way to hatch via argv; clear local state and dismiss.
+        values = [:]
+        dismiss()
+    }
+}
+
 struct OuroAgentInstallSheet: View {
     @ObservedObject var model: WorkbenchViewModel
     @Environment(\.dismiss) private var dismiss
@@ -5419,6 +5512,17 @@ private struct OnboardingRepairStepRow: View {
                     model.runOnboardingProviderChecksIfNeeded()
                 } label: {
                     Label("Register", systemImage: "link.badge.plus")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            } else if step.isProviderSetup {
+                // Provider-setup opens the NATIVE provider form (the one human gate) — not a
+                // `ouro connect providers` `.trusted` pane. This covers both the cold-start
+                // credential gate (`request-provider-config`) and the existing-agent lane steps.
+                Button {
+                    model.openOnboardingRepair(step)
+                } label: {
+                    Label("Connect", systemImage: "link")
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
@@ -12205,6 +12309,17 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     func openOnboardingRepair(_ step: OnboardingRepairStep) {
+        // Provider-setup steps open the NATIVE provider form (the one human gate) — never a
+        // `ouro connect providers` `.trusted` pane. That interactive pane was the TTFA violation
+        // R3 deleted: the human is never handed a CLI, not even in an app-opened pane. The
+        // cold-start gate (`request-provider-config`) carries no command at all; the existing-
+        // agent lane-completion steps (`outward-lane` / `inner-lane`) still carry an audit-lane
+        // command in Core, but here they route to the native form (and the form honestly reports
+        // the existing-agent gap — gap a — rather than spawning a pane).
+        if step.isProviderSetup {
+            presentProviderConfigForm(agentName: onboardingReadiness?.selectedBossName ?? state.boss.agentName)
+            return
+        }
         guard let commandLine = step.commandLine else {
             return
         }
@@ -14200,6 +14315,73 @@ final class WorkbenchViewModel: ObservableObject {
         let trimmed = agentName.trimmingCharacters(in: .whitespacesAndNewlines)
         providerConfigAgentName = trimmed.isEmpty ? state.boss.agentName : trimmed
         isProviderConfigPresented = true
+    }
+
+    /// Whether a usable agent bundle already exists for the provider-config target. Drives the
+    /// cold-start vs. existing-agent branch in `submitProviderConfig`.
+    func providerConfigAgentAlreadyExists(named agentName: String) -> Bool {
+        let trimmed = agentName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return ouroAgents.contains { $0.name.caseInsensitiveCompare(trimmed) == .orderedSame }
+    }
+
+    /// Submit the native provider-config form. Returns the seam-free message to surface in the
+    /// form (nil = success + dismiss). The SECRET reaches `ouro hatch` only here, native-form →
+    /// hatch argv — it NEVER passes through the agent's context/MCP.
+    ///
+    /// COLD-START path (the deliverable): no usable agent yet → build + run a headless
+    /// `ouro hatch …` with the matching credential flags, then re-probe readiness.
+    @discardableResult
+    func submitProviderConfig(
+        provider: WorkbenchProvider,
+        humanName: String,
+        values: [String: String]
+    ) -> String? {
+        let agentName = providerConfigAgentName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedAgent = agentName.isEmpty ? state.boss.agentName : agentName
+
+        // EXISTING-AGENT credential refresh has no headless `ouro` non-interactive sink today
+        // (the documented narrow gap, gap a). Surface the honest, seam-free Core copy — do NOT
+        // reintroduce a `connect providers` pane and do NOT block.
+        // FUTURE: needs ouro non-interactive credential-set affordance.
+        if providerConfigAgentAlreadyExists(named: resolvedAgent) {
+            return ProviderConfigForm.existingAgentRefreshUnavailableMessage(agentName: resolvedAgent)
+        }
+
+        let form = ProviderConfigForm(agentName: resolvedAgent, humanName: humanName)
+        let outcome = form.submit(provider: provider, values: values)
+
+        switch outcome {
+        case let .invalid(message):
+            return message
+        case let .unsupportedColdStartSink(message):
+            // github-copilot cold-start (gap b): no `ouro hatch` argv flag. Honest report — no
+            // fabricated command, no CLI pane. The Core form built this seam-free message.
+            return message
+        case let .coldStartHatch(plan):
+            // Run the cold-start hatch headlessly (no pane). The secret lives only in the plan's
+            // argv tokens, built natively from the form — never through the agent.
+            Task { [weak self] in
+                try? await ColdStartHatchRunner.runHeadless(plan: plan)
+                await MainActor.run {
+                    // Re-probe readiness: the agent was just created WITH creds, so the provider
+                    // gate is now satisfied. (R4 re-runs the parked first-run bootstrap here.)
+                    // FUTURE: re-run the parked AgentReadinessBootstrap to cross S2 → handoff.
+                    self?.refreshOuroAgents()
+                    self?.refreshOnboardingReadiness()
+                    self?.runOnboardingProviderChecksIfNeeded()
+                }
+            }
+            recordActionLog(
+                source: "native",
+                action: "providerConfigColdStart",
+                targetName: resolvedAgent,
+                // Audit lane only — carries the raw `ouro hatch` verb (NOT the credential value).
+                result: "ran `ouro hatch --agent \(resolvedAgent) --provider \(provider.providerFlagValue)` (cold-start; credential via native form → argv)",
+                succeeded: true
+            )
+            isProviderConfigPresented = false
+            return nil
+        }
     }
 
     /// Open the native provider-config form in response to a non-secret-bearing

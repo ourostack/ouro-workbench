@@ -152,6 +152,16 @@ public struct ProviderConfigForm: Sendable {
         "Choose a provider and enter your credentials so your agent can start working. This is the only step that needs you."
     }
 
+    /// Honest, seam-free copy for the EXISTING-agent credential-refresh gap (gap a). Refreshing
+    /// an already-set-up agent's provider has no headless `ouro` non-interactive credential-set
+    /// affordance today, so the form tells the human plainly that this isn't available yet —
+    /// it never fabricates a command and never reopens a CLI pane. (Cold-start, by contrast,
+    /// runs headlessly via `submit`'s hatch plan.)
+    // FUTURE: needs ouro non-interactive credential-set affordance (existing-agent cred-refresh).
+    public static func existingAgentRefreshUnavailableMessage(agentName: String) -> String {
+        "\(agentName) is already set up. Updating an existing agent's provider isn't available here yet — Workbench will add this soon."
+    }
+
     /// Validate + build the cold-start outcome for the chosen provider and entered field values.
     ///
     /// COLD-START path only (a brand-new agent → headless hatch). Refreshing an EXISTING agent's
