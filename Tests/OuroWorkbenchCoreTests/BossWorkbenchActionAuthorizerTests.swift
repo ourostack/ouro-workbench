@@ -169,4 +169,201 @@ final class BossWorkbenchActionAuthorizerTests: XCTestCase {
             )
         }
     }
+
+    // MARK: - Entry-less authorization (closes the bypass; trusted-onboarding posture)
+
+    func testEntrylessRepairAgentIsAllowedUnderTrustedOnboarding() throws {
+        let action = BossWorkbenchAction(action: .repairAgent, name: "slugger")
+
+        let authorization = BossWorkbenchActionAuthorizer().authorizeEntryless(action)
+
+        XCTAssertTrue(authorization.isAllowed)
+        XCTAssertEqual(authorization.posture, .trustedOnboarding)
+        XCTAssertTrue(authorization.requiresAudit)
+    }
+
+    func testEntrylessRepairAgentWithoutAgentNameIsDenied() throws {
+        // Even an onboarding action must carry its explicit resolved agent name to be
+        // authorized entry-less — never lean on `ouro` default-agent resolution.
+        let action = BossWorkbenchAction(action: .repairAgent, name: "   ")
+
+        let authorization = BossWorkbenchActionAuthorizer().authorizeEntryless(action)
+
+        XCTAssertFalse(authorization.isAllowed)
+        XCTAssertEqual(authorization.reason, "repairAgent requires an explicit agent name")
+        XCTAssertEqual(authorization.posture, .denied)
+        XCTAssertFalse(authorization.requiresAudit)
+    }
+
+    func testEntrylessCreateGroupRemainsExplicitlyAuthorized() throws {
+        // Previously bypassed authorization entirely; now must pass through explicitly.
+        let action = BossWorkbenchAction(
+            action: .createGroup,
+            name: "Harness",
+            workingDirectory: "/repo"
+        )
+
+        let authorization = BossWorkbenchActionAuthorizer().authorizeEntryless(action)
+
+        XCTAssertTrue(authorization.isAllowed)
+        XCTAssertEqual(authorization.posture, .knownEntryless)
+    }
+
+    func testEntrylessCreateTerminalRemainsExplicitlyAuthorized() throws {
+        let action = BossWorkbenchAction(
+            action: .createTerminal,
+            group: "Harness",
+            name: "Codex",
+            command: "codex --yolo"
+        )
+
+        let authorization = BossWorkbenchActionAuthorizer().authorizeEntryless(action)
+
+        XCTAssertTrue(authorization.isAllowed)
+        XCTAssertEqual(authorization.posture, .knownEntryless)
+    }
+
+    func testEntrylessCreateSessionRemainsExplicitlyAuthorized() throws {
+        // `createSession` is a live-added third known entry-less kind — it must also
+        // pass the now-explicit entry-less authorization under `knownEntryless`.
+        let action = BossWorkbenchAction(
+            action: .createSession,
+            group: "Harness",
+            name: "Release Codex",
+            command: "codex --yolo",
+            owner: "slugger"
+        )
+
+        let authorization = BossWorkbenchActionAuthorizer().authorizeEntryless(action)
+
+        XCTAssertTrue(authorization.isAllowed)
+        XCTAssertEqual(authorization.posture, .knownEntryless)
+    }
+
+    func testEntrylessEntryScopedActionIsDenied() throws {
+        // An action that is supposed to be entry-scoped must NEVER be allowed entry-less:
+        // routing it through the entry-less path means it slipped the entry check.
+        let action = BossWorkbenchAction(action: .launch)
+
+        let authorization = BossWorkbenchActionAuthorizer().authorizeEntryless(action)
+
+        XCTAssertFalse(authorization.isAllowed)
+        XCTAssertEqual(authorization.reason, "launch is not authorized without a target entry")
+        XCTAssertEqual(authorization.posture, .denied)
+        XCTAssertFalse(authorization.requiresAudit)
+    }
+
+    func testEntrylessSendInputIsDenied() throws {
+        // The most security-sensitive entry-scoped action: a `sendInput` arriving with no
+        // entry must be denied entry-less — it can never slip the entry-scoped livePrompt floor.
+        let action = BossWorkbenchAction(action: .sendInput, text: "y")
+
+        let authorization = BossWorkbenchActionAuthorizer().authorizeEntryless(action)
+
+        XCTAssertFalse(authorization.isAllowed)
+        XCTAssertEqual(authorization.reason, "sendInput is not authorized without a target entry")
+        XCTAssertEqual(authorization.posture, .denied)
+    }
+
+    // MARK: - Unified front door (both MCP enqueue + app apply route through this)
+
+    func testUnifiedAuthorizeDispatchesToEntryScopedWhenEntryPresent() throws {
+        let entry = ProcessEntry(
+            projectId: UUID(),
+            name: "Untrusted",
+            kind: .terminalAgent,
+            executable: "/bin/zsh",
+            workingDirectory: "/repo",
+            trust: .untrusted
+        )
+        let action = BossWorkbenchAction(action: .launch, entry: entry.id.uuidString)
+
+        let authorization = BossWorkbenchActionAuthorizer().authorize(action, resolvedEntry: entry)
+
+        XCTAssertFalse(authorization.isAllowed)
+        XCTAssertEqual(authorization.reason, "entry is untrusted")
+    }
+
+    func testUnifiedAuthorizeDispatchesToEntrylessWhenNoEntry() throws {
+        let action = BossWorkbenchAction(action: .repairAgent, name: "slugger")
+
+        let authorization = BossWorkbenchActionAuthorizer().authorize(action, resolvedEntry: nil)
+
+        XCTAssertTrue(authorization.isAllowed)
+        XCTAssertEqual(authorization.posture, .trustedOnboarding)
+    }
+
+    func testUnifiedAuthorizeDeniesUnknownEntrylessAction() throws {
+        // An entry-scoped action arriving with no entry must be denied via the front door.
+        let action = BossWorkbenchAction(action: .sendInput, text: "status")
+
+        let authorization = BossWorkbenchActionAuthorizer().authorize(action, resolvedEntry: nil)
+
+        XCTAssertFalse(authorization.isAllowed)
+        XCTAssertEqual(authorization.reason, "sendInput is not authorized without a target entry")
+    }
+
+    func testUnifiedAuthorizeAllowsKnownEntrylessCreateGroup() throws {
+        let action = BossWorkbenchAction(action: .createGroup, name: "Harness", workingDirectory: "/repo")
+
+        let authorization = BossWorkbenchActionAuthorizer().authorize(action, resolvedEntry: nil)
+
+        XCTAssertTrue(authorization.isAllowed)
+        XCTAssertEqual(authorization.posture, .knownEntryless)
+    }
+
+    // MARK: - ADDITIVE-MERGE REGRESSION GUARD: the livePrompt safety floor must still fire
+
+    /// THE keystone regression guard. R2's additive merge adds an entry-less posture path
+    /// WITHOUT touching live's `authorize(_:for:livePrompt:)` sendInput safety floor. This
+    /// test proves the floor STILL fires after the merge: a boss answering `y` to an
+    /// `rm -rf /` confirmation on a TRUSTED session, routed through the unified front door
+    /// with a resolved entry, must be withheld + escalated (classified off the live prompt,
+    /// not the bare input). If this ever goes green-to-allowed, the additive merge silently
+    /// deleted live's destructive-input protection — a security regression.
+    func testUnifiedFrontDoorPreservesLivePromptSafetyFloorForDangerousSendInput() throws {
+        let entry = ProcessEntry(
+            projectId: UUID(),
+            name: "Trusted",
+            kind: .terminalAgent,
+            executable: "codex",
+            workingDirectory: "/repo",
+            trust: .trusted
+        )
+        let action = BossWorkbenchAction(action: .sendInput, entry: entry.id.uuidString, text: "y")
+
+        // Route through the entry-scoped overload WITH the live prompt — the exact call
+        // `applyBossAction` makes at the second switch. The merge must not have changed it.
+        let authorization = BossWorkbenchActionAuthorizer().authorize(
+            action,
+            for: entry,
+            livePrompt: "Run 'rm -rf /'? [y/N]"
+        )
+
+        XCTAssertFalse(authorization.isAllowed, "the livePrompt floor must still withhold `y` to an rm -rf prompt")
+        XCTAssertEqual(authorization.reason, "withheld unsafe input (destructive command) — escalated to a human")
+    }
+
+    /// Companion guard: a credential-bearing live prompt must still be withheld after the
+    /// merge — proving the floor's full classifier (not just `rm -rf`) survives intact.
+    func testUnifiedFrontDoorPreservesLivePromptSafetyFloorForSecretBearingPrompt() throws {
+        let entry = ProcessEntry(
+            projectId: UUID(),
+            name: "Trusted",
+            kind: .terminalAgent,
+            executable: "codex",
+            workingDirectory: "/repo",
+            trust: .trusted
+        )
+        let action = BossWorkbenchAction(action: .sendInput, entry: entry.id.uuidString, text: "hunter2")
+
+        let authorization = BossWorkbenchActionAuthorizer().authorize(
+            action,
+            for: entry,
+            livePrompt: "Enter your password to continue:"
+        )
+
+        XCTAssertFalse(authorization.isAllowed)
+        XCTAssertEqual(authorization.reason, "withheld unsafe input (credential prompt) — escalated to a human")
+    }
 }

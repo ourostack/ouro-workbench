@@ -13960,6 +13960,14 @@ final class WorkbenchViewModel: ObservableObject {
                 return finishBossAction(source: source, action: action, entry: nil, result: "Failed createSession: \(errorMessage ?? "invalid session")")
             }
             return finishBossAction(source: source, action: action, entry: entry, result: "Created session \(entry.name) in \(project.name) owned by \(ownerName)")
+        case .repairAgent:
+            // R2.1 lands the entry-less kind + posture; R2.3 wires the headless runner.
+            // Until then, validate the explicit agent name and ack — no command runs yet.
+            let agentName = (action.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !agentName.isEmpty else {
+                return finishBossAction(source: source, action: action, entry: nil, result: "Skipped repairAgent: missing explicit agent name")
+            }
+            return finishBossAction(source: source, action: action, entry: nil, result: "Working on getting \(agentName) ready…")
         case .launch, .recover, .terminate, .sendInput, .moveSession, .setTrust, .setAutoResume, .archive, .restore:
             break
         }
@@ -14101,7 +14109,7 @@ final class WorkbenchViewModel: ObservableObject {
                 return finishBossAction(source: source, action: action, entry: entry, result: "Failed restore for \(entry.name): \(errorMessage ?? "not restorable")")
             }
             return finishBossAction(source: source, action: action, entry: entry, result: "Restored \(entry.name)")
-        case .createGroup, .createTerminal, .createSession:
+        case .createGroup, .createTerminal, .createSession, .repairAgent:
             return finishBossAction(source: source, action: action, entry: entry, result: "Skipped \(action.action.rawValue): already handled")
         }
     }

@@ -13,6 +13,13 @@ public enum BossWorkbenchActionKind: String, Codable, Sendable, CaseIterable {
     case setAutoResume
     case archive
     case restore
+    /// Onboarding remediation: repair the named agent's vault/provider readiness
+    /// (`ouro repair --agent <name>`). Entry-less — it targets an agent by an EXPLICIT
+    /// `name`, never a process entry, and never relies on `ouro` default-agent resolution.
+    /// Authorized under the `trustedOnboarding` posture (auto-apply + mandatory audit);
+    /// executed headlessly with a post-command verify probe (recovery truth from the
+    /// probe, never the exit code).
+    case repairAgent
 }
 
 public struct BossWorkbenchAction: Codable, Equatable, Sendable {
@@ -134,7 +141,7 @@ public extension BossWorkbenchAction {
             guard entry?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
                 throw BossWorkbenchActionValidationError.missingEntry(action)
             }
-        case .createGroup, .createTerminal, .createSession:
+        case .createGroup, .createTerminal, .createSession, .repairAgent:
             break
         }
 
@@ -178,6 +185,13 @@ public extension BossWorkbenchAction {
         case .setAutoResume:
             guard autoResume != nil else {
                 throw BossWorkbenchActionValidationError.missingAutoResumeForSetAutoResume
+            }
+        case .repairAgent:
+            // Entry-less, but MUST carry an EXPLICIT resolved agent name — never lean on
+            // `ouro` default-agent resolution (multiple agents can exist on the box, and the
+            // wrong one could be repaired).
+            guard name?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+                throw BossWorkbenchActionValidationError.missingName(action)
             }
         case .launch, .recover, .terminate, .archive, .restore:
             break

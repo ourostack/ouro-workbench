@@ -232,4 +232,43 @@ final class BossWorkbenchActionTests: XCTestCase {
 
         XCTAssertEqual(actions, [BossWorkbenchAction(action: .recover, entry: "Fenced")])
     }
+
+    // MARK: - repairAgent (entry-less onboarding remediation, explicit agent name)
+
+    func testRepairAgentRequiresExplicitAgentNameBeforeQueueing() {
+        // repairAgent is entry-less but MUST carry an explicit resolved agent name
+        // (never rely on `ouro` default-agent resolution — two agents can exist on the box).
+        let missingName = BossWorkbenchAction(action: .repairAgent)
+        let blankName = BossWorkbenchAction(action: .repairAgent, name: "   ")
+
+        XCTAssertThrowsError(try missingName.validateForQueueing()) { error in
+            XCTAssertEqual(error as? BossWorkbenchActionValidationError, .missingName(.repairAgent))
+        }
+        XCTAssertThrowsError(try blankName.validateForQueueing()) { error in
+            XCTAssertEqual(error as? BossWorkbenchActionValidationError, .missingName(.repairAgent))
+        }
+    }
+
+    func testRepairAgentDoesNotRequireAnEntryBeforeQueueing() throws {
+        // Entry-less by design: it targets an agent by name, not a process entry.
+        let action = BossWorkbenchAction(action: .repairAgent, name: "slugger")
+
+        XCTAssertNoThrow(try action.validateForQueueing())
+    }
+
+    func testParsesRepairAgentOnboardingAction() throws {
+        let reply = """
+        ```ouro-workbench-actions
+        [
+          { "action": "repairAgent", "name": "slugger" }
+        ]
+        ```
+        """
+
+        let actions = try BossWorkbenchActionParser().parse(reply)
+
+        XCTAssertEqual(actions, [
+            BossWorkbenchAction(action: .repairAgent, name: "slugger"),
+        ])
+    }
 }
