@@ -979,17 +979,19 @@ struct HarnessStatusSheet: View {
         .frame(width: 640, height: 540)
         .animation(.easeInOut(duration: 0.2), value: model.harnessActionResult)
         .confirmationDialog(
-            "Repair harness daemon?",
+            "Bring your agent back online?",
             isPresented: $model.isRepairHarnessDaemonConfirmationPresented,
             titleVisibility: .visible
         ) {
-            Button("Run ouro up") {
-                model.repairHarnessDaemon()
-                refresh()
+            Button("Bring back online") {
+                Task {
+                    await model.repairHarnessDaemon()
+                    refresh()
+                }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Starts and refreshes the ouro background runtime by running `ouro up` in a Workbench terminal. Safe to run when the daemon is already up — it just re-checks what this machine needs. The terminal stays open so you can watch progress.")
+            Text("Restarts your agent's background runtime so it can respond again. Safe to run when it's already online — Workbench just re-checks what this machine needs. Runs quietly in the background.")
         }
         .confirmationDialog(
             "Register Workbench MCP?",
@@ -1037,11 +1039,11 @@ struct HarnessStatusSheet: View {
             HarnessDetailRow(label: "Version", value: status.daemon.versionText)
             if offer.isAvailable(.repairDaemon) {
                 HarnessActionRow(
-                    title: "Repair Daemon",
+                    title: "Bring Back Online",
                     systemImage: "wrench.and.screwdriver",
                     help: offer.isUrgent(.repairDaemon)
-                        ? "The daemon isn't reachable. Run `ouro up` to start and refresh it."
-                        : "Restart and refresh the ouro daemon (runs `ouro up`).",
+                        ? "Your agent isn't reachable. Bring its runtime back online."
+                        : "Restart and refresh your agent's background runtime.",
                     isUrgent: offer.isUrgent(.repairDaemon),
                     isBusy: isRefreshing
                 ) {
@@ -8466,9 +8468,9 @@ final class WorkbenchViewModel: ObservableObject {
     /// reachability. Reached from the More menu and the ⌘K palette. The first
     /// W3 step toward Workbench being the human control panel for the harness.
     @Published var isHarnessStatusPresented = false
-    /// Drives the "Repair harness daemon?" confirmation dialog raised from the
-    /// Harness Status sheet's daemon section. The action itself reuses the
-    /// existing ouro-command runner (`openOnboardingRepair`) to run `ouro up`.
+    /// Drives the "Bring your agent back online?" confirmation dialog raised from
+    /// the Harness Status sheet's daemon section. The action itself runs the
+    /// detached `DaemonManager.ensureRunning()` cycle in-app — no pane, no CLI seam.
     @Published var isRepairHarnessDaemonConfirmationPresented = false
     /// Drives the "Register Workbench MCP?" confirmation dialog raised from the
     /// Harness Status sheet's boss section. Reuses `registerWorkbenchForBossChoice`.
@@ -11082,36 +11084,40 @@ final class WorkbenchViewModel: ObservableObject {
 
     // MARK: - Harness Status control actions
 
-    /// Heal/start the ouro daemon from the Harness Status sheet. Reuses the
-    /// existing ouro-command runner (`openOnboardingRepair`) — which spawns a
-    /// trusted Workbench terminal that streams the command's live output and is
-    /// captured in transcripts — to run `ouro up`, the daemon heal/start command
-    /// surfaced by `ouro --help` (it brings up the background runtime and
-    /// refreshes what the machine needs; `--no-repair` is the opt-out, so plain
-    /// `ouro up` is the repair path). Non-destructive and idempotent: starting
-    /// an already-running daemon is a no-op. After spawning, the caller refreshes
-    /// status so the daemon section reflects the new state.
+    /// Bring the agent's background runtime back online from the Harness Status
+    /// sheet. Runs the SAME detached detect-reuse-else-start cycle as the boss
+    /// check-in (`DaemonManager.ensureRunning()`): the app executes it directly —
+    /// no Workbench terminal pane, no CLI seam, no confirmation theater — and the
+    /// daemon is started DETACHED so it survives Workbench quitting. Recovery truth
+    /// comes from the POST-start verify probe, never an exit code. Non-destructive
+    /// and idempotent: an already-up daemon is reused without a respawn.
     ///
-    /// Called only behind the "Repair harness daemon?" confirmation.
-    func repairHarnessDaemon() {
-        let step = OnboardingRepairStep(
-            id: "harness-daemon-repair",
-            actor: .agentRunnable,
-            title: "Repair harness daemon",
-            detail: "Start and refresh the ouro background runtime (ouro up).",
-            command: ["ouro", "up"]
+    /// The human-facing banner is product voice only; the raw CLI-level recovery
+    /// detail is recorded in the audit log surface, never shown to the human.
+    func repairHarnessDaemon() async {
+        let bossName = state.boss.agentName
+        let outcome = await daemonManager.ensureRunning()
+        let message: String
+        switch outcome.recovery {
+        case .resumed:
+            message = "Your agent's runtime is already online."
+        case .respawned:
+            message = "Brought your agent's runtime back online."
+        case .needsManual:
+            message = "Workbench couldn't bring your agent back online automatically. Please reopen Workbench, and if it keeps happening, restart your Mac."
+        }
+        harnessActionResult = HarnessActionResult(
+            kind: .repairDaemon,
+            succeeded: !outcome.needsManualRecovery,
+            message: message
         )
-        // Reuse the established runner: builds a trusted CustomTerminalSessionDraft
-        // and launches it. We don't reimplement subprocess spawning here.
-        openOnboardingRepair(step)
-        let result = "Started ouro up in a Workbench terminal — watch it for progress, then Refresh."
-        harnessActionResult = HarnessActionResult(kind: .repairDaemon, succeeded: true, message: result)
+        // Audit/debug surface — the ONE place the raw `ouro` recovery detail belongs.
         recordActionLog(
             source: "native",
             action: "repairHarnessDaemon",
-            targetName: state.boss.agentName,
-            result: result,
-            succeeded: true
+            targetName: bossName,
+            result: outcome.auditDetail,
+            succeeded: !outcome.needsManualRecovery
         )
     }
 
