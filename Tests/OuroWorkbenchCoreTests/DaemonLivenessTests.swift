@@ -1,0 +1,139 @@
+import XCTest
+@testable import OuroWorkbenchCore
+
+final class DaemonLivenessTests: XCTestCase {
+    func testProbeReportsUpWhenReachabilitySucceeds() async {
+        let probe = DaemonLivenessProbe(
+            configuration: DaemonLivenessConfiguration(probeTimeoutNanoseconds: 1_000_000_000),
+            reachability: { _ in true }
+        )
+
+        let liveness = await probe.probe()
+
+        XCTAssertEqual(liveness, .up)
+    }
+
+    func testProbeReportsDownWhenReachabilityFails() async {
+        let probe = DaemonLivenessProbe(
+            configuration: DaemonLivenessConfiguration(probeTimeoutNanoseconds: 1_000_000_000),
+            reachability: { _ in false }
+        )
+
+        let liveness = await probe.probe()
+
+        XCTAssertEqual(liveness, .down)
+    }
+
+    func testProbeTreatsTimeoutAsDownWithoutThrowing() async {
+        // Reachability never completes within the probe window; probe must resolve to .down,
+        // never surface a thrown error to the caller.
+        let probe = DaemonLivenessProbe(
+            configuration: DaemonLivenessConfiguration(probeTimeoutNanoseconds: 50_000_000),
+            reachability: { _ in
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                return true
+            }
+        )
+
+        let liveness = await probe.probe()
+
+        XCTAssertEqual(liveness, .down)
+    }
+
+    func testProbeTreatsReachabilityThrowAsDown() async {
+        let probe = DaemonLivenessProbe(
+            configuration: DaemonLivenessConfiguration(probeTimeoutNanoseconds: 1_000_000_000),
+            reachability: { _ in throw DaemonLivenessTestError.boom }
+        )
+
+        let liveness = await probe.probe()
+
+        XCTAssertEqual(liveness, .down)
+    }
+
+    func testReachabilityClosureReceivesConfiguredTimeout() async {
+        let timeout = LockedBox<TimeInterval?>(nil)
+        let probe = DaemonLivenessProbe(
+            configuration: DaemonLivenessConfiguration(probeTimeoutNanoseconds: 250_000_000),
+            reachability: { duration in
+                timeout.value = duration
+                return true
+            }
+        )
+
+        _ = await probe.probe()
+
+        XCTAssertEqual(timeout.value, 0.25)
+    }
+
+    // MARK: - Recovery-truth classification
+
+    func testClassifyResumedWhenAlreadyUp() {
+        XCTAssertEqual(
+            DaemonRecoveryTruth.classify(wasUpBeforeStart: true, isUpAfterStart: true),
+            .resumed
+        )
+    }
+
+    func testClassifyRespawnedWhenWasDownAndCameUp() {
+        XCTAssertEqual(
+            DaemonRecoveryTruth.classify(wasUpBeforeStart: false, isUpAfterStart: true),
+            .respawned
+        )
+    }
+
+    func testClassifyNeedsManualWhenStillDownAfterStart() {
+        XCTAssertEqual(
+            DaemonRecoveryTruth.classify(wasUpBeforeStart: false, isUpAfterStart: false),
+            .needsManual
+        )
+    }
+
+    func testClassifyNeedsManualWhenWasUpButProbeNowDown() {
+        // A daemon that read up but is unreachable on the verify probe is not a false "survived".
+        XCTAssertEqual(
+            DaemonRecoveryTruth.classify(wasUpBeforeStart: true, isUpAfterStart: false),
+            .needsManual
+        )
+    }
+
+    func testRecoveryTruthAuditLineUsesCliVerbsNotHumanVoice() {
+        // Audit lines are the ONE place ouro verbs are allowed; assert they carry the verb
+        // so the human-facing layer can stay seam-free while audit stays precise.
+        XCTAssertTrue(DaemonRecoveryTruth.respawned.auditDetail.contains("ouro up"))
+        XCTAssertFalse(DaemonRecoveryTruth.resumed.auditDetail.contains("ouro up"))
+    }
+
+    func testDefaultReachabilityProbeURLIsLocalMailbox() {
+        XCTAssertEqual(
+            DaemonLivenessConfiguration().reachabilityURL.absoluteString,
+            "http://127.0.0.1:6876/api/machine"
+        )
+    }
+}
+
+private enum DaemonLivenessTestError: Error {
+    case boom
+}
+
+private final class LockedBox<Value>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: Value
+
+    init(_ value: Value) {
+        stored = value
+    }
+
+    var value: Value {
+        get { lock.withLock { stored } }
+        set { lock.withLock { stored = newValue } }
+    }
+}
+
+private extension NSLock {
+    func withLock<R>(_ body: () -> R) -> R {
+        lock()
+        defer { unlock() }
+        return body()
+    }
+}
