@@ -366,4 +366,72 @@ final class BossWorkbenchActionAuthorizerTests: XCTestCase {
         XCTAssertFalse(authorization.isAllowed)
         XCTAssertEqual(authorization.reason, "withheld unsafe input (credential prompt) — escalated to a human")
     }
+
+    // MARK: - R2.2 enqueue/apply gate (the shared bypass-closing decision both call sites use)
+
+    /// The MCP enqueue path (`main.swift requestAction`) and the app apply path
+    /// (`applyBossAction` first switch) both route entry-less actions through this gate. It
+    /// returns the authorization PLUS the human-readable denial target so the two call sites
+    /// can't drift in how they reject. An unknown/unauthorized entry-less action must be denied
+    /// with the action's raw name as the target (no entry to name).
+    func testEnqueueGateRejectsUnknownEntrylessActionWithRawTarget() throws {
+        let action = BossWorkbenchAction(action: .sendInput, text: "y")
+
+        let decision = BossWorkbenchActionAuthorizer().gate(action, resolvedEntry: nil)
+
+        XCTAssertFalse(decision.authorization.isAllowed)
+        XCTAssertEqual(decision.deniedTarget, "sendInput")
+        XCTAssertEqual(decision.authorization.reason, "sendInput is not authorized without a target entry")
+    }
+
+    func testEnqueueGateAllowsKnownEntrylessKinds() throws {
+        // All three live entry-less kinds still pass the now-explicit gate.
+        let createGroup = BossWorkbenchAction(action: .createGroup, name: "Harness", workingDirectory: "/repo")
+        let createTerminal = BossWorkbenchAction(action: .createTerminal, group: "Harness", name: "Codex", command: "codex")
+        let createSession = BossWorkbenchAction(action: .createSession, group: "Harness", name: "Codex", command: "codex", owner: "slugger")
+        let authorizer = BossWorkbenchActionAuthorizer()
+
+        for action in [createGroup, createTerminal, createSession] {
+            let decision = authorizer.gate(action, resolvedEntry: nil)
+            XCTAssertTrue(decision.authorization.isAllowed, "\(action.action.rawValue) must pass the entry-less gate")
+            XCTAssertEqual(decision.authorization.posture, .knownEntryless)
+        }
+    }
+
+    func testEnqueueGateAllowsRepairAgentUnderTrustedOnboarding() throws {
+        let action = BossWorkbenchAction(action: .repairAgent, name: "slugger")
+
+        let decision = BossWorkbenchActionAuthorizer().gate(action, resolvedEntry: nil)
+
+        XCTAssertTrue(decision.authorization.isAllowed)
+        XCTAssertEqual(decision.authorization.posture, .trustedOnboarding)
+        // Entry-less: there is no entry to name, so the denial target is the raw kind
+        // (the agent name lives on the action, not the entry).
+        XCTAssertEqual(decision.deniedTarget, "repairAgent")
+    }
+
+    /// The gate forwards `livePrompt` to the entry-scoped floor when an entry is present, so a
+    /// dangerous `sendInput` is still withheld through the SAME gate both call sites use. This
+    /// proves closing the bypass did not bypass the floor: the entry-scoped path keeps it.
+    func testEnqueueGatePreservesLivePromptFloorWhenEntryPresent() throws {
+        let entry = ProcessEntry(
+            projectId: UUID(),
+            name: "Trusted",
+            kind: .terminalAgent,
+            executable: "codex",
+            workingDirectory: "/repo",
+            trust: .trusted
+        )
+        let action = BossWorkbenchAction(action: .sendInput, entry: entry.id.uuidString, text: "y")
+
+        let decision = BossWorkbenchActionAuthorizer().gate(
+            action,
+            resolvedEntry: entry,
+            livePrompt: "Run 'rm -rf /'? [y/N]"
+        )
+
+        XCTAssertFalse(decision.authorization.isAllowed)
+        XCTAssertEqual(decision.deniedTarget, "Trusted")
+        XCTAssertEqual(decision.authorization.reason, "withheld unsafe input (destructive command) — escalated to a human")
+    }
 }

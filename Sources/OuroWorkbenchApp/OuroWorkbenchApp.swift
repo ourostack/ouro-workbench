@@ -13912,6 +13912,29 @@ final class WorkbenchViewModel: ObservableObject {
             )
         }
 
+        // Close the entry-less auth bypass: entry-less actions used to reach their handlers in
+        // the first switch WITHOUT any authorization (they returned before the entry-scoped
+        // authorizer below). Authorize the genuinely entry-less actions explicitly here, BEFORE
+        // any handler runs. Known callers (createGroup / createTerminal / createSession) stay
+        // allowed under `knownEntryless`; repairAgent runs under `trustedOnboarding`; anything
+        // else reaching the entry-less path is denied. The entry-scoped second switch — and its
+        // `authorize(_:for:livePrompt:)` sendInput safety floor + escalateWithheldBossInput
+        // path — is left UNTOUCHED.
+        switch action.action {
+        case .createGroup, .createTerminal, .createSession, .repairAgent:
+            let authorization = bossActionAuthorizer.authorizeEntryless(action)
+            guard authorization.isAllowed else {
+                return finishBossAction(
+                    source: source,
+                    action: action,
+                    entry: nil,
+                    result: "Skipped \(action.action.rawValue): \(authorization.reason ?? "not authorized")"
+                )
+            }
+        case .launch, .recover, .terminate, .sendInput, .moveSession, .setTrust, .setAutoResume, .archive, .restore:
+            break
+        }
+
         switch action.action {
         case .createGroup:
             guard createGroup(name: action.name ?? "", rootPath: action.workingDirectory ?? "") else {

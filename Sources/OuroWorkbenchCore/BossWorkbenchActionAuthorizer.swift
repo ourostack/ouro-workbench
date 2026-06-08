@@ -124,6 +124,32 @@ public struct BossWorkbenchActionAuthorizer: Sendable {
         return authorizeEntryless(action)
     }
 
+    /// The shared enqueue/apply gate decision: the authorization PLUS the human-readable
+    /// target name to name in a denial. Both bypass-closing call sites (MCP `requestAction`
+    /// and app `applyBossAction`) reject with the SAME target string, so they can't drift.
+    public struct GateDecision: Equatable, Sendable {
+        public let authorization: BossWorkbenchActionAuthorization
+        /// The entry's name when entry-scoped, else the action's raw kind (no entry to name).
+        public let deniedTarget: String
+    }
+
+    /// The single bypass-closing gate both call sites use. Routes EVERY action through the
+    /// `authorize(_:resolvedEntry:livePrompt:)` front door (entry-scoped runs live's
+    /// `livePrompt` floor; entry-less runs the explicit posture check) and resolves the denial
+    /// target. Previously entry-less actions skipped authorization entirely; routing them here
+    /// closes that bypass identically in both the MCP enqueue path and the app apply path.
+    public func gate(
+        _ action: BossWorkbenchAction,
+        resolvedEntry entry: ProcessEntry?,
+        livePrompt: String = ""
+    ) -> GateDecision {
+        let authorization = authorize(action, resolvedEntry: entry, livePrompt: livePrompt)
+        return GateDecision(
+            authorization: authorization,
+            deniedTarget: entry?.name ?? action.action.rawValue
+        )
+    }
+
     /// Authorize an ENTRY-LESS action with an explicit allow/deny + reason + posture.
     ///
     /// This closes the historical bypass: before R2, entry-less actions skipped authorization

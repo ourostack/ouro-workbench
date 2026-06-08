@@ -302,11 +302,17 @@ final class WorkbenchMCPServer {
             resolvedEntry = nil
         }
 
-        if let entry = resolvedEntry {
-            let authorization = authorizer.authorize(action, for: entry)
-            guard authorization.isAllowed else {
-                throw MCPToolFailure("Action denied for \(entry.name): \(authorization.reason ?? "not authorized")")
-            }
+        // Authorize EVERY action through the single gate — entry-scoped AND entry-less.
+        // Previously entry-less actions skipped authorization entirely (the check ran only
+        // `if let entry`); routing them through `authorizer.gate(...)` closes that bypass so an
+        // unknown/unauthorized entry-less action is now rejected at enqueue. Entry-scoped
+        // actions still run live's `livePrompt` sendInput safety floor inside the gate (the
+        // enqueue path has no live transcript tail, so it forwards the default empty prompt —
+        // the classifier still catches a verbatim-dangerous input, and the app apply path
+        // re-classifies against the real live prompt before sending).
+        let decision = authorizer.gate(action, resolvedEntry: resolvedEntry)
+        guard decision.authorization.isAllowed else {
+            throw MCPToolFailure("Action denied for \(decision.deniedTarget): \(decision.authorization.reason ?? "not authorized")")
         }
         let request = WorkbenchActionRequest(
             source: (arguments["source"] as? String) ?? "ouro-workbench-mcp",
