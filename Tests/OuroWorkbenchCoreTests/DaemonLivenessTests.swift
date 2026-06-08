@@ -110,6 +110,59 @@ final class DaemonLivenessTests: XCTestCase {
             "http://127.0.0.1:6876/api/machine"
         )
     }
+
+    // MARK: - Synchronous probe (the MCP request-loop bridge)
+
+    func testProbeSynchronouslyReportsUpWhenSyncReachabilitySucceeds() {
+        let probe = DaemonLivenessProbe(
+            configuration: DaemonLivenessConfiguration(probeTimeoutNanoseconds: 1_000_000_000),
+            syncReachability: { _ in true }
+        )
+
+        XCTAssertEqual(probe.probeSynchronously(), .up)
+    }
+
+    func testProbeSynchronouslyReportsDownWhenSyncReachabilityFails() {
+        let probe = DaemonLivenessProbe(
+            configuration: DaemonLivenessConfiguration(probeTimeoutNanoseconds: 1_000_000_000),
+            syncReachability: { _ in false }
+        )
+
+        XCTAssertEqual(probe.probeSynchronously(), .down)
+    }
+
+    func testProbeSynchronouslyTreatsAHangAsDownWithoutBlockingForever() {
+        // A sync reachability that hangs past the budget must resolve to .down via the
+        // semaphore timeout backstop, not wedge the (blocked) caller.
+        let probe = DaemonLivenessProbe(
+            configuration: DaemonLivenessConfiguration(probeTimeoutNanoseconds: 100_000_000),
+            syncReachability: { _ in
+                Thread.sleep(forTimeInterval: 5)
+                return true
+            }
+        )
+
+        let start = Date()
+        let liveness = probe.probeSynchronously()
+        XCTAssertEqual(liveness, .down)
+        // Must give up well before the 5s hang (budget 0.1s + 0.5s backstop).
+        XCTAssertLessThan(Date().timeIntervalSince(start), 3)
+    }
+
+    func testProbeSynchronouslyPassesConfiguredTimeoutToSyncReachability() {
+        let seen = LockedBox<TimeInterval?>(nil)
+        let probe = DaemonLivenessProbe(
+            configuration: DaemonLivenessConfiguration(probeTimeoutNanoseconds: 250_000_000),
+            syncReachability: { duration in
+                seen.value = duration
+                return true
+            }
+        )
+
+        _ = probe.probeSynchronously()
+
+        XCTAssertEqual(seen.value, 0.25)
+    }
 }
 
 private enum DaemonLivenessTestError: Error {

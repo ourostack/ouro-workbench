@@ -23,6 +23,11 @@ final class WorkbenchMCPServer {
     private let recoveryDrill = RecoveryDrill()
     private let senseRenderer = WorkbenchSenseRenderer()
     private let sessionsRenderer = WorkbenchSessionsRenderer()
+    private let onboardingAdvisor = WorkbenchOnboardingAdvisor()
+    private let onboardingReportRenderer = OnboardingReadinessReportRenderer()
+    private let ouroAgentInventory = OuroAgentInventory()
+    private let bossWorkbenchMCPRegistrar = BossWorkbenchMCPRegistrar()
+    private let daemonLivenessProbe = DaemonLivenessProbe()
     private let jsonEncoder: JSONEncoder = {
         let encoder = JSONEncoder()
         // Deterministic key order (stable tests / diffs) + readable timestamps.
@@ -100,6 +105,8 @@ final class WorkbenchMCPServer {
         switch name {
         case "workbench_status":
             return try workbenchStatus()
+        case OnboardingReadinessReportRenderer.toolName:
+            return try onboardingStatus()
         case "workbench_sessions":
             return try sessionsList(arguments: arguments)
         case "workbench_sense":
@@ -166,6 +173,31 @@ final class WorkbenchMCPServer {
             machineFriend: SessionFriend.machineOwner(),
             waitingPrompts: waitingPrompts
         )
+    }
+
+    /// The daemon- and credential-aware onboarding readiness of the selected boss, rendered
+    /// as the structured text the `workbench_onboarding_status` read tool returns. Mirrors
+    /// `workbenchStatus()`: load state, scan the local agent inventory, snapshot the boss's
+    /// MCP registration, probe daemon liveness, then hand all four to the pure
+    /// `WorkbenchOnboardingAdvisor.readiness(...)` and render via the pure
+    /// `OnboardingReadinessReportRenderer` (both unit-tested in Core).
+    private func onboardingStatus() throws -> String {
+        let state = try currentState()
+        let agents = ouroAgentInventory.scan()
+        let registration = bossWorkbenchMCPRegistrar.snapshot(for: state.boss)
+        // Synchronous, Swift-concurrency-free probe: the MCP request loop drives tools
+        // synchronously off `readLine()`, and bridging the async probe into that blocked
+        // thread starves the cooperative executor (crashes the task allocator in a CLI
+        // binary). The Core probe's `probeSynchronously()` uses a callback-based URLSession +
+        // semaphore instead, so it is safe to block for here.
+        let daemonLiveness = daemonLivenessProbe.probeSynchronously()
+        let readiness = onboardingAdvisor.readiness(
+            boss: state.boss,
+            agents: agents,
+            mcpRegistration: registration,
+            daemonLiveness: daemonLiveness
+        )
+        return onboardingReportRenderer.render(readiness)
     }
 
     /// Machine-readable list of sessions for an outbound MCP client (the
@@ -489,6 +521,15 @@ final class WorkbenchMCPServer {
             [
                 "name": "workbench_status",
                 "description": "Summarize Ouro Workbench state, processes, recovery plans, and transcript paths.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [:],
+                    "additionalProperties": false
+                ]
+            ],
+            [
+                "name": OnboardingReadinessReportRenderer.toolName,
+                "description": OnboardingReadinessReportRenderer.toolDescription,
                 "inputSchema": [
                     "type": "object",
                     "properties": [:],

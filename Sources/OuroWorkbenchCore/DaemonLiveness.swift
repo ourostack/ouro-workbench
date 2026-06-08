@@ -86,13 +86,16 @@ public struct DaemonLivenessConfiguration: Equatable, Sendable {
 public struct DaemonLivenessProbe: Sendable {
     public var configuration: DaemonLivenessConfiguration
     private let reachability: @Sendable (TimeInterval?) async throws -> Bool
+    private let syncReachability: @Sendable (TimeInterval?) -> Bool
 
     public init(
         configuration: DaemonLivenessConfiguration = DaemonLivenessConfiguration(),
-        reachability: @escaping @Sendable (TimeInterval?) async throws -> Bool = DaemonLivenessProbe.defaultReachability
+        reachability: @escaping @Sendable (TimeInterval?) async throws -> Bool = DaemonLivenessProbe.defaultReachability,
+        syncReachability: @escaping @Sendable (TimeInterval?) -> Bool = DaemonLivenessProbe.defaultSyncReachability
     ) {
         self.configuration = configuration
         self.reachability = reachability
+        self.syncReachability = syncReachability
     }
 
     /// Probe the daemon. Returns `.up` only on a clean reachable answer; ANY failure —
@@ -118,6 +121,32 @@ public struct DaemonLivenessProbe: Sendable {
         return reachable ? .up : .down
     }
 
+    /// Synchronous, Swift-concurrency-free daemon probe for callers on a thread that must
+    /// block for the answer (e.g. the MCP executable's `readLine()` request loop, which
+    /// drives tools synchronously). Returns `.up` only on a clean reachable answer; ANY
+    /// failure — unreachable, error, or timeout — resolves to `.down` (never throws).
+    ///
+    /// Deliberately uses a callback-based `URLSession.dataTask` + `DispatchSemaphore` (see
+    /// `defaultSyncReachability`) instead of `async`/`await`: bridging the async `probe()`
+    /// into a blocked main thread starves the cooperative executor and crashes the task
+    /// allocator in a CLI binary. The reachability work runs on a global queue with the
+    /// configured timeout enforced at the semaphore so a hung connect still resolves `.down`.
+    public func probeSynchronously() -> DaemonLiveness {
+        let timeoutSeconds = configuration.probeTimeoutSeconds
+        let semaphore = DispatchSemaphore(value: 0)
+        let box = SyncReachabilityBox()
+        let reachability = self.syncReachability
+        DispatchQueue.global(qos: .userInitiated).async {
+            box.reachable = reachability(timeoutSeconds)
+            semaphore.signal()
+        }
+        // Task-level timeout backstop: if the closure hangs past the budget, resolve `.down`.
+        if semaphore.wait(timeout: .now() + timeoutSeconds + 0.5) == .timedOut {
+            return .down
+        }
+        return box.reachable ? .up : .down
+    }
+
     /// Default reachability: a short-timeout GET against the local mailbox health URL.
     /// Any non-2xx, transport error, or non-HTTP response is treated by the caller as
     /// unreachable (this closure throws, which `probe()` maps to `.down`).
@@ -140,6 +169,47 @@ public struct DaemonLivenessProbe: Sendable {
         }
         return (200..<500).contains(http.statusCode)
     }
+
+    /// Synchronous default reachability: a callback-based (NOT async/await) short-timeout GET
+    /// against the local mailbox health URL, blocking the caller's thread on a semaphore until
+    /// the dataTask completes or the timeout fires. Any non-2xx, transport error, or non-HTTP
+    /// response resolves to `false` (unreachable). Free of Swift concurrency so it is safe to
+    /// call from a thread that itself blocks for the result.
+    public static func defaultSyncReachability(timeoutSeconds: TimeInterval?) -> Bool {
+        defaultSyncReachability(
+            url: URL(string: "http://127.0.0.1:6876/api/machine")!,
+            timeoutSeconds: timeoutSeconds
+        )
+    }
+
+    static func defaultSyncReachability(url: URL, timeoutSeconds: TimeInterval?) -> Bool {
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        let budget = (timeoutSeconds ?? 1.5) > 0 ? (timeoutSeconds ?? 1.5) : 1.5
+        request.timeoutInterval = budget
+        let semaphore = DispatchSemaphore(value: 0)
+        let box = SyncReachabilityBox()
+        let task = URLSession.shared.dataTask(with: request) { _, response, _ in
+            if let http = response as? HTTPURLResponse {
+                box.reachable = (200..<500).contains(http.statusCode)
+            }
+            semaphore.signal()
+        }
+        task.resume()
+        if semaphore.wait(timeout: .now() + budget + 0.25) == .timedOut {
+            task.cancel()
+            return false
+        }
+        return box.reachable
+    }
+}
+
+/// A minimal reference box for carrying a `Bool` reachability result out of a callback /
+/// dispatched closure across a `DispatchSemaphore` handoff. Access is serialized by the
+/// semaphore (write happens-before signal; read happens-after wait), so this is safe despite
+/// the `@unchecked` marker.
+private final class SyncReachabilityBox: @unchecked Sendable {
+    var reachable: Bool = false
 }
 
 /// The result of a single detect-reuse-else-start cycle.
