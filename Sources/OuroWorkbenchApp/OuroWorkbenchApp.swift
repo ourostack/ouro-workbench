@@ -8654,6 +8654,7 @@ final class WorkbenchViewModel: ObservableObject {
     private let changeSummarizer = WorkspaceChangeSummarizer()
     private let commandPalette = WorkbenchCommandPalette()
     private let bossMCPClient: BossAgentMCPClient
+    private let daemonManager: DaemonManager
     private let bossWorkbenchMCPRegistrar: BossWorkbenchMCPRegistrar
     private let ouroAgentInventory: OuroAgentInventory
     private let ouroAgentInstallCommandBuilder = OuroAgentInstallCommandBuilder()
@@ -8712,6 +8713,7 @@ final class WorkbenchViewModel: ObservableObject {
         paths: WorkbenchPaths = .defaultPaths(),
         mailboxClient: MailboxClient = MailboxClient(),
         bossMCPClient: BossAgentMCPClient = BossAgentMCPClient(),
+        daemonManager: DaemonManager = DaemonManager(),
         bossWorkbenchMCPRegistrar: BossWorkbenchMCPRegistrar = BossWorkbenchMCPRegistrar(),
         ouroAgentInventory: OuroAgentInventory = OuroAgentInventory(),
         executableHealthChecker: ExecutableHealthChecker = ExecutableHealthChecker(),
@@ -8721,6 +8723,7 @@ final class WorkbenchViewModel: ObservableObject {
         self.store = WorkbenchStore(paths: paths)
         self.mailboxClient = mailboxClient
         self.bossMCPClient = bossMCPClient
+        self.daemonManager = daemonManager
         self.bossWorkbenchMCPRegistrar = bossWorkbenchMCPRegistrar
         self.ouroAgentInventory = ouroAgentInventory
         self.executableHealthChecker = executableHealthChecker
@@ -12907,6 +12910,36 @@ final class WorkbenchViewModel: ObservableObject {
         guard state.boss.agentName == requestedBoss else {
             return
         }
+
+        // Workbench manages the daemon as invisible infrastructure: detect-reuse-else-start
+        // BEFORE asking the agent. `refreshBossDashboard()` above can't tell us this — the
+        // mailbox overview collapses to "unknown" when the daemon is down — so we run a
+        // dedicated liveness probe + detached start here. Recovery truth comes from the
+        // POST-start verify probe, never an exit code. If the agent genuinely can't be
+        // brought online, surface an honest, seam-free line instead of asking a dead daemon;
+        // the precise CLI-level detail stays in the audit log + debug surface only.
+        let daemonOutcome = await daemonManager.ensureRunning()
+        recordActionLog(
+            source: "boss:\(requestedBoss)",
+            action: "ensureDaemon",
+            targetName: requestedBoss,
+            result: daemonOutcome.auditDetail,
+            succeeded: !daemonOutcome.needsManualRecovery
+        )
+        if let startupLine = daemonOutcome.humanFacingStartupLine {
+            bossCheckInAnswer = startupLine
+        }
+        if daemonOutcome.needsManualRecovery {
+            bossAppliedActions = []
+            if bossWatchIsEnabled {
+                bossWatchLastError = daemonOutcome.auditDetail
+            }
+            return
+        }
+        guard state.boss.agentName == requestedBoss else {
+            return
+        }
+
         prepareBossCheckIn(question: question, recentChanges: recentChanges)
         guard let bossCheckInPrompt else {
             return
@@ -12953,7 +12986,9 @@ final class WorkbenchViewModel: ObservableObject {
             bossWatchConsecutiveFailures = 0
             bossWatchNextRetryAt = nil
         } catch {
-            bossCheckInAnswer = "Check-in failed: \(error.localizedDescription)"
+            // Product voice only — never leak the raw transport/CLI error to the human.
+            // The precise detail stays in the audit/debug surface (`bossWatchLastError`).
+            bossCheckInAnswer = "Your agent didn't answer just now. Workbench will try again shortly."
             bossAppliedActions = []
             bossWatchConsecutiveFailures += 1
             bossWatchNextRetryAt = Date().addingTimeInterval(
