@@ -14044,7 +14044,8 @@ final class WorkbenchViewModel: ObservableObject {
         // `authorize(_:for:livePrompt:)` sendInput safety floor + escalateWithheldBossInput
         // path — is left UNTOUCHED.
         switch action.action {
-        case .createGroup, .createTerminal, .createSession, .repairAgent, .requestProviderConfig:
+        case .createGroup, .createTerminal, .createSession, .repairAgent, .requestProviderConfig,
+             .verifyProvider, .refreshProvider, .selectLane, .registerWorkbenchMCP, .ensureDaemon:
             let authorization = bossActionAuthorizer.authorizeEntryless(action)
             guard authorization.isAllowed else {
                 return finishBossAction(
@@ -14110,6 +14111,16 @@ final class WorkbenchViewModel: ObservableObject {
             return startRepairAgent(action: action, source: source)
         case .requestProviderConfig:
             return openProviderConfig(action: action, source: source)
+        case .verifyProvider:
+            return startVerifyProvider(action: action, source: source)
+        case .refreshProvider:
+            return startRefreshProvider(action: action, source: source)
+        case .selectLane:
+            return startSelectLane(action: action, source: source)
+        case .registerWorkbenchMCP:
+            return startRegisterWorkbenchMCP(action: action, source: source)
+        case .ensureDaemon:
+            return startEnsureDaemon(action: action, source: source)
         case .launch, .recover, .terminate, .sendInput, .moveSession, .setTrust, .setAutoResume, .archive, .restore:
             break
         }
@@ -14251,7 +14262,8 @@ final class WorkbenchViewModel: ObservableObject {
                 return finishBossAction(source: source, action: action, entry: entry, result: "Failed restore for \(entry.name): \(errorMessage ?? "not restorable")")
             }
             return finishBossAction(source: source, action: action, entry: entry, result: "Restored \(entry.name)")
-        case .createGroup, .createTerminal, .createSession, .repairAgent, .requestProviderConfig:
+        case .createGroup, .createTerminal, .createSession, .repairAgent, .requestProviderConfig,
+             .verifyProvider, .refreshProvider, .selectLane, .registerWorkbenchMCP, .ensureDaemon:
             return finishBossAction(source: source, action: action, entry: entry, result: "Skipped \(action.action.rawValue): already handled")
         }
     }
@@ -14489,6 +14501,219 @@ final class WorkbenchViewModel: ObservableObject {
                 }
             }
         )
+    }
+
+    /// Kick off a headless `verifyProvider` remediation (`ouro auth verify` / `ouro check
+    /// --lane`). Async like `repairAgent`: returns an immediate seam-free ack, then surfaces the
+    /// recovery-truth (from the POST-command verify probe, never the exit code) once it lands.
+    ///
+    /// The agent name is taken EXPLICITLY from the action (validated non-empty at queueing and
+    /// re-authorized via `authorizeEntryless` under `trustedOnboarding`); it never relies on
+    /// `ouro` default-agent resolution. We re-guard here so a path that skipped validation can't
+    /// verify the wrong agent.
+    private func startVerifyProvider(action: BossWorkbenchAction, source: String) -> String {
+        let agentName = (action.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !agentName.isEmpty else {
+            return finishBossAction(
+                source: source, action: action, entry: nil,
+                result: "Skipped verifyProvider: missing explicit agent name"
+            )
+        }
+        let lane = action.lane
+        let runner = ProviderVerifyRunner(verifyProbe: makeProbe())
+        Task { [weak self] in
+            let outcome = await runner.verify(agentName: agentName, lane: lane)
+            await MainActor.run {
+                self?.completeOnboardingAction(
+                    action: action, source: source, targetName: outcome.agentName,
+                    humanFacingLine: outcome.humanFacingLine, auditDetail: outcome.auditDetail,
+                    succeeded: outcome.truth == .verified, needsManual: outcome.needsManualRecovery
+                )
+            }
+        }
+        return finishBossAction(
+            source: source, action: action, entry: nil,
+            result: "Checking \(agentName)'s provider connection…"
+        )
+    }
+
+    /// Kick off a headless `refreshProvider` remediation (`ouro provider refresh --agent`). Same
+    /// shape as `verifyProvider`: explicit agent name, immediate ack, recovery truth from the
+    /// POST-command probe. Carries no secret — it re-pushes already-stored vault creds.
+    private func startRefreshProvider(action: BossWorkbenchAction, source: String) -> String {
+        let agentName = (action.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !agentName.isEmpty else {
+            return finishBossAction(
+                source: source, action: action, entry: nil,
+                result: "Skipped refreshProvider: missing explicit agent name"
+            )
+        }
+        let runner = ProviderRefreshRunner(verifyProbe: makeProbe())
+        Task { [weak self] in
+            let outcome = await runner.refresh(agentName: agentName)
+            await MainActor.run {
+                self?.completeOnboardingAction(
+                    action: action, source: source, targetName: outcome.agentName,
+                    humanFacingLine: outcome.humanFacingLine, auditDetail: outcome.auditDetail,
+                    succeeded: outcome.truth == .refreshed, needsManual: outcome.needsManualRecovery
+                )
+            }
+        }
+        return finishBossAction(
+            source: source, action: action, entry: nil,
+            result: "Refreshing \(agentName)'s connection…"
+        )
+    }
+
+    /// Kick off a headless `selectLane` remediation (`ouro use --agent --lane --provider
+    /// --model`). CONFIG-ONLY — carries no secret. Re-guards the fully-specified payload (agent
+    /// name + lane + provider + model); any missing piece skips before any command runs.
+    private func startSelectLane(action: BossWorkbenchAction, source: String) -> String {
+        let agentName = (action.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !agentName.isEmpty,
+              let lane = action.lane,
+              let provider = nonEmpty(action.provider),
+              let model = nonEmpty(action.model) else {
+            return finishBossAction(
+                source: source, action: action, entry: nil,
+                result: "Skipped selectLane: missing explicit agent name, lane, provider, or model"
+            )
+        }
+        let selection = LaneSelection(agentName: agentName, lane: lane, provider: provider, model: model)
+        let runner = LaneSelectionRunner(verifyProbe: makeProbe())
+        Task { [weak self] in
+            let outcome = await runner.select(selection)
+            await MainActor.run {
+                self?.completeOnboardingAction(
+                    action: action, source: source, targetName: outcome.selection.agentName,
+                    humanFacingLine: outcome.humanFacingLine, auditDetail: outcome.auditDetail,
+                    succeeded: outcome.truth == .selected, needsManual: outcome.needsManualRecovery
+                )
+            }
+        }
+        return finishBossAction(
+            source: source, action: action, entry: nil,
+            result: "Setting up \(agentName) with \(provider)…"
+        )
+    }
+
+    /// Kick off a `registerWorkbenchMCP` remediation. WRAPS the existing headless in-app
+    /// registrar (`bossWorkbenchMCPRegistrar.install`) as an agent-issuable action; recovery
+    /// truth comes from the POST-command registrar SNAPSHOT, never the install throw.
+    private func startRegisterWorkbenchMCP(action: BossWorkbenchAction, source: String) -> String {
+        let agentName = (action.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !agentName.isEmpty else {
+            return finishBossAction(
+                source: source, action: action, entry: nil,
+                result: "Skipped registerWorkbenchMCP: missing explicit agent name"
+            )
+        }
+        let registrar = bossWorkbenchMCPRegistrar
+        let runner = WorkbenchMCPRegistrationRunner(
+            runRegister: { name in
+                _ = try registrar.install(for: BossAgentSelection(agentName: name))
+            },
+            snapshotProbe: { name in
+                registrar.snapshot(for: BossAgentSelection(agentName: name)).status
+            }
+        )
+        Task { [weak self] in
+            let outcome = await runner.register(agentName: agentName)
+            await MainActor.run {
+                // Keep the native registration cache coherent with what the action just wrote.
+                self?.refreshWorkbenchMCPRegistration()
+                self?.completeOnboardingAction(
+                    action: action, source: source, targetName: outcome.agentName,
+                    humanFacingLine: outcome.humanFacingLine, auditDetail: outcome.auditDetail,
+                    succeeded: outcome.truth == .registered, needsManual: outcome.needsManualRecovery
+                )
+            }
+        }
+        return finishBossAction(
+            source: source, action: action, entry: nil,
+            result: "Connecting \(agentName) to Workbench…"
+        )
+    }
+
+    /// Kick off an `ensureDaemon` remediation. WRAPS Slice 0's `DaemonManager.ensureRunning()`
+    /// (detect-reuse-else-start) as an agent-issuable action; recovery truth comes from its
+    /// existing post-start verify-probe classification, never an exit code. No agent name — the
+    /// daemon is machine-scoped infrastructure. Reuses the SAME `daemonManager` the check-in
+    /// path uses so the agent-issued ensure and the implicit check-in ensure share one config.
+    private func startEnsureDaemon(action: BossWorkbenchAction, source: String) -> String {
+        let manager = daemonManager
+        Task { [weak self] in
+            let start = await manager.ensureRunning()
+            let outcome = DaemonEnsureActionOutcome(start: start)
+            await MainActor.run {
+                self?.completeOnboardingAction(
+                    action: action, source: source, targetName: "daemon",
+                    humanFacingLine: outcome.humanFacingLine, auditDetail: outcome.auditDetail,
+                    succeeded: outcome.succeeded, needsManual: outcome.needsManualRecovery
+                )
+            }
+        }
+        return finishBossAction(
+            source: source, action: action, entry: nil,
+            result: "Bringing your agent's connection online…"
+        )
+    }
+
+    /// Surface the recovery-truth outcome of a completed onboarding action. Mirrors
+    /// `completeRepairAgent`: human-facing (seam-free) line → `bossAppliedActions`; raw audit
+    /// detail → action log; `succeeded` is the recovery truth (from the post-command probe).
+    private func completeOnboardingAction(
+        action: BossWorkbenchAction,
+        source: String,
+        targetName: String,
+        humanFacingLine: String,
+        auditDetail: String,
+        succeeded: Bool,
+        needsManual: Bool
+    ) {
+        bossAppliedActions = Array(([humanFacingLine] + bossAppliedActions).prefix(12))
+        recordActionLog(
+            source: source,
+            action: action.action.rawValue,
+            targetName: targetName,
+            result: auditDetail,
+            succeeded: succeeded
+        )
+        if bossWatchIsEnabled, needsManual {
+            bossWatchLastError = auditDetail
+        }
+    }
+
+    /// The shared POST-command verify probe for the agent-targeted onboarding actions: a
+    /// `BossAgentMCPClient.status(agentName:)` round-trip (a usable answer = healthy; any failure
+    /// = unreachable). This is the SAME readiness signal as the boss check-in's MCP round-trip,
+    /// so a successful probe genuinely proves the agent is serving. Returned in the
+    /// `(name, lane?)` shape `ProviderVerifyRunner` expects; the lane never affects the probe (it
+    /// classifies the whole agent's readiness).
+    private func makeProbe() -> @Sendable (String, ProviderLane?) async -> AgentRepairProbe {
+        let client = bossMCPClient
+        return { name, _ in
+            do {
+                _ = try await client.status(agentName: name)
+                return .healthy
+            } catch {
+                return .unreachable
+            }
+        }
+    }
+
+    /// The name-only verify-probe variant for runners that don't carry a lane
+    /// (`refreshProvider`, `selectLane`).
+    private func makeProbe() -> @Sendable (String) async -> AgentRepairProbe {
+        let client = bossMCPClient
+        return { name in
+            do {
+                _ = try await client.status(agentName: name)
+                return .healthy
+            } catch {
+                return .unreachable
+            }
+        }
     }
 
     private func finishBossAction(

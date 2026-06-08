@@ -28,6 +28,30 @@ public enum BossWorkbenchActionKind: String, Codable, Sendable, CaseIterable {
     /// gate (and the actual credential entry) lives inside the native form, never in this action.
     /// Entry-less and authorized under the `trustedOnboarding` posture (entry-less).
     case requestProviderConfig
+    /// Onboarding remediation: verify the named agent's provider connection
+    /// (`ouro auth verify --agent <name>`, or `ouro check --agent <name> --lane <lane>` when a
+    /// lane is named). Entry-less — explicit agent name, optional lane. Recovery truth from the
+    /// POST-command verify probe, never the exit code.
+    case verifyProvider
+    /// Onboarding remediation: push the named agent's vault credentials into the running daemon
+    /// (`ouro provider refresh --agent <name>`). Entry-less, explicit agent name, post-command
+    /// verify. Carries no secret — it re-pushes already-stored vault creds, never new ones.
+    case refreshProvider
+    /// Onboarding remediation: select the named agent's lane provider/model — CONFIG ONLY, no
+    /// secret (`ouro use --agent <name> --lane <lane> --provider <p> --model <m>`). Entry-less,
+    /// explicit agent name + explicit lane/provider/model. The credential lives in the vault and
+    /// is never routed through this action.
+    case selectLane
+    /// Onboarding remediation: register the Workbench MCP for the named agent — wraps the
+    /// existing headless in-app registrar (`BossWorkbenchMCPRegistrar.install`) as an
+    /// agent-issuable action. Entry-less, explicit agent name; classified from the registrar
+    /// SNAPSHOT, never the install throw.
+    case registerWorkbenchMCP
+    /// Onboarding remediation: ensure the local daemon is running — wraps Slice 0's
+    /// detect-reuse-else-start `DaemonManager.ensureRunning()` as an agent-issuable action.
+    /// Entry-less and MACHINE-SCOPED: the daemon is machine infrastructure, so this carries no
+    /// agent name. Recovery truth from the post-start verify probe, never an exit code.
+    case ensureDaemon
 
     /// Whether this kind's effect is to OPEN the native provider-config form rather than
     /// execute a command. Only `requestProviderConfig` is a UI-opening signal: it shows UI and
@@ -62,6 +86,14 @@ public struct BossWorkbenchAction: Codable, Equatable, Sendable {
     /// registered with no agent identity in its command/env, so the calling
     /// agent must pass its own name; the server validates it non-empty.
     public var owner: String?
+    /// The explicit provider lane (`outward` / `inner`) for the lane-scoped onboarding actions
+    /// (`verifyProvider`, `selectLane`). Optional on `verifyProvider` (nil = whole-agent verify),
+    /// required on `selectLane`.
+    public var lane: ProviderLane?
+    /// The explicit provider id for `selectLane` (config-only, never a secret).
+    public var provider: String?
+    /// The explicit model id for `selectLane` (config-only, never a secret).
+    public var model: String?
 
     private enum CodingKeys: String, CodingKey {
         case action
@@ -75,6 +107,9 @@ public struct BossWorkbenchAction: Codable, Equatable, Sendable {
         case trust
         case autoResume
         case owner
+        case lane
+        case provider
+        case model
     }
 
     public init(
@@ -88,7 +123,10 @@ public struct BossWorkbenchAction: Codable, Equatable, Sendable {
         workingDirectory: String? = nil,
         trust: ProcessTrust? = nil,
         autoResume: Bool? = nil,
-        owner: String? = nil
+        owner: String? = nil,
+        lane: ProviderLane? = nil,
+        provider: String? = nil,
+        model: String? = nil
     ) {
         self.action = action
         self.entry = entry
@@ -101,6 +139,9 @@ public struct BossWorkbenchAction: Codable, Equatable, Sendable {
         self.trust = trust
         self.autoResume = autoResume
         self.owner = owner
+        self.lane = lane
+        self.provider = provider
+        self.model = model
     }
 
     public init(from decoder: Decoder) throws {
@@ -116,6 +157,9 @@ public struct BossWorkbenchAction: Codable, Equatable, Sendable {
         self.trust = try container.decodeIfPresent(ProcessTrust.self, forKey: .trust)
         self.autoResume = try container.decodeIfPresent(Bool.self, forKey: .autoResume)
         self.owner = try container.decodeIfPresent(String.self, forKey: .owner)
+        self.lane = try container.decodeIfPresent(ProviderLane.self, forKey: .lane)
+        self.provider = try container.decodeIfPresent(String.self, forKey: .provider)
+        self.model = try container.decodeIfPresent(String.self, forKey: .model)
     }
 }
 
@@ -130,6 +174,9 @@ public enum BossWorkbenchActionValidationError: LocalizedError, Equatable, Senda
     case missingGroupForMoveSession
     case missingTrustForSetTrust
     case missingAutoResumeForSetAutoResume
+    case missingLane(BossWorkbenchActionKind)
+    case missingProviderForSelectLane
+    case missingModelForSelectLane
 
     public var errorDescription: String? {
         switch self {
@@ -153,6 +200,12 @@ public enum BossWorkbenchActionValidationError: LocalizedError, Equatable, Senda
             return "setTrust requires trust"
         case .missingAutoResumeForSetAutoResume:
             return "setAutoResume requires autoResume"
+        case .missingLane(let action):
+            return "\(action.rawValue) requires a lane"
+        case .missingProviderForSelectLane:
+            return "selectLane requires a non-empty provider"
+        case .missingModelForSelectLane:
+            return "selectLane requires a non-empty model"
         }
     }
 }
@@ -164,7 +217,8 @@ public extension BossWorkbenchAction {
             guard entry?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
                 throw BossWorkbenchActionValidationError.missingEntry(action)
             }
-        case .createGroup, .createTerminal, .createSession, .repairAgent, .requestProviderConfig:
+        case .createGroup, .createTerminal, .createSession, .repairAgent, .requestProviderConfig,
+             .verifyProvider, .refreshProvider, .selectLane, .registerWorkbenchMCP, .ensureDaemon:
             break
         }
 
@@ -209,17 +263,34 @@ public extension BossWorkbenchAction {
             guard autoResume != nil else {
                 throw BossWorkbenchActionValidationError.missingAutoResumeForSetAutoResume
             }
-        case .repairAgent:
-            // Entry-less, but MUST carry an EXPLICIT resolved agent name — never lean on
-            // `ouro` default-agent resolution (multiple agents can exist on the box, and the
-            // wrong one could be repaired).
+        case .repairAgent, .verifyProvider, .refreshProvider, .registerWorkbenchMCP:
+            // Entry-less, but every agent-targeted onboarding remediation MUST carry an EXPLICIT
+            // resolved agent name — never lean on `ouro` default-agent resolution (multiple
+            // agents can exist on the box, and the wrong one could be acted on). verifyProvider's
+            // lane is OPTIONAL (nil = whole-agent verify), so it isn't checked here.
             guard name?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
                 throw BossWorkbenchActionValidationError.missingName(action)
             }
-        case .launch, .recover, .terminate, .archive, .restore, .requestProviderConfig:
+        case .selectLane:
+            // Config-only (no secret) but FULLY specified: explicit agent name + explicit lane +
+            // explicit provider + explicit model.
+            guard name?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+                throw BossWorkbenchActionValidationError.missingName(action)
+            }
+            guard lane != nil else {
+                throw BossWorkbenchActionValidationError.missingLane(action)
+            }
+            guard provider?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+                throw BossWorkbenchActionValidationError.missingProviderForSelectLane
+            }
+            guard model?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+                throw BossWorkbenchActionValidationError.missingModelForSelectLane
+            }
+        case .launch, .recover, .terminate, .archive, .restore, .requestProviderConfig, .ensureDaemon:
             // requestProviderConfig carries no required payload: it only signals the app to
-            // open the native form. The human gate (and the credential) lives inside the form,
-            // never in this non-secret-bearing action.
+            // open the native form. ensureDaemon is machine-scoped infrastructure — it carries
+            // no agent name. The human gate (and the credential) lives inside the form, never in
+            // these non-secret-bearing actions.
             break
         }
     }

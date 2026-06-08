@@ -434,4 +434,64 @@ final class BossWorkbenchActionAuthorizerTests: XCTestCase {
         XCTAssertEqual(decision.deniedTarget, "Trusted")
         XCTAssertEqual(decision.authorization.reason, "withheld unsafe input (destructive command) — escalated to a human")
     }
+
+    // MARK: - Slice 4 onboarding actions (entry-less, trusted-onboarding posture)
+
+    func testEntrylessAgentTargetedOnboardingActionsAreAllowedUnderTrustedOnboarding() throws {
+        let authorizer = BossWorkbenchActionAuthorizer()
+        let actions: [BossWorkbenchAction] = [
+            BossWorkbenchAction(action: .verifyProvider, name: "slugger", lane: .outward),
+            BossWorkbenchAction(action: .refreshProvider, name: "slugger"),
+            BossWorkbenchAction(action: .selectLane, name: "slugger", lane: .inner, provider: "anthropic", model: "claude"),
+            BossWorkbenchAction(action: .registerWorkbenchMCP, name: "slugger"),
+        ]
+        for action in actions {
+            let authorization = authorizer.authorizeEntryless(action)
+            XCTAssertTrue(authorization.isAllowed, "\(action.action.rawValue) must be allowed entry-less")
+            XCTAssertEqual(authorization.posture, .trustedOnboarding)
+            XCTAssertTrue(authorization.requiresAudit, "\(action.action.rawValue) must require an audit line")
+        }
+    }
+
+    func testEntrylessAgentTargetedOnboardingActionsWithoutAgentNameAreDenied() throws {
+        let authorizer = BossWorkbenchActionAuthorizer()
+        let kinds: [BossWorkbenchActionKind] = [.verifyProvider, .refreshProvider, .selectLane, .registerWorkbenchMCP]
+        for kind in kinds {
+            // Empty/whitespace name → the command never runs (could repair/verify the wrong agent).
+            let action = BossWorkbenchAction(action: kind, name: "   ")
+            let authorization = authorizer.authorizeEntryless(action)
+            XCTAssertFalse(authorization.isAllowed, "\(kind.rawValue) without an agent name must be denied")
+            XCTAssertEqual(authorization.reason, "\(kind.rawValue) requires an explicit agent name")
+        }
+    }
+
+    func testEntrylessEnsureDaemonIsAllowedUnderTrustedOnboardingWithNoAgentName() throws {
+        // Machine-scoped infrastructure: no agent name required.
+        let action = BossWorkbenchAction(action: .ensureDaemon)
+
+        let authorization = BossWorkbenchActionAuthorizer().authorizeEntryless(action)
+
+        XCTAssertTrue(authorization.isAllowed)
+        XCTAssertEqual(authorization.posture, .trustedOnboarding)
+        XCTAssertTrue(authorization.requiresAudit)
+        XCTAssertNil(action.name)
+    }
+
+    func testEnqueueGateAllowsSlice4OnboardingActionsWithRawKindTarget() throws {
+        let authorizer = BossWorkbenchActionAuthorizer()
+        let cases: [(BossWorkbenchAction, String)] = [
+            (BossWorkbenchAction(action: .verifyProvider, name: "slugger"), "verifyProvider"),
+            (BossWorkbenchAction(action: .refreshProvider, name: "slugger"), "refreshProvider"),
+            (BossWorkbenchAction(action: .selectLane, name: "slugger", lane: .inner, provider: "anthropic", model: "claude"), "selectLane"),
+            (BossWorkbenchAction(action: .registerWorkbenchMCP, name: "slugger"), "registerWorkbenchMCP"),
+            (BossWorkbenchAction(action: .ensureDaemon), "ensureDaemon"),
+        ]
+        for (action, rawTarget) in cases {
+            let decision = authorizer.gate(action, resolvedEntry: nil)
+            XCTAssertTrue(decision.authorization.isAllowed, "\(rawTarget) must pass the entry-less gate")
+            XCTAssertEqual(decision.authorization.posture, .trustedOnboarding)
+            // Entry-less: the denial target is the raw kind (no entry to name).
+            XCTAssertEqual(decision.deniedTarget, rawTarget)
+        }
+    }
 }

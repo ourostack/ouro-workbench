@@ -348,4 +348,164 @@ final class BossWorkbenchActionTests: XCTestCase {
             BossWorkbenchAction(action: .requestProviderConfig, name: "slugger"),
         ])
     }
+
+    // MARK: - verifyProvider (entry-less, explicit agent name, optional lane)
+
+    func testVerifyProviderRequiresExplicitAgentNameBeforeQueueing() {
+        let missingName = BossWorkbenchAction(action: .verifyProvider)
+        let blankName = BossWorkbenchAction(action: .verifyProvider, name: "   ", lane: .outward)
+
+        XCTAssertThrowsError(try missingName.validateForQueueing()) { error in
+            XCTAssertEqual(error as? BossWorkbenchActionValidationError, .missingName(.verifyProvider))
+        }
+        XCTAssertThrowsError(try blankName.validateForQueueing()) { error in
+            XCTAssertEqual(error as? BossWorkbenchActionValidationError, .missingName(.verifyProvider))
+        }
+    }
+
+    func testVerifyProviderLaneIsOptionalAndEntryless() throws {
+        // Lane-less whole-agent verify is valid; a lane is optional (nil = `ouro auth verify`).
+        XCTAssertNoThrow(try BossWorkbenchAction(action: .verifyProvider, name: "slugger").validateForQueueing())
+        XCTAssertNoThrow(try BossWorkbenchAction(action: .verifyProvider, name: "slugger", lane: .inner).validateForQueueing())
+    }
+
+    func testParsesVerifyProviderOnboardingActionWithLane() throws {
+        let reply = """
+        ```ouro-workbench-actions
+        [
+          { "action": "verifyProvider", "name": "slugger", "lane": "outward" }
+        ]
+        ```
+        """
+
+        let actions = try BossWorkbenchActionParser().parse(reply)
+
+        XCTAssertEqual(actions, [
+            BossWorkbenchAction(action: .verifyProvider, name: "slugger", lane: .outward),
+        ])
+    }
+
+    // MARK: - refreshProvider (entry-less, explicit agent name)
+
+    func testRefreshProviderRequiresExplicitAgentNameBeforeQueueing() {
+        let missingName = BossWorkbenchAction(action: .refreshProvider)
+        let blankName = BossWorkbenchAction(action: .refreshProvider, name: "   ")
+
+        XCTAssertThrowsError(try missingName.validateForQueueing()) { error in
+            XCTAssertEqual(error as? BossWorkbenchActionValidationError, .missingName(.refreshProvider))
+        }
+        XCTAssertThrowsError(try blankName.validateForQueueing()) { error in
+            XCTAssertEqual(error as? BossWorkbenchActionValidationError, .missingName(.refreshProvider))
+        }
+    }
+
+    func testRefreshProviderDoesNotRequireAnEntryBeforeQueueing() throws {
+        XCTAssertNoThrow(try BossWorkbenchAction(action: .refreshProvider, name: "slugger").validateForQueueing())
+    }
+
+    // MARK: - selectLane (entry-less, explicit name + lane + provider + model; config-only)
+
+    func testSelectLaneRequiresExplicitNameLaneProviderAndModelBeforeQueueing() {
+        let missingName = BossWorkbenchAction(action: .selectLane, lane: .inner, provider: "anthropic", model: "claude")
+        let missingLane = BossWorkbenchAction(action: .selectLane, name: "slugger", provider: "anthropic", model: "claude")
+        let missingProvider = BossWorkbenchAction(action: .selectLane, name: "slugger", lane: .inner, model: "claude")
+        let missingModel = BossWorkbenchAction(action: .selectLane, name: "slugger", lane: .inner, provider: "anthropic")
+
+        XCTAssertThrowsError(try missingName.validateForQueueing()) { error in
+            XCTAssertEqual(error as? BossWorkbenchActionValidationError, .missingName(.selectLane))
+        }
+        XCTAssertThrowsError(try missingLane.validateForQueueing()) { error in
+            XCTAssertEqual(error as? BossWorkbenchActionValidationError, .missingLane(.selectLane))
+        }
+        XCTAssertThrowsError(try missingProvider.validateForQueueing()) { error in
+            XCTAssertEqual(error as? BossWorkbenchActionValidationError, .missingProviderForSelectLane)
+        }
+        XCTAssertThrowsError(try missingModel.validateForQueueing()) { error in
+            XCTAssertEqual(error as? BossWorkbenchActionValidationError, .missingModelForSelectLane)
+        }
+    }
+
+    func testSelectLaneFullySpecifiedIsValidAndConfigOnly() throws {
+        // Fully-specified and config-only: there is NO secret field on the wire. Encode it and
+        // assert no credential-bearing key appears (the credential lives in the vault, never here).
+        let action = BossWorkbenchAction(
+            action: .selectLane, name: "slugger", lane: .inner, provider: "anthropic", model: "claude"
+        )
+        XCTAssertNoThrow(try action.validateForQueueing())
+
+        let data = try JSONEncoder().encode(action)
+        let object = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let allowedKeys: Set<String> = [
+            "action", "entry", "text", "appendNewline", "group",
+            "name", "command", "workingDirectory", "trust", "autoResume",
+            "owner", "lane", "provider", "model",
+        ]
+        XCTAssertTrue(Set(object.keys).isSubset(of: allowedKeys))
+        let secretLike = ["apiKey", "api_key", "token", "secret", "credential", "password", "key"]
+        for key in object.keys {
+            for needle in secretLike {
+                XCTAssertFalse(key.lowercased().contains(needle.lowercased()), "selectLane carries no secret; found \(key)")
+            }
+        }
+    }
+
+    func testParsesSelectLaneOnboardingAction() throws {
+        let reply = """
+        ```ouro-workbench-actions
+        [
+          { "action": "selectLane", "name": "slugger", "lane": "inner", "provider": "anthropic", "model": "claude" }
+        ]
+        ```
+        """
+
+        let actions = try BossWorkbenchActionParser().parse(reply)
+
+        XCTAssertEqual(actions, [
+            BossWorkbenchAction(action: .selectLane, name: "slugger", lane: .inner, provider: "anthropic", model: "claude"),
+        ])
+    }
+
+    // MARK: - registerWorkbenchMCP (entry-less, explicit agent name)
+
+    func testRegisterWorkbenchMCPRequiresExplicitAgentNameBeforeQueueing() {
+        let missingName = BossWorkbenchAction(action: .registerWorkbenchMCP)
+        let blankName = BossWorkbenchAction(action: .registerWorkbenchMCP, name: "   ")
+
+        XCTAssertThrowsError(try missingName.validateForQueueing()) { error in
+            XCTAssertEqual(error as? BossWorkbenchActionValidationError, .missingName(.registerWorkbenchMCP))
+        }
+        XCTAssertThrowsError(try blankName.validateForQueueing()) { error in
+            XCTAssertEqual(error as? BossWorkbenchActionValidationError, .missingName(.registerWorkbenchMCP))
+        }
+    }
+
+    func testRegisterWorkbenchMCPDoesNotRequireAnEntryBeforeQueueing() throws {
+        XCTAssertNoThrow(try BossWorkbenchAction(action: .registerWorkbenchMCP, name: "slugger").validateForQueueing())
+    }
+
+    // MARK: - ensureDaemon (entry-less, machine-scoped — NO agent name)
+
+    func testEnsureDaemonRequiresNoAgentNameOrEntryBeforeQueueing() throws {
+        // The daemon is machine-scoped infrastructure: ensureDaemon carries no agent name and
+        // no entry, and must validate clean.
+        let action = BossWorkbenchAction(action: .ensureDaemon)
+        XCTAssertNoThrow(try action.validateForQueueing())
+        XCTAssertNil(action.name)
+    }
+
+    func testParsesEnsureDaemonOnboardingAction() throws {
+        let reply = """
+        ```ouro-workbench-actions
+        [
+          { "action": "ensureDaemon" }
+        ]
+        ```
+        """
+
+        let actions = try BossWorkbenchActionParser().parse(reply)
+
+        XCTAssertEqual(actions, [
+            BossWorkbenchAction(action: .ensureDaemon),
+        ])
+    }
 }

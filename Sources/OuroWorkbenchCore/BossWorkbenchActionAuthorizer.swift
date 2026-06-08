@@ -177,6 +177,19 @@ public struct BossWorkbenchActionAuthorizer: Sendable {
             // one human gate). Allowed entry-less under `trustedOnboarding`; it needs no explicit
             // agent name (the form resolves/labels the target itself).
             return .allowed(posture: .trustedOnboarding)
+        case .verifyProvider, .refreshProvider, .selectLane, .registerWorkbenchMCP:
+            // Every agent-targeted onboarding remediation requires an EXPLICIT resolved agent
+            // name — never lean on `ouro` default-agent resolution (the wrong agent could be
+            // acted on). Authorized under the trusted-onboarding posture (auto-apply + mandatory
+            // audit). An empty name is denied here, so the command never runs.
+            guard action.name?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+                return .denied("\(action.action.rawValue) requires an explicit agent name")
+            }
+            return .allowed(posture: .trustedOnboarding)
+        case .ensureDaemon:
+            // The daemon is machine-scoped infrastructure (no agent name). Authorized under the
+            // trusted-onboarding posture (auto-apply + mandatory audit).
+            return .allowed(posture: .trustedOnboarding)
         case .createGroup, .createTerminal, .createSession:
             return .allowed(posture: .knownEntryless)
         case .launch, .recover, .terminate, .sendInput, .moveSession,
