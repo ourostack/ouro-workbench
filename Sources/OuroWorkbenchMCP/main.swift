@@ -281,6 +281,15 @@ final class WorkbenchMCPServer {
         } else {
             trust = nil
         }
+        let lane: ProviderLane?
+        if let rawLane = try optionalString(arguments, key: "lane") {
+            guard let parsedLane = ProviderLane(rawValue: rawLane) else {
+                throw MCPToolFailure("Invalid lane value: \(rawLane)")
+            }
+            lane = parsedLane
+        } else {
+            lane = nil
+        }
         let action = BossWorkbenchAction(
             action: actionKind,
             entry: try optionalString(arguments, key: "entry"),
@@ -291,7 +300,10 @@ final class WorkbenchMCPServer {
             command: try optionalString(arguments, key: "command"),
             workingDirectory: try optionalString(arguments, key: "workingDirectory"),
             trust: trust,
-            autoResume: try optionalBool(arguments, key: "autoResume")
+            autoResume: try optionalBool(arguments, key: "autoResume"),
+            lane: lane,
+            provider: try optionalString(arguments, key: "provider"),
+            model: try optionalString(arguments, key: "model")
         )
         try action.validateForQueueing()
 
@@ -609,20 +621,23 @@ final class WorkbenchMCPServer {
             ],
             [
                 "name": "workbench_request_action",
-                "description": "Queue an auditable Workbench action for the native app to apply. Entry-scoped actions target a trusted process entry; the entry-less `repairAgent` onboarding remediation targets an agent by its explicit `name` (never default-agent resolution) and repairs that agent's readiness. Applying is asynchronous (a 2s pump drains the queue): this call returns only an enqueue ack, NOT the result. To learn whether a remediation actually worked, read the agent's readiness again and narrate from THAT, never from this ack.",
+                "description": "Queue an auditable Workbench action for the native app to apply. Entry-scoped actions target a trusted process entry; the entry-less onboarding remediations target an agent by its explicit `name` (never default-agent resolution): `repairAgent` repairs an agent's vault/provider readiness, `verifyProvider` checks an agent's provider connection (optionally for a single `lane`), `refreshProvider` re-pushes an agent's stored credentials into the running daemon, `selectLane` sets an agent's `lane` provider/model (config-only, no secret), `registerWorkbenchMCP` connects an agent to Workbench, and `ensureDaemon` brings the local daemon online (machine-scoped — no agent name). Applying is asynchronous (a 2s pump drains the queue): this call returns only an enqueue ack, NOT the result. To learn whether a remediation actually worked, read the agent's readiness again and narrate from THAT, never from this ack.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
-                        "action": ["type": "string", "enum": ["launch", "recover", "terminate", "sendInput", "createGroup", "createTerminal", "moveSession", "setTrust", "setAutoResume", "archive", "restore", "repairAgent"]],
+                        "action": ["type": "string", "enum": ["launch", "recover", "terminate", "sendInput", "createGroup", "createTerminal", "moveSession", "setTrust", "setAutoResume", "archive", "restore", "repairAgent", "verifyProvider", "refreshProvider", "selectLane", "registerWorkbenchMCP", "ensureDaemon"]],
                         "entry": ["type": "string", "description": "Process UUID or unique process name for entry-scoped actions."],
                         "text": ["type": "string", "description": "Required non-empty input text when action is sendInput."],
                         "appendNewline": ["type": "boolean"],
                         "group": ["type": "string", "description": "Group UUID or unique group name for createTerminal and moveSession."],
-                        "name": ["type": "string", "description": "Required for createGroup and createTerminal; and the explicit agent name (never default-agent resolution) for repairAgent."],
+                        "name": ["type": "string", "description": "Required for createGroup and createTerminal; and the explicit agent name (never default-agent resolution) for the agent-targeted onboarding remediations repairAgent, verifyProvider, refreshProvider, selectLane, and registerWorkbenchMCP. Omit for ensureDaemon (machine-scoped)."],
                         "command": ["type": "string", "description": "Required command for createTerminal."],
                         "workingDirectory": ["type": "string", "description": "Group root path or terminal working directory."],
                         "trust": ["type": "string", "enum": ["trusted", "untrusted"]],
                         "autoResume": ["type": "boolean"],
+                        "lane": ["type": "string", "enum": ["outward", "inner"], "description": "Provider lane (outward = human-facing, inner = agent-facing). Optional for verifyProvider (omit = whole-agent verify); required for selectLane."],
+                        "provider": ["type": "string", "description": "Provider id for selectLane (config-only, never a secret)."],
+                        "model": ["type": "string", "description": "Model id for selectLane (config-only, never a secret)."],
                         "source": ["type": "string", "description": "Agent or tool requesting the action."],
                         "format": ["type": "string", "enum": ["text", "json"], "description": "Response format. \"json\" returns {ok,message,requestId} for programmatic callers; default \"text\" returns a human-readable confirmation."]
                     ],
