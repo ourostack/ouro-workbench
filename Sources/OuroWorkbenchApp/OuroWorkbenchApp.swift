@@ -5427,6 +5427,135 @@ private struct OnboardingBossChoiceRow: View {
     }
 }
 
+/// R4b — the first-run cold-start bootstrap surface. While Layer A runs the native bootstrap
+/// (S0→S5) it shows live per-step progress with cohesive-product copy; at the S2 gate it surfaces
+/// the native provider form (the one human touchpoint); the instant the bootstrap hands off, it
+/// switches to the agent-driven (Layer B) framing — the agent inspects + remediates + narrates,
+/// and the human is never asked to run anything. Thin wiring over `model.firstRunPresentation`
+/// (pure `FirstRunBootstrapDrive` output).
+private struct FirstRunBootstrapView: View {
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        if let presentation = model.firstRunPresentation {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .center, spacing: 10) {
+                    Label(presentation.headline, systemImage: headerIcon(for: presentation.mode))
+                        .font(.headline)
+                    Spacer()
+                    if model.firstRunBootstrapIsRunning {
+                        ProgressView().controlSize(.small)
+                    }
+                    StatusPill(text: modeLabel(for: presentation.mode), color: modeColor(for: presentation.mode))
+                        .fixedSize()
+                }
+
+                if presentation.mode == .agentDriven {
+                    // Layer B: the agent took over. Narrate the handoff; the human is never asked
+                    // to run anything. Applied actions land in the dashboard's Applied Actions.
+                    if let narration = model.firstRunAgentDrivenNarration {
+                        FirstRunNarrationRow(text: narration)
+                    }
+                } else {
+                    // Layer A: live per-step native-bootstrap progress (seam-free copy).
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(presentation.rows) { row in
+                            FirstRunStepRow(row: row)
+                        }
+                    }
+                    if presentation.opensProviderGate {
+                        Button {
+                            model.presentProviderConfigForm(
+                                agentName: model.onboardingReadiness?.selectedBossName ?? model.state.boss.agentName
+                            )
+                        } label: {
+                            Label("Connect a provider", systemImage: "link")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                    }
+                }
+            }
+            .padding(14)
+            .background(.quaternary.opacity(0.28), in: RoundedRectangle(cornerRadius: 8))
+        }
+    }
+
+    private func headerIcon(for mode: FirstRunMode) -> String {
+        switch mode {
+        case .bootstrapping: return "gauge.with.dots.needle.bottom.50percent"
+        case .parkedAwaitingProvider: return "link.badge.plus"
+        case .needsAttention: return "exclamationmark.triangle.fill"
+        case .agentDriven: return "sparkles"
+        }
+    }
+
+    private func modeLabel(for mode: FirstRunMode) -> String {
+        switch mode {
+        case .bootstrapping: return "starting"
+        case .parkedAwaitingProvider: return "needs you"
+        case .needsAttention: return "needs attention"
+        case .agentDriven: return "agent driving"
+        }
+    }
+
+    private func modeColor(for mode: FirstRunMode) -> SwiftUI.Color {
+        switch mode {
+        case .bootstrapping: return .blue
+        case .parkedAwaitingProvider: return .orange
+        case .needsAttention: return .red
+        case .agentDriven: return .green
+        }
+    }
+}
+
+private struct FirstRunStepRow: View {
+    var row: BootstrapStepProgress
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            icon
+                .frame(width: 18)
+            Text(row.humanFacingLine)
+                .font(.caption)
+                .foregroundStyle(row.isTerminalFailure ? Color.orange : .secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer()
+        }
+    }
+
+    @ViewBuilder
+    private var icon: some View {
+        if row.isActive {
+            ProgressView().controlSize(.small)
+        } else if row.isDone {
+            Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+        } else if row.isTerminalFailure {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+        } else if row.isAwaitingHuman {
+            Image(systemName: "person.crop.circle.badge.exclamationmark").foregroundStyle(.orange)
+        } else {
+            Image(systemName: "circle").foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct FirstRunNarrationRow: View {
+    var text: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "sparkles")
+                .foregroundStyle(.green)
+                .frame(width: 18)
+            Text(text)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
 private struct OnboardingReadinessView: View {
     @ObservedObject var model: WorkbenchViewModel
 
@@ -5469,7 +5598,13 @@ private struct OnboardingReadinessView: View {
                         .frame(maxWidth: 660)
                     }
                 } else {
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 14) {
+                        // R4b — Layer A native cold-start bootstrap drives the not-ready first run:
+                        // live per-step progress (seam-free copy), the S2 provider-form gate, and
+                        // the seam-free handoff to agent-driven (Layer B) the instant the boss is
+                        // reachable. The repair-step list below remains the manual fallback surface
+                        // (now app-executed — no CLI panes).
+                        FirstRunBootstrapView(model: model)
                         OnboardingStatusRow(
                             systemImage: "exclamationmark.triangle.fill",
                             title: readiness.headline,
@@ -5485,6 +5620,7 @@ private struct OnboardingReadinessView: View {
             }
         }
         .frame(maxWidth: .infinity, minHeight: 420)
+        .onAppear { model.startFirstRunBootstrapIfNeeded() }
     }
 }
 
@@ -5544,11 +5680,14 @@ private struct OnboardingRepairStepRow: View {
                         .controlSize(.small)
                 }
             } else if step.commandLine != nil {
+                // R4b — APP-EXECUTED (no CLI pane). The button reads as an in-app fix, not "Open a
+                // terminal": `openOnboardingRepair` routes through the recovery-truth runners.
                 Button {
                     model.openOnboardingRepair(step)
                 } label: {
-                    Label(commandButtonTitle, systemImage: "terminal")
+                    Label(commandButtonTitle, systemImage: "wand.and.stars")
                 }
+                .buttonStyle(.borderedProminent)
                 .controlSize(.small)
             }
         }
@@ -5569,7 +5708,8 @@ private struct OnboardingRepairStepRow: View {
     }
 
     private var commandButtonTitle: String {
-        step.id.hasPrefix("check-") ? "Run" : "Open"
+        // App-executed verbs (cohesive-product): a fix action, never "Open a terminal".
+        step.actor == .humanChoice ? "Choose" : "Fix"
     }
 
     private var color: SwiftUI.Color {
@@ -8524,6 +8664,17 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var transcriptSearchLastQuery: String?
     @Published var recoveryDrillResult: RecoveryDrillResult?
     @Published var bossAppliedActions: [String] = []
+    /// R4b first-run cold-start bootstrap (Layer A). The live per-step presentation the Setup
+    /// Assistant renders while the native bootstrap (S0→S5) brings the agent online, then the
+    /// agent-driven (Layer B) framing once it hands off. Pure `FirstRunBootstrapDrive` output —
+    /// the view layer is thin wiring over it.
+    @Published var firstRunPresentation: FirstRunBootstrapPresentation?
+    /// True while a `runFirstRunBootstrap()` pass is in flight (drives the header spinner and the
+    /// re-entrancy guard in `FirstRunBootstrapDrive.shouldStart`).
+    @Published var firstRunBootstrapIsRunning = false
+    /// The seam-free handoff narration shown the instant Layer A hands off to Layer B (the boss
+    /// inspects + remediates + narrates). `nil` until handoff.
+    @Published var firstRunAgentDrivenNarration: String?
     @Published var mailboxError: String?
     @Published var isNewSessionSheetPresented = false
     @Published var isNewGroupSheetPresented = false
@@ -8787,6 +8938,10 @@ final class WorkbenchViewModel: ObservableObject {
     private let onboardingAdvisor = WorkbenchOnboardingAdvisor()
     private let onboardingProposalBuilder = WorkbenchImportProposalBuilder()
     private let deskBridgePlanner = DeskBridgePlanner()
+    /// R4b — the pure first-run presenter. ALL the bootstrap branching / sequencing / copy lives
+    /// in this Core type; the App-side methods below are thin wiring that inject the real effects
+    /// and publish its output.
+    private let firstRunDrive = FirstRunBootstrapDrive()
     private let externalActionQueue: WorkbenchActionRequestQueue
     private let releaseUpdateChecker: ReleaseUpdateChecker
     private var manuallyTerminatedRunIDs = Set<UUID>()
@@ -12320,18 +12475,12 @@ final class WorkbenchViewModel: ObservableObject {
             presentProviderConfigForm(agentName: onboardingReadiness?.selectedBossName ?? state.boss.agentName)
             return
         }
-        guard let commandLine = step.commandLine else {
-            return
-        }
-        let draft = CustomTerminalSessionDraft(
-            name: "Ouro Setup: \(step.title)",
-            command: commandLine,
-            workingDirectory: FileManager.default.homeDirectoryForCurrentUser.path,
-            trust: .trusted,
-            autoResume: false,
-            notes: "\(step.actor.rawValue): \(step.detail)"
-        )
-        _ = createCustomSession(draft, launchAfterCreate: true)
+        // R4b — every remaining repair step is APP-EXECUTED (no spawned CLI pane). The Setup
+        // Assistant never hands raw `ouro …` to the human. The last human-as-hands panes
+        // (`repair-agent-config` → `AgentRepairRunner`; `check-outward` / `check-inner` →
+        // `ProviderVerifyRunner`) run headlessly through the same recovery-truth runners the
+        // agent-driven onboarding actions use, surfacing a seam-free line into Applied Actions.
+        runOnboardingRepairStepNatively(step)
     }
 
     func deskBridgePlan(for kind: TerminalAgentKind) -> DeskBridgePlan? {
@@ -14376,11 +14525,16 @@ final class WorkbenchViewModel: ObservableObject {
                 try? await ColdStartHatchRunner.runHeadless(plan: plan)
                 await MainActor.run {
                     // Re-probe readiness: the agent was just created WITH creds, so the provider
-                    // gate is now satisfied. (R4 re-runs the parked first-run bootstrap here.)
-                    // FUTURE: re-run the parked AgentReadinessBootstrap to cross S2 → handoff.
+                    // gate is now satisfied.
                     self?.refreshOuroAgents()
                     self?.refreshOnboardingReadiness()
                     self?.runOnboardingProviderChecksIfNeeded()
+                    // R4b — re-run the parked first-run bootstrap. S2's gate now reads
+                    // `credentialsPresent` (the agent was hatched WITH the credential), so the
+                    // re-run crosses S2 → S3→S5 → the handoff probe, flipping to agent-driven mode.
+                    // `runFirstRunBootstrap` no-ops if a run is already in flight or already
+                    // handed off, so this is safe even outside the parked first-run path.
+                    self?.runFirstRunBootstrap()
                 }
             }
             recordActionLog(
@@ -14480,6 +14634,288 @@ final class WorkbenchViewModel: ObservableObject {
         if bossWatchIsEnabled, outcome.needsManualRecovery {
             bossWatchLastError = outcome.auditDetail
         }
+    }
+
+    // MARK: - R4b first-run cold-start bootstrap (Layer A drive + handoff)
+
+    /// Start the first-run bootstrap when conditions warrant it: a fresh / not-ready setup, an
+    /// explicitly-resolved boss to target, not already running, and not already handed off. Safe
+    /// to call from `onAppear` — it no-ops when those conditions aren't met (already agent-driven,
+    /// already ready, mid-run). The pure run/skip decision is `FirstRunBootstrapDrive.shouldStart`.
+    func startFirstRunBootstrapIfNeeded() {
+        let bossName = (onboardingReadiness?.selectedBossName ?? state.boss.agentName)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let decision = FirstRunBootstrapDrive.shouldStart(
+            isReady: onboardingReadiness?.isReady ?? false,
+            hasResolvedBoss: !bossName.isEmpty,
+            isRunning: firstRunBootstrapIsRunning,
+            currentMode: firstRunPresentation?.mode
+        )
+        guard decision else { return }
+        runFirstRunBootstrap()
+    }
+
+    /// Drive the native cold-start bootstrap S0→S5 with the REAL injected effects, publishing the
+    /// live per-step presentation (seam-free copy) and switching to agent-driven (Layer B) mode on
+    /// the first successful `status` round-trip. The branching/sequencing/copy is all pure Core
+    /// (`AgentReadinessBootstrap` + `FirstRunBootstrapDrive` + `FirstRunBootstrapEffectsResolver`);
+    /// this is the thin app-side wiring that injects the real effects and publishes the result.
+    func runFirstRunBootstrap() {
+        guard !firstRunBootstrapIsRunning else { return }
+        let bossName = (onboardingReadiness?.selectedBossName ?? state.boss.agentName)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        // Without an explicitly-resolved boss name there's nothing to bootstrap against; the
+        // boss-choice surface handles that case. (The machine would also guard it, but we avoid
+        // spinning up effects for an empty name.)
+        guard !bossName.isEmpty else { return }
+
+        firstRunBootstrapIsRunning = true
+        // Seed the live presentation with all-pending steps so the UI shows progress immediately.
+        firstRunPresentation = firstRunDrive.presentIdle()
+
+        // The context's human/provider are only load-bearing for an S1 hatch; this app's S1 effect
+        // defers cold-start agent creation to the S2 native form (which carries the provider +
+        // credential), so they're best-effort here. The agent NAME is the load-bearing field —
+        // explicitly resolved, never `ouro` default-agent resolution.
+        let context = BootstrapAgentContext(
+            agentName: bossName,
+            humanName: deskHumanName(),
+            provider: ""
+        )
+        let effects = makeFirstRunBootstrapEffects(agentName: bossName)
+        let bootstrap = AgentReadinessBootstrap(context: context, effects: effects)
+
+        Task { [weak self] in
+            let result = await bootstrap.run()
+            await MainActor.run {
+                self?.completeFirstRunBootstrap(result: result, agentName: bossName)
+            }
+        }
+    }
+
+    /// Build the REAL `BootstrapStepEffects` from the existing slice pieces, each carrying the
+    /// EXPLICIT resolved boss name (never `ouro` default-agent resolution) and classifying recovery
+    /// truth from a POST-effect probe, never an exit code. This is the R4b composition seam: every
+    /// prior slice's runner traces to a shipped implementation here —
+    ///   S0 `DaemonManager.ensureRunning` (the shared `daemonManager`),
+    ///   S1 cold-start agent existence (deferring creation to the gate),
+    ///   S2 the native provider form as the ONE human gate (parks if creds absent),
+    ///   S3 `ProviderRefreshRunner`, S4 `ProviderVerifyRunner`, S5 `WorkbenchMCPRegistrationRunner`,
+    ///   and the handoff edge = the first successful `BossAgentMCPClient.status` round-trip.
+    private func makeFirstRunBootstrapEffects(agentName: String) -> BootstrapStepEffects {
+        let manager = daemonManager
+        // Capture the bundles URL (Sendable) and rebuild a fresh inventory inside the @Sendable
+        // closures — `OuroAgentInventory` holds a non-Sendable `FileManager`, so we don't capture
+        // the instance. A fresh `.default`-FileManager inventory scans identically.
+        let bundlesURL = ouroAgentInventory.agentBundlesURL
+        let registrar = bossWorkbenchMCPRegistrar
+        let client = bossMCPClient
+
+        // S3/S4 post-command verify probes reuse the SAME readiness signal as the handoff edge:
+        // a `BossAgentMCPClient.status` round-trip (usable answer = healthy; any failure =
+        // unreachable). A successful probe genuinely proves the agent is serving.
+        let nameProbe: @Sendable (String) async -> AgentRepairProbe = { name in
+            do { _ = try await client.status(agentName: name); return .healthy }
+            catch { return .unreachable }
+        }
+        let laneProbe: @Sendable (String, ProviderLane?) async -> AgentRepairProbe = { name, _ in
+            do { _ = try await client.status(agentName: name); return .healthy }
+            catch { return .unreachable }
+        }
+
+        let refreshRunner = ProviderRefreshRunner(verifyProbe: nameProbe)
+        let verifyRunner = ProviderVerifyRunner(verifyProbe: laneProbe)
+        let mcpRunner = WorkbenchMCPRegistrationRunner(
+            runRegister: { name in _ = try registrar.install(for: BossAgentSelection(agentName: name)) },
+            snapshotProbe: { name in registrar.snapshot(for: BossAgentSelection(agentName: name)).status }
+        )
+
+        return BootstrapStepEffects(
+            // S0 — ensure the daemon (detect-reuse-else-start). Recovery truth from the post-start
+            // verify probe, classified inside `DaemonManager`, mapped here to StepHealth.
+            ensureDaemon: {
+                let outcome = await manager.ensureRunning()
+                return outcome.liveness == .up ? .healthy : .needsManual
+            },
+            // S1 — ensure a usable agent exists. Cold-start defers agent creation to the S2 form,
+            // so this reads `.healthy` from a freshly-scanned inventory (existing agent verifies;
+            // absent agent lets the run REACH the gate, which then parks). Pure resolver decides.
+            ensureAgentExists: { name in
+                let agents = OuroAgentInventory(agentBundlesURL: bundlesURL).scan()
+                return FirstRunBootstrapEffectsResolver.ensureAgentExistsHealth(named: name, in: agents)
+            },
+            // S2 — the ONE human gate. Reads the creds signal from a freshly-scanned inventory:
+            // `credentialsPresent` advances; `absent` PARKS (the only exit is the human supplying
+            // creds via the native form, which the UI surfaces in the parked mode). Checked once.
+            providerConfig: {
+                let agents = OuroAgentInventory(agentBundlesURL: bundlesURL).scan()
+                return FirstRunBootstrapEffectsResolver.providerGateStatus(named: agentName, in: agents)
+            },
+            // S3 — vault/provider sync: push the agent's stored vault creds into the running
+            // daemon (`ouro provider refresh`). Recovery truth from the post-command probe.
+            vaultSync: { name in
+                let outcome = await refreshRunner.refresh(agentName: name)
+                switch outcome.truth {
+                case .refreshed: return .healthy
+                case .stillDegraded: return .stillDegraded
+                case .needsManual: return .needsManual
+                }
+            },
+            // S4 — verify the configured credentials actually work (`ouro auth verify`, lane-less).
+            verifyCredentials: { name in
+                let outcome = await verifyRunner.verify(agentName: name, lane: nil)
+                switch outcome.truth {
+                case .verified: return .healthy
+                case .stillUnverified: return .stillDegraded
+                case .needsManual: return .needsManual
+                }
+            },
+            // S5 — register the Workbench MCP for the boss (the existing in-app headless registrar
+            // wrapped as the bootstrap effect). Recovery truth from the post-install snapshot.
+            registerWorkbenchMCP: { name in
+                let outcome = await mcpRunner.register(agentName: name)
+                switch outcome.truth {
+                case .registered: return .healthy
+                case .stillUnregistered: return .stillDegraded
+                case .needsManual: return .needsManual
+                }
+            },
+            // Handoff edge — the first successful `status` round-trip ends Layer A.
+            statusPing: { name in
+                do { _ = try await client.status(agentName: name); return true }
+                catch { return false }
+            }
+        )
+    }
+
+    /// Apply a finished bootstrap run to the UI: publish the live presentation and, on handoff,
+    /// switch to agent-driven (Layer B) mode — surface the seam-free handoff narration and let the
+    /// boss inspect (`workbench_onboarding_status`) + remediate (issue onboarding actions) +
+    /// narrate. From here the human is never asked to run anything; applied actions land in
+    /// `bossAppliedActions`. On a S2 park, surface the native provider form (the one touchpoint).
+    private func completeFirstRunBootstrap(result: BootstrapResult, agentName: String) {
+        firstRunBootstrapIsRunning = false
+        let presentation = firstRunDrive.present(result: result, activeStep: nil)
+        firstRunPresentation = presentation
+        // Keep the readiness snapshot coherent with whatever the bootstrap just changed.
+        refreshOuroAgents()
+        refreshWorkbenchMCPRegistration()
+        refreshOnboardingReadiness()
+
+        // Audit the settled phase (raw verbs allowed in the action log / debug lane only).
+        recordActionLog(
+            source: "native",
+            action: "firstRunBootstrap",
+            targetName: result.didHandOff ? "handed-off" : "layer-a",
+            result: result.stepOutcomes.map(\.auditDetail).joined(separator: " | "),
+            succeeded: result.didHandOff
+        )
+
+        if presentation.didHandOff {
+            // HANDOFF: Layer A guaranteed {daemon ∧ boss bundle ∧ creds ∧ MCP}; the first
+            // `status` round-trip succeeded. Layer B takes the wheel — surface the agent-driven
+            // narration; the boss's applied actions land in `bossAppliedActions` from here on.
+            firstRunAgentDrivenNarration = FirstRunBootstrapDrive.agentDrivenHandoffNarration
+            bossAppliedActions = Array(
+                ([FirstRunBootstrapDrive.agentDrivenHandoffNarration] + bossAppliedActions).prefix(12)
+            )
+        } else if presentation.opensProviderGate {
+            // PARKED at the S2 gate — surface the native provider form (the one human touchpoint).
+            // The form, on submit, runs the cold-start hatch with the credential and re-runs the
+            // parked bootstrap (`submitProviderConfig` → `runFirstRunBootstrap`), crossing S2.
+            firstRunAgentDrivenNarration = nil
+            presentProviderConfigForm(agentName: agentName)
+        } else {
+            firstRunAgentDrivenNarration = nil
+        }
+    }
+
+    /// The human name the bootstrap context carries for a cold-start hatch. Best-effort: the
+    /// current macOS short user name (the native provider form itself collects the human name).
+    private func deskHumanName() -> String {
+        NSUserName()
+    }
+
+    /// Run an onboarding repair step APP-EXECUTED (headless, no pane), classifying from a
+    /// post-command verify probe — the human-as-hands path is gone. Maps the step id to the
+    /// existing recovery-truth runner: `repair-agent-config` → `AgentRepairRunner`;
+    /// `check-outward` / `check-inner` → `ProviderVerifyRunner` (lane-scoped). The Setup Assistant
+    /// never hands a raw `ouro …` command to the human; the seam-free ack copy is pure Core.
+    private func runOnboardingRepairStepNatively(_ step: OnboardingRepairStep) {
+        let agentName = (onboardingReadiness?.selectedBossName ?? state.boss.agentName)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !agentName.isEmpty else { return }
+
+        switch step.id {
+        case "repair-agent-config":
+            let runner = makeAgentRepairRunner()
+            if let ack = NativeOnboardingRepairCopy.inProgressLine(forStepID: step.id) {
+                bossAppliedActions = Array(([ack] + bossAppliedActions).prefix(12))
+            }
+            Task { [weak self] in
+                let outcome = await runner.repair(agentName: agentName)
+                await MainActor.run {
+                    self?.surfaceNativeRepairLine(
+                        humanFacingLine: outcome.humanFacingLine,
+                        auditDetail: outcome.auditDetail,
+                        targetName: outcome.agentName,
+                        action: "repairAgent",
+                        succeeded: outcome.truth == .repaired,
+                        needsManual: outcome.needsManualRecovery
+                    )
+                }
+            }
+        case "check-outward", "check-inner":
+            let lane: ProviderLane = (step.id == "check-outward") ? .outward : .inner
+            let runner = ProviderVerifyRunner(verifyProbe: makeProbe())
+            if let ack = NativeOnboardingRepairCopy.inProgressLine(forStepID: step.id) {
+                bossAppliedActions = Array(([ack] + bossAppliedActions).prefix(12))
+            }
+            Task { [weak self] in
+                let outcome = await runner.verify(agentName: agentName, lane: lane)
+                await MainActor.run {
+                    self?.surfaceNativeRepairLine(
+                        humanFacingLine: outcome.humanFacingLine,
+                        auditDetail: outcome.auditDetail,
+                        targetName: outcome.agentName,
+                        action: "verifyProvider",
+                        succeeded: outcome.truth == .verified,
+                        needsManual: outcome.needsManualRecovery
+                    )
+                }
+            }
+        default:
+            // No other step reaches here (provider-setup short-circuits in `openOnboardingRepair`;
+            // workbench-mcp has its own button; check-* in `running` state render a spinner).
+            // Re-probe readiness so the surface stays coherent.
+            refreshOnboardingReadiness()
+        }
+    }
+
+    /// Surface a natively-run onboarding repair step's recovery truth: seam-free line →
+    /// `bossAppliedActions`; raw audit detail → action log; `succeeded` is the post-command probe
+    /// truth, never an exit code. Then re-probe readiness so the surface reflects the new state.
+    private func surfaceNativeRepairLine(
+        humanFacingLine: String,
+        auditDetail: String,
+        targetName: String,
+        action: String,
+        succeeded: Bool,
+        needsManual: Bool
+    ) {
+        bossAppliedActions = Array(([humanFacingLine] + bossAppliedActions).prefix(12))
+        recordActionLog(
+            source: "native",
+            action: action,
+            targetName: targetName,
+            result: auditDetail,
+            succeeded: succeeded
+        )
+        if bossWatchIsEnabled, needsManual {
+            bossWatchLastError = auditDetail
+        }
+        refreshOuroAgents()
+        refreshOnboardingReadiness()
     }
 
     /// Build the headless repair runner. The default verify probe is a post-command
