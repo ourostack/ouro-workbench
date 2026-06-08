@@ -13984,13 +13984,7 @@ final class WorkbenchViewModel: ObservableObject {
             }
             return finishBossAction(source: source, action: action, entry: entry, result: "Created session \(entry.name) in \(project.name) owned by \(ownerName)")
         case .repairAgent:
-            // R2.1 lands the entry-less kind + posture; R2.3 wires the headless runner.
-            // Until then, validate the explicit agent name and ack — no command runs yet.
-            let agentName = (action.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !agentName.isEmpty else {
-                return finishBossAction(source: source, action: action, entry: nil, result: "Skipped repairAgent: missing explicit agent name")
-            }
-            return finishBossAction(source: source, action: action, entry: nil, result: "Working on getting \(agentName) ready…")
+            return startRepairAgent(action: action, source: source)
         case .launch, .recover, .terminate, .sendInput, .moveSession, .setTrust, .setAutoResume, .archive, .restore:
             break
         }
@@ -14187,6 +14181,92 @@ final class WorkbenchViewModel: ObservableObject {
         if recorded {
             save()
         }
+    }
+
+    /// Kick off a headless `repairAgent` remediation.
+    ///
+    /// The remediation is async (spawn `ouro repair --agent <name>` headlessly → POST-command
+    /// verify probe → classify), but `applyBossAction` is synchronous and the 2s pump narrates
+    /// from the NEXT `workbench_onboarding_status` read, not this ack. So this returns an
+    /// immediate seam-free "working on it" line, then surfaces the recovery-truth audit line
+    /// into `bossAppliedActions` (and the action log) once the verify probe classifies — NEVER
+    /// from the command's exit code.
+    ///
+    /// The agent name is taken EXPLICITLY from the action (validated non-empty at queueing and
+    /// re-authorized via `authorizeEntryless` under `trustedOnboarding`); it never relies on
+    /// `ouro` default-agent resolution. We re-guard here so a code path that skipped validation
+    /// still can't run an agent-less repair (which could repair the wrong agent).
+    private func startRepairAgent(action: BossWorkbenchAction, source: String) -> String {
+        let agentName = (action.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !agentName.isEmpty else {
+            return finishBossAction(
+                source: source,
+                action: action,
+                entry: nil,
+                result: "Skipped repairAgent: missing explicit agent name"
+            )
+        }
+
+        let runner = makeAgentRepairRunner()
+        Task { [weak self] in
+            let outcome = await runner.repair(agentName: agentName)
+            await MainActor.run {
+                self?.completeRepairAgent(action: action, source: source, outcome: outcome)
+            }
+        }
+
+        // Immediate, seam-free ack. Recovery truth follows asynchronously.
+        return finishBossAction(
+            source: source,
+            action: action,
+            entry: nil,
+            result: "Working on getting \(agentName) ready…"
+        )
+    }
+
+    /// Surface the recovery-truth outcome of a completed `repairAgent` cycle.
+    ///
+    /// Writes the human-facing (seam-free) line to `bossAppliedActions` for the UI and records
+    /// the raw audit detail (carrying `ouro repair --agent <name>`) to the action log. The
+    /// `succeeded` flag is the recovery truth — true ONLY when the post-command probe reads
+    /// healthy (`repaired`), never off the exit code.
+    private func completeRepairAgent(
+        action: BossWorkbenchAction,
+        source: String,
+        outcome: AgentRepairOutcome
+    ) {
+        bossAppliedActions = Array(([outcome.humanFacingLine] + bossAppliedActions).prefix(12))
+        recordActionLog(
+            source: source,
+            action: action.action.rawValue,
+            targetName: outcome.agentName,
+            result: outcome.auditDetail,
+            succeeded: outcome.truth == .repaired
+        )
+        if bossWatchIsEnabled, outcome.needsManualRecovery {
+            bossWatchLastError = outcome.auditDetail
+        }
+    }
+
+    /// Build the headless repair runner. The default verify probe is a post-command
+    /// `BossAgentMCPClient.status(agentName:)` round-trip: a usable answer = healthy; any
+    /// failure (no answer / transport) = unreachable. This is the SAME readiness signal as the
+    /// boss check-in's MCP round-trip, so a successful probe genuinely proves the agent is
+    /// serving. The repair command spawns headlessly (no pane) via `AgentRepairRunner`'s
+    /// daemon-spawn env pattern (`/usr/bin/env ouro …` + resolved PATH).
+    private func makeAgentRepairRunner() -> AgentRepairRunner {
+        let client = bossMCPClient
+        return AgentRepairRunner(
+            runRepair: AgentRepairRunner.headlessRepair,
+            verifyProbe: { name in
+                do {
+                    _ = try await client.status(agentName: name)
+                    return .healthy
+                } catch {
+                    return .unreachable
+                }
+            }
+        )
     }
 
     private func finishBossAction(
