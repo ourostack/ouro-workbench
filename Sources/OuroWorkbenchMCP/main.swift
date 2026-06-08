@@ -609,16 +609,16 @@ final class WorkbenchMCPServer {
             ],
             [
                 "name": "workbench_request_action",
-                "description": "Queue an auditable Workbench action for the native app to apply to a trusted process entry.",
+                "description": "Queue an auditable Workbench action for the native app to apply. Entry-scoped actions target a trusted process entry; the entry-less `repairAgent` onboarding remediation targets an agent by its explicit `name` (never default-agent resolution) and repairs that agent's readiness. Applying is asynchronous (a 2s pump drains the queue): this call returns only an enqueue ack, NOT the result. To learn whether a remediation actually worked, read the agent's readiness again and narrate from THAT, never from this ack.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
-                        "action": ["type": "string", "enum": ["launch", "recover", "terminate", "sendInput", "createGroup", "createTerminal", "moveSession", "setTrust", "setAutoResume", "archive", "restore"]],
+                        "action": ["type": "string", "enum": ["launch", "recover", "terminate", "sendInput", "createGroup", "createTerminal", "moveSession", "setTrust", "setAutoResume", "archive", "restore", "repairAgent"]],
                         "entry": ["type": "string", "description": "Process UUID or unique process name for entry-scoped actions."],
                         "text": ["type": "string", "description": "Required non-empty input text when action is sendInput."],
                         "appendNewline": ["type": "boolean"],
                         "group": ["type": "string", "description": "Group UUID or unique group name for createTerminal and moveSession."],
-                        "name": ["type": "string", "description": "Required for createGroup and createTerminal."],
+                        "name": ["type": "string", "description": "Required for createGroup and createTerminal; and the explicit agent name (never default-agent resolution) for repairAgent."],
                         "command": ["type": "string", "description": "Required command for createTerminal."],
                         "workingDirectory": ["type": "string", "description": "Group root path or terminal working directory."],
                         "trust": ["type": "string", "enum": ["trusted", "untrusted"]],
