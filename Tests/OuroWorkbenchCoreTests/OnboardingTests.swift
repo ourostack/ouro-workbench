@@ -83,6 +83,75 @@ final class OnboardingTests: XCTestCase {
         XCTAssertTrue(readiness.repairSteps.contains { $0.id == "workbench-mcp" && $0.actor == .agentRunnable })
     }
 
+    func testWorkbenchMCPStepUsesRuntimeInjectionFramingNotBundleRegistration() {
+        // RUNTIME-INJECTION repoint: the `workbench-mcp` readiness step is no longer "register the
+        // MCP into the bundle" — it means "is runtime injection available" (binary present) + the
+        // bundle is clean of any stale entry. The step's copy must carry the runtime framing and
+        // must NOT claim it registers anything into the bundle.
+        let step = try! XCTUnwrap(
+            WorkbenchOnboardingAdvisor().readiness(
+                boss: BossAgentSelection(agentName: "slugger"),
+                agents: [
+                    OuroAgentRecord(
+                        name: "slugger",
+                        bundlePath: "/tmp/slugger.ouro",
+                        configPath: "/tmp/slugger.ouro/agent.json",
+                        status: .ready,
+                        detail: "ready",
+                        humanFacing: OuroAgentLane(provider: "minimax", model: "MiniMax-M2.7"),
+                        agentFacing: OuroAgentLane(provider: "openai-codex", model: "gpt-5.5")
+                    )
+                ],
+                mcpRegistration: BossWorkbenchMCPRegistrationSnapshot(
+                    agentName: "slugger",
+                    serverName: "ouro_workbench",
+                    commandPath: "/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP",
+                    agentConfigPath: "/tmp/slugger.ouro/agent.json",
+                    status: .notRegistered,
+                    detail: "binary missing"
+                ),
+                providerChecks: [
+                    "outward": OnboardingProviderCheckResult(lane: "outward", state: .passed, detail: "ok"),
+                    "inner": OnboardingProviderCheckResult(lane: "inner", state: .passed, detail: "ok")
+                ]
+            ).repairSteps.first { $0.id == "workbench-mcp" }
+        )
+        XCTAssertEqual(step.title, "Connect Workbench tools")
+        XCTAssertFalse(step.title.lowercased().contains("register"))
+    }
+
+    func testReadyDetailUsesRuntimeInjectionFraming() {
+        let readiness = WorkbenchOnboardingAdvisor().readiness(
+            boss: BossAgentSelection(agentName: "slugger"),
+            agents: [
+                OuroAgentRecord(
+                    name: "slugger",
+                    bundlePath: "/tmp/slugger.ouro",
+                    configPath: "/tmp/slugger.ouro/agent.json",
+                    status: .ready,
+                    detail: "ready",
+                    humanFacing: OuroAgentLane(provider: "minimax", model: "MiniMax-M2.7"),
+                    agentFacing: OuroAgentLane(provider: "openai-codex", model: "gpt-5.5")
+                )
+            ],
+            mcpRegistration: BossWorkbenchMCPRegistrationSnapshot(
+                agentName: "slugger",
+                serverName: "ouro_workbench",
+                commandPath: "/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP",
+                agentConfigPath: "/tmp/slugger.ouro/agent.json",
+                status: .registered,
+                detail: "registered"
+            ),
+            providerChecks: [
+                "outward": OnboardingProviderCheckResult(lane: "outward", state: .passed, detail: "ok"),
+                "inner": OnboardingProviderCheckResult(lane: "inner", state: .passed, detail: "ok")
+            ]
+        )
+        XCTAssertEqual(readiness.state, .ready)
+        XCTAssertTrue(readiness.detail.contains("Workbench tools"))
+        XCTAssertFalse(readiness.detail.lowercased().contains("registered"))
+    }
+
     func testAdvisorRequiresLiveProviderChecksBeforeReady() {
         let readiness = WorkbenchOnboardingAdvisor().readiness(
             boss: BossAgentSelection(agentName: "slugger"),
