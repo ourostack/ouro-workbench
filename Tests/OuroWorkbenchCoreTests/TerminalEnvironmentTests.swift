@@ -13,6 +13,22 @@ final class TerminalEnvironmentTests: XCTestCase {
         XCTAssertEqual(path.components(separatedBy: ":").filter { $0 == "/usr/bin" }.count, 1)
     }
 
+    func testResolvedPathIncludesOuroCliBinAheadOfSystemDirs() {
+        // `ouro` installs only to ~/.ouro-cli/bin (CurrentVersion symlink) and is
+        // present nowhere else; a Finder/login-launched app inherits the bare
+        // launchd PATH, so without this entry daemon bringup / hatch / verify
+        // shellouts cannot resolve `ouro` on a clean install. It must also precede
+        // the system dirs so it wins resolution.
+        let path = TerminalEnvironment.resolvedPath(from: ["HOME": "/Users/test"])
+        let comps = path.components(separatedBy: ":")
+        XCTAssertTrue(comps.contains("/Users/test/.ouro-cli/bin"))
+        let ouroIdx = comps.firstIndex(of: "/Users/test/.ouro-cli/bin")!
+        let homebrewIdx = comps.firstIndex(of: "/opt/homebrew/bin")!
+        let usrBinIdx = comps.firstIndex(of: "/usr/bin")!
+        XCTAssertLessThan(ouroIdx, homebrewIdx)
+        XCTAssertLessThan(ouroIdx, usrBinIdx)
+    }
+
     func testMergedEnvironmentIncludesPathAndTerminalDefaults() {
         let environment = TerminalEnvironment(values: ["HOME": "/Users/test"]).mergedWithTerminalDefaults()
 
