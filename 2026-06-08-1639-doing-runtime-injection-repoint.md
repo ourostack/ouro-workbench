@@ -25,13 +25,26 @@ entries)".
 
 ## Units
 
-### Unit 1a (test): boss-bridge + MCP client pass `--workbench-mcp` ⬜
+### Snapshot-state mapping (LOCKED DECISION)
+Under runtime injection the registrar's `snapshot` means:
+- binary present + bundle clean → `.registered` (runtime injection available)
+- binary present + stale `ouro_workbench`/`senses.workbench` in bundle → `.needsUpdate`
+  (cleanup-pending; the action/S5 runs the cleanup, re-snapshot reads `.registered`)
+- binary missing → `.notRegistered` (reinstall Workbench; NOT auto-recoverable)
+- agent bundle missing → `.agentMissing`; unsafe name / unparseable → `.invalidConfig`
+`classify`: `.registered`→registered; `.needsUpdate`→stillUnregistered (cleanup retries);
+`.notRegistered`/`.agentMissing`/`.executableMissing`/`.invalidConfig`→needsManual.
+`install(for:)` no longer WRITES the bundle — it REMOVES stale `ouro_workbench` from
+`mcpServers` and removes `senses.workbench`.
+
+### Unit 1a (test): boss-bridge + MCP client pass `--workbench-mcp` ✅
 - Test `mcpServePlan` appends `--workbench-mcp <path>` when a path is supplied.
 - Test `BossAgentMCPClient` builds args with `--workbench-mcp <path>` when configured.
 
-### Unit 1b (impl): pass the flag in both spawn sites ⬜
+### Unit 1b (impl): pass the flag in both spawn sites ✅
 - `BossAgentBridgePlanner.mcpServePlan` appends `--workbench-mcp <path>`.
 - `BossAgentMCPClient.callTool` appends `--workbench-mcp <path>` (path-less fallback when unresolved).
+- App wires resolved path into `bossMCPClient.workbenchMCPPath` + `bossMCPCommand`.
 
 ### Unit 2a (test): registrar cleanup + reinterpreted snapshot ⬜
 - `install(for:)` removes stale `ouro_workbench` and disables `senses.workbench`.
