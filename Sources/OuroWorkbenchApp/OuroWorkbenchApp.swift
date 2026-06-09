@@ -997,17 +997,17 @@ struct HarnessStatusSheet: View {
             Text("Restarts your agent's background runtime so it can respond again. Safe to run when it's already online — Workbench just re-checks what this machine needs. Runs quietly in the background.")
         }
         .confirmationDialog(
-            "Register Workbench MCP?",
+            "Connect Workbench tools?",
             isPresented: $model.isRegisterHarnessMCPConfirmationPresented,
             titleVisibility: .visible
         ) {
-            Button("Register with \(status.boss.agentName)") {
+            Button("Connect \(status.boss.agentName)") {
                 model.registerHarnessWorkbenchMCP()
                 refresh()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Registers (or refreshes) the Workbench MCP server in \(status.boss.agentName)'s agent config so the boss can drive Workbench. Writes only that one MCP entry; existing config is preserved.")
+            Text("Makes Workbench's tools available to \(status.boss.agentName) at runtime so the boss can drive Workbench. Nothing is written to the agent's synced config; any stale Workbench entry left by an older setup is cleaned up.")
         }
         .task {
             // Refresh on open so the sheet always reflects current state — the
@@ -1105,9 +1105,9 @@ struct HarnessStatusSheet: View {
             }
             if offer.isAvailable(.registerWorkbenchMCP) {
                 HarnessActionRow(
-                    title: status.boss.mcpStatus == .needsUpdate ? "Update Workbench MCP" : "Register Workbench MCP",
+                    title: status.boss.mcpStatus == .needsUpdate ? "Clean up Workbench entry" : "Connect Workbench tools",
                     systemImage: "antenna.radiowaves.left.and.right",
-                    help: "Write the Workbench MCP entry into \(status.boss.agentName)'s agent config so the boss can drive Workbench.",
+                    help: "Make Workbench's tools available to \(status.boss.agentName) at runtime so the boss can drive Workbench. Nothing is written to the synced config.",
                     isUrgent: offer.isUrgent(.registerWorkbenchMCP),
                     isBusy: isRefreshing
                 ) {
@@ -1355,9 +1355,11 @@ private extension BossWorkbenchMCPRegistrationStatus {
         switch self {
         case .registered:
             return .green
-        case .notRegistered, .needsUpdate:
+        case .needsUpdate:
+            // Cleanup-pending (stale bundle entry, binary present) — auto-fixable.
             return .orange
-        case .agentMissing, .executableMissing, .invalidConfig:
+        case .notRegistered, .agentMissing, .executableMissing, .invalidConfig:
+            // Binary missing (`.notRegistered`) or structural failure — needs a reinstall/fix.
             return .red
         }
     }
@@ -4575,11 +4577,11 @@ struct OuroAgentRowView: View {
                 Button {
                     model.installWorkbenchMCP(for: agent)
                 } label: {
-                    Label(registration?.status == .needsUpdate ? "Update MCP" : "Install MCP", systemImage: "link.badge.plus")
+                    Label(registration?.status == .needsUpdate ? "Clean up entry" : "Connect tools", systemImage: "link.badge.plus")
                 }
                 .labelStyle(.iconOnly)
                 .buttonStyle(.borderless)
-                .help(registration?.detail ?? "Register Workbench MCP")
+                .help(registration?.detail ?? "Connect Workbench tools at runtime")
                 .fixedSize()
             }
             Button {
@@ -6275,7 +6277,7 @@ struct BossWorkbenchMCPSetupView: View {
             }
             .labelStyle(.iconOnly)
             .buttonStyle(.borderless)
-            .help("Refresh Workbench MCP registration")
+            .help("Refresh Workbench tools status")
             .fixedSize()
             if model.bossWorkbenchMCPRegistration?.isActionable == true {
                 Button {
@@ -6629,11 +6631,11 @@ private struct AgentStatusCard: View {
     private func mcpPillText(_ status: BossWorkbenchMCPRegistrationStatus) -> String {
         switch status {
         case .registered:
-            return "registered"
+            return "tools ready"
         case .notRegistered:
-            return "not registered"
+            return "tools missing"
         case .needsUpdate:
-            return "needs update"
+            return "needs cleanup"
         case .agentMissing:
             return "agent missing"
         case .executableMissing:
@@ -9662,10 +9664,10 @@ final class WorkbenchViewModel: ObservableObject {
             ),
             command(
                 .refreshWorkbenchMCP,
-                "Refresh Workbench MCP",
-                "Refresh selected boss MCP registration status",
+                "Refresh Workbench tools status",
+                "Re-check whether Workbench tools are available to the selected boss at runtime",
                 "point.3.connected.trianglepath.dotted",
-                keywords: ["mcp", "boss", "registration"]
+                keywords: ["mcp", "boss", "registration", "tools", "runtime"]
             ),
             command(
                 .searchTranscripts,
@@ -9761,16 +9763,17 @@ final class WorkbenchViewModel: ObservableObject {
             ], at: 2)
         }
 
-        // Only offer the MCP install when it would actually do something (not
-        // already registered/current) — mirrors the header/agent buttons.
+        // Only offer the action when it would actually do something — the binary is missing
+        // (`.notRegistered`) or a stale bundle entry remains (`.needsUpdate`). Mirrors the
+        // header/agent buttons.
         if bossWorkbenchMCPRegistration?.isActionable == true {
             commands.append(
                 command(
                     .installWorkbenchMCPForBoss,
-                    "Install Workbench MCP",
-                    "Register or update Workbench MCP for the selected boss",
+                    "Connect Workbench tools",
+                    "Make Workbench tools available to the selected boss at runtime (cleans any stale bundle entry)",
                     "wrench.and.screwdriver",
-                    keywords: ["mcp", "boss", "register", "bridge"]
+                    keywords: ["mcp", "boss", "connect", "tools", "runtime", "bridge"]
                 )
             )
         }
@@ -10146,11 +10149,11 @@ final class WorkbenchViewModel: ObservableObject {
         }
         switch bossWorkbenchMCPRegistration.status {
         case .registered:
-            return "registered for \(bossWorkbenchMCPRegistration.agentName)"
+            return "available to \(bossWorkbenchMCPRegistration.agentName) at runtime"
         case .notRegistered:
-            return "not registered"
+            return "tools binary missing"
         case .needsUpdate:
-            return "update needed"
+            return "stale entry to clean"
         case .agentMissing:
             return "agent bundle missing"
         case .executableMissing:
@@ -10167,15 +10170,17 @@ final class WorkbenchViewModel: ObservableObject {
         switch status {
         case .registered:
             return .green
-        case .notRegistered, .needsUpdate:
+        case .needsUpdate:
+            // Cleanup-pending (stale bundle entry, binary present) — auto-fixable.
             return .orange
-        case .agentMissing, .executableMissing, .invalidConfig:
+        case .notRegistered, .agentMissing, .executableMissing, .invalidConfig:
+            // Binary missing (`.notRegistered`) or structural failure — needs a reinstall/fix.
             return .red
         }
     }
 
     var bossWorkbenchMCPActionTitle: String {
-        bossWorkbenchMCPRegistration?.status == .needsUpdate ? "Update" : "Install"
+        bossWorkbenchMCPRegistration?.status == .needsUpdate ? "Clean up" : "Connect"
     }
 
     var ouroAgentStatusLine: String {
@@ -10509,6 +10514,11 @@ final class WorkbenchViewModel: ObservableObject {
         ouroAgents.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }
     }
 
+    /// Native "Connect Workbench tools" action. RUNTIME-INJECTION model: nothing is written into
+    /// the boss bundle — Workbench injects the tools at runtime via `--workbench-mcp`. This runs
+    /// the registrar's stale-entry CLEANUP and re-reads the snapshot; recovery truth is the
+    /// POST-cleanup snapshot status (`.registered` once the binary is present + the bundle is
+    /// clean), never a hardcoded success.
     func installWorkbenchMCP(for agent: OuroAgentRecord) {
         do {
             let selection = BossAgentSelection(agentName: agent.name)
@@ -10517,17 +10527,20 @@ final class WorkbenchViewModel: ObservableObject {
             if state.boss.agentName.caseInsensitiveCompare(agent.name) == .orderedSame {
                 bossWorkbenchMCPRegistration = snapshot
             }
-            let result = "Registered Workbench MCP for \(agent.name)"
+            let succeeded = snapshot.status == .registered
+            let result = succeeded
+                ? "\(agent.name) is connected to Workbench and ready."
+                : snapshot.detail
             bossAppliedActions = [result] + bossAppliedActions
             recordActionLog(
                 source: "native",
                 action: "registerWorkbenchMCP",
                 targetName: agent.name,
                 result: result,
-                succeeded: true
+                succeeded: succeeded
             )
         } catch {
-            errorMessage = "Workbench MCP registration failed: \(error.localizedDescription)"
+            errorMessage = "Connecting \(agent.name) to Workbench failed: \(error.localizedDescription)"
             refreshWorkbenchMCPRegistration()
         }
     }
@@ -11409,12 +11422,13 @@ final class WorkbenchViewModel: ObservableObject {
         )
     }
 
-    /// Register (or refresh) the Workbench MCP with the selected boss from the
-    /// Harness Status sheet. Reuses the existing `registerWorkbenchForBossChoice`
-    /// path (which drives the MCP registrar + refreshes registration), then reads
-    /// back the resulting status to report success/failure into the sheet banner.
+    /// Connect Workbench's tools to the selected boss from the Harness Status sheet. RUNTIME
+    /// INJECTION: nothing is written to the bundle — Workbench injects the tools at runtime via
+    /// `--workbench-mcp`. Reuses the `registerWorkbenchForBossChoice` path (which runs the
+    /// registrar's stale-entry cleanup + refreshes the snapshot), then reads back the resulting
+    /// status to report success/failure into the sheet banner.
     ///
-    /// Called only behind the "Register Workbench MCP?" confirmation.
+    /// Called only behind the "Connect Workbench tools?" confirmation.
     func registerHarnessWorkbenchMCP() {
         let bossName = state.boss.agentName
         registerWorkbenchForBossChoice(bossName)
@@ -11422,11 +11436,11 @@ final class WorkbenchViewModel: ObservableObject {
         let succeeded = status == .registered
         let message: String
         if succeeded {
-            message = "Registered Workbench MCP with \(bossName)."
+            message = "\(bossName) is connected to Workbench and ready."
         } else if let detail = bossWorkbenchMCPRegistration?.detail, !detail.isEmpty {
-            message = "Could not register Workbench MCP with \(bossName): \(detail)"
+            message = "Couldn't connect \(bossName) to Workbench: \(detail)"
         } else {
-            message = "Could not register Workbench MCP with \(bossName)."
+            message = "Couldn't connect \(bossName) to Workbench."
         }
         harnessActionResult = HarnessActionResult(
             kind: .registerWorkbenchMCP,
@@ -12346,7 +12360,7 @@ final class WorkbenchViewModel: ObservableObject {
         } else if text.contains("mcp") || text.contains("tool") {
             installWorkbenchMCPForBoss()
             refreshOnboardingReadiness()
-            return "Registering Workbench tools with the selected boss agent."
+            return "Connecting Workbench tools to the selected boss agent at runtime."
         } else if text.contains("hatch") {
             launchOuroAgentInstall(mode: "hatch", agentName: "", remote: "")
             return "Opening the agent hatch flow."

@@ -336,7 +336,8 @@ public struct HarnessBossReachability: Equatable, Sendable {
         }
         switch mcpStatus {
         case .needsUpdate:
-            // Registered but stale — usable today, worth a nudge.
+            // Binary present, only a stale bundle entry remains — runtime injection still works
+            // today (the flag is passed regardless of the bundle); worth a cleanup nudge.
             return bundleIsReady ? .attention : .blocked
         case .none:
             return .attention
@@ -345,17 +346,20 @@ public struct HarnessBossReachability: Equatable, Sendable {
         }
     }
 
+    /// RUNTIME-INJECTION model: the Workbench tools reach the boss at runtime, so this status
+    /// reflects whether runtime injection is available (binary present + bundle clean), not a
+    /// bundle registration.
     public var mcpStatusText: String {
         guard let mcpStatus else {
             return "unknown"
         }
         switch mcpStatus {
         case .registered:
-            return "registered"
+            return "available at runtime"
         case .notRegistered:
-            return "not registered"
+            return "tools binary missing"
         case .needsUpdate:
-            return "update needed"
+            return "stale entry to clean"
         case .agentMissing:
             return "agent bundle missing"
         case .executableMissing:
