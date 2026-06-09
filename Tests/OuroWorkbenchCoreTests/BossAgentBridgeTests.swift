@@ -25,6 +25,43 @@ final class BossAgentBridgeTests: XCTestCase {
         XCTAssertEqual(plan.displayCommand, "ouro mcp-serve --agent slugger")
     }
 
+    func testBossMcpServePlanAppendsWorkbenchMCPFlagWhenPathKnown() {
+        // RUNTIME-INJECTION model: when the installed Workbench MCP binary path is known,
+        // the boss-bridge passes `--workbench-mcp <path>` so the ouro runtime injects the
+        // Workbench MCP into the boss's turn per-turn — nothing is written to the bundle.
+        let plan = BossAgentBridgePlanner().mcpServePlan(
+            for: BossAgentSelection(agentName: "slugger"),
+            workbenchMCPPath: "/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP"
+        )
+
+        XCTAssertEqual(
+            plan.arguments,
+            ["mcp-serve", "--agent", "slugger", "--workbench-mcp", "/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP"]
+        )
+    }
+
+    func testBossMcpServePlanPassesWorkbenchMCPFlagPathlessWhenPathUnresolved() {
+        // When the binary path can't be resolved, pass the flag path-less so the ouro side
+        // self-discovers the Workbench MCP.
+        let plan = BossAgentBridgePlanner().mcpServePlan(
+            for: BossAgentSelection(agentName: "slugger"),
+            workbenchMCPPath: ""
+        )
+
+        XCTAssertEqual(plan.arguments, ["mcp-serve", "--agent", "slugger", "--workbench-mcp"])
+    }
+
+    func testBossMcpServePlanOmitsWorkbenchMCPFlagWhenNotRequested() {
+        // The path-less default (`nil`) preserves the legacy arg shape for callers that
+        // don't opt into runtime injection.
+        let plan = BossAgentBridgePlanner().mcpServePlan(
+            for: BossAgentSelection(agentName: "slugger"),
+            workbenchMCPPath: nil
+        )
+
+        XCTAssertEqual(plan.arguments, ["mcp-serve", "--agent", "slugger"])
+    }
+
     func testDefaultCheckInQuestionTargetsWorkbenchNeeds() {
         let question = BossAgentBridgePlanner().checkInQuestion()
 
