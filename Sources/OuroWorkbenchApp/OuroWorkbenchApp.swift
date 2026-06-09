@@ -4402,12 +4402,12 @@ private let bossQuickQuestions: [BossQuickQuestion] = [
     BossQuickQuestion(
         id: "status",
         title: "What's Going On?",
-        question: "Summarize what is currently going on across the Workbench, including running terminal agents, anything waiting on Ari, and the next useful action."
+        question: "Summarize what is currently going on across the Workbench, including running terminal agents, anything waiting on {{owner}}, and the next useful action."
     ),
     BossQuickQuestion(
         id: "waiting",
         title: "Waiting On Me?",
-        question: "Inspect the Workbench and tell Ari whether anything is waiting on him. Be concise, and include what decision or input is needed only if a human decision is genuinely required."
+        question: "Inspect the Workbench and tell {{owner}} whether anything is waiting on them. Be concise, and include what decision or input is needed only if a human decision is genuinely required."
     ),
     BossQuickQuestion(
         id: "move",
@@ -4417,7 +4417,7 @@ private let bossQuickQuestions: [BossQuickQuestion] = [
     BossQuickQuestion(
         id: "respond",
         title: "Respond For Me",
-        question: "Inspect the Workbench and respond on Ari's behalf when a terminal agent is clearly waiting on routine input. Use Workbench actions for safe obvious replies; escalate only genuinely human-only decisions."
+        question: "Inspect the Workbench and respond on {{owner}}'s behalf when a terminal agent is clearly waiting on routine input. Use Workbench actions for safe obvious replies; escalate only genuinely human-only decisions."
     )
 ]
 
@@ -8914,8 +8914,8 @@ final class WorkbenchViewModel: ObservableObject {
     private let summarizer = WorkspaceSummarizer()
     private let mailboxClient: MailboxClient
     private let bossDashboardBuilder = BossDashboardBuilder()
-    private let bossBridgePlanner = BossAgentBridgePlanner()
-    private let bossPromptBuilder = BossAgentPromptBuilder()
+    private let bossBridgePlanner = BossAgentBridgePlanner(ownerName: WorkbenchViewModel.resolvedOwnerName())
+    private let bossPromptBuilder = BossAgentPromptBuilder(ownerName: WorkbenchViewModel.resolvedOwnerName())
     private let autonomyReadinessBuilder = AutonomyReadinessBuilder()
     private let harnessStatusBuilder = HarnessStatusBuilder()
     private let changeSummarizer = WorkspaceChangeSummarizer()
@@ -13233,9 +13233,10 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     func runBossQuickQuestion(_ question: String) async {
-        bossQuestion = question
+        let resolved = question.replacingOccurrences(of: "{{owner}}", with: ownerDisplayName)
+        bossQuestion = resolved
         setBossPaneCollapsed(false)
-        await runBossCheckIn(question: bossBridgePlanner.checkInQuestion(userQuestion: question), recentChanges: [])
+        await runBossCheckIn(question: bossBridgePlanner.checkInQuestion(userQuestion: resolved), recentChanges: [])
     }
 
     func runBossQuestion(about entry: ProcessEntry) async {
@@ -13243,7 +13244,7 @@ final class WorkbenchViewModel: ObservableObject {
         bossQuestion = shortQuestion
         setBossPaneCollapsed(false)
         let question = """
-        Focus on \(entry.name) (id=\(entry.id.uuidString)). Tell Ari what this session is doing, whether it is waiting on him, and what should happen next. If the next step is obvious for a trusted session, use auditable Workbench actions.
+        Focus on \(entry.name) (id=\(entry.id.uuidString)). Tell \(ownerDisplayName) what this session is doing, whether it is waiting on them, and what should happen next. If the next step is obvious for a trusted session, use auditable Workbench actions.
         """
         await runBossCheckIn(question: bossBridgePlanner.checkInQuestion(userQuestion: question), recentChanges: [])
     }
@@ -14925,6 +14926,18 @@ final class WorkbenchViewModel: ObservableObject {
     private func deskHumanName() -> String {
         NSUserName()
     }
+
+    /// The machine owner's display name (full name, username fallback) — woven into
+    /// the boss's check-in questions and quick-question chips so the agent reports on
+    /// the ACTUAL operator, never a hardcoded name. Static so property initializers
+    /// (the prompt builders) can resolve it before `self` exists.
+    static func resolvedOwnerName() -> String {
+        SessionFriend.machineOwner()?.name ?? NSUserName()
+    }
+
+    /// Instance accessor for `resolvedOwnerName()`, used to substitute the `{{owner}}`
+    /// token in the quick-question chips and per-session questions.
+    private var ownerDisplayName: String { Self.resolvedOwnerName() }
 
     /// Run an onboarding repair step APP-EXECUTED (headless, no pane), classifying from a
     /// post-command verify probe — the human-as-hands path is gone. Maps the step id to the

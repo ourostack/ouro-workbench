@@ -44,6 +44,15 @@ final class BossAgentPromptBuilderTests: XCTestCase {
         XCTAssertTrue(trigger.contains(summary.oneLineStatus))
     }
 
+    func testCheckInTriggerWeavesInTheResolvedOwnerName() {
+        // The scaffold reports on the ACTUAL operator — the owner name is injected,
+        // never the hardcoded "Ari".
+        let (_, summary) = makeFixture()
+        let trigger = BossAgentPromptBuilder(ownerName: "Dana Lee").checkInTrigger(question: "q", summary: summary)
+        XCTAssertTrue(trigger.contains("what is waiting on Dana Lee"))
+        XCTAssertFalse(trigger.contains("Ari"))
+    }
+
     func testCheckInPromptSurfacesSessionOwnerAndAgentGuidance() {
         // A workspace with both a human-owned waiting session and an
         // agent-owned (agent-driven) session.
