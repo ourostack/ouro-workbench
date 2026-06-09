@@ -1,6 +1,6 @@
 # Doing: All-agents bundle-cleanup sweep
 
-Status: in-progress
+Status: done
 Execution Mode: direct
 Branch: first-run-agent-drives-ui
 Planning: (none — spec is the task prompt)
@@ -54,14 +54,20 @@ the UI reflects the now-clean bundles.
 ### Unit 3: full suite + build green, commit, report ✅
 
 ## Completion Criteria
-- [ ] `cleanupAllAgents()` sweeps EVERY `*.ouro` bundle, not just the boss
-- [ ] removes `mcpServers.ouro_workbench` + `senses.workbench`, preserves all other keys
-- [ ] writes back ONLY if changed (no spurious write on clean bundles)
-- [ ] handles missing/garbage bundles without throwing
-- [ ] one shared cleanup helper (no duplicated removal logic vs `install`)
-- [ ] triggered once on launch, off-main, before/independent of boss selection
-- [ ] `swift build` + `swift test` green; no warnings
-- [ ] recovery-truth + R2 livePrompt floor untouched; no drive-by edits
+- [x] `cleanupAllAgents()` sweeps EVERY `*.ouro` bundle, not just the boss
+- [x] removes `mcpServers.ouro_workbench` + `senses.workbench`, preserves all other keys
+- [x] writes back ONLY if changed (no spurious write on clean bundles)
+- [x] handles missing/garbage bundles without throwing
+- [x] one shared cleanup helper (`removeStaleWorkbenchEntries(at:)`; no duplicated removal logic vs `install`)
+- [x] triggered once on launch, off-main, before/independent of boss selection
+- [x] `swift build` + `swift test` green; no warnings (839 tests, 1 pre-existing live-only skip)
+- [x] recovery-truth + R2 livePrompt floor untouched; no drive-by edits
 
 ## Progress Log
 - 2026-06-08 20:10 doing doc created; premise confirmed (ouroboros carries stale entries; boss is slugger).
+- 2026-06-08 20:06 Unit 1a/1b: cleanupAllAgents() sweeps all *.ouro bundles via shared removeStaleWorkbenchEntries() helper; 5 tests red→green.
+- 2026-06-08 20:08 Unit 2b: sweepStaleWorkbenchBundlesOnLaunch() wired into init off-main, before boss selection, re-snapshots when changed.
+- 2026-06-08 20:12 Gates: impl-coverage ✅ | swift build clean + 839 tests green, no warnings ✅ |
+  PR-review vs spec ✅ (single cleanup truth shared with install; sweeps every agent; preserves
+  unrelated keys; idempotent no-op write on clean; skips garbage/missing; diff scope = 3 files,
+  no livePrompt/recovery/drive-by edits).
