@@ -6540,7 +6540,7 @@ private struct AgentStatusCard: View {
                         model.installWorkbenchMCP(for: agent)
                     } label: {
                         Label(
-                            registration.status == .needsUpdate ? "Update MCP" : "Install MCP",
+                            registration.status == .needsUpdate ? "Clean up Workbench entry" : "Connect Workbench tools",
                             systemImage: "link.badge.plus"
                         )
                     }
@@ -10094,8 +10094,8 @@ final class WorkbenchViewModel: ObservableObject {
                     WorkbenchCommandDescriptor(
                         id: .installMCPForSelectedAgent,
                         title: registration.status == .needsUpdate
-                            ? "Update MCP for \(agent.name)"
-                            : "Install MCP for \(agent.name)",
+                            ? "Clean up Workbench entry for \(agent.name)"
+                            : "Connect Workbench tools for \(agent.name)",
                         detail: registration.detail,
                         systemImage: "link.badge.plus",
                         keywords: ["agent", "mcp", "register", "tools", agent.name],
