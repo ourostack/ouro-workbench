@@ -14791,8 +14791,12 @@ final class WorkbenchViewModel: ObservableObject {
                 case .needsManual: return .needsManual
                 }
             },
-            // S5 — register the Workbench MCP for the boss (the existing in-app headless registrar
-            // wrapped as the bootstrap effect). Recovery truth from the post-install snapshot.
+            // S5 — make the Workbench tools available to the boss at RUNTIME. Under runtime
+            // injection nothing is written to the synced bundle: Workbench passes `--workbench-mcp`
+            // when it launches the boss. This effect verifies the binary is present (runtime
+            // injection available) and CLEANS any stale bundle entry an older Workbench left. The
+            // registrar's cleanup + snapshot are wrapped as the bootstrap effect; recovery truth is
+            // the post-cleanup snapshot.
             registerWorkbenchMCP: { name in
                 let outcome = await mcpRunner.register(agentName: name)
                 switch outcome.truth {
@@ -15054,9 +15058,11 @@ final class WorkbenchViewModel: ObservableObject {
         )
     }
 
-    /// Kick off a `registerWorkbenchMCP` remediation. WRAPS the existing headless in-app
-    /// registrar (`bossWorkbenchMCPRegistrar.install`) as an agent-issuable action; recovery
-    /// truth comes from the POST-command registrar SNAPSHOT, never the install throw.
+    /// Kick off a `registerWorkbenchMCP` remediation. RUNTIME-INJECTION model: there is nothing to
+    /// "register" into the bundle — Workbench injects the tools at runtime via `--workbench-mcp`.
+    /// This WRAPS the registrar's cleanup (`bossWorkbenchMCPRegistrar.install`, now a stale-entry
+    /// cleanup) + snapshot (binary-present + bundle-clean) as an agent-issuable action; recovery
+    /// truth comes from the POST-command registrar SNAPSHOT, never the cleanup throw.
     private func startRegisterWorkbenchMCP(action: BossWorkbenchAction, source: String) -> String {
         let agentName = (action.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !agentName.isEmpty else {

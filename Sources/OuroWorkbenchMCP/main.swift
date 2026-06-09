@@ -349,10 +349,10 @@ final class WorkbenchMCPServer {
     /// in the target group and launches it under the same trust gating and
     /// launch validation as a human-created terminal.
     ///
-    /// The Workbench MCP is registered for the boss with no agent identity in
-    /// its command/env (`BossWorkbenchMCPRegistrar` writes empty args + no env),
-    /// so the calling agent must pass its own name as `owner`. We validate it
-    /// non-empty here; the app stamps it as the session owner.
+    /// The Workbench MCP is injected into the boss's turn at runtime (Workbench
+    /// passes `--workbench-mcp` when it launches the boss) with no agent identity
+    /// baked into its command/env, so the calling agent must pass its own name as
+    /// `owner`. We validate it non-empty here; the app stamps it as the session owner.
     private func createSession(arguments: [String: Any]) throws -> String {
         let state = try currentState()
         let trust: ProcessTrust?

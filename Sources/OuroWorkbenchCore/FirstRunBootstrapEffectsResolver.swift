@@ -52,9 +52,11 @@ public enum FirstRunBootstrapEffectsResolver {
         return hasProvider ? .credentialsPresent : .absent
     }
 
-    /// The S5 register-Workbench-MCP health from a registration snapshot status: `.registered`
-    /// is the only `.healthy`; anything else is `.stillDegraded` (the action will re-attempt /
-    /// the post-effect probe re-classifies — never a false "done").
+    /// The S5 Workbench-tools-availability health from a registration snapshot status. Under the
+    /// RUNTIME-INJECTION model `.registered` means "the Workbench MCP binary is present (runtime
+    /// injection available) AND the bundle is clean of any stale entry" — the only `.healthy`.
+    /// Anything else is `.stillDegraded` (cleanup-pending re-attempts; binary-missing/structural
+    /// failures halt honestly — never a false "done").
     public static func registrationHealth(_ status: BossWorkbenchMCPRegistrationStatus) -> StepHealth {
         status == .registered ? .healthy : .stillDegraded
     }

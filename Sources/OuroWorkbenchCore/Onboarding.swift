@@ -309,13 +309,20 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
             )
         )
 
+        // RUNTIME-INJECTION model: the Workbench tools are injected into the boss's turn at
+        // runtime (Workbench passes `--workbench-mcp` when it launches the boss) — nothing is
+        // written to the synced bundle. This step is therefore "are the Workbench tools available
+        // to this boss at runtime" — i.e. the Workbench MCP binary is present on disk AND the
+        // bundle is clean of any stale entry an older Workbench left. `.registered` means both
+        // hold; anything else surfaces this step. The boss actually HAVING the tools is confirmed
+        // by the handoff `status` round-trip, not the bundle.
         if mcpRegistration?.status != .registered {
             repairSteps.append(
                 OnboardingRepairStep(
                     id: "workbench-mcp",
                     actor: .agentRunnable,
-                    title: "Register Workbench tools",
-                    detail: mcpRegistration?.detail ?? "Workbench MCP is not registered for this boss."
+                    title: "Connect Workbench tools",
+                    detail: mcpRegistration?.detail ?? "Workbench tools aren't available to this boss at runtime yet."
                 )
             )
         }
@@ -343,7 +350,7 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
         return OnboardingReadiness(
             state: .ready,
             headline: "\(selected.name) is ready",
-            detail: "The boss is installed, provider lanes passed live checks, and Workbench tools are registered.",
+            detail: "The boss is installed, provider lanes passed live checks, and Workbench tools are available to it at runtime.",
             selectedBossName: selected.name,
             repairSteps: repairSteps
         )
