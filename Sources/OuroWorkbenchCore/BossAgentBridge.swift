@@ -263,37 +263,91 @@ public struct BossWorkbenchMCPRegistrar: @unchecked Sendable {
             throw BossWorkbenchMCPRegistrationError.agentConfigMissing(configURL.path)
         }
         do {
-            var root = try loadRootObject(from: configURL)
-            var changed = false
-
-            if var mcpServers = root["mcpServers"] as? [String: Any],
-               mcpServers[serverName] != nil {
-                mcpServers.removeValue(forKey: serverName)
-                root["mcpServers"] = mcpServers
-                changed = true
-            }
-            if var senses = root["senses"] as? [String: Any],
-               senses["workbench"] != nil {
-                senses.removeValue(forKey: "workbench")
-                root["senses"] = senses
-                changed = true
-            }
-
-            if changed {
-                let data = try JSONSerialization.data(
-                    withJSONObject: root,
-                    options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-                )
-                var output = data
-                output.append(0x0A)
-                try output.write(to: configURL, options: .atomic)
-            }
+            _ = try removeStaleWorkbenchEntries(at: configURL)
         } catch let error as BossWorkbenchMCPRegistrationError {
             throw error
         } catch {
             throw BossWorkbenchMCPRegistrationError.writeFailed(error.localizedDescription)
         }
         return snapshot(for: boss)
+    }
+
+    /// ALL-AGENTS CLEANUP SWEEP. Under runtime injection NOTHING belongs in ANY synced bundle —
+    /// the boss gets the Workbench MCP per-turn from `--workbench-mcp`, so a stale `ouro_workbench`
+    /// server or `senses.workbench` entry on *any* agent (boss or not) is just pollution that
+    /// git-sync would carry to other machines and is over-permissive. `install(for:)` only cleans
+    /// the boss; this runs the SAME safe per-bundle cleanup over EVERY `*.ouro` bundle under
+    /// `agentBundlesURL`, regardless of who's boss.
+    ///
+    /// Safe + idempotent: each bundle is loaded, the two Workbench keys removed, all other keys
+    /// preserved, and the file rewritten ONLY if it changed (a clean machine produces no writes).
+    /// A single unreadable / missing / non-JSON bundle is skipped gracefully — it never throws and
+    /// never corrupts a bundle. Returns the names of the agents whose bundles were changed (so the
+    /// caller can log/verify the migration).
+    @discardableResult
+    public func cleanupAllAgents() -> [String] {
+        guard let bundleURLs = try? fileManager.contentsOfDirectory(
+            at: agentBundlesURL,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+
+        var changedAgents: [String] = []
+        for bundleURL in bundleURLs {
+            guard bundleURL.pathExtension == "ouro",
+                  (try? bundleURL.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
+            else {
+                continue
+            }
+            let configURL = bundleURL.appendingPathComponent("agent.json")
+            guard fileManager.fileExists(atPath: configURL.path) else {
+                continue
+            }
+            // A bad bundle (garbage JSON, unwritable) is skipped — one poison bundle must not
+            // abort the sweep or corrupt anything.
+            if (try? removeStaleWorkbenchEntries(at: configURL)) == true {
+                changedAgents.append(bundleURL.deletingPathExtension().lastPathComponent)
+            }
+        }
+        return changedAgents.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
+    /// THE one cleanup truth, shared by `install(for:)` and `cleanupAllAgents()`. Loads the
+    /// bundle, removes any `mcpServers.ouro_workbench` and `senses.workbench`, preserves every
+    /// other key, and rewrites the file (atomic, stable key order, trailing newline) ONLY when
+    /// something was removed. Returns whether the bundle was changed. Throws on unreadable /
+    /// non-JSON / unwritable bundles so callers can decide whether to propagate (`install`) or
+    /// skip (`cleanupAllAgents`).
+    @discardableResult
+    private func removeStaleWorkbenchEntries(at configURL: URL) throws -> Bool {
+        var root = try loadRootObject(from: configURL)
+        var changed = false
+
+        if var mcpServers = root["mcpServers"] as? [String: Any],
+           mcpServers[serverName] != nil {
+            mcpServers.removeValue(forKey: serverName)
+            root["mcpServers"] = mcpServers
+            changed = true
+        }
+        if var senses = root["senses"] as? [String: Any],
+           senses["workbench"] != nil {
+            senses.removeValue(forKey: "workbench")
+            root["senses"] = senses
+            changed = true
+        }
+
+        if changed {
+            let data = try JSONSerialization.data(
+                withJSONObject: root,
+                options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+            )
+            var output = data
+            output.append(0x0A)
+            try output.write(to: configURL, options: .atomic)
+        }
+        return changed
     }
 
     private func agentConfigURL(forValidAgentName agentName: String) -> URL {
