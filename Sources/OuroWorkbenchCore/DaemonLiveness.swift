@@ -261,6 +261,25 @@ public struct DaemonStartOutcome: Equatable, Sendable {
     }
 }
 
+/// Bounded patience for the post-start verify probe after a detached `ouro up`.
+///
+/// The daemon is spawned detached and is not awaited, so it needs a moment to bind its
+/// socket. These knobs give it `maxProbeAttempts` probes spaced by `probeIntervalNanoseconds`
+/// to come up before the cycle classifies `needsManual`. Defaults to ~10s total (20 × 500ms),
+/// comfortably covering a Node cold start; a genuine failure still resolves to an honest
+/// manual-recovery line once the budget elapses. Tests inject a no-op sleep to stay fast.
+public struct DaemonStartVerifyConfiguration: Equatable, Sendable {
+    /// Number of post-start verify probes before classifying `needsManual` (≥ 1).
+    public var maxProbeAttempts: Int
+    /// Delay between post-start verify probes.
+    public var probeIntervalNanoseconds: UInt64
+
+    public init(maxProbeAttempts: Int = 20, probeIntervalNanoseconds: UInt64 = 500_000_000) {
+        self.maxProbeAttempts = max(1, maxProbeAttempts)
+        self.probeIntervalNanoseconds = probeIntervalNanoseconds
+    }
+}
+
 /// Detect-reuse-else-start manager for the local Ouro daemon.
 ///
 /// Pure + injectable: it takes a `DaemonLivenessProbe` (the probe from Unit 0.1) and a
@@ -276,13 +295,19 @@ public struct DaemonStartOutcome: Equatable, Sendable {
 public struct DaemonManager: Sendable {
     public var probe: DaemonLivenessProbe
     private let startDaemon: @Sendable () async throws -> Void
+    private let verifyConfig: DaemonStartVerifyConfiguration
+    private let sleep: @Sendable (UInt64) async -> Void
 
     public init(
         probe: DaemonLivenessProbe = DaemonLivenessProbe(),
-        startDaemon: @escaping @Sendable () async throws -> Void = DaemonManager.detachedStart
+        startDaemon: @escaping @Sendable () async throws -> Void = DaemonManager.detachedStart,
+        verifyConfig: DaemonStartVerifyConfiguration = DaemonStartVerifyConfiguration(),
+        sleep: @escaping @Sendable (UInt64) async -> Void = { try? await Task.sleep(nanoseconds: $0) }
     ) {
         self.probe = probe
         self.startDaemon = startDaemon
+        self.verifyConfig = verifyConfig
+        self.sleep = sleep
     }
 
     /// Detect → reuse if up → else start (detached) → re-probe → classify recovery truth.
@@ -296,12 +321,36 @@ public struct DaemonManager: Sendable {
         // verify probe, never the spawn error.
         try? await startDaemon()
 
-        let afterStart = await probe.probe()
+        let afterStart = await verifyStartedWithinBudget()
         let recovery = DaemonRecoveryTruth.classify(
             wasUpBeforeStart: false,
             isUpAfterStart: afterStart == .up
         )
         return DaemonStartOutcome(recovery: recovery, liveness: afterStart, startAttempted: true)
+    }
+
+    /// Verify a freshly-spawned daemon came up, polling with a bounded budget.
+    ///
+    /// `detachedStart` spawns `ouro up` and does NOT wait — the daemon needs a moment to bind
+    /// its socket (a Node cold start, or a one-time CLI self-update download on the first `up`
+    /// after a new release). A single immediate probe loses that race and would misclassify a
+    /// still-booting daemon as `needsManual`, surfacing a false manual-recovery line on the
+    /// exact factory-reset cold-start path this spine exists to make seam-free. So probe
+    /// repeatedly: return `.up` the instant a probe reads up, `.down` only after the whole
+    /// budget genuinely elapses (the honest "couldn't bring it back" case). The first probe is
+    /// immediate, so an already-fast start adds zero latency.
+    private func verifyStartedWithinBudget() async -> DaemonLiveness {
+        var attempt = 0
+        while true {
+            if await probe.probe() == .up {
+                return .up
+            }
+            attempt += 1
+            if attempt >= verifyConfig.maxProbeAttempts {
+                return .down
+            }
+            await sleep(verifyConfig.probeIntervalNanoseconds)
+        }
     }
 
     /// Default start: spawn `ouro up` DETACHED from Workbench so the daemon outlives the app.
