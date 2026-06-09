@@ -10205,7 +10205,22 @@ final class WorkbenchViewModel: ObservableObject {
 
     func refreshOuroAgents() {
         ouroAgents = ouroAgentInventory.scan()
+        resolveBossFromInventoryIfNeeded()
         refreshWorkbenchMCPRegistration()
+    }
+
+    /// When the persisted boss is unresolved (a fresh / factory-reset machine, or
+    /// a boss naming no installed bundle), adopt the sole installed agent
+    /// automatically. With more than one usable agent the human picks (the
+    /// onboarding boss-choice surface); with none the onboarding routes to
+    /// acquisition. Never hardcodes an agent name. No-ops once a boss resolves, so
+    /// it never switches away from a real selection mid-session.
+    func resolveBossFromInventoryIfNeeded() {
+        guard let name = BossAutoResolution.adoptableBossName(
+            persistedBossName: state.boss.agentName,
+            agents: ouroAgents
+        ) else { return }
+        selectBoss(agentName: name)
     }
 
     func workbenchMCPRegistration(for agent: OuroAgentRecord) -> BossWorkbenchMCPRegistrationSnapshot? {
@@ -13238,6 +13253,14 @@ final class WorkbenchViewModel: ObservableObject {
         recentChanges: [WorkspaceChangeSummary]
     ) async {
         guard !bossCheckInIsRunning else {
+            return
+        }
+        // No boss resolved yet (fresh / factory-reset machine, or >1 agent awaiting
+        // an explicit choice). There's no agent to check in with — skip rather than
+        // spawn `ouro mcp-serve --agent ""`, which would fail and trip the watch
+        // backoff while the human is still on the boss-choice screen. Every check-in
+        // entry point (manual, questions, the watch tick) funnels through here.
+        guard !state.boss.agentName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return
         }
         let requestedBoss = state.boss.agentName

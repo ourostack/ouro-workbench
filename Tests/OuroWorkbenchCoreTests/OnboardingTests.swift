@@ -54,6 +54,29 @@ final class OnboardingTests: XCTestCase {
         XCTAssertFalse(bridge.detail.contains("boss"))
     }
 
+    func testEmptyBossSurfacesChooseCopyWithoutBlankName() {
+        // Unresolved boss + more than one usable agent: the readiness must offer a
+        // human choice with honest copy — never "The selected boss  is not
+        // installed" with a blank name (the empty-boss regression from killing the
+        // hardcoded default).
+        let readiness = WorkbenchOnboardingAdvisor().readiness(
+            boss: BossAgentSelection(agentName: ""),
+            agents: [
+                OuroAgentRecord(name: "ouroboros", bundlePath: "/b/ouroboros.ouro", configPath: "/b/ouroboros.ouro/agent.json", status: .ready, detail: "ready"),
+                OuroAgentRecord(name: "slugger", bundlePath: "/b/slugger.ouro", configPath: "/b/slugger.ouro/agent.json", status: .ready, detail: "ready")
+            ],
+            mcpRegistration: nil
+        )
+
+        XCTAssertEqual(readiness.state, .needsAgent)
+        XCTAssertEqual(readiness.headline, "Choose this machine's boss")
+        XCTAssertEqual(readiness.selectedBossName, "")
+        XCTAssertTrue(readiness.detail.contains("Choose which local agent"))
+        XCTAssertFalse(readiness.detail.contains("The selected boss  is"))
+        XCTAssertEqual(Set(readiness.repairSteps.map(\.id)), ["use-ouroboros", "use-slugger"])
+        XCTAssertTrue(readiness.repairSteps.allSatisfy { $0.actor == .humanChoice })
+    }
+
     func testAdvisorSurfacesProviderAndMCPRepairs() {
         let readiness = WorkbenchOnboardingAdvisor().readiness(
             boss: BossAgentSelection(agentName: "slugger"),
