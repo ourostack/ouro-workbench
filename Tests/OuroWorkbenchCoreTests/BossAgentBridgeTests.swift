@@ -250,6 +250,176 @@ final class BossAgentBridgeTests: XCTestCase {
         }
     }
 
+    // MARK: - All-agents bundle-cleanup sweep
+    //
+    // `install(for:)` only cleans the BOSS bundle. But under runtime injection NOTHING belongs in
+    // ANY synced bundle, and a non-boss agent can still carry a stale `ouro_workbench` /
+    // `senses.workbench` (written by an older Workbench, or synced from another machine). The
+    // all-agents sweep runs the SAME safe cleanup over every `*.ouro` bundle, regardless of who's
+    // boss — never throwing on a single bad/missing bundle.
+
+    func testCleanupAllAgentsRemovesStaleEntriesFromEveryDirtyBundle() throws {
+        // TWO non-boss agents both carry stale Workbench entries — the all-agents point.
+        let ouroborosConfig = try writeAgentConfig(
+            agentName: "ouroboros",
+            json: """
+            {
+              "version": 2,
+              "mcpServers": {
+                "browser": { "command": "npx", "args": ["@playwright/mcp@latest"] },
+                "ouro_workbench": { "command": "/tmp/old", "args": [] }
+              },
+              "senses": {
+                "cli": { "enabled": true },
+                "workbench": { "enabled": true }
+              }
+            }
+            """
+        )
+        let sluggerConfig = try writeAgentConfig(
+            agentName: "slugger",
+            json: """
+            {
+              "version": 2,
+              "mcpServers": {
+                "ouro_workbench": { "command": "/tmp/old", "args": [] }
+              }
+            }
+            """
+        )
+        let registrar = BossWorkbenchMCPRegistrar(
+            agentBundlesURL: temporaryDirectory,
+            mcpExecutableURL: try writeExecutable()
+        )
+
+        let changed = try registrar.cleanupAllAgents()
+
+        XCTAssertEqual(Set(changed), ["ouroboros", "slugger"], "both dirty agents must be cleaned")
+
+        let ouroboros = try loadJSON(ouroborosConfig)
+        let ouroborosServers = try XCTUnwrap(ouroboros["mcpServers"] as? [String: Any])
+        XCTAssertNil(ouroborosServers["ouro_workbench"], "stale Workbench server removed from non-boss agent")
+        XCTAssertNotNil(ouroborosServers["browser"], "unrelated server preserved")
+        let ouroborosSenses = try XCTUnwrap(ouroboros["senses"] as? [String: Any])
+        XCTAssertNil(ouroborosSenses["workbench"], "stale Workbench sense removed from non-boss agent")
+        XCTAssertEqual((ouroborosSenses["cli"] as? [String: Any])?["enabled"] as? Bool, true, "unrelated sense preserved")
+
+        let slugger = try loadJSON(sluggerConfig)
+        XCTAssertNil((slugger["mcpServers"] as? [String: Any])?["ouro_workbench"], "stale Workbench server removed from second agent")
+    }
+
+    func testCleanupAllAgentsIsNoOpWriteWhenAllBundlesClean() throws {
+        // A clean machine must produce NO writes — idempotent. We assert the file is byte-for-byte
+        // untouched (no reserialization), which also proves we don't rewrite on every launch.
+        let configURL = try writeAgentConfig(
+            agentName: "slugger",
+            json: """
+            {
+              "version": 2,
+              "mcpServers": {
+                "browser": { "command": "npx", "args": ["@playwright/mcp@latest"] }
+              }
+            }
+            """
+        )
+        let before = try Data(contentsOf: configURL)
+        let registrar = BossWorkbenchMCPRegistrar(
+            agentBundlesURL: temporaryDirectory,
+            mcpExecutableURL: try writeExecutable()
+        )
+
+        let changed = try registrar.cleanupAllAgents()
+
+        XCTAssertTrue(changed.isEmpty, "no agent should be reported changed on a clean machine")
+        XCTAssertEqual(try Data(contentsOf: configURL), before, "clean bundle must NOT be rewritten")
+    }
+
+    func testCleanupAllAgentsPreservesUnrelatedTopLevelKeys() throws {
+        // Cleanup is surgical — only the two Workbench keys go; everything else survives verbatim.
+        let configURL = try writeAgentConfig(
+            agentName: "slugger",
+            json: """
+            {
+              "version": 2,
+              "enabled": true,
+              "humanFacing": { "provider": "anthropic", "model": "opus" },
+              "mcpServers": {
+                "browser": { "command": "npx", "args": ["@playwright/mcp@latest"] },
+                "ouro_workbench": { "command": "/tmp/old", "args": [] }
+              },
+              "senses": {
+                "cli": { "enabled": true },
+                "mail": { "enabled": true },
+                "workbench": { "enabled": true }
+              }
+            }
+            """
+        )
+        let registrar = BossWorkbenchMCPRegistrar(
+            agentBundlesURL: temporaryDirectory,
+            mcpExecutableURL: try writeExecutable()
+        )
+
+        _ = try registrar.cleanupAllAgents()
+
+        let root = try loadJSON(configURL)
+        XCTAssertEqual(root["version"] as? Int, 2)
+        XCTAssertEqual(root["enabled"] as? Bool, true)
+        let human = try XCTUnwrap(root["humanFacing"] as? [String: Any])
+        XCTAssertEqual(human["provider"] as? String, "anthropic")
+        XCTAssertEqual(human["model"] as? String, "opus")
+        let servers = try XCTUnwrap(root["mcpServers"] as? [String: Any])
+        XCTAssertNil(servers["ouro_workbench"])
+        XCTAssertNotNil(servers["browser"])
+        let senses = try XCTUnwrap(root["senses"] as? [String: Any])
+        XCTAssertNil(senses["workbench"])
+        XCTAssertEqual((senses["cli"] as? [String: Any])?["enabled"] as? Bool, true)
+        XCTAssertEqual((senses["mail"] as? [String: Any])?["enabled"] as? Bool, true)
+    }
+
+    func testCleanupAllAgentsSkipsGarbageAndMissingBundlesWithoutThrowing() throws {
+        // One clean dirty-then-cleaned bundle, one bundle whose agent.json is non-JSON garbage,
+        // and one bundle directory with NO agent.json at all. The sweep must clean the good one
+        // and skip the bad ones gracefully — never throwing, never corrupting.
+        let dirtyConfig = try writeAgentConfig(
+            agentName: "slugger",
+            json: """
+            {
+              "version": 2,
+              "mcpServers": { "ouro_workbench": { "command": "/tmp/old", "args": [] } }
+            }
+            """
+        )
+        // garbage agent.json
+        let garbageConfig = try writeAgentConfig(agentName: "garbage", json: "this is not json {{{")
+        let garbageBefore = try Data(contentsOf: garbageConfig)
+        // bundle dir with no agent.json
+        try FileManager.default.createDirectory(
+            at: temporaryDirectory.appendingPathComponent("noconfig.ouro", isDirectory: true),
+            withIntermediateDirectories: true
+        )
+        let registrar = BossWorkbenchMCPRegistrar(
+            agentBundlesURL: temporaryDirectory,
+            mcpExecutableURL: try writeExecutable()
+        )
+
+        let changed = try registrar.cleanupAllAgents()
+
+        XCTAssertEqual(changed, ["slugger"], "only the valid dirty bundle is cleaned")
+        XCTAssertNil((try loadJSON(dirtyConfig)["mcpServers"] as? [String: Any])?["ouro_workbench"])
+        XCTAssertEqual(try Data(contentsOf: garbageConfig), garbageBefore, "garbage bundle left untouched, not corrupted")
+    }
+
+    func testCleanupAllAgentsReturnsEmptyWhenBundlesDirectoryMissing() throws {
+        // No AgentBundles directory at all (fresh machine) → empty result, no throw.
+        let registrar = BossWorkbenchMCPRegistrar(
+            agentBundlesURL: temporaryDirectory.appendingPathComponent("does-not-exist", isDirectory: true),
+            mcpExecutableURL: try writeExecutable()
+        )
+
+        XCTAssertEqual(try registrar.cleanupAllAgents(), [])
+    }
+
     func testSnapshotReportsMissingAgentBundle() throws {
         let executableURL = try writeExecutable()
         let registrar = BossWorkbenchMCPRegistrar(
