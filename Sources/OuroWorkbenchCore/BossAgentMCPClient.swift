@@ -36,8 +36,34 @@ public enum BossAgentMCPClientError: Error, Equatable, LocalizedError, Sendable 
 public final class BossAgentMCPClient: @unchecked Sendable {
     public var timeoutNanoseconds: UInt64
 
-    public init(timeoutNanoseconds: UInt64 = 120_000_000_000) {
+    /// The installed Workbench MCP binary path passed to the boss's turn for RUNTIME INJECTION.
+    ///
+    /// When non-nil, every `mcp-serve` spawn appends `--workbench-mcp <path>` so the `ouro`
+    /// runtime injects the Workbench MCP into THIS boss's turn at runtime — nothing is written to
+    /// the synced agent bundle. A non-nil but EMPTY string passes the flag path-less so the
+    /// `ouro` side self-discovers the binary. `nil` (the default) omits the flag.
+    public var workbenchMCPPath: String?
+
+    public init(
+        timeoutNanoseconds: UInt64 = 120_000_000_000,
+        workbenchMCPPath: String? = nil
+    ) {
         self.timeoutNanoseconds = timeoutNanoseconds
+        self.workbenchMCPPath = workbenchMCPPath
+    }
+
+    /// `["mcp-serve", "--agent", <agentName>] (+ ["--workbench-mcp", <path>] | ["--workbench-mcp"])`.
+    /// Pure + testable so the spawn site and the bridge plan agree on the exact arg shape.
+    public static func mcpServeArguments(agentName: String, workbenchMCPPath: String?) -> [String] {
+        ["mcp-serve", "--agent"] + BossAgentBridgePlanner.agentAndWorkbenchArguments(
+            agentName: agentName,
+            workbenchMCPPath: workbenchMCPPath
+        )
+    }
+
+    /// The configured spawn args for this client (uses `workbenchMCPPath`).
+    public func mcpServeArguments(agentName: String) -> [String] {
+        Self.mcpServeArguments(agentName: agentName, workbenchMCPPath: workbenchMCPPath)
     }
 
     public func ask(agentName: String, question: String) async throws -> String {
@@ -82,7 +108,7 @@ public final class BossAgentMCPClient: @unchecked Sendable {
     public func callTool(agentName: String, name: String, arguments: [String: String]) async throws -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["ouro", "mcp-serve", "--agent", agentName]
+        process.arguments = ["ouro"] + mcpServeArguments(agentName: agentName)
         process.environment = TerminalEnvironment().valuesWithResolvedPath()
 
         let stdin = Pipe()

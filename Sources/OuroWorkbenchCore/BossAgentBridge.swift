@@ -19,11 +19,41 @@ public struct BossAgentBridgePlan: Equatable, Sendable {
 public struct BossAgentBridgePlanner: Sendable {
     public init() {}
 
-    public func mcpServePlan(for boss: BossAgentSelection) -> BossAgentBridgePlan {
+    /// The `ouro mcp-serve --agent <boss>` plan that launches the boss's turn.
+    ///
+    /// RUNTIME-INJECTION model: when `workbenchMCPPath` is supplied, the plan appends
+    /// `--workbench-mcp <path>` so the `ouro` runtime injects the Workbench MCP into THIS boss's
+    /// turn at runtime (per-turn, boss-aware) — nothing is written to the synced agent bundle. A
+    /// non-nil but EMPTY path passes the flag path-less (`--workbench-mcp` with no value) so the
+    /// `ouro` side self-discovers the binary. A `nil` path (the default) omits the flag entirely,
+    /// preserving the legacy arg shape for callers that don't opt into runtime injection.
+    public func mcpServePlan(
+        for boss: BossAgentSelection,
+        workbenchMCPPath: String? = nil
+    ) -> BossAgentBridgePlan {
         BossAgentBridgePlan(
             agentName: boss.agentName,
-            arguments: ["mcp-serve", "--agent", boss.agentName]
+            arguments: ["mcp-serve", "--agent"] + Self.agentAndWorkbenchArguments(
+                agentName: boss.agentName,
+                workbenchMCPPath: workbenchMCPPath
+            )
         )
+    }
+
+    /// `[<agentName>] (+ ["--workbench-mcp", <path>] | ["--workbench-mcp"])` — the agent name
+    /// followed by the optional runtime-injection flag. Shared so the spawn sites agree on the
+    /// exact arg shape.
+    static func agentAndWorkbenchArguments(
+        agentName: String,
+        workbenchMCPPath: String?
+    ) -> [String] {
+        guard let workbenchMCPPath else {
+            return [agentName]
+        }
+        if workbenchMCPPath.isEmpty {
+            return [agentName, "--workbench-mcp"]
+        }
+        return [agentName, "--workbench-mcp", workbenchMCPPath]
     }
 
     public func checkInQuestion(userQuestion: String? = nil) -> String {

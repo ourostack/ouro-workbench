@@ -8994,6 +8994,14 @@ final class WorkbenchViewModel: ObservableObject {
         self.bossMCPClient = bossMCPClient
         self.daemonManager = daemonManager
         self.bossWorkbenchMCPRegistrar = bossWorkbenchMCPRegistrar
+        // RUNTIME-INJECTION model: every boss turn Workbench spawns passes `--workbench-mcp
+        // <path>` so the `ouro` runtime injects the Workbench MCP into the boss's turn per-turn
+        // (boss-aware) — nothing is written to the synced agent bundle. Resolve the installed
+        // Workbench MCP binary once and configure the client to pass it; when the binary can't be
+        // resolved we pass the flag path-less so the `ouro` side self-discovers it.
+        bossMCPClient.workbenchMCPPath = Self.runtimeWorkbenchMCPPath(
+            executableURL: bossWorkbenchMCPRegistrar.mcpExecutableURL
+        )
         self.ouroAgentInventory = ouroAgentInventory
         self.executableHealthChecker = executableHealthChecker
         self.releaseUpdateChecker = releaseUpdateChecker
@@ -9361,7 +9369,20 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     var bossMCPCommand: String {
-        bossBridgePlanner.mcpServePlan(for: state.boss).displayCommand
+        bossBridgePlanner.mcpServePlan(
+            for: state.boss,
+            workbenchMCPPath: Self.runtimeWorkbenchMCPPath(
+                executableURL: bossWorkbenchMCPRegistrar.mcpExecutableURL
+            )
+        ).displayCommand
+    }
+
+    /// The `--workbench-mcp` value for RUNTIME INJECTION. When the installed Workbench MCP binary
+    /// exists on disk we pass its explicit path (preferred). When it can't be resolved we pass the
+    /// flag path-less (empty string) so the `ouro` side self-discovers the binary. Never returns
+    /// `nil` — Workbench always opts into runtime injection so the boss gets the tools per-turn.
+    static func runtimeWorkbenchMCPPath(executableURL: URL) -> String {
+        FileManager.default.isExecutableFile(atPath: executableURL.path) ? executableURL.path : ""
     }
 
     var autonomyReadiness: AutonomyReadinessSnapshot {
