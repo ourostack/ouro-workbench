@@ -19,11 +19,41 @@ public struct BossAgentBridgePlan: Equatable, Sendable {
 public struct BossAgentBridgePlanner: Sendable {
     public init() {}
 
-    public func mcpServePlan(for boss: BossAgentSelection) -> BossAgentBridgePlan {
+    /// The `ouro mcp-serve --agent <boss>` plan that launches the boss's turn.
+    ///
+    /// RUNTIME-INJECTION model: when `workbenchMCPPath` is supplied, the plan appends
+    /// `--workbench-mcp <path>` so the `ouro` runtime injects the Workbench MCP into THIS boss's
+    /// turn at runtime (per-turn, boss-aware) — nothing is written to the synced agent bundle. A
+    /// non-nil but EMPTY path passes the flag path-less (`--workbench-mcp` with no value) so the
+    /// `ouro` side self-discovers the binary. A `nil` path (the default) omits the flag entirely,
+    /// preserving the legacy arg shape for callers that don't opt into runtime injection.
+    public func mcpServePlan(
+        for boss: BossAgentSelection,
+        workbenchMCPPath: String? = nil
+    ) -> BossAgentBridgePlan {
         BossAgentBridgePlan(
             agentName: boss.agentName,
-            arguments: ["mcp-serve", "--agent", boss.agentName]
+            arguments: ["mcp-serve", "--agent"] + Self.agentAndWorkbenchArguments(
+                agentName: boss.agentName,
+                workbenchMCPPath: workbenchMCPPath
+            )
         )
+    }
+
+    /// `[<agentName>] (+ ["--workbench-mcp", <path>] | ["--workbench-mcp"])` — the agent name
+    /// followed by the optional runtime-injection flag. Shared so the spawn sites agree on the
+    /// exact arg shape.
+    static func agentAndWorkbenchArguments(
+        agentName: String,
+        workbenchMCPPath: String?
+    ) -> [String] {
+        guard let workbenchMCPPath else {
+            return [agentName]
+        }
+        if workbenchMCPPath.isEmpty {
+            return [agentName, "--workbench-mcp"]
+        }
+        return [agentName, "--workbench-mcp", workbenchMCPPath]
     }
 
     public func checkInQuestion(userQuestion: String? = nil) -> String {
@@ -99,7 +129,7 @@ public enum BossWorkbenchMCPRegistrationError: Error, Equatable, LocalizedError,
     }
 }
 
-public struct BossWorkbenchMCPRegistrar {
+public struct BossWorkbenchMCPRegistrar: @unchecked Sendable {
     public var agentBundlesURL: URL
     public var mcpExecutableURL: URL
     public var serverName: String
@@ -147,6 +177,22 @@ public struct BossWorkbenchMCPRegistrar {
         return agentName.rangeOfCharacter(from: disallowed) == nil
     }
 
+    /// RUNTIME-INJECTION model. "Registered" no longer means "the Workbench MCP is written into
+    /// the boss bundle" — under runtime injection the boss gets the Workbench tools per-turn from
+    /// the `--workbench-mcp` flag Workbench passes when it launches the boss (see
+    /// `BossAgentBridgePlanner.mcpServePlan`). So this snapshot reports whether RUNTIME INJECTION
+    /// is AVAILABLE — i.e. the Workbench MCP binary is present on disk — and whether the bundle is
+    /// CLEAN of any stale `ouro_workbench` server / `senses.workbench` entry that an older
+    /// Workbench (or a sync from another machine) may have left behind:
+    ///   - `.registered`     — binary present AND bundle clean (runtime injection available).
+    ///   - `.needsUpdate`    — binary present BUT a stale Workbench bundle entry remains
+    ///                         (cleanup-pending; `install` migrates it away).
+    ///   - `.notRegistered`  — binary missing (runtime injection unavailable; reinstall Workbench).
+    ///   - `.agentMissing`   — the boss bundle config is missing.
+    ///   - `.invalidConfig`  — unsafe agent name or unparseable config.
+    ///
+    /// The boss actually HAVING the tools at runtime is confirmed separately by the handoff
+    /// round-trip (`BossAgentMCPClient.status`), not by this on-disk snapshot.
     public func snapshot(for boss: BossAgentSelection) -> BossWorkbenchMCPRegistrationSnapshot {
         guard Self.isValidAgentBundleName(boss.agentName) else {
             return makeSnapshot(
@@ -157,7 +203,6 @@ public struct BossWorkbenchMCPRegistrar {
             )
         }
         let configURL = agentConfigURL(forValidAgentName: boss.agentName)
-        let commandPath = mcpExecutableURL.path
         if !fileManager.fileExists(atPath: configURL.path) {
             return makeSnapshot(
                 agentName: boss.agentName,
@@ -166,46 +211,29 @@ public struct BossWorkbenchMCPRegistrar {
                 detail: "Agent bundle config is missing."
             )
         }
-        if !fileManager.isExecutableFile(atPath: commandPath) {
+        if !fileManager.isExecutableFile(atPath: mcpExecutableURL.path) {
             return makeSnapshot(
                 agentName: boss.agentName,
                 configURL: configURL,
-                status: .executableMissing,
-                detail: "Install the native app so the Workbench MCP executable is available."
+                status: .notRegistered,
+                detail: "The Workbench tools binary isn't installed yet, so Workbench can't connect this boss at runtime. Reinstall Workbench."
             )
         }
         do {
             let root = try loadRootObject(from: configURL)
-            guard let mcpServers = root["mcpServers"] as? [String: Any],
-                  let server = mcpServers[serverName] as? [String: Any] else {
-                return makeSnapshot(
-                    agentName: boss.agentName,
-                    configURL: configURL,
-                    status: .notRegistered,
-                    detail: "Workbench MCP is not registered for this boss agent."
-                )
-            }
-            if serverMatches(server), workbenchSenseEnabled(in: root) {
-                return makeSnapshot(
-                    agentName: boss.agentName,
-                    configURL: configURL,
-                    status: .registered,
-                    detail: "Workbench MCP is registered for this boss agent."
-                )
-            }
-            if serverMatches(server) {
+            if bundleHasStaleWorkbenchEntry(in: root) {
                 return makeSnapshot(
                     agentName: boss.agentName,
                     configURL: configURL,
                     status: .needsUpdate,
-                    detail: "Workbench MCP is registered, but senses.workbench.enabled is missing."
+                    detail: "A stale Workbench entry is left in the boss bundle from an older setup; Workbench will remove it (the tools are now injected at runtime, not stored in the bundle)."
                 )
             }
             return makeSnapshot(
                 agentName: boss.agentName,
                 configURL: configURL,
-                status: .needsUpdate,
-                detail: "Workbench MCP registration points at a different command."
+                status: .registered,
+                detail: "Workbench tools are available to this boss at runtime, and the bundle is clean."
             )
         } catch {
             return makeSnapshot(
@@ -217,6 +245,11 @@ public struct BossWorkbenchMCPRegistrar {
         }
     }
 
+    /// CLEANUP MIGRATION (not a bundle write). Under runtime injection nothing belongs in the
+    /// synced bundle, so this REMOVES any stale `ouro_workbench` server from `mcpServers` and
+    /// removes the `senses.workbench` entry — and writes the bundle back only if it changed.
+    /// It NEVER writes the Workbench server or sense. Recovery truth is the post-cleanup snapshot
+    /// (`.registered` once clean + binary present), classified by the caller — not this return.
     @discardableResult
     public func install(for boss: BossAgentSelection) throws -> BossWorkbenchMCPRegistrationSnapshot {
         guard !boss.agentName.isEmpty else {
@@ -229,20 +262,83 @@ public struct BossWorkbenchMCPRegistrar {
         guard fileManager.fileExists(atPath: configURL.path) else {
             throw BossWorkbenchMCPRegistrationError.agentConfigMissing(configURL.path)
         }
-        guard fileManager.isExecutableFile(atPath: mcpExecutableURL.path) else {
-            throw BossWorkbenchMCPRegistrationError.executableMissing(mcpExecutableURL.path)
-        }
         do {
-            var root = try loadRootObject(from: configURL)
-            var mcpServers = root["mcpServers"] as? [String: Any] ?? [:]
-            mcpServers[serverName] = [
-                "command": mcpExecutableURL.path,
-                "args": []
-            ]
+            _ = try removeStaleWorkbenchEntries(at: configURL)
+        } catch let error as BossWorkbenchMCPRegistrationError {
+            throw error
+        } catch {
+            throw BossWorkbenchMCPRegistrationError.writeFailed(error.localizedDescription)
+        }
+        return snapshot(for: boss)
+    }
+
+    /// ALL-AGENTS CLEANUP SWEEP. Under runtime injection NOTHING belongs in ANY synced bundle —
+    /// the boss gets the Workbench MCP per-turn from `--workbench-mcp`, so a stale `ouro_workbench`
+    /// server or `senses.workbench` entry on *any* agent (boss or not) is just pollution that
+    /// git-sync would carry to other machines and is over-permissive. `install(for:)` only cleans
+    /// the boss; this runs the SAME safe per-bundle cleanup over EVERY `*.ouro` bundle under
+    /// `agentBundlesURL`, regardless of who's boss.
+    ///
+    /// Safe + idempotent: each bundle is loaded, the two Workbench keys removed, all other keys
+    /// preserved, and the file rewritten ONLY if it changed (a clean machine produces no writes).
+    /// A single unreadable / missing / non-JSON bundle is skipped gracefully — it never throws and
+    /// never corrupts a bundle. Returns the names of the agents whose bundles were changed (so the
+    /// caller can log/verify the migration).
+    @discardableResult
+    public func cleanupAllAgents() -> [String] {
+        guard let bundleURLs = try? fileManager.contentsOfDirectory(
+            at: agentBundlesURL,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+
+        var changedAgents: [String] = []
+        for bundleURL in bundleURLs {
+            guard bundleURL.pathExtension == "ouro",
+                  (try? bundleURL.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
+            else {
+                continue
+            }
+            let configURL = bundleURL.appendingPathComponent("agent.json")
+            guard fileManager.fileExists(atPath: configURL.path) else {
+                continue
+            }
+            // A bad bundle (garbage JSON, unwritable) is skipped — one poison bundle must not
+            // abort the sweep or corrupt anything.
+            if (try? removeStaleWorkbenchEntries(at: configURL)) == true {
+                changedAgents.append(bundleURL.deletingPathExtension().lastPathComponent)
+            }
+        }
+        return changedAgents.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
+    /// THE one cleanup truth, shared by `install(for:)` and `cleanupAllAgents()`. Loads the
+    /// bundle, removes any `mcpServers.ouro_workbench` and `senses.workbench`, preserves every
+    /// other key, and rewrites the file (atomic, stable key order, trailing newline) ONLY when
+    /// something was removed. Returns whether the bundle was changed. Throws on unreadable /
+    /// non-JSON / unwritable bundles so callers can decide whether to propagate (`install`) or
+    /// skip (`cleanupAllAgents`).
+    @discardableResult
+    private func removeStaleWorkbenchEntries(at configURL: URL) throws -> Bool {
+        var root = try loadRootObject(from: configURL)
+        var changed = false
+
+        if var mcpServers = root["mcpServers"] as? [String: Any],
+           mcpServers[serverName] != nil {
+            mcpServers.removeValue(forKey: serverName)
             root["mcpServers"] = mcpServers
-            var senses = root["senses"] as? [String: Any] ?? [:]
-            senses["workbench"] = ["enabled": true]
+            changed = true
+        }
+        if var senses = root["senses"] as? [String: Any],
+           senses["workbench"] != nil {
+            senses.removeValue(forKey: "workbench")
             root["senses"] = senses
+            changed = true
+        }
+
+        if changed {
             let data = try JSONSerialization.data(
                 withJSONObject: root,
                 options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
@@ -250,12 +346,8 @@ public struct BossWorkbenchMCPRegistrar {
             var output = data
             output.append(0x0A)
             try output.write(to: configURL, options: .atomic)
-        } catch let error as BossWorkbenchMCPRegistrationError {
-            throw error
-        } catch {
-            throw BossWorkbenchMCPRegistrationError.writeFailed(error.localizedDescription)
         }
-        return snapshot(for: boss)
+        return changed
     }
 
     private func agentConfigURL(forValidAgentName agentName: String) -> URL {
@@ -288,19 +380,16 @@ public struct BossWorkbenchMCPRegistrar {
         return root
     }
 
-    private func serverMatches(_ server: [String: Any]) -> Bool {
-        guard server["command"] as? String == mcpExecutableURL.path else {
-            return false
+    /// True when the boss bundle still carries a stale Workbench entry that the runtime-injection
+    /// migration should remove: either an `ouro_workbench` server in `mcpServers`, or any
+    /// `senses.workbench` entry. (Under runtime injection neither belongs in the synced bundle.)
+    private func bundleHasStaleWorkbenchEntry(in root: [String: Any]) -> Bool {
+        if let mcpServers = root["mcpServers"] as? [String: Any], mcpServers[serverName] != nil {
+            return true
         }
-        let args = server["args"] as? [String]
-        return args == [] || server["args"] == nil
-    }
-
-    private func workbenchSenseEnabled(in root: [String: Any]) -> Bool {
-        guard let senses = root["senses"] as? [String: Any],
-              let workbench = senses["workbench"] as? [String: Any] else {
-            return false
+        if let senses = root["senses"] as? [String: Any], senses["workbench"] != nil {
+            return true
         }
-        return workbench["enabled"] as? Bool == true
+        return false
     }
 }

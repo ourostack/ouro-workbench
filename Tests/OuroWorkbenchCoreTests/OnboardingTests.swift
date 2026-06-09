@@ -83,6 +83,75 @@ final class OnboardingTests: XCTestCase {
         XCTAssertTrue(readiness.repairSteps.contains { $0.id == "workbench-mcp" && $0.actor == .agentRunnable })
     }
 
+    func testWorkbenchMCPStepUsesRuntimeInjectionFramingNotBundleRegistration() {
+        // RUNTIME-INJECTION repoint: the `workbench-mcp` readiness step is no longer "register the
+        // MCP into the bundle" — it means "is runtime injection available" (binary present) + the
+        // bundle is clean of any stale entry. The step's copy must carry the runtime framing and
+        // must NOT claim it registers anything into the bundle.
+        let step = try! XCTUnwrap(
+            WorkbenchOnboardingAdvisor().readiness(
+                boss: BossAgentSelection(agentName: "slugger"),
+                agents: [
+                    OuroAgentRecord(
+                        name: "slugger",
+                        bundlePath: "/tmp/slugger.ouro",
+                        configPath: "/tmp/slugger.ouro/agent.json",
+                        status: .ready,
+                        detail: "ready",
+                        humanFacing: OuroAgentLane(provider: "minimax", model: "MiniMax-M2.7"),
+                        agentFacing: OuroAgentLane(provider: "openai-codex", model: "gpt-5.5")
+                    )
+                ],
+                mcpRegistration: BossWorkbenchMCPRegistrationSnapshot(
+                    agentName: "slugger",
+                    serverName: "ouro_workbench",
+                    commandPath: "/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP",
+                    agentConfigPath: "/tmp/slugger.ouro/agent.json",
+                    status: .notRegistered,
+                    detail: "binary missing"
+                ),
+                providerChecks: [
+                    "outward": OnboardingProviderCheckResult(lane: "outward", state: .passed, detail: "ok"),
+                    "inner": OnboardingProviderCheckResult(lane: "inner", state: .passed, detail: "ok")
+                ]
+            ).repairSteps.first { $0.id == "workbench-mcp" }
+        )
+        XCTAssertEqual(step.title, "Connect Workbench tools")
+        XCTAssertFalse(step.title.lowercased().contains("register"))
+    }
+
+    func testReadyDetailUsesRuntimeInjectionFraming() {
+        let readiness = WorkbenchOnboardingAdvisor().readiness(
+            boss: BossAgentSelection(agentName: "slugger"),
+            agents: [
+                OuroAgentRecord(
+                    name: "slugger",
+                    bundlePath: "/tmp/slugger.ouro",
+                    configPath: "/tmp/slugger.ouro/agent.json",
+                    status: .ready,
+                    detail: "ready",
+                    humanFacing: OuroAgentLane(provider: "minimax", model: "MiniMax-M2.7"),
+                    agentFacing: OuroAgentLane(provider: "openai-codex", model: "gpt-5.5")
+                )
+            ],
+            mcpRegistration: BossWorkbenchMCPRegistrationSnapshot(
+                agentName: "slugger",
+                serverName: "ouro_workbench",
+                commandPath: "/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP",
+                agentConfigPath: "/tmp/slugger.ouro/agent.json",
+                status: .registered,
+                detail: "registered"
+            ),
+            providerChecks: [
+                "outward": OnboardingProviderCheckResult(lane: "outward", state: .passed, detail: "ok"),
+                "inner": OnboardingProviderCheckResult(lane: "inner", state: .passed, detail: "ok")
+            ]
+        )
+        XCTAssertEqual(readiness.state, .ready)
+        XCTAssertTrue(readiness.detail.contains("Workbench tools"))
+        XCTAssertFalse(readiness.detail.lowercased().contains("registered"))
+    }
+
     func testAdvisorRequiresLiveProviderChecksBeforeReady() {
         let readiness = WorkbenchOnboardingAdvisor().readiness(
             boss: BossAgentSelection(agentName: "slugger"),
@@ -146,6 +215,211 @@ final class OnboardingTests: XCTestCase {
                 $0.actor == .humanRequired &&
                 $0.detail == "vault locked"
         })
+    }
+
+    // MARK: - R1.1: daemon- and creds-aware readiness (re-applied onto the 4-arg signature)
+
+    private func readyAgentWithBothLanes(name: String = "slugger") -> OuroAgentRecord {
+        OuroAgentRecord(
+            name: name,
+            bundlePath: "/tmp/\(name).ouro",
+            configPath: "/tmp/\(name).ouro/agent.json",
+            status: .ready,
+            detail: "ready",
+            humanFacing: OuroAgentLane(provider: "minimax", model: "MiniMax-M2.7"),
+            agentFacing: OuroAgentLane(provider: "openai-codex", model: "gpt-5.5")
+        )
+    }
+
+    private func registeredSnapshot(name: String = "slugger") -> BossWorkbenchMCPRegistrationSnapshot {
+        BossWorkbenchMCPRegistrationSnapshot(
+            agentName: name,
+            serverName: "ouro-workbench",
+            commandPath: "/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP",
+            agentConfigPath: "/tmp/\(name).ouro/agent.json",
+            status: .registered,
+            detail: "registered"
+        )
+    }
+
+    /// Live's `.ready` gate also requires both provider lanes to have passed their live
+    /// checks (the `providerChecks` machine live added). These passing checks let a
+    /// fully-configured agent reach `.ready` so the daemon×creds matrix can assert the
+    /// "everything good" corner; `.needsCredentials` / `.needsDaemon` short-circuit BEFORE
+    /// this machine, so they are unaffected by it.
+    private func passingProviderChecks() -> [String: OnboardingProviderCheckResult] {
+        [
+            "outward": OnboardingProviderCheckResult(lane: "outward", state: .passed, detail: "ok"),
+            "inner": OnboardingProviderCheckResult(lane: "inner", state: .passed, detail: "ok")
+        ]
+    }
+
+    func testReadinessDaemonDownIsNotReadyEvenWhenAgentsAndMCPAreFine() {
+        let readiness = WorkbenchOnboardingAdvisor().readiness(
+            boss: BossAgentSelection(agentName: "slugger"),
+            agents: [readyAgentWithBothLanes()],
+            mcpRegistration: registeredSnapshot(),
+            providerChecks: passingProviderChecks(),
+            daemonLiveness: .down
+        )
+
+        XCTAssertEqual(readiness.state, .needsDaemon)
+        XCTAssertFalse(readiness.isReady)
+        XCTAssertEqual(readiness.selectedBossName, "slugger")
+        // App-executable remediation, not a human-typed CLI step.
+        let daemonStep = readiness.repairSteps.first { $0.id == "ensure-daemon" }
+        XCTAssertNotNil(daemonStep)
+        XCTAssertEqual(daemonStep?.actor, .agentRunnable)
+        // The daemon step must be ordered first (you cannot act through a down daemon).
+        XCTAssertEqual(readiness.repairSteps.first?.id, "ensure-daemon")
+    }
+
+    func testReadinessDaemonDownCopyHasNoCLIorDaemonSeams() {
+        let readiness = WorkbenchOnboardingAdvisor().readiness(
+            boss: BossAgentSelection(agentName: "slugger"),
+            agents: [readyAgentWithBothLanes()],
+            mcpRegistration: registeredSnapshot(),
+            providerChecks: passingProviderChecks(),
+            daemonLiveness: .down
+        )
+
+        let daemonStep = readiness.repairSteps.first { $0.id == "ensure-daemon" }
+        let humanFacing = [readiness.headline, readiness.detail, daemonStep?.title ?? "", daemonStep?.detail ?? ""]
+        for copy in humanFacing {
+            let lowered = copy.lowercased()
+            XCTAssertFalse(lowered.contains("ouro"), "human-facing copy leaked a CLI seam: \(copy)")
+            XCTAssertFalse(lowered.contains("daemon"), "human-facing copy leaked the daemon seam: \(copy)")
+            XCTAssertFalse(lowered.contains("ouro up"), "human-facing copy leaked a CLI verb: \(copy)")
+        }
+        // Raw verbs are allowed only in the audit-lane command array.
+        XCTAssertEqual(daemonStep?.command.first, "ouro")
+    }
+
+    func testReadinessCredsAbsentIsADistinctState() throws {
+        let credlessAgent = OuroAgentRecord(
+            name: "slugger",
+            bundlePath: "/tmp/slugger.ouro",
+            configPath: "/tmp/slugger.ouro/agent.json",
+            status: .ready,
+            detail: "ready",
+            humanFacing: OuroAgentLane(provider: nil, model: nil),
+            agentFacing: OuroAgentLane(provider: nil, model: nil)
+        )
+        let readiness = WorkbenchOnboardingAdvisor().readiness(
+            boss: BossAgentSelection(agentName: "slugger"),
+            agents: [credlessAgent],
+            mcpRegistration: registeredSnapshot(),
+            daemonLiveness: .up
+        )
+
+        XCTAssertEqual(readiness.state, .needsCredentials)
+        XCTAssertFalse(readiness.isReady)
+        // Distinct from generic needsRepair; carries a credential remediation step.
+        let providerStep = try XCTUnwrap(readiness.repairSteps.first { $0.id == "request-provider-config" })
+        // The provider step must NOT carry a pane-spawning `ouro connect providers` command:
+        // that interactive CLI pane is the TTFA violation we deleted. It routes to the native
+        // provider form instead, so it has no audit-lane command line.
+        XCTAssertNil(providerStep.commandLine)
+        XCTAssertTrue(providerStep.command.isEmpty)
+        XCTAssertEqual(providerStep.actor, .humanRequired)
+        // The UI routes provider-setup steps to the native form, so the step is classifiable.
+        XCTAssertTrue(providerStep.isProviderSetup)
+    }
+
+    func testProviderSetupStepClassification() {
+        // Provider-setup steps (the ones that previously spawned `ouro connect providers` panes)
+        // are the steps the UI routes to the native provider form. Non-provider steps are not.
+        let providerIds = ["request-provider-config", "outward-lane", "inner-lane"]
+        for id in providerIds {
+            let step = OnboardingRepairStep(id: id, actor: .humanRequired, title: "t", detail: "d")
+            XCTAssertTrue(step.isProviderSetup, "\(id) should be a provider-setup step")
+        }
+        let other = OnboardingRepairStep(id: "ensure-daemon", actor: .agentRunnable, title: "t", detail: "d")
+        XCTAssertFalse(other.isProviderSetup)
+    }
+
+    func testReadinessAllFourDaemonCredsCombos() {
+        let advisor = WorkbenchOnboardingAdvisor()
+        let withCreds = readyAgentWithBothLanes()
+        let withoutCreds = OuroAgentRecord(
+            name: "slugger",
+            bundlePath: "/tmp/slugger.ouro",
+            configPath: "/tmp/slugger.ouro/agent.json",
+            status: .ready,
+            detail: "ready",
+            humanFacing: OuroAgentLane(provider: nil, model: nil),
+            agentFacing: OuroAgentLane(provider: nil, model: nil)
+        )
+        let boss = BossAgentSelection(agentName: "slugger")
+        let snapshot = registeredSnapshot()
+        let checks = passingProviderChecks()
+
+        // daemon up × creds present (+ passing live checks) -> ready
+        XCTAssertEqual(
+            advisor.readiness(boss: boss, agents: [withCreds], mcpRegistration: snapshot, providerChecks: checks, daemonLiveness: .up).state,
+            .ready
+        )
+        // daemon up × creds absent -> needsCredentials
+        XCTAssertEqual(
+            advisor.readiness(boss: boss, agents: [withoutCreds], mcpRegistration: snapshot, providerChecks: checks, daemonLiveness: .up).state,
+            .needsCredentials
+        )
+        // daemon down × creds present -> needsDaemon (daemon wins)
+        XCTAssertEqual(
+            advisor.readiness(boss: boss, agents: [withCreds], mcpRegistration: snapshot, providerChecks: checks, daemonLiveness: .down).state,
+            .needsDaemon
+        )
+        // daemon down × creds absent -> needsDaemon (daemon still wins; cannot act through a down daemon)
+        XCTAssertEqual(
+            advisor.readiness(boss: boss, agents: [withoutCreds], mcpRegistration: snapshot, providerChecks: checks, daemonLiveness: .down).state,
+            .needsDaemon
+        )
+    }
+
+    func testReadinessDefaultsToDaemonUpWhenLivenessOmitted() {
+        // Back-compat: the existing call (no `daemonLiveness:`) still resolves to a daemon-up
+        // reading — `.needsDaemon` never appears unless the caller passes `.down`.
+        let readiness = WorkbenchOnboardingAdvisor().readiness(
+            boss: BossAgentSelection(agentName: "slugger"),
+            agents: [readyAgentWithBothLanes()],
+            mcpRegistration: registeredSnapshot(),
+            providerChecks: passingProviderChecks()
+        )
+        XCTAssertEqual(readiness.state, .ready)
+    }
+
+    /// `.needsCredentials` is COMPLEMENTARY to live's per-lane `providerChecks` machine, not a
+    /// duplicate: `providerChecks` live-checks a *configured* lane (and can fail it), whereas
+    /// `.needsCredentials` fires only when there is NO usable lane at all (no provider in
+    /// either lane). An agent with one configured lane is never `.needsCredentials` — it flows
+    /// into the per-lane providerChecks path instead.
+    func testNeedsCredentialsIsComplementaryToProviderChecks() {
+        let advisor = WorkbenchOnboardingAdvisor()
+        let boss = BossAgentSelection(agentName: "slugger")
+        let snapshot = registeredSnapshot()
+        // One usable lane (outward) → NOT needsCredentials; the inner lane flows into the
+        // per-lane providerChecks path, so the state is the existing needsRepair, not creds.
+        let oneLaneAgent = OuroAgentRecord(
+            name: "slugger",
+            bundlePath: "/tmp/slugger.ouro",
+            configPath: "/tmp/slugger.ouro/agent.json",
+            status: .ready,
+            detail: "ready",
+            humanFacing: OuroAgentLane(provider: "minimax", model: "MiniMax-M2.7"),
+            agentFacing: OuroAgentLane(provider: nil, model: nil)
+        )
+        let readiness = advisor.readiness(
+            boss: boss,
+            agents: [oneLaneAgent],
+            mcpRegistration: snapshot,
+            providerChecks: ["outward": OnboardingProviderCheckResult(lane: "outward", state: .passed, detail: "ok")],
+            daemonLiveness: .up
+        )
+        XCTAssertNotEqual(readiness.state, .needsCredentials)
+        XCTAssertEqual(readiness.state, .needsRepair)
+        XCTAssertFalse(readiness.repairSteps.contains { $0.id == "request-provider-config" })
+        // The configured lane goes through the providerChecks path (here: inner is unconfigured).
+        XCTAssertTrue(readiness.repairSteps.contains { $0.id == "inner-lane" })
     }
 
     func testRecentSessionScannerFindsClaudeCodexAndShellCandidates() throws {

@@ -23,6 +23,11 @@ final class WorkbenchMCPServer {
     private let recoveryDrill = RecoveryDrill()
     private let senseRenderer = WorkbenchSenseRenderer()
     private let sessionsRenderer = WorkbenchSessionsRenderer()
+    private let onboardingAdvisor = WorkbenchOnboardingAdvisor()
+    private let onboardingReportRenderer = OnboardingReadinessReportRenderer()
+    private let ouroAgentInventory = OuroAgentInventory()
+    private let bossWorkbenchMCPRegistrar = BossWorkbenchMCPRegistrar()
+    private let daemonLivenessProbe = DaemonLivenessProbe()
     private let jsonEncoder: JSONEncoder = {
         let encoder = JSONEncoder()
         // Deterministic key order (stable tests / diffs) + readable timestamps.
@@ -100,6 +105,8 @@ final class WorkbenchMCPServer {
         switch name {
         case "workbench_status":
             return try workbenchStatus()
+        case OnboardingReadinessReportRenderer.toolName:
+            return try onboardingStatus()
         case "workbench_sessions":
             return try sessionsList(arguments: arguments)
         case "workbench_sense":
@@ -166,6 +173,31 @@ final class WorkbenchMCPServer {
             machineFriend: SessionFriend.machineOwner(),
             waitingPrompts: waitingPrompts
         )
+    }
+
+    /// The daemon- and credential-aware onboarding readiness of the selected boss, rendered
+    /// as the structured text the `workbench_onboarding_status` read tool returns. Mirrors
+    /// `workbenchStatus()`: load state, scan the local agent inventory, snapshot the boss's
+    /// MCP registration, probe daemon liveness, then hand all four to the pure
+    /// `WorkbenchOnboardingAdvisor.readiness(...)` and render via the pure
+    /// `OnboardingReadinessReportRenderer` (both unit-tested in Core).
+    private func onboardingStatus() throws -> String {
+        let state = try currentState()
+        let agents = ouroAgentInventory.scan()
+        let registration = bossWorkbenchMCPRegistrar.snapshot(for: state.boss)
+        // Synchronous, Swift-concurrency-free probe: the MCP request loop drives tools
+        // synchronously off `readLine()`, and bridging the async probe into that blocked
+        // thread starves the cooperative executor (crashes the task allocator in a CLI
+        // binary). The Core probe's `probeSynchronously()` uses a callback-based URLSession +
+        // semaphore instead, so it is safe to block for here.
+        let daemonLiveness = daemonLivenessProbe.probeSynchronously()
+        let readiness = onboardingAdvisor.readiness(
+            boss: state.boss,
+            agents: agents,
+            mcpRegistration: registration,
+            daemonLiveness: daemonLiveness
+        )
+        return onboardingReportRenderer.render(readiness)
     }
 
     /// Machine-readable list of sessions for an outbound MCP client (the
@@ -249,6 +281,15 @@ final class WorkbenchMCPServer {
         } else {
             trust = nil
         }
+        let lane: ProviderLane?
+        if let rawLane = try optionalString(arguments, key: "lane") {
+            guard let parsedLane = ProviderLane(rawValue: rawLane) else {
+                throw MCPToolFailure("Invalid lane value: \(rawLane)")
+            }
+            lane = parsedLane
+        } else {
+            lane = nil
+        }
         let action = BossWorkbenchAction(
             action: actionKind,
             entry: try optionalString(arguments, key: "entry"),
@@ -259,7 +300,10 @@ final class WorkbenchMCPServer {
             command: try optionalString(arguments, key: "command"),
             workingDirectory: try optionalString(arguments, key: "workingDirectory"),
             trust: trust,
-            autoResume: try optionalBool(arguments, key: "autoResume")
+            autoResume: try optionalBool(arguments, key: "autoResume"),
+            lane: lane,
+            provider: try optionalString(arguments, key: "provider"),
+            model: try optionalString(arguments, key: "model")
         )
         try action.validateForQueueing()
 
@@ -270,11 +314,17 @@ final class WorkbenchMCPServer {
             resolvedEntry = nil
         }
 
-        if let entry = resolvedEntry {
-            let authorization = authorizer.authorize(action, for: entry)
-            guard authorization.isAllowed else {
-                throw MCPToolFailure("Action denied for \(entry.name): \(authorization.reason ?? "not authorized")")
-            }
+        // Authorize EVERY action through the single gate — entry-scoped AND entry-less.
+        // Previously entry-less actions skipped authorization entirely (the check ran only
+        // `if let entry`); routing them through `authorizer.gate(...)` closes that bypass so an
+        // unknown/unauthorized entry-less action is now rejected at enqueue. Entry-scoped
+        // actions still run live's `livePrompt` sendInput safety floor inside the gate (the
+        // enqueue path has no live transcript tail, so it forwards the default empty prompt —
+        // the classifier still catches a verbatim-dangerous input, and the app apply path
+        // re-classifies against the real live prompt before sending).
+        let decision = authorizer.gate(action, resolvedEntry: resolvedEntry)
+        guard decision.authorization.isAllowed else {
+            throw MCPToolFailure("Action denied for \(decision.deniedTarget): \(decision.authorization.reason ?? "not authorized")")
         }
         let request = WorkbenchActionRequest(
             source: (arguments["source"] as? String) ?? "ouro-workbench-mcp",
@@ -299,10 +349,10 @@ final class WorkbenchMCPServer {
     /// in the target group and launches it under the same trust gating and
     /// launch validation as a human-created terminal.
     ///
-    /// The Workbench MCP is registered for the boss with no agent identity in
-    /// its command/env (`BossWorkbenchMCPRegistrar` writes empty args + no env),
-    /// so the calling agent must pass its own name as `owner`. We validate it
-    /// non-empty here; the app stamps it as the session owner.
+    /// The Workbench MCP is injected into the boss's turn at runtime (Workbench
+    /// passes `--workbench-mcp` when it launches the boss) with no agent identity
+    /// baked into its command/env, so the calling agent must pass its own name as
+    /// `owner`. We validate it non-empty here; the app stamps it as the session owner.
     private func createSession(arguments: [String: Any]) throws -> String {
         let state = try currentState()
         let trust: ProcessTrust?
@@ -496,6 +546,15 @@ final class WorkbenchMCPServer {
                 ]
             ],
             [
+                "name": OnboardingReadinessReportRenderer.toolName,
+                "description": OnboardingReadinessReportRenderer.toolDescription,
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [:],
+                    "additionalProperties": false
+                ]
+            ],
+            [
                 "name": "workbench_sessions",
                 "description": "Machine-readable JSON list of Workbench sessions for programmatic clients (use workbench_status for the human-readable check-in prompt). Returns {\"sessions\":[{id,name,group,owner:{kind,name},kind,status,attention,needsHuman,trust,autoResume,isArchived,isPinned,pid,exitCode,workingDirectory,transcriptPath,startedAt,lastOutputAt}]}. status is the latest run's state (configured|running|exited|waitingForInput|needsRecovery|manualActionNeeded); attention is idle|active|waitingOnHuman|blocked|needsBossReview. Optional fields are omitted when not applicable. After workbench_create_session, poll this with `name` set to your unique session name to resolve the new session's id and watch its status.",
                 "inputSchema": [
@@ -562,20 +621,23 @@ final class WorkbenchMCPServer {
             ],
             [
                 "name": "workbench_request_action",
-                "description": "Queue an auditable Workbench action for the native app to apply to a trusted process entry.",
+                "description": "Queue an auditable Workbench action for the native app to apply. Entry-scoped actions target a trusted process entry; the entry-less onboarding remediations target an agent by its explicit `name` (never default-agent resolution): `repairAgent` repairs an agent's vault/provider readiness, `verifyProvider` checks an agent's provider connection (optionally for a single `lane`), `refreshProvider` re-pushes an agent's stored credentials into the running daemon, `selectLane` sets an agent's `lane` provider/model (config-only, no secret), `registerWorkbenchMCP` connects an agent to Workbench, and `ensureDaemon` brings the local daemon online (machine-scoped — no agent name). Applying is asynchronous (a 2s pump drains the queue): this call returns only an enqueue ack, NOT the result. To learn whether a remediation actually worked, read the agent's readiness again and narrate from THAT, never from this ack.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
-                        "action": ["type": "string", "enum": ["launch", "recover", "terminate", "sendInput", "createGroup", "createTerminal", "moveSession", "setTrust", "setAutoResume", "archive", "restore"]],
+                        "action": ["type": "string", "enum": ["launch", "recover", "terminate", "sendInput", "createGroup", "createTerminal", "moveSession", "setTrust", "setAutoResume", "archive", "restore", "repairAgent", "verifyProvider", "refreshProvider", "selectLane", "registerWorkbenchMCP", "ensureDaemon"]],
                         "entry": ["type": "string", "description": "Process UUID or unique process name for entry-scoped actions."],
                         "text": ["type": "string", "description": "Required non-empty input text when action is sendInput."],
                         "appendNewline": ["type": "boolean"],
                         "group": ["type": "string", "description": "Group UUID or unique group name for createTerminal and moveSession."],
-                        "name": ["type": "string", "description": "Required for createGroup and createTerminal."],
+                        "name": ["type": "string", "description": "Required for createGroup and createTerminal; and the explicit agent name (never default-agent resolution) for the agent-targeted onboarding remediations repairAgent, verifyProvider, refreshProvider, selectLane, and registerWorkbenchMCP. Omit for ensureDaemon (machine-scoped)."],
                         "command": ["type": "string", "description": "Required command for createTerminal."],
                         "workingDirectory": ["type": "string", "description": "Group root path or terminal working directory."],
                         "trust": ["type": "string", "enum": ["trusted", "untrusted"]],
                         "autoResume": ["type": "boolean"],
+                        "lane": ["type": "string", "enum": ["outward", "inner"], "description": "Provider lane (outward = human-facing, inner = agent-facing). Optional for verifyProvider (omit = whole-agent verify); required for selectLane."],
+                        "provider": ["type": "string", "description": "Provider id for selectLane (config-only, never a secret)."],
+                        "model": ["type": "string", "description": "Model id for selectLane (config-only, never a secret)."],
                         "source": ["type": "string", "description": "Agent or tool requesting the action."],
                         "format": ["type": "string", "enum": ["text", "json"], "description": "Response format. \"json\" returns {ok,message,requestId} for programmatic callers; default \"text\" returns a human-readable confirmation."]
                     ],

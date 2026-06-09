@@ -79,6 +79,42 @@ final class BossAgentMCPClientTests: XCTestCase {
         }
     }
 
+    // MARK: - mcp-serve arguments (RUNTIME-INJECTION: pass --workbench-mcp)
+
+    func testMcpServeArgumentsOmitWorkbenchFlagWhenNoPath() {
+        XCTAssertEqual(
+            BossAgentMCPClient.mcpServeArguments(agentName: "slugger", workbenchMCPPath: nil),
+            ["mcp-serve", "--agent", "slugger"]
+        )
+    }
+
+    func testMcpServeArgumentsAppendWorkbenchFlagWithPath() {
+        XCTAssertEqual(
+            BossAgentMCPClient.mcpServeArguments(
+                agentName: "slugger",
+                workbenchMCPPath: "/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP"
+            ),
+            ["mcp-serve", "--agent", "slugger", "--workbench-mcp", "/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP"]
+        )
+    }
+
+    func testMcpServeArgumentsAppendWorkbenchFlagPathlessWhenEmpty() {
+        XCTAssertEqual(
+            BossAgentMCPClient.mcpServeArguments(agentName: "slugger", workbenchMCPPath: ""),
+            ["mcp-serve", "--agent", "slugger", "--workbench-mcp"]
+        )
+    }
+
+    func testClientConfiguredWithPathPassesFlagThroughArgs() {
+        let client = BossAgentMCPClient(
+            workbenchMCPPath: "/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP"
+        )
+        XCTAssertEqual(
+            client.mcpServeArguments(agentName: "slugger"),
+            ["mcp-serve", "--agent", "slugger", "--workbench-mcp", "/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP"]
+        )
+    }
+
     func testExtractsToolTextResponse() throws {
         let line = """
         {"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":"hello boss"}],"isError":false}}

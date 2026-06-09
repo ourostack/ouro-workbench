@@ -124,12 +124,16 @@ public struct AutonomyReadinessBuilder: Sendable {
         )
     }
 
+    /// RUNTIME-INJECTION model: the Workbench tools reach the boss at runtime (Workbench passes
+    /// `--workbench-mcp` when it launches the boss), so "ready" means the Workbench MCP binary is
+    /// present (runtime injection available) AND the boss bundle is clean of any stale entry — not
+    /// that anything is written into the synced bundle.
     private func mcpCheck(_ registration: BossWorkbenchMCPRegistrationSnapshot?) -> AutonomyReadinessCheck {
         guard let registration else {
             return AutonomyReadinessCheck(
                 id: "boss-mcp",
                 label: "Boss bridge",
-                detail: "Workbench MCP registration has not been checked.",
+                detail: "Workbench tools availability has not been checked.",
                 state: .warning
             )
         }
@@ -139,21 +143,21 @@ public struct AutonomyReadinessBuilder: Sendable {
             return AutonomyReadinessCheck(
                 id: "boss-mcp",
                 label: "Boss bridge",
-                detail: "Workbench MCP is registered for \(registration.agentName).",
+                detail: "Workbench tools are available to \(registration.agentName) at runtime.",
                 state: .ok
             )
         case .notRegistered:
             return AutonomyReadinessCheck(
                 id: "boss-mcp",
                 label: "Boss bridge",
-                detail: "Workbench MCP is not registered for \(registration.agentName).",
+                detail: "The Workbench tools binary isn't installed, so \(registration.agentName) can't be connected at runtime. Reinstall Workbench.",
                 state: .blocker
             )
         case .needsUpdate:
             return AutonomyReadinessCheck(
                 id: "boss-mcp",
                 label: "Boss bridge",
-                detail: "Workbench MCP points at an older command and needs an update.",
+                detail: "A stale Workbench entry is left in the boss bundle from an older setup and needs to be cleaned.",
                 state: .blocker
             )
         case .agentMissing:
@@ -167,7 +171,7 @@ public struct AutonomyReadinessBuilder: Sendable {
             return AutonomyReadinessCheck(
                 id: "boss-mcp",
                 label: "Boss bridge",
-                detail: "The Workbench MCP executable is not installed.",
+                detail: "The Workbench tools binary is not installed.",
                 state: .blocker
             )
         case .invalidConfig:
