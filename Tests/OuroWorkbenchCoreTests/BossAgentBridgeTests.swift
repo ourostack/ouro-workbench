@@ -78,115 +78,61 @@ final class BossAgentBridgeTests: XCTestCase {
         XCTAssertTrue(question.contains("keep trusted terminal agents moving"))
     }
 
-    func testWorkbenchMCPRegistrationInstallsServerIntoBossAgentConfig() throws {
-        let agentConfigURL = try writeAgentConfig(
-            agentName: "slugger",
-            json: """
-            {
-              "version": 2,
-              "mcpServers": {
-                "browser": {
-                  "command": "npx",
-                  "args": ["@playwright/mcp@latest"]
-                }
-              }
-            }
-            """
-        )
-        let executableURL = try writeExecutable()
-        let registrar = BossWorkbenchMCPRegistrar(
-            agentBundlesURL: temporaryDirectory,
-            mcpExecutableURL: executableURL
-        )
+    // MARK: - RUNTIME-INJECTION model
+    //
+    // The registrar no longer WRITES the boss bundle. `install` is now a CLEANUP migration that
+    // REMOVES any stale `ouro_workbench` from `mcpServers` and removes `senses.workbench`. The
+    // `snapshot` reads `.registered` when the Workbench MCP binary is present on disk AND the
+    // bundle is clean (runtime injection available); `.needsUpdate` when the binary is present but
+    // a stale bundle entry remains (cleanup-pending); `.notRegistered` when the binary is missing.
 
-        let before = registrar.snapshot(for: BossAgentSelection(agentName: "slugger"))
-        XCTAssertEqual(before.status, .notRegistered)
-
-        let after = try registrar.install(for: BossAgentSelection(agentName: "slugger"))
-
-        XCTAssertEqual(after.status, .registered)
-        let root = try loadJSON(agentConfigURL)
-        let servers = try XCTUnwrap(root["mcpServers"] as? [String: Any])
-        XCTAssertNotNil(servers["browser"])
-        let workbench = try XCTUnwrap(servers["ouro_workbench"] as? [String: Any])
-        XCTAssertEqual(workbench["command"] as? String, executableURL.path)
-        XCTAssertEqual(workbench["args"] as? [String], [])
-        let senses = try XCTUnwrap(root["senses"] as? [String: Any])
-        let workbenchSense = try XCTUnwrap(senses["workbench"] as? [String: Any])
-        XCTAssertEqual(workbenchSense["enabled"] as? Bool, true)
-    }
-
-    func testWorkbenchMCPRegistrationDetectsDriftAndUpdates() throws {
-        let agentConfigURL = try writeAgentConfig(
-            agentName: "slugger",
-            json: """
-            {
-              "version": 2,
-              "mcpServers": {
-                "ouro_workbench": {
-                  "command": "/tmp/old",
-                  "args": ["--old"]
-                }
-              }
-            }
-            """
-        )
-        let executableURL = try writeExecutable()
-        let registrar = BossWorkbenchMCPRegistrar(
-            agentBundlesURL: temporaryDirectory,
-            mcpExecutableURL: executableURL
-        )
-
-        XCTAssertEqual(registrar.snapshot(for: BossAgentSelection(agentName: "slugger")).status, .needsUpdate)
-
-        try registrar.install(for: BossAgentSelection(agentName: "slugger"))
-
-        let root = try loadJSON(agentConfigURL)
-        let servers = try XCTUnwrap(root["mcpServers"] as? [String: Any])
-        let workbench = try XCTUnwrap(servers["ouro_workbench"] as? [String: Any])
-        XCTAssertEqual(workbench["command"] as? String, executableURL.path)
-        XCTAssertEqual(workbench["args"] as? [String], [])
-    }
-
-    func testWorkbenchMCPRegistrationRepairsMissingWorkbenchSenseFlag() throws {
-        let executableURL = try writeExecutable()
+    func testSnapshotRegisteredWhenBinaryPresentAndBundleClean() throws {
+        // A bundle with no Workbench entry + an installed binary → runtime injection available.
         try writeAgentConfig(
             agentName: "slugger",
             json: """
             {
               "version": 2,
               "mcpServers": {
-                "ouro_workbench": {
-                  "command": "\(executableURL.path)",
-                  "args": []
-                }
-              },
-              "senses": {
-                "cli": { "enabled": true }
+                "browser": { "command": "npx", "args": ["@playwright/mcp@latest"] }
               }
             }
             """
         )
+        let executableURL = try writeExecutable()
         let registrar = BossWorkbenchMCPRegistrar(
             agentBundlesURL: temporaryDirectory,
             mcpExecutableURL: executableURL
         )
 
         let snapshot = registrar.snapshot(for: BossAgentSelection(agentName: "slugger"))
-
-        XCTAssertEqual(snapshot.status, .needsUpdate)
-        XCTAssertTrue(snapshot.detail.contains("senses.workbench.enabled"))
+        XCTAssertEqual(snapshot.status, .registered)
     }
 
-    func testWorkbenchMCPRegistrationPreservesExistingSenses() throws {
-        let agentConfigURL = try writeAgentConfig(
+    func testSnapshotNotRegisteredWhenBinaryMissing() throws {
+        // A clean bundle but a missing binary → runtime injection NOT available.
+        try writeAgentConfig(agentName: "slugger", json: #"{"version":2}"#)
+        let registrar = BossWorkbenchMCPRegistrar(
+            agentBundlesURL: temporaryDirectory,
+            mcpExecutableURL: temporaryDirectory.appendingPathComponent("missing")
+        )
+
+        XCTAssertEqual(
+            registrar.snapshot(for: BossAgentSelection(agentName: "slugger")).status,
+            .notRegistered
+        )
+    }
+
+    func testSnapshotNeedsUpdateWhenStaleWorkbenchServerInBundle() throws {
+        // Binary present, but a stale `ouro_workbench` entry survives in the bundle (e.g. written
+        // by an older Workbench, or synced from another machine) → cleanup-pending.
+        try writeAgentConfig(
             agentName: "slugger",
             json: """
             {
               "version": 2,
-              "senses": {
-                "cli": { "enabled": true },
-                "mail": { "enabled": true }
+              "mcpServers": {
+                "ouro_workbench": { "command": "/tmp/old", "args": ["--old"] }
               }
             }
             """
@@ -197,31 +143,123 @@ final class BossAgentBridgeTests: XCTestCase {
             mcpExecutableURL: executableURL
         )
 
-        try registrar.install(for: BossAgentSelection(agentName: "slugger"))
-
-        let root = try loadJSON(agentConfigURL)
-        let senses = try XCTUnwrap(root["senses"] as? [String: Any])
-        XCTAssertEqual((senses["cli"] as? [String: Any])?["enabled"] as? Bool, true)
-        XCTAssertEqual((senses["mail"] as? [String: Any])?["enabled"] as? Bool, true)
-        XCTAssertEqual((senses["workbench"] as? [String: Any])?["enabled"] as? Bool, true)
+        XCTAssertEqual(
+            registrar.snapshot(for: BossAgentSelection(agentName: "slugger")).status,
+            .needsUpdate
+        )
     }
 
-    func testWorkbenchMCPRegistrationReportsMissingAgentAndExecutable() throws {
+    func testSnapshotNeedsUpdateWhenStaleWorkbenchSenseInBundle() throws {
+        // Binary present, no stale server, but a stale `senses.workbench` entry remains.
+        try writeAgentConfig(
+            agentName: "slugger",
+            json: """
+            {
+              "version": 2,
+              "senses": {
+                "cli": { "enabled": true },
+                "workbench": { "enabled": true }
+              }
+            }
+            """
+        )
         let executableURL = try writeExecutable()
-        let missingAgentRegistrar = BossWorkbenchMCPRegistrar(
+        let registrar = BossWorkbenchMCPRegistrar(
             agentBundlesURL: temporaryDirectory,
             mcpExecutableURL: executableURL
         )
 
-        XCTAssertEqual(missingAgentRegistrar.snapshot(for: BossAgentSelection(agentName: "slugger")).status, .agentMissing)
+        XCTAssertEqual(
+            registrar.snapshot(for: BossAgentSelection(agentName: "slugger")).status,
+            .needsUpdate
+        )
+    }
 
-        try writeAgentConfig(agentName: "slugger", json: #"{"version":2}"#)
-        let missingExecutableRegistrar = BossWorkbenchMCPRegistrar(
+    func testInstallCleansStaleWorkbenchServerAndSenseFromBundle() throws {
+        // The migration: `install` REMOVES the stale `ouro_workbench` server and the stale
+        // `senses.workbench` entry — and preserves everything else.
+        let agentConfigURL = try writeAgentConfig(
+            agentName: "slugger",
+            json: """
+            {
+              "version": 2,
+              "mcpServers": {
+                "browser": { "command": "npx", "args": ["@playwright/mcp@latest"] },
+                "ouro_workbench": { "command": "/tmp/old", "args": [] }
+              },
+              "senses": {
+                "cli": { "enabled": true },
+                "mail": { "enabled": true },
+                "workbench": { "enabled": true }
+              }
+            }
+            """
+        )
+        let executableURL = try writeExecutable()
+        let registrar = BossWorkbenchMCPRegistrar(
             agentBundlesURL: temporaryDirectory,
-            mcpExecutableURL: temporaryDirectory.appendingPathComponent("missing")
+            mcpExecutableURL: executableURL
         )
 
-        XCTAssertEqual(missingExecutableRegistrar.snapshot(for: BossAgentSelection(agentName: "slugger")).status, .executableMissing)
+        XCTAssertEqual(
+            registrar.snapshot(for: BossAgentSelection(agentName: "slugger")).status,
+            .needsUpdate
+        )
+
+        let after = try registrar.install(for: BossAgentSelection(agentName: "slugger"))
+        XCTAssertEqual(after.status, .registered)
+
+        let root = try loadJSON(agentConfigURL)
+        let servers = try XCTUnwrap(root["mcpServers"] as? [String: Any])
+        XCTAssertNil(servers["ouro_workbench"], "stale Workbench server must be removed")
+        XCTAssertNotNil(servers["browser"], "unrelated servers must be preserved")
+        let senses = try XCTUnwrap(root["senses"] as? [String: Any])
+        XCTAssertNil(senses["workbench"], "stale Workbench sense must be removed")
+        XCTAssertEqual((senses["cli"] as? [String: Any])?["enabled"] as? Bool, true)
+        XCTAssertEqual((senses["mail"] as? [String: Any])?["enabled"] as? Bool, true)
+    }
+
+    func testInstallIsNoOpWriteWhenBundleAlreadyClean() throws {
+        // A clean bundle stays clean (and `install` does NOT add `ouro_workbench`/`senses.workbench`).
+        let agentConfigURL = try writeAgentConfig(
+            agentName: "slugger",
+            json: """
+            {
+              "version": 2,
+              "mcpServers": {
+                "browser": { "command": "npx", "args": ["@playwright/mcp@latest"] }
+              }
+            }
+            """
+        )
+        let executableURL = try writeExecutable()
+        let registrar = BossWorkbenchMCPRegistrar(
+            agentBundlesURL: temporaryDirectory,
+            mcpExecutableURL: executableURL
+        )
+
+        let after = try registrar.install(for: BossAgentSelection(agentName: "slugger"))
+        XCTAssertEqual(after.status, .registered)
+
+        let root = try loadJSON(agentConfigURL)
+        let servers = try XCTUnwrap(root["mcpServers"] as? [String: Any])
+        XCTAssertNil(servers["ouro_workbench"], "install must NEVER write the Workbench server")
+        XCTAssertNotNil(servers["browser"])
+        if let senses = root["senses"] as? [String: Any] {
+            XCTAssertNil(senses["workbench"], "install must NEVER write the Workbench sense")
+        }
+    }
+
+    func testSnapshotReportsMissingAgentBundle() throws {
+        let executableURL = try writeExecutable()
+        let registrar = BossWorkbenchMCPRegistrar(
+            agentBundlesURL: temporaryDirectory,
+            mcpExecutableURL: executableURL
+        )
+        XCTAssertEqual(
+            registrar.snapshot(for: BossAgentSelection(agentName: "slugger")).status,
+            .agentMissing
+        )
     }
 
     func testWorkbenchMCPRegistrationRejectsUnsafeBossAgentNames() throws {

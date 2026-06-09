@@ -9,12 +9,16 @@ final class WorkbenchMCPRegistrationActionTests: XCTestCase {
         XCTAssertEqual(WorkbenchMCPRegistrationTruth.classify(status: .registered), .registered)
     }
 
-    func testClassifyStillUnregisteredWhenSnapshotActionable() {
-        XCTAssertEqual(WorkbenchMCPRegistrationTruth.classify(status: .notRegistered), .stillUnregistered)
+    func testClassifyStillUnregisteredWhenCleanupPending() {
+        // Under runtime injection, `.needsUpdate` = "binary present but a stale bundle entry
+        // remains" — the cleanup re-runs (auto-recoverable), so it is still-unregistered.
         XCTAssertEqual(WorkbenchMCPRegistrationTruth.classify(status: .needsUpdate), .stillUnregistered)
     }
 
     func testClassifyNeedsManualWhenSnapshotUnrecoverable() {
+        // Binary missing (`.notRegistered`) is NOT auto-recoverable — the registrar can't install a
+        // binary — so it is needs-manual (reinstall Workbench), alongside the structural failures.
+        XCTAssertEqual(WorkbenchMCPRegistrationTruth.classify(status: .notRegistered), .needsManual)
         XCTAssertEqual(WorkbenchMCPRegistrationTruth.classify(status: .agentMissing), .needsManual)
         XCTAssertEqual(WorkbenchMCPRegistrationTruth.classify(status: .executableMissing), .needsManual)
         XCTAssertEqual(WorkbenchMCPRegistrationTruth.classify(status: .invalidConfig), .needsManual)
@@ -80,10 +84,16 @@ final class WorkbenchMCPRegistrationActionTests: XCTestCase {
         XCTAssertEqual(outcome.agentName, "slugger")
     }
 
-    func testRunnerClassifiesStillUnregisteredWhenSnapshotActionable() async {
-        let runner = WorkbenchMCPRegistrationRunner(runRegister: { _ in }, snapshotProbe: { _ in .notRegistered })
+    func testRunnerClassifiesStillUnregisteredWhenCleanupPending() async {
+        let runner = WorkbenchMCPRegistrationRunner(runRegister: { _ in }, snapshotProbe: { _ in .needsUpdate })
         let outcome = await runner.register(agentName: "slugger")
         XCTAssertEqual(outcome.truth, .stillUnregistered)
+    }
+
+    func testRunnerClassifiesNeedsManualWhenBinaryMissing() async {
+        let runner = WorkbenchMCPRegistrationRunner(runRegister: { _ in }, snapshotProbe: { _ in .notRegistered })
+        let outcome = await runner.register(agentName: "slugger")
+        XCTAssertEqual(outcome.truth, .needsManual)
     }
 
     func testRunnerClassifiesNeedsManualWhenSnapshotUnrecoverable() async {
