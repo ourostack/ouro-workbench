@@ -2,18 +2,24 @@ import Foundation
 
 /// Recovery-truth of a single `registerWorkbenchMCP` cycle.
 ///
-/// Classified from the POST-command registrar SNAPSHOT (`BossWorkbenchMCPRegistrationStatus`),
-/// never from whether the registrar's `install` threw — a thrown install does not prove the
-/// config is unregistered, and a clean return does not prove the snapshot reads registered.
-/// Only the post-command snapshot of the on-disk agent config is trustworthy.
+/// RUNTIME-INJECTION model: the action no longer registers the Workbench MCP into the boss
+/// bundle. It verifies that runtime injection is AVAILABLE (the Workbench MCP binary is present)
+/// and CLEANS any stale bundle entry an older Workbench left behind. Recovery truth is classified
+/// from the POST-command registrar SNAPSHOT (`BossWorkbenchMCPRegistrationStatus`), never from
+/// whether the registrar's cleanup threw — a thrown cleanup does not prove the bundle is dirty,
+/// and a clean return does not prove the snapshot reads registered. Only the post-command
+/// snapshot of the on-disk agent config + binary presence is trustworthy.
 public enum WorkbenchMCPRegistrationTruth: String, Codable, Equatable, Sendable {
-    /// The post-command snapshot reads registered.
+    /// The post-command snapshot reads registered (binary present + bundle clean → runtime
+    /// injection available).
     case registered
-    /// The snapshot is still actionable (`notRegistered` / `needsUpdate`) — never a false
-    /// "registered".
+    /// The snapshot is still cleanup-pending (`needsUpdate`: binary present but a stale bundle
+    /// entry remains) — the cleanup re-runs; never a false "registered".
     case stillUnregistered
-    /// The snapshot is unrecoverable automatically (`agentMissing` / `executableMissing` /
-    /// `invalidConfig`), or registration could not be attempted (missing explicit agent name).
+    /// The snapshot is unrecoverable automatically — the binary is missing (`notRegistered`:
+    /// reinstall Workbench) or the bundle is structurally broken (`agentMissing` /
+    /// `executableMissing` / `invalidConfig`), or the action could not be attempted (missing
+    /// explicit agent name).
     case needsManual
 
     /// Classify purely from the post-command registrar snapshot — never from a throw.
@@ -21,9 +27,12 @@ public enum WorkbenchMCPRegistrationTruth: String, Codable, Equatable, Sendable 
         switch status {
         case .registered:
             return .registered
-        case .notRegistered, .needsUpdate:
+        case .needsUpdate:
+            // Binary present, a stale bundle entry remains — the cleanup re-runs.
             return .stillUnregistered
-        case .agentMissing, .executableMissing, .invalidConfig:
+        case .notRegistered, .agentMissing, .executableMissing, .invalidConfig:
+            // Binary missing (`notRegistered`) is NOT auto-recoverable — the registrar can't
+            // install a binary — so it is needs-manual alongside the structural failures.
             return .needsManual
         }
     }
@@ -46,15 +55,15 @@ public enum WorkbenchMCPRegistrationTruth: String, Codable, Equatable, Sendable 
         }
     }
 
-    /// Audit/debug detail line — names the agent and the Workbench MCP registration target.
+    /// Audit/debug detail line — names the agent and the Workbench MCP runtime-injection target.
     public func auditDetail(agentName: String) -> String {
         switch self {
         case .registered:
-            return "registered the Workbench MCP for \(agentName); post-command registrar snapshot reads registered."
+            return "verified Workbench MCP runtime injection for \(agentName) (binary present + bundle clean); post-command registrar snapshot reads registered."
         case .stillUnregistered:
-            return "ran the Workbench MCP registration for \(agentName); post-command registrar snapshot still actionable (still-unregistered)."
+            return "ran the Workbench MCP bundle cleanup for \(agentName); post-command registrar snapshot still cleanup-pending (still-unregistered)."
         case .needsManual:
-            return "ran the Workbench MCP registration for \(agentName); post-command registrar snapshot unrecoverable (needs-manual)."
+            return "ran the Workbench MCP runtime-injection check for \(agentName); post-command registrar snapshot unrecoverable (needs-manual: binary missing or bundle broken)."
         }
     }
 }
