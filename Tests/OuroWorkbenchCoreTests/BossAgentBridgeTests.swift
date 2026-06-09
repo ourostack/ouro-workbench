@@ -292,7 +292,7 @@ final class BossAgentBridgeTests: XCTestCase {
             mcpExecutableURL: try writeExecutable()
         )
 
-        let changed = try registrar.cleanupAllAgents()
+        let changed = registrar.cleanupAllAgents()
 
         XCTAssertEqual(Set(changed), ["ouroboros", "slugger"], "both dirty agents must be cleaned")
 
@@ -328,7 +328,7 @@ final class BossAgentBridgeTests: XCTestCase {
             mcpExecutableURL: try writeExecutable()
         )
 
-        let changed = try registrar.cleanupAllAgents()
+        let changed = registrar.cleanupAllAgents()
 
         XCTAssertTrue(changed.isEmpty, "no agent should be reported changed on a clean machine")
         XCTAssertEqual(try Data(contentsOf: configURL), before, "clean bundle must NOT be rewritten")
@@ -360,7 +360,7 @@ final class BossAgentBridgeTests: XCTestCase {
             mcpExecutableURL: try writeExecutable()
         )
 
-        _ = try registrar.cleanupAllAgents()
+        _ = registrar.cleanupAllAgents()
 
         let root = try loadJSON(configURL)
         XCTAssertEqual(root["version"] as? Int, 2)
@@ -403,7 +403,7 @@ final class BossAgentBridgeTests: XCTestCase {
             mcpExecutableURL: try writeExecutable()
         )
 
-        let changed = try registrar.cleanupAllAgents()
+        let changed = registrar.cleanupAllAgents()
 
         XCTAssertEqual(changed, ["slugger"], "only the valid dirty bundle is cleaned")
         XCTAssertNil((try loadJSON(dirtyConfig)["mcpServers"] as? [String: Any])?["ouro_workbench"])
@@ -417,7 +417,7 @@ final class BossAgentBridgeTests: XCTestCase {
             mcpExecutableURL: try writeExecutable()
         )
 
-        XCTAssertEqual(try registrar.cleanupAllAgents(), [])
+        XCTAssertEqual(registrar.cleanupAllAgents(), [])
     }
 
     func testSnapshotReportsMissingAgentBundle() throws {
