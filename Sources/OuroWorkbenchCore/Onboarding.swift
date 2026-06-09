@@ -228,10 +228,17 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
         }
 
         guard let selected = agents.first(where: { $0.name.caseInsensitiveCompare(boss.agentName) == .orderedSame }) else {
+            // Empty boss = unresolved (fresh / factory-reset, or >1 agent so
+            // auto-adopt declined). A non-empty-but-missing name means the
+            // persisted boss's bundle is gone. Keep the copy honest for each —
+            // never render "The selected boss  is not installed" with a blank name.
+            let detail = boss.agentName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? "Choose which local agent runs as the boss on this machine."
+                : "The selected boss \(boss.agentName) is not installed. Choose a local agent or install the missing bundle."
             return OnboardingReadiness(
                 state: .needsAgent,
                 headline: "Choose this machine's boss",
-                detail: "The selected boss \(boss.agentName) is not installed. Choose a local agent or install the missing bundle.",
+                detail: detail,
                 selectedBossName: boss.agentName,
                 repairSteps: agents
                     .filter(\.isUsableAsBoss)

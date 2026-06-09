@@ -10205,7 +10205,22 @@ final class WorkbenchViewModel: ObservableObject {
 
     func refreshOuroAgents() {
         ouroAgents = ouroAgentInventory.scan()
+        resolveBossFromInventoryIfNeeded()
         refreshWorkbenchMCPRegistration()
+    }
+
+    /// When the persisted boss is unresolved (a fresh / factory-reset machine, or
+    /// a boss naming no installed bundle), adopt the sole installed agent
+    /// automatically. With more than one usable agent the human picks (the
+    /// onboarding boss-choice surface); with none the onboarding routes to
+    /// acquisition. Never hardcodes an agent name. No-ops once a boss resolves, so
+    /// it never switches away from a real selection mid-session.
+    func resolveBossFromInventoryIfNeeded() {
+        guard let name = BossAutoResolution.adoptableBossName(
+            persistedBossName: state.boss.agentName,
+            agents: ouroAgents
+        ) else { return }
+        selectBoss(agentName: name)
     }
 
     func workbenchMCPRegistration(for agent: OuroAgentRecord) -> BossWorkbenchMCPRegistrationSnapshot? {

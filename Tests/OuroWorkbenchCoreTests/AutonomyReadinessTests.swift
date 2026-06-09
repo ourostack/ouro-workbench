@@ -80,7 +80,10 @@ final class AutonomyReadinessTests: XCTestCase {
 
     private func bootstrappedState() -> WorkspaceState {
         WorkbenchBootstrapper().bootstrappedState(
-            from: WorkspaceState(),
+            // Explicit resolved boss — the default is now unresolved (empty), and an
+            // unresolved boss correctly blocks autonomy; these tests exercise the
+            // OTHER readiness dimensions given a real boss.
+            from: WorkspaceState(boss: BossAgentSelection(agentName: "ouroboros")),
             defaults: WorkbenchDefaults(projectName: "Workbench", projectRootPath: "/tmp/workbench")
         )
     }
@@ -89,6 +92,7 @@ final class AutonomyReadinessTests: XCTestCase {
         let project = WorkbenchProject(name: "Workbench", rootPath: "/tmp/workbench")
         return WorkbenchBootstrapper().bootstrappedState(
             from: WorkspaceState(
+                boss: BossAgentSelection(agentName: "ouroboros"),
                 projects: [project],
                 processEntries: [
                     ProcessEntry(
