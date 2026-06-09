@@ -1,6 +1,6 @@
 # Doing: Repoint Workbench to runtime-injection MCP model
 
-Status: in-progress
+Status: done
 Execution Mode: direct
 Branch: first-run-agent-drives-ui
 Planning: (none — spec is the task prompt)
@@ -46,28 +46,38 @@ Under runtime injection the registrar's `snapshot` means:
 - `BossAgentMCPClient.callTool` appends `--workbench-mcp <path>` (path-less fallback when unresolved).
 - App wires resolved path into `bossMCPClient.workbenchMCPPath` + `bossMCPCommand`.
 
-### Unit 2a (test): registrar cleanup + reinterpreted snapshot ⬜
-- `install(for:)` removes stale `ouro_workbench` and disables `senses.workbench`.
-- `snapshot` reads `.registered` when binary present + bundle clean; `.notRegistered`
-  when... binary present but stale entry remains? (cleanup-pending) — see design.
-- `snapshot` reads `.executableMissing` → maps to runtime-unavailable.
+### Unit 2a (test): registrar cleanup + reinterpreted snapshot ✅
+### Unit 2b (impl): rewrite registrar to runtime model ✅
+- `install(for:)` removes stale `ouro_workbench` + `senses.workbench`, writes only if changed,
+  NEVER writes the workbench server/sense.
+- `snapshot`: binary present + clean → `.registered`; present + stale entry → `.needsUpdate`;
+  binary missing → `.notRegistered`; bundle missing → `.agentMissing`; bad name → `.invalidConfig`.
+- `classify`: `.notRegistered` → `.needsManual` (binary missing, reinstall); `.needsUpdate` →
+  `.stillUnregistered` (cleanup retries).
 
-### Unit 2b (impl): rewrite registrar to runtime model ⬜
+### Unit 3a (test): readiness + S5 + action repointed ✅
+### Unit 3b (impl): repoint readiness/action/S5 ✅
+- Readiness `workbench-mcp` step title "Connect Workbench tools"; ready detail runtime framing.
+- S5 effect + `startRegisterWorkbenchMCP` + `registrationHealth` doc repointed.
+- `AutonomyReadiness.mcpCheck` copy repointed to runtime model.
+- `OuroWorkbenchMCP/main.swift` createSession doc repointed (no more bundle-write claim).
 
-### Unit 3a (test): readiness + S5 + action repointed ⬜
-### Unit 3b (impl): repoint readiness/action/S5 ⬜
-
-### Unit 4: full suite + build green, commit, report ⬜
+### Unit 4: full suite + build green, commit, report ✅
 
 ## Completion Criteria
-- [ ] `--workbench-mcp <path>` passed in `mcpServePlan` and `BossAgentMCPClient`
-- [ ] `install(for:)` no longer writes bundle; cleans stale entries
-- [ ] readiness `workbench-mcp` step means "binary present for runtime injection"
-- [ ] S5 + `registerWorkbenchMCP` action repointed to binary-present + cleanup
-- [ ] `.registered`/`.notRegistered` reinterpreted; seam-free copy updated
-- [ ] one-boss invariant preserved; no per-agent bundle registration reintroduced
-- [ ] `swift build` + `swift test` green; no warnings
-- [ ] recovery-truth preserved; R2 livePrompt floor untouched
+- [x] `--workbench-mcp <path>` passed in `mcpServePlan` and `BossAgentMCPClient`
+- [x] `install(for:)` no longer writes bundle; cleans stale entries
+- [x] readiness `workbench-mcp` step means "binary present for runtime injection"
+- [x] S5 + `registerWorkbenchMCP` action repointed to binary-present + cleanup
+- [x] `.registered`/`.notRegistered` reinterpreted; seam-free copy updated
+- [x] one-boss invariant preserved; no per-agent bundle registration reintroduced
+- [x] `swift build` + `swift test` green; no warnings
+- [x] recovery-truth preserved; R2 livePrompt floor untouched
 
 ## Progress Log
 - 2026-06-08 16:39 doing doc created; baseline build green (822-ish tests expected).
+- 2026-06-08 17:40 Unit 1a/1b: both spawn sites pass `--workbench-mcp`; app wires resolved path.
+- 2026-06-08 17:46 Unit 2a/2b: registrar stops writing bundle; cleans stale entries; runtime snapshot.
+- 2026-06-08 17:55 Unit 3a/3b: readiness/S5/action/autonomy + all human-facing copy repointed.
+- 2026-06-08 17:55 Gates: impl-coverage ✅ | swift build + 834 tests green ✅ | no warnings ✅ |
+  PR-review vs spec ✅ (both spawn sites pass flag; bundle-write gone; cleanup removes stale).
