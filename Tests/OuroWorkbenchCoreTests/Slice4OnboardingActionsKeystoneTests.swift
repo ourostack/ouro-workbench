@@ -154,7 +154,11 @@ final class Slice4OnboardingActionsKeystoneTests: XCTestCase {
     func testEnsureDaemonFullLoopNeedsManualWhenStillDown() async throws {
         let manager = DaemonManager(
             probe: DaemonLivenessProbe(reachability: { _ in false }),
-            startDaemon: { }
+            startDaemon: { },
+            // Small budget + no-op sleep: the always-down probe exhausts the verify budget,
+            // so without this the default ~10s polling window would real-sleep in CI.
+            verifyConfig: DaemonStartVerifyConfiguration(maxProbeAttempts: 4, probeIntervalNanoseconds: 0),
+            sleep: { _ in }
         )
         let outcome = DaemonEnsureActionOutcome(start: await manager.ensureRunning())
         XCTAssertFalse(outcome.succeeded)
