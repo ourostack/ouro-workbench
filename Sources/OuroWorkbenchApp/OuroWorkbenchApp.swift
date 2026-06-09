@@ -9016,6 +9016,10 @@ final class WorkbenchViewModel: ObservableObject {
         load()
         refreshOuroAgents()
         refreshWorkbenchMCPRegistration()
+        // Migrate EVERY local agent bundle off any stale `ouro_workbench` / `senses.workbench`
+        // entry (runtime injection means nothing belongs in a synced bundle). Independent of boss
+        // selection so a stale entry on any non-boss agent is cleaned too.
+        sweepStaleWorkbenchBundlesOnLaunch()
         refreshExecutableHealth()
         refreshGitStatus()
         refreshSessionActivity()
@@ -11291,6 +11295,30 @@ final class WorkbenchViewModel: ObservableObject {
         )
         snapshots[state.boss.agentName] = selectedSnapshot
         bossWorkbenchMCPRegistrationByAgentName = snapshots
+    }
+
+    /// One-time launch migration: sweep EVERY local agent bundle clean of stale `ouro_workbench`
+    /// servers and `senses.workbench` entries. Under runtime injection the boss gets the Workbench
+    /// MCP per-turn from `--workbench-mcp` (see `BossAgentBridgePlanner.mcpServePlan`), so nothing
+    /// belongs in any agent's git-synced bundle. `install(for:)` only cleans the boss, which leaves
+    /// a stale entry on any NON-boss agent to pollute git-sync to other machines and remain
+    /// over-permissive. This sweeps all of them.
+    ///
+    /// Runs off the main actor (per-agent file edit) and BEFORE/independent of boss selection — a
+    /// stale entry on any agent is cleaned regardless of who's boss. Idempotent: a clean machine
+    /// produces no writes. When something was cleaned we re-snapshot so the Agents pane reflects
+    /// the now-clean bundles.
+    func sweepStaleWorkbenchBundlesOnLaunch() {
+        let registrar = bossWorkbenchMCPRegistrar
+        Task.detached(priority: .utility) {
+            let changed = registrar.cleanupAllAgents()
+            guard !changed.isEmpty else {
+                return
+            }
+            await MainActor.run {
+                self.refreshWorkbenchMCPRegistration()
+            }
+        }
     }
 
     func refreshExecutableHealth() {
