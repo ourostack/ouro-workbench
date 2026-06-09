@@ -81,6 +81,15 @@ final class BossAutoResolutionTests: XCTestCase {
         )
     }
 
+    func testReadyAgentWithInvalidBundleNameIsNotUsable() {
+        // isUsableAsBoss also requires a valid bundle name; a ready agent whose name
+        // is invalid (e.g. contains "/") is not adoptable, so a lone such agent
+        // yields no auto-adoption.
+        XCTAssertNil(
+            BossAutoResolution.adoptableBossName(persistedBossName: "", agents: [agent("bad/name")])
+        )
+    }
+
     func testWhitespaceBossNameTreatedAsEmpty() {
         XCTAssertEqual(
             BossAutoResolution.adoptableBossName(persistedBossName: "   ", agents: [agent("ouroboros")]),
