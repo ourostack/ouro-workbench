@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.154 - Daemon cold-start verify polling
+
+- The first-run daemon spine no longer reports a false "manual recovery required" while a freshly-started daemon is still coming up. When the boss check-in finds the Ouro daemon down, Workbench spawns it detached and now **polls** the verify probe for a bounded window (~10s) instead of taking a single immediate reading — so a daemon that needs a moment to bind its socket (a Node cold start, or the one-time `ouro` self-update download on the first launch after a new release) is correctly recognized as recovered ("Waking your agent…") rather than misclassified as unrecoverable. The honest "isn't responding yet" line still surfaces, but only after the daemon genuinely fails to come up within the budget.
+
 ## 0.1.153 - Workbench tools via runtime injection (no bundle entry)
 
 - The boss agent now receives the Workbench MCP (`ouro_workbench`) at **runtime**, injected by the daemon for the boss's turn when Workbench launches it — nothing is written into the agent's git-synced bundle. This fixes a class of bugs where the `ouro_workbench` entry (a machine-specific binary path) was written into `agent.json`, then synced to your other machines where the path was wrong, drifted from the boss selection (boss on one agent, the MCP registration stranded on another), and survived a Workbench factory-reset because it lived outside Workbench's own state. Workbench now passes `ouro mcp-serve --agent <boss> --workbench-mcp <path>` (a coordinated `ouro` change adds the flag and merges the server per-turn/per-agent, never globally — no cross-agent tool leak), stops writing the bundle, and cleans up any stale `ouro_workbench`/`senses.workbench` entries it finds. One boss per machine; the boss is the only agent Workbench hands its tools to.
