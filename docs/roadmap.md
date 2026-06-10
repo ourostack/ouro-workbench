@@ -150,6 +150,33 @@ agent-aware terminal workbench rather than a launcher with terminal panes.
   deep passes.
 - Keep branch protection and CI green on `main`.
 
+## Future Horizons (deferred from the 2026-06 experience audit)
+
+A holistic experience audit (4,000+ user + agent stories scored against the
+product) surfaced several large capabilities deliberately deferred so the
+single-main-agent-per-machine experience can be made excellent first. They are
+recorded here so the aspiration is not lost:
+
+- **Multi-agent fleet & peer coordination.** Surface, drive, narrate, and audit
+  agent-to-agent coordination (delegate / message / ask / status) inside
+  Workbench, so one coordinator can orchestrate multiple Ouro agents from one
+  pane. Today coordination, if any, is a CLI/daemon side-channel Workbench never
+  injects or narrates. Deferred until one main agent per machine is solid.
+- **Enterprise & managed fleet.** A managed-preferences / MDM policy plane,
+  org-credential / SSO mode, a managed-distribution artifact (`.pkg`/`.dmg`), an
+  autonomy kill-switch that stops the boss (not just terminals), and an
+  exportable, agent-attributed audit plus an attestable offboard/credential-wipe
+  receipt for IT. Deferred: not required for single-machine excellence.
+- **Multiple main agents per machine (e.g. work + personal).** A first-class
+  context axis — a boss per context, with isolation across projects, sessions,
+  identity, credentials, and recovery — if real demand emerges for more than one
+  main agent on a machine. (One instance is an operator running an EMU-work agent
+  alongside a personal agent.) Deferred until the single-main-agent model is
+  solid and the range of real multi-agent setups is better understood.
+
+Notarization/signing for the browser-download path is tracked under **Native
+Release** above.
+
 ## Current Thin Slice
 
 Make Workbench open like a terminal:
