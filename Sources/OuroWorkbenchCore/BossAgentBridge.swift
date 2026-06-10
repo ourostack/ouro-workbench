@@ -17,7 +17,14 @@ public struct BossAgentBridgePlan: Equatable, Sendable {
 }
 
 public struct BossAgentBridgePlanner: Sendable {
-    public init() {}
+    /// The machine owner's display name, woven into check-in questions so the boss
+    /// reports on the ACTUAL operator — never a hardcoded name. Resolved at the app
+    /// boundary (`SessionFriend.machineOwner`); defaults neutral for previews/tests.
+    public let ownerName: String
+
+    public init(ownerName: String = "the operator") {
+        self.ownerName = ownerName
+    }
 
     /// The `ouro mcp-serve --agent <boss>` plan that launches the boss's turn.
     ///
@@ -57,11 +64,11 @@ public struct BossAgentBridgePlanner: Sendable {
     }
 
     public func checkInQuestion(userQuestion: String? = nil) -> String {
-        userQuestion ?? "Summarize what is going on, what is waiting on Ari, active terminal agents, blockers, and next actions."
+        userQuestion ?? "Summarize what is going on, what is waiting on \(ownerName), active terminal agents, blockers, and next actions."
     }
 
     public func watchQuestion() -> String {
-        "Watch mode check-in: summarize important workspace changes, identify anything waiting on Ari, and keep trusted terminal agents moving when the next action is clear."
+        "Watch mode check-in: summarize important workspace changes, identify anything waiting on \(ownerName), and keep trusted terminal agents moving when the next action is clear."
     }
 }
 

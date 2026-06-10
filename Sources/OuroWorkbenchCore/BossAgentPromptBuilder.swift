@@ -1,7 +1,14 @@
 import Foundation
 
 public struct BossAgentPromptBuilder: Sendable {
-    public init() {}
+    /// The machine owner's display name, woven into the check-in scaffold so the
+    /// boss reports on the ACTUAL operator — never a hardcoded name. Resolved at the
+    /// app boundary (`SessionFriend.machineOwner`); defaults neutral for tests.
+    public let ownerName: String
+
+    public init(ownerName: String = "the operator") {
+        self.ownerName = ownerName
+    }
 
     public func checkInPrompt(
         question: String,
@@ -31,7 +38,7 @@ public struct BossAgentPromptBuilder: Sendable {
         lines.append("")
         lines.append("For every session that is waiting on the human, record an auditable decision in exactly one fenced JSON block labeled ouro-workbench-decisions. This is the decision log for tuning — recording does NOT act yet. Decide using that session's friend (shown per process) and what you know of that friend's preferences/notes: \(BossDecisionKind.allCases.map(\.rawValue).joined(separator: ", ")). Choose autoAdvance only when the friend's preference clearly covers this prompt and it is not destructive or secret-bearing; otherwise escalate (or hold if there is nothing to do yet). Sessions owned by an agent (owner=agent:<name>) are driven by that agent's own loop — do NOT record autoAdvance or sendInput for them; treat them as informational (hold). Always include your reasoning and the preference you relied on. Use the process id in entry. Example:")
         lines.append("```ouro-workbench-decisions")
-        lines.append("[{\"entry\":\"PROCESS-ID\",\"kind\":\"autoAdvance\",\"proposedInput\":\"1\",\"preferenceCited\":\"Ari: approve test runs\",\"confidence\":0.9,\"reasoning\":\"prompt is a test-run approval; friend pre-approves these\",\"prompt\":\"Run tests? (y/N)\"}]")
+        lines.append("[{\"entry\":\"PROCESS-ID\",\"kind\":\"autoAdvance\",\"proposedInput\":\"1\",\"preferenceCited\":\"\(ownerName): approve test runs\",\"confidence\":0.9,\"reasoning\":\"prompt is a test-run approval; friend pre-approves these\",\"prompt\":\"Run tests? (y/N)\"}]")
         lines.append("```")
         lines.append("")
         lines.append("Workspace status: \(summary.oneLineStatus)")
@@ -170,11 +177,11 @@ public struct BossAgentPromptBuilder: Sendable {
         lines.append("")
         lines.append("For every session waiting on a human, record an auditable decision in exactly one fenced JSON block labeled ouro-workbench-decisions (recording does NOT act yet — it is the tuning log). Decide using that session's friend and preferences: \(BossDecisionKind.allCases.map(\.rawValue).joined(separator: ", ")). Choose autoAdvance only when the friend's preference clearly covers this prompt and it is not destructive or secret-bearing; otherwise escalate (or hold). Sessions owned by an agent (owner=agent:<name>) are driven by that agent's own loop — do NOT record autoAdvance or sendInput for them; treat them as informational (hold). Always include reasoning and the preference relied on. Example:")
         lines.append("```ouro-workbench-decisions")
-        lines.append("[{\"entry\":\"PROCESS-ID\",\"kind\":\"autoAdvance\",\"proposedInput\":\"1\",\"preferenceCited\":\"Ari: approve test runs\",\"confidence\":0.9,\"reasoning\":\"prompt is a test-run approval; friend pre-approves these\",\"prompt\":\"Run tests? (y/N)\"}]")
+        lines.append("[{\"entry\":\"PROCESS-ID\",\"kind\":\"autoAdvance\",\"proposedInput\":\"1\",\"preferenceCited\":\"\(ownerName): approve test runs\",\"confidence\":0.9,\"reasoning\":\"prompt is a test-run approval; friend pre-approves these\",\"prompt\":\"Run tests? (y/N)\"}]")
         lines.append("```")
         lines.append("")
         lines.append("Current pulse (call workbench_status for detail): \(summary.oneLineStatus)")
-        lines.append("Then reply with a concise summary of what is going on, what is waiting on Ari, and what you did.")
+        lines.append("Then reply with a concise summary of what is going on, what is waiting on \(ownerName), and what you did.")
         return lines.joined(separator: "\n")
     }
 
