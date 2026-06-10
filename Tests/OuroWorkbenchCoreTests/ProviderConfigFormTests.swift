@@ -2,6 +2,26 @@ import XCTest
 @testable import OuroWorkbenchCore
 
 final class ProviderConfigFormTests: XCTestCase {
+    // MARK: - New-agent name validation (the empty-machine "Create Agent" path)
+
+    func testNewAgentNameValidation() {
+        let existing = ["ouroboros", "slugger"]
+        // Valid, non-colliding name.
+        XCTAssertNil(ProviderConfigForm.newAgentNameValidationMessage("scout", existingNames: existing))
+        // Empty / whitespace.
+        XCTAssertEqual(ProviderConfigForm.newAgentNameValidationMessage("   ", existingNames: existing), "Please give your agent a name.")
+        // Invalid bundle name (slash).
+        XCTAssertEqual(
+            ProviderConfigForm.newAgentNameValidationMessage("bad/name", existingNames: existing),
+            "That name can't be used. Avoid slashes, colons, and backslashes."
+        )
+        // Collides with an installed agent (case-insensitive) — that's the existing-agent path.
+        XCTAssertEqual(
+            ProviderConfigForm.newAgentNameValidationMessage("Ouroboros", existingNames: existing),
+            "An agent named Ouroboros already exists. Pick a different name."
+        )
+    }
+
     // MARK: - Supported providers (the 5 from `ouro`'s isAgentProvider)
 
     func testSupportedProvidersAreExactlyTheFiveAgentProviders() {

@@ -162,6 +162,24 @@ public struct ProviderConfigForm: Sendable {
         "\(agentName) is already set up. Updating an existing agent's provider isn't available here yet — Workbench will add this soon."
     }
 
+    /// Validate a brand-new agent's name for cold-start creation (the empty-machine /
+    /// "create an agent" path). Returns a seam-free message if invalid, else nil.
+    /// `existingNames` are the already-installed agents — a new agent must not collide
+    /// with one (that would be the existing-agent refresh path, not a fresh hatch).
+    public static func newAgentNameValidationMessage(_ name: String, existingNames: [String]) -> String? {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            return "Please give your agent a name."
+        }
+        guard BossWorkbenchMCPRegistrar.isValidAgentBundleName(trimmed) else {
+            return "That name can't be used. Avoid slashes, colons, and backslashes."
+        }
+        if existingNames.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame }) {
+            return "An agent named \(trimmed) already exists. Pick a different name."
+        }
+        return nil
+    }
+
     /// Validate + build the cold-start outcome for the chosen provider and entered field values.
     ///
     /// COLD-START path only (a brand-new agent → headless hatch). Refreshing an EXISTING agent's
