@@ -66,7 +66,9 @@ final class BossAgentBridgeTests: XCTestCase {
         let question = BossAgentBridgePlanner().checkInQuestion()
 
         XCTAssertTrue(question.contains("what is going on"))
-        XCTAssertTrue(question.contains("what is waiting on Ari"))
+        // No hardcoded operator name — the default is neutral.
+        XCTAssertTrue(question.contains("what is waiting on the operator"))
+        XCTAssertFalse(question.contains("Ari"))
         XCTAssertTrue(question.contains("active terminal agents"))
     }
 
@@ -74,8 +76,18 @@ final class BossAgentBridgeTests: XCTestCase {
         let question = BossAgentBridgePlanner().watchQuestion()
 
         XCTAssertTrue(question.contains("workspace changes"))
-        XCTAssertTrue(question.contains("waiting on Ari"))
+        XCTAssertTrue(question.contains("waiting on the operator"))
+        XCTAssertFalse(question.contains("Ari"))
         XCTAssertTrue(question.contains("keep trusted terminal agents moving"))
+    }
+
+    func testQuestionsWeaveInTheResolvedOwnerName() {
+        // The owner's display name is injected, not hardcoded — so a non-"Ari"
+        // operator's boss reports on the actual operator.
+        let planner = BossAgentBridgePlanner(ownerName: "Dana Lee")
+        XCTAssertTrue(planner.checkInQuestion().contains("what is waiting on Dana Lee"))
+        XCTAssertTrue(planner.watchQuestion().contains("waiting on Dana Lee"))
+        XCTAssertFalse(planner.checkInQuestion().contains("the operator"))
     }
 
     // MARK: - RUNTIME-INJECTION model
