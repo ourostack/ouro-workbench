@@ -4683,6 +4683,7 @@ struct ProviderConfigSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var provider: WorkbenchProvider = .anthropic
     @State private var humanName: String = NSFullUserName()
+    @State private var newAgentName: String = ""
     @State private var values: [String: String] = [:]
     @State private var message: String?
 
@@ -4692,13 +4693,18 @@ struct ProviderConfigSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(form.title)
+            Text(model.providerConfigIsNewAgent ? "Create your agent" : form.title)
                 .font(.title3.weight(.semibold))
-            Text(form.subtitle)
+            Text(model.providerConfigIsNewAgent
+                 ? "Name your agent, choose a provider, and enter your credentials. This is the only step that needs you."
+                 : form.subtitle)
                 .font(.callout)
                 .foregroundStyle(.secondary)
 
             Form {
+                if model.providerConfigIsNewAgent {
+                    TextField("Agent name", text: $newAgentName)
+                }
                 Picker("Provider", selection: $provider) {
                     ForEach(WorkbenchProvider.allCases) { provider in
                         Text(provider.displayName).tag(provider)
@@ -4729,7 +4735,8 @@ struct ProviderConfigSheet: View {
                 Button {
                     submit()
                 } label: {
-                    Label("Connect", systemImage: "link")
+                    Label(model.providerConfigIsNewAgent ? "Create Agent" : "Connect",
+                          systemImage: model.providerConfigIsNewAgent ? "plus.circle" : "link")
                 }
                 .buttonStyle(.borderedProminent)
             }
@@ -4752,6 +4759,16 @@ struct ProviderConfigSheet: View {
     }
 
     private func submit() {
+        if model.providerConfigIsNewAgent {
+            // Validate + commit the new agent's name before the cold-start hatch. A name
+            // that collides with an installed agent is rejected here (that would be the
+            // existing-agent path, not a fresh hatch).
+            if let nameFailure = model.newAgentNameValidationMessage(newAgentName) {
+                message = nameFailure
+                return
+            }
+            model.providerConfigAgentName = newAgentName.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
         if let failure = model.submitProviderConfig(provider: provider, humanName: humanName, values: values) {
             message = failure
             return
@@ -5354,9 +5371,9 @@ private struct OnboardingBossChoiceView: View {
                 )
                 HStack(spacing: 8) {
                     Button {
-                        model.launchOuroAgentInstall(mode: "hatch", agentName: "", remote: "")
+                        model.presentNewAgentProviderConfigForm()
                     } label: {
-                        Label("Hatch Agent", systemImage: "plus.circle")
+                        Label("Create Agent", systemImage: "plus.circle")
                     }
                     Button {
                         model.isOuroAgentInstallSheetPresented = true
@@ -8911,6 +8928,12 @@ final class WorkbenchViewModel: ObservableObject {
     /// credential). Defaults to the selected boss when the request named no explicit agent.
     @Published var providerConfigAgentName: String = ""
 
+    /// True when the provider form is creating a BRAND-NEW agent (the empty-machine /
+    /// "create an agent" path) rather than connecting a provider for an existing one.
+    /// In new-agent mode the form collects the agent name + provider + credentials and
+    /// cold-start-hatches headlessly — no visible `ouro hatch` CLI pane.
+    @Published var providerConfigIsNewAgent = false
+
     private let paths: WorkbenchPaths
     private let store: WorkbenchStore
     private let bootstrapper = WorkbenchBootstrapper()
@@ -12431,9 +12454,9 @@ final class WorkbenchViewModel: ObservableObject {
             installWorkbenchMCPForBoss()
             refreshOnboardingReadiness()
             return "Connecting Workbench tools to the selected boss agent at runtime."
-        } else if text.contains("hatch") {
-            launchOuroAgentInstall(mode: "hatch", agentName: "", remote: "")
-            return "Opening the agent hatch flow."
+        } else if text.contains("hatch") || text.contains("create agent") {
+            presentNewAgentProviderConfigForm()
+            return "Opening the new-agent setup form."
         } else {
             bossQuestion = rawText
             Task {
@@ -14588,8 +14611,25 @@ final class WorkbenchViewModel: ObservableObject {
     /// affordance. Sets only the label/seed and the presentation flag; carries no credential.
     func presentProviderConfigForm(agentName: String) {
         let trimmed = agentName.trimmingCharacters(in: .whitespacesAndNewlines)
+        providerConfigIsNewAgent = false
         providerConfigAgentName = trimmed.isEmpty ? state.boss.agentName : trimmed
         isProviderConfigPresented = true
+    }
+
+    /// Present the provider form to CREATE A NEW AGENT (the empty-machine first-agent
+    /// path, and the "create another" path). The form collects the agent name +
+    /// provider + credentials and cold-start-hatches headlessly — replacing the
+    /// visible `ouro hatch` CLI pane that `launchOuroAgentInstall` spawned.
+    func presentNewAgentProviderConfigForm() {
+        providerConfigIsNewAgent = true
+        providerConfigAgentName = ""
+        isProviderConfigPresented = true
+    }
+
+    /// Seam-free validation for a new agent's name, or nil if valid. Surfaced inline in
+    /// the new-agent form before any hatch is attempted.
+    func newAgentNameValidationMessage(_ name: String) -> String? {
+        ProviderConfigForm.newAgentNameValidationMessage(name, existingNames: ouroAgents.map(\.name))
     }
 
     /// Whether a usable agent bundle already exists for the provider-config target. Drives the
