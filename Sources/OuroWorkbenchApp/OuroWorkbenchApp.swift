@@ -1070,7 +1070,7 @@ struct HarnessStatusSheet: View {
             trailingText: status.agents.summaryLine
         ) {
             if status.agents.isEmpty {
-                Text("No Ouro agent bundles found in ~/AgentBundles.")
+                Text("No Ouro agents are installed on this machine yet.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -3594,7 +3594,7 @@ struct BossSelectorView: View {
 
     private var bossHealthHelp: String {
         guard let bossAgent else {
-            return "\(model.state.boss.agentName) is the persisted boss but has no bundle in ~/AgentBundles. Pick an installed agent or hatch one."
+            return "\(model.state.boss.agentName) is the selected boss but isn't installed on this machine. Pick an installed agent or create one."
         }
         return "\(bossAgent.name): \(bossAgent.detail)"
     }
@@ -4511,7 +4511,7 @@ struct OuroAgentManagerView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "person.crop.circle.badge.exclamationmark")
                         .foregroundStyle(.orange)
-                    Text("No local agent bundles found in ~/AgentBundles.")
+                    Text("No Ouro agents are installed on this machine yet.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -4782,7 +4782,7 @@ struct OuroAgentInstallSheet: View {
             Form {
                 switch mode {
                 case .hatch:
-                    Label("SerpentGuide Conversation", systemImage: "bubble.left.and.bubble.right.fill")
+                    Label("Guided Setup", systemImage: "bubble.left.and.bubble.right.fill")
                 case .clone:
                     TextField("Git Remote", text: $remote)
                     TextField("Agent Name Override", text: $agentName)

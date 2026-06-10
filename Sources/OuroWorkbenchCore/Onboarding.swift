@@ -213,7 +213,7 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
                         id: "hatch",
                         actor: .humanChoice,
                         title: "Hatch a new agent",
-                        detail: "Create a new local Ouro agent through the conversational SerpentGuide flow.",
+                        detail: "Create a new local Ouro agent through a guided setup conversation.",
                         command: ["ouro", "hatch"]
                     ),
                     OnboardingRepairStep(

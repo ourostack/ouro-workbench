@@ -28,7 +28,7 @@ public enum BossAgentMCPClientError: Error, Equatable, LocalizedError, Sendable 
         case .toolError(let message):
             return message
         case .emptyResult:
-            return "The boss returned an empty reply. Check that the agent is set up and responding — run `ouro mcp-serve --agent <name>` in a terminal, or use More ▸ Set Up Workbench."
+            return "Your agent didn't respond. Workbench will try again automatically — if this keeps happening, reopen Workbench."
         }
     }
 }

@@ -279,7 +279,7 @@ public struct HarnessAgentInventory: Equatable, Sendable {
 
     public var summaryLine: String {
         guard !entries.isEmpty else {
-            return "No local agents found in ~/AgentBundles"
+            return "No Ouro agents are installed on this machine yet"
         }
         return "\(total) local, \(readyCount) ready"
     }
