@@ -225,7 +225,7 @@ final class HarnessStatusTests: XCTestCase {
         XCTAssertEqual(status.daemon.statusText, "unreachable (not checked yet)")
         XCTAssertEqual(status.daemon.state, .blocked)
         XCTAssertTrue(status.agents.isEmpty)
-        XCTAssertEqual(status.agents.summaryLine, "No local agents found in ~/AgentBundles")
+        XCTAssertEqual(status.agents.summaryLine, "No Ouro agents are installed on this machine yet")
         XCTAssertEqual(status.overallState, .blocked)
     }
 
