@@ -71,7 +71,13 @@ public struct BossAgentSelection: Codable, Equatable, Sendable {
     public var agentName: String
     public var scope: String
 
-    public init(agentName: String = "slugger", scope: String = "machine") {
+    /// The default boss is UNRESOLVED (empty), never a hardcoded agent name. A
+    /// machine's boss is resolved from the installed-agent inventory at runtime
+    /// (see `BossAutoResolution`): zero agents route to acquisition, exactly one
+    /// is adopted automatically, more than one forces an explicit human choice.
+    /// Hardcoding a name here would land first-run on a non-existent agent on
+    /// every machine that doesn't happen to have an agent by that name.
+    public init(agentName: String = "", scope: String = "machine") {
         self.agentName = agentName
         self.scope = scope
     }

@@ -9,7 +9,11 @@ final class WorkbenchBootstrapperTests: XCTestCase {
         )
 
         XCTAssertEqual(state.projects.map(\.name), ["Workbench"])
-        XCTAssertEqual(state.boss.agentName, "slugger")
+        // Bootstrap leaves the boss UNRESOLVED (empty). The boss is never
+        // hardcoded — it is resolved from the installed-agent inventory at runtime
+        // (BossAutoResolution): 0 agents → acquisition, 1 → auto-adopt, >1 → human
+        // choice. A hardcoded default would land first-run on a non-existent agent.
+        XCTAssertEqual(state.boss.agentName, "")
         XCTAssertEqual(state.processEntries.count, 1)
         XCTAssertEqual(state.processEntries.first?.name, "Local Shell")
         XCTAssertEqual(state.processEntries.first?.kind, .shell)
