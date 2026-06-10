@@ -367,6 +367,10 @@ struct WorkbenchRootView: View {
             Text(model.errorMessage ?? "Unknown error")
         }
         .task {
+            // Bring the managed daemon online on launch (idempotent, quiet) before
+            // recovery + status refreshes, so a daemon that died between sessions is
+            // back up without waiting for a check-in.
+            await model.ensureDaemonRunningOnLaunch()
             // Detect still-alive `screen` sessions first so startup recovery can
             // reattach to running agents losslessly instead of respawning them.
             await model.refreshLiveScreenSessions()
@@ -11424,6 +11428,29 @@ final class WorkbenchViewModel: ObservableObject {
             detail: "selected boss"
         )
         installWorkbenchMCP(for: selectedAgent)
+    }
+
+    /// Bring the local runtime online at app launch. The daemon is managed-but-
+    /// independent infrastructure — it should be online whenever Workbench is, not
+    /// only after the first check-in or while Boss Watch happens to be on. Without
+    /// this, a daemon that died between sessions stays down on relaunch until a
+    /// manual check-in. Runs the SAME idempotent detect-reuse-else-start cycle as
+    /// the check-in, but QUIETLY: records the outcome to the audit log and never
+    /// shows a startup banner (a real check-in surfaces "waking" when it matters).
+    /// Skipped before a boss is resolved — a fresh machine has no agent yet and the
+    /// first-run bootstrap (S0) owns its own bringup.
+    func ensureDaemonRunningOnLaunch() async {
+        guard !state.boss.agentName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
+        let outcome = await daemonManager.ensureRunning()
+        recordActionLog(
+            source: "native",
+            action: "ensureDaemon",
+            targetName: "launch",
+            result: outcome.auditDetail,
+            succeeded: !outcome.needsManualRecovery
+        )
     }
 
     // MARK: - Harness Status control actions
