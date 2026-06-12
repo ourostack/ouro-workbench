@@ -4230,6 +4230,9 @@ struct BossDashboardView: View {
                 if let dashboard = model.bossDashboard {
                     DashboardMetricsStrip(dashboard: dashboard)
                 }
+                if let visibility = model.workbenchVisibility {
+                    WorkbenchVisibilityStrip(snapshot: visibility)
+                }
                 if let dashboard = model.bossDashboard,
                    !dashboard.availability.issues.isEmpty {
                     MailboxWarningView(issues: dashboard.availability.issues)
@@ -4282,6 +4285,9 @@ struct BossDashboardView: View {
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
                     }
+                }
+                if let dashboard = model.bossDashboard {
+                    HabitHistoryPanelView(model: dashboard.habitHistory)
                 }
                 Button {
                     withAnimation(.easeInOut(duration: 0.18)) {
@@ -4340,6 +4346,61 @@ struct BossDashboardView: View {
     }
 }
 
+struct HabitHistoryPanelView: View {
+    var model: HabitHistoryPanelModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(model.title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            if model.rows.isEmpty {
+                Text(model.statusMessage ?? "No habit runs yet")
+                    .font(.caption)
+                    .foregroundStyle(model.isAvailable ? Color.secondary : Color.orange)
+                    .lineLimit(2)
+                    .textSelection(.enabled)
+            }
+            ForEach(model.rows.prefix(5)) { row in
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(row.habitName)
+                            .font(.caption.weight(.semibold))
+                            .lineLimit(1)
+                        Text(row.outcome)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text(row.endedAt)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    Text(row.summary)
+                        .font(.caption)
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+                    HStack(spacing: 8) {
+                        if let operationId = row.operationId {
+                            Text(operationId)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        Text(row.receiptLocator)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 struct DashboardMetricsStrip: View {
     var dashboard: BossDashboardSnapshot
 
@@ -4350,9 +4411,37 @@ struct DashboardMetricsStrip: View {
                 MetricChip(label: "needs me", value: dashboard.availability.needsMeAvailable ? "\(dashboard.needsMeItems.count)" : "?")
                 MetricChip(label: "coding", value: dashboard.availability.codingAvailable ? "\(dashboard.activeCodingAgents)" : "?")
                 MetricChip(label: "blocked", value: dashboard.availability.codingAvailable ? "\(dashboard.blockedCodingAgents)" : "?")
+                MetricChip(label: "habits", value: dashboard.habitHistory.isAvailable ? "\(dashboard.habitHistory.rows.count)" : "?")
                 MetricChip(label: "mode", value: dashboard.daemonMode)
             }
         }
+    }
+}
+
+struct WorkbenchVisibilityStrip: View {
+    var snapshot: WorkbenchVisibilitySnapshot
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                MetricChip(label: "visibility", value: snapshot.readiness.status.rawValue)
+                MetricChip(label: "owed", value: render(snapshot.agentWork.counts.owed))
+                MetricChip(label: "returns", value: render(snapshot.agentWork.counts.returnObligations))
+                MetricChip(label: "claims", value: snapshot.agentWork.claims.available ? "ok" : "unknown")
+                MetricChip(label: "inbox", value: "\(snapshot.decisions.openInbox)")
+                MetricChip(label: "recover", value: "\(snapshot.workspace.recoverableSessions)")
+            }
+        }
+        .help(helpText)
+    }
+
+    private var helpText: String {
+        let issueText = snapshot.readiness.issues.map { "\($0.code): \($0.detail)" }.joined(separator: "\n")
+        return issueText.isEmpty ? "Workbench visibility is available." : issueText
+    }
+
+    private func render(_ value: Int?) -> String {
+        value.map(String.init) ?? "?"
     }
 }
 
@@ -8663,6 +8752,7 @@ final class WorkbenchViewModel: ObservableObject {
     }
     @Published var errorMessage: String?
     @Published var bossDashboard: BossDashboardSnapshot?
+    @Published var workbenchVisibility: WorkbenchVisibilitySnapshot?
     @Published var bossCheckInPrompt: String?
     @Published var bossCheckInAnswer: String?
     @Published var bossCheckInIsRunning = false
@@ -8941,6 +9031,8 @@ final class WorkbenchViewModel: ObservableObject {
     private let summarizer = WorkspaceSummarizer()
     private let mailboxClient: MailboxClient
     private let bossDashboardBuilder = BossDashboardBuilder()
+    private let visibilityBuilder = WorkbenchVisibilityBuilder()
+    private let workCardReader: OuroWorkCardReader
     private let bossBridgePlanner = BossAgentBridgePlanner(ownerName: WorkbenchViewModel.resolvedOwnerName())
     private let bossPromptBuilder = BossAgentPromptBuilder(ownerName: WorkbenchViewModel.resolvedOwnerName())
     private let autonomyReadinessBuilder = AutonomyReadinessBuilder()
@@ -9015,7 +9107,8 @@ final class WorkbenchViewModel: ObservableObject {
         bossWorkbenchMCPRegistrar: BossWorkbenchMCPRegistrar = BossWorkbenchMCPRegistrar(),
         ouroAgentInventory: OuroAgentInventory = OuroAgentInventory(),
         executableHealthChecker: ExecutableHealthChecker = ExecutableHealthChecker(),
-        releaseUpdateChecker: ReleaseUpdateChecker = ReleaseUpdateChecker()
+        releaseUpdateChecker: ReleaseUpdateChecker = ReleaseUpdateChecker(),
+        workCardReader: OuroWorkCardReader = OuroWorkCardReader()
     ) {
         self.paths = paths
         self.store = WorkbenchStore(paths: paths)
@@ -9034,6 +9127,7 @@ final class WorkbenchViewModel: ObservableObject {
         self.ouroAgentInventory = ouroAgentInventory
         self.executableHealthChecker = executableHealthChecker
         self.releaseUpdateChecker = releaseUpdateChecker
+        self.workCardReader = workCardReader
         self.externalActionQueue = WorkbenchActionRequestQueue(paths: paths)
         self.state = WorkspaceState()
         // Seed the palette's static override from the persisted setting so
@@ -13157,26 +13251,42 @@ final class WorkbenchViewModel: ObservableObject {
         async let machineResult = fetchResult(.machine, as: MailboxMachineView.self, label: "machine")
         async let needsMeResult = fetchResult(.needsMe(state.boss.agentName), as: MailboxNeedsMeView.self, label: "needs-me")
         async let codingResult = fetchResult(.coding(state.boss.agentName), as: MailboxCodingSummary.self, label: "coding")
+        async let habitHistoryResult = fetchResult(.habitRunSummaries(state.boss.agentName, limit: 5), as: MailboxHabitSessionSummaryView.self, label: "habit-history")
 
-        let (machine, needsMe, coding) = await (machineResult, needsMeResult, codingResult)
-        let issues = [machine.issue, needsMe.issue, coding.issue].compactMap(\.self)
+        let (machine, needsMe, coding, habitHistory) = await (machineResult, needsMeResult, codingResult, habitHistoryResult)
+        let issues = [machine.issue, needsMe.issue, coding.issue, habitHistory.issue].compactMap(\.self)
 
         let snapshot = bossDashboardBuilder.build(
             boss: state.boss,
             machine: machine.value,
             needsMe: needsMe.value,
             coding: coding.value,
-            availability: BossDashboardAvailability(
-                machineAvailable: machine.issue == nil,
-                needsMeAvailable: needsMe.issue == nil,
-                codingAvailable: coding.issue == nil,
-                issues: issues
+            habitHistory: habitHistory.value,
+            availability: .mailbox(
+                machineIssue: machine.issue,
+                needsMeIssue: needsMe.issue,
+                codingIssue: coding.issue,
+                habitHistoryIssue: habitHistory.issue
             )
         )
         let previousDashboard = bossDashboard
         bossDashboard = snapshot
         mailboxError = issues.isEmpty ? nil : "Mailbox warnings: \(issues.joined(separator: "; "))"
         notifyAboutNewNeedsMeItems(previous: previousDashboard, current: snapshot)
+        await refreshWorkbenchVisibility()
+    }
+
+    func refreshWorkbenchVisibility() async {
+        let snapshotState = state
+        let agentName = snapshotState.boss.agentName
+        let reader = workCardReader
+        let workCard = await Task.detached(priority: .utility) {
+            reader.read(agent: agentName)
+        }.value
+        workbenchVisibility = visibilityBuilder.build(
+            state: snapshotState,
+            workCard: workCard
+        )
     }
 
     /// IDs of needs-me items we've already notified the user about. We never
@@ -13321,14 +13431,10 @@ final class WorkbenchViewModel: ObservableObject {
             bossCheckInIsRunning = false
         }
         refreshExecutableHealth()
-        await refreshBossDashboard()
-        guard state.boss.agentName == requestedBoss else {
-            return
-        }
 
         // Workbench manages the daemon as invisible infrastructure: detect-reuse-else-start
-        // BEFORE asking the agent. `refreshBossDashboard()` above can't tell us this — the
-        // mailbox overview collapses to "unknown" when the daemon is down — so we run a
+        // BEFORE asking the agent. The mailbox overview collapses to "unknown" when the
+        // daemon is down, so we run a
         // dedicated liveness probe + detached start here. Recovery truth comes from the
         // POST-start verify probe, never an exit code. If the agent genuinely can't be
         // brought online, surface an honest, seam-free line instead of asking a dead daemon;
@@ -13351,6 +13457,10 @@ final class WorkbenchViewModel: ObservableObject {
             }
             return
         }
+        guard state.boss.agentName == requestedBoss else {
+            return
+        }
+        await refreshBossDashboard()
         guard state.boss.agentName == requestedBoss else {
             return
         }

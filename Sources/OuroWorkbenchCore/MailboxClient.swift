@@ -7,6 +7,8 @@ public enum MailboxEndpoint: Equatable, Sendable {
     case coding(String)
     case sessions(String)
     case attention(String)
+    case habitRunSummaries(String, limit: Int?)
+    case habitRunSummary(String, selector: MailboxHabitSummarySelector)
     case events
 
     public var path: String {
@@ -23,6 +25,14 @@ public enum MailboxEndpoint: Equatable, Sendable {
             return "/api/agents/\(Self.escape(agent))/sessions"
         case .attention(let agent):
             return "/api/agents/\(Self.escape(agent))/attention"
+        case .habitRunSummaries(let agent, let limit):
+            let basePath = "/api/agents/\(Self.escape(agent))/habit-run-summaries"
+            guard let limit else { return basePath }
+            return "\(basePath)?\(Self.queryString([("limit", String(limit))]))"
+        case .habitRunSummary(let agent, let selector):
+            let basePath = "/api/agents/\(Self.escape(agent))/habit-run-summary"
+            let query = Self.queryString(selector.queryItems)
+            return query.isEmpty ? basePath : "\(basePath)?\(query)"
         case .events:
             return "/api/events"
         }
@@ -32,6 +42,49 @@ public enum MailboxEndpoint: Equatable, Sendable {
         var allowed = CharacterSet.urlPathAllowed
         allowed.remove(charactersIn: "/")
         return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+    }
+
+    private static func escapeQuery(_ value: String) -> String {
+        var allowed = CharacterSet.alphanumerics
+        allowed.insert(charactersIn: "-._~")
+        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+    }
+
+    private static func queryString(_ items: [(String, String?)]) -> String {
+        items.compactMap { key, value in
+            guard let value else { return nil }
+            return "\(escapeQuery(key))=\(escapeQuery(value))"
+        }.joined(separator: "&")
+    }
+}
+
+public struct MailboxHabitSummarySelector: Equatable, Sendable {
+    public var runId: String?
+    public var habitName: String?
+    public var operationId: String?
+    public var which: String?
+
+    public init(
+        runId: String? = nil,
+        habitName: String? = nil,
+        operationId: String? = nil,
+        which: String? = nil
+    ) {
+        self.runId = runId
+        self.habitName = habitName
+        self.operationId = operationId
+        self.which = which
+    }
+
+    fileprivate var queryItems: [(String, String?)] {
+        if runId != nil {
+            return [("runId", runId)]
+        }
+        return [
+            ("habit", habitName),
+            ("operation-id", operationId),
+            ("which", which),
+        ]
     }
 }
 
@@ -310,5 +363,120 @@ public struct MailboxCodingItem: Decodable, Equatable, Identifiable, Sendable {
         self.lastActivityAt = lastActivityAt
         self.checkpoint = checkpoint
         self.taskRef = taskRef
+    }
+}
+
+public struct MailboxHabitSessionSummaryView: Decodable, Equatable, Sendable {
+    public var totalCount: Int
+    public var limit: Int
+    public var items: [MailboxHabitSessionSummary]
+
+    public init(totalCount: Int, limit: Int, items: [MailboxHabitSessionSummary]) {
+        self.totalCount = totalCount
+        self.limit = limit
+        self.items = items
+    }
+}
+
+public struct MailboxHabitSessionSummary: Decodable, Equatable, Identifiable, Sendable {
+    public var runId: String
+    public var habitName: String
+    public var operationId: String?
+    public var status: String
+    public var triggeredAt: String
+    public var completedAt: String
+    public var summary: String
+    public var decisions: [String]
+    public var pending: MailboxHabitSummaryPending
+    public var messagesSent: [MailboxHabitSummaryMessage]
+    public var toolsUsed: [String]
+    public var producedRefs: [MailboxHabitSummaryProducedRef]
+    public var errors: [String]
+    public var warnings: [String]
+    public var nextLikelyStep: String?
+    public var sources: MailboxHabitSummarySources
+
+    public var id: String { runId }
+
+    public init(
+        runId: String,
+        habitName: String,
+        operationId: String?,
+        status: String,
+        triggeredAt: String,
+        completedAt: String,
+        summary: String,
+        decisions: [String],
+        pending: MailboxHabitSummaryPending,
+        messagesSent: [MailboxHabitSummaryMessage],
+        toolsUsed: [String],
+        producedRefs: [MailboxHabitSummaryProducedRef],
+        errors: [String],
+        warnings: [String],
+        nextLikelyStep: String?,
+        sources: MailboxHabitSummarySources
+    ) {
+        self.runId = runId
+        self.habitName = habitName
+        self.operationId = operationId
+        self.status = status
+        self.triggeredAt = triggeredAt
+        self.completedAt = completedAt
+        self.summary = summary
+        self.decisions = decisions
+        self.pending = pending
+        self.messagesSent = messagesSent
+        self.toolsUsed = toolsUsed
+        self.producedRefs = producedRefs
+        self.errors = errors
+        self.warnings = warnings
+        self.nextLikelyStep = nextLikelyStep
+        self.sources = sources
+    }
+}
+
+public struct MailboxHabitSummaryPending: Decodable, Equatable, Sendable {
+    public var count: Int
+    public var files: [String]
+
+    public init(count: Int, files: [String]) {
+        self.count = count
+        self.files = files
+    }
+}
+
+public struct MailboxHabitSummaryMessage: Decodable, Equatable, Sendable {
+    public var recipient: String
+    public var channel: String
+    public var result: String
+
+    public init(recipient: String, channel: String, result: String) {
+        self.recipient = recipient
+        self.channel = channel
+        self.result = result
+    }
+}
+
+public struct MailboxHabitSummaryProducedRef: Decodable, Equatable, Sendable {
+    public var kind: String
+    public var locator: String
+
+    public init(kind: String, locator: String) {
+        self.kind = kind
+        self.locator = locator
+    }
+}
+
+public struct MailboxHabitSummarySources: Decodable, Equatable, Sendable {
+    public var receipt: String
+    public var session: String
+    public var pending: String
+    public var runtimeState: String
+
+    public init(receipt: String, session: String, pending: String, runtimeState: String) {
+        self.receipt = receipt
+        self.session = session
+        self.pending = pending
+        self.runtimeState = runtimeState
     }
 }

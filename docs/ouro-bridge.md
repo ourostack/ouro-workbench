@@ -88,6 +88,8 @@ This gives an Ouro agent a direct Workbench-facing tool surface:
 
 - `workbench_status`: summarize persisted Workbench state, processes, recovery
   plans, and transcript paths.
+- `workbench_visibility`: read Workbench session counts, boss-decision counts,
+  and Ouro Work Card state with typed unknown/unavailable fields.
 - `workbench_sense`: render the Workbench sense contract, boss boundary,
   group/Desk mirror, and current tool affordances.
 - `workbench_transcript_tail`: read a bounded tail from the latest transcript

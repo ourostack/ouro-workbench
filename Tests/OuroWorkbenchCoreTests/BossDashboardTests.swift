@@ -112,6 +112,130 @@ final class BossDashboardTests: XCTestCase {
         XCTAssertTrue(prompt.contains("Mailbox coding sessions:"))
     }
 
+    func testPromptIncludesHabitHistorySignals() {
+        let dashboard = BossDashboardSnapshot(
+            agentName: "slugger",
+            daemonStatus: "running",
+            daemonMode: "dev",
+            attentionLabel: "active",
+            openObligations: 0,
+            activeCodingAgents: 0,
+            blockedCodingAgents: 0,
+            needsMeItems: [],
+            codingItems: [],
+            habitHistory: HabitHistoryPanelModel(summaries: [
+                MailboxHabitSessionSummary(
+                    runId: "run-history",
+                    habitName: "heartbeat",
+                    operationId: "habit:heartbeat",
+                    status: "surfaced",
+                    triggeredAt: "2026-06-11T10:00:00.000Z",
+                    completedAt: "2026-06-11T10:01:00.000Z",
+                    summary: "Queued iMessage and recorded the route.",
+                    decisions: [],
+                    pending: MailboxHabitSummaryPending(count: 0, files: []),
+                    messagesSent: [],
+                    toolsUsed: [],
+                    producedRefs: [],
+                    errors: [],
+                    warnings: [],
+                    nextLikelyStep: nil,
+                    sources: MailboxHabitSummarySources(
+                        receipt: "arc/flight-recorder/habit-receipts/run-history.json",
+                        session: "state/habit-sessions/run-history/session.json",
+                        pending: "state/habit-sessions/run-history/pending",
+                        runtimeState: "state/habits/heartbeat.json"
+                    )
+                )
+            ]),
+            observedAt: nil
+        )
+
+        let prompt = BossAgentPromptBuilder().checkInPrompt(
+            question: "what changed?",
+            state: WorkspaceState(),
+            summary: WorkspaceSummarizer().summarize(WorkspaceState()),
+            dashboard: dashboard
+        )
+
+        XCTAssertTrue(prompt.contains("Habit history:"))
+        XCTAssertTrue(prompt.contains("heartbeat: outcome=surfaced"))
+        XCTAssertTrue(prompt.contains("operation=habit:heartbeat"))
+        XCTAssertTrue(prompt.contains("receipt=arc/flight-recorder/habit-receipts/run-history.json"))
+    }
+
+    func testPromptIncludesEmptyAndUnavailableHabitHistoryStates() {
+        let emptyDashboard = BossDashboardSnapshot(
+            agentName: "slugger",
+            daemonStatus: "running",
+            daemonMode: "dev",
+            attentionLabel: "active",
+            openObligations: 0,
+            activeCodingAgents: 0,
+            blockedCodingAgents: 0,
+            needsMeItems: [],
+            codingItems: [],
+            observedAt: nil
+        )
+
+        let emptyPrompt = BossAgentPromptBuilder().checkInPrompt(
+            question: "history?",
+            state: WorkspaceState(),
+            summary: WorkspaceSummarizer().summarize(WorkspaceState()),
+            dashboard: emptyDashboard
+        )
+        XCTAssertTrue(emptyPrompt.contains("Habit history: no recent runs"))
+
+        let unavailableDashboard = BossDashboardBuilder().build(
+            boss: BossAgentSelection(agentName: "slugger"),
+            machine: nil,
+            needsMe: nil,
+            coding: nil,
+            habitHistory: nil,
+            availability: BossDashboardAvailability(
+                machineAvailable: false,
+                needsMeAvailable: false,
+                codingAvailable: false,
+                habitHistoryAvailable: false,
+                issues: ["habit-history: timed out"]
+            )
+        )
+        let unavailablePrompt = BossAgentPromptBuilder().checkInPrompt(
+            question: "history?",
+            state: WorkspaceState(),
+            summary: WorkspaceSummarizer().summarize(WorkspaceState()),
+            dashboard: unavailableDashboard
+        )
+        XCTAssertTrue(unavailablePrompt.contains("Habit history unavailable: habit-history: timed out"))
+    }
+
+    func testMailboxAvailabilityCarriesHabitHistoryFailures() {
+        let availability = BossDashboardAvailability.mailbox(
+            machineIssue: nil,
+            needsMeIssue: nil,
+            codingIssue: nil,
+            habitHistoryIssue: "habit-history: timed out"
+        )
+
+        XCTAssertTrue(availability.machineAvailable)
+        XCTAssertTrue(availability.needsMeAvailable)
+        XCTAssertTrue(availability.codingAvailable)
+        XCTAssertFalse(availability.habitHistoryAvailable)
+        XCTAssertEqual(availability.issues, ["habit-history: timed out"])
+
+        let snapshot = BossDashboardBuilder().build(
+            boss: BossAgentSelection(agentName: "slugger"),
+            machine: nil,
+            needsMe: nil,
+            coding: nil,
+            habitHistory: nil,
+            availability: availability
+        )
+
+        XCTAssertFalse(snapshot.habitHistory.isAvailable)
+        XCTAssertEqual(snapshot.habitHistory.statusMessage, "Habit history unavailable: habit-history: timed out")
+    }
+
     func testUnavailableNeedsMeDoesNotRenderAsZeroWaiting() {
         let snapshot = BossDashboardBuilder().build(
             boss: BossAgentSelection(agentName: "slugger"),

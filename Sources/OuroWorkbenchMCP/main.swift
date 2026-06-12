@@ -23,6 +23,10 @@ final class WorkbenchMCPServer {
     private let recoveryDrill = RecoveryDrill()
     private let senseRenderer = WorkbenchSenseRenderer()
     private let sessionsRenderer = WorkbenchSessionsRenderer()
+    private let visibilityBuilder = WorkbenchVisibilityBuilder()
+    private let visibilityRenderer = WorkbenchVisibilityTextRenderer()
+    private let workCardReader = OuroWorkCardReader()
+    private let mailboxDashboardReader = MailboxDashboardSnapshotReader()
     private let onboardingAdvisor = WorkbenchOnboardingAdvisor()
     private let onboardingReportRenderer = OnboardingReadinessReportRenderer()
     private let ouroAgentInventory = OuroAgentInventory()
@@ -109,6 +113,8 @@ final class WorkbenchMCPServer {
             return try onboardingStatus()
         case "workbench_sessions":
             return try sessionsList(arguments: arguments)
+        case "workbench_visibility":
+            return try workbenchVisibility(arguments: arguments)
         case "workbench_sense":
             return try workbenchSense()
         case "workbench_transcript_tail":
@@ -168,6 +174,7 @@ final class WorkbenchMCPServer {
             question: "What is currently going on in Ouro Workbench?",
             state: state,
             summary: summary,
+            dashboard: mailboxDashboardReader.read(boss: state.boss),
             executableHealth: executableHealth,
             gitStatus: gitStatus,
             machineFriend: SessionFriend.machineOwner(),
@@ -223,6 +230,26 @@ final class WorkbenchMCPServer {
             state: state,
             summary: summarizer.summarize(state)
         )
+    }
+
+    /// Read-only visibility plane for Workbench + Ouro durable work. This does
+    /// not inspect transcript content or queue actions; it returns counts,
+    /// source availability, and typed "unknown/unavailable" states.
+    private func workbenchVisibility(arguments: [String: Any]) throws -> String {
+        var state = try currentState()
+        let agentName = try optionalString(arguments, key: "agent") ?? state.boss.agentName
+        state.boss.agentName = agentName
+        let workCard = workCardReader.read(agent: agentName)
+        let snapshot = visibilityBuilder.build(state: state, workCard: workCard)
+        let format = (try optionalString(arguments, key: "format"))?.lowercased() ?? "text"
+        switch format {
+        case "json":
+            return try encodeJSON(snapshot)
+        case "text":
+            return visibilityRenderer.render(snapshot)
+        default:
+            throw MCPToolFailure("Invalid format: \(format)")
+        }
     }
 
     private func transcriptTail(arguments: [String: Any]) throws -> String {
@@ -563,6 +590,18 @@ final class WorkbenchMCPServer {
                         "owner": ["type": "string", "description": "Return only sessions owned by this agent name (owner:agent:<name>). Omit for all owners."],
                         "name": ["type": "string", "description": "Return only sessions whose name matches case-insensitively. Use to resolve the id of a session you just created."],
                         "includeArchived": ["type": "boolean", "description": "Include archived sessions. Defaults to false."]
+                    ],
+                    "additionalProperties": false
+                ]
+            ],
+            [
+                "name": "workbench_visibility",
+                "description": "Read-only visibility snapshot for Workbench sessions, boss decisions, and the selected Ouro agent's durable Work Card. Returns typed unavailable/unknown fields instead of false zeroes; does not include transcript content or queue actions.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "agent": ["type": "string", "description": "Ouro agent name to read with `ouro work card`. Defaults to Workbench's selected boss agent."],
+                        "format": ["type": "string", "enum": ["text", "json"], "description": "Response format. \"json\" returns the structured visibility snapshot; default \"text\" returns a concise human-readable summary."]
                     ],
                     "additionalProperties": false
                 ]

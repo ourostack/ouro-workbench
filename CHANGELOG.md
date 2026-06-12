@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.155 - Workbench visibility plane
+
+- Adds a read-only `workbench_visibility` MCP tool and native boss-pane visibility strip that combine Workbench session/decision counts with the selected Ouro agent's durable Work Card. Unknown claim verification state is represented explicitly as unavailable/unknown rather than false zeroes, and redacted Work Card next-action summaries are not expanded in Workbench output.
+
 ## 0.1.154 - Daemon cold-start verify polling
 
 - The first-run daemon spine no longer reports a false "manual recovery required" while a freshly-started daemon is still coming up. When the boss check-in finds the Ouro daemon down, Workbench spawns it detached and now **polls** the verify probe for a bounded window (~10s) instead of taking a single immediate reading — so a daemon that needs a moment to bind its socket (a Node cold start, or the one-time `ouro` self-update download on the first launch after a new release) is correctly recognized as recovered ("Waking your agent…") rather than misclassified as unrecoverable. The honest "isn't responding yet" line still surfaces, but only after the daemon genuinely fails to come up within the budget.
