@@ -13,6 +13,16 @@ final class MailboxClientTests: XCTestCase {
         XCTAssertEqual(try client.url(for: .attention("slugger")).absoluteString, "http://127.0.0.1:6876/api/agents/slugger/attention")
         XCTAssertEqual(try client.url(for: .events).absoluteString, "http://127.0.0.1:6876/api/events")
         XCTAssertEqual(try client.url(for: .agent("ari/slugger")).absoluteString, "http://127.0.0.1:6876/api/agents/ari%2Fslugger")
+        XCTAssertEqual(try client.url(for: .habitRunSummaries("ari/slugger", limit: 5)).absoluteString, "http://127.0.0.1:6876/api/agents/ari%2Fslugger/habit-run-summaries?limit=5")
+        XCTAssertEqual(try client.url(for: .habitRunSummaries("slugger", limit: nil)).absoluteString, "http://127.0.0.1:6876/api/agents/slugger/habit-run-summaries")
+        XCTAssertEqual(try client.url(for: .habitRunSummary("slugger", selector: MailboxHabitSummarySelector(runId: "run 1"))).absoluteString, "http://127.0.0.1:6876/api/agents/slugger/habit-run-summary?runId=run%201")
+        XCTAssertEqual(
+            try client.url(for: .habitRunSummary(
+                "slugger",
+                selector: MailboxHabitSummarySelector(habitName: "weekly check", operationId: "habit:weekly/check", which: "latest-success")
+            )).absoluteString,
+            "http://127.0.0.1:6876/api/agents/slugger/habit-run-summary?habit=weekly%20check&operation-id=habit%3Aweekly%2Fcheck&which=latest-success"
+        )
     }
 
     func testFetchDecodesMachineView() async throws {
@@ -134,5 +144,54 @@ final class MailboxClientTests: XCTestCase {
         XCTAssertEqual(needsMe.items.first?.ref?.focus, "obl_1")
         XCTAssertEqual(coding.items.first?.runner, "codex")
         XCTAssertEqual(coding.items.first?.checkpoint, "tests green")
+    }
+
+    func testDecodesHabitSessionSummaryView() throws {
+        let payload = """
+        {
+          "totalCount": 1,
+          "limit": 5,
+          "items": [
+            {
+              "runId": "run-http-summary",
+              "habitName": "heartbeat",
+              "operationId": "habit:heartbeat",
+              "status": "surfaced",
+              "triggeredAt": "2026-06-11T10:00:00.000Z",
+              "completedAt": "2026-06-11T10:01:00.000Z",
+              "summary": "Queued an iMessage and recorded the route.",
+              "decisions": ["keep the route"],
+              "pending": { "count": 1, "files": ["reply.json"] },
+              "messagesSent": [
+                { "recipient": "ari", "channel": "bluebubbles", "result": "queued" }
+              ],
+              "toolsUsed": ["send_message"],
+              "producedRefs": [
+                { "kind": "surface", "locator": "surface/ari/bluebubbles" }
+              ],
+              "errors": [],
+              "warnings": [],
+              "nextLikelyStep": "inspect iMessage delivery",
+              "sources": {
+                "receipt": "arc/flight-recorder/habit-receipts/run-http-summary.json",
+                "session": "state/habit-sessions/run-http-summary/session.json",
+                "pending": "state/habit-sessions/run-http-summary/pending",
+                "runtimeState": "state/habits/heartbeat.json"
+              }
+            }
+          ]
+        }
+        """
+
+        let view = try JSONDecoder().decode(MailboxHabitSessionSummaryView.self, from: Data(payload.utf8))
+
+        XCTAssertEqual(view.totalCount, 1)
+        XCTAssertEqual(view.limit, 5)
+        XCTAssertEqual(view.items.first?.id, "run-http-summary")
+        XCTAssertEqual(view.items.first?.operationId, "habit:heartbeat")
+        XCTAssertEqual(view.items.first?.pending.count, 1)
+        XCTAssertEqual(view.items.first?.messagesSent.first?.channel, "bluebubbles")
+        XCTAssertEqual(view.items.first?.producedRefs.first?.locator, "surface/ari/bluebubbles")
+        XCTAssertEqual(view.items.first?.sources.receipt, "arc/flight-recorder/habit-receipts/run-http-summary.json")
     }
 }
