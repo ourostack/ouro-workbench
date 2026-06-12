@@ -23,6 +23,7 @@ final class MailboxClientTests: XCTestCase {
             )).absoluteString,
             "http://127.0.0.1:6876/api/agents/slugger/habit-run-summary?habit=weekly%20check&operation-id=habit%3Aweekly%2Fcheck&which=latest-success"
         )
+        XCTAssertEqual(try client.url(for: .habitRunSummary("slugger", selector: MailboxHabitSummarySelector())).absoluteString, "http://127.0.0.1:6876/api/agents/slugger/habit-run-summary")
     }
 
     func testFetchDecodesMachineView() async throws {
@@ -193,5 +194,76 @@ final class MailboxClientTests: XCTestCase {
         XCTAssertEqual(view.items.first?.messagesSent.first?.channel, "bluebubbles")
         XCTAssertEqual(view.items.first?.producedRefs.first?.locator, "surface/ari/bluebubbles")
         XCTAssertEqual(view.items.first?.sources.receipt, "arc/flight-recorder/habit-receipts/run-http-summary.json")
+    }
+
+    func testFetchesHabitSessionSummaryViewFromExpectedEndpoint() async throws {
+        let payload = """
+        {
+          "totalCount": 0,
+          "limit": 2,
+          "items": []
+        }
+        """
+        let client = MailboxClient { url in
+            XCTAssertEqual(url.path, "/api/agents/slugger/habit-run-summaries")
+            XCTAssertEqual(url.query, "limit=2")
+            let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!
+            return (Data(payload.utf8), response)
+        }
+
+        let view = try await client.fetch(.habitRunSummaries("slugger", limit: 2), as: MailboxHabitSessionSummaryView.self)
+
+        XCTAssertEqual(view.totalCount, 0)
+        XCTAssertTrue(view.items.isEmpty)
+    }
+
+    func testDecodesHabitSessionSummaryWithNullOptionalsAndFailsOnMalformedItems() throws {
+        let sparsePayload = """
+        {
+          "totalCount": 1,
+          "limit": 20,
+          "items": [
+            {
+              "runId": "run-fallback",
+              "habitName": "heartbeat",
+              "operationId": null,
+              "status": "surfaced",
+              "triggeredAt": "2026-06-11T10:00:00.000Z",
+              "completedAt": "2026-06-11T10:01:00.000Z",
+              "summary": "Habit heartbeat finished with surfaced.",
+              "decisions": [],
+              "pending": { "count": 0, "files": [] },
+              "messagesSent": [],
+              "toolsUsed": [],
+              "producedRefs": [],
+              "errors": [],
+              "warnings": ["session file missing"],
+              "nextLikelyStep": null,
+              "sources": {
+                "receipt": "arc/flight-recorder/habit-receipts/run-fallback.json",
+                "session": "state/habit-sessions/run-fallback/session.json",
+                "pending": "state/habit-sessions/run-fallback/pending",
+                "runtimeState": "state/habits/heartbeat.json"
+              }
+            }
+          ]
+        }
+        """
+        let sparse = try JSONDecoder().decode(MailboxHabitSessionSummaryView.self, from: Data(sparsePayload.utf8))
+
+        XCTAssertNil(sparse.items.first?.operationId)
+        XCTAssertNil(sparse.items.first?.nextLikelyStep)
+        XCTAssertEqual(sparse.items.first?.warnings, ["session file missing"])
+
+        let malformed = """
+        {
+          "totalCount": 1,
+          "limit": 20,
+          "items": [
+            { "runId": "missing-required-fields" }
+          ]
+        }
+        """
+        XCTAssertThrowsError(try JSONDecoder().decode(MailboxHabitSessionSummaryView.self, from: Data(malformed.utf8)))
     }
 }
