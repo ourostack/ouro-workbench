@@ -13,6 +13,7 @@ public struct BossDashboardSnapshot: Equatable, Sendable {
     public var blockedCodingAgents: Int
     public var needsMeItems: [MailboxNeedsMeItem]
     public var codingItems: [MailboxCodingItem]
+    public var habitHistory: HabitHistoryPanelModel
     public var observedAt: String?
     public var availability: BossDashboardAvailability
     public var knownAgentNames: [String]
@@ -28,6 +29,7 @@ public struct BossDashboardSnapshot: Equatable, Sendable {
         blockedCodingAgents: Int,
         needsMeItems: [MailboxNeedsMeItem],
         codingItems: [MailboxCodingItem],
+        habitHistory: HabitHistoryPanelModel = HabitHistoryPanelModel(),
         observedAt: String?,
         availability: BossDashboardAvailability = .complete,
         knownAgentNames: [String] = []
@@ -42,6 +44,7 @@ public struct BossDashboardSnapshot: Equatable, Sendable {
         self.blockedCodingAgents = blockedCodingAgents
         self.needsMeItems = needsMeItems
         self.codingItems = codingItems
+        self.habitHistory = habitHistory
         self.observedAt = observedAt
         self.availability = availability
         self.knownAgentNames = knownAgentNames
@@ -61,6 +64,38 @@ public struct BossDashboardSnapshot: Equatable, Sendable {
             return "\(activeCodingAgents) active coding agent\(activeCodingAgents == 1 ? "" : "s")"
         }
         return attentionLabel
+    }
+}
+
+public struct HabitHistoryPanelModel: Equatable, Sendable {
+    public var title: String
+    public var rows: [HabitHistoryPanelRow]
+
+    public init(title: String = "Habit History", summaries: [MailboxHabitSessionSummary] = []) {
+        self.title = title
+        self.rows = summaries.map(HabitHistoryPanelRow.init(summary:))
+    }
+}
+
+public struct HabitHistoryPanelRow: Equatable, Identifiable, Sendable {
+    public var id: String
+    public var habitName: String
+    public var outcome: String
+    public var endedAt: String
+    public var summary: String
+    public var operationId: String?
+    public var receiptLocator: String
+    public var sourceLocator: String
+
+    public init(summary: MailboxHabitSessionSummary) {
+        self.id = summary.runId
+        self.habitName = summary.habitName
+        self.outcome = summary.status
+        self.endedAt = summary.completedAt
+        self.summary = summary.summary
+        self.operationId = summary.operationId
+        self.receiptLocator = summary.sources.receipt
+        self.sourceLocator = summary.sources.session
     }
 }
 
@@ -97,6 +132,7 @@ public struct BossDashboardBuilder: Sendable {
         machine: MailboxMachineView?,
         needsMe: MailboxNeedsMeView?,
         coding: MailboxCodingSummary?,
+        habitHistory: MailboxHabitSessionSummaryView? = nil,
         availability: BossDashboardAvailability = .complete
     ) -> BossDashboardSnapshot {
         let selectedAgent = machine?.agents.first { $0.agentName.caseInsensitiveCompare(boss.agentName) == .orderedSame }
@@ -113,6 +149,7 @@ public struct BossDashboardBuilder: Sendable {
             blockedCodingAgents: selectedAgent?.coding?.blockedCount ?? coding?.blockedCount ?? totals?.blockedCodingAgents ?? 0,
             needsMeItems: needsMe?.items ?? [],
             codingItems: coding?.items ?? [],
+            habitHistory: HabitHistoryPanelModel(summaries: habitHistory?.items ?? []),
             observedAt: machine?.overview?.observedAt,
             availability: availability,
             knownAgentNames: knownAgentNames

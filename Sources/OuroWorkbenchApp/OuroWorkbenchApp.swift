@@ -4286,6 +4286,10 @@ struct BossDashboardView: View {
                         }
                     }
                 }
+                if let dashboard = model.bossDashboard,
+                   !dashboard.habitHistory.rows.isEmpty {
+                    HabitHistoryPanelView(model: dashboard.habitHistory)
+                }
                 Button {
                     withAnimation(.easeInOut(duration: 0.18)) {
                         showsAdvanced.toggle()
@@ -4340,6 +4344,54 @@ struct BossDashboardView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(minHeight: 100, idealHeight: showsAdvanced ? 320 : 160, maxHeight: showsAdvanced ? 380 : 200, alignment: .topLeading)
+    }
+}
+
+struct HabitHistoryPanelView: View {
+    var model: HabitHistoryPanelModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(model.title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            ForEach(model.rows.prefix(5)) { row in
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(row.habitName)
+                            .font(.caption.weight(.semibold))
+                            .lineLimit(1)
+                        Text(row.outcome)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text(row.endedAt)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    Text(row.summary)
+                        .font(.caption)
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+                    HStack(spacing: 8) {
+                        if let operationId = row.operationId {
+                            Text(operationId)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                        Text(row.receiptLocator)
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -13192,15 +13244,17 @@ final class WorkbenchViewModel: ObservableObject {
         async let machineResult = fetchResult(.machine, as: MailboxMachineView.self, label: "machine")
         async let needsMeResult = fetchResult(.needsMe(state.boss.agentName), as: MailboxNeedsMeView.self, label: "needs-me")
         async let codingResult = fetchResult(.coding(state.boss.agentName), as: MailboxCodingSummary.self, label: "coding")
+        async let habitHistoryResult = fetchResult(.habitRunSummaries(state.boss.agentName, limit: 5), as: MailboxHabitSessionSummaryView.self, label: "habit-history")
 
-        let (machine, needsMe, coding) = await (machineResult, needsMeResult, codingResult)
-        let issues = [machine.issue, needsMe.issue, coding.issue].compactMap(\.self)
+        let (machine, needsMe, coding, habitHistory) = await (machineResult, needsMeResult, codingResult, habitHistoryResult)
+        let issues = [machine.issue, needsMe.issue, coding.issue, habitHistory.issue].compactMap(\.self)
 
         let snapshot = bossDashboardBuilder.build(
             boss: state.boss,
             machine: machine.value,
             needsMe: needsMe.value,
             coding: coding.value,
+            habitHistory: habitHistory.value,
             availability: BossDashboardAvailability(
                 machineAvailable: machine.issue == nil,
                 needsMeAvailable: needsMe.issue == nil,
