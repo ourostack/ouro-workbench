@@ -56,6 +56,27 @@ final class HabitHistoryPanelTests: XCTestCase {
         XCTAssertEqual(snapshot.habitHistory.rows.first?.summary, "Asked Ari for a missing credential.")
     }
 
+    func testHandlesEmptyAndLongSparseHistoryRows() {
+        XCTAssertTrue(HabitHistoryPanelModel().rows.isEmpty)
+
+        let longSummary = String(repeating: "handoff ", count: 80)
+        let model = HabitHistoryPanelModel(summaries: [
+            makeHabitSummary(
+                runId: "run-long",
+                habitName: "long-check",
+                operationId: nil,
+                status: "no_change",
+                completedAt: "2026-06-11T10:10:00.000Z",
+                summary: longSummary,
+                receipt: "arc/flight-recorder/habit-receipts/run-long.json"
+            )
+        ])
+
+        XCTAssertNil(model.rows.first?.operationId)
+        XCTAssertEqual(model.rows.first?.summary, longSummary)
+        XCTAssertEqual(model.rows.first?.sourceLocator, "state/habit-sessions/run-long/session.json")
+    }
+
     private func makeHabitSummary(
         runId: String,
         habitName: String,
