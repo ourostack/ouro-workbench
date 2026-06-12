@@ -217,6 +217,61 @@ final class MailboxClientTests: XCTestCase {
         XCTAssertTrue(view.items.isEmpty)
     }
 
+    func testSyncDashboardReaderCarriesHabitHistoryForMCPStatus() {
+        let reader = MailboxDashboardSnapshotReader(
+            configuration: MailboxClientConfiguration(baseURL: URL(string: "http://127.0.0.1:6876")!),
+            dataLoader: { url, _ in
+                switch (url.path, url.query) {
+                case ("/api/machine", _):
+                    return (Data(Self.machinePayload.utf8), 200)
+                case ("/api/agents/slugger/needs-me", _):
+                    return (Data(#"{"items":[]}"#.utf8), 200)
+                case ("/api/agents/slugger/coding", _):
+                    return (Data(#"{"totalCount":0,"activeCount":0,"blockedCount":0,"items":[]}"#.utf8), 200)
+                case ("/api/agents/slugger/habit-run-summaries", "limit=5"):
+                    return (Data(Self.habitHistoryPayload.utf8), 200)
+                default:
+                    XCTFail("unexpected endpoint \(url.absoluteString)")
+                    return (Data(), 404)
+                }
+            }
+        )
+
+        let snapshot = reader.read(boss: BossAgentSelection(agentName: "slugger"))
+
+        XCTAssertEqual(snapshot.daemonStatus, "running")
+        XCTAssertTrue(snapshot.habitHistory.isAvailable)
+        XCTAssertEqual(snapshot.habitHistory.rows.map(\.habitName), ["heartbeat"])
+        XCTAssertEqual(snapshot.habitHistory.rows.first?.summary, "Queued an iMessage and recorded the route.")
+    }
+
+    func testSyncDashboardReaderMarksHabitHistoryUnavailableOnEndpointFailure() {
+        let reader = MailboxDashboardSnapshotReader(
+            configuration: MailboxClientConfiguration(baseURL: URL(string: "http://127.0.0.1:6876")!),
+            dataLoader: { url, _ in
+                switch url.path {
+                case "/api/machine":
+                    return (Data(Self.machinePayload.utf8), 200)
+                case "/api/agents/slugger/needs-me":
+                    return (Data(#"{"items":[]}"#.utf8), 200)
+                case "/api/agents/slugger/coding":
+                    return (Data(#"{"totalCount":0,"activeCount":0,"blockedCount":0,"items":[]}"#.utf8), 200)
+                case "/api/agents/slugger/habit-run-summaries":
+                    return (Data(), 503)
+                default:
+                    return (Data(), 404)
+                }
+            }
+        )
+
+        let snapshot = reader.read(boss: BossAgentSelection(agentName: "slugger"))
+
+        XCTAssertFalse(snapshot.habitHistory.isAvailable)
+        XCTAssertTrue(snapshot.habitHistory.rows.isEmpty)
+        XCTAssertTrue(snapshot.habitHistory.statusMessage?.contains("Habit history unavailable: habit-history:") == true)
+        XCTAssertTrue(snapshot.availability.issues.contains { $0.hasPrefix("habit-history:") })
+    }
+
     func testDecodesHabitSessionSummaryWithNullOptionalsAndFailsOnMalformedItems() throws {
         let sparsePayload = """
         {
@@ -266,4 +321,76 @@ final class MailboxClientTests: XCTestCase {
         """
         XCTAssertThrowsError(try JSONDecoder().decode(MailboxHabitSessionSummaryView.self, from: Data(malformed.utf8)))
     }
+
+    private static let machinePayload = """
+    {
+      "overview": {
+        "observedAt": "2026-05-23T00:00:00Z",
+        "primaryEntryPoint": "http://127.0.0.1:6876",
+        "daemon": {
+          "status": "running",
+          "mode": "dev",
+          "mailboxUrl": "http://127.0.0.1:6876"
+        },
+        "totals": {
+          "openObligations": 0,
+          "activeCodingAgents": 0,
+          "blockedCodingAgents": 0
+        }
+      },
+      "agents": [
+        {
+          "agentName": "slugger",
+          "enabled": true,
+          "attention": {
+            "level": "active",
+            "label": "active"
+          },
+          "obligations": {
+            "openCount": 0
+          },
+          "coding": {
+            "activeCount": 0,
+            "blockedCount": 0
+          }
+        }
+      ]
+    }
+    """
+
+    private static let habitHistoryPayload = """
+    {
+      "totalCount": 1,
+      "limit": 5,
+      "items": [
+        {
+          "runId": "run-http-summary",
+          "habitName": "heartbeat",
+          "operationId": "habit:heartbeat",
+          "status": "surfaced",
+          "triggeredAt": "2026-06-11T10:00:00.000Z",
+          "completedAt": "2026-06-11T10:01:00.000Z",
+          "summary": "Queued an iMessage and recorded the route.",
+          "decisions": ["keep the route"],
+          "pending": { "count": 1, "files": ["reply.json"] },
+          "messagesSent": [
+            { "recipient": "ari", "channel": "bluebubbles", "result": "queued" }
+          ],
+          "toolsUsed": ["send_message"],
+          "producedRefs": [
+            { "kind": "surface", "locator": "surface/ari/bluebubbles" }
+          ],
+          "errors": [],
+          "warnings": [],
+          "nextLikelyStep": "inspect iMessage delivery",
+          "sources": {
+            "receipt": "arc/flight-recorder/habit-receipts/run-http-summary.json",
+            "session": "state/habit-sessions/run-http-summary/session.json",
+            "pending": "state/habit-sessions/run-http-summary/pending",
+            "runtimeState": "state/habits/heartbeat.json"
+          }
+        }
+      ]
+    }
+    """
 }

@@ -4286,8 +4286,7 @@ struct BossDashboardView: View {
                         }
                     }
                 }
-                if let dashboard = model.bossDashboard,
-                   !dashboard.habitHistory.rows.isEmpty {
+                if let dashboard = model.bossDashboard {
                     HabitHistoryPanelView(model: dashboard.habitHistory)
                 }
                 Button {
@@ -4355,6 +4354,13 @@ struct HabitHistoryPanelView: View {
             Text(model.title)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
+            if model.rows.isEmpty {
+                Text(model.statusMessage ?? "No habit runs yet")
+                    .font(.caption)
+                    .foregroundStyle(model.isAvailable ? Color.secondary : Color.orange)
+                    .lineLimit(2)
+                    .textSelection(.enabled)
+            }
             ForEach(model.rows.prefix(5)) { row in
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -4405,6 +4411,7 @@ struct DashboardMetricsStrip: View {
                 MetricChip(label: "needs me", value: dashboard.availability.needsMeAvailable ? "\(dashboard.needsMeItems.count)" : "?")
                 MetricChip(label: "coding", value: dashboard.availability.codingAvailable ? "\(dashboard.activeCodingAgents)" : "?")
                 MetricChip(label: "blocked", value: dashboard.availability.codingAvailable ? "\(dashboard.blockedCodingAgents)" : "?")
+                MetricChip(label: "habits", value: dashboard.habitHistory.isAvailable ? "\(dashboard.habitHistory.rows.count)" : "?")
                 MetricChip(label: "mode", value: dashboard.daemonMode)
             }
         }
@@ -13255,11 +13262,11 @@ final class WorkbenchViewModel: ObservableObject {
             needsMe: needsMe.value,
             coding: coding.value,
             habitHistory: habitHistory.value,
-            availability: BossDashboardAvailability(
-                machineAvailable: machine.issue == nil,
-                needsMeAvailable: needsMe.issue == nil,
-                codingAvailable: coding.issue == nil,
-                issues: issues
+            availability: .mailbox(
+                machineIssue: machine.issue,
+                needsMeIssue: needsMe.issue,
+                codingIssue: coding.issue,
+                habitHistoryIssue: habitHistory.issue
             )
         )
         let previousDashboard = bossDashboard
@@ -13424,14 +13431,10 @@ final class WorkbenchViewModel: ObservableObject {
             bossCheckInIsRunning = false
         }
         refreshExecutableHealth()
-        await refreshBossDashboard()
-        guard state.boss.agentName == requestedBoss else {
-            return
-        }
 
         // Workbench manages the daemon as invisible infrastructure: detect-reuse-else-start
-        // BEFORE asking the agent. `refreshBossDashboard()` above can't tell us this — the
-        // mailbox overview collapses to "unknown" when the daemon is down — so we run a
+        // BEFORE asking the agent. The mailbox overview collapses to "unknown" when the
+        // daemon is down, so we run a
         // dedicated liveness probe + detached start here. Recovery truth comes from the
         // POST-start verify probe, never an exit code. If the agent genuinely can't be
         // brought online, surface an honest, seam-free line instead of asking a dead daemon;
@@ -13454,6 +13457,10 @@ final class WorkbenchViewModel: ObservableObject {
             }
             return
         }
+        guard state.boss.agentName == requestedBoss else {
+            return
+        }
+        await refreshBossDashboard()
         guard state.boss.agentName == requestedBoss else {
             return
         }

@@ -57,7 +57,10 @@ final class HabitHistoryPanelTests: XCTestCase {
     }
 
     func testHandlesEmptyAndLongSparseHistoryRows() {
-        XCTAssertTrue(HabitHistoryPanelModel().rows.isEmpty)
+        let empty = HabitHistoryPanelModel()
+        XCTAssertTrue(empty.rows.isEmpty)
+        XCTAssertTrue(empty.isAvailable)
+        XCTAssertEqual(empty.statusMessage, "No habit runs yet")
 
         let longSummary = String(repeating: "handoff ", count: 80)
         let model = HabitHistoryPanelModel(summaries: [
@@ -75,6 +78,19 @@ final class HabitHistoryPanelTests: XCTestCase {
         XCTAssertNil(model.rows.first?.operationId)
         XCTAssertEqual(model.rows.first?.summary, longSummary)
         XCTAssertEqual(model.rows.first?.sourceLocator, "state/habit-sessions/run-long/session.json")
+        XCTAssertNil(model.statusMessage)
+    }
+
+    func testUnavailableHistoryKeepsPanelVisibleWithErrorState() {
+        let model = HabitHistoryPanelModel(
+            summaries: [],
+            isAvailable: false,
+            issue: "habit-history: The Ouro mailbox did not answer before the Workbench timeout."
+        )
+
+        XCTAssertFalse(model.isAvailable)
+        XCTAssertTrue(model.rows.isEmpty)
+        XCTAssertEqual(model.statusMessage, "Habit history unavailable: habit-history: The Ouro mailbox did not answer before the Workbench timeout.")
     }
 
     private func makeHabitSummary(

@@ -75,7 +75,13 @@ public struct BossAgentPromptBuilder: Sendable {
                     lines.append("- \(item.runner) \(item.id): status=\(item.status), workdir=\(item.workdir), checkpoint=\(item.checkpoint ?? "none")")
                 }
             }
-            if !dashboard.habitHistory.rows.isEmpty {
+            if !dashboard.habitHistory.isAvailable {
+                lines.append("")
+                lines.append(dashboard.habitHistory.statusMessage ?? "Habit history unavailable")
+            } else if dashboard.habitHistory.rows.isEmpty {
+                lines.append("")
+                lines.append("Habit history: no recent runs")
+            } else {
                 lines.append("")
                 lines.append("Habit history:")
                 for row in dashboard.habitHistory.rows.prefix(5) {

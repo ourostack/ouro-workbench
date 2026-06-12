@@ -70,10 +70,25 @@ public struct BossDashboardSnapshot: Equatable, Sendable {
 public struct HabitHistoryPanelModel: Equatable, Sendable {
     public var title: String
     public var rows: [HabitHistoryPanelRow]
+    public var isAvailable: Bool
+    public var statusMessage: String?
 
-    public init(title: String = "Habit History", summaries: [MailboxHabitSessionSummary] = []) {
+    public init(
+        title: String = "Habit History",
+        summaries: [MailboxHabitSessionSummary] = [],
+        isAvailable: Bool = true,
+        issue: String? = nil
+    ) {
         self.title = title
         self.rows = summaries.map(HabitHistoryPanelRow.init(summary:))
+        self.isAvailable = isAvailable
+        if !isAvailable {
+            self.statusMessage = issue.map { "Habit history unavailable: \($0)" } ?? "Habit history unavailable"
+        } else if summaries.isEmpty {
+            self.statusMessage = "No habit runs yet"
+        } else {
+            self.statusMessage = nil
+        }
     }
 }
 
@@ -103,25 +118,44 @@ public struct BossDashboardAvailability: Equatable, Sendable {
     public var machineAvailable: Bool
     public var needsMeAvailable: Bool
     public var codingAvailable: Bool
+    public var habitHistoryAvailable: Bool
     public var issues: [String]
 
     public init(
         machineAvailable: Bool,
         needsMeAvailable: Bool,
         codingAvailable: Bool,
+        habitHistoryAvailable: Bool = true,
         issues: [String] = []
     ) {
         self.machineAvailable = machineAvailable
         self.needsMeAvailable = needsMeAvailable
         self.codingAvailable = codingAvailable
+        self.habitHistoryAvailable = habitHistoryAvailable
         self.issues = issues
     }
 
     public static let complete = BossDashboardAvailability(
         machineAvailable: true,
         needsMeAvailable: true,
-        codingAvailable: true
+        codingAvailable: true,
+        habitHistoryAvailable: true
     )
+
+    public static func mailbox(
+        machineIssue: String?,
+        needsMeIssue: String?,
+        codingIssue: String?,
+        habitHistoryIssue: String?
+    ) -> BossDashboardAvailability {
+        BossDashboardAvailability(
+            machineAvailable: machineIssue == nil,
+            needsMeAvailable: needsMeIssue == nil,
+            codingAvailable: codingIssue == nil,
+            habitHistoryAvailable: habitHistoryIssue == nil,
+            issues: [machineIssue, needsMeIssue, codingIssue, habitHistoryIssue].compactMap(\.self)
+        )
+    }
 }
 
 public struct BossDashboardBuilder: Sendable {
@@ -149,7 +183,11 @@ public struct BossDashboardBuilder: Sendable {
             blockedCodingAgents: selectedAgent?.coding?.blockedCount ?? coding?.blockedCount ?? totals?.blockedCodingAgents ?? 0,
             needsMeItems: needsMe?.items ?? [],
             codingItems: coding?.items ?? [],
-            habitHistory: HabitHistoryPanelModel(summaries: habitHistory?.items ?? []),
+            habitHistory: HabitHistoryPanelModel(
+                summaries: habitHistory?.items ?? [],
+                isAvailable: availability.habitHistoryAvailable,
+                issue: availability.issues.first { $0.hasPrefix("habit-history:") }
+            ),
             observedAt: machine?.overview?.observedAt,
             availability: availability,
             knownAgentNames: knownAgentNames

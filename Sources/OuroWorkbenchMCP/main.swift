@@ -26,6 +26,7 @@ final class WorkbenchMCPServer {
     private let visibilityBuilder = WorkbenchVisibilityBuilder()
     private let visibilityRenderer = WorkbenchVisibilityTextRenderer()
     private let workCardReader = OuroWorkCardReader()
+    private let mailboxDashboardReader = MailboxDashboardSnapshotReader()
     private let onboardingAdvisor = WorkbenchOnboardingAdvisor()
     private let onboardingReportRenderer = OnboardingReadinessReportRenderer()
     private let ouroAgentInventory = OuroAgentInventory()
@@ -173,6 +174,7 @@ final class WorkbenchMCPServer {
             question: "What is currently going on in Ouro Workbench?",
             state: state,
             summary: summary,
+            dashboard: mailboxDashboardReader.read(boss: state.boss),
             executableHealth: executableHealth,
             gitStatus: gitStatus,
             machineFriend: SessionFriend.machineOwner(),
