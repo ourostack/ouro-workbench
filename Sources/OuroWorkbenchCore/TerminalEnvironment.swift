@@ -91,8 +91,16 @@ public struct TerminalEnvironment: Equatable, Sendable {
     public static func resolvedPath(from values: [String: String]) -> String {
         let existing = values["PATH"]?.split(separator: ":").map(String.init) ?? []
         let homeLocalBin = values["HOME"].map { "\($0)/.local/bin" }
+        // The `ouro` CLI installs to `~/.ouro-cli/bin` (CurrentVersion symlink) and is
+        // present nowhere else — not in homebrew, /usr/local, or ~/.local/bin. A
+        // Finder/login-launched app inherits the bare launchd PATH (no login-shell
+        // additions), so without this entry every `/usr/bin/env ouro …` shellout
+        // (daemon bringup, hatch, verify, the mcp-serve bridge) fails to resolve `ouro`
+        // on a clean install. Keep this ahead of the system dirs so it always wins.
+        let ouroCliBin = values["HOME"].map { "\($0)/.ouro-cli/bin" }
         let defaults = [
             homeLocalBin,
+            ouroCliBin,
             "/opt/homebrew/bin",
             "/opt/homebrew/sbin",
             "/usr/local/bin",

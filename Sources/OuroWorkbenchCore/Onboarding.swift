@@ -9,6 +9,8 @@ public enum OnboardingRepairActor: String, Codable, Equatable, Sendable {
 public enum OnboardingReadinessState: String, Codable, Equatable, Sendable {
     case ready
     case needsAgent
+    case needsDaemon
+    case needsCredentials
     case needsRepair
 }
 
@@ -35,6 +37,15 @@ public struct OnboardingRepairStep: Codable, Equatable, Identifiable, Sendable {
 
     public var commandLine: String? {
         command.isEmpty ? nil : ShellArgumentEscaper.commandLine(command)
+    }
+
+    /// Whether this step is a provider-setup step the UI routes to the NATIVE provider form
+    /// (the one human gate) rather than a `ouro connect providers` `.trusted` pane. These are
+    /// the steps Slice 3 redirected away from pane-spawning: the cold-start credential gate
+    /// (`request-provider-config`) and the existing-agent lane-completion steps
+    /// (`outward-lane` / `inner-lane` — the documented existing-agent gap).
+    public var isProviderSetup: Bool {
+        id == "request-provider-config" || id == "outward-lane" || id == "inner-lane"
     }
 }
 
@@ -83,15 +94,114 @@ public struct OnboardingReadiness: Codable, Equatable, Sendable {
     }
 }
 
+/// Renders an `OnboardingReadiness` snapshot as the structured text the
+/// `workbench_onboarding_status` read MCP tool returns: state + selected boss + ordered,
+/// numbered repair steps with actor tags + an audit-history lane that carries the raw
+/// recovery verbs.
+///
+/// Pure and free of I/O so the MCP executable (which has no test target of its own) can
+/// delegate both the rendering and the agent-facing tool description here and have them
+/// unit-tested from `OuroWorkbenchCoreTests`.
+public struct OnboardingReadinessReportRenderer: Sendable {
+    /// The published MCP tool name.
+    public static let toolName = "workbench_onboarding_status"
+
+    /// The agent-facing tool description.
+    ///
+    /// CONTRACT (load-bearing): the action queue behind `workbench_request_action` is
+    /// asynchronous and polled (~2s), so an enqueue acknowledgement proves only that the
+    /// request was *accepted*, never that the remediation *succeeded*. The agent MUST narrate
+    /// outcomes from the NEXT `workbench_onboarding_status` read — never from a
+    /// `workbench_request_action` enqueue ack — or it will report "done" off an action that
+    /// has not run yet. This sentence is asserted by a test so it cannot silently drift.
+    public static let toolDescription = """
+    Read the daemon- and credential-aware onboarding readiness of the selected boss agent: \
+    the current readiness state, an ordered list of repair steps (each tagged with its actor — \
+    agent-runnable, human-required, or human-choice), and an audit history of the underlying \
+    recovery commands. This is a read-only inspection tool. IMPORTANT: any remediation you \
+    queue via workbench_request_action is applied asynchronously by the native app (the action \
+    queue is polled roughly every 2 seconds), so the enqueue acknowledgement only confirms the \
+    request was accepted — it does NOT mean the action completed. Always narrate progress and \
+    outcomes from the NEXT workbench_onboarding_status read, never from a workbench_request_action \
+    enqueue acknowledgement.
+    """
+
+    public init() {}
+
+    public func render(_ readiness: OnboardingReadiness) -> String {
+        var lines: [String] = []
+        lines.append("# workbench onboarding status")
+        lines.append("state: \(readiness.state.rawValue)")
+        lines.append("boss: \(readiness.selectedBossName)")
+        lines.append(readiness.headline)
+        lines.append(readiness.detail)
+        lines.append("")
+
+        if readiness.repairSteps.isEmpty {
+            lines.append("repair steps: none — no remediation needed.")
+        } else {
+            lines.append("repair steps (apply in order):")
+            for (index, step) in readiness.repairSteps.enumerated() {
+                lines.append("\(index + 1). [\(step.actor.rawValue)] \(step.title): \(step.detail)")
+            }
+        }
+        lines.append("")
+
+        lines.append("audit history (recovery commands — debug lane, not human-facing):")
+        let auditableSteps = readiness.repairSteps.filter { $0.commandLine != nil }
+        if auditableSteps.isEmpty {
+            lines.append("- none")
+        } else {
+            for step in auditableSteps {
+                lines.append("- \(step.id): \(step.commandLine ?? "")")
+            }
+        }
+        return lines.joined(separator: "\n")
+    }
+}
+
 public struct WorkbenchOnboardingAdvisor: Sendable {
     public init() {}
 
+    /// Compute onboarding readiness.
+    ///
+    /// Pure and synchronous: the daemon-liveness signal (Slice 0's `DaemonLiveness`) is
+    /// passed IN already-resolved, and the credential signal is derived synchronously from
+    /// the selected agent's `humanFacing` / `agentFacing` lanes. This type never performs
+    /// I/O — callers run the probe / inventory scan and hand the results here.
+    ///
+    /// Precedence: daemon-down is the top gate (you cannot act through a daemon that is not
+    /// serving — not even to repair an agent), so it short-circuits every other check.
+    /// `daemonLiveness` defaults to `.up` so existing callers keep compiling.
+    ///
+    /// `.needsCredentials` (no usable lane at all) is COMPLEMENTARY to `providerChecks`
+    /// (which live-checks a *configured* lane and can fail it): the two never overlap, because
+    /// an agent with no usable lane never reaches the per-lane `providerChecks` path.
     public func readiness(
         boss: BossAgentSelection,
         agents: [OuroAgentRecord],
         mcpRegistration: BossWorkbenchMCPRegistrationSnapshot?,
-        providerChecks: [String: OnboardingProviderCheckResult] = [:]
+        providerChecks: [String: OnboardingProviderCheckResult] = [:],
+        daemonLiveness: DaemonLiveness = .up
     ) -> OnboardingReadiness {
+        if daemonLiveness == .down {
+            return OnboardingReadiness(
+                state: .needsDaemon,
+                headline: "Bringing Workbench online",
+                detail: "Your agent isn't responding yet. Workbench will wake it for you — no action needed on your part.",
+                selectedBossName: boss.agentName,
+                repairSteps: [
+                    OnboardingRepairStep(
+                        id: "ensure-daemon",
+                        actor: .agentRunnable,
+                        title: "Wake your agent",
+                        detail: "Workbench brings the local runtime back online so your agent can respond.",
+                        command: ["ouro", "up"]
+                    )
+                ]
+            )
+        }
+
         guard !agents.isEmpty else {
             return OnboardingReadiness(
                 state: .needsAgent,
@@ -103,7 +213,7 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
                         id: "hatch",
                         actor: .humanChoice,
                         title: "Hatch a new agent",
-                        detail: "Create a new local Ouro agent through the conversational SerpentGuide flow.",
+                        detail: "Create a new local Ouro agent through a guided setup conversation.",
                         command: ["ouro", "hatch"]
                     ),
                     OnboardingRepairStep(
@@ -118,10 +228,17 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
         }
 
         guard let selected = agents.first(where: { $0.name.caseInsensitiveCompare(boss.agentName) == .orderedSame }) else {
+            // Empty boss = unresolved (fresh / factory-reset, or >1 agent so
+            // auto-adopt declined). A non-empty-but-missing name means the
+            // persisted boss's bundle is gone. Keep the copy honest for each —
+            // never render "The selected boss  is not installed" with a blank name.
+            let detail = boss.agentName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? "Choose which local agent runs as the boss on this machine."
+                : "The selected boss \(boss.agentName) is not installed. Choose a local agent or install the missing bundle."
             return OnboardingReadiness(
                 state: .needsAgent,
                 headline: "Choose this machine's boss",
-                detail: "The selected boss \(boss.agentName) is not installed. Choose a local agent or install the missing bundle.",
+                detail: detail,
                 selectedBossName: boss.agentName,
                 repairSteps: agents
                     .filter(\.isUsableAsBoss)
@@ -149,6 +266,34 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
             )
         }
 
+        // Credential signal: an otherwise-ready agent that has NO usable provider in EITHER
+        // lane is "exists but has no usable credentials" — categorically distinct from a
+        // single incomplete lane (which flows into the per-lane `providerChecks` path below
+        // and stays `needsRepair`). Provider configuration is the one irreducibly human
+        // touchpoint, so this surfaces a non-secret-bearing request to open the provider form
+        // rather than an agent-runnable auto-remediation. This is COMPLEMENTARY to
+        // `providerChecks` (which live-checks a *configured* lane): the two never overlap,
+        // because an agent with no usable lane never reaches the per-lane check path.
+        if selected.status == .ready, !hasAnyUsableLane(selected) {
+            return OnboardingReadiness(
+                state: .needsCredentials,
+                headline: "Connect a provider",
+                detail: "\(selected.name) is installed but has no provider connected yet. Connecting one lets your agent start working.",
+                selectedBossName: selected.name,
+                repairSteps: [
+                    OnboardingRepairStep(
+                        id: "request-provider-config",
+                        actor: .humanRequired,
+                        title: "Connect a provider",
+                        detail: "Workbench opens a setup form so you can connect a provider for \(selected.name). This is the only step that needs you."
+                        // No audit-lane command: this step opens the NATIVE provider form, not a
+                        // `ouro connect providers` CLI pane. That interactive pane is the TTFA
+                        // violation Slice 3 deleted — the human gate lives inside the native form.
+                    )
+                ]
+            )
+        }
+
         repairSteps.append(
             contentsOf: providerRepairSteps(
                 agent: selected,
@@ -171,13 +316,20 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
             )
         )
 
+        // RUNTIME-INJECTION model: the Workbench tools are injected into the boss's turn at
+        // runtime (Workbench passes `--workbench-mcp` when it launches the boss) — nothing is
+        // written to the synced bundle. This step is therefore "are the Workbench tools available
+        // to this boss at runtime" — i.e. the Workbench MCP binary is present on disk AND the
+        // bundle is clean of any stale entry an older Workbench left. `.registered` means both
+        // hold; anything else surfaces this step. The boss actually HAVING the tools is confirmed
+        // by the handoff `status` round-trip, not the bundle.
         if mcpRegistration?.status != .registered {
             repairSteps.append(
                 OnboardingRepairStep(
                     id: "workbench-mcp",
                     actor: .agentRunnable,
-                    title: "Register Workbench tools",
-                    detail: mcpRegistration?.detail ?? "Workbench MCP is not registered for this boss."
+                    title: "Connect Workbench tools",
+                    detail: mcpRegistration?.detail ?? "Workbench tools aren't available to this boss at runtime yet."
                 )
             )
         }
@@ -205,7 +357,7 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
         return OnboardingReadiness(
             state: .ready,
             headline: "\(selected.name) is ready",
-            detail: "The boss is installed, provider lanes passed live checks, and Workbench tools are registered.",
+            detail: "The boss is installed, provider lanes passed live checks, and Workbench tools are available to it at runtime.",
             selectedBossName: selected.name,
             repairSteps: repairSteps
         )
@@ -264,6 +416,13 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
                 )
             ]
         }
+    }
+
+    /// The credential signal, derived from the selected agent's provider lanes: an agent has
+    /// usable credentials only when at least one lane (`humanFacing` or `agentFacing`) names a
+    /// provider. A lane with no provider carries no usable credential regardless of model.
+    private func hasAnyUsableLane(_ agent: OuroAgentRecord) -> Bool {
+        agent.humanFacing?.provider != nil || agent.agentFacing?.provider != nil
     }
 }
 

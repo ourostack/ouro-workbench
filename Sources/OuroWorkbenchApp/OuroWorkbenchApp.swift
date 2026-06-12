@@ -367,6 +367,10 @@ struct WorkbenchRootView: View {
             Text(model.errorMessage ?? "Unknown error")
         }
         .task {
+            // Bring the managed daemon online on launch (idempotent, quiet) before
+            // recovery + status refreshes, so a daemon that died between sessions is
+            // back up without waiting for a check-in.
+            await model.ensureDaemonRunningOnLaunch()
             // Detect still-alive `screen` sessions first so startup recovery can
             // reattach to running agents losslessly instead of respawning them.
             await model.refreshLiveScreenSessions()
@@ -451,6 +455,9 @@ struct WorkbenchRootView: View {
         }
         .sheet(isPresented: $model.isOnboardingPresented) {
             WorkbenchOnboardingSheet(model: model)
+        }
+        .sheet(isPresented: $model.isProviderConfigPresented) {
+            ProviderConfigSheet(model: model)
         }
         .confirmationDialog("Delete Terminal?", isPresented: model.deleteConfirmationIsPresented) {
             if let entry = model.pendingDeleteSession {
@@ -979,30 +986,32 @@ struct HarnessStatusSheet: View {
         .frame(width: 640, height: 540)
         .animation(.easeInOut(duration: 0.2), value: model.harnessActionResult)
         .confirmationDialog(
-            "Repair harness daemon?",
+            "Bring your agent back online?",
             isPresented: $model.isRepairHarnessDaemonConfirmationPresented,
             titleVisibility: .visible
         ) {
-            Button("Run ouro up") {
-                model.repairHarnessDaemon()
-                refresh()
+            Button("Bring back online") {
+                Task {
+                    await model.repairHarnessDaemon()
+                    refresh()
+                }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Starts and refreshes the ouro background runtime by running `ouro up` in a Workbench terminal. Safe to run when the daemon is already up — it just re-checks what this machine needs. The terminal stays open so you can watch progress.")
+            Text("Restarts your agent's background runtime so it can respond again. Safe to run when it's already online — Workbench just re-checks what this machine needs. Runs quietly in the background.")
         }
         .confirmationDialog(
-            "Register Workbench MCP?",
+            "Connect Workbench tools?",
             isPresented: $model.isRegisterHarnessMCPConfirmationPresented,
             titleVisibility: .visible
         ) {
-            Button("Register with \(status.boss.agentName)") {
+            Button("Connect \(status.boss.agentName)") {
                 model.registerHarnessWorkbenchMCP()
                 refresh()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("Registers (or refreshes) the Workbench MCP server in \(status.boss.agentName)'s agent config so the boss can drive Workbench. Writes only that one MCP entry; existing config is preserved.")
+            Text("Makes Workbench's tools available to \(status.boss.agentName) at runtime so the boss can drive Workbench. Nothing is written to the agent's synced config; any stale Workbench entry left by an older setup is cleaned up.")
         }
         .task {
             // Refresh on open so the sheet always reflects current state — the
@@ -1037,11 +1046,11 @@ struct HarnessStatusSheet: View {
             HarnessDetailRow(label: "Version", value: status.daemon.versionText)
             if offer.isAvailable(.repairDaemon) {
                 HarnessActionRow(
-                    title: "Repair Daemon",
+                    title: "Bring Back Online",
                     systemImage: "wrench.and.screwdriver",
                     help: offer.isUrgent(.repairDaemon)
-                        ? "The daemon isn't reachable. Run `ouro up` to start and refresh it."
-                        : "Restart and refresh the ouro daemon (runs `ouro up`).",
+                        ? "Your agent isn't reachable. Bring its runtime back online."
+                        : "Restart and refresh your agent's background runtime.",
                     isUrgent: offer.isUrgent(.repairDaemon),
                     isBusy: isRefreshing
                 ) {
@@ -1061,7 +1070,7 @@ struct HarnessStatusSheet: View {
             trailingText: status.agents.summaryLine
         ) {
             if status.agents.isEmpty {
-                Text("No Ouro agent bundles found in ~/AgentBundles.")
+                Text("No Ouro agents are installed on this machine yet.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -1100,9 +1109,9 @@ struct HarnessStatusSheet: View {
             }
             if offer.isAvailable(.registerWorkbenchMCP) {
                 HarnessActionRow(
-                    title: status.boss.mcpStatus == .needsUpdate ? "Update Workbench MCP" : "Register Workbench MCP",
+                    title: status.boss.mcpStatus == .needsUpdate ? "Clean up Workbench entry" : "Connect Workbench tools",
                     systemImage: "antenna.radiowaves.left.and.right",
-                    help: "Write the Workbench MCP entry into \(status.boss.agentName)'s agent config so the boss can drive Workbench.",
+                    help: "Make Workbench's tools available to \(status.boss.agentName) at runtime so the boss can drive Workbench. Nothing is written to the synced config.",
                     isUrgent: offer.isUrgent(.registerWorkbenchMCP),
                     isBusy: isRefreshing
                 ) {
@@ -1350,9 +1359,11 @@ private extension BossWorkbenchMCPRegistrationStatus {
         switch self {
         case .registered:
             return .green
-        case .notRegistered, .needsUpdate:
+        case .needsUpdate:
+            // Cleanup-pending (stale bundle entry, binary present) — auto-fixable.
             return .orange
-        case .agentMissing, .executableMissing, .invalidConfig:
+        case .notRegistered, .agentMissing, .executableMissing, .invalidConfig:
+            // Binary missing (`.notRegistered`) or structural failure — needs a reinstall/fix.
             return .red
         }
     }
@@ -3583,7 +3594,7 @@ struct BossSelectorView: View {
 
     private var bossHealthHelp: String {
         guard let bossAgent else {
-            return "\(model.state.boss.agentName) is the persisted boss but has no bundle in ~/AgentBundles. Pick an installed agent or hatch one."
+            return "\(model.state.boss.agentName) is the selected boss but isn't installed on this machine. Pick an installed agent or create one."
         }
         return "\(bossAgent.name): \(bossAgent.detail)"
     }
@@ -4425,12 +4436,12 @@ private let bossQuickQuestions: [BossQuickQuestion] = [
     BossQuickQuestion(
         id: "status",
         title: "What's Going On?",
-        question: "Summarize what is currently going on across the Workbench, including running terminal agents, anything waiting on Ari, and the next useful action."
+        question: "Summarize what is currently going on across the Workbench, including running terminal agents, anything waiting on {{owner}}, and the next useful action."
     ),
     BossQuickQuestion(
         id: "waiting",
         title: "Waiting On Me?",
-        question: "Inspect the Workbench and tell Ari whether anything is waiting on him. Be concise, and include what decision or input is needed only if a human decision is genuinely required."
+        question: "Inspect the Workbench and tell {{owner}} whether anything is waiting on them. Be concise, and include what decision or input is needed only if a human decision is genuinely required."
     ),
     BossQuickQuestion(
         id: "move",
@@ -4440,7 +4451,7 @@ private let bossQuickQuestions: [BossQuickQuestion] = [
     BossQuickQuestion(
         id: "respond",
         title: "Respond For Me",
-        question: "Inspect the Workbench and respond on Ari's behalf when a terminal agent is clearly waiting on routine input. Use Workbench actions for safe obvious replies; escalate only genuinely human-only decisions."
+        question: "Inspect the Workbench and respond on {{owner}}'s behalf when a terminal agent is clearly waiting on routine input. Use Workbench actions for safe obvious replies; escalate only genuinely human-only decisions."
     )
 ]
 
@@ -4530,7 +4541,7 @@ struct OuroAgentManagerView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "person.crop.circle.badge.exclamationmark")
                         .foregroundStyle(.orange)
-                    Text("No local agent bundles found in ~/AgentBundles.")
+                    Text("No Ouro agents are installed on this machine yet.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -4600,11 +4611,11 @@ struct OuroAgentRowView: View {
                 Button {
                     model.installWorkbenchMCP(for: agent)
                 } label: {
-                    Label(registration?.status == .needsUpdate ? "Update MCP" : "Install MCP", systemImage: "link.badge.plus")
+                    Label(registration?.status == .needsUpdate ? "Clean up entry" : "Connect tools", systemImage: "link.badge.plus")
                 }
                 .labelStyle(.iconOnly)
                 .buttonStyle(.borderless)
-                .help(registration?.detail ?? "Register Workbench MCP")
+                .help(registration?.detail ?? "Connect Workbench tools at runtime")
                 .fixedSize()
             }
             Button {
@@ -4691,6 +4702,113 @@ private enum OuroAgentInstallSheetMode: String, CaseIterable, Identifiable {
     }
 }
 
+/// The native provider-config form — the ONE human touchpoint of the cold-start bootstrap.
+///
+/// Thin wiring over the pure `ProviderConfigForm` Core type: it collects the provider choice and
+/// the credential fields, then hands them to the model. The SECRET never leaves this native form
+/// except as `ouro hatch` argv tokens the model builds — it is NEVER routed through the agent's
+/// context/MCP. Cohesive-product copy: reads as one product ("your agent"), no `ouro`/CLI seams.
+struct ProviderConfigSheet: View {
+    @ObservedObject var model: WorkbenchViewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var provider: WorkbenchProvider = .anthropic
+    @State private var humanName: String = NSFullUserName()
+    @State private var newAgentName: String = ""
+    @State private var values: [String: String] = [:]
+    @State private var message: String?
+
+    private var form: ProviderConfigForm {
+        ProviderConfigForm(agentName: model.providerConfigAgentName, humanName: humanName)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(model.providerConfigIsNewAgent ? "Create your agent" : form.title)
+                .font(.title3.weight(.semibold))
+            Text(model.providerConfigIsNewAgent
+                 ? "Name your agent, choose a provider, and enter your credentials. This is the only step that needs you."
+                 : form.subtitle)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            Form {
+                if model.providerConfigIsNewAgent {
+                    TextField("Agent name", text: $newAgentName)
+                }
+                Picker("Provider", selection: $provider) {
+                    ForEach(WorkbenchProvider.allCases) { provider in
+                        Text(provider.displayName).tag(provider)
+                    }
+                }
+                TextField("Your name", text: $humanName)
+                ForEach(provider.credentialFields) { field in
+                    if field.isSecret {
+                        SecureField(field.label, text: binding(for: field.key))
+                    } else {
+                        TextField(field.label, text: binding(for: field.key))
+                    }
+                }
+            }
+
+            if let message {
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack {
+                Spacer()
+                Button("Cancel") {
+                    dismiss()
+                }
+                Button {
+                    submit()
+                } label: {
+                    Label(model.providerConfigIsNewAgent ? "Create Agent" : "Connect",
+                          systemImage: model.providerConfigIsNewAgent ? "plus.circle" : "link")
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding()
+        .frame(width: 560)
+        .onChange(of: provider) {
+            // Clearing per-provider field values when the provider changes keeps stale secrets
+            // out of the form state.
+            values = [:]
+            message = nil
+        }
+    }
+
+    private func binding(for key: String) -> Binding<String> {
+        Binding(
+            get: { values[key] ?? "" },
+            set: { values[key] = $0 }
+        )
+    }
+
+    private func submit() {
+        if model.providerConfigIsNewAgent {
+            // Validate + commit the new agent's name before the cold-start hatch. A name
+            // that collides with an installed agent is rejected here (that would be the
+            // existing-agent path, not a fresh hatch).
+            if let nameFailure = model.newAgentNameValidationMessage(newAgentName) {
+                message = nameFailure
+                return
+            }
+            model.providerConfigAgentName = newAgentName.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if let failure = model.submitProviderConfig(provider: provider, humanName: humanName, values: values) {
+            message = failure
+            return
+        }
+        // Success: the secret is on its way to hatch via argv; clear local state and dismiss.
+        values = [:]
+        dismiss()
+    }
+}
+
 struct OuroAgentInstallSheet: View {
     @ObservedObject var model: WorkbenchViewModel
     @Environment(\.dismiss) private var dismiss
@@ -4711,7 +4829,7 @@ struct OuroAgentInstallSheet: View {
             Form {
                 switch mode {
                 case .hatch:
-                    Label("SerpentGuide Conversation", systemImage: "bubble.left.and.bubble.right.fill")
+                    Label("Guided Setup", systemImage: "bubble.left.and.bubble.right.fill")
                 case .clone:
                     TextField("Git Remote", text: $remote)
                     TextField("Agent Name Override", text: $agentName)
@@ -5283,9 +5401,9 @@ private struct OnboardingBossChoiceView: View {
                 )
                 HStack(spacing: 8) {
                     Button {
-                        model.launchOuroAgentInstall(mode: "hatch", agentName: "", remote: "")
+                        model.presentNewAgentProviderConfigForm()
                     } label: {
-                        Label("Hatch Agent", systemImage: "plus.circle")
+                        Label("Create Agent", systemImage: "plus.circle")
                     }
                     Button {
                         model.isOuroAgentInstallSheetPresented = true
@@ -5362,6 +5480,135 @@ private struct OnboardingBossChoiceRow: View {
     }
 }
 
+/// R4b — the first-run cold-start bootstrap surface. While Layer A runs the native bootstrap
+/// (S0→S5) it shows live per-step progress with cohesive-product copy; at the S2 gate it surfaces
+/// the native provider form (the one human touchpoint); the instant the bootstrap hands off, it
+/// switches to the agent-driven (Layer B) framing — the agent inspects + remediates + narrates,
+/// and the human is never asked to run anything. Thin wiring over `model.firstRunPresentation`
+/// (pure `FirstRunBootstrapDrive` output).
+private struct FirstRunBootstrapView: View {
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        if let presentation = model.firstRunPresentation {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .center, spacing: 10) {
+                    Label(presentation.headline, systemImage: headerIcon(for: presentation.mode))
+                        .font(.headline)
+                    Spacer()
+                    if model.firstRunBootstrapIsRunning {
+                        ProgressView().controlSize(.small)
+                    }
+                    StatusPill(text: modeLabel(for: presentation.mode), color: modeColor(for: presentation.mode))
+                        .fixedSize()
+                }
+
+                if presentation.mode == .agentDriven {
+                    // Layer B: the agent took over. Narrate the handoff; the human is never asked
+                    // to run anything. Applied actions land in the dashboard's Applied Actions.
+                    if let narration = model.firstRunAgentDrivenNarration {
+                        FirstRunNarrationRow(text: narration)
+                    }
+                } else {
+                    // Layer A: live per-step native-bootstrap progress (seam-free copy).
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(presentation.rows) { row in
+                            FirstRunStepRow(row: row)
+                        }
+                    }
+                    if presentation.opensProviderGate {
+                        Button {
+                            model.presentProviderConfigForm(
+                                agentName: model.onboardingReadiness?.selectedBossName ?? model.state.boss.agentName
+                            )
+                        } label: {
+                            Label("Connect a provider", systemImage: "link")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                    }
+                }
+            }
+            .padding(14)
+            .background(.quaternary.opacity(0.28), in: RoundedRectangle(cornerRadius: 8))
+        }
+    }
+
+    private func headerIcon(for mode: FirstRunMode) -> String {
+        switch mode {
+        case .bootstrapping: return "gauge.with.dots.needle.bottom.50percent"
+        case .parkedAwaitingProvider: return "link.badge.plus"
+        case .needsAttention: return "exclamationmark.triangle.fill"
+        case .agentDriven: return "sparkles"
+        }
+    }
+
+    private func modeLabel(for mode: FirstRunMode) -> String {
+        switch mode {
+        case .bootstrapping: return "starting"
+        case .parkedAwaitingProvider: return "needs you"
+        case .needsAttention: return "needs attention"
+        case .agentDriven: return "agent driving"
+        }
+    }
+
+    private func modeColor(for mode: FirstRunMode) -> SwiftUI.Color {
+        switch mode {
+        case .bootstrapping: return .blue
+        case .parkedAwaitingProvider: return .orange
+        case .needsAttention: return .red
+        case .agentDriven: return .green
+        }
+    }
+}
+
+private struct FirstRunStepRow: View {
+    var row: BootstrapStepProgress
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            icon
+                .frame(width: 18)
+            Text(row.humanFacingLine)
+                .font(.caption)
+                .foregroundStyle(row.isTerminalFailure ? Color.orange : .secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer()
+        }
+    }
+
+    @ViewBuilder
+    private var icon: some View {
+        if row.isActive {
+            ProgressView().controlSize(.small)
+        } else if row.isDone {
+            Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+        } else if row.isTerminalFailure {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+        } else if row.isAwaitingHuman {
+            Image(systemName: "person.crop.circle.badge.exclamationmark").foregroundStyle(.orange)
+        } else {
+            Image(systemName: "circle").foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct FirstRunNarrationRow: View {
+    var text: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "sparkles")
+                .foregroundStyle(.green)
+                .frame(width: 18)
+            Text(text)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
 private struct OnboardingReadinessView: View {
     @ObservedObject var model: WorkbenchViewModel
 
@@ -5404,7 +5651,13 @@ private struct OnboardingReadinessView: View {
                         .frame(maxWidth: 660)
                     }
                 } else {
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 14) {
+                        // R4b — Layer A native cold-start bootstrap drives the not-ready first run:
+                        // live per-step progress (seam-free copy), the S2 provider-form gate, and
+                        // the seam-free handoff to agent-driven (Layer B) the instant the boss is
+                        // reachable. The repair-step list below remains the manual fallback surface
+                        // (now app-executed — no CLI panes).
+                        FirstRunBootstrapView(model: model)
                         OnboardingStatusRow(
                             systemImage: "exclamationmark.triangle.fill",
                             title: readiness.headline,
@@ -5420,6 +5673,7 @@ private struct OnboardingReadinessView: View {
             }
         }
         .frame(maxWidth: .infinity, minHeight: 420)
+        .onAppear { model.startFirstRunBootstrapIfNeeded() }
     }
 }
 
@@ -5450,6 +5704,17 @@ private struct OnboardingRepairStepRow: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
+            } else if step.isProviderSetup {
+                // Provider-setup opens the NATIVE provider form (the one human gate) — not a
+                // `ouro connect providers` `.trusted` pane. This covers both the cold-start
+                // credential gate (`request-provider-config`) and the existing-agent lane steps.
+                Button {
+                    model.openOnboardingRepair(step)
+                } label: {
+                    Label("Connect", systemImage: "link")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
             } else if step.id.hasPrefix("check-") {
                 // A check-* step carrying a commandLine means the provider check
                 // hasn't actually started yet (pending) — show a Run button so
@@ -5468,11 +5733,14 @@ private struct OnboardingRepairStepRow: View {
                         .controlSize(.small)
                 }
             } else if step.commandLine != nil {
+                // R4b — APP-EXECUTED (no CLI pane). The button reads as an in-app fix, not "Open a
+                // terminal": `openOnboardingRepair` routes through the recovery-truth runners.
                 Button {
                     model.openOnboardingRepair(step)
                 } label: {
-                    Label(commandButtonTitle, systemImage: "terminal")
+                    Label(commandButtonTitle, systemImage: "wand.and.stars")
                 }
+                .buttonStyle(.borderedProminent)
                 .controlSize(.small)
             }
         }
@@ -5493,7 +5761,8 @@ private struct OnboardingRepairStepRow: View {
     }
 
     private var commandButtonTitle: String {
-        step.id.hasPrefix("check-") ? "Run" : "Open"
+        // App-executed verbs (cohesive-product): a fix action, never "Open a terminal".
+        step.actor == .humanChoice ? "Choose" : "Fix"
     }
 
     private var color: SwiftUI.Color {
@@ -6059,7 +6328,7 @@ struct BossWorkbenchMCPSetupView: View {
             }
             .labelStyle(.iconOnly)
             .buttonStyle(.borderless)
-            .help("Refresh Workbench MCP registration")
+            .help("Refresh Workbench tools status")
             .fixedSize()
             if model.bossWorkbenchMCPRegistration?.isActionable == true {
                 Button {
@@ -6322,7 +6591,7 @@ private struct AgentStatusCard: View {
                         model.installWorkbenchMCP(for: agent)
                     } label: {
                         Label(
-                            registration.status == .needsUpdate ? "Update MCP" : "Install MCP",
+                            registration.status == .needsUpdate ? "Clean up Workbench entry" : "Connect Workbench tools",
                             systemImage: "link.badge.plus"
                         )
                     }
@@ -6413,11 +6682,11 @@ private struct AgentStatusCard: View {
     private func mcpPillText(_ status: BossWorkbenchMCPRegistrationStatus) -> String {
         switch status {
         case .registered:
-            return "registered"
+            return "tools ready"
         case .notRegistered:
-            return "not registered"
+            return "tools missing"
         case .needsUpdate:
-            return "needs update"
+            return "needs cleanup"
         case .agentMissing:
             return "agent missing"
         case .executableMissing:
@@ -8449,6 +8718,17 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var transcriptSearchLastQuery: String?
     @Published var recoveryDrillResult: RecoveryDrillResult?
     @Published var bossAppliedActions: [String] = []
+    /// R4b first-run cold-start bootstrap (Layer A). The live per-step presentation the Setup
+    /// Assistant renders while the native bootstrap (S0→S5) brings the agent online, then the
+    /// agent-driven (Layer B) framing once it hands off. Pure `FirstRunBootstrapDrive` output —
+    /// the view layer is thin wiring over it.
+    @Published var firstRunPresentation: FirstRunBootstrapPresentation?
+    /// True while a `runFirstRunBootstrap()` pass is in flight (drives the header spinner and the
+    /// re-entrancy guard in `FirstRunBootstrapDrive.shouldStart`).
+    @Published var firstRunBootstrapIsRunning = false
+    /// The seam-free handoff narration shown the instant Layer A hands off to Layer B (the boss
+    /// inspects + remediates + narrates). `nil` until handoff.
+    @Published var firstRunAgentDrivenNarration: String?
     @Published var mailboxError: String?
     @Published var isNewSessionSheetPresented = false
     @Published var isNewGroupSheetPresented = false
@@ -8497,9 +8777,9 @@ final class WorkbenchViewModel: ObservableObject {
     /// reachability. Reached from the More menu and the ⌘K palette. The first
     /// W3 step toward Workbench being the human control panel for the harness.
     @Published var isHarnessStatusPresented = false
-    /// Drives the "Repair harness daemon?" confirmation dialog raised from the
-    /// Harness Status sheet's daemon section. The action itself reuses the
-    /// existing ouro-command runner (`openOnboardingRepair`) to run `ouro up`.
+    /// Drives the "Bring your agent back online?" confirmation dialog raised from
+    /// the Harness Status sheet's daemon section. The action itself runs the
+    /// detached `DaemonManager.ensureRunning()` cycle in-app — no pane, no CLI seam.
     @Published var isRepairHarnessDaemonConfirmationPresented = false
     /// Drives the "Register Workbench MCP?" confirmation dialog raised from the
     /// Harness Status sheet's boss section. Reuses `registerWorkbenchForBossChoice`.
@@ -8670,6 +8950,20 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var onboardingProposal: WorkbenchImportProposal?
     @Published var onboardingIsScanning = false
     @Published var lastImportSummary: WorkbenchImportApplyResult?
+    /// Whether the native provider-config form (the one human gate) is presented. Flipped true
+    /// by `requestProviderConfig` (and the native onboarding provider-setup affordance).
+    /// NON-SECRET-BEARING: this flag only opens the form; the credential is entered natively in
+    /// the form and flows to `ouro hatch` argv — never through the agent's context.
+    @Published var isProviderConfigPresented = false
+    /// The agent name the provider form is connecting a provider for (label/seed only — never a
+    /// credential). Defaults to the selected boss when the request named no explicit agent.
+    @Published var providerConfigAgentName: String = ""
+
+    /// True when the provider form is creating a BRAND-NEW agent (the empty-machine /
+    /// "create an agent" path) rather than connecting a provider for an existing one.
+    /// In new-agent mode the form collects the agent name + provider + credentials and
+    /// cold-start-hatches headlessly — no visible `ouro hatch` CLI pane.
+    @Published var providerConfigIsNewAgent = false
 
     private let paths: WorkbenchPaths
     private let store: WorkbenchStore
@@ -8680,13 +8974,14 @@ final class WorkbenchViewModel: ObservableObject {
     private let bossDashboardBuilder = BossDashboardBuilder()
     private let visibilityBuilder = WorkbenchVisibilityBuilder()
     private let workCardReader: OuroWorkCardReader
-    private let bossBridgePlanner = BossAgentBridgePlanner()
-    private let bossPromptBuilder = BossAgentPromptBuilder()
+    private let bossBridgePlanner = BossAgentBridgePlanner(ownerName: WorkbenchViewModel.resolvedOwnerName())
+    private let bossPromptBuilder = BossAgentPromptBuilder(ownerName: WorkbenchViewModel.resolvedOwnerName())
     private let autonomyReadinessBuilder = AutonomyReadinessBuilder()
     private let harnessStatusBuilder = HarnessStatusBuilder()
     private let changeSummarizer = WorkspaceChangeSummarizer()
     private let commandPalette = WorkbenchCommandPalette()
     private let bossMCPClient: BossAgentMCPClient
+    private let daemonManager: DaemonManager
     private let bossWorkbenchMCPRegistrar: BossWorkbenchMCPRegistrar
     private let ouroAgentInventory: OuroAgentInventory
     private let ouroAgentInstallCommandBuilder = OuroAgentInstallCommandBuilder()
@@ -8705,6 +9000,10 @@ final class WorkbenchViewModel: ObservableObject {
     private let onboardingAdvisor = WorkbenchOnboardingAdvisor()
     private let onboardingProposalBuilder = WorkbenchImportProposalBuilder()
     private let deskBridgePlanner = DeskBridgePlanner()
+    /// R4b — the pure first-run presenter. ALL the bootstrap branching / sequencing / copy lives
+    /// in this Core type; the App-side methods below are thin wiring that inject the real effects
+    /// and publish its output.
+    private let firstRunDrive = FirstRunBootstrapDrive()
     private let externalActionQueue: WorkbenchActionRequestQueue
     private let releaseUpdateChecker: ReleaseUpdateChecker
     private var manuallyTerminatedRunIDs = Set<UUID>()
@@ -8745,6 +9044,7 @@ final class WorkbenchViewModel: ObservableObject {
         paths: WorkbenchPaths = .defaultPaths(),
         mailboxClient: MailboxClient = MailboxClient(),
         bossMCPClient: BossAgentMCPClient = BossAgentMCPClient(),
+        daemonManager: DaemonManager = DaemonManager(),
         bossWorkbenchMCPRegistrar: BossWorkbenchMCPRegistrar = BossWorkbenchMCPRegistrar(),
         ouroAgentInventory: OuroAgentInventory = OuroAgentInventory(),
         executableHealthChecker: ExecutableHealthChecker = ExecutableHealthChecker(),
@@ -8755,7 +9055,16 @@ final class WorkbenchViewModel: ObservableObject {
         self.store = WorkbenchStore(paths: paths)
         self.mailboxClient = mailboxClient
         self.bossMCPClient = bossMCPClient
+        self.daemonManager = daemonManager
         self.bossWorkbenchMCPRegistrar = bossWorkbenchMCPRegistrar
+        // RUNTIME-INJECTION model: every boss turn Workbench spawns passes `--workbench-mcp
+        // <path>` so the `ouro` runtime injects the Workbench MCP into the boss's turn per-turn
+        // (boss-aware) — nothing is written to the synced agent bundle. Resolve the installed
+        // Workbench MCP binary once and configure the client to pass it; when the binary can't be
+        // resolved we pass the flag path-less so the `ouro` side self-discovers it.
+        bossMCPClient.workbenchMCPPath = Self.runtimeWorkbenchMCPPath(
+            executableURL: bossWorkbenchMCPRegistrar.mcpExecutableURL
+        )
         self.ouroAgentInventory = ouroAgentInventory
         self.executableHealthChecker = executableHealthChecker
         self.releaseUpdateChecker = releaseUpdateChecker
@@ -8769,6 +9078,10 @@ final class WorkbenchViewModel: ObservableObject {
         load()
         refreshOuroAgents()
         refreshWorkbenchMCPRegistration()
+        // Migrate EVERY local agent bundle off any stale `ouro_workbench` / `senses.workbench`
+        // entry (runtime injection means nothing belongs in a synced bundle). Independent of boss
+        // selection so a stale entry on any non-boss agent is cleaned too.
+        sweepStaleWorkbenchBundlesOnLaunch()
         refreshExecutableHealth()
         refreshGitStatus()
         refreshSessionActivity()
@@ -9124,7 +9437,20 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     var bossMCPCommand: String {
-        bossBridgePlanner.mcpServePlan(for: state.boss).displayCommand
+        bossBridgePlanner.mcpServePlan(
+            for: state.boss,
+            workbenchMCPPath: Self.runtimeWorkbenchMCPPath(
+                executableURL: bossWorkbenchMCPRegistrar.mcpExecutableURL
+            )
+        ).displayCommand
+    }
+
+    /// The `--workbench-mcp` value for RUNTIME INJECTION. When the installed Workbench MCP binary
+    /// exists on disk we pass its explicit path (preferred). When it can't be resolved we pass the
+    /// flag path-less (empty string) so the `ouro` side self-discovers the binary. Never returns
+    /// `nil` — Workbench always opts into runtime injection so the boss gets the tools per-turn.
+    static func runtimeWorkbenchMCPPath(executableURL: URL) -> String {
+        FileManager.default.isExecutableFile(atPath: executableURL.path) ? executableURL.path : ""
     }
 
     var autonomyReadiness: AutonomyReadinessSnapshot {
@@ -9404,10 +9730,10 @@ final class WorkbenchViewModel: ObservableObject {
             ),
             command(
                 .refreshWorkbenchMCP,
-                "Refresh Workbench MCP",
-                "Refresh selected boss MCP registration status",
+                "Refresh Workbench tools status",
+                "Re-check whether Workbench tools are available to the selected boss at runtime",
                 "point.3.connected.trianglepath.dotted",
-                keywords: ["mcp", "boss", "registration"]
+                keywords: ["mcp", "boss", "registration", "tools", "runtime"]
             ),
             command(
                 .searchTranscripts,
@@ -9503,16 +9829,17 @@ final class WorkbenchViewModel: ObservableObject {
             ], at: 2)
         }
 
-        // Only offer the MCP install when it would actually do something (not
-        // already registered/current) — mirrors the header/agent buttons.
+        // Only offer the action when it would actually do something — the binary is missing
+        // (`.notRegistered`) or a stale bundle entry remains (`.needsUpdate`). Mirrors the
+        // header/agent buttons.
         if bossWorkbenchMCPRegistration?.isActionable == true {
             commands.append(
                 command(
                     .installWorkbenchMCPForBoss,
-                    "Install Workbench MCP",
-                    "Register or update Workbench MCP for the selected boss",
+                    "Connect Workbench tools",
+                    "Make Workbench tools available to the selected boss at runtime (cleans any stale bundle entry)",
                     "wrench.and.screwdriver",
-                    keywords: ["mcp", "boss", "register", "bridge"]
+                    keywords: ["mcp", "boss", "connect", "tools", "runtime", "bridge"]
                 )
             )
         }
@@ -9833,8 +10160,8 @@ final class WorkbenchViewModel: ObservableObject {
                     WorkbenchCommandDescriptor(
                         id: .installMCPForSelectedAgent,
                         title: registration.status == .needsUpdate
-                            ? "Update MCP for \(agent.name)"
-                            : "Install MCP for \(agent.name)",
+                            ? "Clean up Workbench entry for \(agent.name)"
+                            : "Connect Workbench tools for \(agent.name)",
                         detail: registration.detail,
                         systemImage: "link.badge.plus",
                         keywords: ["agent", "mcp", "register", "tools", agent.name],
@@ -9888,11 +10215,11 @@ final class WorkbenchViewModel: ObservableObject {
         }
         switch bossWorkbenchMCPRegistration.status {
         case .registered:
-            return "registered for \(bossWorkbenchMCPRegistration.agentName)"
+            return "available to \(bossWorkbenchMCPRegistration.agentName) at runtime"
         case .notRegistered:
-            return "not registered"
+            return "tools binary missing"
         case .needsUpdate:
-            return "update needed"
+            return "stale entry to clean"
         case .agentMissing:
             return "agent bundle missing"
         case .executableMissing:
@@ -9909,15 +10236,17 @@ final class WorkbenchViewModel: ObservableObject {
         switch status {
         case .registered:
             return .green
-        case .notRegistered, .needsUpdate:
+        case .needsUpdate:
+            // Cleanup-pending (stale bundle entry, binary present) — auto-fixable.
             return .orange
-        case .agentMissing, .executableMissing, .invalidConfig:
+        case .notRegistered, .agentMissing, .executableMissing, .invalidConfig:
+            // Binary missing (`.notRegistered`) or structural failure — needs a reinstall/fix.
             return .red
         }
     }
 
     var bossWorkbenchMCPActionTitle: String {
-        bossWorkbenchMCPRegistration?.status == .needsUpdate ? "Update" : "Install"
+        bossWorkbenchMCPRegistration?.status == .needsUpdate ? "Clean up" : "Connect"
     }
 
     var ouroAgentStatusLine: String {
@@ -9938,7 +10267,22 @@ final class WorkbenchViewModel: ObservableObject {
 
     func refreshOuroAgents() {
         ouroAgents = ouroAgentInventory.scan()
+        resolveBossFromInventoryIfNeeded()
         refreshWorkbenchMCPRegistration()
+    }
+
+    /// When the persisted boss is unresolved (a fresh / factory-reset machine, or
+    /// a boss naming no installed bundle), adopt the sole installed agent
+    /// automatically. With more than one usable agent the human picks (the
+    /// onboarding boss-choice surface); with none the onboarding routes to
+    /// acquisition. Never hardcodes an agent name. No-ops once a boss resolves, so
+    /// it never switches away from a real selection mid-session.
+    func resolveBossFromInventoryIfNeeded() {
+        guard let name = BossAutoResolution.adoptableBossName(
+            persistedBossName: state.boss.agentName,
+            agents: ouroAgents
+        ) else { return }
+        selectBoss(agentName: name)
     }
 
     func workbenchMCPRegistration(for agent: OuroAgentRecord) -> BossWorkbenchMCPRegistrationSnapshot? {
@@ -10251,6 +10595,11 @@ final class WorkbenchViewModel: ObservableObject {
         ouroAgents.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }
     }
 
+    /// Native "Connect Workbench tools" action. RUNTIME-INJECTION model: nothing is written into
+    /// the boss bundle — Workbench injects the tools at runtime via `--workbench-mcp`. This runs
+    /// the registrar's stale-entry CLEANUP and re-reads the snapshot; recovery truth is the
+    /// POST-cleanup snapshot status (`.registered` once the binary is present + the bundle is
+    /// clean), never a hardcoded success.
     func installWorkbenchMCP(for agent: OuroAgentRecord) {
         do {
             let selection = BossAgentSelection(agentName: agent.name)
@@ -10259,17 +10608,20 @@ final class WorkbenchViewModel: ObservableObject {
             if state.boss.agentName.caseInsensitiveCompare(agent.name) == .orderedSame {
                 bossWorkbenchMCPRegistration = snapshot
             }
-            let result = "Registered Workbench MCP for \(agent.name)"
+            let succeeded = snapshot.status == .registered
+            let result = succeeded
+                ? "\(agent.name) is connected to Workbench and ready."
+                : snapshot.detail
             bossAppliedActions = [result] + bossAppliedActions
             recordActionLog(
                 source: "native",
                 action: "registerWorkbenchMCP",
                 targetName: agent.name,
                 result: result,
-                succeeded: true
+                succeeded: succeeded
             )
         } catch {
-            errorMessage = "Workbench MCP registration failed: \(error.localizedDescription)"
+            errorMessage = "Connecting \(agent.name) to Workbench failed: \(error.localizedDescription)"
             refreshWorkbenchMCPRegistration()
         }
     }
@@ -11022,6 +11374,30 @@ final class WorkbenchViewModel: ObservableObject {
         bossWorkbenchMCPRegistrationByAgentName = snapshots
     }
 
+    /// One-time launch migration: sweep EVERY local agent bundle clean of stale `ouro_workbench`
+    /// servers and `senses.workbench` entries. Under runtime injection the boss gets the Workbench
+    /// MCP per-turn from `--workbench-mcp` (see `BossAgentBridgePlanner.mcpServePlan`), so nothing
+    /// belongs in any agent's git-synced bundle. `install(for:)` only cleans the boss, which leaves
+    /// a stale entry on any NON-boss agent to pollute git-sync to other machines and remain
+    /// over-permissive. This sweeps all of them.
+    ///
+    /// Runs off the main actor (per-agent file edit) and BEFORE/independent of boss selection — a
+    /// stale entry on any agent is cleaned regardless of who's boss. Idempotent: a clean machine
+    /// produces no writes. When something was cleaned we re-snapshot so the Agents pane reflects
+    /// the now-clean bundles.
+    func sweepStaleWorkbenchBundlesOnLaunch() {
+        let registrar = bossWorkbenchMCPRegistrar
+        Task.detached(priority: .utility) {
+            let changed = registrar.cleanupAllAgents()
+            guard !changed.isEmpty else {
+                return
+            }
+            await MainActor.run {
+                self.refreshWorkbenchMCPRegistration()
+            }
+        }
+    }
+
     func refreshExecutableHealth() {
         executableHealthByEntryID = Dictionary(
             uniqueKeysWithValues: allSessionEntries.map { entry in
@@ -11112,47 +11488,75 @@ final class WorkbenchViewModel: ObservableObject {
         installWorkbenchMCP(for: selectedAgent)
     }
 
-    // MARK: - Harness Status control actions
-
-    /// Heal/start the ouro daemon from the Harness Status sheet. Reuses the
-    /// existing ouro-command runner (`openOnboardingRepair`) — which spawns a
-    /// trusted Workbench terminal that streams the command's live output and is
-    /// captured in transcripts — to run `ouro up`, the daemon heal/start command
-    /// surfaced by `ouro --help` (it brings up the background runtime and
-    /// refreshes what the machine needs; `--no-repair` is the opt-out, so plain
-    /// `ouro up` is the repair path). Non-destructive and idempotent: starting
-    /// an already-running daemon is a no-op. After spawning, the caller refreshes
-    /// status so the daemon section reflects the new state.
-    ///
-    /// Called only behind the "Repair harness daemon?" confirmation.
-    func repairHarnessDaemon() {
-        let step = OnboardingRepairStep(
-            id: "harness-daemon-repair",
-            actor: .agentRunnable,
-            title: "Repair harness daemon",
-            detail: "Start and refresh the ouro background runtime (ouro up).",
-            command: ["ouro", "up"]
-        )
-        // Reuse the established runner: builds a trusted CustomTerminalSessionDraft
-        // and launches it. We don't reimplement subprocess spawning here.
-        openOnboardingRepair(step)
-        let result = "Started ouro up in a Workbench terminal — watch it for progress, then Refresh."
-        harnessActionResult = HarnessActionResult(kind: .repairDaemon, succeeded: true, message: result)
+    /// Bring the local runtime online at app launch. The daemon is managed-but-
+    /// independent infrastructure — it should be online whenever Workbench is, not
+    /// only after the first check-in or while Boss Watch happens to be on. Without
+    /// this, a daemon that died between sessions stays down on relaunch until a
+    /// manual check-in. Runs the SAME idempotent detect-reuse-else-start cycle as
+    /// the check-in, but QUIETLY: records the outcome to the audit log and never
+    /// shows a startup banner (a real check-in surfaces "waking" when it matters).
+    /// Skipped before a boss is resolved — a fresh machine has no agent yet and the
+    /// first-run bootstrap (S0) owns its own bringup.
+    func ensureDaemonRunningOnLaunch() async {
+        guard !state.boss.agentName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
+        let outcome = await daemonManager.ensureRunning()
         recordActionLog(
             source: "native",
-            action: "repairHarnessDaemon",
-            targetName: state.boss.agentName,
-            result: result,
-            succeeded: true
+            action: "ensureDaemon",
+            targetName: "launch",
+            result: outcome.auditDetail,
+            succeeded: !outcome.needsManualRecovery
         )
     }
 
-    /// Register (or refresh) the Workbench MCP with the selected boss from the
-    /// Harness Status sheet. Reuses the existing `registerWorkbenchForBossChoice`
-    /// path (which drives the MCP registrar + refreshes registration), then reads
-    /// back the resulting status to report success/failure into the sheet banner.
+    // MARK: - Harness Status control actions
+
+    /// Bring the agent's background runtime back online from the Harness Status
+    /// sheet. Runs the SAME detached detect-reuse-else-start cycle as the boss
+    /// check-in (`DaemonManager.ensureRunning()`): the app executes it directly —
+    /// no Workbench terminal pane, no CLI seam, no confirmation theater — and the
+    /// daemon is started DETACHED so it survives Workbench quitting. Recovery truth
+    /// comes from the POST-start verify probe, never an exit code. Non-destructive
+    /// and idempotent: an already-up daemon is reused without a respawn.
     ///
-    /// Called only behind the "Register Workbench MCP?" confirmation.
+    /// The human-facing banner is product voice only; the raw CLI-level recovery
+    /// detail is recorded in the audit log surface, never shown to the human.
+    func repairHarnessDaemon() async {
+        let bossName = state.boss.agentName
+        let outcome = await daemonManager.ensureRunning()
+        let message: String
+        switch outcome.recovery {
+        case .resumed:
+            message = "Your agent's runtime is already online."
+        case .respawned:
+            message = "Brought your agent's runtime back online."
+        case .needsManual:
+            message = "Workbench couldn't bring your agent back online automatically. Please reopen Workbench, and if it keeps happening, restart your Mac."
+        }
+        harnessActionResult = HarnessActionResult(
+            kind: .repairDaemon,
+            succeeded: !outcome.needsManualRecovery,
+            message: message
+        )
+        // Audit/debug surface — the ONE place the raw `ouro` recovery detail belongs.
+        recordActionLog(
+            source: "native",
+            action: "repairHarnessDaemon",
+            targetName: bossName,
+            result: outcome.auditDetail,
+            succeeded: !outcome.needsManualRecovery
+        )
+    }
+
+    /// Connect Workbench's tools to the selected boss from the Harness Status sheet. RUNTIME
+    /// INJECTION: nothing is written to the bundle — Workbench injects the tools at runtime via
+    /// `--workbench-mcp`. Reuses the `registerWorkbenchForBossChoice` path (which runs the
+    /// registrar's stale-entry cleanup + refreshes the snapshot), then reads back the resulting
+    /// status to report success/failure into the sheet banner.
+    ///
+    /// Called only behind the "Connect Workbench tools?" confirmation.
     func registerHarnessWorkbenchMCP() {
         let bossName = state.boss.agentName
         registerWorkbenchForBossChoice(bossName)
@@ -11160,11 +11564,11 @@ final class WorkbenchViewModel: ObservableObject {
         let succeeded = status == .registered
         let message: String
         if succeeded {
-            message = "Registered Workbench MCP with \(bossName)."
+            message = "\(bossName) is connected to Workbench and ready."
         } else if let detail = bossWorkbenchMCPRegistration?.detail, !detail.isEmpty {
-            message = "Could not register Workbench MCP with \(bossName): \(detail)"
+            message = "Couldn't connect \(bossName) to Workbench: \(detail)"
         } else {
-            message = "Could not register Workbench MCP with \(bossName)."
+            message = "Couldn't connect \(bossName) to Workbench."
         }
         harnessActionResult = HarnessActionResult(
             kind: .registerWorkbenchMCP,
@@ -12084,10 +12488,10 @@ final class WorkbenchViewModel: ObservableObject {
         } else if text.contains("mcp") || text.contains("tool") {
             installWorkbenchMCPForBoss()
             refreshOnboardingReadiness()
-            return "Registering Workbench tools with the selected boss agent."
-        } else if text.contains("hatch") {
-            launchOuroAgentInstall(mode: "hatch", agentName: "", remote: "")
-            return "Opening the agent hatch flow."
+            return "Connecting Workbench tools to the selected boss agent at runtime."
+        } else if text.contains("hatch") || text.contains("create agent") {
+            presentNewAgentProviderConfigForm()
+            return "Opening the new-agent setup form."
         } else {
             bossQuestion = rawText
             Task {
@@ -12223,18 +12627,23 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     func openOnboardingRepair(_ step: OnboardingRepairStep) {
-        guard let commandLine = step.commandLine else {
+        // Provider-setup steps open the NATIVE provider form (the one human gate) — never a
+        // `ouro connect providers` `.trusted` pane. That interactive pane was the TTFA violation
+        // R3 deleted: the human is never handed a CLI, not even in an app-opened pane. The
+        // cold-start gate (`request-provider-config`) carries no command at all; the existing-
+        // agent lane-completion steps (`outward-lane` / `inner-lane`) still carry an audit-lane
+        // command in Core, but here they route to the native form (and the form honestly reports
+        // the existing-agent gap — gap a — rather than spawning a pane).
+        if step.isProviderSetup {
+            presentProviderConfigForm(agentName: onboardingReadiness?.selectedBossName ?? state.boss.agentName)
             return
         }
-        let draft = CustomTerminalSessionDraft(
-            name: "Ouro Setup: \(step.title)",
-            command: commandLine,
-            workingDirectory: FileManager.default.homeDirectoryForCurrentUser.path,
-            trust: .trusted,
-            autoResume: false,
-            notes: "\(step.actor.rawValue): \(step.detail)"
-        )
-        _ = createCustomSession(draft, launchAfterCreate: true)
+        // R4b — every remaining repair step is APP-EXECUTED (no spawned CLI pane). The Setup
+        // Assistant never hands raw `ouro …` to the human. The last human-as-hands panes
+        // (`repair-agent-config` → `AgentRepairRunner`; `check-outward` / `check-inner` →
+        // `ProviderVerifyRunner`) run headlessly through the same recovery-truth runners the
+        // agent-driven onboarding actions use, surfacing a seam-free line into Applied Actions.
+        runOnboardingRepairStepNatively(step)
     }
 
     func deskBridgePlan(for kind: TerminalAgentKind) -> DeskBridgePlan? {
@@ -12923,9 +13332,10 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     func runBossQuickQuestion(_ question: String) async {
-        bossQuestion = question
+        let resolved = question.replacingOccurrences(of: "{{owner}}", with: ownerDisplayName)
+        bossQuestion = resolved
         setBossPaneCollapsed(false)
-        await runBossCheckIn(question: bossBridgePlanner.checkInQuestion(userQuestion: question), recentChanges: [])
+        await runBossCheckIn(question: bossBridgePlanner.checkInQuestion(userQuestion: resolved), recentChanges: [])
     }
 
     func runBossQuestion(about entry: ProcessEntry) async {
@@ -12933,7 +13343,7 @@ final class WorkbenchViewModel: ObservableObject {
         bossQuestion = shortQuestion
         setBossPaneCollapsed(false)
         let question = """
-        Focus on \(entry.name) (id=\(entry.id.uuidString)). Tell Ari what this session is doing, whether it is waiting on him, and what should happen next. If the next step is obvious for a trusted session, use auditable Workbench actions.
+        Focus on \(entry.name) (id=\(entry.id.uuidString)). Tell \(ownerDisplayName) what this session is doing, whether it is waiting on them, and what should happen next. If the next step is obvious for a trusted session, use auditable Workbench actions.
         """
         await runBossCheckIn(question: bossBridgePlanner.checkInQuestion(userQuestion: question), recentChanges: [])
     }
@@ -12943,6 +13353,14 @@ final class WorkbenchViewModel: ObservableObject {
         recentChanges: [WorkspaceChangeSummary]
     ) async {
         guard !bossCheckInIsRunning else {
+            return
+        }
+        // No boss resolved yet (fresh / factory-reset machine, or >1 agent awaiting
+        // an explicit choice). There's no agent to check in with — skip rather than
+        // spawn `ouro mcp-serve --agent ""`, which would fail and trip the watch
+        // backoff while the human is still on the boss-choice screen. Every check-in
+        // entry point (manual, questions, the watch tick) funnels through here.
+        guard !state.boss.agentName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return
         }
         let requestedBoss = state.boss.agentName
@@ -12956,6 +13374,36 @@ final class WorkbenchViewModel: ObservableObject {
         guard state.boss.agentName == requestedBoss else {
             return
         }
+
+        // Workbench manages the daemon as invisible infrastructure: detect-reuse-else-start
+        // BEFORE asking the agent. `refreshBossDashboard()` above can't tell us this — the
+        // mailbox overview collapses to "unknown" when the daemon is down — so we run a
+        // dedicated liveness probe + detached start here. Recovery truth comes from the
+        // POST-start verify probe, never an exit code. If the agent genuinely can't be
+        // brought online, surface an honest, seam-free line instead of asking a dead daemon;
+        // the precise CLI-level detail stays in the audit log + debug surface only.
+        let daemonOutcome = await daemonManager.ensureRunning()
+        recordActionLog(
+            source: "boss:\(requestedBoss)",
+            action: "ensureDaemon",
+            targetName: requestedBoss,
+            result: daemonOutcome.auditDetail,
+            succeeded: !daemonOutcome.needsManualRecovery
+        )
+        if let startupLine = daemonOutcome.humanFacingStartupLine {
+            bossCheckInAnswer = startupLine
+        }
+        if daemonOutcome.needsManualRecovery {
+            bossAppliedActions = []
+            if bossWatchIsEnabled {
+                bossWatchLastError = daemonOutcome.auditDetail
+            }
+            return
+        }
+        guard state.boss.agentName == requestedBoss else {
+            return
+        }
+
         prepareBossCheckIn(question: question, recentChanges: recentChanges)
         guard let bossCheckInPrompt else {
             return
@@ -13002,7 +13450,9 @@ final class WorkbenchViewModel: ObservableObject {
             bossWatchConsecutiveFailures = 0
             bossWatchNextRetryAt = nil
         } catch {
-            bossCheckInAnswer = "Check-in failed: \(error.localizedDescription)"
+            // Product voice only — never leak the raw transport/CLI error to the human.
+            // The precise detail stays in the audit/debug surface (`bossWatchLastError`).
+            bossCheckInAnswer = "Your agent didn't answer just now. Workbench will try again shortly."
             bossAppliedActions = []
             bossWatchConsecutiveFailures += 1
             bossWatchNextRetryAt = Date().addingTimeInterval(
@@ -13920,6 +14370,30 @@ final class WorkbenchViewModel: ObservableObject {
             )
         }
 
+        // Close the entry-less auth bypass: entry-less actions used to reach their handlers in
+        // the first switch WITHOUT any authorization (they returned before the entry-scoped
+        // authorizer below). Authorize the genuinely entry-less actions explicitly here, BEFORE
+        // any handler runs. Known callers (createGroup / createTerminal / createSession) stay
+        // allowed under `knownEntryless`; repairAgent runs under `trustedOnboarding`; anything
+        // else reaching the entry-less path is denied. The entry-scoped second switch — and its
+        // `authorize(_:for:livePrompt:)` sendInput safety floor + escalateWithheldBossInput
+        // path — is left UNTOUCHED.
+        switch action.action {
+        case .createGroup, .createTerminal, .createSession, .repairAgent, .requestProviderConfig,
+             .verifyProvider, .refreshProvider, .selectLane, .registerWorkbenchMCP, .ensureDaemon:
+            let authorization = bossActionAuthorizer.authorizeEntryless(action)
+            guard authorization.isAllowed else {
+                return finishBossAction(
+                    source: source,
+                    action: action,
+                    entry: nil,
+                    result: "Skipped \(action.action.rawValue): \(authorization.reason ?? "not authorized")"
+                )
+            }
+        case .launch, .recover, .terminate, .sendInput, .moveSession, .setTrust, .setAutoResume, .archive, .restore:
+            break
+        }
+
         switch action.action {
         case .createGroup:
             guard createGroup(name: action.name ?? "", rootPath: action.workingDirectory ?? "") else {
@@ -13968,6 +14442,20 @@ final class WorkbenchViewModel: ObservableObject {
                 return finishBossAction(source: source, action: action, entry: nil, result: "Failed createSession: \(errorMessage ?? "invalid session")")
             }
             return finishBossAction(source: source, action: action, entry: entry, result: "Created session \(entry.name) in \(project.name) owned by \(ownerName)")
+        case .repairAgent:
+            return startRepairAgent(action: action, source: source)
+        case .requestProviderConfig:
+            return openProviderConfig(action: action, source: source)
+        case .verifyProvider:
+            return startVerifyProvider(action: action, source: source)
+        case .refreshProvider:
+            return startRefreshProvider(action: action, source: source)
+        case .selectLane:
+            return startSelectLane(action: action, source: source)
+        case .registerWorkbenchMCP:
+            return startRegisterWorkbenchMCP(action: action, source: source)
+        case .ensureDaemon:
+            return startEnsureDaemon(action: action, source: source)
         case .launch, .recover, .terminate, .sendInput, .moveSession, .setTrust, .setAutoResume, .archive, .restore:
             break
         }
@@ -14109,7 +14597,8 @@ final class WorkbenchViewModel: ObservableObject {
                 return finishBossAction(source: source, action: action, entry: entry, result: "Failed restore for \(entry.name): \(errorMessage ?? "not restorable")")
             }
             return finishBossAction(source: source, action: action, entry: entry, result: "Restored \(entry.name)")
-        case .createGroup, .createTerminal, .createSession:
+        case .createGroup, .createTerminal, .createSession, .repairAgent, .requestProviderConfig,
+             .verifyProvider, .refreshProvider, .selectLane, .registerWorkbenchMCP, .ensureDaemon:
             return finishBossAction(source: source, action: action, entry: entry, result: "Skipped \(action.action.rawValue): already handled")
         }
     }
@@ -14163,6 +14652,724 @@ final class WorkbenchViewModel: ObservableObject {
         )
         if recorded {
             save()
+        }
+    }
+
+    /// Present the native provider-config form for `agentName`. The single place the form is
+    /// opened — from the `requestProviderConfig` action OR a native onboarding provider-setup
+    /// affordance. Sets only the label/seed and the presentation flag; carries no credential.
+    func presentProviderConfigForm(agentName: String) {
+        let trimmed = agentName.trimmingCharacters(in: .whitespacesAndNewlines)
+        providerConfigIsNewAgent = false
+        providerConfigAgentName = trimmed.isEmpty ? state.boss.agentName : trimmed
+        isProviderConfigPresented = true
+    }
+
+    /// Present the provider form to CREATE A NEW AGENT (the empty-machine first-agent
+    /// path, and the "create another" path). The form collects the agent name +
+    /// provider + credentials and cold-start-hatches headlessly — replacing the
+    /// visible `ouro hatch` CLI pane that `launchOuroAgentInstall` spawned.
+    func presentNewAgentProviderConfigForm() {
+        providerConfigIsNewAgent = true
+        providerConfigAgentName = ""
+        isProviderConfigPresented = true
+    }
+
+    /// Seam-free validation for a new agent's name, or nil if valid. Surfaced inline in
+    /// the new-agent form before any hatch is attempted.
+    func newAgentNameValidationMessage(_ name: String) -> String? {
+        ProviderConfigForm.newAgentNameValidationMessage(name, existingNames: ouroAgents.map(\.name))
+    }
+
+    /// Whether a usable agent bundle already exists for the provider-config target. Drives the
+    /// cold-start vs. existing-agent branch in `submitProviderConfig`.
+    func providerConfigAgentAlreadyExists(named agentName: String) -> Bool {
+        let trimmed = agentName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return ouroAgents.contains { $0.name.caseInsensitiveCompare(trimmed) == .orderedSame }
+    }
+
+    /// Submit the native provider-config form. Returns the seam-free message to surface in the
+    /// form (nil = success + dismiss). The SECRET reaches `ouro hatch` only here, native-form →
+    /// hatch argv — it NEVER passes through the agent's context/MCP.
+    ///
+    /// COLD-START path (the deliverable): no usable agent yet → build + run a headless
+    /// `ouro hatch …` with the matching credential flags, then re-probe readiness.
+    @discardableResult
+    func submitProviderConfig(
+        provider: WorkbenchProvider,
+        humanName: String,
+        values: [String: String]
+    ) -> String? {
+        let agentName = providerConfigAgentName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedAgent = agentName.isEmpty ? state.boss.agentName : agentName
+
+        // EXISTING-AGENT credential refresh has no headless `ouro` non-interactive sink today
+        // (the documented narrow gap, gap a). Surface the honest, seam-free Core copy — do NOT
+        // reintroduce a `connect providers` pane and do NOT block.
+        // FUTURE: needs ouro non-interactive credential-set affordance.
+        if providerConfigAgentAlreadyExists(named: resolvedAgent) {
+            return ProviderConfigForm.existingAgentRefreshUnavailableMessage(agentName: resolvedAgent)
+        }
+
+        let form = ProviderConfigForm(agentName: resolvedAgent, humanName: humanName)
+        let outcome = form.submit(provider: provider, values: values)
+
+        switch outcome {
+        case let .invalid(message):
+            return message
+        case let .unsupportedColdStartSink(message):
+            // github-copilot cold-start (gap b): no `ouro hatch` argv flag. Honest report — no
+            // fabricated command, no CLI pane. The Core form built this seam-free message.
+            return message
+        case let .coldStartHatch(plan):
+            // Run the cold-start hatch headlessly (no pane). The secret lives only in the plan's
+            // argv tokens, built natively from the form — never through the agent.
+            Task { [weak self] in
+                try? await ColdStartHatchRunner.runHeadless(plan: plan)
+                await MainActor.run {
+                    // Re-probe readiness: the agent was just created WITH creds, so the provider
+                    // gate is now satisfied.
+                    self?.refreshOuroAgents()
+                    self?.refreshOnboardingReadiness()
+                    self?.runOnboardingProviderChecksIfNeeded()
+                    // R4b — re-run the parked first-run bootstrap. S2's gate now reads
+                    // `credentialsPresent` (the agent was hatched WITH the credential), so the
+                    // re-run crosses S2 → S3→S5 → the handoff probe, flipping to agent-driven mode.
+                    // `runFirstRunBootstrap` no-ops if a run is already in flight or already
+                    // handed off, so this is safe even outside the parked first-run path.
+                    self?.runFirstRunBootstrap()
+                }
+            }
+            recordActionLog(
+                source: "native",
+                action: "providerConfigColdStart",
+                targetName: resolvedAgent,
+                // Audit lane only — carries the raw `ouro hatch` verb (NOT the credential value).
+                result: "ran `ouro hatch --agent \(resolvedAgent) --provider \(provider.providerFlagValue)` (cold-start; credential via native form → argv)",
+                succeeded: true
+            )
+            isProviderConfigPresented = false
+            return nil
+        }
+    }
+
+    /// Open the native provider-config form in response to a non-secret-bearing
+    /// `requestProviderConfig` onboarding action.
+    ///
+    /// NON-EXECUTING by contract: this runs NO command and carries NO credential. The agent can
+    /// only ASK the app to open the form; the human supplies the credential inside the native
+    /// form, which never routes through the agent's context/transcript. The effect here is a
+    /// single published flag flip that presents the form — the one human touchpoint.
+    private func openProviderConfig(action: BossWorkbenchAction, source: String) -> String {
+        // Seed the form with the explicit agent name if the action named one (never relied on
+        // for credentials — only to label which agent the form is connecting a provider for).
+        let agentName = (action.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let target = agentName.isEmpty ? state.boss.agentName : agentName
+        presentProviderConfigForm(agentName: target)
+        return finishBossAction(
+            source: source,
+            action: action,
+            entry: nil,
+            result: "Opened the provider setup form for \(target)."
+        )
+    }
+
+    /// Kick off a headless `repairAgent` remediation.
+    ///
+    /// The remediation is async (spawn `ouro repair --agent <name>` headlessly → POST-command
+    /// verify probe → classify), but `applyBossAction` is synchronous and the 2s pump narrates
+    /// from the NEXT `workbench_onboarding_status` read, not this ack. So this returns an
+    /// immediate seam-free "working on it" line, then surfaces the recovery-truth audit line
+    /// into `bossAppliedActions` (and the action log) once the verify probe classifies — NEVER
+    /// from the command's exit code.
+    ///
+    /// The agent name is taken EXPLICITLY from the action (validated non-empty at queueing and
+    /// re-authorized via `authorizeEntryless` under `trustedOnboarding`); it never relies on
+    /// `ouro` default-agent resolution. We re-guard here so a code path that skipped validation
+    /// still can't run an agent-less repair (which could repair the wrong agent).
+    private func startRepairAgent(action: BossWorkbenchAction, source: String) -> String {
+        let agentName = (action.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !agentName.isEmpty else {
+            return finishBossAction(
+                source: source,
+                action: action,
+                entry: nil,
+                result: "Skipped repairAgent: missing explicit agent name"
+            )
+        }
+
+        let runner = makeAgentRepairRunner()
+        Task { [weak self] in
+            let outcome = await runner.repair(agentName: agentName)
+            await MainActor.run {
+                self?.completeRepairAgent(action: action, source: source, outcome: outcome)
+            }
+        }
+
+        // Immediate, seam-free ack. Recovery truth follows asynchronously.
+        return finishBossAction(
+            source: source,
+            action: action,
+            entry: nil,
+            result: "Working on getting \(agentName) ready…"
+        )
+    }
+
+    /// Surface the recovery-truth outcome of a completed `repairAgent` cycle.
+    ///
+    /// Writes the human-facing (seam-free) line to `bossAppliedActions` for the UI and records
+    /// the raw audit detail (carrying `ouro repair --agent <name>`) to the action log. The
+    /// `succeeded` flag is the recovery truth — true ONLY when the post-command probe reads
+    /// healthy (`repaired`), never off the exit code.
+    private func completeRepairAgent(
+        action: BossWorkbenchAction,
+        source: String,
+        outcome: AgentRepairOutcome
+    ) {
+        bossAppliedActions = Array(([outcome.humanFacingLine] + bossAppliedActions).prefix(12))
+        recordActionLog(
+            source: source,
+            action: action.action.rawValue,
+            targetName: outcome.agentName,
+            result: outcome.auditDetail,
+            succeeded: outcome.truth == .repaired
+        )
+        if bossWatchIsEnabled, outcome.needsManualRecovery {
+            bossWatchLastError = outcome.auditDetail
+        }
+    }
+
+    // MARK: - R4b first-run cold-start bootstrap (Layer A drive + handoff)
+
+    /// Start the first-run bootstrap when conditions warrant it: a fresh / not-ready setup, an
+    /// explicitly-resolved boss to target, not already running, and not already handed off. Safe
+    /// to call from `onAppear` — it no-ops when those conditions aren't met (already agent-driven,
+    /// already ready, mid-run). The pure run/skip decision is `FirstRunBootstrapDrive.shouldStart`.
+    func startFirstRunBootstrapIfNeeded() {
+        let bossName = (onboardingReadiness?.selectedBossName ?? state.boss.agentName)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let decision = FirstRunBootstrapDrive.shouldStart(
+            isReady: onboardingReadiness?.isReady ?? false,
+            hasResolvedBoss: !bossName.isEmpty,
+            isRunning: firstRunBootstrapIsRunning,
+            currentMode: firstRunPresentation?.mode
+        )
+        guard decision else { return }
+        runFirstRunBootstrap()
+    }
+
+    /// Drive the native cold-start bootstrap S0→S5 with the REAL injected effects, publishing the
+    /// live per-step presentation (seam-free copy) and switching to agent-driven (Layer B) mode on
+    /// the first successful `status` round-trip. The branching/sequencing/copy is all pure Core
+    /// (`AgentReadinessBootstrap` + `FirstRunBootstrapDrive` + `FirstRunBootstrapEffectsResolver`);
+    /// this is the thin app-side wiring that injects the real effects and publishes the result.
+    func runFirstRunBootstrap() {
+        guard !firstRunBootstrapIsRunning else { return }
+        let bossName = (onboardingReadiness?.selectedBossName ?? state.boss.agentName)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        // Without an explicitly-resolved boss name there's nothing to bootstrap against; the
+        // boss-choice surface handles that case. (The machine would also guard it, but we avoid
+        // spinning up effects for an empty name.)
+        guard !bossName.isEmpty else { return }
+
+        firstRunBootstrapIsRunning = true
+        // Seed the live presentation with all-pending steps so the UI shows progress immediately.
+        firstRunPresentation = firstRunDrive.presentIdle()
+
+        // The context's human/provider are only load-bearing for an S1 hatch; this app's S1 effect
+        // defers cold-start agent creation to the S2 native form (which carries the provider +
+        // credential), so they're best-effort here. The agent NAME is the load-bearing field —
+        // explicitly resolved, never `ouro` default-agent resolution.
+        let context = BootstrapAgentContext(
+            agentName: bossName,
+            humanName: deskHumanName(),
+            provider: ""
+        )
+        let effects = makeFirstRunBootstrapEffects(agentName: bossName)
+        let bootstrap = AgentReadinessBootstrap(context: context, effects: effects)
+
+        Task { [weak self] in
+            let result = await bootstrap.run()
+            await MainActor.run {
+                self?.completeFirstRunBootstrap(result: result, agentName: bossName)
+            }
+        }
+    }
+
+    /// Build the REAL `BootstrapStepEffects` from the existing slice pieces, each carrying the
+    /// EXPLICIT resolved boss name (never `ouro` default-agent resolution) and classifying recovery
+    /// truth from a POST-effect probe, never an exit code. This is the R4b composition seam: every
+    /// prior slice's runner traces to a shipped implementation here —
+    ///   S0 `DaemonManager.ensureRunning` (the shared `daemonManager`),
+    ///   S1 cold-start agent existence (deferring creation to the gate),
+    ///   S2 the native provider form as the ONE human gate (parks if creds absent),
+    ///   S3 `ProviderRefreshRunner`, S4 `ProviderVerifyRunner`, S5 `WorkbenchMCPRegistrationRunner`,
+    ///   and the handoff edge = the first successful `BossAgentMCPClient.status` round-trip.
+    private func makeFirstRunBootstrapEffects(agentName: String) -> BootstrapStepEffects {
+        let manager = daemonManager
+        // Capture the bundles URL (Sendable) and rebuild a fresh inventory inside the @Sendable
+        // closures — `OuroAgentInventory` holds a non-Sendable `FileManager`, so we don't capture
+        // the instance. A fresh `.default`-FileManager inventory scans identically.
+        let bundlesURL = ouroAgentInventory.agentBundlesURL
+        let registrar = bossWorkbenchMCPRegistrar
+        let client = bossMCPClient
+
+        // S3/S4 post-command verify probes reuse the SAME readiness signal as the handoff edge:
+        // a `BossAgentMCPClient.status` round-trip (usable answer = healthy; any failure =
+        // unreachable). A successful probe genuinely proves the agent is serving.
+        let nameProbe: @Sendable (String) async -> AgentRepairProbe = { name in
+            do { _ = try await client.status(agentName: name); return .healthy }
+            catch { return .unreachable }
+        }
+        let laneProbe: @Sendable (String, ProviderLane?) async -> AgentRepairProbe = { name, _ in
+            do { _ = try await client.status(agentName: name); return .healthy }
+            catch { return .unreachable }
+        }
+
+        let refreshRunner = ProviderRefreshRunner(verifyProbe: nameProbe)
+        let verifyRunner = ProviderVerifyRunner(verifyProbe: laneProbe)
+        let mcpRunner = WorkbenchMCPRegistrationRunner(
+            runRegister: { name in _ = try registrar.install(for: BossAgentSelection(agentName: name)) },
+            snapshotProbe: { name in registrar.snapshot(for: BossAgentSelection(agentName: name)).status }
+        )
+
+        return BootstrapStepEffects(
+            // S0 — ensure the daemon (detect-reuse-else-start). Recovery truth from the post-start
+            // verify probe, classified inside `DaemonManager`, mapped here to StepHealth.
+            ensureDaemon: {
+                let outcome = await manager.ensureRunning()
+                return outcome.liveness == .up ? .healthy : .needsManual
+            },
+            // S1 — ensure a usable agent exists. Cold-start defers agent creation to the S2 form,
+            // so this reads `.healthy` from a freshly-scanned inventory (existing agent verifies;
+            // absent agent lets the run REACH the gate, which then parks). Pure resolver decides.
+            ensureAgentExists: { name in
+                let agents = OuroAgentInventory(agentBundlesURL: bundlesURL).scan()
+                return FirstRunBootstrapEffectsResolver.ensureAgentExistsHealth(named: name, in: agents)
+            },
+            // S2 — the ONE human gate. Reads the creds signal from a freshly-scanned inventory:
+            // `credentialsPresent` advances; `absent` PARKS (the only exit is the human supplying
+            // creds via the native form, which the UI surfaces in the parked mode). Checked once.
+            providerConfig: {
+                let agents = OuroAgentInventory(agentBundlesURL: bundlesURL).scan()
+                return FirstRunBootstrapEffectsResolver.providerGateStatus(named: agentName, in: agents)
+            },
+            // S3 — vault/provider sync: push the agent's stored vault creds into the running
+            // daemon (`ouro provider refresh`). Recovery truth from the post-command probe.
+            vaultSync: { name in
+                let outcome = await refreshRunner.refresh(agentName: name)
+                switch outcome.truth {
+                case .refreshed: return .healthy
+                case .stillDegraded: return .stillDegraded
+                case .needsManual: return .needsManual
+                }
+            },
+            // S4 — verify the configured credentials actually work (`ouro auth verify`, lane-less).
+            verifyCredentials: { name in
+                let outcome = await verifyRunner.verify(agentName: name, lane: nil)
+                switch outcome.truth {
+                case .verified: return .healthy
+                case .stillUnverified: return .stillDegraded
+                case .needsManual: return .needsManual
+                }
+            },
+            // S5 — make the Workbench tools available to the boss at RUNTIME. Under runtime
+            // injection nothing is written to the synced bundle: Workbench passes `--workbench-mcp`
+            // when it launches the boss. This effect verifies the binary is present (runtime
+            // injection available) and CLEANS any stale bundle entry an older Workbench left. The
+            // registrar's cleanup + snapshot are wrapped as the bootstrap effect; recovery truth is
+            // the post-cleanup snapshot.
+            registerWorkbenchMCP: { name in
+                let outcome = await mcpRunner.register(agentName: name)
+                switch outcome.truth {
+                case .registered: return .healthy
+                case .stillUnregistered: return .stillDegraded
+                case .needsManual: return .needsManual
+                }
+            },
+            // Handoff edge — the first successful `status` round-trip ends Layer A.
+            statusPing: { name in
+                do { _ = try await client.status(agentName: name); return true }
+                catch { return false }
+            }
+        )
+    }
+
+    /// Apply a finished bootstrap run to the UI: publish the live presentation and, on handoff,
+    /// switch to agent-driven (Layer B) mode — surface the seam-free handoff narration and let the
+    /// boss inspect (`workbench_onboarding_status`) + remediate (issue onboarding actions) +
+    /// narrate. From here the human is never asked to run anything; applied actions land in
+    /// `bossAppliedActions`. On a S2 park, surface the native provider form (the one touchpoint).
+    private func completeFirstRunBootstrap(result: BootstrapResult, agentName: String) {
+        firstRunBootstrapIsRunning = false
+        let presentation = firstRunDrive.present(result: result, activeStep: nil)
+        firstRunPresentation = presentation
+        // Keep the readiness snapshot coherent with whatever the bootstrap just changed.
+        refreshOuroAgents()
+        refreshWorkbenchMCPRegistration()
+        refreshOnboardingReadiness()
+
+        // Audit the settled phase (raw verbs allowed in the action log / debug lane only).
+        recordActionLog(
+            source: "native",
+            action: "firstRunBootstrap",
+            targetName: result.didHandOff ? "handed-off" : "layer-a",
+            result: result.stepOutcomes.map(\.auditDetail).joined(separator: " | "),
+            succeeded: result.didHandOff
+        )
+
+        if presentation.didHandOff {
+            // HANDOFF: Layer A guaranteed {daemon ∧ boss bundle ∧ creds ∧ MCP}; the first
+            // `status` round-trip succeeded. Layer B takes the wheel — surface the agent-driven
+            // narration; the boss's applied actions land in `bossAppliedActions` from here on.
+            firstRunAgentDrivenNarration = FirstRunBootstrapDrive.agentDrivenHandoffNarration
+            bossAppliedActions = Array(
+                ([FirstRunBootstrapDrive.agentDrivenHandoffNarration] + bossAppliedActions).prefix(12)
+            )
+        } else if presentation.opensProviderGate {
+            // PARKED at the S2 gate — surface the native provider form (the one human touchpoint).
+            // The form, on submit, runs the cold-start hatch with the credential and re-runs the
+            // parked bootstrap (`submitProviderConfig` → `runFirstRunBootstrap`), crossing S2.
+            firstRunAgentDrivenNarration = nil
+            presentProviderConfigForm(agentName: agentName)
+        } else {
+            firstRunAgentDrivenNarration = nil
+        }
+    }
+
+    /// The human name the bootstrap context carries for a cold-start hatch. Best-effort: the
+    /// current macOS short user name (the native provider form itself collects the human name).
+    private func deskHumanName() -> String {
+        NSUserName()
+    }
+
+    /// The machine owner's display name (full name, username fallback) — woven into
+    /// the boss's check-in questions and quick-question chips so the agent reports on
+    /// the ACTUAL operator, never a hardcoded name. Static so property initializers
+    /// (the prompt builders) can resolve it before `self` exists.
+    static func resolvedOwnerName() -> String {
+        SessionFriend.machineOwner()?.name ?? NSUserName()
+    }
+
+    /// Instance accessor for `resolvedOwnerName()`, used to substitute the `{{owner}}`
+    /// token in the quick-question chips and per-session questions.
+    private var ownerDisplayName: String { Self.resolvedOwnerName() }
+
+    /// Run an onboarding repair step APP-EXECUTED (headless, no pane), classifying from a
+    /// post-command verify probe — the human-as-hands path is gone. Maps the step id to the
+    /// existing recovery-truth runner: `repair-agent-config` → `AgentRepairRunner`;
+    /// `check-outward` / `check-inner` → `ProviderVerifyRunner` (lane-scoped). The Setup Assistant
+    /// never hands a raw `ouro …` command to the human; the seam-free ack copy is pure Core.
+    private func runOnboardingRepairStepNatively(_ step: OnboardingRepairStep) {
+        let agentName = (onboardingReadiness?.selectedBossName ?? state.boss.agentName)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !agentName.isEmpty else { return }
+
+        switch step.id {
+        case "repair-agent-config":
+            let runner = makeAgentRepairRunner()
+            if let ack = NativeOnboardingRepairCopy.inProgressLine(forStepID: step.id) {
+                bossAppliedActions = Array(([ack] + bossAppliedActions).prefix(12))
+            }
+            Task { [weak self] in
+                let outcome = await runner.repair(agentName: agentName)
+                await MainActor.run {
+                    self?.surfaceNativeRepairLine(
+                        humanFacingLine: outcome.humanFacingLine,
+                        auditDetail: outcome.auditDetail,
+                        targetName: outcome.agentName,
+                        action: "repairAgent",
+                        succeeded: outcome.truth == .repaired,
+                        needsManual: outcome.needsManualRecovery
+                    )
+                }
+            }
+        case "check-outward", "check-inner":
+            let lane: ProviderLane = (step.id == "check-outward") ? .outward : .inner
+            let runner = ProviderVerifyRunner(verifyProbe: makeProbe())
+            if let ack = NativeOnboardingRepairCopy.inProgressLine(forStepID: step.id) {
+                bossAppliedActions = Array(([ack] + bossAppliedActions).prefix(12))
+            }
+            Task { [weak self] in
+                let outcome = await runner.verify(agentName: agentName, lane: lane)
+                await MainActor.run {
+                    self?.surfaceNativeRepairLine(
+                        humanFacingLine: outcome.humanFacingLine,
+                        auditDetail: outcome.auditDetail,
+                        targetName: outcome.agentName,
+                        action: "verifyProvider",
+                        succeeded: outcome.truth == .verified,
+                        needsManual: outcome.needsManualRecovery
+                    )
+                }
+            }
+        default:
+            // No other step reaches here (provider-setup short-circuits in `openOnboardingRepair`;
+            // workbench-mcp has its own button; check-* in `running` state render a spinner).
+            // Re-probe readiness so the surface stays coherent.
+            refreshOnboardingReadiness()
+        }
+    }
+
+    /// Surface a natively-run onboarding repair step's recovery truth: seam-free line →
+    /// `bossAppliedActions`; raw audit detail → action log; `succeeded` is the post-command probe
+    /// truth, never an exit code. Then re-probe readiness so the surface reflects the new state.
+    private func surfaceNativeRepairLine(
+        humanFacingLine: String,
+        auditDetail: String,
+        targetName: String,
+        action: String,
+        succeeded: Bool,
+        needsManual: Bool
+    ) {
+        bossAppliedActions = Array(([humanFacingLine] + bossAppliedActions).prefix(12))
+        recordActionLog(
+            source: "native",
+            action: action,
+            targetName: targetName,
+            result: auditDetail,
+            succeeded: succeeded
+        )
+        if bossWatchIsEnabled, needsManual {
+            bossWatchLastError = auditDetail
+        }
+        refreshOuroAgents()
+        refreshOnboardingReadiness()
+    }
+
+    /// Build the headless repair runner. The default verify probe is a post-command
+    /// `BossAgentMCPClient.status(agentName:)` round-trip: a usable answer = healthy; any
+    /// failure (no answer / transport) = unreachable. This is the SAME readiness signal as the
+    /// boss check-in's MCP round-trip, so a successful probe genuinely proves the agent is
+    /// serving. The repair command spawns headlessly (no pane) via `AgentRepairRunner`'s
+    /// daemon-spawn env pattern (`/usr/bin/env ouro …` + resolved PATH).
+    private func makeAgentRepairRunner() -> AgentRepairRunner {
+        let client = bossMCPClient
+        return AgentRepairRunner(
+            runRepair: AgentRepairRunner.headlessRepair,
+            verifyProbe: { name in
+                do {
+                    _ = try await client.status(agentName: name)
+                    return .healthy
+                } catch {
+                    return .unreachable
+                }
+            }
+        )
+    }
+
+    /// Kick off a headless `verifyProvider` remediation (`ouro auth verify` / `ouro check
+    /// --lane`). Async like `repairAgent`: returns an immediate seam-free ack, then surfaces the
+    /// recovery-truth (from the POST-command verify probe, never the exit code) once it lands.
+    ///
+    /// The agent name is taken EXPLICITLY from the action (validated non-empty at queueing and
+    /// re-authorized via `authorizeEntryless` under `trustedOnboarding`); it never relies on
+    /// `ouro` default-agent resolution. We re-guard here so a path that skipped validation can't
+    /// verify the wrong agent.
+    private func startVerifyProvider(action: BossWorkbenchAction, source: String) -> String {
+        let agentName = (action.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !agentName.isEmpty else {
+            return finishBossAction(
+                source: source, action: action, entry: nil,
+                result: "Skipped verifyProvider: missing explicit agent name"
+            )
+        }
+        let lane = action.lane
+        let runner = ProviderVerifyRunner(verifyProbe: makeProbe())
+        Task { [weak self] in
+            let outcome = await runner.verify(agentName: agentName, lane: lane)
+            await MainActor.run {
+                self?.completeOnboardingAction(
+                    action: action, source: source, targetName: outcome.agentName,
+                    humanFacingLine: outcome.humanFacingLine, auditDetail: outcome.auditDetail,
+                    succeeded: outcome.truth == .verified, needsManual: outcome.needsManualRecovery
+                )
+            }
+        }
+        return finishBossAction(
+            source: source, action: action, entry: nil,
+            result: "Checking \(agentName)'s provider connection…"
+        )
+    }
+
+    /// Kick off a headless `refreshProvider` remediation (`ouro provider refresh --agent`). Same
+    /// shape as `verifyProvider`: explicit agent name, immediate ack, recovery truth from the
+    /// POST-command probe. Carries no secret — it re-pushes already-stored vault creds.
+    private func startRefreshProvider(action: BossWorkbenchAction, source: String) -> String {
+        let agentName = (action.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !agentName.isEmpty else {
+            return finishBossAction(
+                source: source, action: action, entry: nil,
+                result: "Skipped refreshProvider: missing explicit agent name"
+            )
+        }
+        let runner = ProviderRefreshRunner(verifyProbe: makeProbe())
+        Task { [weak self] in
+            let outcome = await runner.refresh(agentName: agentName)
+            await MainActor.run {
+                self?.completeOnboardingAction(
+                    action: action, source: source, targetName: outcome.agentName,
+                    humanFacingLine: outcome.humanFacingLine, auditDetail: outcome.auditDetail,
+                    succeeded: outcome.truth == .refreshed, needsManual: outcome.needsManualRecovery
+                )
+            }
+        }
+        return finishBossAction(
+            source: source, action: action, entry: nil,
+            result: "Refreshing \(agentName)'s connection…"
+        )
+    }
+
+    /// Kick off a headless `selectLane` remediation (`ouro use --agent --lane --provider
+    /// --model`). CONFIG-ONLY — carries no secret. Re-guards the fully-specified payload (agent
+    /// name + lane + provider + model); any missing piece skips before any command runs.
+    private func startSelectLane(action: BossWorkbenchAction, source: String) -> String {
+        let agentName = (action.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !agentName.isEmpty,
+              let lane = action.lane,
+              let provider = nonEmpty(action.provider),
+              let model = nonEmpty(action.model) else {
+            return finishBossAction(
+                source: source, action: action, entry: nil,
+                result: "Skipped selectLane: missing explicit agent name, lane, provider, or model"
+            )
+        }
+        let selection = LaneSelection(agentName: agentName, lane: lane, provider: provider, model: model)
+        let runner = LaneSelectionRunner(verifyProbe: makeProbe())
+        Task { [weak self] in
+            let outcome = await runner.select(selection)
+            await MainActor.run {
+                self?.completeOnboardingAction(
+                    action: action, source: source, targetName: outcome.selection.agentName,
+                    humanFacingLine: outcome.humanFacingLine, auditDetail: outcome.auditDetail,
+                    succeeded: outcome.truth == .selected, needsManual: outcome.needsManualRecovery
+                )
+            }
+        }
+        return finishBossAction(
+            source: source, action: action, entry: nil,
+            result: "Setting up \(agentName) with \(provider)…"
+        )
+    }
+
+    /// Kick off a `registerWorkbenchMCP` remediation. RUNTIME-INJECTION model: there is nothing to
+    /// "register" into the bundle — Workbench injects the tools at runtime via `--workbench-mcp`.
+    /// This WRAPS the registrar's cleanup (`bossWorkbenchMCPRegistrar.install`, now a stale-entry
+    /// cleanup) + snapshot (binary-present + bundle-clean) as an agent-issuable action; recovery
+    /// truth comes from the POST-command registrar SNAPSHOT, never the cleanup throw.
+    private func startRegisterWorkbenchMCP(action: BossWorkbenchAction, source: String) -> String {
+        let agentName = (action.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !agentName.isEmpty else {
+            return finishBossAction(
+                source: source, action: action, entry: nil,
+                result: "Skipped registerWorkbenchMCP: missing explicit agent name"
+            )
+        }
+        let registrar = bossWorkbenchMCPRegistrar
+        let runner = WorkbenchMCPRegistrationRunner(
+            runRegister: { name in
+                _ = try registrar.install(for: BossAgentSelection(agentName: name))
+            },
+            snapshotProbe: { name in
+                registrar.snapshot(for: BossAgentSelection(agentName: name)).status
+            }
+        )
+        Task { [weak self] in
+            let outcome = await runner.register(agentName: agentName)
+            await MainActor.run {
+                // Keep the native registration cache coherent with what the action just wrote.
+                self?.refreshWorkbenchMCPRegistration()
+                self?.completeOnboardingAction(
+                    action: action, source: source, targetName: outcome.agentName,
+                    humanFacingLine: outcome.humanFacingLine, auditDetail: outcome.auditDetail,
+                    succeeded: outcome.truth == .registered, needsManual: outcome.needsManualRecovery
+                )
+            }
+        }
+        return finishBossAction(
+            source: source, action: action, entry: nil,
+            result: "Connecting \(agentName) to Workbench…"
+        )
+    }
+
+    /// Kick off an `ensureDaemon` remediation. WRAPS Slice 0's `DaemonManager.ensureRunning()`
+    /// (detect-reuse-else-start) as an agent-issuable action; recovery truth comes from its
+    /// existing post-start verify-probe classification, never an exit code. No agent name — the
+    /// daemon is machine-scoped infrastructure. Reuses the SAME `daemonManager` the check-in
+    /// path uses so the agent-issued ensure and the implicit check-in ensure share one config.
+    private func startEnsureDaemon(action: BossWorkbenchAction, source: String) -> String {
+        let manager = daemonManager
+        Task { [weak self] in
+            let start = await manager.ensureRunning()
+            let outcome = DaemonEnsureActionOutcome(start: start)
+            await MainActor.run {
+                self?.completeOnboardingAction(
+                    action: action, source: source, targetName: "daemon",
+                    humanFacingLine: outcome.humanFacingLine, auditDetail: outcome.auditDetail,
+                    succeeded: outcome.succeeded, needsManual: outcome.needsManualRecovery
+                )
+            }
+        }
+        return finishBossAction(
+            source: source, action: action, entry: nil,
+            result: "Bringing your agent's connection online…"
+        )
+    }
+
+    /// Surface the recovery-truth outcome of a completed onboarding action. Mirrors
+    /// `completeRepairAgent`: human-facing (seam-free) line → `bossAppliedActions`; raw audit
+    /// detail → action log; `succeeded` is the recovery truth (from the post-command probe).
+    private func completeOnboardingAction(
+        action: BossWorkbenchAction,
+        source: String,
+        targetName: String,
+        humanFacingLine: String,
+        auditDetail: String,
+        succeeded: Bool,
+        needsManual: Bool
+    ) {
+        bossAppliedActions = Array(([humanFacingLine] + bossAppliedActions).prefix(12))
+        recordActionLog(
+            source: source,
+            action: action.action.rawValue,
+            targetName: targetName,
+            result: auditDetail,
+            succeeded: succeeded
+        )
+        if bossWatchIsEnabled, needsManual {
+            bossWatchLastError = auditDetail
+        }
+    }
+
+    /// The shared POST-command verify probe for the agent-targeted onboarding actions: a
+    /// `BossAgentMCPClient.status(agentName:)` round-trip (a usable answer = healthy; any failure
+    /// = unreachable). This is the SAME readiness signal as the boss check-in's MCP round-trip,
+    /// so a successful probe genuinely proves the agent is serving. Returned in the
+    /// `(name, lane?)` shape `ProviderVerifyRunner` expects; the lane never affects the probe (it
+    /// classifies the whole agent's readiness).
+    private func makeProbe() -> @Sendable (String, ProviderLane?) async -> AgentRepairProbe {
+        let client = bossMCPClient
+        return { name, _ in
+            do {
+                _ = try await client.status(agentName: name)
+                return .healthy
+            } catch {
+                return .unreachable
+            }
+        }
+    }
+
+    /// The name-only verify-probe variant for runners that don't carry a lane
+    /// (`refreshProvider`, `selectLane`).
+    private func makeProbe() -> @Sendable (String) async -> AgentRepairProbe {
+        let client = bossMCPClient
+        return { name in
+            do {
+                _ = try await client.status(agentName: name)
+                return .healthy
+            } catch {
+                return .unreachable
+            }
         }
     }
 

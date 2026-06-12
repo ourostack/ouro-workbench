@@ -1,8 +1,20 @@
 # Changelog
 
-## 0.1.152 - Workbench visibility plane
+## 0.1.155 - Workbench visibility plane
 
 - Adds a read-only `workbench_visibility` MCP tool and native boss-pane visibility strip that combine Workbench session/decision counts with the selected Ouro agent's durable Work Card. Unknown claim verification state is represented explicitly as unavailable/unknown rather than false zeroes, and redacted Work Card next-action summaries are not expanded in Workbench output.
+
+## 0.1.154 - Daemon cold-start verify polling
+
+- The first-run daemon spine no longer reports a false "manual recovery required" while a freshly-started daemon is still coming up. When the boss check-in finds the Ouro daemon down, Workbench spawns it detached and now **polls** the verify probe for a bounded window (~10s) instead of taking a single immediate reading — so a daemon that needs a moment to bind its socket (a Node cold start, or the one-time `ouro` self-update download on the first launch after a new release) is correctly recognized as recovered ("Waking your agent…") rather than misclassified as unrecoverable. The honest "isn't responding yet" line still surfaces, but only after the daemon genuinely fails to come up within the budget.
+
+## 0.1.153 - Workbench tools via runtime injection (no bundle entry)
+
+- The boss agent now receives the Workbench MCP (`ouro_workbench`) at **runtime**, injected by the daemon for the boss's turn when Workbench launches it — nothing is written into the agent's git-synced bundle. This fixes a class of bugs where the `ouro_workbench` entry (a machine-specific binary path) was written into `agent.json`, then synced to your other machines where the path was wrong, drifted from the boss selection (boss on one agent, the MCP registration stranded on another), and survived a Workbench factory-reset because it lived outside Workbench's own state. Workbench now passes `ouro mcp-serve --agent <boss> --workbench-mcp <path>` (a coordinated `ouro` change adds the flag and merges the server per-turn/per-agent, never globally — no cross-agent tool leak), stops writing the bundle, and cleans up any stale `ouro_workbench`/`senses.workbench` entries it finds. One boss per machine; the boss is the only agent Workbench hands its tools to.
+
+## 0.1.152 - Agent-driven first-run
+
+- First-run no longer asks you to be the agent's hands. When the boss check-in finds the Ouro daemon down, Workbench now starts it itself — detached, so it survives Workbench quitting — and surfaces "Waking your agent…" instead of the old raw `Check-in failed: …Start it with ouro up` error; the Harness Status "Run ouro up" pane is gone too, replaced by an app-executed "Bring back online". Onboarding readiness is now daemon- and credential-aware, and the boss agent can drive its own setup through a named, audited onboarding-action family (`repairAgent`, `verifyProvider`, `refreshProvider`, `selectLane`, `registerWorkbenchMCP`, `ensureDaemon`) issued via `workbench_request_action` — each runs headlessly and classifies its result from a post-command verify probe, never an exit code — plus a `workbench_onboarding_status` read tool. A native cold-start bootstrap (ensure daemon → ensure a healthy agent → register Workbench MCP) drives a fresh machine and hands the wheel to the agent the instant it answers an MCP round-trip; the single human touchpoint is a native provider-config form whose credential goes straight to `ouro hatch` argv, never through the agent's context. The onboarding repair steps that used to spawn a terminal pane for you to drive now run app-executed. Closes a pre-existing gap where entry-less boss actions skipped authorization, while leaving the existing `sendInput` destructive-input safety floor intact.
 
 ## 0.1.151 - Glanceable per-session chip
 

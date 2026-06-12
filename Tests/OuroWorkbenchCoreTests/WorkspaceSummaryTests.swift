@@ -53,6 +53,7 @@ final class WorkspaceSummaryTests: XCTestCase {
             succeeded: false
         )
         let state = WorkspaceState(
+            boss: BossAgentSelection(agentName: "slugger"),
             bossWatchEnabled: true,
             bossPaneCollapsed: true,
             selectedProjectId: project.id,

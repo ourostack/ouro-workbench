@@ -90,7 +90,7 @@ final class HarnessStatusTests: XCTestCase {
 
         // Boss reachability
         XCTAssertTrue(status.boss.isReachable)
-        XCTAssertEqual(status.boss.mcpStatusText, "registered")
+        XCTAssertEqual(status.boss.mcpStatusText, "available at runtime")
         XCTAssertEqual(status.boss.bundleText, "installed and ready")
 
         // Roll-up
@@ -148,7 +148,7 @@ final class HarnessStatusTests: XCTestCase {
 
         XCTAssertTrue(status.daemon.isReachable)
         XCTAssertFalse(status.boss.isReachable)
-        XCTAssertEqual(status.boss.mcpStatusText, "not registered")
+        XCTAssertEqual(status.boss.mcpStatusText, "tools binary missing")
         XCTAssertEqual(status.boss.state, .blocked)
         XCTAssertEqual(status.overallState, .blocked)
         XCTAssertEqual(status.headline, "Boss slugger is not reachable")
@@ -187,7 +187,7 @@ final class HarnessStatusTests: XCTestCase {
         // sub-state is attention (works today) rather than blocked.
         XCTAssertFalse(status.boss.isReachable)
         XCTAssertEqual(status.boss.state, .attention)
-        XCTAssertEqual(status.boss.mcpStatusText, "update needed")
+        XCTAssertEqual(status.boss.mcpStatusText, "stale entry to clean")
     }
 
     // MARK: - Unready agent drives attention even when boss is fine
@@ -225,7 +225,7 @@ final class HarnessStatusTests: XCTestCase {
         XCTAssertEqual(status.daemon.statusText, "unreachable (not checked yet)")
         XCTAssertEqual(status.daemon.state, .blocked)
         XCTAssertTrue(status.agents.isEmpty)
-        XCTAssertEqual(status.agents.summaryLine, "No local agents found in ~/AgentBundles")
+        XCTAssertEqual(status.agents.summaryLine, "No Ouro agents are installed on this machine yet")
         XCTAssertEqual(status.overallState, .blocked)
     }
 
