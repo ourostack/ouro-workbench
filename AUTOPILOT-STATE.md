@@ -21,7 +21,7 @@ Gate state:
 - Audit: written and committed
 - Planning review: converged and approved
 - Doing review: converged; doing doc ready
-- Implementation: Unit 4c complete; Unit 3 cold-review findings fixed; starting Unit 5a
+- Implementation: Unit 5a complete; starting Unit 5b
 - Live validation: pending
 
-Next action: write failing Unit 5a boss-led onboarding narrative tests.
+Next action: implement WorkbenchOnboardingNarrative and wire boss-led onboarding copy into the app.

@@ -151,7 +151,7 @@ swift test --filter OnboardingTests
 **Output**: Test/build output saved to `2026-06-14-1420-doing-factory-reset-setup-flow/unit-4-session-controls.log`.
 **Acceptance**: Running/stopped/archived/recoverable action policies are covered and green.
 
-### ⬜ Unit 5a: Boss-Led Onboarding Copy - Tests
+### ✅ Unit 5a: Boss-Led Onboarding Copy - Tests
 **What**: Add failing tests for a pure onboarding narrative helper. Target `Tests/OuroWorkbenchCoreTests/OnboardingTests.swift` or a new `Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift`.
 **Output**: Tests require exact copy from `WorkbenchOnboardingNarrative`: `bossReadyWelcome == "I can see this Mac now."`, `scanIntro == "I will look for local coding-agent sessions across Workbench, Claude, Codex, Copilot, cmux, and shell history."`, `unclearImport == "I will ask before importing anything unclear."`, `ambiguousCandidates(count: 2) == "I found 2 unclear sessions. I will ask before importing them."`, `duplicateCleanup == "After I resume these in Workbench, I will help you close matching sessions still running outside Workbench so work does not fork."`, and `proposalSummary(groupCount: 3, selectedCount: 5) == "I found 5 likely sessions across 3 workspaces."`
 **Acceptance**: Tests fail before implementation because `WorkbenchOnboardingNarrative` does not exist or old copy omits boss-led import/cleanup language.
@@ -361,3 +361,4 @@ grep -F 'PASS import_scanner' "$ART/e2e-import-scanner.md"
 - 2026-06-14 15:50 Unit 4b complete: added session action policy and replaced running-session header icon row with Stop plus Session Controls menu; green log saved to unit-4b-green.log.
 - 2026-06-14 15:55 Unit 3 cold-review findings addressed: workspace creation/edit/error copy now uses workspace nouns and sidebar labels/recovery visibility are wired through WorkbenchSurfacePolicy.
 - 2026-06-14 15:55 Unit 4c complete: reran WorkbenchSurfacePolicyTests, build, and session-control source assertions; log saved to unit-4-session-controls.log.
+- 2026-06-14 15:56 Unit 5a complete: added failing boss-led onboarding narrative tests; red log saved to unit-5a-red.log.
