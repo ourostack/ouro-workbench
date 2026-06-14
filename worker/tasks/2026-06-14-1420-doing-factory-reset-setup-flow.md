@@ -146,7 +146,7 @@ swift test --filter OnboardingTests
 **Output**: Header UI no longer shows the screenshot's row of unlabeled low-level icons; advanced actions remain reachable with labels/tooltips.
 **Acceptance**: Unit 4a tests pass; `swift build` succeeds; `rg -n 'RunningSessionHeaderControls|Session Controls|Ctrl-C|EOF|Restart' Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift` shows the actions under the menu implementation, not as separate primary image buttons.
 
-### ⬜ Unit 4c: Running Session Controls Policy - Coverage & Refactor
+### ✅ Unit 4c: Running Session Controls Policy - Coverage & Refactor
 **What**: Run `swift test --filter WorkbenchSurfacePolicyTests` and `swift build`. Keep refactor scoped to the policy enum/action naming and `RunningSessionHeaderControls`.
 **Output**: Test/build output saved to `2026-06-14-1420-doing-factory-reset-setup-flow/unit-4-session-controls.log`.
 **Acceptance**: Running/stopped/archived/recoverable action policies are covered and green.
@@ -359,3 +359,5 @@ grep -F 'PASS import_scanner' "$ART/e2e-import-scanner.md"
 - 2026-06-14 15:47 Unit 3c complete: reran WorkbenchSurfacePolicyTests, build, and sidebar source assertions; log saved to unit-3-sidebar-policy.log.
 - 2026-06-14 15:48 Unit 4a complete: added failing session controls policy tests; red log saved to unit-4a-red.log.
 - 2026-06-14 15:50 Unit 4b complete: added session action policy and replaced running-session header icon row with Stop plus Session Controls menu; green log saved to unit-4b-green.log.
+- 2026-06-14 15:55 Unit 3 cold-review findings addressed: workspace creation/edit/error copy now uses workspace nouns and sidebar labels/recovery visibility are wired through WorkbenchSurfacePolicy.
+- 2026-06-14 15:55 Unit 4c complete: reran WorkbenchSurfacePolicyTests, build, and session-control source assertions; log saved to unit-4-session-controls.log.
