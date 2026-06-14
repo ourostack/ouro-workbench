@@ -1,0 +1,42 @@
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/10] Write swift-version--58304C5D6DBC2206.txt
+Build complete! (0.41s)
+Test Suite 'Selected tests' started at 2026-06-14 15:47:00.016.
+Test Suite 'OuroWorkbenchPackageTests.xctest' started at 2026-06-14 15:47:00.017.
+Test Suite 'WorkbenchSurfacePolicyTests' started at 2026-06-14 15:47:00.017.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testBossStatusLabelsStayCompact]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testBossStatusLabelsStayCompact]' passed (0.002 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testParseSidebarSessionControlsFixtureAction]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testParseSidebarSessionControlsFixtureAction]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testParseSidebarSessionControlsFixtureRequiresPath]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testParseSidebarSessionControlsFixtureRequiresPath]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testRecoverySectionIsHiddenWhenThereIsNothingActionable]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testRecoverySectionIsHiddenWhenThereIsNothingActionable]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testRecoverySectionIsShownWhenActionable]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testRecoverySectionIsShownWhenActionable]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testSetupWorkspaceNameIsUnsortedSessionsNotThisMac]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testSetupWorkspaceNameIsUnsortedSessionsNotThisMac]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testSidebarPrimaryLabelsUseWorkbenchStoryNouns]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testSidebarPrimaryLabelsUseWorkbenchStoryNouns]' passed (0.000 seconds).
+Test Suite 'WorkbenchSurfacePolicyTests' passed at 2026-06-14 15:47:00.021.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.004 (0.004) seconds
+Test Suite 'OuroWorkbenchPackageTests.xctest' passed at 2026-06-14 15:47:00.021.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.004 (0.004) seconds
+Test Suite 'Selected tests' passed at 2026-06-14 15:47:00.021.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.004 (0.005) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/9] Write swift-version--58304C5D6DBC2206.txt
+Build complete! (0.38s)
+2640:            Section("Workspaces") {
+2621:            Section("Boss") {
+2719:            if !model.recoverableEntries.isEmpty {
