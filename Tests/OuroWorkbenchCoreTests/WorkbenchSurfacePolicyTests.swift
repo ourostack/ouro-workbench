@@ -37,6 +37,15 @@ final class WorkbenchSurfacePolicyTests: XCTestCase {
         XCTAssertFalse(source.contains("Keep at least one terminal group"))
     }
 
+    func testTitleStripUsesSessionControlPolicyWithoutPrimaryRestartLeak() throws {
+        let source = try appSource()
+
+        XCTAssertTrue(source.contains("RunningSessionHeaderControls(entry: entry, model: model)"))
+        XCTAssertFalse(source.contains("if model.activeSession(for: entry) != nil {\n                    RunningSessionHeaderControls"))
+        XCTAssertFalse(source.contains("model.activeSession(for: entry) == nil ? \"Launch\" : \"Restart\""))
+        XCTAssertFalse(source.contains("Move this session to another group"))
+    }
+
     func testSetupWorkspaceNameIsUnsortedSessionsNotThisMac() {
         XCTAssertEqual(WorkbenchSurfacePolicy.setupWorkspaceName, "Unsorted Sessions")
         XCTAssertNotEqual(WorkbenchSurfacePolicy.setupWorkspaceName, "This Mac")
