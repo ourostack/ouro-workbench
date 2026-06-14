@@ -5091,9 +5091,9 @@ struct WorkbenchOnboardingSheet: View {
         case .boss:
             return "Continue"
         case .connect:
-            return model.onboardingReadiness?.isReady == true ? "Scan Recent Work" : "Finish Setup"
+            return model.onboardingFlowDecision.primaryActionTitle
         case .importWork:
-            return model.onboardingProposal == nil ? "Scan" : "Arrange"
+            return model.onboardingFlowDecision.primaryActionTitle
         }
     }
 
@@ -5102,9 +5102,16 @@ struct WorkbenchOnboardingSheet: View {
         case .welcome, .boss:
             return "chevron.right"
         case .connect:
-            return "magnifyingglass"
+            return model.onboardingFlowDecision.phase == .bossSetupWizard ? "link" : "magnifyingglass"
         case .importWork:
-            return model.onboardingProposal == nil ? "magnifyingglass" : "checkmark.circle"
+            switch model.onboardingFlowDecision.phase {
+            case .arrangeApprovedImports:
+                return "checkmark.circle"
+            case .duplicateCleanup:
+                return "rectangle.stack.badge.minus"
+            default:
+                return "magnifyingglass"
+            }
         }
     }
 
@@ -5115,14 +5122,14 @@ struct WorkbenchOnboardingSheet: View {
         case .boss:
             return model.onboardingBossChoices.contains { $0.isSelected && $0.isUsable } == false
         case .connect:
-            return model.onboardingReadiness?.isReady != true
+            return model.onboardingIsScanning
         case .importWork:
             if model.onboardingIsScanning || model.onboardingReadiness?.isReady != true {
                 return true
             }
-            // Once a proposal is on screen, Arrange should be gated by whether
-            // anything is actually selected — otherwise the button "does nothing".
-            if let proposal = model.onboardingProposal, proposal.selectedTerminalCount == 0 {
+            if model.onboardingFlowDecision.phase == .scanProposal,
+               model.onboardingProposal != nil,
+               model.onboardingProposal?.selectedTerminalCount == 0 {
                 return true
             }
             return false
@@ -5136,14 +5143,22 @@ struct WorkbenchOnboardingSheet: View {
         case .boss:
             page = .connect
         case .connect:
+            if model.onboardingFlowDecision.phase == .bossSetupWizard {
+                model.refreshOnboardingReadiness()
+                model.runOnboardingProviderChecksIfNeeded()
+                model.startFirstRunBootstrapIfNeeded()
+                instructionStatus = "Connecting the boss. Workbench is checking provider and tool readiness now."
+                return
+            }
             page = .importWork
-            if model.onboardingReadiness?.isReady == true, model.onboardingProposal == nil {
+            if model.onboardingFlowDecision.phase == .bossReadyWelcome {
                 model.scanForOnboardingSessions()
             }
         case .importWork:
-            if model.onboardingProposal == nil {
+            switch model.onboardingFlowDecision.phase {
+            case .bossReadyWelcome, .scanProposal:
                 model.scanForOnboardingSessions()
-            } else {
+            case .arrangeApprovedImports:
                 let result = model.applyOnboardingProposal()
                 // Whether anything new landed or every selection was already
                 // imported, hand the user back to the workbench with a banner
@@ -5152,6 +5167,11 @@ struct WorkbenchOnboardingSheet: View {
                 if result != nil {
                     dismiss()
                 }
+            case .duplicateCleanup:
+                instructionStatus = model.onboardingFlowDecision.notice
+                dismiss()
+            case .bossSetupWizard:
+                page = .connect
             }
         }
     }
@@ -5901,6 +5921,13 @@ private struct OnboardingBootstrapView: View {
                 Text("Scanning local coding-agent sessions...")
                     .font(.callout)
                     .foregroundStyle(.secondary)
+            } else if let notice = model.onboardingFlowDecision.notice {
+                Text(notice)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 640)
             }
             if let proposal = model.onboardingProposal {
                 VStack(alignment: .leading, spacing: 10) {
@@ -9781,6 +9808,30 @@ final class WorkbenchViewModel: ObservableObject {
             return .blue
         }
         return lastImportSummary?.hasImports == true ? .green : .purple
+    }
+
+    var onboardingFlowInput: WorkbenchOnboardingFlowInput {
+        WorkbenchOnboardingFlowInput(
+            bossIsReady: onboardingReadiness?.isReady == true,
+            hasProposal: onboardingProposal != nil,
+            selectedTerminalCount: onboardingProposal?.selectedTerminalCount ?? 0,
+            ambiguousCandidateCount: onboardingAmbiguousCandidateCount,
+            importSummaryHasImports: lastImportSummary?.hasImports == true
+        )
+    }
+
+    var onboardingFlowDecision: WorkbenchOnboardingFlowDecision {
+        WorkbenchOnboardingFlowPolicy.decision(for: onboardingFlowInput)
+    }
+
+    private var onboardingAmbiguousCandidateCount: Int {
+        if let proposal = onboardingProposal {
+            return proposal.groups
+                .flatMap(\.terminals)
+                .filter { $0.candidate.confidence >= 0.50 && $0.candidate.confidence < 0.70 }
+                .count
+        }
+        return onboardingCandidates.filter { $0.confidence >= 0.50 && $0.confidence < 0.70 }.count
     }
 
     var onboardingOpeningLine: String {
