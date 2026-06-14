@@ -166,7 +166,7 @@ swift test --filter OnboardingTests
 **Output**: Tests define `WorkbenchOnboardingPhase` exact cases `.bossSetupWizard`, `.bossReadyWelcome`, `.scanProposal`, `.arrangeApprovedImports`, and `.duplicateCleanup`; `WorkbenchOnboardingFlowInput` fields `bossIsReady`, `hasProposal`, `selectedTerminalCount`, `ambiguousCandidateCount`, and `importSummaryHasImports`; and primary CTA titles `Connect Boss`, `Scan With Boss`, `Arrange Selected`, and `Review Duplicates`. Expected flow: not-ready -> `.bossSetupWizard`/`Connect Boss`; ready without proposal -> `.bossReadyWelcome`/`Scan With Boss`; ready with proposal and zero selected -> `.scanProposal`/`Scan With Boss`; selected imports -> `.arrangeApprovedImports`/`Arrange Selected`; ambiguous candidates attach `WorkbenchOnboardingNarrative.ambiguousCandidates(count:)`; imported summary -> `.duplicateCleanup`/`Review Duplicates`.
 **Acceptance**: Tests fail before implementation because flow policy does not exist or old readiness/import states do not distinguish boss-led phases.
 
-### ⬜ Unit 5d: Boss-Led Onboarding Flow Policy - Implementation
+### ✅ Unit 5d: Boss-Led Onboarding Flow Policy - Implementation
 **What**: Add `WorkbenchOnboardingFlowPolicy` in `Sources/OuroWorkbenchCore/WorkbenchOnboardingNarrative.swift` and wire `WorkbenchOnboardingSheet.advance`, `primaryActionTitle`, `OnboardingBootstrapView`, and `handleOnboardingInstruction` through it where those functions choose setup/import/arrange behavior.
 **Output**: Traditional wizard remains limited to boss setup/readiness; after readiness, the boss-led import phase drives scan/proposal/arrange and duplicate cleanup messaging using the exact phase cases and CTA strings tested in Unit 5c.
 **Acceptance**: Unit 5c tests pass; `swift build` succeeds; `rg -n 'WorkbenchOnboardingFlowPolicy|WorkbenchOnboardingNarrative' Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift Sources/OuroWorkbenchCore/WorkbenchOnboardingNarrative.swift` shows both app wiring and core policy/narrative definitions.
@@ -364,3 +364,5 @@ grep -F 'PASS import_scanner' "$ART/e2e-import-scanner.md"
 - 2026-06-14 15:56 Unit 5a complete: added failing boss-led onboarding narrative tests; red log saved to unit-5a-red.log.
 - 2026-06-14 15:59 Unit 5b complete: added WorkbenchOnboardingNarrative and wired boss-led scan/proposal/cleanup copy into onboarding surfaces and import summary; green log saved to unit-5b-green.log.
 - 2026-06-14 16:00 Unit 5c complete: added failing boss-led onboarding phase/CTA tests; red log saved to unit-5c-red.log.
+- 2026-06-14 16:03 Unit 5d complete: added WorkbenchOnboardingFlowPolicy and wired onboarding CTA/advance behavior through it; green log saved to unit-5d-green.log.
+- 2026-06-14 16:05 Unit 4 cold-review findings fixed: title strip now uses session controls policy for active/inactive/recoverable sessions, primary Restart leak removed, and leftover group tooltip changed to workspace; red/green logs saved to unit-4-review-*.log.

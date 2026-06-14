@@ -21,7 +21,7 @@ Gate state:
 - Audit: written and committed
 - Planning review: converged and approved
 - Doing review: converged; doing doc ready
-- Implementation: Unit 5c complete; starting Unit 5d
+- Implementation: Unit 5d complete; Unit 4 cold-review findings fixed; starting Unit 5e
 - Live validation: pending
 
-Next action: implement WorkbenchOnboardingFlowPolicy and wire onboarding advance/CTA behavior through it.
+Next action: run Unit 5e onboarding narrative/flow coverage, existing OnboardingTests, and build.
