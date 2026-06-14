@@ -1,4 +1,9 @@
-# Goal
+# Planning: Factory Reset Setup Flow
+
+**Status**: approved
+**Created**: 2026-06-14 14:20
+
+## Goal
 
 Restore the simple Workbench product story: a native terminal multiplexer whose Ouro boss agent can read, write, resume, and coordinate every terminal session.
 
@@ -6,9 +11,19 @@ The immediate blocker is the post-factory-reset first-run experience: Workbench 
 
 Canonical product spec for this implementation campaign: `docs/workbench-surface-spec.md`.
 
-# Scope
+## Upstream Work Items
 
-## In Scope
+- A-001
+- A-002
+- A-003
+- A-004
+- A-005
+- A-006
+- A-007
+
+## Scope
+
+### In Scope
 
 - Reframe first-run around the intended product narrative:
   - Workbench is a terminal multiplexer.
@@ -37,7 +52,7 @@ Canonical product spec for this implementation campaign: `docs/workbench-surface
 - Update user-facing copy if needed so the reset dialog and first-run state match what the app actually does.
 - Run a whole-system audit against `docs/workbench-surface-spec.md`, route findings into an implementation plan, and implement only after the spec and audit have converged through no-human-gates reviewer checks.
 
-## Out of Scope
+### Out of Scope
 
 - Deleting or modifying Claude, Codex, Copilot, cmux, shell, or Ouro harness-owned history during factory reset.
 - Claiming that agent processes survive reset or reboot; imported sessions must remain resumable/respawnable with evidence, not "still running" unless a live process is actually present.
@@ -46,7 +61,7 @@ Canonical product spec for this implementation campaign: `docs/workbench-surface
 - Treating Claude Code, Codex, or Copilot as fixed app modes; they remain detected terminal identities.
 - Building a generic "agent dashboard" or traditional setup wizard for anything after boss readiness; post-agent setup should be conversational.
 
-# Completion Criteria
+## Completion Criteria
 
 - After `Reset to Factory Defaults`, the next launch presents the setup/import flow even when the selected boss/harness readiness would otherwise be `.ready`.
 - First-run setup first resolves the Ouro agent: select an existing functioning agent or hatch/configure a new one. No terminal import/chrome complexity blocks that step.
@@ -60,9 +75,12 @@ Canonical product spec for this implementation campaign: `docs/workbench-surface
 - The recent-session scanner returns candidates from representative Codex archived JSONL/manual-recovery files and representative Claude task records, with evidence paths and resume commands.
 - Existing scanner tests for Claude project history, live cmux/Claude panels, Codex SQLite/index, shell history, and grouping still pass.
 - Factory reset tests prove the explicit setup marker is set/cleared correctly and cannot be immediately overwritten by quit-time save.
+- 100% test coverage on all new code.
+- All tests pass.
+- No warnings.
 - `swift test` passes for the touched targets.
 
-# Code Coverage Requirements
+## Code Coverage Requirements
 
 - Add unit tests in `Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift` or a nearby reset/onboarding test file for the reset setup marker behavior.
 - Add or update `WorkbenchBootstrapperTests` to cover first-run/post-reset local-shell behavior.
@@ -70,13 +88,13 @@ Canonical product spec for this implementation campaign: `docs/workbench-surface
 - Add focused view-model/core coverage for whichever state drives simplified primary chrome, if extracted behind a pure helper.
 - Add app/view-model-level tests only if existing seams allow it without brittle UI automation; otherwise cover through pure core seams and small injectable helpers.
 
-# Open Questions
+## Open Questions
 
 - None. Ari delegated product and implementation judgement for this campaign on
   2026-06-14. Reviewer gates replace human approval, and missed judgement calls
   are resolved by best judgement against `docs/workbench-surface-spec.md`.
 
-# Decisions Made
+## Decisions Made
 
 - Factory reset should not rely exclusively on readiness/config-gap inference. A reset is an explicit request to re-run setup, so it needs explicit state to force setup on relaunch.
 - The setup wizard boundary is narrow: it exists only until there is a functioning Ouro boss agent. After that, the boss drives onboarding conversationally.
@@ -93,7 +111,7 @@ Canonical product spec for this implementation campaign: `docs/workbench-surface
 - Running-session primary chrome keeps a visible stop action when a session is running and moves focus, redraw, Ctrl-C, Esc, EOF, and restart/relaunch into a labeled advanced `Session Controls` menu.
 - Validation uses a build/install from the current source tree. The stale `/Applications/Ouro Workbench.app` `0.1.125` build is only historical evidence for the reported symptom.
 
-# Context / References
+## Context / References
 
 - `Sources/OuroWorkbenchCore/WorkbenchFactoryReset.swift`
   - `wipeData` moves `workspace-state.json` to `workspace-state.<epoch>.bak.json` and clears one defaults domain.
@@ -118,7 +136,7 @@ Canonical product spec for this implementation campaign: `docs/workbench-surface
   - Multiple backup files exist under `~/Library/Application Support/OuroWorkbench/workspace-state.*.bak.json`, proving reset rotated the file but relaunch recreated fresh state.
   - User screenshot shows `Local Shell` context menu lacks delete/archive/edit actions.
 
-# Notes
+## Notes
 
 - A likely implementation shape:
   - Introduce a reset/setup marker in UserDefaults using a key outside the wiped domain or set it after wiping/synchronizing so relaunch can see it.
@@ -141,10 +159,11 @@ Canonical product spec for this implementation campaign: `docs/workbench-surface
   or `subagents/work-doer.md` in this repo, so the installed Work Suite skills
   under `~/.agents/skills/` are the available planner/doer instructions.
 
-# Progress Log
+## Progress Log
 
 - 2026-06-14 14:20 Diagnosed reset symptom from live app state and drafted planning doc.
 - 2026-06-14 14:20 Ran tinfoil pass: verified referenced files/mechanisms exist and completion criteria are testable.
 - 2026-06-14 14:24 Incorporated Ari's product-story feedback: narrow setup wizard to agent readiness, make import conversational/agentic, and remove unclear low-level terminal controls from primary chrome.
 - 2026-06-14 14:32 Added `docs/workbench-surface-spec.md` as the canonical spec and recorded the no-human-gates implementation mandate.
 - 2026-06-14 14:48 Added audit artifacts and resolved all remaining product questions for autonomous execution.
+- 2026-06-14 14:42 Planning reviewer gate converged after Round 2; marked planning approved.
