@@ -5239,7 +5239,7 @@ private struct OnboardingWelcomePage: View {
             HStack(alignment: .top, spacing: 26) {
                 OnboardingWelcomePoint(systemImage: "terminal", title: "Keep Your Tools", detail: "Claude Code, Codex, Copilot CLI, shells, cmux.")
                 OnboardingWelcomePoint(systemImage: "person.crop.circle.badge.checkmark", title: "Choose a Boss", detail: "One Ouro agent watches this Mac for you.")
-                OnboardingWelcomePoint(systemImage: "square.grid.2x2", title: "Recover the Thread", detail: "Recent work returns as named project groups.")
+                OnboardingWelcomePoint(systemImage: "square.grid.2x2", title: "Recover the Thread", detail: "Recent work returns as Workbench workspaces.")
             }
             .frame(maxWidth: 680)
         }
@@ -5700,7 +5700,7 @@ private struct OnboardingReadinessView: View {
                             .foregroundStyle(Color.green)
                         Text("\(readiness.selectedBossName) is ready")
                             .font(.title3.weight(.semibold))
-                        Text("Next, Workbench can look for recent terminal work and propose project groups.")
+                        Text(WorkbenchOnboardingNarrative.scanIntro)
                             .font(.callout)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
@@ -5850,10 +5850,10 @@ private struct OnboardingBootstrapView: View {
     var body: some View {
         VStack(alignment: .center, spacing: 22) {
             VStack(alignment: .center, spacing: 10) {
-                Text("Bring your work in")
+                Text(WorkbenchOnboardingNarrative.bossReadyWelcome)
                     .font(.largeTitle.weight(.semibold))
                     .multilineTextAlignment(.center)
-                Text("Workbench can find recent cmux, Claude Code, Codex, Copilot CLI, shell, and Workbench sessions from the last week.")
+                Text(WorkbenchOnboardingNarrative.scanIntro)
                     .font(.title3)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -5888,7 +5888,7 @@ private struct OnboardingBootstrapView: View {
                     .help(
                         proposal.selectedTerminalCount == 0
                         ? "Select at least one terminal to arrange."
-                        : "Import \(proposal.selectedTerminalCount) selected terminal\(proposal.selectedTerminalCount == 1 ? "" : "s") into the Workbench."
+                        : "Arrange \(proposal.selectedTerminalCount) selected terminal\(proposal.selectedTerminalCount == 1 ? "" : "s") in Workbench."
                     )
                 }
             }
@@ -5898,7 +5898,7 @@ private struct OnboardingBootstrapView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             } else if model.onboardingIsScanning {
-                Text("Scanning recent local sessions…")
+                Text("Scanning local coding-agent sessions...")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -5906,8 +5906,11 @@ private struct OnboardingBootstrapView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     OnboardingStatusRow(
                         systemImage: "square.grid.2x2.fill",
-                        title: model.onboardingReadiness?.isReady == true ? "Ready to arrange" : "Proposal waiting",
-                        detail: "\(proposal.groups.count) group\(proposal.groups.count == 1 ? "" : "s"), \(proposal.selectedTerminalCount) terminal\(proposal.selectedTerminalCount == 1 ? "" : "s") selected.",
+                        title: model.onboardingReadiness?.isReady == true ? "Proposed workspaces" : "Proposal waiting",
+                        detail: WorkbenchOnboardingNarrative.proposalSummary(
+                            groupCount: proposal.groups.count,
+                            selectedCount: proposal.selectedTerminalCount
+                        ),
                         color: .blue
                     )
                     ForEach(proposal.groups) { group in
@@ -5916,7 +5919,7 @@ private struct OnboardingBootstrapView: View {
                 }
                 .frame(maxWidth: 700)
             } else {
-                Text("Nothing is imported until you review the proposal.")
+                Text(WorkbenchOnboardingNarrative.unclearImport)
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -5952,7 +5955,7 @@ private struct OnboardingGroupProposalView: View {
                         .foregroundStyle(selectedCount == 0 ? Color.secondary : Color.accentColor)
                 }
                 .buttonStyle(.plain)
-                .help(allSelected ? "Deselect every terminal in this group" : "Select every terminal in this group")
+                .help(allSelected ? "Deselect every terminal in this workspace" : "Select every terminal in this workspace")
                 VStack(alignment: .leading, spacing: 1) {
                     Text(group.name)
                         .font(.subheadline.weight(.semibold))
@@ -6102,6 +6105,9 @@ private struct OnboardingSessionPreviewSheet: View {
                         Text(terminal.candidate.summary)
                             .font(.body)
                             .textSelection(.enabled)
+                        Text(WorkbenchOnboardingNarrative.unclearImport)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
@@ -8710,9 +8716,9 @@ struct WorkbenchImportApplyResult: Equatable {
         case (1, _):
             return "Arranged 1 terminal"
         case (let n, 1):
-            return "Arranged \(n) terminals in 1 group"
+            return "Arranged \(n) terminals in 1 workspace"
         case (let n, let g):
-            return "Arranged \(n) terminals across \(g) groups"
+            return "Arranged \(n) terminals across \(g) workspaces"
         }
     }
 
@@ -8723,6 +8729,9 @@ struct WorkbenchImportApplyResult: Equatable {
         }
         if !skippedNames.isEmpty {
             parts.append("Skipped: \(skippedNames.joined(separator: ", "))")
+        }
+        if hasImports {
+            parts.append(WorkbenchOnboardingNarrative.duplicateCleanup)
         }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
@@ -9776,12 +9785,12 @@ final class WorkbenchViewModel: ObservableObject {
 
     var onboardingOpeningLine: String {
         if onboardingReadiness?.isReady == true {
-            return "\(state.boss.agentName) is selected as this Mac's boss. Workbench can now scan recent terminal-agent work and arrange it into terminals and groups."
+            return "\(state.boss.agentName) is selected as this Mac's boss. \(WorkbenchOnboardingNarrative.bossReadyWelcome) \(WorkbenchOnboardingNarrative.scanIntro)"
         }
         if ouroAgents.count > 1 {
             return "This Mac has multiple Ouro agents. Choose the one that should be boss for Workbench before importing sessions."
         }
-        return "First choose or repair this Mac's Ouro boss, then Workbench can scan recent sessions and import them as terminals and groups."
+        return "First choose or repair this Mac's Ouro boss, then Workbench can scan recent sessions and arrange them as terminals and workspaces."
     }
 
     var onboardingBossChoices: [OnboardingBossChoice] {
@@ -12622,7 +12631,7 @@ final class WorkbenchViewModel: ObservableObject {
                 return "Finish connecting the boss first. Import stays locked until provider checks pass."
             }
             applyOnboardingProposal()
-            return "Arranging proposed sessions into Workbench groups."
+            return WorkbenchOnboardingNarrative.duplicateCleanup
         } else if text.contains("mcp") || text.contains("tool") {
             installWorkbenchMCPForBoss()
             refreshOnboardingReadiness()
