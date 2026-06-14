@@ -21,7 +21,7 @@ Gate state:
 - Audit: written and committed
 - Planning review: converged and approved
 - Doing review: converged; doing doc ready
-- Implementation: Unit 1 complete; starting Unit 2a red scanner tests
+- Implementation: Unit 2a complete; starting Unit 2b scanner implementation
 - Live validation: pending
 
-Next action: write and run Unit 2a failing recent-session scanner tests.
+Next action: implement Codex/Claude scanner adapters and dump-recent-sessions diagnostic output.
