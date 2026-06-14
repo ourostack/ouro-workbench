@@ -24,6 +24,19 @@ final class WorkbenchBootstrapperTests: XCTestCase {
         XCTAssertTrue(state.processEntries.allSatisfy { $0.workingDirectory == "/tmp/workbench" })
     }
 
+    func testBootstrapSetupModeCreatesUnsortedWorkspaceWithoutLocalShell() throws {
+        let state = WorkbenchBootstrapper().bootstrappedState(
+            from: WorkspaceState(),
+            defaults: .firstRunSetup(projectRootPath: "/tmp/workbench")
+        )
+
+        XCTAssertEqual(state.projects.map(\.name), ["Unsorted Sessions"])
+        XCTAssertFalse(state.projects.contains { $0.name == "This Mac" })
+        XCTAssertTrue(state.processEntries.isEmpty)
+        XCTAssertNil(state.selectedEntryId)
+        XCTAssertEqual(state.projects.first?.rootPath, "/tmp/workbench")
+    }
+
     func testBootstrapPreservesExistingAgentTerminalWithoutCreatingFixedScaffolds() {
         let project = WorkbenchProject(name: "Existing", rootPath: "/tmp/existing")
         let existing = ProcessEntry(
