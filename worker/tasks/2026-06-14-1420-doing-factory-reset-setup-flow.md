@@ -141,7 +141,7 @@ swift test --filter OnboardingTests
 **Output**: Tests require running sessions to expose only `stop` as a primary action and to expose `focus`, `redraw`, `restart`, `controlC`, `escape`, and `eof` only as advanced session controls.
 **Acceptance**: Tests fail before implementation because the policy does not exist or still treats low-level controls/restart as primary.
 
-### ⬜ Unit 4b: Running Session Controls Policy - Implementation
+### ✅ Unit 4b: Running Session Controls Policy - Implementation
 **What**: Extend `Sources/OuroWorkbenchCore/WorkbenchSurfacePolicy.swift` for session chrome actions and update `RunningSessionHeaderControls` in `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift` so the header shows a visible Stop button plus a labeled `Session Controls` menu containing Focus, Redraw, Restart, Ctrl-C, Esc, EOF, Copy Launch Command, and Open Working Directory.
 **Output**: Header UI no longer shows the screenshot's row of unlabeled low-level icons; advanced actions remain reachable with labels/tooltips.
 **Acceptance**: Unit 4a tests pass; `swift build` succeeds; `rg -n 'RunningSessionHeaderControls|Session Controls|Ctrl-C|EOF|Restart' Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift` shows the actions under the menu implementation, not as separate primary image buttons.
@@ -358,3 +358,4 @@ grep -F 'PASS import_scanner' "$ART/e2e-import-scanner.md"
 - 2026-06-14 15:46 Unit 3b complete: added WorkbenchSurfacePolicy, schema-backed sidebar e2e fixture writer, Workspaces/Boss sidebar labels, and hidden healthy Recovery; green log saved to unit-3b-green.log.
 - 2026-06-14 15:47 Unit 3c complete: reran WorkbenchSurfacePolicyTests, build, and sidebar source assertions; log saved to unit-3-sidebar-policy.log.
 - 2026-06-14 15:48 Unit 4a complete: added failing session controls policy tests; red log saved to unit-4a-red.log.
+- 2026-06-14 15:50 Unit 4b complete: added session action policy and replaced running-session header icon row with Stop plus Session Controls menu; green log saved to unit-4b-green.log.
