@@ -2618,7 +2618,7 @@ struct WorkbenchSidebarView: View {
 
     private var sessionList: some View {
         List(selection: $model.selectedEntryID) {
-            Section("Boss") {
+            Section(WorkbenchSurfacePolicy.bossSectionTitle) {
                 ForEach(model.ouroAgents) { agent in
                     SidebarAgentRow(
                         agent: agent,
@@ -2637,7 +2637,7 @@ struct WorkbenchSidebarView: View {
                     }
                 }
             }
-            Section("Workspaces") {
+            Section(WorkbenchSurfacePolicy.workspaceSectionTitle) {
                 ForEach(model.state.projects) { project in
                     SidebarProjectRow(
                         project: project,
@@ -2666,7 +2666,7 @@ struct WorkbenchSidebarView: View {
                     // equals global.
                     model.moveGroups(fromOffsets: offsets, toOffset: destination)
                 }
-                SidebarActionRow(title: "New Workspace", systemImage: "folder.badge.plus") {
+                SidebarActionRow(title: WorkbenchSurfacePolicy.newWorkspaceTitle, systemImage: "folder.badge.plus") {
                     model.isNewGroupSheetPresented = true
                 }
             }
@@ -2716,7 +2716,7 @@ struct WorkbenchSidebarView: View {
                     }
                 }
             }
-            if !model.recoverableEntries.isEmpty {
+            if WorkbenchSurfacePolicy.shouldShowRecovery(recoverableCount: model.recoverableEntries.count) {
                 Section("Recovery") {
                     Button {
                         model.isRecoverySheetPresented = true
@@ -8087,7 +8087,7 @@ struct NewTerminalGroupSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("New Terminal Group")
+            Text(WorkbenchSurfacePolicy.newWorkspaceSheetTitle)
                 .font(.title3.weight(.semibold))
             Form {
                 TextField("Name", text: $name)
@@ -8152,7 +8152,7 @@ struct EditTerminalGroupSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Edit Terminal Group")
+            Text(WorkbenchSurfacePolicy.editWorkspaceSheetTitle)
                 .font(.title3.weight(.semibold))
             Form {
                 TextField("Name", text: $name)
@@ -11211,7 +11211,7 @@ final class WorkbenchViewModel: ObservableObject {
     /// alert path.
     func presentSaveWorkspacePanel() {
         guard let project = selectedProject else {
-            errorMessage = "No group is selected to save"
+            errorMessage = WorkbenchSurfacePolicy.noWorkspaceSelectedToSaveMessage
             return
         }
         let config = exportWorkspaceConfig(for: project)
@@ -11274,11 +11274,11 @@ final class WorkbenchViewModel: ObservableObject {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedRoot = rootPath.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else {
-            errorMessage = "Group name is required"
+            errorMessage = WorkbenchSurfacePolicy.workspaceNameRequiredMessage
             return false
         }
         guard !trimmedRoot.isEmpty else {
-            errorMessage = "Group root path is required"
+            errorMessage = WorkbenchSurfacePolicy.workspaceRootPathRequiredMessage
             return false
         }
         let project = WorkbenchProject(
@@ -11295,7 +11295,7 @@ final class WorkbenchViewModel: ObservableObject {
 
     func beginEditingGroup(_ project: WorkbenchProject) {
         guard state.projects.contains(where: { $0.id == project.id }) else {
-            errorMessage = "Group no longer exists: \(project.name)"
+            errorMessage = WorkbenchSurfacePolicy.workspaceNoLongerExistsMessage(name: project.name)
             return
         }
         editingGroup = project
@@ -11306,15 +11306,15 @@ final class WorkbenchViewModel: ObservableObject {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedRoot = rootPath.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else {
-            errorMessage = "Group name is required"
+            errorMessage = WorkbenchSurfacePolicy.workspaceNameRequiredMessage
             return false
         }
         guard !trimmedRoot.isEmpty else {
-            errorMessage = "Group root path is required"
+            errorMessage = WorkbenchSurfacePolicy.workspaceRootPathRequiredMessage
             return false
         }
         guard let index = state.projects.firstIndex(where: { $0.id == project.id }) else {
-            errorMessage = "Group no longer exists: \(project.name)"
+            errorMessage = WorkbenchSurfacePolicy.workspaceNoLongerExistsMessage(name: project.name)
             return false
         }
         state.projects[index].name = trimmedName
@@ -11324,7 +11324,7 @@ final class WorkbenchViewModel: ObservableObject {
             source: "native",
             action: "editGroup",
             targetName: trimmedName,
-            result: "Edited group \(trimmedName)",
+            result: "Edited workspace \(trimmedName)",
             succeeded: true
         )
         return true
@@ -11332,7 +11332,7 @@ final class WorkbenchViewModel: ObservableObject {
 
     func requestDeleteGroup(_ project: WorkbenchProject) {
         guard state.projects.count > 1 else {
-            errorMessage = "Keep at least one terminal group"
+            errorMessage = WorkbenchSurfacePolicy.keepAtLeastOneWorkspaceMessage
             return
         }
         guard totalTerminalCount(in: project) == 0 else {
@@ -11344,11 +11344,11 @@ final class WorkbenchViewModel: ObservableObject {
 
     func deleteGroup(_ project: WorkbenchProject) {
         guard state.projects.count > 1 else {
-            errorMessage = "Keep at least one terminal group"
+            errorMessage = WorkbenchSurfacePolicy.keepAtLeastOneWorkspaceMessage
             return
         }
         guard totalTerminalCount(in: project) == 0 else {
-            errorMessage = "Move or delete terminals before deleting \(project.name)"
+            errorMessage = WorkbenchSurfacePolicy.moveOrDeleteTerminalsBeforeDeletingMessage(name: project.name)
             pendingDeleteGroup = nil
             return
         }
@@ -11362,14 +11362,14 @@ final class WorkbenchViewModel: ObservableObject {
             source: "native",
             action: "deleteGroup",
             targetName: project.name,
-            result: "Deleted empty group \(project.name)",
+            result: "Deleted empty workspace \(project.name)",
             succeeded: true
         )
     }
 
     func moveSession(_ entry: ProcessEntry, to projectId: UUID, recordNativeAction: Bool = true) {
         guard let project = state.projects.first(where: { $0.id == projectId }) else {
-            errorMessage = "Target group no longer exists"
+            errorMessage = WorkbenchSurfacePolicy.targetWorkspaceNoLongerExistsMessage
             return
         }
         guard activeSessions[entry.id] == nil else {

@@ -25,8 +25,23 @@ public enum WorkbenchSurfacePolicy {
 
     public static let workspaceSectionTitle = "Workspaces"
     public static let newWorkspaceTitle = "New Workspace"
+    public static let newWorkspaceSheetTitle = "New Workspace"
+    public static let editWorkspaceSheetTitle = "Edit Workspace"
+    public static let workspaceNameRequiredMessage = "Workspace name is required"
+    public static let workspaceRootPathRequiredMessage = "Workspace root path is required"
+    public static let noWorkspaceSelectedToSaveMessage = "No workspace is selected to save"
+    public static let keepAtLeastOneWorkspaceMessage = "Keep at least one workspace"
+    public static let targetWorkspaceNoLongerExistsMessage = "Target workspace no longer exists"
     public static let bossSectionTitle = "Boss"
     public static let setupWorkspaceName = "Unsorted Sessions"
+
+    public static func workspaceNoLongerExistsMessage(name: String) -> String {
+        "Workspace no longer exists: \(name)"
+    }
+
+    public static func moveOrDeleteTerminalsBeforeDeletingMessage(name: String) -> String {
+        "Move or delete terminals before deleting \(name)"
+    }
 
     public static func bossStatus(agentName: String, isReady: Bool) -> String {
         let trimmed = agentName.trimmingCharacters(in: .whitespacesAndNewlines)
