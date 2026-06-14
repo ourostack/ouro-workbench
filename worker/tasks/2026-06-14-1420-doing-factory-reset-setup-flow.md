@@ -161,7 +161,7 @@ swift test --filter OnboardingTests
 **Output**: Onboarding copy uses the exact strings tested in Unit 5a and says the boss can see this Mac, will scan local coding-agent sessions, will ask before unclear imports, and will guide cleanup of duplicates after Workbench resumes approved sessions.
 **Acceptance**: Unit 5a tests pass; `swift build` succeeds; `rg -n 'Nothing is imported until you review the proposal|Ready to arrange|Bring your work in' Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift` returns no old static-wizard copy.
 
-### ⬜ Unit 5c: Boss-Led Onboarding Flow Policy - Tests
+### ✅ Unit 5c: Boss-Led Onboarding Flow Policy - Tests
 **What**: Add failing tests for pure onboarding flow decisions in `Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift`: wizard phase before boss readiness, boss-led import phase after readiness, proposal visual support when candidates exist, ambiguity prompt when low-confidence candidates exist, and duplicate cleanup guidance after import.
 **Output**: Tests define `WorkbenchOnboardingPhase` exact cases `.bossSetupWizard`, `.bossReadyWelcome`, `.scanProposal`, `.arrangeApprovedImports`, and `.duplicateCleanup`; `WorkbenchOnboardingFlowInput` fields `bossIsReady`, `hasProposal`, `selectedTerminalCount`, `ambiguousCandidateCount`, and `importSummaryHasImports`; and primary CTA titles `Connect Boss`, `Scan With Boss`, `Arrange Selected`, and `Review Duplicates`. Expected flow: not-ready -> `.bossSetupWizard`/`Connect Boss`; ready without proposal -> `.bossReadyWelcome`/`Scan With Boss`; ready with proposal and zero selected -> `.scanProposal`/`Scan With Boss`; selected imports -> `.arrangeApprovedImports`/`Arrange Selected`; ambiguous candidates attach `WorkbenchOnboardingNarrative.ambiguousCandidates(count:)`; imported summary -> `.duplicateCleanup`/`Review Duplicates`.
 **Acceptance**: Tests fail before implementation because flow policy does not exist or old readiness/import states do not distinguish boss-led phases.
@@ -363,3 +363,4 @@ grep -F 'PASS import_scanner' "$ART/e2e-import-scanner.md"
 - 2026-06-14 15:55 Unit 4c complete: reran WorkbenchSurfacePolicyTests, build, and session-control source assertions; log saved to unit-4-session-controls.log.
 - 2026-06-14 15:56 Unit 5a complete: added failing boss-led onboarding narrative tests; red log saved to unit-5a-red.log.
 - 2026-06-14 15:59 Unit 5b complete: added WorkbenchOnboardingNarrative and wired boss-led scan/proposal/cleanup copy into onboarding surfaces and import summary; green log saved to unit-5b-green.log.
+- 2026-06-14 16:00 Unit 5c complete: added failing boss-led onboarding phase/CTA tests; red log saved to unit-5c-red.log.
