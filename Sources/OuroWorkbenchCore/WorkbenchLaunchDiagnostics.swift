@@ -3,6 +3,7 @@ import Foundation
 public struct WorkbenchLaunchDiagnostics: Equatable, Sendable {
     public enum Action: Equatable, Sendable {
         case factoryResetForE2E
+        case dumpRecentSessions(scanHomeRoot: URL?)
     }
 
     public enum ParseError: Error, Equatable, LocalizedError {
@@ -38,6 +39,7 @@ public struct WorkbenchLaunchDiagnostics: Equatable, Sendable {
 
     public static func parse(_ arguments: [String]) throws -> WorkbenchLaunchDiagnostics {
         var diagnostics = WorkbenchLaunchDiagnostics()
+        var scanHomeRoot: URL?
         var index = arguments.isEmpty ? 0 : 1
         while index < arguments.count {
             let argument = arguments[index]
@@ -55,6 +57,19 @@ public struct WorkbenchLaunchDiagnostics: Equatable, Sendable {
             case "--factory-reset-for-e2e":
                 diagnostics.action = .factoryResetForE2E
                 index += 1
+            case "--dump-recent-sessions-json":
+                diagnostics.action = .dumpRecentSessions(scanHomeRoot: scanHomeRoot)
+                index += 1
+            case "--scan-home-root":
+                let nextIndex = index + 1
+                guard nextIndex < arguments.count else {
+                    throw ParseError.missingValue(argument)
+                }
+                scanHomeRoot = URL(fileURLWithPath: arguments[nextIndex], isDirectory: true)
+                if case .dumpRecentSessions = diagnostics.action {
+                    diagnostics.action = .dumpRecentSessions(scanHomeRoot: scanHomeRoot)
+                }
+                index += 2
             default:
                 diagnostics.passthroughArguments.append(argument)
                 index += 1

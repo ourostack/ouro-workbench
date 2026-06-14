@@ -44,5 +44,22 @@ if workbenchLaunchDiagnostics.action == .factoryResetForE2E {
     Darwin.exit(0)
 }
 
+if case let .dumpRecentSessions(scanHomeRoot) = workbenchLaunchDiagnostics.action {
+    let scanner = RecentSessionScanner(homeURL: scanHomeRoot ?? FileManager.default.homeDirectoryForCurrentUser)
+    let candidates = scanner.scan()
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .iso8601
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    do {
+        let data = try encoder.encode(candidates)
+        FileHandle.standardOutput.write(data)
+        FileHandle.standardOutput.write(Data("\n".utf8))
+        Darwin.exit(0)
+    } catch {
+        FileHandle.standardError.write(Data("Failed to encode recent sessions: \(error.localizedDescription)\n".utf8))
+        Darwin.exit(1)
+    }
+}
+
 OuroWorkbenchApp.main()
 #endif
