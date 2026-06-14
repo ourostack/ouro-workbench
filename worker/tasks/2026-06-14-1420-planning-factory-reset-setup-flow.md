@@ -54,6 +54,8 @@ Canonical product spec for this implementation campaign: `docs/workbench-surface
 - A fresh/post-reset workspace does not show an undeletable `Local Shell` as the only apparent thing to do before setup/import.
 - If a fallback local shell is still present somewhere, it has a clear, tested removal/archive path or is intentionally hidden/deferred until after setup/import.
 - The selected-session header no longer exposes the full low-level control strip as primary chrome in normal use. Advanced controls remain reachable when needed, with clear labels/tooltips.
+- Running sessions show stop as the only primary action. Restart/relaunch, if kept, moves into `Session Controls` or another advanced menu. Launch/resume/recover stays visible for inactive or recoverable sessions.
+- Primary sidebar/setup copy uses `Workspaces`, not `Groups`; `This Mac` appears only as machine scope; selected boss appears as compact boss status, not a permanent `Agents` peer; `Recovery` is hidden unless actionable.
 - There is a clear path for the boss/import flow to surface likely sessions, ambiguous sessions, proposed organization, and duplicate-outside-Workbench guidance.
 - The recent-session scanner returns candidates from representative Codex archived JSONL/manual-recovery files and representative Claude task records, with evidence paths and resume commands.
 - Existing scanner tests for Claude project history, live cmux/Claude panels, Codex SQLite/index, shell history, and grouping still pass.
@@ -68,37 +70,11 @@ Canonical product spec for this implementation campaign: `docs/workbench-surface
 - Add focused view-model/core coverage for whichever state drives simplified primary chrome, if extracted behind a pure helper.
 - Add app/view-model-level tests only if existing seams allow it without brittle UI automation; otherwise cover through pure core seams and small injectable helpers.
 
-# Autonomy Rule
+# Open Questions
 
-Ari explicitly delegated product and implementation judgement for this campaign on
-2026-06-14. Do not return control for further human approval, review, naming,
-scope, credential, or UI decisions. Use best judgement against
-`docs/workbench-surface-spec.md`, keep changes auditable, and continue through
-implementation plus live validation.
-
-# Resolved Decisions
-
-- Fresh first-run and post-reset setup both defer `Local Shell`; the terminal list
-  should start from boss setup/import rather than a shell-only fallback. A local
-  shell may still be created later through explicit user action or advanced
-  fallback behavior.
-- The primary UI noun is `Workspaces`. Existing internal model names may remain
-  `project`/`group` where a broad storage migration would add risk, but visible
-  primary copy should not teach `Groups`.
-- `This Mac` is machine scope copy only. It must not appear as the default
-  workspace after reset or fresh first-run.
-- Codex/Claude scanning keeps the existing recency lookback for signal quality
-  while adding deterministic adapters for observed archived/manual-recovery/task
-  stores. Older-session UX can be added later.
-- No separate canonical Claude Desktop store has been proven beyond local
-  `~/.claude/projects` and `~/.claude/tasks`; this pass scans those plus bounded
-  evidence discovered under them.
-- Running-session primary chrome keeps a visible stop action when a session is
-  running and moves focus, redraw, Ctrl-C, Esc, and EOF into a labeled advanced
-  `Session Controls` menu.
-- Validation uses a build/install from the current source tree. The stale
-  `/Applications/Ouro Workbench.app` `0.1.125` build is only historical evidence
-  for the reported symptom.
+- None. Ari delegated product and implementation judgement for this campaign on
+  2026-06-14. Reviewer gates replace human approval, and missed judgement calls
+  are resolved by best judgement against `docs/workbench-surface-spec.md`.
 
 # Decisions Made
 
@@ -109,6 +85,13 @@ implementation plus live validation.
 - Workbench reset remains non-destructive to agent-owned history. Importer changes only read local stores and create Workbench session entries pointing at resume commands.
 - The current `Local Shell` behavior is the immediate cause of the screenshot: `WorkbenchBootstrapper` recreates it after the reset removes `workspace-state.json`, and `TerminalRowContextMenu` hides delete/edit/archive actions for non-custom built-in entries.
 - The installed app at `/Applications/Ouro Workbench.app` is `0.1.125`, while source is `0.1.155`; validation should distinguish current-source behavior from the installed dogfood build.
+- Fresh first-run and post-reset setup both defer `Local Shell`; the terminal list starts from boss setup/import rather than a shell-only fallback. A local shell may still be created later through explicit user action or advanced fallback behavior.
+- The primary UI noun is `Workspaces`. Existing internal model names may remain `project`/`group` where a broad storage migration would add risk, but visible primary copy should not teach `Groups`.
+- `This Mac` is machine scope copy only. It must not appear as the default workspace after reset or fresh first-run.
+- Codex/Claude scanning keeps the existing recency lookback for signal quality while adding deterministic adapters for observed archived/manual-recovery/task stores. Older-session UX can be added later.
+- No separate canonical Claude Desktop store has been proven beyond local `~/.claude/projects` and `~/.claude/tasks`; this pass scans those plus bounded evidence discovered under them.
+- Running-session primary chrome keeps a visible stop action when a session is running and moves focus, redraw, Ctrl-C, Esc, EOF, and restart/relaunch into a labeled advanced `Session Controls` menu.
+- Validation uses a build/install from the current source tree. The stale `/Applications/Ouro Workbench.app` `0.1.125` build is only historical evidence for the reported symptom.
 
 # Context / References
 
@@ -148,9 +131,15 @@ implementation plus live validation.
 - Existing root `AGENTS.md` product truth says terminal/TUI agents are first-class and restart recovery is P0; this plan keeps that intact by importing/resuming rather than replacing terminal agents.
 - Ari gave an explicit no-human-gates/autopilot mandate on 2026-06-14:
   complete the comprehensive spec, whole-system audit, work-suite plan,
-  implementation, and live end-to-end validation without returning control.
-  Reviewer gates substitute for human approval, and any missed judgement calls
-  are resolved by best judgement against the canonical spec.
+  implementation, and live end-to-end validation without returning control for
+  approval, review, naming, scope, credential, or UI judgement. Native credential
+  forms remain allowed product surfaces, but this campaign does not depend on
+  obtaining new credentials. Destructive external actions are avoided; when a
+  duplicate external session cannot be proven safe to stop, Workbench guides
+  cleanup instead of terminating it.
+- Source-of-truth skill check on 2026-06-14 found no `subagents/work-planner.md`
+  or `subagents/work-doer.md` in this repo, so the installed Work Suite skills
+  under `~/.agents/skills/` are the available planner/doer instructions.
 
 # Progress Log
 
@@ -158,3 +147,4 @@ implementation plus live validation.
 - 2026-06-14 14:20 Ran tinfoil pass: verified referenced files/mechanisms exist and completion criteria are testable.
 - 2026-06-14 14:24 Incorporated Ari's product-story feedback: narrow setup wizard to agent readiness, make import conversational/agentic, and remove unclear low-level terminal controls from primary chrome.
 - 2026-06-14 14:32 Added `docs/workbench-surface-spec.md` as the canonical spec and recorded the no-human-gates implementation mandate.
+- 2026-06-14 14:48 Added audit artifacts and resolved all remaining product questions for autonomous execution.
