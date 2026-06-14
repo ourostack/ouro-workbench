@@ -21,7 +21,7 @@ Gate state:
 - Audit: written and committed
 - Planning review: converged and approved
 - Doing review: converged; doing doc ready
-- Implementation: Unit 1a complete; starting Unit 1b implementation
+- Implementation: Unit 1b complete; Unit 1b cold review pending
 - Live validation: pending
 
-Next action: implement reset setup intent, launch diagnostics, and app wiring to pass Unit 1a tests.
+Next action: run Unit 1b cold review, then Unit 1c coverage/refactor.
