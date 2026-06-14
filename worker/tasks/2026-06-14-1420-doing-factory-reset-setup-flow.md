@@ -131,7 +131,7 @@ swift test --filter OnboardingTests
 **Output**: Core policy plus app sidebar copy/visibility changes. The diagnostic command `swift run OuroWorkbench --write-e2e-state sidebar-session-controls /tmp/workspace-state.json` writes a state containing one workspace named `Fixture Workspace` and one trusted auto-resume terminal agent named `Fixture Running Session`.
 **Acceptance**: Unit 3a tests pass; `swift build` succeeds; `rg -n 'Section\\(\"Groups\"\\)|New Group|Move to Group|Delete Terminal Group|Groups with terminals' Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift` returns no primary user-facing sidebar/header strings.
 
-### ⬜ Unit 3c: Sidebar Workspace Policy - Coverage & Refactor
+### ✅ Unit 3c: Sidebar Workspace Policy - Coverage & Refactor
 **What**: Run `swift test --filter WorkbenchSurfacePolicyTests` and `swift build`. Keep any refactor limited to `WorkbenchSurfacePolicy` naming and call sites already changed in Unit 3b.
 **Output**: Test/build output saved to `2026-06-14-1420-doing-factory-reset-setup-flow/unit-3-sidebar-policy.log`.
 **Acceptance**: Policy branches for setup mode, normal mode, healthy recovery, and actionable recovery are covered and green.
@@ -356,3 +356,4 @@ grep -F 'PASS import_scanner' "$ART/e2e-import-scanner.md"
 - 2026-06-14 15:39 Unit 3a complete: added failing sidebar surface policy and e2e fixture diagnostic tests; red log saved to unit-3a-red.log.
 - 2026-06-14 15:43 Unit 2 review finding addressed: added red/green coverage for Codex `session_meta.payload` archive/manual-recovery JSONL records.
 - 2026-06-14 15:46 Unit 3b complete: added WorkbenchSurfacePolicy, schema-backed sidebar e2e fixture writer, Workspaces/Boss sidebar labels, and hidden healthy Recovery; green log saved to unit-3b-green.log.
+- 2026-06-14 15:47 Unit 3c complete: reran WorkbenchSurfacePolicyTests, build, and sidebar source assertions; log saved to unit-3-sidebar-policy.log.
