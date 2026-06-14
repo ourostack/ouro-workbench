@@ -21,7 +21,7 @@ Gate state:
 - Audit: written and committed
 - Planning review: converged and approved
 - Doing review: converged; doing doc ready
-- Implementation: Unit 2b complete; starting Unit 2c coverage/refactor
+- Implementation: Unit 2 complete; Unit 2 cold review pending; starting Unit 3a
 - Live validation: pending
 
-Next action: run Unit 2c exact scanner coverage commands and cold review Unit 2.
+Next action: dispatch Unit 2 cold review, then write Unit 3a failing surface policy tests.

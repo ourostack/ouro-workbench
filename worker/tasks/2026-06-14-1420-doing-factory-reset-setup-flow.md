@@ -101,7 +101,7 @@ The immediate blocker is the post-factory-reset first-run experience: Workbench 
 **Output**: Scanner returns evidence-backed `RecentSessionCandidate` values with source, kind, title, working directory, recency, resume command, summary, evidence path, confidence, and repository-root grouping. The diagnostic command `swift run OuroWorkbench --dump-recent-sessions-json` emits JSON without mutating Workbench or harness state.
 **Acceptance**: Unit 2a tests pass; existing onboarding scanner/proposal tests pass.
 
-### ⬜ Unit 2c: Recent Session Scanner Stores - Coverage & Refactor
+### ✅ Unit 2c: Recent Session Scanner Stores - Coverage & Refactor
 **What**: Run exact focused coverage commands for the scanner happy paths and edge cases:
 
 ```bash
@@ -352,3 +352,4 @@ grep -F 'PASS import_scanner' "$ART/e2e-import-scanner.md"
 - 2026-06-14 15:28 Unit 1c complete: reran reset/bootstrap/launch diagnostic tests and build; Unit 1b cold review converged after isolated reset-root safety fix.
 - 2026-06-14 15:31 Unit 2a complete: added failing Codex/Claude scanner store tests and dump-recent-sessions diagnostic parse tests; red log saved to unit-2a-red.log.
 - 2026-06-14 15:37 Unit 2b complete: implemented Codex archived/manual-recovery/index/sqlite union, Claude task/project JSON scanning, and dump-recent-sessions JSON diagnostic; green log saved to unit-2b-green.log.
+- 2026-06-14 15:38 Unit 2c complete: reran exact scanner edge coverage commands and full OnboardingTests; log saved to unit-2-scanner.log.
