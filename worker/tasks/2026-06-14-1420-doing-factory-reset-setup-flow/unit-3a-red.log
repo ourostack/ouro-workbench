@@ -1,0 +1,104 @@
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/12] Write sources
+[3/12] Write swift-version--58304C5D6DBC2206.txt
+[5/8] Emitting module OuroWorkbenchCoreTests
+[6/8] Compiling OuroWorkbenchCoreTests WorkbenchSurfacePolicyTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift:6:24: error: cannot find 'WorkbenchSurfacePolicy' in scope
+ 4 | final class WorkbenchSurfacePolicyTests: XCTestCase {
+ 5 |     func testSidebarPrimaryLabelsUseWorkbenchStoryNouns() {
+ 6 |         XCTAssertEqual(WorkbenchSurfacePolicy.workspaceSectionTitle, "Workspaces")
+   |                        `- error: cannot find 'WorkbenchSurfacePolicy' in scope
+ 7 |         XCTAssertEqual(WorkbenchSurfacePolicy.newWorkspaceTitle, "New Workspace")
+ 8 |         XCTAssertEqual(WorkbenchSurfacePolicy.bossSectionTitle, "Boss")
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift:7:24: error: cannot find 'WorkbenchSurfacePolicy' in scope
+ 5 |     func testSidebarPrimaryLabelsUseWorkbenchStoryNouns() {
+ 6 |         XCTAssertEqual(WorkbenchSurfacePolicy.workspaceSectionTitle, "Workspaces")
+ 7 |         XCTAssertEqual(WorkbenchSurfacePolicy.newWorkspaceTitle, "New Workspace")
+   |                        `- error: cannot find 'WorkbenchSurfacePolicy' in scope
+ 8 |         XCTAssertEqual(WorkbenchSurfacePolicy.bossSectionTitle, "Boss")
+ 9 |     }
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift:8:24: error: cannot find 'WorkbenchSurfacePolicy' in scope
+ 6 |         XCTAssertEqual(WorkbenchSurfacePolicy.workspaceSectionTitle, "Workspaces")
+ 7 |         XCTAssertEqual(WorkbenchSurfacePolicy.newWorkspaceTitle, "New Workspace")
+ 8 |         XCTAssertEqual(WorkbenchSurfacePolicy.bossSectionTitle, "Boss")
+   |                        `- error: cannot find 'WorkbenchSurfacePolicy' in scope
+ 9 |     }
+10 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift:12:24: error: cannot find 'WorkbenchSurfacePolicy' in scope
+10 | 
+11 |     func testSetupWorkspaceNameIsUnsortedSessionsNotThisMac() {
+12 |         XCTAssertEqual(WorkbenchSurfacePolicy.setupWorkspaceName, "Unsorted Sessions")
+   |                        `- error: cannot find 'WorkbenchSurfacePolicy' in scope
+13 |         XCTAssertNotEqual(WorkbenchSurfacePolicy.setupWorkspaceName, "This Mac")
+14 |     }
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift:13:27: error: cannot find 'WorkbenchSurfacePolicy' in scope
+11 |     func testSetupWorkspaceNameIsUnsortedSessionsNotThisMac() {
+12 |         XCTAssertEqual(WorkbenchSurfacePolicy.setupWorkspaceName, "Unsorted Sessions")
+13 |         XCTAssertNotEqual(WorkbenchSurfacePolicy.setupWorkspaceName, "This Mac")
+   |                           `- error: cannot find 'WorkbenchSurfacePolicy' in scope
+14 |     }
+15 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift:17:24: error: cannot find 'WorkbenchSurfacePolicy' in scope
+15 | 
+16 |     func testBossStatusLabelsStayCompact() {
+17 |         XCTAssertEqual(WorkbenchSurfacePolicy.bossStatus(agentName: "", isReady: false), "Choose boss")
+   |                        `- error: cannot find 'WorkbenchSurfacePolicy' in scope
+18 |         XCTAssertEqual(WorkbenchSurfacePolicy.bossStatus(agentName: "slugger", isReady: true), "slugger ready")
+19 |         XCTAssertEqual(WorkbenchSurfacePolicy.bossStatus(agentName: "slugger", isReady: false), "slugger setup needed")
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift:18:24: error: cannot find 'WorkbenchSurfacePolicy' in scope
+16 |     func testBossStatusLabelsStayCompact() {
+17 |         XCTAssertEqual(WorkbenchSurfacePolicy.bossStatus(agentName: "", isReady: false), "Choose boss")
+18 |         XCTAssertEqual(WorkbenchSurfacePolicy.bossStatus(agentName: "slugger", isReady: true), "slugger ready")
+   |                        `- error: cannot find 'WorkbenchSurfacePolicy' in scope
+19 |         XCTAssertEqual(WorkbenchSurfacePolicy.bossStatus(agentName: "slugger", isReady: false), "slugger setup needed")
+20 |     }
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift:19:24: error: cannot find 'WorkbenchSurfacePolicy' in scope
+17 |         XCTAssertEqual(WorkbenchSurfacePolicy.bossStatus(agentName: "", isReady: false), "Choose boss")
+18 |         XCTAssertEqual(WorkbenchSurfacePolicy.bossStatus(agentName: "slugger", isReady: true), "slugger ready")
+19 |         XCTAssertEqual(WorkbenchSurfacePolicy.bossStatus(agentName: "slugger", isReady: false), "slugger setup needed")
+   |                        `- error: cannot find 'WorkbenchSurfacePolicy' in scope
+20 |     }
+21 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift:23:24: error: cannot find 'WorkbenchSurfacePolicy' in scope
+21 | 
+22 |     func testRecoverySectionIsHiddenWhenThereIsNothingActionable() {
+23 |         XCTAssertFalse(WorkbenchSurfacePolicy.shouldShowRecovery(recoverableCount: 0))
+   |                        `- error: cannot find 'WorkbenchSurfacePolicy' in scope
+24 |     }
+25 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift:27:23: error: cannot find 'WorkbenchSurfacePolicy' in scope
+25 | 
+26 |     func testRecoverySectionIsShownWhenActionable() {
+27 |         XCTAssertTrue(WorkbenchSurfacePolicy.shouldShowRecovery(recoverableCount: 2))
+   |                       `- error: cannot find 'WorkbenchSurfacePolicy' in scope
+28 |     }
+29 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift:40:14: error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'writeE2EState'
+38 |         XCTAssertEqual(
+39 |             diagnostics.action,
+40 |             .writeE2EState(.sidebarSessionControls, URL(fileURLWithPath: "/tmp/workspace-state.json"))
+   |              `- error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'writeE2EState'
+41 |         )
+42 |     }
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift:40:29: error: cannot infer contextual base in reference to member 'sidebarSessionControls'
+38 |         XCTAssertEqual(
+39 |             diagnostics.action,
+40 |             .writeE2EState(.sidebarSessionControls, URL(fileURLWithPath: "/tmp/workspace-state.json"))
+   |                             `- error: cannot infer contextual base in reference to member 'sidebarSessionControls'
+41 |         )
+42 |     }
+error: fatalError
