@@ -7845,62 +7845,120 @@ struct RunningSessionHeaderControls: View {
     @ObservedObject var model: WorkbenchViewModel
 
     var body: some View {
+        let controls = WorkbenchSurfacePolicy.sessionControls(
+            isRunning: model.activeSession(for: entry) != nil,
+            isArchived: entry.isArchived,
+            isRecoverable: model.recoveryPlan(for: entry) != nil
+        )
         HStack(spacing: 8) {
-            Button {
-                model.focusTerminal(entry)
-            } label: {
-                Image(systemName: "arrow.up.left.and.arrow.down.right")
+            ForEach(controls.primaryActions, id: \.self) { action in
+                primaryButton(for: action)
             }
-            .keyboardShortcut("f", modifiers: [.command, .shift])
-            .help("Focus this terminal")
-            .accessibilityLabel("Full Screen")
-            .frame(width: 28)
+            Menu {
+                ForEach(controls.advancedActions, id: \.self) { action in
+                    advancedButton(for: action)
+                }
+                if !controls.advancedActions.isEmpty {
+                    Divider()
+                }
+                Button {
+                    model.copyLaunchCommand(for: entry)
+                } label: {
+                    Label("Copy Launch Command", systemImage: "doc.on.doc")
+                }
+                Button {
+                    model.openWorkingDirectory(for: entry)
+                } label: {
+                    Label("Open Working Directory", systemImage: "folder")
+                }
+            } label: {
+                Label("Session Controls", systemImage: "slider.horizontal.3")
+            }
+            .help("Session Controls")
+        }
+        .controlSize(.small)
+    }
 
-            Button {
-                model.redrawTerminal(entry)
-            } label: {
-                Image(systemName: "arrow.clockwise")
-            }
-            .help("Send Ctrl-L to redraw the terminal")
-            .keyboardShortcut("l", modifiers: [.command])
-            .accessibilityLabel("Redraw")
-            .frame(width: 28)
-
-            Button {
-                model.sendControlC(to: entry)
-            } label: {
-                Image(systemName: "command")
-            }
-            .help("Send Ctrl-C to this terminal")
-            .accessibilityLabel("Ctrl-C")
-            .frame(width: 28)
-            Button {
-                model.sendEscape(to: entry)
-            } label: {
-                Image(systemName: "escape")
-            }
-            .help("Send Esc to this terminal")
-            .accessibilityLabel("Esc")
-            .frame(width: 28)
-            Button {
-                model.sendEOF(to: entry)
-            } label: {
-                Image(systemName: "eject")
-            }
-            .help("Send Ctrl-D / EOF to this terminal")
-            .accessibilityLabel("EOF")
-            .frame(width: 28)
+    @ViewBuilder
+    private func primaryButton(for action: WorkbenchSurfacePolicy.SessionAction) -> some View {
+        switch action {
+        case .stop:
             Button(role: .destructive) {
                 model.terminate(entry)
             } label: {
-                Image(systemName: "stop.fill")
+                Label("Stop", systemImage: "stop.fill")
             }
             .keyboardShortcut(".", modifiers: [.command])
             .help("Stop this terminal")
-            .accessibilityLabel("Stop")
-            .frame(width: 28)
+        case .launch:
+            Button {
+                model.launch(entry)
+            } label: {
+                Label("Launch", systemImage: "play.fill")
+            }
+            .help("Launch this terminal")
+        case .recover:
+            Button {
+                model.recover(entry)
+            } label: {
+                Label("Recover", systemImage: "arrow.clockwise.circle")
+            }
+            .help("Recover this terminal")
+        default:
+            EmptyView()
         }
-        .controlSize(.small)
+    }
+
+    @ViewBuilder
+    private func advancedButton(for action: WorkbenchSurfacePolicy.SessionAction) -> some View {
+        switch action {
+        case .focus:
+            Button {
+                model.focusTerminal(entry)
+            } label: {
+                Label("Focus", systemImage: "arrow.up.left.and.arrow.down.right")
+            }
+            .keyboardShortcut("f", modifiers: [.command, .shift])
+            .help("Focus this terminal")
+        case .redraw:
+            Button {
+                model.redrawTerminal(entry)
+            } label: {
+                Label("Redraw", systemImage: "arrow.clockwise")
+            }
+            .keyboardShortcut("l", modifiers: [.command])
+            .help("Send Ctrl-L to redraw the terminal")
+        case .restart:
+            Button {
+                model.launch(entry)
+            } label: {
+                Label("Restart", systemImage: "play.fill")
+            }
+            .help("Restart this terminal")
+        case .controlC:
+            Button {
+                model.sendControlC(to: entry)
+            } label: {
+                Label("Ctrl-C", systemImage: "command")
+            }
+            .help("Send Ctrl-C to this terminal")
+        case .escape:
+            Button {
+                model.sendEscape(to: entry)
+            } label: {
+                Label("Esc", systemImage: "escape")
+            }
+            .help("Send Esc to this terminal")
+        case .eof:
+            Button {
+                model.sendEOF(to: entry)
+            } label: {
+                Label("EOF", systemImage: "eject")
+            }
+            .help("Send Ctrl-D / EOF to this terminal")
+        default:
+            EmptyView()
+        }
     }
 }
 
