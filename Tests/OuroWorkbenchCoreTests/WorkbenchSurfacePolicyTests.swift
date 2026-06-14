@@ -48,4 +48,32 @@ final class WorkbenchSurfacePolicyTests: XCTestCase {
             "sidebar-session-controls"
         ]))
     }
+
+    func testRunningSessionShowsOnlyStopAsPrimaryAction() {
+        let policy = WorkbenchSurfacePolicy.sessionControls(isRunning: true, isArchived: false, isRecoverable: false)
+
+        XCTAssertEqual(policy.primaryActions, [.stop])
+        XCTAssertEqual(policy.advancedActions, [.focus, .redraw, .restart, .controlC, .escape, .eof])
+    }
+
+    func testStoppedSessionShowsLaunchAsPrimaryAction() {
+        let policy = WorkbenchSurfacePolicy.sessionControls(isRunning: false, isArchived: false, isRecoverable: false)
+
+        XCTAssertEqual(policy.primaryActions, [.launch])
+        XCTAssertTrue(policy.advancedActions.isEmpty)
+    }
+
+    func testRecoverableSessionShowsRecoverAsPrimaryAction() {
+        let policy = WorkbenchSurfacePolicy.sessionControls(isRunning: false, isArchived: false, isRecoverable: true)
+
+        XCTAssertEqual(policy.primaryActions, [.recover])
+        XCTAssertTrue(policy.advancedActions.isEmpty)
+    }
+
+    func testArchivedSessionShowsNoPrimaryOrAdvancedActions() {
+        let policy = WorkbenchSurfacePolicy.sessionControls(isRunning: false, isArchived: true, isRecoverable: false)
+
+        XCTAssertTrue(policy.primaryActions.isEmpty)
+        XCTAssertTrue(policy.advancedActions.isEmpty)
+    }
 }

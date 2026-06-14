@@ -1,0 +1,154 @@
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/11] Write sources
+[3/11] Write swift-version--58304C5D6DBC2206.txt
+[5/7] Emitting module OuroWorkbenchCoreTests
+[6/7] Compiling OuroWorkbenchCoreTests WorkbenchSurfacePolicyTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift:53:45: error: type 'WorkbenchSurfacePolicy' has no member 'sessionControls'
+51 | 
+52 |     func testRunningSessionShowsOnlyStopAsPrimaryAction() {
+53 |         let policy = WorkbenchSurfacePolicy.sessionControls(isRunning: true, isArchived: false, isRecoverable: false)
+   |                                             `- error: type 'WorkbenchSurfacePolicy' has no member 'sessionControls'
+54 | 
+55 |         XCTAssertEqual(policy.primaryActions, [.stop])
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift:55:9: error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+53 |         let policy = WorkbenchSurfacePolicy.sessionControls(isRunning: true, isArchived: false, isRecoverable: false)
+54 | 
+55 |         XCTAssertEqual(policy.primaryActions, [.stop])
+   |         |- error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+   |         |- note: only concrete types such as structs, enums and classes can conform to protocols
+   |         `- note: requirement from conditional conformance of '[Any]' to 'Equatable'
+56 |         XCTAssertEqual(policy.advancedActions, [.focus, .redraw, .restart, .controlC, .escape, .eof])
+57 |     }
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift:55:49: error: reference to member 'stop' cannot be resolved without a contextual type
+53 |         let policy = WorkbenchSurfacePolicy.sessionControls(isRunning: true, isArchived: false, isRecoverable: false)
+54 | 
+55 |         XCTAssertEqual(policy.primaryActions, [.stop])
+   |                                                 `- error: reference to member 'stop' cannot be resolved without a contextual type
+56 |         XCTAssertEqual(policy.advancedActions, [.focus, .redraw, .restart, .controlC, .escape, .eof])
+57 |     }
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift:56:9: error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+54 | 
+55 |         XCTAssertEqual(policy.primaryActions, [.stop])
+56 |         XCTAssertEqual(policy.advancedActions, [.focus, .redraw, .restart, .controlC, .escape, .eof])
+   |         |- error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+   |         |- note: only concrete types such as structs, enums and classes can conform to protocols
+   |         `- note: requirement from conditional conformance of '[Any]' to 'Equatable'
+57 |     }
+58 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift:56:50: error: reference to member 'focus' cannot be resolved without a contextual type
+54 | 
+55 |         XCTAssertEqual(policy.primaryActions, [.stop])
+56 |         XCTAssertEqual(policy.advancedActions, [.focus, .redraw, .restart, .controlC, .escape, .eof])
+   |                                                  `- error: reference to member 'focus' cannot be resolved without a contextual type
+57 |     }
+58 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift:56:58: error: reference to member 'redraw' cannot be resolved without a contextual type
+54 | 
+55 |         XCTAssertEqual(policy.primaryActions, [.stop])
+56 |         XCTAssertEqual(policy.advancedActions, [.focus, .redraw, .restart, .controlC, .escape, .eof])
+   |                                                          `- error: reference to member 'redraw' cannot be resolved without a contextual type
+57 |     }
+58 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift:56:67: error: reference to member 'restart' cannot be resolved without a contextual type
+54 | 
+55 |         XCTAssertEqual(policy.primaryActions, [.stop])
+56 |         XCTAssertEqual(policy.advancedActions, [.focus, .redraw, .restart, .controlC, .escape, .eof])
+   |                                                                   `- error: reference to member 'restart' cannot be resolved without a contextual type
+57 |     }
+58 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift:56:77: error: reference to member 'controlC' cannot be resolved without a contextual type
+54 | 
+55 |         XCTAssertEqual(policy.primaryActions, [.stop])
+56 |         XCTAssertEqual(policy.advancedActions, [.focus, .redraw, .restart, .controlC, .escape, .eof])
+   |                                                                             `- error: reference to member 'controlC' cannot be resolved without a contextual type
+57 |     }
+58 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift:56:88: error: reference to member 'escape' cannot be resolved without a contextual type
+54 | 
+55 |         XCTAssertEqual(policy.primaryActions, [.stop])
+56 |         XCTAssertEqual(policy.advancedActions, [.focus, .redraw, .restart, .controlC, .escape, .eof])
+   |                                                                                        `- error: reference to member 'escape' cannot be resolved without a contextual type
+57 |     }
+58 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift:56:97: error: reference to member 'eof' cannot be resolved without a contextual type
+54 | 
+55 |         XCTAssertEqual(policy.primaryActions, [.stop])
+56 |         XCTAssertEqual(policy.advancedActions, [.focus, .redraw, .restart, .controlC, .escape, .eof])
+   |                                                                                                 `- error: reference to member 'eof' cannot be resolved without a contextual type
+57 |     }
+58 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift:60:45: error: type 'WorkbenchSurfacePolicy' has no member 'sessionControls'
+58 | 
+59 |     func testStoppedSessionShowsLaunchAsPrimaryAction() {
+60 |         let policy = WorkbenchSurfacePolicy.sessionControls(isRunning: false, isArchived: false, isRecoverable: false)
+   |                                             `- error: type 'WorkbenchSurfacePolicy' has no member 'sessionControls'
+61 | 
+62 |         XCTAssertEqual(policy.primaryActions, [.launch])
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift:62:9: error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+60 |         let policy = WorkbenchSurfacePolicy.sessionControls(isRunning: false, isArchived: false, isRecoverable: false)
+61 | 
+62 |         XCTAssertEqual(policy.primaryActions, [.launch])
+   |         |- error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+   |         |- note: only concrete types such as structs, enums and classes can conform to protocols
+   |         `- note: requirement from conditional conformance of '[Any]' to 'Equatable'
+63 |         XCTAssertTrue(policy.advancedActions.isEmpty)
+64 |     }
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift:62:49: error: reference to member 'launch' cannot be resolved without a contextual type
+60 |         let policy = WorkbenchSurfacePolicy.sessionControls(isRunning: false, isArchived: false, isRecoverable: false)
+61 | 
+62 |         XCTAssertEqual(policy.primaryActions, [.launch])
+   |                                                 `- error: reference to member 'launch' cannot be resolved without a contextual type
+63 |         XCTAssertTrue(policy.advancedActions.isEmpty)
+64 |     }
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift:67:45: error: type 'WorkbenchSurfacePolicy' has no member 'sessionControls'
+65 | 
+66 |     func testRecoverableSessionShowsRecoverAsPrimaryAction() {
+67 |         let policy = WorkbenchSurfacePolicy.sessionControls(isRunning: false, isArchived: false, isRecoverable: true)
+   |                                             `- error: type 'WorkbenchSurfacePolicy' has no member 'sessionControls'
+68 | 
+69 |         XCTAssertEqual(policy.primaryActions, [.recover])
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift:69:9: error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+67 |         let policy = WorkbenchSurfacePolicy.sessionControls(isRunning: false, isArchived: false, isRecoverable: true)
+68 | 
+69 |         XCTAssertEqual(policy.primaryActions, [.recover])
+   |         |- error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+   |         |- note: only concrete types such as structs, enums and classes can conform to protocols
+   |         `- note: requirement from conditional conformance of '[Any]' to 'Equatable'
+70 |         XCTAssertTrue(policy.advancedActions.isEmpty)
+71 |     }
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift:69:49: error: reference to member 'recover' cannot be resolved without a contextual type
+67 |         let policy = WorkbenchSurfacePolicy.sessionControls(isRunning: false, isArchived: false, isRecoverable: true)
+68 | 
+69 |         XCTAssertEqual(policy.primaryActions, [.recover])
+   |                                                 `- error: reference to member 'recover' cannot be resolved without a contextual type
+70 |         XCTAssertTrue(policy.advancedActions.isEmpty)
+71 |     }
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift:74:45: error: type 'WorkbenchSurfacePolicy' has no member 'sessionControls'
+72 | 
+73 |     func testArchivedSessionShowsNoPrimaryOrAdvancedActions() {
+74 |         let policy = WorkbenchSurfacePolicy.sessionControls(isRunning: false, isArchived: true, isRecoverable: false)
+   |                                             `- error: type 'WorkbenchSurfacePolicy' has no member 'sessionControls'
+75 | 
+76 |         XCTAssertTrue(policy.primaryActions.isEmpty)
+
+[#ProtocolTypeNonConformance]: <https://docs.swift.org/compiler/documentation/diagnostics/protocol-type-non-conformance>
+error: fatalError
