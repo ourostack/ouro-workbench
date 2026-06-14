@@ -22,7 +22,7 @@ public struct WorkbenchDefaults: Sendable {
         projectRootPath: String = FileManager.default.homeDirectoryForCurrentUser.path
     ) -> WorkbenchDefaults {
         WorkbenchDefaults(
-            projectName: "Unsorted Sessions",
+            projectName: WorkbenchSurfacePolicy.setupWorkspaceName,
             projectRootPath: projectRootPath,
             boss: BossAgentSelection(),
             includeLocalShell: false

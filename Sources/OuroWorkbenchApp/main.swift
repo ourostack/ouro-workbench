@@ -61,5 +61,39 @@ if case let .dumpRecentSessions(scanHomeRoot) = workbenchLaunchDiagnostics.actio
     }
 }
 
+if case let .writeE2EState(fixture, stateURL) = workbenchLaunchDiagnostics.action {
+    do {
+        switch fixture {
+        case .sidebarSessionControls:
+            let rootPath = FileManager.default.homeDirectoryForCurrentUser.path
+            let project = WorkbenchProject(name: "Fixture Workspace", rootPath: rootPath)
+            let entry = ProcessEntry(
+                projectId: project.id,
+                name: "Fixture Running Session",
+                kind: .terminalAgent,
+                agentKind: .openAICodex,
+                executable: "/bin/zsh",
+                arguments: ["-lc", "while true; do sleep 60; done"],
+                workingDirectory: rootPath,
+                trust: .trusted,
+                autoResume: true,
+                lastSummary: "Fixture running session"
+            )
+            let state = WorkspaceState(
+                selectedProjectId: project.id,
+                selectedEntryId: entry.id,
+                projects: [project],
+                processEntries: [entry]
+            )
+            try WorkbenchStore(stateURL: stateURL).save(state)
+        }
+        FileHandle.standardOutput.write(Data("wrote e2e state \(stateURL.path)\n".utf8))
+        Darwin.exit(0)
+    } catch {
+        FileHandle.standardError.write(Data("Failed to write e2e state: \(error.localizedDescription)\n".utf8))
+        Darwin.exit(1)
+    }
+}
+
 OuroWorkbenchApp.main()
 #endif

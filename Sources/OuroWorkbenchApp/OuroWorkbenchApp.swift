@@ -59,8 +59,8 @@ struct OuroWorkbenchApp: App {
                 Divider()
                 menuCommand("Previous Terminal", .prevTerminal, "[")
                 menuCommand("Next Terminal", .nextTerminal, "]")
-                menuCommand("Previous Group", .prevGroup, "[", [.command, .shift])
-                menuCommand("Next Group", .nextGroup, "]", [.command, .shift])
+                menuCommand("Previous Workspace", .prevGroup, "[", [.command, .shift])
+                menuCommand("Next Workspace", .nextGroup, "]", [.command, .shift])
                 Divider()
                 Menu("Select Terminal") {
                     ForEach(1...9, id: \.self) { index in
@@ -479,7 +479,7 @@ struct WorkbenchRootView: View {
                 Text("This removes \(entry.name) from the workbench and clears its run records. Transcript files remain on disk.")
             }
         }
-        .confirmationDialog("Delete Terminal Group?", isPresented: model.deleteGroupConfirmationIsPresented) {
+        .confirmationDialog("Delete Workspace?", isPresented: model.deleteGroupConfirmationIsPresented) {
             if let project = model.pendingDeleteGroup {
                 Button("Delete \(project.name)", role: .destructive) {
                     model.deleteGroup(project)
@@ -488,7 +488,7 @@ struct WorkbenchRootView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             if let project = model.pendingDeleteGroup {
-                Text("This removes the empty group \(project.name). Groups with terminals cannot be deleted.")
+                Text("This removes the empty workspace \(project.name). Workspaces with terminals cannot be deleted.")
             }
         }
         .confirmationDialog("Reset to Factory Defaults?", isPresented: $model.isResetFirstRunConfirmationPresented, titleVisibility: .visible) {
@@ -2618,7 +2618,7 @@ struct WorkbenchSidebarView: View {
 
     private var sessionList: some View {
         List(selection: $model.selectedEntryID) {
-            Section("Agents") {
+            Section("Boss") {
                 ForEach(model.ouroAgents) { agent in
                     SidebarAgentRow(
                         agent: agent,
@@ -2637,7 +2637,7 @@ struct WorkbenchSidebarView: View {
                     }
                 }
             }
-            Section("Groups") {
+            Section("Workspaces") {
                 ForEach(model.state.projects) { project in
                     SidebarProjectRow(
                         project: project,
@@ -2666,7 +2666,7 @@ struct WorkbenchSidebarView: View {
                     // equals global.
                     model.moveGroups(fromOffsets: offsets, toOffset: destination)
                 }
-                SidebarActionRow(title: "New Group", systemImage: "folder.badge.plus") {
+                SidebarActionRow(title: "New Workspace", systemImage: "folder.badge.plus") {
                     model.isNewGroupSheetPresented = true
                 }
             }
@@ -2716,30 +2716,30 @@ struct WorkbenchSidebarView: View {
                     }
                 }
             }
-            Section("Recovery") {
-                Button {
-                    model.isRecoverySheetPresented = true
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "arrow.clockwise.circle")
-                            .foregroundStyle(model.recoverableEntries.isEmpty ? Color.secondary : Color.orange)
-                        Text(model.summary.oneLineStatus)
-                            .font(.caption)
-                            .lineLimit(2)
-                            .truncationMode(.tail)
-                            .multilineTextAlignment(.leading)
-                            .foregroundStyle(.primary)
-                        Spacer(minLength: 0)
-                        Image(systemName: "chevron.right")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
+            if !model.recoverableEntries.isEmpty {
+                Section("Recovery") {
+                    Button {
+                        model.isRecoverySheetPresented = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "arrow.clockwise.circle")
+                                .foregroundStyle(Color.orange)
+                            Text(model.summary.oneLineStatus)
+                                .font(.caption)
+                                .lineLimit(2)
+                                .truncationMode(.tail)
+                                .multilineTextAlignment(.leading)
+                                .foregroundStyle(.primary)
+                            Spacer(minLength: 0)
+                            Image(systemName: "chevron.right")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                        .contentShape(Rectangle())
                     }
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
+                    .help("\(model.recoverableEntries.count) session\(model.recoverableEntries.count == 1 ? "" : "s") waiting on recovery. Click to inspect.")
                 }
-                .buttonStyle(.plain)
-                .help(model.recoverableEntries.isEmpty
-                      ? "No sessions are currently waiting on recovery"
-                      : "\(model.recoverableEntries.count) session\(model.recoverableEntries.count == 1 ? "" : "s") waiting on recovery. Click to inspect.")
             }
         }
     }
@@ -2793,7 +2793,7 @@ struct SidebarProjectRow: View {
 
             Menu {
                 Button(action: rename) {
-                    Label("Rename Group", systemImage: "pencil")
+                    Label("Rename Workspace", systemImage: "pencil")
                 }
                 Menu {
                     Button {
@@ -2815,15 +2815,15 @@ struct SidebarProjectRow: View {
                     Label("Color Tag", systemImage: "paintpalette")
                 }
                 Button(role: .destructive, action: delete) {
-                    Label("Delete Empty Group", systemImage: "trash")
+                    Label("Delete Empty Workspace", systemImage: "trash")
                 }
                 .disabled(!canDelete)
             } label: {
-                Label("Group Actions", systemImage: "ellipsis.circle")
+                Label("Workspace Actions", systemImage: "ellipsis.circle")
             }
             .labelStyle(.iconOnly)
             .menuStyle(.borderlessButton)
-            .help("Group actions")
+            .help("Workspace actions")
             .fixedSize()
         }
         .padding(.vertical, 1)
@@ -3021,7 +3021,7 @@ struct TerminalRowContextMenu: View {
                         .disabled(project.id == entry.projectId)
                     }
                 } label: {
-                    Label("Move to Group", systemImage: "folder")
+                    Label("Move to Workspace", systemImage: "folder")
                 }
                 .disabled(model.activeSession(for: entry) != nil || model.state.projects.count < 2)
                 if entry.isArchived {
@@ -7368,7 +7368,7 @@ private struct SessionTitleStrip: View {
                                 .disabled(project.id == entry.projectId)
                             }
                         } label: {
-                            Label("Move to Group", systemImage: "folder")
+                            Label("Move to Workspace", systemImage: "folder")
                         }
                         .disabled(model.activeSession(for: entry) != nil || model.state.projects.count < 2)
                         Button {

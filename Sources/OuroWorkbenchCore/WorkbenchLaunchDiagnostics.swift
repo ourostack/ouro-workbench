@@ -1,9 +1,14 @@
 import Foundation
 
 public struct WorkbenchLaunchDiagnostics: Equatable, Sendable {
+    public enum E2EStateFixture: String, Equatable, Sendable {
+        case sidebarSessionControls = "sidebar-session-controls"
+    }
+
     public enum Action: Equatable, Sendable {
         case factoryResetForE2E
         case dumpRecentSessions(scanHomeRoot: URL?)
+        case writeE2EState(E2EStateFixture, URL)
     }
 
     public enum ParseError: Error, Equatable, LocalizedError {
@@ -70,6 +75,26 @@ public struct WorkbenchLaunchDiagnostics: Equatable, Sendable {
                     diagnostics.action = .dumpRecentSessions(scanHomeRoot: scanHomeRoot)
                 }
                 index += 2
+            case "--write-e2e-state":
+                let fixtureIndex = index + 1
+                let pathIndex = index + 2
+                guard fixtureIndex < arguments.count else {
+                    throw ParseError.missingValue(argument)
+                }
+                guard pathIndex < arguments.count else {
+                    throw ParseError.missingValue(arguments[fixtureIndex])
+                }
+                if let fixture = E2EStateFixture(rawValue: arguments[fixtureIndex]) {
+                    diagnostics.action = .writeE2EState(
+                        fixture,
+                        URL(fileURLWithPath: arguments[pathIndex])
+                    )
+                } else {
+                    diagnostics.passthroughArguments.append(argument)
+                    diagnostics.passthroughArguments.append(arguments[fixtureIndex])
+                    diagnostics.passthroughArguments.append(arguments[pathIndex])
+                }
+                index += 3
             default:
                 diagnostics.passthroughArguments.append(argument)
                 index += 1
