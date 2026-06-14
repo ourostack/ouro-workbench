@@ -181,7 +181,7 @@ swift test --filter OnboardingTests
 **Output**: Save output to `2026-06-14-1420-doing-factory-reset-setup-flow/full-swift-test.log` and `2026-06-14-1420-doing-factory-reset-setup-flow/swift-build.log`.
 **Acceptance**: Both commands exit 0, logs contain no warnings, and failures are fixed before continuing.
 
-### ⬜ Unit 6b: Scenario Verifier
+### ✅ Unit 6b: Scenario Verifier
 **What**: Run `swift run OuroWorkbenchScenarioVerifier --out worker/tasks/2026-06-14-1420-doing-factory-reset-setup-flow/scenario-verifier --no-samples`.
 **Output**: Save command output to `2026-06-14-1420-doing-factory-reset-setup-flow/scenario-verifier.log` and generated verifier files under `2026-06-14-1420-doing-factory-reset-setup-flow/scenario-verifier/`.
 **Acceptance**: Command exits 0 and the log records zero scenario failures.
@@ -368,3 +368,4 @@ grep -F 'PASS import_scanner' "$ART/e2e-import-scanner.md"
 - 2026-06-14 16:05 Unit 4 cold-review findings fixed: title strip now uses session controls policy for active/inactive/recoverable sessions, primary Restart leak removed, and leftover group tooltip changed to workspace; red/green logs saved to unit-4-review-*.log.
 - 2026-06-14 16:06 Unit 5e complete: reran OnboardingNarrativeTests, OnboardingTests, build, and old-copy source scan; log saved to unit-5-onboarding.log.
 - 2026-06-14 16:07 Unit 6a complete: full swift test ran 919 tests with 1 skip and 0 failures; swift build passed; logs saved to full-swift-test.log and swift-build.log.
+- 2026-06-14 16:07 Unit 6b complete: scenario verifier checked 5,000 rows / 25,000 render passes with failures: 0; log saved to scenario-verifier.log.

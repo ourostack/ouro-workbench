@@ -22,6 +22,6 @@ Gate state:
 - Planning review: converged and approved
 - Doing review: converged; doing doc ready
 - Implementation: Unit 5e complete; Unit 4 cold-review findings fixed
-- Live validation: Unit 6a complete; starting Unit 6b
+- Live validation: Unit 6b complete; starting Unit 6c
 
-Next action: run OuroWorkbenchScenarioVerifier for Unit 6b.
+Next action: package, install, verify, and record installed app version/build for Unit 6c.
