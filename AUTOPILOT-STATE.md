@@ -19,11 +19,11 @@ Gate state:
 
 - Spec: written and committed
 - Audit: written and committed
-- Planning review: Round 2 in progress
-- Doing review: granularity and validation/source-fidelity converged; ambiguity and quality in progress
+- Planning review: converged and approved
+- Doing review: granularity and validation/source-fidelity converged; ambiguity Round 1 and quality Round 1 findings addressed in doc
 - Implementation: not started
 - Live validation: pending
 
-Next action: rerun granularity review, finish remaining doing review passes,
-mark doing doc ready, then execute units directly with TDD and sub-agent reviews
+Next action: rerun ambiguity/quality doing review, mark doing doc ready after
+reviewer convergence, then execute units directly with TDD and sub-agent reviews
 where useful.

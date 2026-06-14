@@ -77,42 +77,57 @@ The immediate blocker is the post-factory-reset first-run experience: Workbench 
 **Acceptance**: Artifact records branch, status, exact target files, test files, and the decision that implementation can proceed without human input.
 
 ### ⬜ Unit 1a: Reset Setup Intent - Tests
-**What**: Write failing tests for a core setup intent marker and setup-mode bootstrap. Target `Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift` and `Tests/OuroWorkbenchCoreTests/WorkbenchBootstrapperTests.swift`.
-**Output**: Failing tests prove a setup intent marker file named `force-first-run-setup` can be requested under Workbench app support, survives a factory defaults wipe when written after the wipe, can be consumed/cleared, and bootstrapping with `includeLocalShell: false` creates no local shell while using a non-`This Mac` workspace name.
+**What**: Write failing tests for a core setup intent marker, setup-mode bootstrap, and testable launch diagnostics. Target `Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift`, `Tests/OuroWorkbenchCoreTests/WorkbenchBootstrapperTests.swift`, and a new `Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift`.
+**Output**: Failing tests prove a setup intent marker file named `force-first-run-setup` can be requested under Workbench app support, survives a factory defaults wipe when written after the wipe, can be consumed/cleared, and bootstrapping with `includeLocalShell: false` creates no local shell while using a non-`This Mac` workspace name. Diagnostic tests define `WorkbenchLaunchDiagnostics.parse(_:)` expectations for `--app-support-root PATH`, `--auto-launch-resumable-for-e2e`, absent flags, missing required path, and unknown passthrough args before any app diagnostic implementation exists.
 **Acceptance**: Focused test command fails for the new expectations before implementation.
 
 ### ⬜ Unit 1b: Reset Setup Intent - Implementation
-**What**: Add the minimal core helper and app wiring so reset/fresh first-run loads setup-mode bootstrap, suppresses default shell auto-launch, forces onboarding on next launch, and consumes the explicit reset marker after presentation. Add app diagnostic arguments `--app-support-root PATH` and `--auto-launch-resumable-for-e2e` in `Sources/OuroWorkbenchApp/main.swift` and `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift` so live E2E can force `WorkbenchPaths` and auto-launch behavior without relying on `HOME` or the real defaults domain.
-**Output**: Code changes in `Sources/OuroWorkbenchCore/WorkbenchFactoryReset.swift`, `Sources/OuroWorkbenchCore/WorkbenchBootstrapper.swift`, `Sources/OuroWorkbenchCore/WorkbenchPaths.swift`, `Sources/OuroWorkbenchApp/main.swift`, and `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift`.
+**What**: Add the minimal core helper and app wiring so reset/fresh first-run loads setup-mode bootstrap, suppresses default shell auto-launch, forces onboarding on next launch, and consumes the explicit reset marker after presentation. Add test-covered launch diagnostic parsing in `Sources/OuroWorkbenchCore/WorkbenchLaunchDiagnostics.swift`, then wire app diagnostic arguments `--app-support-root PATH` and `--auto-launch-resumable-for-e2e` in `Sources/OuroWorkbenchApp/main.swift` and `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift` so live E2E can force `WorkbenchPaths` and auto-launch behavior without relying on `HOME` or the real defaults domain.
+**Output**: Code changes in `Sources/OuroWorkbenchCore/WorkbenchFactoryReset.swift`, `Sources/OuroWorkbenchCore/WorkbenchBootstrapper.swift`, `Sources/OuroWorkbenchCore/WorkbenchPaths.swift`, `Sources/OuroWorkbenchCore/WorkbenchLaunchDiagnostics.swift`, `Sources/OuroWorkbenchApp/main.swift`, and `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift`.
 **Acceptance**: Unit 1a tests pass; `swift build` succeeds without warnings.
 
 ### ⬜ Unit 1c: Reset Setup Intent - Coverage & Refactor
-**What**: Run `swift test --filter WorkbenchFactoryResetTests`, `swift test --filter WorkbenchBootstrapperTests`, and `swift build`. Make no code changes unless one of those commands fails or a new setup-intent branch is uncovered by the tests.
+**What**: Run `swift test --filter WorkbenchFactoryResetTests`, `swift test --filter WorkbenchBootstrapperTests`, `swift test --filter WorkbenchLaunchDiagnosticsTests`, and `swift build`. Make no code changes unless one of those commands fails or a new setup-intent/launch-diagnostic branch is uncovered by the tests.
 **Output**: Test/build output saved to `2026-06-14-1420-doing-factory-reset-setup-flow/unit-1-reset-setup.log`.
-**Acceptance**: New setup-intent code has branch coverage for request, consume, absent marker, setup bootstrap, and ordinary bootstrap.
+**Acceptance**: New setup-intent and launch-diagnostic code has branch coverage for request, consume, absent marker, setup bootstrap, ordinary bootstrap, app-support override, auto-launch override, missing diagnostic arguments, and unknown arg passthrough.
 
 ### ⬜ Unit 2a: Recent Session Scanner Stores - Tests
-**What**: Write failing tests in `Tests/OuroWorkbenchCoreTests/OnboardingTests.swift` for Codex archived JSONL, Codex manual-recovery JSONL, Claude task JSON records, and SQLite-plus-session-index union behavior.
-**Output**: Fixture tests using temporary `.codex/archived_sessions`, `.codex/manual-recovery-*`, `.codex/session_index.jsonl`, `.codex/state_5.sqlite`, and `.claude/tasks`.
-**Acceptance**: Focused onboarding tests fail before scanner implementation because candidates are missing.
+**What**: Write failing tests in `Tests/OuroWorkbenchCoreTests/OnboardingTests.swift` for Codex archived JSONL, Codex manual-recovery JSONL, Claude task JSON records, SQLite-plus-session-index union behavior, scanner edge cases, and diagnostic parse coverage.
+**Output**: Fixture tests using temporary `.codex/archived_sessions`, `.codex/manual-recovery-*`, `.codex/session_index.jsonl`, `.codex/state_5.sqlite`, and `.claude/tasks`. Add exact scanner tests named `testRecentSessionScannerReadsCodexArchivedJsonl`, `testRecentSessionScannerReadsCodexManualRecoveryJsonl`, `testRecentSessionScannerReadsClaudeTaskJson`, `testRecentSessionScannerUnionsCodexSqliteAndSessionIndex`, `testRecentSessionScannerIgnoresStaleCodexArchive`, `testRecentSessionScannerSkipsMalformedCodexArchiveLines`, `testRecentSessionScannerDropsCodexArchiveWithoutSessionId`, `testRecentSessionScannerKeepsCodexArchiveWithoutWorkingDirectoryAsRecoverable`, `testRecentSessionScannerPrefersHigherConfidenceDuplicate`, and `testRecentSessionScannerFallsBackToSessionIndexWhenSqliteMissingOrUnexecutable`. Add `WorkbenchLaunchDiagnosticsTests` coverage for `--dump-recent-sessions-json` and optional `--scan-home-root PATH`.
+**Acceptance**: Focused onboarding/diagnostic tests fail before scanner implementation because candidates and diagnostic actions are missing. Expected edge results are: stale file outside lookback absent, malformed line skipped, missing session id dropped, missing working directory retained only as a recoverable low-confidence candidate, duplicate id picks the higher-confidence candidate, and missing/unusable sqlite still reads `session_index.jsonl`.
 
 ### ⬜ Unit 2b: Recent Session Scanner Stores - Implementation
-**What**: Extend `RecentSessionScanner.scan()` and helper methods in `Sources/OuroWorkbenchCore/Onboarding.swift` to include deterministic adapters for the new Codex and Claude stores while preserving existing scanner behavior. Add a read-only app diagnostic flag `--dump-recent-sessions-json` in `Sources/OuroWorkbenchApp/main.swift` that prints encoded `RecentSessionCandidate` records and exits before mounting SwiftUI.
+**What**: Extend `RecentSessionScanner.scan()` and helper methods in `Sources/OuroWorkbenchCore/Onboarding.swift` to include deterministic adapters for the new Codex and Claude stores while preserving existing scanner behavior. Extend `WorkbenchLaunchDiagnostics` with a read-only diagnostic action for `--dump-recent-sessions-json [--scan-home-root PATH]`, and wire that action in `Sources/OuroWorkbenchApp/main.swift` so it prints encoded `RecentSessionCandidate` records and exits before mounting SwiftUI.
 **Output**: Scanner returns evidence-backed `RecentSessionCandidate` values with source, kind, title, working directory, recency, resume command, summary, evidence path, confidence, and repository-root grouping. The diagnostic command `swift run OuroWorkbench --dump-recent-sessions-json` emits JSON without mutating Workbench or harness state.
 **Acceptance**: Unit 2a tests pass; existing onboarding scanner/proposal tests pass.
 
 ### ⬜ Unit 2c: Recent Session Scanner Stores - Coverage & Refactor
-**What**: Run onboarding tests and inspect edge cases: old files outside lookback, malformed JSON lines, missing cwd/id, duplicate ids with different confidence, and missing sqlite binary.
+**What**: Run exact focused coverage commands for the scanner happy paths and edge cases:
+
+```bash
+swift test --filter OnboardingTests/testRecentSessionScannerReadsCodexArchivedJsonl
+swift test --filter OnboardingTests/testRecentSessionScannerReadsCodexManualRecoveryJsonl
+swift test --filter OnboardingTests/testRecentSessionScannerReadsClaudeTaskJson
+swift test --filter OnboardingTests/testRecentSessionScannerUnionsCodexSqliteAndSessionIndex
+swift test --filter OnboardingTests/testRecentSessionScannerIgnoresStaleCodexArchive
+swift test --filter OnboardingTests/testRecentSessionScannerSkipsMalformedCodexArchiveLines
+swift test --filter OnboardingTests/testRecentSessionScannerDropsCodexArchiveWithoutSessionId
+swift test --filter OnboardingTests/testRecentSessionScannerKeepsCodexArchiveWithoutWorkingDirectoryAsRecoverable
+swift test --filter OnboardingTests/testRecentSessionScannerPrefersHigherConfidenceDuplicate
+swift test --filter OnboardingTests/testRecentSessionScannerFallsBackToSessionIndexWhenSqliteMissingOrUnexecutable
+swift test --filter WorkbenchLaunchDiagnosticsTests
+swift test --filter OnboardingTests
+```
 **Output**: Test output saved to artifacts.
 **Acceptance**: New scanner code has coverage for happy path, stale path, malformed/partial path, and dedupe/union behavior.
 
 ### ⬜ Unit 3a: Sidebar Workspace Policy - Tests
-**What**: Add failing tests for a pure sidebar/setup surface policy. Target a new `Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift` covering workspace noun copy, setup-mode project name, boss section label/status, hidden healthy recovery, and shown actionable recovery.
-**Output**: Failing tests specify exact expected values: section title `Workspaces`, setup workspace name `Unsorted Sessions`, no `This Mac` workspace name, compact boss status labels, and recovery visibility only when recoverable count is greater than zero.
+**What**: Add failing tests for a pure sidebar/setup surface policy and the sidebar fixture diagnostic. Target a new `Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift` covering workspace noun copy, setup-mode project name, boss section label/status, hidden healthy recovery, shown actionable recovery, and `WorkbenchLaunchDiagnostics` fixture action parsing for `--write-e2e-state sidebar-session-controls PATH`.
+**Output**: Failing tests specify exact expected values: section title `Workspaces`, setup workspace name `Unsorted Sessions`, no `This Mac` workspace name, compact boss status labels, recovery visibility only when recoverable count is greater than zero, diagnostic action case `.writeE2EState(.sidebarSessionControls, path)`, and parse error for missing fixture path.
 **Acceptance**: Focused policy tests fail before implementation because `WorkbenchSurfacePolicy` does not exist or returns old `Groups`/always-recovery behavior.
 
 ### ⬜ Unit 3b: Sidebar Workspace Policy - Implementation
-**What**: Add `Sources/OuroWorkbenchCore/WorkbenchSurfacePolicy.swift` and wire `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift` sidebar/setup labels through it. Replace primary `Groups` text with `Workspaces`, use `Unsorted Sessions` for setup-mode bootstrap, replace permanent `Agents` section title with compact `Boss`, and hide the sidebar `Recovery` section when `model.recoverableEntries.isEmpty`. Add a hidden diagnostic flag `--write-e2e-state sidebar-session-controls PATH` in `Sources/OuroWorkbenchApp/main.swift` that writes a deterministic Workbench state for Unit 6e and exits before mounting SwiftUI.
+**What**: Add `Sources/OuroWorkbenchCore/WorkbenchSurfacePolicy.swift` and wire `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift` sidebar/setup labels through it. Replace primary `Groups` text with `Workspaces`, use `Unsorted Sessions` for setup-mode bootstrap, replace permanent `Agents` section title with compact `Boss`, and hide the sidebar `Recovery` section when `model.recoverableEntries.isEmpty`. Extend the test-covered diagnostic helper with a hidden flag `--write-e2e-state sidebar-session-controls PATH` in `Sources/OuroWorkbenchApp/main.swift` that writes a deterministic Workbench state for Unit 6e and exits before mounting SwiftUI.
 **Output**: Core policy plus app sidebar copy/visibility changes. The diagnostic command `swift run OuroWorkbench --write-e2e-state sidebar-session-controls /tmp/workspace-state.json` writes a state containing one workspace named `Fixture Workspace` and one trusted auto-resume terminal agent named `Fixture Running Session`.
 **Acceptance**: Unit 3a tests pass; `swift build` succeeds; `rg -n 'Section\\(\"Groups\"\\)|New Group|Move to Group|Delete Terminal Group|Groups with terminals' Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift` returns no primary user-facing sidebar/header strings.
 
@@ -138,22 +153,22 @@ The immediate blocker is the post-factory-reset first-run experience: Workbench 
 
 ### ⬜ Unit 5a: Boss-Led Onboarding Copy - Tests
 **What**: Add failing tests for a pure onboarding narrative helper. Target `Tests/OuroWorkbenchCoreTests/OnboardingTests.swift` or a new `Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift`.
-**Output**: Tests require copy for boss-ready welcome, scan intro, proposal summary, ambiguous/low-confidence explanation, and duplicate external session cleanup guidance.
+**Output**: Tests require exact copy from `WorkbenchOnboardingNarrative`: `bossReadyWelcome == "I can see this Mac now."`, `scanIntro == "I will look for local coding-agent sessions across Workbench, Claude, Codex, Copilot, cmux, and shell history."`, `unclearImport == "I will ask before importing anything unclear."`, `ambiguousCandidates(count: 2) == "I found 2 unclear sessions. I will ask before importing them."`, `duplicateCleanup == "After I resume these in Workbench, I will help you close matching sessions still running outside Workbench so work does not fork."`, and `proposalSummary(groupCount: 3, selectedCount: 5) == "I found 5 likely sessions across 3 workspaces."`
 **Acceptance**: Tests fail before implementation because `WorkbenchOnboardingNarrative` does not exist or old copy omits boss-led import/cleanup language.
 
 ### ⬜ Unit 5b: Boss-Led Onboarding Copy - Implementation
 **What**: Add `Sources/OuroWorkbenchCore/WorkbenchOnboardingNarrative.swift` and use it in `OnboardingWelcomePage`, `OnboardingBootstrapView`, `OnboardingGroupProposalView`, `OnboardingSessionPreviewSheet`, and import summary/banner copy in `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift`.
-**Output**: Onboarding copy says the boss can see this Mac, will scan local coding-agent sessions, will ask before unclear imports, and will guide cleanup of duplicates after Workbench resumes approved sessions.
+**Output**: Onboarding copy uses the exact strings tested in Unit 5a and says the boss can see this Mac, will scan local coding-agent sessions, will ask before unclear imports, and will guide cleanup of duplicates after Workbench resumes approved sessions.
 **Acceptance**: Unit 5a tests pass; `swift build` succeeds; `rg -n 'Nothing is imported until you review the proposal|Ready to arrange|Bring your work in' Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift` returns no old static-wizard copy.
 
 ### ⬜ Unit 5c: Boss-Led Onboarding Flow Policy - Tests
 **What**: Add failing tests for pure onboarding flow decisions in `Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift`: wizard phase before boss readiness, boss-led import phase after readiness, proposal visual support when candidates exist, ambiguity prompt when low-confidence candidates exist, and duplicate cleanup guidance after import.
-**Output**: Tests define `WorkbenchOnboardingFlowPolicy` inputs and expected phase/prompt values.
+**Output**: Tests define `WorkbenchOnboardingPhase` exact cases `.bossSetupWizard`, `.bossReadyWelcome`, `.scanProposal`, `.arrangeApprovedImports`, and `.duplicateCleanup`; `WorkbenchOnboardingFlowInput` fields `bossIsReady`, `hasProposal`, `selectedTerminalCount`, `ambiguousCandidateCount`, and `importSummaryHasImports`; and primary CTA titles `Connect Boss`, `Scan With Boss`, `Arrange Selected`, and `Review Duplicates`. Expected flow: not-ready -> `.bossSetupWizard`/`Connect Boss`; ready without proposal -> `.bossReadyWelcome`/`Scan With Boss`; ready with proposal and zero selected -> `.scanProposal`/`Scan With Boss`; selected imports -> `.arrangeApprovedImports`/`Arrange Selected`; ambiguous candidates attach `WorkbenchOnboardingNarrative.ambiguousCandidates(count:)`; imported summary -> `.duplicateCleanup`/`Review Duplicates`.
 **Acceptance**: Tests fail before implementation because flow policy does not exist or old readiness/import states do not distinguish boss-led phases.
 
 ### ⬜ Unit 5d: Boss-Led Onboarding Flow Policy - Implementation
 **What**: Add `WorkbenchOnboardingFlowPolicy` in `Sources/OuroWorkbenchCore/WorkbenchOnboardingNarrative.swift` and wire `WorkbenchOnboardingSheet.advance`, `primaryActionTitle`, `OnboardingBootstrapView`, and `handleOnboardingInstruction` through it where those functions choose setup/import/arrange behavior.
-**Output**: Traditional wizard remains limited to boss setup/readiness; after readiness, the boss-led import phase drives scan/proposal/arrange and duplicate cleanup messaging.
+**Output**: Traditional wizard remains limited to boss setup/readiness; after readiness, the boss-led import phase drives scan/proposal/arrange and duplicate cleanup messaging using the exact phase cases and CTA strings tested in Unit 5c.
 **Acceptance**: Unit 5c tests pass; `swift build` succeeds; `rg -n 'WorkbenchOnboardingFlowPolicy|WorkbenchOnboardingNarrative' Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift Sources/OuroWorkbenchCore/WorkbenchOnboardingNarrative.swift` shows both app wiring and core policy/narrative definitions.
 
 ### ⬜ Unit 5e: Boss-Led Onboarding - Coverage & Refactor
@@ -210,6 +225,16 @@ test -f "$STATE"
 plutil -p "$STATE" > "$ART/e2e-reset-state.txt"
 ! grep -F 'Local Shell' "$STATE"
 ! test -e "$TEST_SUPPORT/force-first-run-setup"
+test -s "$ART/e2e-reset-setup.png"
+{
+  printf 'PASS reset_setup\n'
+  printf 'state_path=%s\n' "$STATE"
+  printf 'screenshot=%s\n' "$ART/e2e-reset-setup.png"
+  printf 'assertion=marker consumed\n'
+  printf 'assertion=no Local Shell in setup workspace\n'
+  printf 'assertion=onboarding/setup screenshot captured from launched app\n'
+} > "$ART/e2e-reset-setup.md"
+grep -F 'PASS reset_setup' "$ART/e2e-reset-setup.md"
 kill "$PID" >/dev/null 2>&1 || true
 wait "$PID" >/dev/null 2>&1 || true
 ```
@@ -235,8 +260,23 @@ plutil -p "$TEST_SUPPORT/workspace-state.json" > "$ART/e2e-sidebar-state.txt"
 grep -F 'Fixture Workspace' "$TEST_SUPPORT/workspace-state.json"
 grep -F 'Fixture Running Session' "$TEST_SUPPORT/workspace-state.json"
 rg -n 'Section\("Groups"\)|New Group|Move to Group|Delete Terminal Group|Groups with terminals' Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift && exit 1
+rg -n 'Section\("Workspaces"\)' Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift
+rg -n 'Section\("Boss"\)' Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift
+rg -n 'if !model\.recoverableEntries\.isEmpty' Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift
 rg -n 'Session Controls' Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift
 rg -n 'Label\("Stop", systemImage: "stop.fill"\)' Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift
+test -s "$ART/e2e-sidebar-session-controls.png"
+{
+  printf 'PASS sidebar_session_controls\n'
+  printf 'state_path=%s\n' "$TEST_SUPPORT/workspace-state.json"
+  printf 'screenshot=%s\n' "$ART/e2e-sidebar-session-controls.png"
+  printf 'assertion=Workspaces section wired in source\n'
+  printf 'assertion=Boss section wired in source\n'
+  printf 'assertion=healthy recovery hidden by empty recoverable entries\n'
+  printf 'assertion=Stop primary action wired in source\n'
+  printf 'assertion=Session Controls menu wired in source\n'
+} > "$ART/e2e-sidebar-session-controls.md"
+grep -F 'PASS sidebar_session_controls' "$ART/e2e-sidebar-session-controls.md"
 kill "$PID" >/dev/null 2>&1 || true
 wait "$PID" >/dev/null 2>&1 || true
 ```
@@ -245,25 +285,43 @@ wait "$PID" >/dev/null 2>&1 || true
 **Acceptance**: Artifact has `PASS`; visible primary labels use `Workspaces`/`Boss`; healthy recovery is hidden; running-session header shows Stop and labeled `Session Controls`; focus/redraw/restart/Ctrl-C/Esc/EOF are not a row of primary icon buttons.
 
 ### ⬜ Unit 6f: Live Import Scanner E2E
-**What**: Run the read-only diagnostic added in Unit 2b against the installed current-source app and verify source coverage with `jq`:
+**What**: Create and run `worker/tasks/2026-06-14-1420-doing-factory-reset-setup-flow/validate-import-scanner.sh`. The script must seed deterministic synthetic harness stores under an isolated scan home, run the read-only diagnostic added in Unit 2b against the installed current-source app, and verify source coverage with `jq`:
 
 ```bash
 ART="worker/tasks/2026-06-14-1420-doing-factory-reset-setup-flow"
 APP="$HOME/Applications/Ouro Workbench.app"
-"$APP/Contents/MacOS/OuroWorkbench" --dump-recent-sessions-json > "$ART/e2e-import-scanner.json"
+SCAN_HOME="$PWD/$ART/live-scan-home"
+rm -rf "$SCAN_HOME"
+mkdir -p "$SCAN_HOME/.codex/archived_sessions" "$SCAN_HOME/.codex/manual-recovery-20260614" "$SCAN_HOME/.claude/tasks" "$SCAN_HOME/.claude/projects/-Users-arimendelow-Projects-fixture"
+printf '{"id":"codex-archive-live","timestamp":"2026-06-14T20:00:00Z","cwd":"/Users/arimendelow/Projects/fixture","prompt":"continue fixture archive"}\n' > "$SCAN_HOME/.codex/archived_sessions/session.jsonl"
+printf '{"id":"codex-manual-live","timestamp":"2026-06-14T20:05:00Z","cwd":"/Users/arimendelow/Projects/fixture","prompt":"manual recovery fixture"}\n' > "$SCAN_HOME/.codex/manual-recovery-20260614/recovery.jsonl"
+printf '{"sessionId":"claude-task-live","updatedAt":"2026-06-14T20:10:00Z","cwd":"/Users/arimendelow/Projects/fixture","summary":"Claude task fixture"}\n' > "$SCAN_HOME/.claude/tasks/task.json"
+printf '{"sessionId":"claude-project-live","updatedAt":"2026-06-14T20:15:00Z","cwd":"/Users/arimendelow/Projects/fixture","summary":"Claude project fixture"}\n' > "$SCAN_HOME/.claude/projects/-Users-arimendelow-Projects-fixture/session.json"
+"$APP/Contents/MacOS/OuroWorkbench" --dump-recent-sessions-json --scan-home-root "$SCAN_HOME" > "$ART/e2e-import-scanner.json"
 jq -e '[.[] | select(.source == "openAICodex") | select((.evidencePaths // []) | map(test("/\\.codex/(archived_sessions|manual-recovery-)")) | any)] | length >= 1' "$ART/e2e-import-scanner.json"
 jq -e '[.[] | select(.source == "claudeCode") | select((.evidencePaths // []) | map(test("/\\.claude/(tasks|projects)")) | any)] | length >= 1' "$ART/e2e-import-scanner.json"
+jq -e '[.[] | select((.resumeCommand // []) | length > 0) | select((.evidencePaths // []) | length > 0)] | length >= 2' "$ART/e2e-import-scanner.json"
 jq -r '.[] | [.source, .title, .workingDirectory, (.resumeCommand | join(" ")), (.evidencePaths | join(","))] | @tsv' "$ART/e2e-import-scanner.json" > "$ART/e2e-import-scanner.tsv"
+{
+  printf 'PASS import_scanner\n'
+  printf 'scan_home=%s\n' "$SCAN_HOME"
+  printf 'json=%s\n' "$ART/e2e-import-scanner.json"
+  printf 'tsv=%s\n' "$ART/e2e-import-scanner.tsv"
+  printf 'assertion=synthetic Codex archived/manual-recovery source detected\n'
+  printf 'assertion=synthetic Claude tasks/projects source detected\n'
+  printf 'assertion=evidence paths and resume commands present\n'
+} > "$ART/e2e-import-scanner.md"
+grep -F 'PASS import_scanner' "$ART/e2e-import-scanner.md"
 ```
 
 **Output**: Save scanner output summary to `2026-06-14-1420-doing-factory-reset-setup-flow/e2e-import-scanner.md`.
-**Acceptance**: Artifact has `PASS`; scanner reports candidates from at least one real or synthetic Codex archived/manual-recovery source and one Claude task/project source, with evidence paths and resume commands, without mutating any external harness store.
+**Acceptance**: Artifact has `PASS`; scanner reports candidates from the synthetic isolated Codex archived/manual-recovery source and synthetic isolated Claude task/project source, with evidence paths and resume commands, without reading or mutating any external harness store.
 
 ## Execution
 
 - **TDD strictly enforced**: tests -> red -> implement -> green -> refactor
-- Commit after each phase (1a, 1b, 1c)
-- Push after each unit complete when a remote is configured
+- Commit after every unit phase (`1a` through `6f`) and after each doing-doc status/progress update
+- Push after each atomic commit when a remote is configured and the network command succeeds
 - Run full test suite before marking unit done
 - **All artifacts**: Save outputs, logs, data to `./2026-06-14-1420-doing-factory-reset-setup-flow/`
 - **Fixes/blockers**: Spawn sub-agent immediately; do not ask the user
