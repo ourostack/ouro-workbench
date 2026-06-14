@@ -176,7 +176,7 @@ swift test --filter OnboardingTests
 **Output**: Test/build output saved to `2026-06-14-1420-doing-factory-reset-setup-flow/unit-5-onboarding.log`.
 **Acceptance**: Narrative and flow helpers have branch coverage for not-ready, ready-no-proposal, proposal-with-selected, proposal-with-low-confidence, and imported/cleanup states.
 
-### ⬜ Unit 6a: Automated Suite Verification
+### ✅ Unit 6a: Automated Suite Verification
 **What**: Run `swift test` and `swift build`.
 **Output**: Save output to `2026-06-14-1420-doing-factory-reset-setup-flow/full-swift-test.log` and `2026-06-14-1420-doing-factory-reset-setup-flow/swift-build.log`.
 **Acceptance**: Both commands exit 0, logs contain no warnings, and failures are fixed before continuing.
@@ -367,3 +367,4 @@ grep -F 'PASS import_scanner' "$ART/e2e-import-scanner.md"
 - 2026-06-14 16:03 Unit 5d complete: added WorkbenchOnboardingFlowPolicy and wired onboarding CTA/advance behavior through it; green log saved to unit-5d-green.log.
 - 2026-06-14 16:05 Unit 4 cold-review findings fixed: title strip now uses session controls policy for active/inactive/recoverable sessions, primary Restart leak removed, and leftover group tooltip changed to workspace; red/green logs saved to unit-4-review-*.log.
 - 2026-06-14 16:06 Unit 5e complete: reran OnboardingNarrativeTests, OnboardingTests, build, and old-copy source scan; log saved to unit-5-onboarding.log.
+- 2026-06-14 16:07 Unit 6a complete: full swift test ran 919 tests with 1 skip and 0 failures; swift build passed; logs saved to full-swift-test.log and swift-build.log.

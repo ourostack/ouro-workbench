@@ -22,6 +22,6 @@ Gate state:
 - Planning review: converged and approved
 - Doing review: converged; doing doc ready
 - Implementation: Unit 5e complete; Unit 4 cold-review findings fixed
-- Live validation: starting Unit 6a
+- Live validation: Unit 6a complete; starting Unit 6b
 
-Next action: run full swift test and build logs for Unit 6a.
+Next action: run OuroWorkbenchScenarioVerifier for Unit 6b.
