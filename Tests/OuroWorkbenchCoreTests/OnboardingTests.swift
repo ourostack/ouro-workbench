@@ -652,6 +652,35 @@ final class OnboardingTests: XCTestCase {
         XCTAssertTrue(candidate.evidencePaths.contains(recoveryURL.path))
     }
 
+    func testRecentSessionScannerReadsCodexSessionMetaPayloadJsonl() throws {
+        let now = ISO8601DateFormatter().date(from: "2026-05-26T12:00:00Z")!
+        let archiveURL = temporaryDirectory
+            .appendingPathComponent(".codex/archived_sessions/payload.jsonl")
+        let recoveryURL = temporaryDirectory
+            .appendingPathComponent(".codex/manual-recovery-20260526/payload.jsonl")
+        try FileManager.default.createDirectory(at: archiveURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: recoveryURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try #"{"type":"session_meta","payload":{"id":"payload-archive","timestamp":"2026-05-26T11:30:00Z","cwd":"/Users/ari/Projects/payload-archive","title":"Payload archive fixture"}}"#
+            .write(to: archiveURL, atomically: true, encoding: .utf8)
+        try #"{"type":"session_meta","payload":{"sessionId":"payload-manual","updatedAt":"2026-05-26T11:35:00Z","workingDirectory":"/Users/ari/Projects/payload-manual","summary":"Payload manual fixture"}}"#
+            .write(to: recoveryURL, atomically: true, encoding: .utf8)
+
+        let candidates = RecentSessionScanner(
+            homeURL: temporaryDirectory,
+            now: now,
+            sqlite3URL: temporaryDirectory.appendingPathComponent("missing-sqlite3")
+        ).scan()
+        let archived = try XCTUnwrap(candidates.first { $0.id == "codex:payload-archive" })
+        let manual = try XCTUnwrap(candidates.first { $0.id == "codex:payload-manual" })
+
+        XCTAssertEqual(archived.workingDirectory, "/Users/ari/Projects/payload-archive")
+        XCTAssertEqual(archived.title, "Payload archive fixture")
+        XCTAssertTrue(archived.evidencePaths.contains(archiveURL.path))
+        XCTAssertEqual(manual.workingDirectory, "/Users/ari/Projects/payload-manual")
+        XCTAssertEqual(manual.title, "Payload manual fixture")
+        XCTAssertTrue(manual.evidencePaths.contains(recoveryURL.path))
+    }
+
     func testRecentSessionScannerReadsClaudeTaskJson() throws {
         let now = ISO8601DateFormatter().date(from: "2026-05-26T12:00:00Z")!
         let taskURL = temporaryDirectory
