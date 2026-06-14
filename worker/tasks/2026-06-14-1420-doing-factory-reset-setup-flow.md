@@ -36,7 +36,7 @@ The immediate blocker is the post-factory-reset first-run experience: Workbench 
 - [ ] A fresh/post-reset workspace does not show an undeletable `Local Shell` as the only apparent thing to do before setup/import.
 - [ ] If a fallback local shell is still present somewhere, it has a clear, tested removal/archive path or is intentionally hidden/deferred until after setup/import.
 - [ ] The selected-session header no longer exposes the full low-level control strip as primary chrome in normal use. Advanced controls remain reachable when needed, with clear labels/tooltips.
-- [ ] Running sessions show stop as the only primary action. Restart/relaunch, if kept, moves into `Session Controls` or another advanced menu. Launch/resume/recover stays visible for inactive or recoverable sessions.
+- [ ] Running sessions show stop as the only primary action. Restart/relaunch moves into `Session Controls`. Launch/resume/recover stays visible for inactive or recoverable sessions.
 - [ ] Primary sidebar/setup copy uses `Workspaces`, not `Groups`; `This Mac` appears only as machine scope; selected boss appears as compact boss status, not a permanent `Agents` peer; `Recovery` is hidden unless actionable.
 - [ ] There is a clear path for the boss/import flow to surface likely sessions, ambiguous sessions, proposed organization, and duplicate-outside-Workbench guidance.
 - [ ] The recent-session scanner returns candidates from representative Codex archived JSONL/manual-recovery files and representative Claude task records, with evidence paths and resume commands.
@@ -82,13 +82,13 @@ The immediate blocker is the post-factory-reset first-run experience: Workbench 
 **Acceptance**: Focused test command fails for the new expectations before implementation.
 
 ### ⬜ Unit 1b: Reset Setup Intent - Implementation
-**What**: Add the minimal core helper and app wiring so reset/fresh first-run loads setup-mode bootstrap, suppresses default shell auto-launch, forces onboarding on next launch, and consumes the explicit reset marker after presentation.
-**Output**: Code changes in `Sources/OuroWorkbenchCore/WorkbenchFactoryReset.swift`, `Sources/OuroWorkbenchCore/WorkbenchBootstrapper.swift`, `Sources/OuroWorkbenchCore/WorkbenchPaths.swift`, and `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift`.
+**What**: Add the minimal core helper and app wiring so reset/fresh first-run loads setup-mode bootstrap, suppresses default shell auto-launch, forces onboarding on next launch, and consumes the explicit reset marker after presentation. Add app diagnostic arguments `--app-support-root PATH` and `--auto-launch-resumable-for-e2e` in `Sources/OuroWorkbenchApp/main.swift` and `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift` so live E2E can force `WorkbenchPaths` and auto-launch behavior without relying on `HOME` or the real defaults domain.
+**Output**: Code changes in `Sources/OuroWorkbenchCore/WorkbenchFactoryReset.swift`, `Sources/OuroWorkbenchCore/WorkbenchBootstrapper.swift`, `Sources/OuroWorkbenchCore/WorkbenchPaths.swift`, `Sources/OuroWorkbenchApp/main.swift`, and `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift`.
 **Acceptance**: Unit 1a tests pass; `swift build` succeeds without warnings.
 
 ### ⬜ Unit 1c: Reset Setup Intent - Coverage & Refactor
-**What**: Run the reset/bootstrap focused tests plus any affected core tests. Refactor only if needed for clarity while keeping behavior unchanged.
-**Output**: Test/build output saved to artifacts.
+**What**: Run `swift test --filter WorkbenchFactoryResetTests`, `swift test --filter WorkbenchBootstrapperTests`, and `swift build`. Make no code changes unless one of those commands fails or a new setup-intent branch is uncovered by the tests.
+**Output**: Test/build output saved to `2026-06-14-1420-doing-factory-reset-setup-flow/unit-1-reset-setup.log`.
 **Acceptance**: New setup-intent code has branch coverage for request, consume, absent marker, setup bootstrap, and ordinary bootstrap.
 
 ### ⬜ Unit 2a: Recent Session Scanner Stores - Tests
@@ -144,7 +144,7 @@ The immediate blocker is the post-factory-reset first-run experience: Workbench 
 ### ⬜ Unit 5b: Boss-Led Onboarding Copy - Implementation
 **What**: Add `Sources/OuroWorkbenchCore/WorkbenchOnboardingNarrative.swift` and use it in `OnboardingWelcomePage`, `OnboardingBootstrapView`, `OnboardingGroupProposalView`, `OnboardingSessionPreviewSheet`, and import summary/banner copy in `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift`.
 **Output**: Onboarding copy says the boss can see this Mac, will scan local coding-agent sessions, will ask before unclear imports, and will guide cleanup of duplicates after Workbench resumes approved sessions.
-**Acceptance**: Unit 5a tests pass; `swift build` succeeds; source inspection confirms setup/import copy no longer frames import as a static app-only wizard.
+**Acceptance**: Unit 5a tests pass; `swift build` succeeds; `rg -n 'Nothing is imported until you review the proposal|Ready to arrange|Bring your work in' Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift` returns no old static-wizard copy.
 
 ### ⬜ Unit 5c: Boss-Led Onboarding Flow Policy - Tests
 **What**: Add failing tests for pure onboarding flow decisions in `Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift`: wizard phase before boss readiness, boss-led import phase after readiness, proposal visual support when candidates exist, ambiguity prompt when low-confidence candidates exist, and duplicate cleanup guidance after import.
@@ -154,7 +154,7 @@ The immediate blocker is the post-factory-reset first-run experience: Workbench 
 ### ⬜ Unit 5d: Boss-Led Onboarding Flow Policy - Implementation
 **What**: Add `WorkbenchOnboardingFlowPolicy` in `Sources/OuroWorkbenchCore/WorkbenchOnboardingNarrative.swift` and wire `WorkbenchOnboardingSheet.advance`, `primaryActionTitle`, `OnboardingBootstrapView`, and `handleOnboardingInstruction` through it where those functions choose setup/import/arrange behavior.
 **Output**: Traditional wizard remains limited to boss setup/readiness; after readiness, the boss-led import phase drives scan/proposal/arrange and duplicate cleanup messaging.
-**Acceptance**: Unit 5c tests pass; `swift build` succeeds; source inspection shows `OnboardingBootstrapView` using policy/narrative values for scan, proposal, ambiguity, and cleanup text.
+**Acceptance**: Unit 5c tests pass; `swift build` succeeds; `rg -n 'WorkbenchOnboardingFlowPolicy|WorkbenchOnboardingNarrative' Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift Sources/OuroWorkbenchCore/WorkbenchOnboardingNarrative.swift` shows both app wiring and core policy/narrative definitions.
 
 ### ⬜ Unit 5e: Boss-Led Onboarding - Coverage & Refactor
 **What**: Run onboarding narrative/flow tests, existing `OnboardingTests`, and `swift build`. Refactor only helper names or call-site duplication created in Units 5b/5d.
@@ -192,24 +192,24 @@ scripts/verify-app-bundle.sh "$APP" >> "$ART/package-install.log" 2>&1
 **Acceptance**: Installed app version/build match the current source artifact, not the stale `0.1.125` / `201` evidence build.
 
 ### ⬜ Unit 6d: Live Reset Setup E2E
-**What**: Create and run `worker/tasks/2026-06-14-1420-doing-factory-reset-setup-flow/validate-reset-setup.sh`. The script must run these exact validation steps with an isolated home:
+**What**: Create and run `worker/tasks/2026-06-14-1420-doing-factory-reset-setup-flow/validate-reset-setup.sh`. The script must run these exact validation steps with an isolated app support root:
 
 ```bash
 ART="worker/tasks/2026-06-14-1420-doing-factory-reset-setup-flow"
 APP="$HOME/Applications/Ouro Workbench.app"
-TEST_HOME="$PWD/$ART/live-reset-home"
-rm -rf "$TEST_HOME"
-mkdir -p "$TEST_HOME/Library/Application Support/OuroWorkbench"
-printf 'reset\n' > "$TEST_HOME/Library/Application Support/OuroWorkbench/force-first-run-setup"
-env HOME="$TEST_HOME" "$APP/Contents/MacOS/OuroWorkbench" > "$ART/e2e-reset-app.log" 2>&1 &
+TEST_SUPPORT="$PWD/$ART/live-reset-support"
+rm -rf "$TEST_SUPPORT"
+mkdir -p "$TEST_SUPPORT"
+printf 'reset\n' > "$TEST_SUPPORT/force-first-run-setup"
+"$APP/Contents/MacOS/OuroWorkbench" --app-support-root "$TEST_SUPPORT" > "$ART/e2e-reset-app.log" 2>&1 &
 PID=$!
 sleep 6
 screencapture -x "$ART/e2e-reset-setup.png"
-STATE="$TEST_HOME/Library/Application Support/OuroWorkbench/workspace-state.json"
+STATE="$TEST_SUPPORT/workspace-state.json"
 test -f "$STATE"
 plutil -p "$STATE" > "$ART/e2e-reset-state.txt"
 ! grep -F 'Local Shell' "$STATE"
-! test -e "$TEST_HOME/Library/Application Support/OuroWorkbench/force-first-run-setup"
+! test -e "$TEST_SUPPORT/force-first-run-setup"
 kill "$PID" >/dev/null 2>&1 || true
 wait "$PID" >/dev/null 2>&1 || true
 ```
@@ -223,19 +223,17 @@ wait "$PID" >/dev/null 2>&1 || true
 ```bash
 ART="worker/tasks/2026-06-14-1420-doing-factory-reset-setup-flow"
 APP="$HOME/Applications/Ouro Workbench.app"
-TEST_HOME="$PWD/$ART/live-sidebar-home"
-rm -rf "$TEST_HOME"
-mkdir -p "$TEST_HOME/Library/Application Support/OuroWorkbench"
-mkdir -p "$TEST_HOME/Library/Preferences"
-"$APP/Contents/MacOS/OuroWorkbench" --write-e2e-state sidebar-session-controls "$TEST_HOME/Library/Application Support/OuroWorkbench/workspace-state.json" > "$ART/sidebar-fixture.log" 2>&1
-defaults write "$TEST_HOME/Library/Preferences/com.ourostack.workbench" ouro.workbench.autoLaunchResumableOnStartup -bool true
-env HOME="$TEST_HOME" "$APP/Contents/MacOS/OuroWorkbench" > "$ART/e2e-sidebar-app.log" 2>&1 &
+TEST_SUPPORT="$PWD/$ART/live-sidebar-support"
+rm -rf "$TEST_SUPPORT"
+mkdir -p "$TEST_SUPPORT"
+"$APP/Contents/MacOS/OuroWorkbench" --write-e2e-state sidebar-session-controls "$TEST_SUPPORT/workspace-state.json" > "$ART/sidebar-fixture.log" 2>&1
+"$APP/Contents/MacOS/OuroWorkbench" --app-support-root "$TEST_SUPPORT" --auto-launch-resumable-for-e2e > "$ART/e2e-sidebar-app.log" 2>&1 &
 PID=$!
 sleep 6
 screencapture -x "$ART/e2e-sidebar-session-controls.png"
-plutil -p "$TEST_HOME/Library/Application Support/OuroWorkbench/workspace-state.json" > "$ART/e2e-sidebar-state.txt"
-grep -F 'Fixture Workspace' "$TEST_HOME/Library/Application Support/OuroWorkbench/workspace-state.json"
-grep -F 'Fixture Running Session' "$TEST_HOME/Library/Application Support/OuroWorkbench/workspace-state.json"
+plutil -p "$TEST_SUPPORT/workspace-state.json" > "$ART/e2e-sidebar-state.txt"
+grep -F 'Fixture Workspace' "$TEST_SUPPORT/workspace-state.json"
+grep -F 'Fixture Running Session' "$TEST_SUPPORT/workspace-state.json"
 rg -n 'Section\("Groups"\)|New Group|Move to Group|Delete Terminal Group|Groups with terminals' Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift && exit 1
 rg -n 'Session Controls' Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift
 rg -n 'Label\("Stop", systemImage: "stop.fill"\)' Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift
