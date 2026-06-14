@@ -28,10 +28,20 @@ final class WorkbenchLaunchDiagnosticsTests: XCTestCase {
     func testParseFactoryResetAction() throws {
         let diagnostics = try WorkbenchLaunchDiagnostics.parse([
             "OuroWorkbench",
+            "--app-support-root",
+            "/tmp/ouro-workbench",
             "--factory-reset-for-e2e"
         ])
 
+        XCTAssertEqual(diagnostics.appSupportRoot?.path, "/tmp/ouro-workbench")
         XCTAssertEqual(diagnostics.action, .factoryResetForE2E)
+    }
+
+    func testParseFactoryResetRequiresAppSupportRoot() {
+        XCTAssertThrowsError(try WorkbenchLaunchDiagnostics.parse([
+            "OuroWorkbench",
+            "--factory-reset-for-e2e"
+        ]))
     }
 
     func testParseRequiresAppSupportRootPath() {

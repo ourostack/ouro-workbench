@@ -1,0 +1,120 @@
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/13] Write sources
+[5/13] Write swift-version--58304C5D6DBC2206.txt
+[7/15] Emitting module OuroWorkbenchCore
+[8/15] Compiling OuroWorkbenchCore WorkbenchLaunchDiagnostics.swift
+[9/25] Emitting module OuroWorkbenchMCP
+[9/25] Write Objects.LinkFileList
+[11/25] Emitting module OuroWorkbenchScenarioVerifier
+[11/25] Write Objects.LinkFileList
+[12/25] Linking OuroWorkbenchMCP
+[13/25] Applying OuroWorkbenchMCP
+[15/25] Compiling OuroWorkbenchCoreTests WorkbenchLaunchDiagnosticsTests.swift
+[16/25] Emitting module OuroWorkbenchCoreTests
+[16/25] Write Objects.LinkFileList
+[17/25] Linking OuroWorkbenchScenarioVerifier
+[18/25] Applying OuroWorkbenchScenarioVerifier
+[20/25] Compiling OuroWorkbenchApp main.swift
+[21/25] Emitting module OuroWorkbenchApp
+[21/26] Linking OuroWorkbenchPackageTests
+[23/26] Compiling OuroWorkbenchApp OuroWorkbenchApp.swift
+[23/26] Write Objects.LinkFileList
+[24/26] Linking OuroWorkbench
+[25/26] Applying OuroWorkbench
+Build complete! (18.28s)
+Test Suite 'Selected tests' started at 2026-06-14 15:27:18.468.
+Test Suite 'OuroWorkbenchPackageTests.xctest' started at 2026-06-14 15:27:18.469.
+Test Suite 'WorkbenchLaunchDiagnosticsTests' started at 2026-06-14 15:27:18.469.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchLaunchDiagnosticsTests testParseAppSupportRootAndAutoLaunchOverride]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchLaunchDiagnosticsTests testParseAppSupportRootAndAutoLaunchOverride]' passed (0.002 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchLaunchDiagnosticsTests testParseEmptyArgumentsUsesDefaultOptions]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchLaunchDiagnosticsTests testParseEmptyArgumentsUsesDefaultOptions]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchLaunchDiagnosticsTests testParseFactoryResetAction]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchLaunchDiagnosticsTests testParseFactoryResetAction]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchLaunchDiagnosticsTests testParseFactoryResetRequiresAppSupportRoot]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchLaunchDiagnosticsTests testParseFactoryResetRequiresAppSupportRoot]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchLaunchDiagnosticsTests testParseKeepsUnknownArgumentsForExistingLaunchHandling]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchLaunchDiagnosticsTests testParseKeepsUnknownArgumentsForExistingLaunchHandling]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchLaunchDiagnosticsTests testParseRequiresAppSupportRootPath]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchLaunchDiagnosticsTests testParseRequiresAppSupportRootPath]' passed (0.000 seconds).
+Test Suite 'WorkbenchLaunchDiagnosticsTests' passed at 2026-06-14 15:27:18.472.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.003 (0.003) seconds
+Test Suite 'OuroWorkbenchPackageTests.xctest' passed at 2026-06-14 15:27:18.472.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.003 (0.003) seconds
+Test Suite 'Selected tests' passed at 2026-06-14 15:27:18.472.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.003 (0.004) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/10] Write swift-version--58304C5D6DBC2206.txt
+Build complete! (0.13s)
+Test Suite 'Selected tests' started at 2026-06-14 15:27:19.176.
+Test Suite 'OuroWorkbenchPackageTests.xctest' started at 2026-06-14 15:27:19.176.
+Test Suite 'WorkbenchFactoryResetTests' started at 2026-06-14 15:27:19.176.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchFactoryResetTests testBacksUpStateFileToTimestampedSiblingAndClearsAllPreferences]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchFactoryResetTests testBacksUpStateFileToTimestampedSiblingAndClearsAllPreferences]' passed (0.006 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchFactoryResetTests testFactoryResetRequestsFirstRunSetupAfterWipe]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchFactoryResetTests testFactoryResetRequestsFirstRunSetupAfterWipe]' passed (0.003 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchFactoryResetTests testNoStateFileStillClearsPreferencesAndReturnsNil]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchFactoryResetTests testNoStateFileStillClearsPreferencesAndReturnsNil]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchFactoryResetTests testRequestsAndConsumesFirstRunSetupMarker]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchFactoryResetTests testRequestsAndConsumesFirstRunSetupMarker]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchFactoryResetTests testSecondResetInSameSecondDoesNotThrowAndOverwritesBackup]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchFactoryResetTests testSecondResetInSameSecondDoesNotThrowAndOverwritesBackup]' passed (0.002 seconds).
+Test Suite 'WorkbenchFactoryResetTests' passed at 2026-06-14 15:27:19.190.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.013 (0.013) seconds
+Test Suite 'OuroWorkbenchPackageTests.xctest' passed at 2026-06-14 15:27:19.190.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.013 (0.013) seconds
+Test Suite 'Selected tests' passed at 2026-06-14 15:27:19.190.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.013 (0.014) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/10] Write swift-version--58304C5D6DBC2206.txt
+Build complete! (0.13s)
+Test Suite 'Selected tests' started at 2026-06-14 15:27:19.890.
+Test Suite 'OuroWorkbenchPackageTests.xctest' started at 2026-06-14 15:27:19.891.
+Test Suite 'WorkbenchBootstrapperTests' started at 2026-06-14 15:27:19.891.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapCreatesDefaultProjectAndLocalShellOnly]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapCreatesDefaultProjectAndLocalShellOnly]' passed (0.003 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapDeduplicatesEntriesSharingAnID]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapDeduplicatesEntriesSharingAnID]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapDetectsKnownCLIFromShellWrappedLegacyTerminal]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapDetectsKnownCLIFromShellWrappedLegacyTerminal]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapKeepsLegacyAgentScaffoldsWithRuns]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapKeepsLegacyAgentScaffoldsWithRuns]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapPreservesExistingAgentTerminalWithoutCreatingFixedScaffolds]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapPreservesExistingAgentTerminalWithoutCreatingFixedScaffolds]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapRemovesUntouchedLegacyAgentScaffolds]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapRemovesUntouchedLegacyAgentScaffolds]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapRepairsAndDoesNotDuplicateExistingLocalShell]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapRepairsAndDoesNotDuplicateExistingLocalShell]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapSetupModeCreatesUnsortedWorkspaceWithoutLocalShell]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapSetupModeCreatesUnsortedWorkspaceWithoutLocalShell]' passed (0.000 seconds).
+Test Suite 'WorkbenchBootstrapperTests' passed at 2026-06-14 15:27:19.896.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.004 (0.005) seconds
+Test Suite 'OuroWorkbenchPackageTests.xctest' passed at 2026-06-14 15:27:19.896.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.004 (0.005) seconds
+Test Suite 'Selected tests' passed at 2026-06-14 15:27:19.896.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.004 (0.006) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/9] Write swift-version--58304C5D6DBC2206.txt
+Build complete! (1.05s)

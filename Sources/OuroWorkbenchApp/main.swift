@@ -29,10 +29,8 @@ if CommandLine.arguments.contains("--smoke-launch") {
 }
 
 if workbenchLaunchDiagnostics.action == .factoryResetForE2E {
-    let paths = WorkbenchPaths(rootURL: workbenchLaunchDiagnostics.appSupportRoot ?? WorkbenchPaths.defaultPaths().rootURL)
-    let defaultsDomain = workbenchLaunchDiagnostics.appSupportRoot == nil
-        ? WorkbenchRelease.bundleIdentifier
-        : "com.ourostack.workbench.e2e"
+    let paths = WorkbenchPaths(rootURL: workbenchLaunchDiagnostics.appSupportRoot!)
+    let defaultsDomain = "com.ourostack.workbench.e2e"
     let defaults = UserDefaults(suiteName: defaultsDomain) ?? .standard
     let result = WorkbenchFactoryReset.resetToFactoryDefaults(
         stateURL: paths.stateURL,

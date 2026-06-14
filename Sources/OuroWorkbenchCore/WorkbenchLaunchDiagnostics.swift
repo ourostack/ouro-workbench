@@ -7,11 +7,14 @@ public struct WorkbenchLaunchDiagnostics: Equatable, Sendable {
 
     public enum ParseError: Error, Equatable, LocalizedError {
         case missingValue(String)
+        case factoryResetRequiresAppSupportRoot
 
         public var errorDescription: String? {
             switch self {
             case let .missingValue(flag):
                 return "\(flag) requires a value"
+            case .factoryResetRequiresAppSupportRoot:
+                return "--factory-reset-for-e2e requires --app-support-root"
             }
         }
     }
@@ -56,6 +59,9 @@ public struct WorkbenchLaunchDiagnostics: Equatable, Sendable {
                 diagnostics.passthroughArguments.append(argument)
                 index += 1
             }
+        }
+        if diagnostics.action == .factoryResetForE2E, diagnostics.appSupportRoot == nil {
+            throw ParseError.factoryResetRequiresAppSupportRoot
         }
         return diagnostics
     }
