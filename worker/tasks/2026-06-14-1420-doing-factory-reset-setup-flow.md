@@ -126,7 +126,7 @@ swift test --filter OnboardingTests
 **Output**: Failing tests specify exact expected values: section title `Workspaces`, setup workspace name `Unsorted Sessions`, no `This Mac` workspace name, compact boss status labels, recovery visibility only when recoverable count is greater than zero, diagnostic action case `.writeE2EState(.sidebarSessionControls, path)`, and parse error for missing fixture path.
 **Acceptance**: Focused policy tests fail before implementation because `WorkbenchSurfacePolicy` does not exist or returns old `Groups`/always-recovery behavior.
 
-### ⬜ Unit 3b: Sidebar Workspace Policy - Implementation
+### ✅ Unit 3b: Sidebar Workspace Policy - Implementation
 **What**: Add `Sources/OuroWorkbenchCore/WorkbenchSurfacePolicy.swift` and wire `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift` sidebar/setup labels through it. Replace primary `Groups` text with `Workspaces`, use `Unsorted Sessions` for setup-mode bootstrap, replace permanent `Agents` section title with compact `Boss`, and hide the sidebar `Recovery` section when `model.recoverableEntries.isEmpty`. Extend the test-covered diagnostic helper with a hidden flag `--write-e2e-state sidebar-session-controls PATH` in `Sources/OuroWorkbenchApp/main.swift` that writes a deterministic Workbench state for Unit 6e and exits before mounting SwiftUI.
 **Output**: Core policy plus app sidebar copy/visibility changes. The diagnostic command `swift run OuroWorkbench --write-e2e-state sidebar-session-controls /tmp/workspace-state.json` writes a state containing one workspace named `Fixture Workspace` and one trusted auto-resume terminal agent named `Fixture Running Session`.
 **Acceptance**: Unit 3a tests pass; `swift build` succeeds; `rg -n 'Section\\(\"Groups\"\\)|New Group|Move to Group|Delete Terminal Group|Groups with terminals' Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift` returns no primary user-facing sidebar/header strings.
@@ -355,3 +355,4 @@ grep -F 'PASS import_scanner' "$ART/e2e-import-scanner.md"
 - 2026-06-14 15:38 Unit 2c complete: reran exact scanner edge coverage commands and full OnboardingTests; log saved to unit-2-scanner.log.
 - 2026-06-14 15:39 Unit 3a complete: added failing sidebar surface policy and e2e fixture diagnostic tests; red log saved to unit-3a-red.log.
 - 2026-06-14 15:43 Unit 2 review finding addressed: added red/green coverage for Codex `session_meta.payload` archive/manual-recovery JSONL records.
+- 2026-06-14 15:46 Unit 3b complete: added WorkbenchSurfacePolicy, schema-backed sidebar e2e fixture writer, Workspaces/Boss sidebar labels, and hidden healthy Recovery; green log saved to unit-3b-green.log.
