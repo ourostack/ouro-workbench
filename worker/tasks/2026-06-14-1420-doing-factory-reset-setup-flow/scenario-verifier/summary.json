@@ -1,0 +1,93 @@
+{
+  "coverage" : {
+    "bossAgents" : {
+      "slugger" : 5000
+    },
+    "bossBridgeStates" : {
+      "agentMissing" : 1250,
+      "needsUpdate" : 1250,
+      "notRegistered" : 1250,
+      "registered" : 1250
+    },
+    "digest" : "567dc7ec0c45835b",
+    "executableHealthStates" : {
+      "available" : 2500,
+      "missing" : 2500
+    },
+    "lifecycles" : {
+      "configured" : 1000,
+      "manual_action_needed" : 1000,
+      "needs_recovery" : 1000,
+      "running" : 1000,
+      "waiting_for_input" : 1000
+    },
+    "processCounts" : {
+      "1" : 5000
+    },
+    "projectCounts" : {
+      "1" : 5000
+    },
+    "readinessStates" : {
+      "attention" : 378,
+      "blocked" : 4550,
+      "ready" : 72
+    },
+    "recoveryActions" : {
+      "autoResume" : 128,
+      "manualActionNeeded" : 1120,
+      "noAction" : 3560,
+      "respawn" : 192
+    },
+    "renderPasses" : 25000,
+    "rowCount" : 5000,
+    "runCounts" : {
+      "0" : 1000,
+      "1" : 4000
+    },
+    "surfaces" : {
+      "archived_session" : 1000,
+      "boss_pane_collapsed" : 1000,
+      "sidebar_dashboard" : 1000,
+      "sidebar_hidden_dashboard" : 1000,
+      "terminal_focus" : 1000
+    },
+    "terminals" : {
+      "claude" : 1000,
+      "codex" : 1000,
+      "copilot" : 1000,
+      "generic_tui" : 1000,
+      "local_shell" : 1000
+    },
+    "trustResumePostures" : {
+      "trusted_auto_no_session" : 1000,
+      "trusted_auto_session" : 1000,
+      "trusted_no_auto" : 1000,
+      "untrusted_auto" : 1000,
+      "untrusted_no_auto" : 1000
+    },
+    "viewports" : {
+      "compact-terminal" : 5000,
+      "short-window" : 5000,
+      "standard" : 5000,
+      "tall-workspace" : 5000,
+      "wide-workspace" : 5000
+    }
+  },
+  "deepRowsVerified" : 0,
+  "failures" : [
+
+  ],
+  "matrixRowsVerified" : 5000,
+  "renderPasses" : 25000,
+  "rowsVerified" : 5000,
+  "sampleFiles" : [
+
+  ],
+  "viewportNames" : [
+    "standard",
+    "short-window",
+    "compact-terminal",
+    "tall-workspace",
+    "wide-workspace"
+  ]
+}
