@@ -21,7 +21,7 @@ Gate state:
 - Audit: written and committed
 - Planning review: converged and approved
 - Doing review: converged; doing doc ready
-- Implementation: Unit 3 complete; Unit 3 cold review pending; starting Unit 4a
+- Implementation: Unit 4a complete; Unit 3 cold review pending; starting Unit 4b
 - Live validation: pending
 
-Next action: dispatch Unit 3 cold review and write Unit 4a running-session control policy tests.
+Next action: implement running-session control policy and header menu.

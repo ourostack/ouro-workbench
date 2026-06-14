@@ -136,7 +136,7 @@ swift test --filter OnboardingTests
 **Output**: Test/build output saved to `2026-06-14-1420-doing-factory-reset-setup-flow/unit-3-sidebar-policy.log`.
 **Acceptance**: Policy branches for setup mode, normal mode, healthy recovery, and actionable recovery are covered and green.
 
-### ⬜ Unit 4a: Running Session Controls Policy - Tests
+### ✅ Unit 4a: Running Session Controls Policy - Tests
 **What**: Add failing tests for a pure running-session chrome policy in `Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift`. Cover visible primary actions for running, stopped, archived, and recoverable sessions.
 **Output**: Tests require running sessions to expose only `stop` as a primary action and to expose `focus`, `redraw`, `restart`, `controlC`, `escape`, and `eof` only as advanced session controls.
 **Acceptance**: Tests fail before implementation because the policy does not exist or still treats low-level controls/restart as primary.
@@ -357,3 +357,4 @@ grep -F 'PASS import_scanner' "$ART/e2e-import-scanner.md"
 - 2026-06-14 15:43 Unit 2 review finding addressed: added red/green coverage for Codex `session_meta.payload` archive/manual-recovery JSONL records.
 - 2026-06-14 15:46 Unit 3b complete: added WorkbenchSurfacePolicy, schema-backed sidebar e2e fixture writer, Workspaces/Boss sidebar labels, and hidden healthy Recovery; green log saved to unit-3b-green.log.
 - 2026-06-14 15:47 Unit 3c complete: reran WorkbenchSurfacePolicyTests, build, and sidebar source assertions; log saved to unit-3-sidebar-policy.log.
+- 2026-06-14 15:48 Unit 4a complete: added failing session controls policy tests; red log saved to unit-4a-red.log.
