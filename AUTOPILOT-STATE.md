@@ -21,7 +21,7 @@ Gate state:
 - Audit: written and committed
 - Planning review: converged and approved
 - Doing review: converged; doing doc ready
-- Implementation: Unit 1b complete; Unit 1b cold review pending
+- Implementation: Unit 1 complete; starting Unit 2a red scanner tests
 - Live validation: pending
 
-Next action: run Unit 1b cold review, then Unit 1c coverage/refactor.
+Next action: write and run Unit 2a failing recent-session scanner tests.

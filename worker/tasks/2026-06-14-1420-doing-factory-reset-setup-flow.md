@@ -86,7 +86,7 @@ The immediate blocker is the post-factory-reset first-run experience: Workbench 
 **Output**: Code changes in `Sources/OuroWorkbenchCore/WorkbenchFactoryReset.swift`, `Sources/OuroWorkbenchCore/WorkbenchBootstrapper.swift`, `Sources/OuroWorkbenchCore/WorkbenchPaths.swift`, `Sources/OuroWorkbenchCore/WorkbenchLaunchDiagnostics.swift`, `Sources/OuroWorkbenchApp/main.swift`, and `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift`.
 **Acceptance**: Unit 1a tests pass; `swift build` succeeds without warnings.
 
-### ⬜ Unit 1c: Reset Setup Intent - Coverage & Refactor
+### ✅ Unit 1c: Reset Setup Intent - Coverage & Refactor
 **What**: Run `swift test --filter WorkbenchFactoryResetTests`, `swift test --filter WorkbenchBootstrapperTests`, `swift test --filter WorkbenchLaunchDiagnosticsTests`, and `swift build`. Make no code changes unless one of those commands fails or a new setup-intent/launch-diagnostic branch is uncovered by the tests.
 **Output**: Test/build output saved to `2026-06-14-1420-doing-factory-reset-setup-flow/unit-1-reset-setup.log`.
 **Acceptance**: New setup-intent and launch-diagnostic code has branch coverage for request, consume, absent marker, setup bootstrap, ordinary bootstrap, wipe-then-marker reset ordering, app-support override, auto-launch override, factory-reset diagnostic action, missing diagnostic arguments, and unknown arg passthrough.
@@ -349,3 +349,4 @@ grep -F 'PASS import_scanner' "$ART/e2e-import-scanner.md"
 - 2026-06-14 15:16 Unit 0 complete: recorded branch, clean status, target files, skill-source availability, and no-human-blocker decision.
 - 2026-06-14 15:18 Unit 1a complete: added failing reset marker, setup bootstrap, and launch diagnostic tests; red log saved to unit-1a-red.log.
 - 2026-06-14 15:22 Unit 1b complete: implemented wipe-plus-marker reset, setup-mode bootstrap defaults, launch diagnostics, and app launch wiring; green log saved to unit-1b-green.log.
+- 2026-06-14 15:28 Unit 1c complete: reran reset/bootstrap/launch diagnostic tests and build; Unit 1b cold review converged after isolated reset-root safety fix.
