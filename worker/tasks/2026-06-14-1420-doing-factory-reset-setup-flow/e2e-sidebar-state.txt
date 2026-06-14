@@ -1,0 +1,118 @@
+{
+  "actionLog" => [
+    0 => {
+      "action" => "ensureDaemon"
+      "id" => "FEA56168-A646-4D4F-8E95-A57F4473F8BD"
+      "occurredAt" => "2026-06-14T23:18:45Z"
+      "result" => "Daemon already reachable; reused existing process (no spawn)."
+      "source" => "boss:slugger"
+      "succeeded" => true
+      "targetName" => "slugger"
+    }
+    1 => {
+      "action" => "launchAutoResumeSessionsOnStartup"
+      "id" => "6FC48B65-7D0D-46DA-8953-78AFC746B064"
+      "occurredAt" => "2026-06-14T23:18:44Z"
+      "result" => "Auto-launched 2 resumable sessions"
+      "source" => "native"
+      "succeeded" => true
+      "targetName" => "Ouro Workbench"
+    }
+    2 => {
+      "action" => "ensureDaemon"
+      "id" => "C1DD986F-9F04-4AC8-9DB8-2E08A19BBEFF"
+      "occurredAt" => "2026-06-14T23:18:44Z"
+      "result" => "Daemon already reachable; reused existing process (no spawn)."
+      "source" => "native"
+      "succeeded" => true
+      "targetName" => "launch"
+    }
+  ]
+  "boss" => {
+    "agentName" => "slugger"
+    "scope" => "machine"
+  }
+  "bossPaneCollapsed" => true
+  "bossWatchEnabled" => true
+  "decisionLog" => [
+  ]
+  "processEntries" => [
+    0 => {
+      "arguments" => [
+        0 => "-l"
+      ]
+      "attention" => "active"
+      "autoResume" => true
+      "executable" => "/bin/zsh"
+      "id" => "59C180B8-AF3F-424B-B049-F1A153860FF9"
+      "isArchived" => false
+      "isPinned" => false
+      "kind" => "shell"
+      "lastSummary" => "launch configured Local Shell session"
+      "name" => "Local Shell"
+      "owner" => {
+        "kind" => "human"
+      }
+      "projectId" => "F3D5DC90-E9D9-4312-B411-BF0F5E763148"
+      "trust" => "trusted"
+      "workingDirectory" => "/Users/arimendelow"
+    }
+    1 => {
+      "agentKind" => "openAICodex"
+      "arguments" => [
+        0 => "-lc"
+        1 => "while true; do sleep 60; done"
+      ]
+      "attention" => "active"
+      "autoResume" => true
+      "executable" => "/bin/zsh"
+      "id" => "171EAB1F-A377-480E-9862-338004604F1B"
+      "isArchived" => false
+      "isPinned" => false
+      "kind" => "terminalAgent"
+      "lastSummary" => "launch configured Fixture Running Session session"
+      "name" => "Fixture Running Session"
+      "owner" => {
+        "kind" => "human"
+      }
+      "projectId" => "F3D5DC90-E9D9-4312-B411-BF0F5E763148"
+      "trust" => "trusted"
+      "workingDirectory" => "/Users/arimendelow"
+    }
+  ]
+  "processRuns" => [
+    0 => {
+      "entryId" => "171EAB1F-A377-480E-9862-338004604F1B"
+      "id" => "AA4F7312-5872-4078-90F7-53AD159D1C52"
+      "lastOutputAt" => "2026-06-14T23:18:44Z"
+      "pid" => 67129
+      "startedAt" => "2026-06-14T23:18:44Z"
+      "status" => "running"
+      "transcriptPath" => "/Users/arimendelow/Projects/ouro-workbench/worker/tasks/2026-06-14-1420-doing-factory-reset-setup-flow/live-sidebar-support/transcripts/171EAB1F-A377-480E-9862-338004604F1B/AA4F7312-5872-4078-90F7-53AD159D1C52.log"
+    }
+    1 => {
+      "entryId" => "59C180B8-AF3F-424B-B049-F1A153860FF9"
+      "id" => "66762C24-AA80-40E9-BAA0-C8E046B3ABB3"
+      "lastOutputAt" => "2026-06-14T23:18:44Z"
+      "pid" => 67128
+      "startedAt" => "2026-06-14T23:18:44Z"
+      "status" => "running"
+      "transcriptPath" => "/Users/arimendelow/Projects/ouro-workbench/worker/tasks/2026-06-14-1420-doing-factory-reset-setup-flow/live-sidebar-support/transcripts/59C180B8-AF3F-424B-B049-F1A153860FF9/66762C24-AA80-40E9-BAA0-C8E046B3ABB3.log"
+    }
+  ]
+  "projects" => [
+    0 => {
+      "boss" => {
+        "agentName" => "slugger"
+        "scope" => "machine"
+      }
+      "id" => "F3D5DC90-E9D9-4312-B411-BF0F5E763148"
+      "name" => "Fixture Workspace"
+      "rootPath" => "/Users/arimendelow"
+    }
+  ]
+  "schemaVersion" => 1
+  "selectedEntryId" => "171EAB1F-A377-480E-9862-338004604F1B"
+  "selectedProjectId" => "F3D5DC90-E9D9-4312-B411-BF0F5E763148"
+  "updatedAt" => "2026-06-14T23:18:46Z"
+}
