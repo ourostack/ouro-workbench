@@ -78,18 +78,18 @@ The immediate blocker is the post-factory-reset first-run experience: Workbench 
 
 ### ⬜ Unit 1a: Reset Setup Intent - Tests
 **What**: Write failing tests for a core setup intent marker, setup-mode bootstrap, and testable launch diagnostics. Target `Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift`, `Tests/OuroWorkbenchCoreTests/WorkbenchBootstrapperTests.swift`, and a new `Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift`.
-**Output**: Failing tests prove a setup intent marker file named `force-first-run-setup` can be requested under Workbench app support, survives a factory defaults wipe when written after the wipe, can be consumed/cleared, and bootstrapping with `includeLocalShell: false` creates no local shell while using a non-`This Mac` workspace name. Diagnostic tests define `WorkbenchLaunchDiagnostics.parse(_:)` expectations for `--app-support-root PATH`, `--auto-launch-resumable-for-e2e`, absent flags, missing required path, and unknown passthrough args before any app diagnostic implementation exists.
+**Output**: Failing tests prove a setup intent marker file named `force-first-run-setup` can be requested under Workbench app support, survives a factory defaults wipe when written after the wipe, can be consumed/cleared, and bootstrapping with `includeLocalShell: false` creates no local shell while using a non-`This Mac` workspace name. Add a failing `WorkbenchFactoryResetTests/testFactoryResetRequestsFirstRunSetupAfterWipe` that seeds a state file and stale marker, calls a core reset helper, and expects the state file removed/backed up, preferences cleared, and a fresh `force-first-run-setup` marker present after the wipe. Diagnostic tests define `WorkbenchLaunchDiagnostics.parse(_:)` expectations for `--app-support-root PATH`, `--auto-launch-resumable-for-e2e`, `--factory-reset-for-e2e`, absent flags, missing required path, and unknown passthrough args before any app diagnostic implementation exists.
 **Acceptance**: Focused test command fails for the new expectations before implementation.
 
 ### ⬜ Unit 1b: Reset Setup Intent - Implementation
-**What**: Add the minimal core helper and app wiring so reset/fresh first-run loads setup-mode bootstrap, suppresses default shell auto-launch, forces onboarding on next launch, and consumes the explicit reset marker after presentation. Add test-covered launch diagnostic parsing in `Sources/OuroWorkbenchCore/WorkbenchLaunchDiagnostics.swift`, then wire app diagnostic arguments `--app-support-root PATH` and `--auto-launch-resumable-for-e2e` in `Sources/OuroWorkbenchApp/main.swift` and `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift` so live E2E can force `WorkbenchPaths` and auto-launch behavior without relying on `HOME` or the real defaults domain.
+**What**: Add the minimal core helper and app wiring so reset/fresh first-run loads setup-mode bootstrap, suppresses default shell auto-launch, forces onboarding on next launch, and consumes the explicit reset marker after presentation. Factor a core reset helper in `WorkbenchFactoryReset` that performs `wipeData` and writes the setup marker after the wipe; update `WorkbenchViewModel.resetToFirstRun()` to call that helper. Add test-covered launch diagnostic parsing in `Sources/OuroWorkbenchCore/WorkbenchLaunchDiagnostics.swift`, then wire app diagnostic arguments `--app-support-root PATH`, `--auto-launch-resumable-for-e2e`, and `--factory-reset-for-e2e` in `Sources/OuroWorkbenchApp/main.swift` and `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift` so live E2E can force `WorkbenchPaths`, exercise the real reset data path, and control auto-launch behavior without relying on `HOME` or the real defaults domain.
 **Output**: Code changes in `Sources/OuroWorkbenchCore/WorkbenchFactoryReset.swift`, `Sources/OuroWorkbenchCore/WorkbenchBootstrapper.swift`, `Sources/OuroWorkbenchCore/WorkbenchPaths.swift`, `Sources/OuroWorkbenchCore/WorkbenchLaunchDiagnostics.swift`, `Sources/OuroWorkbenchApp/main.swift`, and `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift`.
 **Acceptance**: Unit 1a tests pass; `swift build` succeeds without warnings.
 
 ### ⬜ Unit 1c: Reset Setup Intent - Coverage & Refactor
 **What**: Run `swift test --filter WorkbenchFactoryResetTests`, `swift test --filter WorkbenchBootstrapperTests`, `swift test --filter WorkbenchLaunchDiagnosticsTests`, and `swift build`. Make no code changes unless one of those commands fails or a new setup-intent/launch-diagnostic branch is uncovered by the tests.
 **Output**: Test/build output saved to `2026-06-14-1420-doing-factory-reset-setup-flow/unit-1-reset-setup.log`.
-**Acceptance**: New setup-intent and launch-diagnostic code has branch coverage for request, consume, absent marker, setup bootstrap, ordinary bootstrap, app-support override, auto-launch override, missing diagnostic arguments, and unknown arg passthrough.
+**Acceptance**: New setup-intent and launch-diagnostic code has branch coverage for request, consume, absent marker, setup bootstrap, ordinary bootstrap, wipe-then-marker reset ordering, app-support override, auto-launch override, factory-reset diagnostic action, missing diagnostic arguments, and unknown arg passthrough.
 
 ### ⬜ Unit 2a: Recent Session Scanner Stores - Tests
 **What**: Write failing tests in `Tests/OuroWorkbenchCoreTests/OnboardingTests.swift` for Codex archived JSONL, Codex manual-recovery JSONL, Claude task JSON records, SQLite-plus-session-index union behavior, scanner edge cases, and diagnostic parse coverage.
@@ -210,14 +210,21 @@ scripts/verify-app-bundle.sh "$APP" >> "$ART/package-install.log" 2>&1
 **What**: Create and run `worker/tasks/2026-06-14-1420-doing-factory-reset-setup-flow/validate-reset-setup.sh`. The script must run these exact validation steps with an isolated app support root:
 
 ```bash
+set -euo pipefail
 ART="worker/tasks/2026-06-14-1420-doing-factory-reset-setup-flow"
 APP="$HOME/Applications/Ouro Workbench.app"
 TEST_SUPPORT="$PWD/$ART/live-reset-support"
 rm -rf "$TEST_SUPPORT"
 mkdir -p "$TEST_SUPPORT"
-printf 'reset\n' > "$TEST_SUPPORT/force-first-run-setup"
+printf '{"projects":[{"name":"This Mac"}],"processEntries":[{"name":"Local Shell"}]}\n' > "$TEST_SUPPORT/workspace-state.json"
+printf 'stale-before-reset\n' > "$TEST_SUPPORT/force-first-run-setup"
+"$APP/Contents/MacOS/OuroWorkbench" --app-support-root "$TEST_SUPPORT" --factory-reset-for-e2e > "$ART/e2e-reset-command.log" 2>&1
+test -e "$TEST_SUPPORT/force-first-run-setup"
+! grep -F 'stale-before-reset' "$TEST_SUPPORT/force-first-run-setup"
+ls "$TEST_SUPPORT"/workspace-state.*.bak.json > "$ART/e2e-reset-backups.txt"
 "$APP/Contents/MacOS/OuroWorkbench" --app-support-root "$TEST_SUPPORT" > "$ART/e2e-reset-app.log" 2>&1 &
 PID=$!
+trap 'kill "$PID" >/dev/null 2>&1 || true; wait "$PID" >/dev/null 2>&1 || true' EXIT
 sleep 6
 screencapture -x "$ART/e2e-reset-setup.png"
 STATE="$TEST_SUPPORT/workspace-state.json"
@@ -237,15 +244,17 @@ test -s "$ART/e2e-reset-setup.png"
 grep -F 'PASS reset_setup' "$ART/e2e-reset-setup.md"
 kill "$PID" >/dev/null 2>&1 || true
 wait "$PID" >/dev/null 2>&1 || true
+trap - EXIT
 ```
 
 **Output**: Save notes and screenshots to `2026-06-14-1420-doing-factory-reset-setup-flow/e2e-reset-setup.md`.
-**Acceptance**: Artifact has `PASS`; next launch presents onboarding/setup, no default `Local Shell` is selected/launched before setup/import, and `workspace-state.json` does not contain a reset-created shell-only dead end.
+**Acceptance**: Artifact has `PASS`; the validation first runs the reset data path through `--factory-reset-for-e2e`, proves the stale marker was replaced after the wipe and a state backup exists, next launch presents onboarding/setup, no default `Local Shell` is selected/launched before setup/import, and `workspace-state.json` does not contain a reset-created shell-only dead end.
 
 ### ⬜ Unit 6e: Live Sidebar And Session Controls E2E
 **What**: Create and run `worker/tasks/2026-06-14-1420-doing-factory-reset-setup-flow/validate-sidebar-session-controls.sh`. The script must launch the installed app with an isolated home seeded by the Unit 3b diagnostic fixture, capture a screenshot, and run these exact commands:
 
 ```bash
+set -euo pipefail
 ART="worker/tasks/2026-06-14-1420-doing-factory-reset-setup-flow"
 APP="$HOME/Applications/Ouro Workbench.app"
 TEST_SUPPORT="$PWD/$ART/live-sidebar-support"
@@ -254,12 +263,15 @@ mkdir -p "$TEST_SUPPORT"
 "$APP/Contents/MacOS/OuroWorkbench" --write-e2e-state sidebar-session-controls "$TEST_SUPPORT/workspace-state.json" > "$ART/sidebar-fixture.log" 2>&1
 "$APP/Contents/MacOS/OuroWorkbench" --app-support-root "$TEST_SUPPORT" --auto-launch-resumable-for-e2e > "$ART/e2e-sidebar-app.log" 2>&1 &
 PID=$!
+trap 'kill "$PID" >/dev/null 2>&1 || true; wait "$PID" >/dev/null 2>&1 || true' EXIT
 sleep 6
 screencapture -x "$ART/e2e-sidebar-session-controls.png"
 plutil -p "$TEST_SUPPORT/workspace-state.json" > "$ART/e2e-sidebar-state.txt"
 grep -F 'Fixture Workspace' "$TEST_SUPPORT/workspace-state.json"
 grep -F 'Fixture Running Session' "$TEST_SUPPORT/workspace-state.json"
-rg -n 'Section\("Groups"\)|New Group|Move to Group|Delete Terminal Group|Groups with terminals' Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift && exit 1
+if rg -n 'Section\("Groups"\)|New Group|Move to Group|Delete Terminal Group|Groups with terminals' Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift; then
+  exit 1
+fi
 rg -n 'Section\("Workspaces"\)' Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift
 rg -n 'Section\("Boss"\)' Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift
 rg -n 'if !model\.recoverableEntries\.isEmpty' Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift
@@ -279,6 +291,7 @@ test -s "$ART/e2e-sidebar-session-controls.png"
 grep -F 'PASS sidebar_session_controls' "$ART/e2e-sidebar-session-controls.md"
 kill "$PID" >/dev/null 2>&1 || true
 wait "$PID" >/dev/null 2>&1 || true
+trap - EXIT
 ```
 
 **Output**: Save notes and screenshots to `2026-06-14-1420-doing-factory-reset-setup-flow/e2e-sidebar-session-controls.md`.
@@ -288,15 +301,17 @@ wait "$PID" >/dev/null 2>&1 || true
 **What**: Create and run `worker/tasks/2026-06-14-1420-doing-factory-reset-setup-flow/validate-import-scanner.sh`. The script must seed deterministic synthetic harness stores under an isolated scan home, run the read-only diagnostic added in Unit 2b against the installed current-source app, and verify source coverage with `jq`:
 
 ```bash
+set -euo pipefail
 ART="worker/tasks/2026-06-14-1420-doing-factory-reset-setup-flow"
 APP="$HOME/Applications/Ouro Workbench.app"
 SCAN_HOME="$PWD/$ART/live-scan-home"
 rm -rf "$SCAN_HOME"
 mkdir -p "$SCAN_HOME/.codex/archived_sessions" "$SCAN_HOME/.codex/manual-recovery-20260614" "$SCAN_HOME/.claude/tasks" "$SCAN_HOME/.claude/projects/-Users-arimendelow-Projects-fixture"
-printf '{"id":"codex-archive-live","timestamp":"2026-06-14T20:00:00Z","cwd":"/Users/arimendelow/Projects/fixture","prompt":"continue fixture archive"}\n' > "$SCAN_HOME/.codex/archived_sessions/session.jsonl"
-printf '{"id":"codex-manual-live","timestamp":"2026-06-14T20:05:00Z","cwd":"/Users/arimendelow/Projects/fixture","prompt":"manual recovery fixture"}\n' > "$SCAN_HOME/.codex/manual-recovery-20260614/recovery.jsonl"
-printf '{"sessionId":"claude-task-live","updatedAt":"2026-06-14T20:10:00Z","cwd":"/Users/arimendelow/Projects/fixture","summary":"Claude task fixture"}\n' > "$SCAN_HOME/.claude/tasks/task.json"
-printf '{"sessionId":"claude-project-live","updatedAt":"2026-06-14T20:15:00Z","cwd":"/Users/arimendelow/Projects/fixture","summary":"Claude project fixture"}\n' > "$SCAN_HOME/.claude/projects/-Users-arimendelow-Projects-fixture/session.json"
+NOW="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+printf '{"id":"codex-archive-live","timestamp":"%s","cwd":"/Users/arimendelow/Projects/fixture","prompt":"continue fixture archive"}\n' "$NOW" > "$SCAN_HOME/.codex/archived_sessions/session.jsonl"
+printf '{"id":"codex-manual-live","timestamp":"%s","cwd":"/Users/arimendelow/Projects/fixture","prompt":"manual recovery fixture"}\n' "$NOW" > "$SCAN_HOME/.codex/manual-recovery-20260614/recovery.jsonl"
+printf '{"sessionId":"claude-task-live","updatedAt":"%s","cwd":"/Users/arimendelow/Projects/fixture","summary":"Claude task fixture"}\n' "$NOW" > "$SCAN_HOME/.claude/tasks/task.json"
+printf '{"sessionId":"claude-project-live","updatedAt":"%s","cwd":"/Users/arimendelow/Projects/fixture","summary":"Claude project fixture"}\n' "$NOW" > "$SCAN_HOME/.claude/projects/-Users-arimendelow-Projects-fixture/session.json"
 "$APP/Contents/MacOS/OuroWorkbench" --dump-recent-sessions-json --scan-home-root "$SCAN_HOME" > "$ART/e2e-import-scanner.json"
 jq -e '[.[] | select(.source == "openAICodex") | select((.evidencePaths // []) | map(test("/\\.codex/(archived_sessions|manual-recovery-)")) | any)] | length >= 1' "$ART/e2e-import-scanner.json"
 jq -e '[.[] | select(.source == "claudeCode") | select((.evidencePaths // []) | map(test("/\\.claude/(tasks|projects)")) | any)] | length >= 1' "$ART/e2e-import-scanner.json"
