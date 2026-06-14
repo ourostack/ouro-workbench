@@ -44,6 +44,37 @@ final class WorkbenchLaunchDiagnosticsTests: XCTestCase {
         ]))
     }
 
+    func testParseDumpRecentSessionsDiagnostic() throws {
+        let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+            "OuroWorkbench",
+            "--dump-recent-sessions-json"
+        ])
+
+        XCTAssertEqual(diagnostics.action, .dumpRecentSessions(scanHomeRoot: nil))
+    }
+
+    func testParseDumpRecentSessionsDiagnosticWithScanHomeRoot() throws {
+        let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+            "OuroWorkbench",
+            "--dump-recent-sessions-json",
+            "--scan-home-root",
+            "/tmp/harness-home"
+        ])
+
+        XCTAssertEqual(
+            diagnostics.action,
+            .dumpRecentSessions(scanHomeRoot: URL(fileURLWithPath: "/tmp/harness-home", isDirectory: true))
+        )
+    }
+
+    func testParseScanHomeRootRequiresPath() {
+        XCTAssertThrowsError(try WorkbenchLaunchDiagnostics.parse([
+            "OuroWorkbench",
+            "--dump-recent-sessions-json",
+            "--scan-home-root"
+        ]))
+    }
+
     func testParseRequiresAppSupportRootPath() {
         XCTAssertThrowsError(try WorkbenchLaunchDiagnostics.parse([
             "OuroWorkbench",
