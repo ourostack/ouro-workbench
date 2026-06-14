@@ -121,4 +121,44 @@ final class OnboardingNarrativeTests: XCTestCase {
         XCTAssertEqual(decision.primaryActionTitle, "Review Duplicates")
         XCTAssertEqual(decision.notice, WorkbenchOnboardingNarrative.duplicateCleanup)
     }
+
+    func testAppFlowWiringKeepsScanAndDuplicateCleanupActionsUseful() throws {
+        let source = try appSource()
+
+        XCTAssertFalse(source.contains("model.onboardingProposal?.selectedTerminalCount == 0 {\n                return true"))
+        XCTAssertTrue(source.contains("Task { await model.runBossQuickQuestion(WorkbenchOnboardingNarrative.duplicateCleanup) }"))
+        XCTAssertFalse(source.contains("case .duplicateCleanup:\n                instructionStatus = model.onboardingFlowDecision.notice\n                dismiss()"))
+    }
+
+    func testAppFlowInputUsesOnlyOnboardingArrangeSummaryForDuplicateCleanup() throws {
+        let source = try appSource()
+
+        XCTAssertTrue(source.contains("importSummaryHasImports: onboardingImportSummaryHasImports"))
+        XCTAssertFalse(source.contains("importSummaryHasImports: lastImportSummary?.hasImports == true"))
+        XCTAssertTrue(source.contains("onboardingImportSummaryHasImports = result.hasImports"))
+        XCTAssertFalse(source.contains("onboardingImportSummaryHasImports = true\n        lastImportSummary = result"))
+    }
+
+    func testAppOnboardingChromeAvoidsStaticImportFraming() throws {
+        let source = try appSource()
+
+        XCTAssertFalse(source.contains("case .importWork:\n                return \"Import\""))
+        XCTAssertFalse(source.contains("Ask about setup, providers, or which sessions to import"))
+        XCTAssertFalse(source.contains("Import stays locked until provider checks pass."))
+    }
+
+    private func appSource() throws -> String {
+        let sourceURL = repoRoot()
+            .appendingPathComponent("Sources")
+            .appendingPathComponent("OuroWorkbenchApp")
+            .appendingPathComponent("OuroWorkbenchApp.swift")
+        return try String(contentsOf: sourceURL, encoding: .utf8)
+    }
+
+    private func repoRoot() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+    }
 }

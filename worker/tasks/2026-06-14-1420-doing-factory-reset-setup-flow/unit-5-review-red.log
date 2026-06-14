@@ -1,0 +1,63 @@
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/11] Write sources
+[3/11] Write swift-version--58304C5D6DBC2206.txt
+[5/7] Compiling OuroWorkbenchCoreTests OnboardingNarrativeTests.swift
+[6/7] Emitting module OuroWorkbenchCoreTests
+[6/8] Write Objects.LinkFileList
+[7/8] Linking OuroWorkbenchPackageTests
+Build complete! (1.86s)
+Test Suite 'Selected tests' started at 2026-06-14 16:12:37.810.
+Test Suite 'OuroWorkbenchPackageTests.xctest' started at 2026-06-14 16:12:37.811.
+Test Suite 'OnboardingNarrativeTests' started at 2026-06-14 16:12:37.811.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testAmbiguousCandidateCopyIncludesCount]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testAmbiguousCandidateCopyIncludesCount]' passed (0.002 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testAppFlowInputUsesOnlyOnboardingArrangeSummaryForDuplicateCleanup]' started.
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:136: error: -[OuroWorkbenchCoreTests.OnboardingNarrativeTests testAppFlowInputUsesOnlyOnboardingArrangeSummaryForDuplicateCleanup] : XCTAssertTrue failed
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:137: error: -[OuroWorkbenchCoreTests.OnboardingNarrativeTests testAppFlowInputUsesOnlyOnboardingArrangeSummaryForDuplicateCleanup] : XCTAssertFalse failed
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:138: error: -[OuroWorkbenchCoreTests.OnboardingNarrativeTests testAppFlowInputUsesOnlyOnboardingArrangeSummaryForDuplicateCleanup] : XCTAssertTrue failed
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testAppFlowInputUsesOnlyOnboardingArrangeSummaryForDuplicateCleanup]' failed (0.235 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testAppFlowWiringKeepsScanAndDuplicateCleanupActionsUseful]' started.
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:128: error: -[OuroWorkbenchCoreTests.OnboardingNarrativeTests testAppFlowWiringKeepsScanAndDuplicateCleanupActionsUseful] : XCTAssertFalse failed
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:129: error: -[OuroWorkbenchCoreTests.OnboardingNarrativeTests testAppFlowWiringKeepsScanAndDuplicateCleanupActionsUseful] : XCTAssertTrue failed
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:130: error: -[OuroWorkbenchCoreTests.OnboardingNarrativeTests testAppFlowWiringKeepsScanAndDuplicateCleanupActionsUseful] : XCTAssertFalse failed
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testAppFlowWiringKeepsScanAndDuplicateCleanupActionsUseful]' failed (0.027 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testAppOnboardingChromeAvoidsStaticImportFraming]' started.
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:145: error: -[OuroWorkbenchCoreTests.OnboardingNarrativeTests testAppOnboardingChromeAvoidsStaticImportFraming] : XCTAssertFalse failed
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:146: error: -[OuroWorkbenchCoreTests.OnboardingNarrativeTests testAppOnboardingChromeAvoidsStaticImportFraming] : XCTAssertFalse failed
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:147: error: -[OuroWorkbenchCoreTests.OnboardingNarrativeTests testAppOnboardingChromeAvoidsStaticImportFraming] : XCTAssertFalse failed
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testAppOnboardingChromeAvoidsStaticImportFraming]' failed (0.023 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testBossReadyWelcomeCopy]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testBossReadyWelcomeCopy]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testDuplicateCleanupCopyGuidesExternalSessionShutdown]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testDuplicateCleanupCopyGuidesExternalSessionShutdown]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testFlowArrangesApprovedImportsWhenSelectionExists]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testFlowArrangesApprovedImportsWhenSelectionExists]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testFlowAttachesAmbiguousCandidateNarrative]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testFlowAttachesAmbiguousCandidateNarrative]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testFlowGuidesDuplicateCleanupAfterImportSummary]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testFlowGuidesDuplicateCleanupAfterImportSummary]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testFlowKeepsScanProposalWhenProposalHasNoSelectedTerminals]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testFlowKeepsScanProposalWhenProposalHasNoSelectedTerminals]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testFlowStartsInBossSetupWizardBeforeBossReadiness]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testFlowStartsInBossSetupWizardBeforeBossReadiness]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testFlowSwitchesToBossReadyWelcomeWhenBossCanScan]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testFlowSwitchesToBossReadyWelcomeWhenBossCanScan]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testProposalSummaryCopyUsesWorkspaces]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testProposalSummaryCopyUsesWorkspaces]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testScanIntroNamesLocalAgentStores]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testScanIntroNamesLocalAgentStores]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testUnclearImportCopyPromisesToAsk]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testUnclearImportCopyPromisesToAsk]' passed (0.000 seconds).
+Test Suite 'OnboardingNarrativeTests' failed at 2026-06-14 16:12:38.100.
+	 Executed 15 tests, with 9 failures (0 unexpected) in 0.288 (0.289) seconds
+Test Suite 'OuroWorkbenchPackageTests.xctest' failed at 2026-06-14 16:12:38.100.
+	 Executed 15 tests, with 9 failures (0 unexpected) in 0.288 (0.289) seconds
+Test Suite 'Selected tests' failed at 2026-06-14 16:12:38.100.
+	 Executed 15 tests, with 9 failures (0 unexpected) in 0.288 (0.291) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
