@@ -21,7 +21,7 @@ Gate state:
 - Audit: written and committed
 - Planning review: converged and approved
 - Doing review: converged; doing doc ready
-- Implementation: Unit 5e complete; Unit 4 cold-review findings fixed
-- Live validation: Unit 6e complete; starting Unit 6f
+- Implementation: complete; Unit 4 and Unit 5 cold-review findings fixed
+- Live validation: complete; Units 6a-6f passed and artifacts committed
 
-Next action: create and run isolated import scanner E2E script for Unit 6f.
+Next action: final completion audit and goal closure.
