@@ -3,12 +3,12 @@
 [2/2] Compiling plugin GenerateDoccReference
 Building for debugging...
 [2/10] Write swift-version--58304C5D6DBC2206.txt
-Build complete! (0.40s)
-Test Suite 'All tests' started at 2026-06-14 16:07:09.664.
-Test Suite 'OuroWorkbenchPackageTests.xctest' started at 2026-06-14 16:07:09.665.
-Test Suite 'AgentReadinessBootstrapTests' started at 2026-06-14 16:07:09.666.
+Build complete! (0.36s)
+Test Suite 'All tests' started at 2026-06-14 16:15:02.390.
+Test Suite 'OuroWorkbenchPackageTests.xctest' started at 2026-06-14 16:15:02.391.
+Test Suite 'AgentReadinessBootstrapTests' started at 2026-06-14 16:15:02.391.
 Test Case '-[OuroWorkbenchCoreTests.AgentReadinessBootstrapTests testAbsentCredentialsParksAndDoesNotAdvance]' started.
-Test Case '-[OuroWorkbenchCoreTests.AgentReadinessBootstrapTests testAbsentCredentialsParksAndDoesNotAdvance]' passed (0.004 seconds).
+Test Case '-[OuroWorkbenchCoreTests.AgentReadinessBootstrapTests testAbsentCredentialsParksAndDoesNotAdvance]' passed (0.002 seconds).
 Test Case '-[OuroWorkbenchCoreTests.AgentReadinessBootstrapTests testAuditDetailCoversEveryRecoveryTruth]' started.
 Test Case '-[OuroWorkbenchCoreTests.AgentReadinessBootstrapTests testAuditDetailCoversEveryRecoveryTruth]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.AgentReadinessBootstrapTests testAuditDetailMayNameCliVerbs]' started.
@@ -34,7 +34,7 @@ Test Case '-[OuroWorkbenchCoreTests.AgentReadinessBootstrapTests testEnsureAgent
 Test Case '-[OuroWorkbenchCoreTests.AgentReadinessBootstrapTests testEnsureAgentExistsReportsStillDegradedWhenVerifyFailsAfterProvision]' started.
 Test Case '-[OuroWorkbenchCoreTests.AgentReadinessBootstrapTests testEnsureAgentExistsReportsStillDegradedWhenVerifyFailsAfterProvision]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.AgentReadinessBootstrapTests testEnsureAgentExistsSkipsProvisionWhenUsableAgentAlreadyExists]' started.
-Test Case '-[OuroWorkbenchCoreTests.AgentReadinessBootstrapTests testEnsureAgentExistsSkipsProvisionWhenUsableAgentAlreadyExists]' passed (0.108 seconds).
+Test Case '-[OuroWorkbenchCoreTests.AgentReadinessBootstrapTests testEnsureAgentExistsSkipsProvisionWhenUsableAgentAlreadyExists]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.AgentReadinessBootstrapTests testEnsureAgentExistsUsesInjectedExecutorAndClassifiesFromVerify]' started.
 Test Case '-[OuroWorkbenchCoreTests.AgentReadinessBootstrapTests testEnsureAgentExistsUsesInjectedExecutorAndClassifiesFromVerify]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.AgentReadinessBootstrapTests testEveryAgentTargetedStepReceivesTheExplicitResolvedName]' started.
@@ -64,7 +64,7 @@ Test Case '-[OuroWorkbenchCoreTests.AgentReadinessBootstrapTests testParkExitsOn
 Test Case '-[OuroWorkbenchCoreTests.AgentReadinessBootstrapTests testPathSeparatorAgentNameFailsGuard]' started.
 Test Case '-[OuroWorkbenchCoreTests.AgentReadinessBootstrapTests testPathSeparatorAgentNameFailsGuard]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.AgentReadinessBootstrapTests testRecoveryTruthIsDerivedFromPostEffectVerifyNotAssumedSuccess]' started.
-Test Case '-[OuroWorkbenchCoreTests.AgentReadinessBootstrapTests testRecoveryTruthIsDerivedFromPostEffectVerifyNotAssumedSuccess]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.AgentReadinessBootstrapTests testRecoveryTruthIsDerivedFromPostEffectVerifyNotAssumedSuccess]' passed (0.110 seconds).
 Test Case '-[OuroWorkbenchCoreTests.AgentReadinessBootstrapTests testRunningAParkedMachineAgainDoesNotReAttemptUntilCredsSupplied]' started.
 Test Case '-[OuroWorkbenchCoreTests.AgentReadinessBootstrapTests testRunningAParkedMachineAgainDoesNotReAttemptUntilCredsSupplied]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.AgentReadinessBootstrapTests testRunsAllStepsInOrderThenHandsOff]' started.
@@ -81,9 +81,9 @@ Test Case '-[OuroWorkbenchCoreTests.AgentReadinessBootstrapTests testStepReporti
 Test Case '-[OuroWorkbenchCoreTests.AgentReadinessBootstrapTests testStepReportingStillDegradedClassifiesRecoveryNotVerified]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.AgentReadinessBootstrapTests testVerifiedRecoveryAdvancesOthersHalt]' started.
 Test Case '-[OuroWorkbenchCoreTests.AgentReadinessBootstrapTests testVerifiedRecoveryAdvancesOthersHalt]' passed (0.000 seconds).
-Test Suite 'AgentReadinessBootstrapTests' passed at 2026-06-14 16:07:09.786.
+Test Suite 'AgentReadinessBootstrapTests' passed at 2026-06-14 16:15:02.511.
 	 Executed 37 tests, with 0 failures (0 unexpected) in 0.118 (0.120) seconds
-Test Suite 'AgentRepairTests' started at 2026-06-14 16:07:09.786.
+Test Suite 'AgentRepairTests' started at 2026-06-14 16:15:02.511.
 Test Case '-[OuroWorkbenchCoreTests.AgentRepairTests testAuditDetailCarriesRawVerbAndExplicitAgent]' started.
 Test Case '-[OuroWorkbenchCoreTests.AgentRepairTests testAuditDetailCarriesRawVerbAndExplicitAgent]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.AgentRepairTests testClassifyNeedsManualWhenProbeUnreachable]' started.
@@ -101,20 +101,20 @@ Test Case '-[OuroWorkbenchCoreTests.AgentRepairTests testNeedsManualRecoveryFlag
 Test Case '-[OuroWorkbenchCoreTests.AgentRepairTests testOutcomeResultLineIsSeamFreeAndAuditDetailRaw]' started.
 Test Case '-[OuroWorkbenchCoreTests.AgentRepairTests testOutcomeResultLineIsSeamFreeAndAuditDetailRaw]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.AgentRepairTests testRunnerClassifiesNeedsManualWhenProbeUnreachable]' started.
-Test Case '-[OuroWorkbenchCoreTests.AgentRepairTests testRunnerClassifiesNeedsManualWhenProbeUnreachable]' passed (0.109 seconds).
+Test Case '-[OuroWorkbenchCoreTests.AgentRepairTests testRunnerClassifiesNeedsManualWhenProbeUnreachable]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.AgentRepairTests testRunnerClassifiesRepairedFromProbeNotExitCode]' started.
 Test Case '-[OuroWorkbenchCoreTests.AgentRepairTests testRunnerClassifiesRepairedFromProbeNotExitCode]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.AgentRepairTests testRunnerClassifiesStillDegradedWhenProbeStillDegraded]' started.
-Test Case '-[OuroWorkbenchCoreTests.AgentRepairTests testRunnerClassifiesStillDegradedWhenProbeStillDegraded]' passed (0.110 seconds).
+Test Case '-[OuroWorkbenchCoreTests.AgentRepairTests testRunnerClassifiesStillDegradedWhenProbeStillDegraded]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.AgentRepairTests testRunnerPassesExplicitAgentNameToBothRunAndProbe]' started.
-Test Case '-[OuroWorkbenchCoreTests.AgentRepairTests testRunnerPassesExplicitAgentNameToBothRunAndProbe]' passed (0.002 seconds).
+Test Case '-[OuroWorkbenchCoreTests.AgentRepairTests testRunnerPassesExplicitAgentNameToBothRunAndProbe]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.AgentRepairTests testRunnerRejectsEmptyAgentNameWithoutRunningCommand]' started.
-Test Case '-[OuroWorkbenchCoreTests.AgentRepairTests testRunnerRejectsEmptyAgentNameWithoutRunningCommand]' passed (0.001 seconds).
-Test Suite 'AgentRepairTests' passed at 2026-06-14 16:07:10.011.
-	 Executed 13 tests, with 0 failures (0 unexpected) in 0.223 (0.225) seconds
-Test Suite 'AttentionSignalDetectorTests' started at 2026-06-14 16:07:10.011.
+Test Case '-[OuroWorkbenchCoreTests.AgentRepairTests testRunnerRejectsEmptyAgentNameWithoutRunningCommand]' passed (0.000 seconds).
+Test Suite 'AgentRepairTests' passed at 2026-06-14 16:15:02.515.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.003 (0.003) seconds
+Test Suite 'AttentionSignalDetectorTests' started at 2026-06-14 16:15:02.515.
 Test Case '-[OuroWorkbenchCoreTests.AttentionSignalDetectorTests testArrowWithoutNumberIsNotWaiting]' started.
-Test Case '-[OuroWorkbenchCoreTests.AttentionSignalDetectorTests testArrowWithoutNumberIsNotWaiting]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.AttentionSignalDetectorTests testArrowWithoutNumberIsNotWaiting]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.AttentionSignalDetectorTests testBareErrorWordIsNotBlocked]' started.
 Test Case '-[OuroWorkbenchCoreTests.AttentionSignalDetectorTests testBareErrorWordIsNotBlocked]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.AttentionSignalDetectorTests testBracketedYesNoIsWaiting]' started.
@@ -153,18 +153,18 @@ Test Case '-[OuroWorkbenchCoreTests.AttentionSignalDetectorTests testTrailingDir
 Test Case '-[OuroWorkbenchCoreTests.AttentionSignalDetectorTests testTrailingDirectQuestionIsWaiting]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.AttentionSignalDetectorTests testWaitingSurvivesAnsiColorCodes]' started.
 Test Case '-[OuroWorkbenchCoreTests.AttentionSignalDetectorTests testWaitingSurvivesAnsiColorCodes]' passed (0.000 seconds).
-Test Suite 'AttentionSignalDetectorTests' passed at 2026-06-14 16:07:10.017.
+Test Suite 'AttentionSignalDetectorTests' passed at 2026-06-14 16:15:02.521.
 	 Executed 20 tests, with 0 failures (0 unexpected) in 0.005 (0.006) seconds
-Test Suite 'AttentionStateTests' started at 2026-06-14 16:07:10.017.
+Test Suite 'AttentionStateTests' started at 2026-06-14 16:15:02.521.
 Test Case '-[OuroWorkbenchCoreTests.AttentionStateTests testActiveAndIdleDoNotNeedHuman]' started.
 Test Case '-[OuroWorkbenchCoreTests.AttentionStateTests testActiveAndIdleDoNotNeedHuman]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.AttentionStateTests testNeedsHumanCoversWaitingReviewAndBlocked]' started.
 Test Case '-[OuroWorkbenchCoreTests.AttentionStateTests testNeedsHumanCoversWaitingReviewAndBlocked]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.AttentionStateTests testUnknownRawValueDecodesToIdleAndDoesNotNeedHuman]' started.
-Test Case '-[OuroWorkbenchCoreTests.AttentionStateTests testUnknownRawValueDecodesToIdleAndDoesNotNeedHuman]' passed (0.001 seconds).
-Test Suite 'AttentionStateTests' passed at 2026-06-14 16:07:10.019.
-	 Executed 3 tests, with 0 failures (0 unexpected) in 0.001 (0.002) seconds
-Test Suite 'AutomaticBossDefaultsTests' started at 2026-06-14 16:07:10.019.
+Test Case '-[OuroWorkbenchCoreTests.AttentionStateTests testUnknownRawValueDecodesToIdleAndDoesNotNeedHuman]' passed (0.000 seconds).
+Test Suite 'AttentionStateTests' passed at 2026-06-14 16:15:02.522.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'AutomaticBossDefaultsTests' started at 2026-06-14 16:15:02.522.
 Test Case '-[OuroWorkbenchCoreTests.AutomaticBossDefaultsTests testApplyAutomaticBossDefaultsTrustsUntrustedAndEnablesWatch]' started.
 Test Case '-[OuroWorkbenchCoreTests.AutomaticBossDefaultsTests testApplyAutomaticBossDefaultsTrustsUntrustedAndEnablesWatch]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.AutomaticBossDefaultsTests testExplicitBossWatchFalseSurvivesDecode]' started.
@@ -175,13 +175,13 @@ Test Case '-[OuroWorkbenchCoreTests.AutomaticBossDefaultsTests testNewWorkspaceD
 Test Case '-[OuroWorkbenchCoreTests.AutomaticBossDefaultsTests testNewWorkspaceDefaultsBossWatchOn]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.AutomaticBossDefaultsTests testStateMissingBossWatchKeyDecodesOn]' started.
 Test Case '-[OuroWorkbenchCoreTests.AutomaticBossDefaultsTests testStateMissingBossWatchKeyDecodesOn]' passed (0.000 seconds).
-Test Suite 'AutomaticBossDefaultsTests' passed at 2026-06-14 16:07:10.022.
-	 Executed 5 tests, with 0 failures (0 unexpected) in 0.003 (0.003) seconds
-Test Suite 'AutonomyReadinessTests' started at 2026-06-14 16:07:10.022.
+Test Suite 'AutomaticBossDefaultsTests' passed at 2026-06-14 16:15:02.524.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
+Test Suite 'AutonomyReadinessTests' started at 2026-06-14 16:15:02.524.
 Test Case '-[OuroWorkbenchCoreTests.AutonomyReadinessTests testDetectedAgentWithDisabledAutoResumeBlocksReadiness]' started.
 Test Case '-[OuroWorkbenchCoreTests.AutonomyReadinessTests testDetectedAgentWithDisabledAutoResumeBlocksReadiness]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.AutonomyReadinessTests testManualRecoveryBlocksReadiness]' started.
-Test Case '-[OuroWorkbenchCoreTests.AutonomyReadinessTests testManualRecoveryBlocksReadiness]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.AutonomyReadinessTests testManualRecoveryBlocksReadiness]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.AutonomyReadinessTests testMissingBossBridgeBlocksHandsOffOperation]' started.
 Test Case '-[OuroWorkbenchCoreTests.AutonomyReadinessTests testMissingBossBridgeBlocksHandsOffOperation]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.AutonomyReadinessTests testMissingDetectedAgentExecutableBlocksReadiness]' started.
@@ -192,60 +192,60 @@ Test Case '-[OuroWorkbenchCoreTests.AutonomyReadinessTests testPausedBossWatchMa
 Test Case '-[OuroWorkbenchCoreTests.AutonomyReadinessTests testPausedBossWatchMakesAutonomyAttentiveButUsable]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.AutonomyReadinessTests testReadyWhenBossBridgeAgentRecoveryAndWatchAreClear]' started.
 Test Case '-[OuroWorkbenchCoreTests.AutonomyReadinessTests testReadyWhenBossBridgeAgentRecoveryAndWatchAreClear]' passed (0.000 seconds).
-Test Suite 'AutonomyReadinessTests' passed at 2026-06-14 16:07:10.025.
+Test Suite 'AutonomyReadinessTests' passed at 2026-06-14 16:15:02.527.
 	 Executed 7 tests, with 0 failures (0 unexpected) in 0.003 (0.003) seconds
-Test Suite 'BossAgentBridgeTests' started at 2026-06-14 16:07:10.025.
+Test Suite 'BossAgentBridgeTests' started at 2026-06-14 16:15:02.527.
 Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testBossMcpServePlanAppendsWorkbenchMCPFlagWhenPathKnown]' started.
-Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testBossMcpServePlanAppendsWorkbenchMCPFlagWhenPathKnown]' passed (0.002 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testBossMcpServePlanAppendsWorkbenchMCPFlagWhenPathKnown]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testBossMcpServePlanOmitsWorkbenchMCPFlagWhenNotRequested]' started.
-Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testBossMcpServePlanOmitsWorkbenchMCPFlagWhenNotRequested]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testBossMcpServePlanOmitsWorkbenchMCPFlagWhenNotRequested]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testBossMcpServePlanPassesWorkbenchMCPFlagPathlessWhenPathUnresolved]' started.
-Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testBossMcpServePlanPassesWorkbenchMCPFlagPathlessWhenPathUnresolved]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testBossMcpServePlanPassesWorkbenchMCPFlagPathlessWhenPathUnresolved]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testBossMcpServePlanUsesSelectedAgent]' started.
 Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testBossMcpServePlanUsesSelectedAgent]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testCleanupAllAgentsIsNoOpWriteWhenAllBundlesClean]' started.
-Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testCleanupAllAgentsIsNoOpWriteWhenAllBundlesClean]' passed (0.003 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testCleanupAllAgentsIsNoOpWriteWhenAllBundlesClean]' passed (0.002 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testCleanupAllAgentsPreservesUnrelatedTopLevelKeys]' started.
 Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testCleanupAllAgentsPreservesUnrelatedTopLevelKeys]' passed (0.002 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testCleanupAllAgentsRemovesStaleEntriesFromEveryDirtyBundle]' started.
 Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testCleanupAllAgentsRemovesStaleEntriesFromEveryDirtyBundle]' passed (0.002 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testCleanupAllAgentsReturnsEmptyWhenBundlesDirectoryMissing]' started.
-Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testCleanupAllAgentsReturnsEmptyWhenBundlesDirectoryMissing]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testCleanupAllAgentsReturnsEmptyWhenBundlesDirectoryMissing]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testCleanupAllAgentsSkipsGarbageAndMissingBundlesWithoutThrowing]' started.
-Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testCleanupAllAgentsSkipsGarbageAndMissingBundlesWithoutThrowing]' passed (0.002 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testCleanupAllAgentsSkipsGarbageAndMissingBundlesWithoutThrowing]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testDefaultCheckInQuestionTargetsWorkbenchNeeds]' started.
 Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testDefaultCheckInQuestionTargetsWorkbenchNeeds]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testDefaultWorkbenchMCPExecutableURLFallsBackToHomeApplicationsForDevelopmentRuns]' started.
-Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testDefaultWorkbenchMCPExecutableURLFallsBackToHomeApplicationsForDevelopmentRuns]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testDefaultWorkbenchMCPExecutableURLFallsBackToHomeApplicationsForDevelopmentRuns]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testDefaultWorkbenchMCPExecutableURLUsesBundleWhenRunningFromAppBundle]' started.
-Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testDefaultWorkbenchMCPExecutableURLUsesBundleWhenRunningFromAppBundle]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testDefaultWorkbenchMCPExecutableURLUsesBundleWhenRunningFromAppBundle]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testInstallCleansStaleWorkbenchServerAndSenseFromBundle]' started.
 Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testInstallCleansStaleWorkbenchServerAndSenseFromBundle]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testInstallIsNoOpWriteWhenBundleAlreadyClean]' started.
 Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testInstallIsNoOpWriteWhenBundleAlreadyClean]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testQuestionsWeaveInTheResolvedOwnerName]' started.
-Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testQuestionsWeaveInTheResolvedOwnerName]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testQuestionsWeaveInTheResolvedOwnerName]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testSnapshotNeedsUpdateWhenStaleWorkbenchSenseInBundle]' started.
 Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testSnapshotNeedsUpdateWhenStaleWorkbenchSenseInBundle]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testSnapshotNeedsUpdateWhenStaleWorkbenchServerInBundle]' started.
 Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testSnapshotNeedsUpdateWhenStaleWorkbenchServerInBundle]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testSnapshotNotRegisteredWhenBinaryMissing]' started.
-Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testSnapshotNotRegisteredWhenBinaryMissing]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testSnapshotNotRegisteredWhenBinaryMissing]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testSnapshotRegisteredWhenBinaryPresentAndBundleClean]' started.
 Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testSnapshotRegisteredWhenBinaryPresentAndBundleClean]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testSnapshotReportsMissingAgentBundle]' started.
-Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testSnapshotReportsMissingAgentBundle]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testSnapshotReportsMissingAgentBundle]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testWatchQuestionTargetsChangesAndAutonomy]' started.
-Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testWatchQuestionTargetsChangesAndAutonomy]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testWatchQuestionTargetsChangesAndAutonomy]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testWorkbenchMCPRegistrationRejectsUnsafeBossAgentNames]' started.
-Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testWorkbenchMCPRegistrationRejectsUnsafeBossAgentNames]' passed (0.001 seconds).
-Test Suite 'BossAgentBridgeTests' passed at 2026-06-14 16:07:10.050.
-	 Executed 22 tests, with 0 failures (0 unexpected) in 0.024 (0.025) seconds
-Test Suite 'BossAgentMCPClientTests' started at 2026-06-14 16:07:10.050.
+Test Case '-[OuroWorkbenchCoreTests.BossAgentBridgeTests testWorkbenchMCPRegistrationRejectsUnsafeBossAgentNames]' passed (0.000 seconds).
+Test Suite 'BossAgentBridgeTests' passed at 2026-06-14 16:15:02.544.
+	 Executed 22 tests, with 0 failures (0 unexpected) in 0.016 (0.017) seconds
+Test Suite 'BossAgentMCPClientTests' started at 2026-06-14 16:15:02.544.
 Test Case '-[OuroWorkbenchCoreTests.BossAgentMCPClientTests testCallToolReturnsWithoutWaitingForLongLivedServerEOF]' started.
-Test Case '-[OuroWorkbenchCoreTests.BossAgentMCPClientTests testCallToolReturnsWithoutWaitingForLongLivedServerEOF]' passed (0.131 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossAgentMCPClientTests testCallToolReturnsWithoutWaitingForLongLivedServerEOF]' passed (0.127 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossAgentMCPClientTests testCallToolSurfacesProcessStderrWhenServerCannotStart]' started.
-Test Case '-[OuroWorkbenchCoreTests.BossAgentMCPClientTests testCallToolSurfacesProcessStderrWhenServerCannotStart]' passed (0.132 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossAgentMCPClientTests testCallToolSurfacesProcessStderrWhenServerCannotStart]' passed (0.124 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossAgentMCPClientTests testClientConfiguredWithPathPassesFlagThroughArgs]' started.
 Test Case '-[OuroWorkbenchCoreTests.BossAgentMCPClientTests testClientConfiguredWithPathPassesFlagThroughArgs]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossAgentMCPClientTests testEmptyResponseSentinelSurfacesAsEmptyResult]' started.
@@ -278,22 +278,22 @@ Test Case '-[OuroWorkbenchCoreTests.BossAgentMCPClientTests testRPCErrorSurfaces
 Test Case '-[OuroWorkbenchCoreTests.BossAgentMCPClientTests testRPCErrorSurfacesAsError]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossAgentMCPClientTests testToolErrorsSurfaceAsErrors]' started.
 Test Case '-[OuroWorkbenchCoreTests.BossAgentMCPClientTests testToolErrorsSurfaceAsErrors]' passed (0.000 seconds).
-Test Suite 'BossAgentMCPClientTests' passed at 2026-06-14 16:07:10.316.
-	 Executed 18 tests, with 0 failures (0 unexpected) in 0.265 (0.266) seconds
-Test Suite 'BossAgentPromptBuilderTests' started at 2026-06-14 16:07:10.316.
+Test Suite 'BossAgentMCPClientTests' passed at 2026-06-14 16:15:02.801.
+	 Executed 18 tests, with 0 failures (0 unexpected) in 0.255 (0.257) seconds
+Test Suite 'BossAgentPromptBuilderTests' started at 2026-06-14 16:15:02.801.
 Test Case '-[OuroWorkbenchCoreTests.BossAgentPromptBuilderTests testCheckInPromptSurfacesSessionOwnerAndAgentGuidance]' started.
-Test Case '-[OuroWorkbenchCoreTests.BossAgentPromptBuilderTests testCheckInPromptSurfacesSessionOwnerAndAgentGuidance]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossAgentPromptBuilderTests testCheckInPromptSurfacesSessionOwnerAndAgentGuidance]' passed (0.002 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossAgentPromptBuilderTests testCheckInTriggerCarriesProtocolAndPulse]' started.
-Test Case '-[OuroWorkbenchCoreTests.BossAgentPromptBuilderTests testCheckInTriggerCarriesProtocolAndPulse]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossAgentPromptBuilderTests testCheckInTriggerCarriesProtocolAndPulse]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossAgentPromptBuilderTests testCheckInTriggerIsSubstantiallyShorterThanFullPrompt]' started.
 Test Case '-[OuroWorkbenchCoreTests.BossAgentPromptBuilderTests testCheckInTriggerIsSubstantiallyShorterThanFullPrompt]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossAgentPromptBuilderTests testCheckInTriggerWeavesInTheResolvedOwnerName]' started.
 Test Case '-[OuroWorkbenchCoreTests.BossAgentPromptBuilderTests testCheckInTriggerWeavesInTheResolvedOwnerName]' passed (0.000 seconds).
-Test Suite 'BossAgentPromptBuilderTests' passed at 2026-06-14 16:07:10.318.
-	 Executed 4 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
-Test Suite 'BossAutoResolutionTests' started at 2026-06-14 16:07:10.318.
+Test Suite 'BossAgentPromptBuilderTests' passed at 2026-06-14 16:15:02.805.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.004 (0.004) seconds
+Test Suite 'BossAutoResolutionTests' started at 2026-06-14 16:15:02.805.
 Test Case '-[OuroWorkbenchCoreTests.BossAutoResolutionTests testEmptyBossCountsOnlyUsableAgents]' started.
-Test Case '-[OuroWorkbenchCoreTests.BossAutoResolutionTests testEmptyBossCountsOnlyUsableAgents]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossAutoResolutionTests testEmptyBossCountsOnlyUsableAgents]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossAutoResolutionTests testEmptyBossWithMultipleUsableAgentsRequiresChoice]' started.
 Test Case '-[OuroWorkbenchCoreTests.BossAutoResolutionTests testEmptyBossWithMultipleUsableAgentsRequiresChoice]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossAutoResolutionTests testEmptyBossWithNoAgentsResolvesToNil]' started.
@@ -312,24 +312,24 @@ Test Case '-[OuroWorkbenchCoreTests.BossAutoResolutionTests testResolvedBossIsNe
 Test Case '-[OuroWorkbenchCoreTests.BossAutoResolutionTests testResolvedBossIsNeverSwitchedAway]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossAutoResolutionTests testWhitespaceBossNameTreatedAsEmpty]' started.
 Test Case '-[OuroWorkbenchCoreTests.BossAutoResolutionTests testWhitespaceBossNameTreatedAsEmpty]' passed (0.000 seconds).
-Test Suite 'BossAutoResolutionTests' passed at 2026-06-14 16:07:10.320.
-	 Executed 10 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
-Test Suite 'BossDashboardTests' started at 2026-06-14 16:07:10.320.
+Test Suite 'BossAutoResolutionTests' passed at 2026-06-14 16:15:02.808.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
+Test Suite 'BossDashboardTests' started at 2026-06-14 16:15:02.808.
 Test Case '-[OuroWorkbenchCoreTests.BossDashboardTests testBuildsDashboardForSelectedBossAgent]' started.
 Test Case '-[OuroWorkbenchCoreTests.BossDashboardTests testBuildsDashboardForSelectedBossAgent]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossDashboardTests testMailboxAvailabilityCarriesHabitHistoryFailures]' started.
 Test Case '-[OuroWorkbenchCoreTests.BossDashboardTests testMailboxAvailabilityCarriesHabitHistoryFailures]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossDashboardTests testPromptIncludesDashboardSignals]' started.
-Test Case '-[OuroWorkbenchCoreTests.BossDashboardTests testPromptIncludesDashboardSignals]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossDashboardTests testPromptIncludesDashboardSignals]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossDashboardTests testPromptIncludesEmptyAndUnavailableHabitHistoryStates]' started.
-Test Case '-[OuroWorkbenchCoreTests.BossDashboardTests testPromptIncludesEmptyAndUnavailableHabitHistoryStates]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossDashboardTests testPromptIncludesEmptyAndUnavailableHabitHistoryStates]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossDashboardTests testPromptIncludesHabitHistorySignals]' started.
 Test Case '-[OuroWorkbenchCoreTests.BossDashboardTests testPromptIncludesHabitHistorySignals]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossDashboardTests testUnavailableNeedsMeDoesNotRenderAsZeroWaiting]' started.
-Test Case '-[OuroWorkbenchCoreTests.BossDashboardTests testUnavailableNeedsMeDoesNotRenderAsZeroWaiting]' passed (0.000 seconds).
-Test Suite 'BossDashboardTests' passed at 2026-06-14 16:07:10.323.
-	 Executed 6 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
-Test Suite 'BossInboxDecisionTests' started at 2026-06-14 16:07:10.323.
+Test Case '-[OuroWorkbenchCoreTests.BossDashboardTests testUnavailableNeedsMeDoesNotRenderAsZeroWaiting]' passed (0.001 seconds).
+Test Suite 'BossDashboardTests' passed at 2026-06-14 16:15:02.812.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.004 (0.004) seconds
+Test Suite 'BossInboxDecisionTests' started at 2026-06-14 16:15:02.812.
 Test Case '-[OuroWorkbenchCoreTests.BossInboxDecisionTests testActionAndDecisionForDifferentEntriesBothSend]' started.
 Test Case '-[OuroWorkbenchCoreTests.BossInboxDecisionTests testActionAndDecisionForDifferentEntriesBothSend]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossInboxDecisionTests testActionAndDecisionForSameEntryAndPromptSendInputOnce]' started.
@@ -349,7 +349,7 @@ Test Case '-[OuroWorkbenchCoreTests.BossInboxDecisionTests testOpenInboxDeduplic
 Test Case '-[OuroWorkbenchCoreTests.BossInboxDecisionTests testOpenInboxExcludesResolvedAndCurrentlySnoozed]' started.
 Test Case '-[OuroWorkbenchCoreTests.BossInboxDecisionTests testOpenInboxExcludesResolvedAndCurrentlySnoozed]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossInboxDecisionTests testOpenInboxGroupsAndCount]' started.
-Test Case '-[OuroWorkbenchCoreTests.BossInboxDecisionTests testOpenInboxGroupsAndCount]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossInboxDecisionTests testOpenInboxGroupsAndCount]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossInboxDecisionTests testOpenInboxIncludesHoldAndBlockedAutoAdvanceButNotAppliedAutoAdvance]' started.
 Test Case '-[OuroWorkbenchCoreTests.BossInboxDecisionTests testOpenInboxIncludesHoldAndBlockedAutoAdvanceButNotAppliedAutoAdvance]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossInboxDecisionTests testOpenInboxKeepsEntrylessDecisionsSeparately]' started.
@@ -373,7 +373,7 @@ Test Case '-[OuroWorkbenchCoreTests.BossInboxDecisionTests testRecordDecisionIfN
 Test Case '-[OuroWorkbenchCoreTests.BossInboxDecisionTests testRecordDecisionInsertsNewestFirst]' started.
 Test Case '-[OuroWorkbenchCoreTests.BossInboxDecisionTests testRecordDecisionInsertsNewestFirst]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossInboxDecisionTests testRecordDecisionTrimsToCap]' started.
-Test Case '-[OuroWorkbenchCoreTests.BossInboxDecisionTests testRecordDecisionTrimsToCap]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossInboxDecisionTests testRecordDecisionTrimsToCap]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossInboxDecisionTests testSeverityFromKindAndPrompt]' started.
 Test Case '-[OuroWorkbenchCoreTests.BossInboxDecisionTests testSeverityFromKindAndPrompt]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossInboxDecisionTests testSeverityIsAtMostFourTiers]' started.
@@ -394,9 +394,9 @@ Test Case '-[OuroWorkbenchCoreTests.BossInboxDecisionTests testWorkspaceStateWit
 Test Case '-[OuroWorkbenchCoreTests.BossInboxDecisionTests testWorkspaceStateWithoutDecisionLogDecodesToEmpty]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossInboxDecisionTests testWorkspaceStateWithPreTriageDecisionLogLoadsAsOpenInbox]' started.
 Test Case '-[OuroWorkbenchCoreTests.BossInboxDecisionTests testWorkspaceStateWithPreTriageDecisionLogLoadsAsOpenInbox]' passed (0.000 seconds).
-Test Suite 'BossInboxDecisionTests' passed at 2026-06-14 16:07:10.331.
-	 Executed 32 tests, with 0 failures (0 unexpected) in 0.007 (0.008) seconds
-Test Suite 'BossWatchEventPolicyTests' started at 2026-06-14 16:07:10.331.
+Test Suite 'BossInboxDecisionTests' passed at 2026-06-14 16:15:02.823.
+	 Executed 32 tests, with 0 failures (0 unexpected) in 0.010 (0.012) seconds
+Test Suite 'BossWatchEventPolicyTests' started at 2026-06-14 16:15:02.823.
 Test Case '-[OuroWorkbenchCoreTests.BossWatchEventPolicyTests testBackoffDelayGrowsExponentiallyAndCaps]' started.
 Test Case '-[OuroWorkbenchCoreTests.BossWatchEventPolicyTests testBackoffDelayGrowsExponentiallyAndCaps]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossWatchEventPolicyTests testDoesNotTriggerWhenBusy]' started.
@@ -411,9 +411,9 @@ Test Case '-[OuroWorkbenchCoreTests.BossWatchEventPolicyTests testTriggersAfterC
 Test Case '-[OuroWorkbenchCoreTests.BossWatchEventPolicyTests testTriggersAfterCooldownElapsed]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossWatchEventPolicyTests testTriggersWhenEnabledIdleAndNeverRunBefore]' started.
 Test Case '-[OuroWorkbenchCoreTests.BossWatchEventPolicyTests testTriggersWhenEnabledIdleAndNeverRunBefore]' passed (0.000 seconds).
-Test Suite 'BossWatchEventPolicyTests' passed at 2026-06-14 16:07:10.332.
+Test Suite 'BossWatchEventPolicyTests' passed at 2026-06-14 16:15:02.825.
 	 Executed 7 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
-Test Suite 'BossWorkbenchActionAuthorizerTests' started at 2026-06-14 16:07:10.332.
+Test Suite 'BossWorkbenchActionAuthorizerTests' started at 2026-06-14 16:15:02.825.
 Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testArchivedEntriesCannotReceiveBossActions]' started.
 Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testArchivedEntriesCannotReceiveBossActions]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEnqueueGateAllowsKnownEntrylessKinds]' started.
@@ -472,9 +472,9 @@ Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUnsaf
 Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUnsafeSendInputIsWithheldEvenOnTrustedSession]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUntrustedEntriesCannotReceiveBossActions]' started.
 Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUntrustedEntriesCannotReceiveBossActions]' passed (0.000 seconds).
-Test Suite 'BossWorkbenchActionAuthorizerTests' passed at 2026-06-14 16:07:10.337.
-	 Executed 29 tests, with 0 failures (0 unexpected) in 0.004 (0.005) seconds
-Test Suite 'BossWorkbenchActionTests' started at 2026-06-14 16:07:10.337.
+Test Suite 'BossWorkbenchActionAuthorizerTests' passed at 2026-06-14 16:15:02.831.
+	 Executed 29 tests, with 0 failures (0 unexpected) in 0.004 (0.006) seconds
+Test Suite 'BossWorkbenchActionTests' started at 2026-06-14 16:15:02.831.
 Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionTests testCreateSessionParsesAndCarriesOwner]' started.
 Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionTests testCreateSessionParsesAndCarriesOwner]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionTests testCreateSessionRequiresNameCommandAndOwnerBeforeQueueing]' started.
@@ -541,9 +541,9 @@ Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionTests testVerifyProviderL
 Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionTests testVerifyProviderLaneIsOptionalAndEntryless]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionTests testVerifyProviderRequiresExplicitAgentNameBeforeQueueing]' started.
 Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionTests testVerifyProviderRequiresExplicitAgentNameBeforeQueueing]' passed (0.000 seconds).
-Test Suite 'BossWorkbenchActionTests' passed at 2026-06-14 16:07:10.342.
-	 Executed 33 tests, with 0 failures (0 unexpected) in 0.004 (0.005) seconds
-Test Suite 'BugReportComposerTests' started at 2026-06-14 16:07:10.342.
+Test Suite 'BossWorkbenchActionTests' passed at 2026-06-14 16:15:02.837.
+	 Executed 33 tests, with 0 failures (0 unexpected) in 0.005 (0.006) seconds
+Test Suite 'BugReportComposerTests' started at 2026-06-14 16:15:02.837.
 Test Case '-[OuroWorkbenchCoreTests.BugReportComposerTests testDirectoryNameFallsBackToTimestampWhenNoteHasNoSlug]' started.
 Test Case '-[OuroWorkbenchCoreTests.BugReportComposerTests testDirectoryNameFallsBackToTimestampWhenNoteHasNoSlug]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BugReportComposerTests testDirectoryNameIsSortableTimestampPlusSlug]' started.
@@ -565,7 +565,7 @@ Test Case '-[OuroWorkbenchCoreTests.BugReportComposerTests testMarkdownRendersNo
 Test Case '-[OuroWorkbenchCoreTests.BugReportComposerTests testMarkdownRendersSessionTableWithEscapedCells]' started.
 Test Case '-[OuroWorkbenchCoreTests.BugReportComposerTests testMarkdownRendersSessionTableWithEscapedCells]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BugReportComposerTests testMarkdownTruncatesLongDecisionAndActionLists]' started.
-Test Case '-[OuroWorkbenchCoreTests.BugReportComposerTests testMarkdownTruncatesLongDecisionAndActionLists]' passed (0.002 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BugReportComposerTests testMarkdownTruncatesLongDecisionAndActionLists]' passed (0.003 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BugReportComposerTests testSlugCollapsesRunsAndTrimsEdges]' started.
 Test Case '-[OuroWorkbenchCoreTests.BugReportComposerTests testSlugCollapsesRunsAndTrimsEdges]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BugReportComposerTests testSlugIsEmptyForNoUsableCharacters]' started.
@@ -574,9 +574,9 @@ Test Case '-[OuroWorkbenchCoreTests.BugReportComposerTests testSlugLowercasesAnd
 Test Case '-[OuroWorkbenchCoreTests.BugReportComposerTests testSlugLowercasesAndHyphenates]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BugReportComposerTests testSlugRespectsMaxLengthWithoutTrailingHyphen]' started.
 Test Case '-[OuroWorkbenchCoreTests.BugReportComposerTests testSlugRespectsMaxLengthWithoutTrailingHyphen]' passed (0.000 seconds).
-Test Suite 'BugReportComposerTests' passed at 2026-06-14 16:07:10.348.
-	 Executed 15 tests, with 0 failures (0 unexpected) in 0.006 (0.006) seconds
-Test Suite 'BugReportWriterTests' started at 2026-06-14 16:07:10.348.
+Test Suite 'BugReportComposerTests' passed at 2026-06-14 16:15:02.844.
+	 Executed 15 tests, with 0 failures (0 unexpected) in 0.006 (0.007) seconds
+Test Suite 'BugReportWriterTests' started at 2026-06-14 16:15:02.844.
 Test Case '-[OuroWorkbenchCoreTests.BugReportWriterTests testCopiesDiagnosticsArchiveIntoBundle]' started.
 Test Case '-[OuroWorkbenchCoreTests.BugReportWriterTests testCopiesDiagnosticsArchiveIntoBundle]' passed (0.002 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BugReportWriterTests testDiagnosticsFailureBecomesWarning]' started.
@@ -585,9 +585,9 @@ Test Case '-[OuroWorkbenchCoreTests.BugReportWriterTests testMissingScreenshotBe
 Test Case '-[OuroWorkbenchCoreTests.BugReportWriterTests testMissingScreenshotBecomesWarning]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.BugReportWriterTests testWritesReportAndScreenshot]' started.
 Test Case '-[OuroWorkbenchCoreTests.BugReportWriterTests testWritesReportAndScreenshot]' passed (0.001 seconds).
-Test Suite 'BugReportWriterTests' passed at 2026-06-14 16:07:10.353.
+Test Suite 'BugReportWriterTests' passed at 2026-06-14 16:15:02.848.
 	 Executed 4 tests, with 0 failures (0 unexpected) in 0.004 (0.005) seconds
-Test Suite 'CommandPlannerTests' started at 2026-06-14 16:07:10.353.
+Test Suite 'CommandPlannerTests' started at 2026-06-14 16:15:02.849.
 Test Case '-[OuroWorkbenchCoreTests.CommandPlannerTests testAbsoluteExecutablesLaunchDirectly]' started.
 Test Case '-[OuroWorkbenchCoreTests.CommandPlannerTests testAbsoluteExecutablesLaunchDirectly]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.CommandPlannerTests testCheckpointRespawnCoversGenericTerminalAgents]' started.
@@ -626,9 +626,9 @@ Test Case '-[OuroWorkbenchCoreTests.CommandPlannerTests testPersistentTerminalSe
 Test Case '-[OuroWorkbenchCoreTests.CommandPlannerTests testPersistentTerminalSessionPrefersBundledScreenExecutable]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.CommandPlannerTests testReattachRecoveryPlanIsAPlainReconnectLaunch]' started.
 Test Case '-[OuroWorkbenchCoreTests.CommandPlannerTests testReattachRecoveryPlanIsAPlainReconnectLaunch]' passed (0.000 seconds).
-Test Suite 'CommandPlannerTests' passed at 2026-06-14 16:07:10.358.
+Test Suite 'CommandPlannerTests' passed at 2026-06-14 16:15:02.854.
 	 Executed 19 tests, with 0 failures (0 unexpected) in 0.004 (0.005) seconds
-Test Suite 'CustomTerminalSessionTests' started at 2026-06-14 16:07:10.358.
+Test Suite 'CustomTerminalSessionTests' started at 2026-06-14 16:15:02.854.
 Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testCustomSessionCreatesShellWrappedTerminalEntry]' started.
 Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testCustomSessionCreatesShellWrappedTerminalEntry]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testCustomSessionDetectsKnownCLIAndStoresDirectCommand]' started.
@@ -651,9 +651,9 @@ Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerUpdate
 Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerUpdatePreservesOwnerPinAndFriend]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerUpdatesCustomSessionWhilePreservingIdentityAndArchiveState]' started.
 Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerUpdatesCustomSessionWhilePreservingIdentityAndArchiveState]' passed (0.000 seconds).
-Test Suite 'CustomTerminalSessionTests' passed at 2026-06-14 16:07:10.361.
+Test Suite 'CustomTerminalSessionTests' passed at 2026-06-14 16:15:02.856.
 	 Executed 11 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
-Test Suite 'DaemonEnsureActionTests' started at 2026-06-14 16:07:10.361.
+Test Suite 'DaemonEnsureActionTests' started at 2026-06-14 16:15:02.856.
 Test Case '-[OuroWorkbenchCoreTests.DaemonEnsureActionTests testAuditDetailCarriesRawDaemonVerb]' started.
 Test Case '-[OuroWorkbenchCoreTests.DaemonEnsureActionTests testAuditDetailCarriesRawDaemonVerb]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.DaemonEnsureActionTests testHumanFacingLineIsNonEmptyAndSeamFreeForEveryOutcome]' started.
@@ -664,9 +664,9 @@ Test Case '-[OuroWorkbenchCoreTests.DaemonEnsureActionTests testResumedAndRespaw
 Test Case '-[OuroWorkbenchCoreTests.DaemonEnsureActionTests testResumedAndRespawnedHaveDistinctReadyLines]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.DaemonEnsureActionTests testSucceededTrueOnlyWhenUp]' started.
 Test Case '-[OuroWorkbenchCoreTests.DaemonEnsureActionTests testSucceededTrueOnlyWhenUp]' passed (0.000 seconds).
-Test Suite 'DaemonEnsureActionTests' passed at 2026-06-14 16:07:10.361.
+Test Suite 'DaemonEnsureActionTests' passed at 2026-06-14 16:15:02.857.
 	 Executed 5 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
-Test Suite 'DaemonLivenessTests' started at 2026-06-14 16:07:10.362.
+Test Suite 'DaemonLivenessTests' started at 2026-06-14 16:15:02.857.
 Test Case '-[OuroWorkbenchCoreTests.DaemonLivenessTests testClassifyNeedsManualWhenStillDownAfterStart]' started.
 Test Case '-[OuroWorkbenchCoreTests.DaemonLivenessTests testClassifyNeedsManualWhenStillDownAfterStart]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.DaemonLivenessTests testClassifyNeedsManualWhenWasUpButProbeNowDown]' started.
@@ -688,18 +688,18 @@ Test Case '-[OuroWorkbenchCoreTests.DaemonLivenessTests testProbeSynchronouslyRe
 Test Case '-[OuroWorkbenchCoreTests.DaemonLivenessTests testProbeSynchronouslyReportsUpWhenSyncReachabilitySucceeds]' started.
 Test Case '-[OuroWorkbenchCoreTests.DaemonLivenessTests testProbeSynchronouslyReportsUpWhenSyncReachabilitySucceeds]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.DaemonLivenessTests testProbeSynchronouslyTreatsAHangAsDownWithoutBlockingForever]' started.
-Test Case '-[OuroWorkbenchCoreTests.DaemonLivenessTests testProbeSynchronouslyTreatsAHangAsDownWithoutBlockingForever]' passed (0.607 seconds).
+Test Case '-[OuroWorkbenchCoreTests.DaemonLivenessTests testProbeSynchronouslyTreatsAHangAsDownWithoutBlockingForever]' passed (0.610 seconds).
 Test Case '-[OuroWorkbenchCoreTests.DaemonLivenessTests testProbeTreatsReachabilityThrowAsDown]' started.
-Test Case '-[OuroWorkbenchCoreTests.DaemonLivenessTests testProbeTreatsReachabilityThrowAsDown]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.DaemonLivenessTests testProbeTreatsReachabilityThrowAsDown]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.DaemonLivenessTests testProbeTreatsTimeoutAsDownWithoutThrowing]' started.
-Test Case '-[OuroWorkbenchCoreTests.DaemonLivenessTests testProbeTreatsTimeoutAsDownWithoutThrowing]' passed (0.060 seconds).
+Test Case '-[OuroWorkbenchCoreTests.DaemonLivenessTests testProbeTreatsTimeoutAsDownWithoutThrowing]' passed (0.061 seconds).
 Test Case '-[OuroWorkbenchCoreTests.DaemonLivenessTests testReachabilityClosureReceivesConfiguredTimeout]' started.
-Test Case '-[OuroWorkbenchCoreTests.DaemonLivenessTests testReachabilityClosureReceivesConfiguredTimeout]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.DaemonLivenessTests testReachabilityClosureReceivesConfiguredTimeout]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.DaemonLivenessTests testRecoveryTruthAuditLineUsesCliVerbsNotHumanVoice]' started.
 Test Case '-[OuroWorkbenchCoreTests.DaemonLivenessTests testRecoveryTruthAuditLineUsesCliVerbsNotHumanVoice]' passed (0.000 seconds).
-Test Suite 'DaemonLivenessTests' passed at 2026-06-14 16:07:11.032.
-	 Executed 15 tests, with 0 failures (0 unexpected) in 0.669 (0.670) seconds
-Test Suite 'DaemonManagerTests' started at 2026-06-14 16:07:11.032.
+Test Suite 'DaemonLivenessTests' passed at 2026-06-14 16:15:03.532.
+	 Executed 15 tests, with 0 failures (0 unexpected) in 0.674 (0.675) seconds
+Test Suite 'DaemonManagerTests' started at 2026-06-14 16:15:03.532.
 Test Case '-[OuroWorkbenchCoreTests.DaemonManagerTests testAlreadyUpReusesWithoutSpawning]' started.
 Test Case '-[OuroWorkbenchCoreTests.DaemonManagerTests testAlreadyUpReusesWithoutSpawning]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.DaemonManagerTests testDownThenUpAfterStartClassifiesRespawned]' started.
@@ -707,7 +707,7 @@ Test Case '-[OuroWorkbenchCoreTests.DaemonManagerTests testDownThenUpAfterStartC
 Test Case '-[OuroWorkbenchCoreTests.DaemonManagerTests testNeedsManualOutcomeHumanLineIsSeamFreeAndHonest]' started.
 Test Case '-[OuroWorkbenchCoreTests.DaemonManagerTests testNeedsManualOutcomeHumanLineIsSeamFreeAndHonest]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.DaemonManagerTests testNeedsManualOutcomeReportsDownLiveness]' started.
-Test Case '-[OuroWorkbenchCoreTests.DaemonManagerTests testNeedsManualOutcomeReportsDownLiveness]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.DaemonManagerTests testNeedsManualOutcomeReportsDownLiveness]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.DaemonManagerTests testOutcomeAuditDetailMatchesRecoveryTruth]' started.
 Test Case '-[OuroWorkbenchCoreTests.DaemonManagerTests testOutcomeAuditDetailMatchesRecoveryTruth]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.DaemonManagerTests testPollingRecoversWhenDaemonComesUpAfterSeveralProbes]' started.
@@ -722,29 +722,29 @@ Test Case '-[OuroWorkbenchCoreTests.DaemonManagerTests testStartFailureStillClas
 Test Case '-[OuroWorkbenchCoreTests.DaemonManagerTests testStartFailureStillClassifiesFromPostProbeNeedsManual]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.DaemonManagerTests testStartThenStillUnreachableClassifiesNeedsManual]' started.
 Test Case '-[OuroWorkbenchCoreTests.DaemonManagerTests testStartThenStillUnreachableClassifiesNeedsManual]' passed (0.000 seconds).
-Test Suite 'DaemonManagerTests' passed at 2026-06-14 16:07:11.035.
-	 Executed 11 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
-Test Suite 'ExecutableHealthTests' started at 2026-06-14 16:07:11.035.
+Test Suite 'DaemonManagerTests' passed at 2026-06-14 16:15:03.536.
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.004 (0.005) seconds
+Test Suite 'ExecutableHealthTests' started at 2026-06-14 16:15:03.536.
 Test Case '-[OuroWorkbenchCoreTests.ExecutableHealthTests testFindsExecutableOnResolvedPath]' started.
-Test Case '-[OuroWorkbenchCoreTests.ExecutableHealthTests testFindsExecutableOnResolvedPath]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.ExecutableHealthTests testFindsExecutableOnResolvedPath]' passed (0.002 seconds).
 Test Case '-[OuroWorkbenchCoreTests.ExecutableHealthTests testGenericShellScriptHealthTargetsShellExecutable]' started.
 Test Case '-[OuroWorkbenchCoreTests.ExecutableHealthTests testGenericShellScriptHealthTargetsShellExecutable]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.ExecutableHealthTests testReportsMissingExecutable]' started.
-Test Case '-[OuroWorkbenchCoreTests.ExecutableHealthTests testReportsMissingExecutable]' passed (0.002 seconds).
+Test Case '-[OuroWorkbenchCoreTests.ExecutableHealthTests testReportsMissingExecutable]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.ExecutableHealthTests testReportsNotExecutableAbsolutePath]' started.
 Test Case '-[OuroWorkbenchCoreTests.ExecutableHealthTests testReportsNotExecutableAbsolutePath]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.ExecutableHealthTests testShellWrappedKnownAgentHealthTargetsDetectedExecutable]' started.
-Test Case '-[OuroWorkbenchCoreTests.ExecutableHealthTests testShellWrappedKnownAgentHealthTargetsDetectedExecutable]' passed (0.001 seconds).
-Test Suite 'ExecutableHealthTests' passed at 2026-06-14 16:07:11.040.
-	 Executed 5 tests, with 0 failures (0 unexpected) in 0.005 (0.005) seconds
-Test Suite 'ExitStatusTests' started at 2026-06-14 16:07:11.040.
+Test Case '-[OuroWorkbenchCoreTests.ExecutableHealthTests testShellWrappedKnownAgentHealthTargetsDetectedExecutable]' passed (0.000 seconds).
+Test Suite 'ExecutableHealthTests' passed at 2026-06-14 16:15:03.541.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.004 (0.005) seconds
+Test Suite 'ExitStatusTests' started at 2026-06-14 16:15:03.541.
 Test Case '-[OuroWorkbenchCoreTests.ExitStatusTests testDecodesNormalWaitStatus]' started.
 Test Case '-[OuroWorkbenchCoreTests.ExitStatusTests testDecodesNormalWaitStatus]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.ExitStatusTests testSignalTerminationHasNoNormalExitCode]' started.
 Test Case '-[OuroWorkbenchCoreTests.ExitStatusTests testSignalTerminationHasNoNormalExitCode]' passed (0.000 seconds).
-Test Suite 'ExitStatusTests' passed at 2026-06-14 16:07:11.040.
+Test Suite 'ExitStatusTests' passed at 2026-06-14 16:15:03.542.
 	 Executed 2 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
-Test Suite 'FirstRunBootstrapDriveTests' started at 2026-06-14 16:07:11.040.
+Test Suite 'FirstRunBootstrapDriveTests' started at 2026-06-14 16:15:03.542.
 Test Case '-[OuroWorkbenchCoreTests.FirstRunBootstrapDriveTests testActiveLinesAreDistinctPerStep]' started.
 Test Case '-[OuroWorkbenchCoreTests.FirstRunBootstrapDriveTests testActiveLinesAreDistinctPerStep]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.FirstRunBootstrapDriveTests testActiveStepRowReportsActive]' started.
@@ -817,9 +817,9 @@ Test Case '-[OuroWorkbenchCoreTests.FirstRunBootstrapDriveTests testStepRowIdent
 Test Case '-[OuroWorkbenchCoreTests.FirstRunBootstrapDriveTests testStepRowIdentifierMatchesTheStepRawValue]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.FirstRunBootstrapDriveTests testVerifiedStepRowIsDoneNotFailure]' started.
 Test Case '-[OuroWorkbenchCoreTests.FirstRunBootstrapDriveTests testVerifiedStepRowIsDoneNotFailure]' passed (0.000 seconds).
-Test Suite 'FirstRunBootstrapDriveTests' passed at 2026-06-14 16:07:11.046.
-	 Executed 36 tests, with 0 failures (0 unexpected) in 0.004 (0.006) seconds
-Test Suite 'FirstRunBootstrapEffectsResolverTests' started at 2026-06-14 16:07:11.046.
+Test Suite 'FirstRunBootstrapDriveTests' passed at 2026-06-14 16:15:03.549.
+	 Executed 36 tests, with 0 failures (0 unexpected) in 0.006 (0.007) seconds
+Test Suite 'FirstRunBootstrapEffectsResolverTests' started at 2026-06-14 16:15:03.549.
 Test Case '-[OuroWorkbenchCoreTests.FirstRunBootstrapEffectsResolverTests testAgentDoesNotExistForEmptyName]' started.
 Test Case '-[OuroWorkbenchCoreTests.FirstRunBootstrapEffectsResolverTests testAgentDoesNotExistForEmptyName]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.FirstRunBootstrapEffectsResolverTests testAgentDoesNotExistWhenAbsent]' started.
@@ -848,9 +848,9 @@ Test Case '-[OuroWorkbenchCoreTests.FirstRunBootstrapEffectsResolverTests testS1
 Test Case '-[OuroWorkbenchCoreTests.FirstRunBootstrapEffectsResolverTests testS1VerifyDefersHealthyWhenNoAgentSoTheRunReachesTheGate]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.FirstRunBootstrapEffectsResolverTests testS1VerifyIsHealthyWhenAgentAlreadyExists]' started.
 Test Case '-[OuroWorkbenchCoreTests.FirstRunBootstrapEffectsResolverTests testS1VerifyIsHealthyWhenAgentAlreadyExists]' passed (0.000 seconds).
-Test Suite 'FirstRunBootstrapEffectsResolverTests' passed at 2026-06-14 16:07:11.048.
-	 Executed 14 tests, with 0 failures (0 unexpected) in 0.001 (0.002) seconds
-Test Suite 'FriendPreferenceTeachingTests' started at 2026-06-14 16:07:11.048.
+Test Suite 'FirstRunBootstrapEffectsResolverTests' passed at 2026-06-14 16:15:03.552.
+	 Executed 14 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
+Test Suite 'FriendPreferenceTeachingTests' started at 2026-06-14 16:15:03.552.
 Test Case '-[OuroWorkbenchCoreTests.FriendPreferenceTeachingTests testBossDirectiveCarriesFriendAndPreferenceAndPersistInstruction]' started.
 Test Case '-[OuroWorkbenchCoreTests.FriendPreferenceTeachingTests testBossDirectiveCarriesFriendAndPreferenceAndPersistInstruction]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.FriendPreferenceTeachingTests testBossDirectiveOmitsIdClauseWhenAbsent]' started.
@@ -861,9 +861,9 @@ Test Case '-[OuroWorkbenchCoreTests.FriendPreferenceTeachingTests testFallsBackW
 Test Case '-[OuroWorkbenchCoreTests.FriendPreferenceTeachingTests testFallsBackWhenFriendAndPromptMissing]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.FriendPreferenceTeachingTests testReinforceAutoAdvanceProducesApprovalPreference]' started.
 Test Case '-[OuroWorkbenchCoreTests.FriendPreferenceTeachingTests testReinforceAutoAdvanceProducesApprovalPreference]' passed (0.000 seconds).
-Test Suite 'FriendPreferenceTeachingTests' passed at 2026-06-14 16:07:11.049.
+Test Suite 'FriendPreferenceTeachingTests' passed at 2026-06-14 16:15:03.553.
 	 Executed 5 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
-Test Suite 'GitHubIssueComposerTests' started at 2026-06-14 16:07:11.049.
+Test Suite 'GitHubIssueComposerTests' started at 2026-06-14 16:15:03.553.
 Test Case '-[OuroWorkbenchCoreTests.GitHubIssueComposerTests testBodyAppendsBundleFooterPointingAtLocalPath]' started.
 Test Case '-[OuroWorkbenchCoreTests.GitHubIssueComposerTests testBodyAppendsBundleFooterPointingAtLocalPath]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.GitHubIssueComposerTests testBodyWithoutBundlePathIsUnchanged]' started.
@@ -882,9 +882,9 @@ Test Case '-[OuroWorkbenchCoreTests.GitHubIssueComposerTests testTitleIsCappedAn
 Test Case '-[OuroWorkbenchCoreTests.GitHubIssueComposerTests testTitleIsCappedAndEllipsizedWithinLimit]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.GitHubIssueComposerTests testTitleUsesFirstMeaningfulLineWithPrefix]' started.
 Test Case '-[OuroWorkbenchCoreTests.GitHubIssueComposerTests testTitleUsesFirstMeaningfulLineWithPrefix]' passed (0.000 seconds).
-Test Suite 'GitHubIssueComposerTests' passed at 2026-06-14 16:07:11.051.
-	 Executed 9 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
-Test Suite 'GitSessionStatusTests' started at 2026-06-14 16:07:11.051.
+Test Suite 'GitHubIssueComposerTests' passed at 2026-06-14 16:15:03.555.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
+Test Suite 'GitSessionStatusTests' started at 2026-06-14 16:15:03.555.
 Test Case '-[OuroWorkbenchCoreTests.GitSessionStatusTests testAheadAndBehindCounts]' started.
 Test Case '-[OuroWorkbenchCoreTests.GitSessionStatusTests testAheadAndBehindCounts]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.GitSessionStatusTests testCleanBranchInSyncWithUpstream]' started.
@@ -900,10 +900,10 @@ Test Case '-[OuroWorkbenchCoreTests.GitSessionStatusTests testNotARepoSentinel]'
 Test Case '-[OuroWorkbenchCoreTests.GitSessionStatusTests testNoUpstreamMeansZeroAheadBehind]' started.
 Test Case '-[OuroWorkbenchCoreTests.GitSessionStatusTests testNoUpstreamMeansZeroAheadBehind]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.GitSessionStatusTests testReaderReturnsRepoStatusForThisCheckout]' started.
-Test Case '-[OuroWorkbenchCoreTests.GitSessionStatusTests testReaderReturnsRepoStatusForThisCheckout]' passed (0.091 seconds).
-Test Suite 'GitSessionStatusTests' passed at 2026-06-14 16:07:11.143.
-	 Executed 8 tests, with 0 failures (0 unexpected) in 0.092 (0.092) seconds
-Test Suite 'HabitHistoryPanelTests' started at 2026-06-14 16:07:11.143.
+Test Case '-[OuroWorkbenchCoreTests.GitSessionStatusTests testReaderReturnsRepoStatusForThisCheckout]' passed (0.093 seconds).
+Test Suite 'GitSessionStatusTests' passed at 2026-06-14 16:15:03.650.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.094 (0.095) seconds
+Test Suite 'HabitHistoryPanelTests' started at 2026-06-14 16:15:03.650.
 Test Case '-[OuroWorkbenchCoreTests.HabitHistoryPanelTests testDashboardBuilderCarriesHabitHistory]' started.
 Test Case '-[OuroWorkbenchCoreTests.HabitHistoryPanelTests testDashboardBuilderCarriesHabitHistory]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.HabitHistoryPanelTests testFormatsHabitSummaryRowsForCompactHistoryPanel]' started.
@@ -912,9 +912,9 @@ Test Case '-[OuroWorkbenchCoreTests.HabitHistoryPanelTests testHandlesEmptyAndLo
 Test Case '-[OuroWorkbenchCoreTests.HabitHistoryPanelTests testHandlesEmptyAndLongSparseHistoryRows]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.HabitHistoryPanelTests testUnavailableHistoryKeepsPanelVisibleWithErrorState]' started.
 Test Case '-[OuroWorkbenchCoreTests.HabitHistoryPanelTests testUnavailableHistoryKeepsPanelVisibleWithErrorState]' passed (0.000 seconds).
-Test Suite 'HabitHistoryPanelTests' passed at 2026-06-14 16:07:11.144.
+Test Suite 'HabitHistoryPanelTests' passed at 2026-06-14 16:15:03.651.
 	 Executed 4 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
-Test Suite 'HarnessStatusTests' started at 2026-06-14 16:07:11.144.
+Test Suite 'HarnessStatusTests' started at 2026-06-14 16:15:03.651.
 Test Case '-[OuroWorkbenchCoreTests.HarnessStatusTests testBossBundleMissingDoesNotOfferRegister]' started.
 Test Case '-[OuroWorkbenchCoreTests.HarnessStatusTests testBossBundleMissingDoesNotOfferRegister]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.HarnessStatusTests testBossMissingFromInventoryIsNotReady]' started.
@@ -947,9 +947,9 @@ Test Case '-[OuroWorkbenchCoreTests.HarnessStatusTests testPreFirstRefreshOffers
 Test Case '-[OuroWorkbenchCoreTests.HarnessStatusTests testPreFirstRefreshOffersRepairUrgently]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.HarnessStatusTests testSingleAgentHeadlineIsSingular]' started.
 Test Case '-[OuroWorkbenchCoreTests.HarnessStatusTests testSingleAgentHeadlineIsSingular]' passed (0.000 seconds).
-Test Suite 'HarnessStatusTests' passed at 2026-06-14 16:07:11.148.
+Test Suite 'HarnessStatusTests' passed at 2026-06-14 16:15:03.655.
 	 Executed 16 tests, with 0 failures (0 unexpected) in 0.003 (0.004) seconds
-Test Suite 'LaneSelectionTests' started at 2026-06-14 16:07:11.148.
+Test Suite 'LaneSelectionTests' started at 2026-06-14 16:15:03.655.
 Test Case '-[OuroWorkbenchCoreTests.LaneSelectionTests testAuditDetailCarriesRawVerbWithAllFields]' started.
 Test Case '-[OuroWorkbenchCoreTests.LaneSelectionTests testAuditDetailCarriesRawVerbWithAllFields]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.LaneSelectionTests testClassifyNeedsManualWhenProbeUnreachable]' started.
@@ -967,7 +967,7 @@ Test Case '-[OuroWorkbenchCoreTests.LaneSelectionTests testNeedsManualRecoveryFl
 Test Case '-[OuroWorkbenchCoreTests.LaneSelectionTests testOutcomeResultLineIsSeamFreeAndAuditDetailRaw]' started.
 Test Case '-[OuroWorkbenchCoreTests.LaneSelectionTests testOutcomeResultLineIsSeamFreeAndAuditDetailRaw]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.LaneSelectionTests testRunnerClassifiesNeedsManualWhenProbeUnreachable]' started.
-Test Case '-[OuroWorkbenchCoreTests.LaneSelectionTests testRunnerClassifiesNeedsManualWhenProbeUnreachable]' passed (0.110 seconds).
+Test Case '-[OuroWorkbenchCoreTests.LaneSelectionTests testRunnerClassifiesNeedsManualWhenProbeUnreachable]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.LaneSelectionTests testRunnerClassifiesSelectedFromProbeNotExitCode]' started.
 Test Case '-[OuroWorkbenchCoreTests.LaneSelectionTests testRunnerClassifiesSelectedFromProbeNotExitCode]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.LaneSelectionTests testRunnerClassifiesStillDegradedWhenProbeDegraded]' started.
@@ -978,43 +978,43 @@ Test Case '-[OuroWorkbenchCoreTests.LaneSelectionTests testRunnerRejectsEmptyAge
 Test Case '-[OuroWorkbenchCoreTests.LaneSelectionTests testRunnerRejectsEmptyAgentNameWithoutRunningCommand]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.LaneSelectionTests testUseTokensCarryAgentLaneProviderModelNoSecret]' started.
 Test Case '-[OuroWorkbenchCoreTests.LaneSelectionTests testUseTokensCarryAgentLaneProviderModelNoSecret]' passed (0.000 seconds).
-Test Suite 'LaneSelectionTests' passed at 2026-06-14 16:07:11.262.
-	 Executed 14 tests, with 0 failures (0 unexpected) in 0.113 (0.113) seconds
-Test Suite 'LaunchAgentLoginItemTests' started at 2026-06-14 16:07:11.262.
+Test Suite 'LaneSelectionTests' passed at 2026-06-14 16:15:03.657.
+	 Executed 14 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
+Test Suite 'LaunchAgentLoginItemTests' started at 2026-06-14 16:15:03.657.
 Test Case '-[OuroWorkbenchCoreTests.LaunchAgentLoginItemTests testDefaultAppURLFallsBackToHomeApplicationsForDevelopmentRuns]' started.
 Test Case '-[OuroWorkbenchCoreTests.LaunchAgentLoginItemTests testDefaultAppURLFallsBackToHomeApplicationsForDevelopmentRuns]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.LaunchAgentLoginItemTests testDefaultAppURLUsesBundleWhenRunningFromAppBundle]' started.
 Test Case '-[OuroWorkbenchCoreTests.LaunchAgentLoginItemTests testDefaultAppURLUsesBundleWhenRunningFromAppBundle]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.LaunchAgentLoginItemTests testInstallFailsWhenAppBundleIsMissing]' started.
-Test Case '-[OuroWorkbenchCoreTests.LaunchAgentLoginItemTests testInstallFailsWhenAppBundleIsMissing]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.LaunchAgentLoginItemTests testInstallFailsWhenAppBundleIsMissing]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.LaunchAgentLoginItemTests testInstallWritesLaunchAgentPlist]' started.
-Test Case '-[OuroWorkbenchCoreTests.LaunchAgentLoginItemTests testInstallWritesLaunchAgentPlist]' passed (0.002 seconds).
+Test Case '-[OuroWorkbenchCoreTests.LaunchAgentLoginItemTests testInstallWritesLaunchAgentPlist]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.LaunchAgentLoginItemTests testStatusReportsNeedsUpdateWhenPlistPointsAtDifferentApp]' started.
-Test Case '-[OuroWorkbenchCoreTests.LaunchAgentLoginItemTests testStatusReportsNeedsUpdateWhenPlistPointsAtDifferentApp]' passed (0.002 seconds).
-Test Suite 'LaunchAgentLoginItemTests' passed at 2026-06-14 16:07:11.268.
-	 Executed 5 tests, with 0 failures (0 unexpected) in 0.006 (0.006) seconds
-Test Suite 'MailboxClientTests' started at 2026-06-14 16:07:11.268.
+Test Case '-[OuroWorkbenchCoreTests.LaunchAgentLoginItemTests testStatusReportsNeedsUpdateWhenPlistPointsAtDifferentApp]' passed (0.001 seconds).
+Test Suite 'LaunchAgentLoginItemTests' passed at 2026-06-14 16:15:03.661.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.004 (0.004) seconds
+Test Suite 'MailboxClientTests' started at 2026-06-14 16:15:03.661.
 Test Case '-[OuroWorkbenchCoreTests.MailboxClientTests testBuildsKnownMailboxEndpoints]' started.
-Test Case '-[OuroWorkbenchCoreTests.MailboxClientTests testBuildsKnownMailboxEndpoints]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.MailboxClientTests testBuildsKnownMailboxEndpoints]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.MailboxClientTests testDecodesHabitSessionSummaryView]' started.
-Test Case '-[OuroWorkbenchCoreTests.MailboxClientTests testDecodesHabitSessionSummaryView]' passed (0.002 seconds).
+Test Case '-[OuroWorkbenchCoreTests.MailboxClientTests testDecodesHabitSessionSummaryView]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.MailboxClientTests testDecodesHabitSessionSummaryWithNullOptionalsAndFailsOnMalformedItems]' started.
 Test Case '-[OuroWorkbenchCoreTests.MailboxClientTests testDecodesHabitSessionSummaryWithNullOptionalsAndFailsOnMalformedItems]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.MailboxClientTests testDecodesNeedsMeAndCodingViews]' started.
-Test Case '-[OuroWorkbenchCoreTests.MailboxClientTests testDecodesNeedsMeAndCodingViews]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.MailboxClientTests testDecodesNeedsMeAndCodingViews]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.MailboxClientTests testFetchDecodesMachineView]' started.
 Test Case '-[OuroWorkbenchCoreTests.MailboxClientTests testFetchDecodesMachineView]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.MailboxClientTests testFetchesHabitSessionSummaryViewFromExpectedEndpoint]' started.
 Test Case '-[OuroWorkbenchCoreTests.MailboxClientTests testFetchesHabitSessionSummaryViewFromExpectedEndpoint]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.MailboxClientTests testFetchTimesOutQuickly]' started.
-Test Case '-[OuroWorkbenchCoreTests.MailboxClientTests testFetchTimesOutQuickly]' passed (0.013 seconds).
+Test Case '-[OuroWorkbenchCoreTests.MailboxClientTests testFetchTimesOutQuickly]' passed (0.015 seconds).
 Test Case '-[OuroWorkbenchCoreTests.MailboxClientTests testSyncDashboardReaderCarriesHabitHistoryForMCPStatus]' started.
 Test Case '-[OuroWorkbenchCoreTests.MailboxClientTests testSyncDashboardReaderCarriesHabitHistoryForMCPStatus]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.MailboxClientTests testSyncDashboardReaderMarksHabitHistoryUnavailableOnEndpointFailure]' started.
 Test Case '-[OuroWorkbenchCoreTests.MailboxClientTests testSyncDashboardReaderMarksHabitHistoryUnavailableOnEndpointFailure]' passed (0.000 seconds).
-Test Suite 'MailboxClientTests' passed at 2026-06-14 16:07:11.287.
+Test Suite 'MailboxClientTests' passed at 2026-06-14 16:15:03.680.
 	 Executed 9 tests, with 0 failures (0 unexpected) in 0.018 (0.019) seconds
-Test Suite 'MarkdownMessageTests' started at 2026-06-14 16:07:11.287.
+Test Suite 'MarkdownMessageTests' started at 2026-06-14 16:15:03.680.
 Test Case '-[OuroWorkbenchCoreTests.MarkdownMessageTests testBoldHeaderLineStaysParagraphNotHeading]' started.
 Test Case '-[OuroWorkbenchCoreTests.MarkdownMessageTests testBoldHeaderLineStaysParagraphNotHeading]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.MarkdownMessageTests testBulletKeepsInlineMarksForTheView]' started.
@@ -1027,9 +1027,9 @@ Test Case '-[OuroWorkbenchCoreTests.MarkdownMessageTests testHashWithoutSpaceIsN
 Test Case '-[OuroWorkbenchCoreTests.MarkdownMessageTests testHashWithoutSpaceIsNotAHeading]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.MarkdownMessageTests testNestedBulletIndentByLeadingSpaces]' started.
 Test Case '-[OuroWorkbenchCoreTests.MarkdownMessageTests testNestedBulletIndentByLeadingSpaces]' passed (0.000 seconds).
-Test Suite 'MarkdownMessageTests' passed at 2026-06-14 16:07:11.288.
-	 Executed 6 tests, with 0 failures (0 unexpected) in 0.001 (0.002) seconds
-Test Suite 'NativeOnboardingRepairCopyTests' started at 2026-06-14 16:07:11.288.
+Test Suite 'MarkdownMessageTests' passed at 2026-06-14 16:15:03.681.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'NativeOnboardingRepairCopyTests' started at 2026-06-14 16:15:03.681.
 Test Case '-[OuroWorkbenchCoreTests.NativeOnboardingRepairCopyTests testAppExecutedStepIDsAreExactlyTheRemovedPanes]' started.
 Test Case '-[OuroWorkbenchCoreTests.NativeOnboardingRepairCopyTests testAppExecutedStepIDsAreExactlyTheRemovedPanes]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.NativeOnboardingRepairCopyTests testBothCheckLanesShareTheSameInProgressLine]' started.
@@ -1044,13 +1044,19 @@ Test Case '-[OuroWorkbenchCoreTests.NativeOnboardingRepairCopyTests testRepairAg
 Test Case '-[OuroWorkbenchCoreTests.NativeOnboardingRepairCopyTests testRepairAgentInProgressLineIsSeamFree]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.NativeOnboardingRepairCopyTests testUnknownStepHasNoInProgressLine]' started.
 Test Case '-[OuroWorkbenchCoreTests.NativeOnboardingRepairCopyTests testUnknownStepHasNoInProgressLine]' passed (0.000 seconds).
-Test Suite 'NativeOnboardingRepairCopyTests' passed at 2026-06-14 16:07:11.290.
-	 Executed 7 tests, with 0 failures (0 unexpected) in 0.001 (0.002) seconds
-Test Suite 'OnboardingNarrativeTests' started at 2026-06-14 16:07:11.290.
+Test Suite 'NativeOnboardingRepairCopyTests' passed at 2026-06-14 16:15:03.682.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'OnboardingNarrativeTests' started at 2026-06-14 16:15:03.682.
 Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testAmbiguousCandidateCopyIncludesCount]' started.
 Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testAmbiguousCandidateCopyIncludesCount]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testAppFlowInputUsesOnlyOnboardingArrangeSummaryForDuplicateCleanup]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testAppFlowInputUsesOnlyOnboardingArrangeSummaryForDuplicateCleanup]' passed (0.057 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testAppFlowWiringKeepsScanAndDuplicateCleanupActionsUseful]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testAppFlowWiringKeepsScanAndDuplicateCleanupActionsUseful]' passed (0.039 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testAppOnboardingChromeAvoidsStaticImportFraming]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testAppOnboardingChromeAvoidsStaticImportFraming]' passed (0.050 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testBossReadyWelcomeCopy]' started.
-Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testBossReadyWelcomeCopy]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testBossReadyWelcomeCopy]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testDuplicateCleanupCopyGuidesExternalSessionShutdown]' started.
 Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testDuplicateCleanupCopyGuidesExternalSessionShutdown]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testFlowArrangesApprovedImportsWhenSelectionExists]' started.
@@ -1071,11 +1077,11 @@ Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testScanIntroNamesL
 Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testScanIntroNamesLocalAgentStores]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testUnclearImportCopyPromisesToAsk]' started.
 Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testUnclearImportCopyPromisesToAsk]' passed (0.000 seconds).
-Test Suite 'OnboardingNarrativeTests' passed at 2026-06-14 16:07:11.293.
-	 Executed 12 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
-Test Suite 'OnboardingStatusToolTests' started at 2026-06-14 16:07:11.293.
+Test Suite 'OnboardingNarrativeTests' passed at 2026-06-14 16:15:03.831.
+	 Executed 15 tests, with 0 failures (0 unexpected) in 0.148 (0.148) seconds
+Test Suite 'OnboardingStatusToolTests' started at 2026-06-14 16:15:03.831.
 Test Case '-[OuroWorkbenchCoreTests.OnboardingStatusToolTests testRendererEmitsStateOrderedStepsActorTagsAndAuditHistory]' started.
-Test Case '-[OuroWorkbenchCoreTests.OnboardingStatusToolTests testRendererEmitsStateOrderedStepsActorTagsAndAuditHistory]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingStatusToolTests testRendererEmitsStateOrderedStepsActorTagsAndAuditHistory]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingStatusToolTests testRendererHandlesReadyStateWithNoSteps]' started.
 Test Case '-[OuroWorkbenchCoreTests.OnboardingStatusToolTests testRendererHandlesReadyStateWithNoSteps]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingStatusToolTests testRendererSurfacesDaemonDownState]' started.
@@ -1084,41 +1090,41 @@ Test Case '-[OuroWorkbenchCoreTests.OnboardingStatusToolTests testToolDescriptio
 Test Case '-[OuroWorkbenchCoreTests.OnboardingStatusToolTests testToolDescriptionCarriesNarrateFromNextReadContract]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingStatusToolTests testToolNameConstantMatchesPublishedTool]' started.
 Test Case '-[OuroWorkbenchCoreTests.OnboardingStatusToolTests testToolNameConstantMatchesPublishedTool]' passed (0.000 seconds).
-Test Suite 'OnboardingStatusToolTests' passed at 2026-06-14 16:07:11.295.
-	 Executed 5 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
-Test Suite 'OnboardingTests' started at 2026-06-14 16:07:11.295.
+Test Suite 'OnboardingStatusToolTests' passed at 2026-06-14 16:15:03.832.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'OnboardingTests' started at 2026-06-14 16:15:03.832.
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testAdvisorBlocksOnFailedProviderCheck]' started.
-Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testAdvisorBlocksOnFailedProviderCheck]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testAdvisorBlocksOnFailedProviderCheck]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testAdvisorKeepsBossReadinessSeparateFromDeskBridgeSetup]' started.
-Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testAdvisorKeepsBossReadinessSeparateFromDeskBridgeSetup]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testAdvisorKeepsBossReadinessSeparateFromDeskBridgeSetup]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testAdvisorRequiresLiveProviderChecksBeforeReady]' started.
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testAdvisorRequiresLiveProviderChecksBeforeReady]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testAdvisorSurfacesProviderAndMCPRepairs]' started.
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testAdvisorSurfacesProviderAndMCPRepairs]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testCodexSQLiteScannerUsesSingleValidOrderByQuery]' started.
-Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testCodexSQLiteScannerUsesSingleValidOrderByQuery]' passed (0.092 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testCodexSQLiteScannerUsesSingleValidOrderByQuery]' passed (0.089 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testEmptyBossSurfacesChooseCopyWithoutBlankName]' started.
-Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testEmptyBossSurfacesChooseCopyWithoutBlankName]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testEmptyBossSurfacesChooseCopyWithoutBlankName]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testImportProposalCuratesDefaultSelectionsInsteadOfStampedingTabs]' started.
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testImportProposalCuratesDefaultSelectionsInsteadOfStampedingTabs]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testImportProposalGroupsClaudeWorktreesByOwningProject]' started.
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testImportProposalGroupsClaudeWorktreesByOwningProject]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testImportProposalGroupsSameRepoDifferentSubdirsIntoOneGroup]' started.
-Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testImportProposalGroupsSameRepoDifferentSubdirsIntoOneGroup]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testImportProposalGroupsSameRepoDifferentSubdirsIntoOneGroup]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testImportProposalKeepsGroupIDsUniqueAcrossGroups]' started.
-Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testImportProposalKeepsGroupIDsUniqueAcrossGroups]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testImportProposalKeepsGroupIDsUniqueAcrossGroups]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testImportProposalPreferredGroupNameOverridesRepoGrouping]' started.
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testImportProposalPreferredGroupNameOverridesRepoGrouping]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testImportProposalSeparatesDistinctRepos]' started.
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testImportProposalSeparatesDistinctRepos]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testNeedsCredentialsIsComplementaryToProviderChecks]' started.
-Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testNeedsCredentialsIsComplementaryToProviderChecks]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testNeedsCredentialsIsComplementaryToProviderChecks]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testProviderSetupStepClassification]' started.
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testProviderSetupStepClassification]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testReadinessAllFourDaemonCredsCombos]' started.
-Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testReadinessAllFourDaemonCredsCombos]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testReadinessAllFourDaemonCredsCombos]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testReadinessCredsAbsentIsADistinctState]' started.
-Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testReadinessCredsAbsentIsADistinctState]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testReadinessCredsAbsentIsADistinctState]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testReadinessDaemonDownCopyHasNoCLIorDaemonSeams]' started.
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testReadinessDaemonDownCopyHasNoCLIorDaemonSeams]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testReadinessDaemonDownIsNotReadyEvenWhenAgentsAndMCPAreFine]' started.
@@ -1128,41 +1134,41 @@ Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testReadinessDefaultsToDaemo
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testReadyDetailUsesRuntimeInjectionFraming]' started.
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testReadyDetailUsesRuntimeInjectionFraming]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerDropsCodexArchiveWithoutSessionId]' started.
-Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerDropsCodexArchiveWithoutSessionId]' passed (0.318 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerDropsCodexArchiveWithoutSessionId]' passed (0.210 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerFallsBackToLiveClaudeProcessesWithoutCmuxState]' started.
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerFallsBackToLiveClaudeProcessesWithoutCmuxState]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerFallsBackToSessionIndexWhenSqliteMissingOrUnexecutable]' started.
-Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerFallsBackToSessionIndexWhenSqliteMissingOrUnexecutable]' passed (0.263 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerFallsBackToSessionIndexWhenSqliteMissingOrUnexecutable]' passed (0.206 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerFindsClaudeCodexAndShellCandidates]' started.
-Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerFindsClaudeCodexAndShellCandidates]' passed (0.263 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerFindsClaudeCodexAndShellCandidates]' passed (0.235 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerIgnoresStaleCodexArchive]' started.
-Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerIgnoresStaleCodexArchive]' passed (0.228 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerIgnoresStaleCodexArchive]' passed (0.247 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerImportsLiveCmuxClaudePanelsWithGroupNames]' started.
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerImportsLiveCmuxClaudePanelsWithGroupNames]' passed (0.003 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerKeepsCodexArchiveWithoutWorkingDirectoryAsRecoverable]' started.
-Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerKeepsCodexArchiveWithoutWorkingDirectoryAsRecoverable]' passed (0.226 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerKeepsCodexArchiveWithoutWorkingDirectoryAsRecoverable]' passed (0.210 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerPrefersHigherConfidenceDuplicate]' started.
-Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerPrefersHigherConfidenceDuplicate]' passed (0.223 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerPrefersHigherConfidenceDuplicate]' passed (0.243 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerReadsClaudeTaskJson]' started.
-Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerReadsClaudeTaskJson]' passed (0.221 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerReadsClaudeTaskJson]' passed (0.211 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerReadsCodexArchivedJsonl]' started.
-Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerReadsCodexArchivedJsonl]' passed (0.243 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerReadsCodexArchivedJsonl]' passed (0.209 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerReadsCodexManualRecoveryJsonl]' started.
-Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerReadsCodexManualRecoveryJsonl]' passed (0.226 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerReadsCodexManualRecoveryJsonl]' passed (0.225 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerReadsCodexSessionMetaPayloadJsonl]' started.
-Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerReadsCodexSessionMetaPayloadJsonl]' passed (0.215 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerReadsCodexSessionMetaPayloadJsonl]' passed (0.246 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerSkipsMalformedCodexArchiveLines]' started.
-Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerSkipsMalformedCodexArchiveLines]' passed (0.275 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerSkipsMalformedCodexArchiveLines]' passed (0.213 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerUnionsCodexSqliteAndSessionIndex]' started.
-Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerUnionsCodexSqliteAndSessionIndex]' passed (0.083 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerUnionsCodexSqliteAndSessionIndex]' passed (0.084 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRepositoryRootReturnsDirectoryItselfWhenItIsTheRoot]' started.
-Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRepositoryRootReturnsDirectoryItselfWhenItIsTheRoot]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRepositoryRootReturnsDirectoryItselfWhenItIsTheRoot]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRepositoryRootReturnsNilOutsideAnyRepo]' started.
-Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRepositoryRootReturnsNilOutsideAnyRepo]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRepositoryRootReturnsNilOutsideAnyRepo]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRepositoryRootWalksUpToGitMarker]' started.
-Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRepositoryRootWalksUpToGitMarker]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRepositoryRootWalksUpToGitMarker]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testSetSelectionBulkSelectsAndClearsAGroup]' started.
-Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testSetSelectionBulkSelectsAndClearsAGroup]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testSetSelectionBulkSelectsAndClearsAGroup]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testToggleSelectionFlipsTerminalSelectionAndCount]' started.
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testToggleSelectionFlipsTerminalSelectionAndCount]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testToggleSelectionReturnsNilForUnknownIDs]' started.
@@ -1171,9 +1177,9 @@ Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testWorkbenchMCPStepUsesRunt
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testWorkbenchMCPStepUsesRuntimeInjectionFramingNotBundleRegistration]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testWorkbenchSenseRendererExposesSenseContractAndTools]' started.
 Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testWorkbenchSenseRendererExposesSenseContractAndTools]' passed (0.001 seconds).
-Test Suite 'OnboardingTests' passed at 2026-06-14 16:07:14.193.
-	 Executed 42 tests, with 0 failures (0 unexpected) in 2.896 (2.899) seconds
-Test Suite 'OuroAgentInstallCommandTests' started at 2026-06-14 16:07:14.193.
+Test Suite 'OnboardingTests' passed at 2026-06-14 16:15:06.476.
+	 Executed 42 tests, with 0 failures (0 unexpected) in 2.642 (2.644) seconds
+Test Suite 'OuroAgentInstallCommandTests' started at 2026-06-14 16:15:06.476.
 Test Case '-[OuroWorkbenchCoreTests.OuroAgentInstallCommandTests testClonePlanAllowsOptionalAgentName]' started.
 Test Case '-[OuroWorkbenchCoreTests.OuroAgentInstallCommandTests testClonePlanAllowsOptionalAgentName]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OuroAgentInstallCommandTests testClonePlanQuotesRemoteWithShellCharacters]' started.
@@ -1182,20 +1188,20 @@ Test Case '-[OuroWorkbenchCoreTests.OuroAgentInstallCommandTests testHatchPlanLa
 Test Case '-[OuroWorkbenchCoreTests.OuroAgentInstallCommandTests testHatchPlanLaunchesConversationalSerpentGuideFlow]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OuroAgentInstallCommandTests testInstallPlansRejectInvalidInputs]' started.
 Test Case '-[OuroWorkbenchCoreTests.OuroAgentInstallCommandTests testInstallPlansRejectInvalidInputs]' passed (0.000 seconds).
-Test Suite 'OuroAgentInstallCommandTests' passed at 2026-06-14 16:07:14.194.
+Test Suite 'OuroAgentInstallCommandTests' passed at 2026-06-14 16:15:06.477.
 	 Executed 4 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
-Test Suite 'OuroAgentInventoryTests' started at 2026-06-14 16:07:14.194.
+Test Suite 'OuroAgentInventoryTests' started at 2026-06-14 16:15:06.477.
 Test Case '-[OuroWorkbenchCoreTests.OuroAgentInventoryTests testScanDiscoversAgentBundlesAndProviderLanes]' started.
 Test Case '-[OuroWorkbenchCoreTests.OuroAgentInventoryTests testScanDiscoversAgentBundlesAndProviderLanes]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OuroAgentInventoryTests testScanReportsMissingDisabledAndInvalidConfigs]' started.
 Test Case '-[OuroWorkbenchCoreTests.OuroAgentInventoryTests testScanReportsMissingDisabledAndInvalidConfigs]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.OuroAgentInventoryTests testScanSupportsCurrentLaneNames]' started.
 Test Case '-[OuroWorkbenchCoreTests.OuroAgentInventoryTests testScanSupportsCurrentLaneNames]' passed (0.001 seconds).
-Test Suite 'OuroAgentInventoryTests' passed at 2026-06-14 16:07:14.198.
-	 Executed 3 tests, with 0 failures (0 unexpected) in 0.003 (0.004) seconds
-Test Suite 'PaneLayoutStateTests' started at 2026-06-14 16:07:14.198.
+Test Suite 'OuroAgentInventoryTests' passed at 2026-06-14 16:15:06.480.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.003 (0.003) seconds
+Test Suite 'PaneLayoutStateTests' started at 2026-06-14 16:15:06.480.
 Test Case '-[OuroWorkbenchCoreTests.PaneLayoutStateTests testPaneLayoutAxisAndFocusDecodeUnknownLeniently]' started.
-Test Case '-[OuroWorkbenchCoreTests.PaneLayoutStateTests testPaneLayoutAxisAndFocusDecodeUnknownLeniently]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.PaneLayoutStateTests testPaneLayoutAxisAndFocusDecodeUnknownLeniently]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.PaneLayoutStateTests testPaneLayoutStateRoundTrips]' started.
 Test Case '-[OuroWorkbenchCoreTests.PaneLayoutStateTests testPaneLayoutStateRoundTrips]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.PaneLayoutStateTests testPaneLayoutStateRoundTripsWithEmptySecondary]' started.
@@ -1213,25 +1219,25 @@ Test Case '-[OuroWorkbenchCoreTests.PaneLayoutStateTests testResolvedKeepsSecond
 Test Case '-[OuroWorkbenchCoreTests.PaneLayoutStateTests testResolvedPreservesValidSecondary]' started.
 Test Case '-[OuroWorkbenchCoreTests.PaneLayoutStateTests testResolvedPreservesValidSecondary]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.PaneLayoutStateTests testWorkspaceStateDecodesOldJSONWithoutDetailLayoutKey]' started.
-Test Case '-[OuroWorkbenchCoreTests.PaneLayoutStateTests testWorkspaceStateDecodesOldJSONWithoutDetailLayoutKey]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.PaneLayoutStateTests testWorkspaceStateDecodesOldJSONWithoutDetailLayoutKey]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.PaneLayoutStateTests testWorkspaceStateRoundTripsThroughStoreWithDetailLayout]' started.
 Test Case '-[OuroWorkbenchCoreTests.PaneLayoutStateTests testWorkspaceStateRoundTripsThroughStoreWithDetailLayout]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.PaneLayoutStateTests testWorkspaceStateRoundTripsWithDetailLayout]' started.
 Test Case '-[OuroWorkbenchCoreTests.PaneLayoutStateTests testWorkspaceStateRoundTripsWithDetailLayout]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.PaneLayoutStateTests testWorkspaceStateRoundTripsWithNilDetailLayout]' started.
 Test Case '-[OuroWorkbenchCoreTests.PaneLayoutStateTests testWorkspaceStateRoundTripsWithNilDetailLayout]' passed (0.000 seconds).
-Test Suite 'PaneLayoutStateTests' passed at 2026-06-14 16:07:14.202.
-	 Executed 13 tests, with 0 failures (0 unexpected) in 0.004 (0.004) seconds
-Test Suite 'PresetTests' started at 2026-06-14 16:07:14.202.
+Test Suite 'PaneLayoutStateTests' passed at 2026-06-14 16:15:06.484.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.003 (0.004) seconds
+Test Suite 'PresetTests' started at 2026-06-14 16:15:06.484.
 Test Case '-[OuroWorkbenchCoreTests.PresetTests testNativeResumeFallbacksAvoidManualPickerAfterRestart]' started.
 Test Case '-[OuroWorkbenchCoreTests.PresetTests testNativeResumeFallbacksAvoidManualPickerAfterRestart]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.PresetTests testTerminalAgentPresetsExist]' started.
 Test Case '-[OuroWorkbenchCoreTests.PresetTests testTerminalAgentPresetsExist]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.PresetTests testTrustedYoloArgumentsAreEncodedForDetectedAgents]' started.
 Test Case '-[OuroWorkbenchCoreTests.PresetTests testTrustedYoloArgumentsAreEncodedForDetectedAgents]' passed (0.000 seconds).
-Test Suite 'PresetTests' passed at 2026-06-14 16:07:14.203.
+Test Suite 'PresetTests' passed at 2026-06-14 16:15:06.485.
 	 Executed 3 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
-Test Suite 'ProcessEntryPinTests' started at 2026-06-14 16:07:14.203.
+Test Suite 'ProcessEntryPinTests' started at 2026-06-14 16:15:06.485.
 Test Case '-[OuroWorkbenchCoreTests.ProcessEntryPinTests testDecodesIgnoringStaleDeskTaskSlugKey]' started.
 Test Case '-[OuroWorkbenchCoreTests.ProcessEntryPinTests testDecodesIgnoringStaleDeskTaskSlugKey]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.ProcessEntryPinTests testDecodesWithoutIsPinnedForBackwardsCompatibility]' started.
@@ -1242,9 +1248,9 @@ Test Case '-[OuroWorkbenchCoreTests.ProcessEntryPinTests testIsPinnedSurvivesCod
 Test Case '-[OuroWorkbenchCoreTests.ProcessEntryPinTests testIsPinnedSurvivesCodingRoundTrip]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.ProcessEntryPinTests testPinnedPartitionIsStableAndPinnedFirst]' started.
 Test Case '-[OuroWorkbenchCoreTests.ProcessEntryPinTests testPinnedPartitionIsStableAndPinnedFirst]' passed (0.000 seconds).
-Test Suite 'ProcessEntryPinTests' passed at 2026-06-14 16:07:14.204.
+Test Suite 'ProcessEntryPinTests' passed at 2026-06-14 16:15:06.486.
 	 Executed 5 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
-Test Suite 'ProcessRunRecencyTests' started at 2026-06-14 16:07:14.204.
+Test Suite 'ProcessRunRecencyTests' started at 2026-06-14 16:15:06.486.
 Test Case '-[OuroWorkbenchCoreTests.ProcessRunRecencyTests testEqualStartedAtBreaksOnIdDeterministically]' started.
 Test Case '-[OuroWorkbenchCoreTests.ProcessRunRecencyTests testEqualStartedAtBreaksOnIdDeterministically]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.ProcessRunRecencyTests testNewerStartedAtIsMoreRecent]' started.
@@ -1255,16 +1261,16 @@ Test Case '-[OuroWorkbenchCoreTests.ProcessRunRecencyTests testPruneProcessRunsN
 Test Case '-[OuroWorkbenchCoreTests.ProcessRunRecencyTests testPruneProcessRunsNoOpUnderCap]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.ProcessRunRecencyTests testSortingPicksSameLatestRegardlessOfInputOrder]' started.
 Test Case '-[OuroWorkbenchCoreTests.ProcessRunRecencyTests testSortingPicksSameLatestRegardlessOfInputOrder]' passed (0.000 seconds).
-Test Suite 'ProcessRunRecencyTests' passed at 2026-06-14 16:07:14.205.
+Test Suite 'ProcessRunRecencyTests' passed at 2026-06-14 16:15:06.487.
 	 Executed 5 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
-Test Suite 'ProcessTerminationPolicyTests' started at 2026-06-14 16:07:14.205.
+Test Suite 'ProcessTerminationPolicyTests' started at 2026-06-14 16:15:06.487.
 Test Case '-[OuroWorkbenchCoreTests.ProcessTerminationPolicyTests testManualStopAndOrdinaryExitRemainExited]' started.
 Test Case '-[OuroWorkbenchCoreTests.ProcessTerminationPolicyTests testManualStopAndOrdinaryExitRemainExited]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.ProcessTerminationPolicyTests testRecoveryAttemptTerminationRequiresManualActionWhenNotUserStopped]' started.
 Test Case '-[OuroWorkbenchCoreTests.ProcessTerminationPolicyTests testRecoveryAttemptTerminationRequiresManualActionWhenNotUserStopped]' passed (0.000 seconds).
-Test Suite 'ProcessTerminationPolicyTests' passed at 2026-06-14 16:07:14.206.
+Test Suite 'ProcessTerminationPolicyTests' passed at 2026-06-14 16:15:06.488.
 	 Executed 2 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
-Test Suite 'PromptSafetyClassifierTests' started at 2026-06-14 16:07:14.206.
+Test Suite 'PromptSafetyClassifierTests' started at 2026-06-14 16:15:06.488.
 Test Case '-[OuroWorkbenchCoreTests.PromptSafetyClassifierTests testAgreementPromptsEscalate]' started.
 Test Case '-[OuroWorkbenchCoreTests.PromptSafetyClassifierTests testAgreementPromptsEscalate]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.PromptSafetyClassifierTests testAllowedAutoAdvanceExecutesAndIsApplied]' started.
@@ -1309,9 +1315,9 @@ Test Case '-[OuroWorkbenchCoreTests.PromptSafetyClassifierTests testSystemPowerE
 Test Case '-[OuroWorkbenchCoreTests.PromptSafetyClassifierTests testSystemPowerEscalates]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.PromptSafetyClassifierTests testWhitespaceVariantsDoNotEvadeTheFloor]' started.
 Test Case '-[OuroWorkbenchCoreTests.PromptSafetyClassifierTests testWhitespaceVariantsDoNotEvadeTheFloor]' passed (0.000 seconds).
-Test Suite 'PromptSafetyClassifierTests' passed at 2026-06-14 16:07:14.210.
-	 Executed 22 tests, with 0 failures (0 unexpected) in 0.004 (0.005) seconds
-Test Suite 'ProviderConfigFormTests' started at 2026-06-14 16:07:14.210.
+Test Suite 'PromptSafetyClassifierTests' passed at 2026-06-14 16:15:06.492.
+	 Executed 22 tests, with 0 failures (0 unexpected) in 0.003 (0.004) seconds
+Test Suite 'ProviderConfigFormTests' started at 2026-06-14 16:15:06.492.
 Test Case '-[OuroWorkbenchCoreTests.ProviderConfigFormTests testAnthropicColdStartBuildsHatchWithSetupToken]' started.
 Test Case '-[OuroWorkbenchCoreTests.ProviderConfigFormTests testAnthropicColdStartBuildsHatchWithSetupToken]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.ProviderConfigFormTests testAzureColdStartBuildsHatchWithApiKeyEndpointDeployment]' started.
@@ -1352,9 +1358,9 @@ Test Case '-[OuroWorkbenchCoreTests.ProviderConfigFormTests testProviderDisplayN
 Test Case '-[OuroWorkbenchCoreTests.ProviderConfigFormTests testProviderDisplayNamesAreSeamFree]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.ProviderConfigFormTests testSupportedProvidersAreExactlyTheFiveAgentProviders]' started.
 Test Case '-[OuroWorkbenchCoreTests.ProviderConfigFormTests testSupportedProvidersAreExactlyTheFiveAgentProviders]' passed (0.000 seconds).
-Test Suite 'ProviderConfigFormTests' passed at 2026-06-14 16:07:14.214.
-	 Executed 20 tests, with 0 failures (0 unexpected) in 0.003 (0.004) seconds
-Test Suite 'ProviderRefreshTests' started at 2026-06-14 16:07:14.214.
+Test Suite 'ProviderConfigFormTests' passed at 2026-06-14 16:15:06.495.
+	 Executed 20 tests, with 0 failures (0 unexpected) in 0.003 (0.003) seconds
+Test Suite 'ProviderRefreshTests' started at 2026-06-14 16:15:06.495.
 Test Case '-[OuroWorkbenchCoreTests.ProviderRefreshTests testAuditDetailCarriesRawVerbAndExplicitAgent]' started.
 Test Case '-[OuroWorkbenchCoreTests.ProviderRefreshTests testAuditDetailCarriesRawVerbAndExplicitAgent]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.ProviderRefreshTests testClassifyNeedsManualWhenProbeUnreachable]' started.
@@ -1372,18 +1378,18 @@ Test Case '-[OuroWorkbenchCoreTests.ProviderRefreshTests testNeedsManualRecovery
 Test Case '-[OuroWorkbenchCoreTests.ProviderRefreshTests testOutcomeResultLineIsSeamFreeAndAuditDetailRaw]' started.
 Test Case '-[OuroWorkbenchCoreTests.ProviderRefreshTests testOutcomeResultLineIsSeamFreeAndAuditDetailRaw]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.ProviderRefreshTests testRunnerClassifiesNeedsManualWhenProbeUnreachable]' started.
-Test Case '-[OuroWorkbenchCoreTests.ProviderRefreshTests testRunnerClassifiesNeedsManualWhenProbeUnreachable]' passed (0.107 seconds).
+Test Case '-[OuroWorkbenchCoreTests.ProviderRefreshTests testRunnerClassifiesNeedsManualWhenProbeUnreachable]' passed (0.108 seconds).
 Test Case '-[OuroWorkbenchCoreTests.ProviderRefreshTests testRunnerClassifiesRefreshedFromProbeNotExitCode]' started.
-Test Case '-[OuroWorkbenchCoreTests.ProviderRefreshTests testRunnerClassifiesRefreshedFromProbeNotExitCode]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.ProviderRefreshTests testRunnerClassifiesRefreshedFromProbeNotExitCode]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.ProviderRefreshTests testRunnerClassifiesStillDegradedWhenProbeDegraded]' started.
 Test Case '-[OuroWorkbenchCoreTests.ProviderRefreshTests testRunnerClassifiesStillDegradedWhenProbeDegraded]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.ProviderRefreshTests testRunnerPassesExplicitAgentNameToBothRunAndProbe]' started.
 Test Case '-[OuroWorkbenchCoreTests.ProviderRefreshTests testRunnerPassesExplicitAgentNameToBothRunAndProbe]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.ProviderRefreshTests testRunnerRejectsEmptyAgentNameWithoutRunningCommand]' started.
 Test Case '-[OuroWorkbenchCoreTests.ProviderRefreshTests testRunnerRejectsEmptyAgentNameWithoutRunningCommand]' passed (0.000 seconds).
-Test Suite 'ProviderRefreshTests' passed at 2026-06-14 16:07:14.324.
-	 Executed 13 tests, with 0 failures (0 unexpected) in 0.109 (0.110) seconds
-Test Suite 'ProviderVerifyTests' started at 2026-06-14 16:07:14.324.
+Test Suite 'ProviderRefreshTests' passed at 2026-06-14 16:15:06.606.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.110 (0.111) seconds
+Test Suite 'ProviderVerifyTests' started at 2026-06-14 16:15:06.606.
 Test Case '-[OuroWorkbenchCoreTests.ProviderVerifyTests testAuditDetailCarriesLaneWhenPresent]' started.
 Test Case '-[OuroWorkbenchCoreTests.ProviderVerifyTests testAuditDetailCarriesLaneWhenPresent]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.ProviderVerifyTests testAuditDetailCarriesRawVerbAndExplicitAgentNoLane]' started.
@@ -1417,10 +1423,10 @@ Test Case '-[OuroWorkbenchCoreTests.ProviderVerifyTests testRunnerClassifiesVeri
 Test Case '-[OuroWorkbenchCoreTests.ProviderVerifyTests testRunnerPassesExplicitAgentNameAndLaneToBothRunAndProbe]' started.
 Test Case '-[OuroWorkbenchCoreTests.ProviderVerifyTests testRunnerPassesExplicitAgentNameAndLaneToBothRunAndProbe]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.ProviderVerifyTests testRunnerRejectsEmptyAgentNameWithoutRunningCommand]' started.
-Test Case '-[OuroWorkbenchCoreTests.ProviderVerifyTests testRunnerRejectsEmptyAgentNameWithoutRunningCommand]' passed (0.108 seconds).
-Test Suite 'ProviderVerifyTests' passed at 2026-06-14 16:07:14.435.
-	 Executed 17 tests, with 0 failures (0 unexpected) in 0.110 (0.111) seconds
-Test Suite 'RecoveryDrillTests' started at 2026-06-14 16:07:14.435.
+Test Case '-[OuroWorkbenchCoreTests.ProviderVerifyTests testRunnerRejectsEmptyAgentNameWithoutRunningCommand]' passed (0.000 seconds).
+Test Suite 'ProviderVerifyTests' passed at 2026-06-14 16:15:06.609.
+	 Executed 17 tests, with 0 failures (0 unexpected) in 0.003 (0.003) seconds
+Test Suite 'RecoveryDrillTests' started at 2026-06-14 16:15:06.609.
 Test Case '-[OuroWorkbenchCoreTests.RecoveryDrillTests testDrillDoesNotMutateInputState]' started.
 Test Case '-[OuroWorkbenchCoreTests.RecoveryDrillTests testDrillDoesNotMutateInputState]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.RecoveryDrillTests testDrillLeavesExitedRunsAlone]' started.
@@ -1429,9 +1435,9 @@ Test Case '-[OuroWorkbenchCoreTests.RecoveryDrillTests testDrillReportsManualRec
 Test Case '-[OuroWorkbenchCoreTests.RecoveryDrillTests testDrillReportsManualRecoveryForUntrustedInFlightEntry]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.RecoveryDrillTests testDrillSimulatesRestartAndPlansRecovery]' started.
 Test Case '-[OuroWorkbenchCoreTests.RecoveryDrillTests testDrillSimulatesRestartAndPlansRecovery]' passed (0.000 seconds).
-Test Suite 'RecoveryDrillTests' passed at 2026-06-14 16:07:14.436.
+Test Suite 'RecoveryDrillTests' passed at 2026-06-14 16:15:06.610.
 	 Executed 4 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
-Test Suite 'RecoveryPlannerTests' started at 2026-06-14 16:07:14.436.
+Test Suite 'RecoveryPlannerTests' started at 2026-06-14 16:15:06.610.
 Test Case '-[OuroWorkbenchCoreTests.RecoveryPlannerTests testAlreadyRunningEntryIsExcludedFromAutoLaunch]' started.
 Test Case '-[OuroWorkbenchCoreTests.RecoveryPlannerTests testAlreadyRunningEntryIsExcludedFromAutoLaunch]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.RecoveryPlannerTests testArchivedEntryDoesNotRecoverEvenWithNeedsRecoveryRun]' started.
@@ -1464,85 +1470,85 @@ Test Case '-[OuroWorkbenchCoreTests.RecoveryPlannerTests testUntrustedEntriesNev
 Test Case '-[OuroWorkbenchCoreTests.RecoveryPlannerTests testUntrustedEntriesNeverAutoResume]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.RecoveryPlannerTests testUntrustedNeedsRecoveryRequiresManualAction]' started.
 Test Case '-[OuroWorkbenchCoreTests.RecoveryPlannerTests testUntrustedNeedsRecoveryRequiresManualAction]' passed (0.000 seconds).
-Test Suite 'RecoveryPlannerTests' passed at 2026-06-14 16:07:14.440.
-	 Executed 16 tests, with 0 failures (0 unexpected) in 0.003 (0.004) seconds
-Test Suite 'ReleaseUpdateTests' started at 2026-06-14 16:07:14.440.
+Test Suite 'RecoveryPlannerTests' passed at 2026-06-14 16:15:06.613.
+	 Executed 16 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
+Test Suite 'ReleaseUpdateTests' started at 2026-06-14 16:15:06.613.
 Test Case '-[OuroWorkbenchCoreTests.ReleaseUpdateTests testAsyncCheckReturnsUnavailableSnapshotOnNetworkFailure]' started.
-Test Case '-[OuroWorkbenchCoreTests.ReleaseUpdateTests testAsyncCheckReturnsUnavailableSnapshotOnNetworkFailure]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.ReleaseUpdateTests testAsyncCheckReturnsUnavailableSnapshotOnNetworkFailure]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.ReleaseUpdateTests testSnapshotIgnoresDraftsAndReportsNoPublishedRelease]' started.
 Test Case '-[OuroWorkbenchCoreTests.ReleaseUpdateTests testSnapshotIgnoresDraftsAndReportsNoPublishedRelease]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.ReleaseUpdateTests testSnapshotReportsCurrentWhenLatestIsNotNewer]' started.
 Test Case '-[OuroWorkbenchCoreTests.ReleaseUpdateTests testSnapshotReportsCurrentWhenLatestIsNotNewer]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.ReleaseUpdateTests testSnapshotReportsUpdateAvailableFromLatestPublishedRelease]' started.
 Test Case '-[OuroWorkbenchCoreTests.ReleaseUpdateTests testSnapshotReportsUpdateAvailableFromLatestPublishedRelease]' passed (0.000 seconds).
-Test Suite 'ReleaseUpdateTests' passed at 2026-06-14 16:07:14.442.
+Test Suite 'ReleaseUpdateTests' passed at 2026-06-14 16:15:06.615.
 	 Executed 4 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
-Test Suite 'RepairAgentKeystoneTests' started at 2026-06-14 16:07:14.442.
+Test Suite 'RepairAgentKeystoneTests' started at 2026-06-14 16:15:06.615.
 Test Case '-[OuroWorkbenchCoreTests.RepairAgentKeystoneTests testEntrylessBypassClosed_unknownEntrylessActionDeniedAfterDrain]' started.
 Test Case '-[OuroWorkbenchCoreTests.RepairAgentKeystoneTests testEntrylessBypassClosed_unknownEntrylessActionDeniedAfterDrain]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.RepairAgentKeystoneTests testFullLoopEnqueueDrainAuthorizeExecuteClassifyRepaired]' started.
-Test Case '-[OuroWorkbenchCoreTests.RepairAgentKeystoneTests testFullLoopEnqueueDrainAuthorizeExecuteClassifyRepaired]' passed (0.002 seconds).
+Test Case '-[OuroWorkbenchCoreTests.RepairAgentKeystoneTests testFullLoopEnqueueDrainAuthorizeExecuteClassifyRepaired]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.RepairAgentKeystoneTests testFullLoopSurfacesNeedsManualWhenProbeUnreachable]' started.
-Test Case '-[OuroWorkbenchCoreTests.RepairAgentKeystoneTests testFullLoopSurfacesNeedsManualWhenProbeUnreachable]' passed (0.108 seconds).
+Test Case '-[OuroWorkbenchCoreTests.RepairAgentKeystoneTests testFullLoopSurfacesNeedsManualWhenProbeUnreachable]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.RepairAgentKeystoneTests testFullLoopSurfacesStillDegradedWhenProbeStillDegraded]' started.
-Test Case '-[OuroWorkbenchCoreTests.RepairAgentKeystoneTests testFullLoopSurfacesStillDegradedWhenProbeStillDegraded]' passed (0.002 seconds).
+Test Case '-[OuroWorkbenchCoreTests.RepairAgentKeystoneTests testFullLoopSurfacesStillDegradedWhenProbeStillDegraded]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.RepairAgentKeystoneTests testKeystoneNeverOpensDestructiveInputHole]' started.
 Test Case '-[OuroWorkbenchCoreTests.RepairAgentKeystoneTests testKeystoneNeverOpensDestructiveInputHole]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.RepairAgentKeystoneTests testLiveRepairAgentLoopAgainstRealAgent]' started.
 /Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/RepairAgentKeystoneTests.swift:152: -[OuroWorkbenchCoreTests.RepairAgentKeystoneTests testLiveRepairAgentLoopAgainstRealAgent] : Test skipped - Set OURO_WORKBENCH_LIVE_REPAIR=<agentName> to run the live repair loop.
 Test Case '-[OuroWorkbenchCoreTests.RepairAgentKeystoneTests testLiveRepairAgentLoopAgainstRealAgent]' skipped (0.001 seconds).
-Test Suite 'RepairAgentKeystoneTests' passed at 2026-06-14 16:07:14.556.
-	 Executed 6 tests, with 1 test skipped and 0 failures (0 unexpected) in 0.114 (0.114) seconds
-Test Suite 'SessionActivityTests' started at 2026-06-14 16:07:14.556.
+Test Suite 'RepairAgentKeystoneTests' passed at 2026-06-14 16:15:06.619.
+	 Executed 6 tests, with 1 test skipped and 0 failures (0 unexpected) in 0.004 (0.004) seconds
+Test Suite 'SessionActivityTests' started at 2026-06-14 16:15:06.619.
 Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testActiveFormFallsBackToContentWhenMissing]' started.
 Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testActiveFormFallsBackToContentWhenMissing]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testBashToolRedactsToLeadingCommandWordOnly]' started.
-Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testBashToolRedactsToLeadingCommandWordOnly]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testBashToolRedactsToLeadingCommandWordOnly]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testCodexLastToolActivity]' started.
-Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testCodexLastToolActivity]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testCodexLastToolActivity]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testCodexTokensTakeLastCumulativeTotal]' started.
-Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testCodexTokensTakeLastCumulativeTotal]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testCodexTokensTakeLastCumulativeTotal]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testEmptyTailIsEmpty]' started.
-Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testEmptyTailIsEmpty]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testEmptyTailIsEmpty]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testLastToolActivityShowsBasenameNotFullPath]' started.
-Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testLastToolActivityShowsBasenameNotFullPath]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testLastToolActivityShowsBasenameNotFullPath]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testMalformedLinesSkipped]' started.
 Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testMalformedLinesSkipped]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testMCPToolNameShortenedToTrailingSegment]' started.
-Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testMCPToolNameShortenedToTrailingSegment]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testMCPToolNameShortenedToTrailingSegment]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testModelPickedByMajorityAndSyntheticIgnored]' started.
-Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testModelPickedByMajorityAndSyntheticIgnored]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testModelPickedByMajorityAndSyntheticIgnored]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testPartialFirstLineFromByteTailIsSkipped]' started.
-Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testPartialFirstLineFromByteTailIsSkipped]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testPartialFirstLineFromByteTailIsSkipped]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testPricingOpusUsesCheapCacheReads]' started.
-Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testPricingOpusUsesCheapCacheReads]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testPricingOpusUsesCheapCacheReads]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testPricingPrefixMatchAcrossPointReleases]' started.
 Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testPricingPrefixMatchAcrossPointReleases]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testProjectDirNameEncodesSlashesAndDots]' started.
-Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testProjectDirNameEncodesSlashesAndDots]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testProjectDirNameEncodesSlashesAndDots]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testReaderPicksMostRecentJSONLInProjectDir]' started.
-Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testReaderPicksMostRecentJSONLInProjectDir]' passed (0.002 seconds).
+Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testReaderPicksMostRecentJSONLInProjectDir]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testReaderReadsTodoAndTokensFromMappedFile]' started.
 Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testReaderReadsTodoAndTokensFromMappedFile]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testReaderReturnsNilWhenNoFileMapsToSession]' started.
 Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testReaderReturnsNilWhenNoFileMapsToSession]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testTodoProgressFromLatestSnapshot]' started.
-Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testTodoProgressFromLatestSnapshot]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testTodoProgressFromLatestSnapshot]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testTokensSummedAcrossMessages]' started.
-Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testTokensSummedAcrossMessages]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testTokensSummedAcrossMessages]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testToolResultContentIsNeverSurfaced]' started.
 Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testToolResultContentIsNeverSurfaced]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testUnknownModelHasNoPrice]' started.
-Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testUnknownModelHasNoPrice]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testUnknownModelHasNoPrice]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testUsageDeduplicatedByMessageID]' started.
-Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testUsageDeduplicatedByMessageID]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testUsageDeduplicatedByMessageID]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testUsdLabelFormatting]' started.
-Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testUsdLabelFormatting]' passed (0.001 seconds).
-Test Suite 'SessionActivityTests' passed at 2026-06-14 16:07:14.575.
-	 Executed 22 tests, with 0 failures (0 unexpected) in 0.017 (0.019) seconds
-Test Suite 'SessionFriendTests' started at 2026-06-14 16:07:14.575.
+Test Case '-[OuroWorkbenchCoreTests.SessionActivityTests testUsdLabelFormatting]' passed (0.000 seconds).
+Test Suite 'SessionActivityTests' passed at 2026-06-14 16:15:06.628.
+	 Executed 22 tests, with 0 failures (0 unexpected) in 0.008 (0.009) seconds
+Test Suite 'SessionFriendTests' started at 2026-06-14 16:15:06.628.
 Test Case '-[OuroWorkbenchCoreTests.SessionFriendTests testBossPromptInlinesWaitingPromptsForDecisioning]' started.
-Test Case '-[OuroWorkbenchCoreTests.SessionFriendTests testBossPromptInlinesWaitingPromptsForDecisioning]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.SessionFriendTests testBossPromptInlinesWaitingPromptsForDecisioning]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SessionFriendTests testBossPromptOmitsWaitingSectionWhenNonePending]' started.
 Test Case '-[OuroWorkbenchCoreTests.SessionFriendTests testBossPromptOmitsWaitingSectionWhenNonePending]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SessionFriendTests testBossPromptResolvesUnassignedToMachineOwnerWhenProvided]' started.
@@ -1577,9 +1583,9 @@ Test Case '-[OuroWorkbenchCoreTests.SessionFriendTests testUnknownEnumRawValuesD
 Test Case '-[OuroWorkbenchCoreTests.SessionFriendTests testUnknownEnumRawValuesDecodeToSafeDefaults]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SessionFriendTests testWorkbenchProjectWithoutDefaultFriendDecodesToNil]' started.
 Test Case '-[OuroWorkbenchCoreTests.SessionFriendTests testWorkbenchProjectWithoutDefaultFriendDecodesToNil]' passed (0.000 seconds).
-Test Suite 'SessionFriendTests' passed at 2026-06-14 16:07:14.580.
-	 Executed 18 tests, with 0 failures (0 unexpected) in 0.004 (0.005) seconds
-Test Suite 'SessionOwnerTests' started at 2026-06-14 16:07:14.580.
+Test Suite 'SessionFriendTests' passed at 2026-06-14 16:15:06.632.
+	 Executed 18 tests, with 0 failures (0 unexpected) in 0.003 (0.004) seconds
+Test Suite 'SessionOwnerTests' started at 2026-06-14 16:15:06.632.
 Test Case '-[OuroWorkbenchCoreTests.SessionOwnerTests testAgentHasSidebarBadge]' started.
 Test Case '-[OuroWorkbenchCoreTests.SessionOwnerTests testAgentHasSidebarBadge]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SessionOwnerTests testAgentOwnerMissingNameFallsBackToHuman]' started.
@@ -1604,9 +1610,9 @@ Test Case '-[OuroWorkbenchCoreTests.SessionOwnerTests testOwnerDefaultsHuman]' s
 Test Case '-[OuroWorkbenchCoreTests.SessionOwnerTests testOwnerDefaultsHuman]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SessionOwnerTests testUnknownOwnerKindDecodesAsHumanNotThrowing]' started.
 Test Case '-[OuroWorkbenchCoreTests.SessionOwnerTests testUnknownOwnerKindDecodesAsHumanNotThrowing]' passed (0.000 seconds).
-Test Suite 'SessionOwnerTests' passed at 2026-06-14 16:07:14.583.
-	 Executed 12 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
-Test Suite 'SidebarSessionFilterTests' started at 2026-06-14 16:07:14.583.
+Test Suite 'SessionOwnerTests' passed at 2026-06-14 16:15:06.634.
+	 Executed 12 tests, with 0 failures (0 unexpected) in 0.001 (0.002) seconds
+Test Suite 'SidebarSessionFilterTests' started at 2026-06-14 16:15:06.634.
 Test Case '-[OuroWorkbenchCoreTests.SidebarSessionFilterTests testAllTokensMustMatch]' started.
 Test Case '-[OuroWorkbenchCoreTests.SidebarSessionFilterTests testAllTokensMustMatch]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SidebarSessionFilterTests testBareOwnerOrStatusTokenIsNeutral]' started.
@@ -1633,15 +1639,15 @@ Test Case '-[OuroWorkbenchCoreTests.SidebarSessionFilterTests testSubstringMatch
 Test Case '-[OuroWorkbenchCoreTests.SidebarSessionFilterTests testSubstringMatchesNameCaseInsensitively]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SidebarSessionFilterTests testTokensCombineAcrossDimensions]' started.
 Test Case '-[OuroWorkbenchCoreTests.SidebarSessionFilterTests testTokensCombineAcrossDimensions]' passed (0.000 seconds).
-Test Suite 'SidebarSessionFilterTests' passed at 2026-06-14 16:07:14.585.
-	 Executed 13 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
-Test Suite 'Slice4OnboardingActionsKeystoneTests' started at 2026-06-14 16:07:14.585.
+Test Suite 'SidebarSessionFilterTests' passed at 2026-06-14 16:15:06.636.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
+Test Suite 'Slice4OnboardingActionsKeystoneTests' started at 2026-06-14 16:15:06.636.
 Test Case '-[OuroWorkbenchCoreTests.Slice4OnboardingActionsKeystoneTests testAgentTargetedRunnersNeverRunTheCommandWithoutAnExplicitName]' started.
 Test Case '-[OuroWorkbenchCoreTests.Slice4OnboardingActionsKeystoneTests testAgentTargetedRunnersNeverRunTheCommandWithoutAnExplicitName]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.Slice4OnboardingActionsKeystoneTests testEnsureDaemonFullLoopNeedsManualWhenStillDown]' started.
 Test Case '-[OuroWorkbenchCoreTests.Slice4OnboardingActionsKeystoneTests testEnsureDaemonFullLoopNeedsManualWhenStillDown]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.Slice4OnboardingActionsKeystoneTests testEnsureDaemonFullLoopRespawned]' started.
-Test Case '-[OuroWorkbenchCoreTests.Slice4OnboardingActionsKeystoneTests testEnsureDaemonFullLoopRespawned]' passed (0.002 seconds).
+Test Case '-[OuroWorkbenchCoreTests.Slice4OnboardingActionsKeystoneTests testEnsureDaemonFullLoopRespawned]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.Slice4OnboardingActionsKeystoneTests testRefreshProviderFullLoopRefreshed]' started.
 Test Case '-[OuroWorkbenchCoreTests.Slice4OnboardingActionsKeystoneTests testRefreshProviderFullLoopRefreshed]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.Slice4OnboardingActionsKeystoneTests testRegisterWorkbenchMCPFullLoopRegistered]' started.
@@ -1650,20 +1656,20 @@ Test Case '-[OuroWorkbenchCoreTests.Slice4OnboardingActionsKeystoneTests testSel
 Test Case '-[OuroWorkbenchCoreTests.Slice4OnboardingActionsKeystoneTests testSelectLaneFullLoopSelected]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.Slice4OnboardingActionsKeystoneTests testVerifyProviderFullLoopVerified]' started.
 Test Case '-[OuroWorkbenchCoreTests.Slice4OnboardingActionsKeystoneTests testVerifyProviderFullLoopVerified]' passed (0.001 seconds).
-Test Suite 'Slice4OnboardingActionsKeystoneTests' passed at 2026-06-14 16:07:14.592.
-	 Executed 7 tests, with 0 failures (0 unexpected) in 0.007 (0.007) seconds
-Test Suite 'StartupRecoveryReconcilerTests' started at 2026-06-14 16:07:14.592.
+Test Suite 'Slice4OnboardingActionsKeystoneTests' passed at 2026-06-14 16:15:06.640.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.004 (0.005) seconds
+Test Suite 'StartupRecoveryReconcilerTests' started at 2026-06-14 16:15:06.640.
 Test Case '-[OuroWorkbenchCoreTests.StartupRecoveryReconcilerTests testStartupLeavesExitedRunsExited]' started.
 Test Case '-[OuroWorkbenchCoreTests.StartupRecoveryReconcilerTests testStartupLeavesExitedRunsExited]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.StartupRecoveryReconcilerTests testStartupReclassifiesInFlightRunsAsNeedingRecovery]' started.
 Test Case '-[OuroWorkbenchCoreTests.StartupRecoveryReconcilerTests testStartupReclassifiesInFlightRunsAsNeedingRecovery]' passed (0.000 seconds).
-Test Suite 'StartupRecoveryReconcilerTests' passed at 2026-06-14 16:07:14.593.
+Test Suite 'StartupRecoveryReconcilerTests' passed at 2026-06-14 16:15:06.641.
 	 Executed 2 tests, with 0 failures (0 unexpected) in 0.000 (0.000) seconds
-Test Suite 'SupportDiagnosticsRunnerTests' started at 2026-06-14 16:07:14.593.
+Test Suite 'SupportDiagnosticsRunnerTests' started at 2026-06-14 16:15:06.641.
 Test Case '-[OuroWorkbenchCoreTests.SupportDiagnosticsRunnerTests testDefaultOutputDirectoryUsesApplicationSupport]' started.
 Test Case '-[OuroWorkbenchCoreTests.SupportDiagnosticsRunnerTests testDefaultOutputDirectoryUsesApplicationSupport]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SupportDiagnosticsRunnerTests testIgnoresNonExecutableDiagnosticsScriptCandidates]' started.
-Test Case '-[OuroWorkbenchCoreTests.SupportDiagnosticsRunnerTests testIgnoresNonExecutableDiagnosticsScriptCandidates]' passed (0.002 seconds).
+Test Case '-[OuroWorkbenchCoreTests.SupportDiagnosticsRunnerTests testIgnoresNonExecutableDiagnosticsScriptCandidates]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SupportDiagnosticsRunnerTests testLocatesBundledDiagnosticsScriptBeforeRepoScript]' started.
 Test Case '-[OuroWorkbenchCoreTests.SupportDiagnosticsRunnerTests testLocatesBundledDiagnosticsScriptBeforeRepoScript]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SupportDiagnosticsRunnerTests testLocatesRepoDiagnosticsScriptWhenBundleScriptIsMissing]' started.
@@ -1671,16 +1677,16 @@ Test Case '-[OuroWorkbenchCoreTests.SupportDiagnosticsRunnerTests testLocatesRep
 Test Case '-[OuroWorkbenchCoreTests.SupportDiagnosticsRunnerTests testParsesDiagnosticsArchivePathFromOutput]' started.
 Test Case '-[OuroWorkbenchCoreTests.SupportDiagnosticsRunnerTests testParsesDiagnosticsArchivePathFromOutput]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SupportDiagnosticsRunnerTests testRunFailsWhenReportedArchiveIsMissing]' started.
-Test Case '-[OuroWorkbenchCoreTests.SupportDiagnosticsRunnerTests testRunFailsWhenReportedArchiveIsMissing]' passed (0.083 seconds).
+Test Case '-[OuroWorkbenchCoreTests.SupportDiagnosticsRunnerTests testRunFailsWhenReportedArchiveIsMissing]' passed (0.081 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SupportDiagnosticsRunnerTests testRunFailsWhenScriptExitsNonZero]' started.
 Test Case '-[OuroWorkbenchCoreTests.SupportDiagnosticsRunnerTests testRunFailsWhenScriptExitsNonZero]' passed (0.083 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SupportDiagnosticsRunnerTests testRunFailsWhenScriptIsMissing]' started.
 Test Case '-[OuroWorkbenchCoreTests.SupportDiagnosticsRunnerTests testRunFailsWhenScriptIsMissing]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.SupportDiagnosticsRunnerTests testRunsDiagnosticsScriptAndReturnsArchiveURL]' started.
-Test Case '-[OuroWorkbenchCoreTests.SupportDiagnosticsRunnerTests testRunsDiagnosticsScriptAndReturnsArchiveURL]' passed (0.083 seconds).
-Test Suite 'SupportDiagnosticsRunnerTests' passed at 2026-06-14 16:07:14.847.
-	 Executed 9 tests, with 0 failures (0 unexpected) in 0.254 (0.255) seconds
-Test Suite 'TerminalEnvironmentTests' started at 2026-06-14 16:07:14.847.
+Test Case '-[OuroWorkbenchCoreTests.SupportDiagnosticsRunnerTests testRunsDiagnosticsScriptAndReturnsArchiveURL]' passed (0.086 seconds).
+Test Suite 'SupportDiagnosticsRunnerTests' passed at 2026-06-14 16:15:06.896.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 0.255 (0.256) seconds
+Test Suite 'TerminalEnvironmentTests' started at 2026-06-14 16:15:06.896.
 Test Case '-[OuroWorkbenchCoreTests.TerminalEnvironmentTests testAlwaysOnWorkbenchMarkersAreSetEvenWithoutContext]' started.
 Test Case '-[OuroWorkbenchCoreTests.TerminalEnvironmentTests testAlwaysOnWorkbenchMarkersAreSetEvenWithoutContext]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.TerminalEnvironmentTests testDictionaryEnvironmentIncludesResolvedPathAndInteractiveTerminalType]' started.
@@ -1693,9 +1699,9 @@ Test Case '-[OuroWorkbenchCoreTests.TerminalEnvironmentTests testResolvedPathInc
 Test Case '-[OuroWorkbenchCoreTests.TerminalEnvironmentTests testResolvedPathIncludesOuroCliBinAheadOfSystemDirs]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.TerminalEnvironmentTests testWorkbenchContextInjectsOnlyPopulatedSessionVariables]' started.
 Test Case '-[OuroWorkbenchCoreTests.TerminalEnvironmentTests testWorkbenchContextInjectsOnlyPopulatedSessionVariables]' passed (0.000 seconds).
-Test Suite 'TerminalEnvironmentTests' passed at 2026-06-14 16:07:14.849.
-	 Executed 6 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
-Test Suite 'TerminalIdentityTests' started at 2026-06-14 16:07:14.849.
+Test Suite 'TerminalEnvironmentTests' passed at 2026-06-14 16:15:06.898.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.001 (0.002) seconds
+Test Suite 'TerminalIdentityTests' started at 2026-06-14 16:15:06.898.
 Test Case '-[OuroWorkbenchCoreTests.TerminalIdentityTests testCanonicalTokensUnwrapLeadingEnvironmentAssignments]' started.
 Test Case '-[OuroWorkbenchCoreTests.TerminalIdentityTests testCanonicalTokensUnwrapLeadingEnvironmentAssignments]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.TerminalIdentityTests testCanonicalTokensUnwrapShellEnvAndExec]' started.
@@ -1703,14 +1709,14 @@ Test Case '-[OuroWorkbenchCoreTests.TerminalIdentityTests testCanonicalTokensUnw
 Test Case '-[OuroWorkbenchCoreTests.TerminalIdentityTests testDetectsKnownCLIFromShellWrappedCommand]' started.
 Test Case '-[OuroWorkbenchCoreTests.TerminalIdentityTests testDetectsKnownCLIFromShellWrappedCommand]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.TerminalIdentityTests testDetectsKnownCLIsFromExecutableAndArguments]' started.
-Test Case '-[OuroWorkbenchCoreTests.TerminalIdentityTests testDetectsKnownCLIsFromExecutableAndArguments]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.TerminalIdentityTests testDetectsKnownCLIsFromExecutableAndArguments]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.TerminalIdentityTests testParserHandlesQuotedArguments]' started.
 Test Case '-[OuroWorkbenchCoreTests.TerminalIdentityTests testParserHandlesQuotedArguments]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.TerminalIdentityTests testParserPreservesEmptyQuotedArguments]' started.
 Test Case '-[OuroWorkbenchCoreTests.TerminalIdentityTests testParserPreservesEmptyQuotedArguments]' passed (0.000 seconds).
-Test Suite 'TerminalIdentityTests' passed at 2026-06-14 16:07:14.851.
-	 Executed 6 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
-Test Suite 'TranscriptRecorderTests' started at 2026-06-14 16:07:14.851.
+Test Suite 'TerminalIdentityTests' passed at 2026-06-14 16:15:06.900.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.001 (0.002) seconds
+Test Suite 'TranscriptRecorderTests' started at 2026-06-14 16:15:06.900.
 Test Case '-[OuroWorkbenchCoreTests.TranscriptRecorderTests testAppendAfterCloseIsANoOpAndDoesNotCrash]' started.
 Test Case '-[OuroWorkbenchCoreTests.TranscriptRecorderTests testAppendAfterCloseIsANoOpAndDoesNotCrash]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.TranscriptRecorderTests testAppendImmediatelyBeforeCloseIsFlushedNotLost]' started.
@@ -1719,62 +1725,62 @@ Test Case '-[OuroWorkbenchCoreTests.TranscriptRecorderTests testAppendWritesByte
 Test Case '-[OuroWorkbenchCoreTests.TranscriptRecorderTests testAppendWritesBytes]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.TranscriptRecorderTests testManyAppendsPreserveOrderAcrossAsyncQueue]' started.
 Test Case '-[OuroWorkbenchCoreTests.TranscriptRecorderTests testManyAppendsPreserveOrderAcrossAsyncQueue]' passed (0.002 seconds).
-Test Suite 'TranscriptRecorderTests' passed at 2026-06-14 16:07:14.856.
+Test Suite 'TranscriptRecorderTests' passed at 2026-06-14 16:15:06.904.
 	 Executed 4 tests, with 0 failures (0 unexpected) in 0.005 (0.005) seconds
-Test Suite 'TranscriptSearchTests' started at 2026-06-14 16:07:14.856.
+Test Suite 'TranscriptSearchTests' started at 2026-06-14 16:15:06.904.
 Test Case '-[OuroWorkbenchCoreTests.TranscriptSearchTests testEmptyQueryReturnsNoMatches]' started.
-Test Case '-[OuroWorkbenchCoreTests.TranscriptSearchTests testEmptyQueryReturnsNoMatches]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.TranscriptSearchTests testEmptyQueryReturnsNoMatches]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.TranscriptSearchTests testSearchClipsVeryLongNoNewlineMatches]' started.
-Test Case '-[OuroWorkbenchCoreTests.TranscriptSearchTests testSearchClipsVeryLongNoNewlineMatches]' passed (0.481 seconds).
+Test Case '-[OuroWorkbenchCoreTests.TranscriptSearchTests testSearchClipsVeryLongNoNewlineMatches]' passed (0.468 seconds).
 Test Case '-[OuroWorkbenchCoreTests.TranscriptSearchTests testSearchFindsCaseInsensitiveMatchesAcrossTranscriptRunsNewestFirst]' started.
-Test Case '-[OuroWorkbenchCoreTests.TranscriptSearchTests testSearchFindsCaseInsensitiveMatchesAcrossTranscriptRunsNewestFirst]' passed (0.002 seconds).
+Test Case '-[OuroWorkbenchCoreTests.TranscriptSearchTests testSearchFindsCaseInsensitiveMatchesAcrossTranscriptRunsNewestFirst]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.TranscriptSearchTests testSearchHandlesCRLFLinesAndDiacriticInsensitiveMatches]' started.
 Test Case '-[OuroWorkbenchCoreTests.TranscriptSearchTests testSearchHandlesCRLFLinesAndDiacriticInsensitiveMatches]' passed (0.002 seconds).
 Test Case '-[OuroWorkbenchCoreTests.TranscriptSearchTests testSearchHonorsMaxMatchesAndSkipsMissingFiles]' started.
 Test Case '-[OuroWorkbenchCoreTests.TranscriptSearchTests testSearchHonorsMaxMatchesAndSkipsMissingFiles]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.TranscriptSearchTests testSearchStripsANSIEscapeCodesFromMatches]' started.
-Test Case '-[OuroWorkbenchCoreTests.TranscriptSearchTests testSearchStripsANSIEscapeCodesFromMatches]' passed (0.002 seconds).
+Test Case '-[OuroWorkbenchCoreTests.TranscriptSearchTests testSearchStripsANSIEscapeCodesFromMatches]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.TranscriptSearchTests testTranscriptSearchLimitClampsCallerProvidedValues]' started.
-Test Case '-[OuroWorkbenchCoreTests.TranscriptSearchTests testTranscriptSearchLimitClampsCallerProvidedValues]' passed (0.001 seconds).
-Test Suite 'TranscriptSearchTests' passed at 2026-06-14 16:07:15.346.
-	 Executed 7 tests, with 0 failures (0 unexpected) in 0.489 (0.489) seconds
-Test Suite 'TranscriptTailReaderTests' started at 2026-06-14 16:07:15.346.
+Test Case '-[OuroWorkbenchCoreTests.TranscriptSearchTests testTranscriptSearchLimitClampsCallerProvidedValues]' passed (0.000 seconds).
+Test Suite 'TranscriptSearchTests' passed at 2026-06-14 16:15:07.379.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.474 (0.474) seconds
+Test Suite 'TranscriptTailReaderTests' started at 2026-06-14 16:15:07.379.
 Test Case '-[OuroWorkbenchCoreTests.TranscriptTailReaderTests testMissingTranscriptReturnsNil]' started.
 Test Case '-[OuroWorkbenchCoreTests.TranscriptTailReaderTests testMissingTranscriptReturnsNil]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.TranscriptTailReaderTests testReadsTailOmittingTerminalRepaintFragments]' started.
-Test Case '-[OuroWorkbenchCoreTests.TranscriptTailReaderTests testReadsTailOmittingTerminalRepaintFragments]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.TranscriptTailReaderTests testReadsTailOmittingTerminalRepaintFragments]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.TranscriptTailReaderTests testReadsTailPreservingPlainShortLines]' started.
-Test Case '-[OuroWorkbenchCoreTests.TranscriptTailReaderTests testReadsTailPreservingPlainShortLines]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.TranscriptTailReaderTests testReadsTailPreservingPlainShortLines]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.TranscriptTailReaderTests testReadsTailWhenTranscriptExceedsLimit]' started.
-Test Case '-[OuroWorkbenchCoreTests.TranscriptTailReaderTests testReadsTailWhenTranscriptExceedsLimit]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.TranscriptTailReaderTests testReadsTailWhenTranscriptExceedsLimit]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.TranscriptTailReaderTests testReadsTailWithoutANSIEscapeCodes]' started.
-Test Case '-[OuroWorkbenchCoreTests.TranscriptTailReaderTests testReadsTailWithoutANSIEscapeCodes]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.TranscriptTailReaderTests testReadsTailWithoutANSIEscapeCodes]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.TranscriptTailReaderTests testReadsWholeTranscriptWhenUnderLimit]' started.
 Test Case '-[OuroWorkbenchCoreTests.TranscriptTailReaderTests testReadsWholeTranscriptWhenUnderLimit]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.TranscriptTailReaderTests testTranscriptTailLimitClampsCallerProvidedValues]' started.
 Test Case '-[OuroWorkbenchCoreTests.TranscriptTailReaderTests testTranscriptTailLimitClampsCallerProvidedValues]' passed (0.000 seconds).
-Test Suite 'TranscriptTailReaderTests' passed at 2026-06-14 16:07:15.350.
-	 Executed 7 tests, with 0 failures (0 unexpected) in 0.004 (0.004) seconds
-Test Suite 'WorkbenchActionRequestQueueTests' started at 2026-06-14 16:07:15.350.
+Test Suite 'TranscriptTailReaderTests' passed at 2026-06-14 16:15:07.381.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
+Test Suite 'WorkbenchActionRequestQueueTests' started at 2026-06-14 16:15:07.381.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchActionRequestQueueTests testCreateSessionRequestRoundTripsCarryingOwnerAndParams]' started.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchActionRequestQueueTests testCreateSessionRequestRoundTripsCarryingOwnerAndParams]' passed (0.002 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchActionRequestQueueTests testCreateSessionRequestRoundTripsCarryingOwnerAndParams]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchActionRequestQueueTests testDrainMovesFilesToProcessingAndConfirmApplyDeletesThem]' started.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchActionRequestQueueTests testDrainMovesFilesToProcessingAndConfirmApplyDeletesThem]' passed (0.003 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchActionRequestQueueTests testDrainMovesFilesToProcessingAndConfirmApplyDeletesThem]' passed (0.002 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchActionRequestQueueTests testDrainQuarantinesMalformedRequestsAndContinues]' started.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchActionRequestQueueTests testDrainQuarantinesMalformedRequestsAndContinues]' passed (0.002 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchActionRequestQueueTests testDrainQuarantinesMalformedRequestsAndContinues]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchActionRequestQueueTests testDrainSortsByDecodedCreationTimeNotLexicalFilename]' started.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchActionRequestQueueTests testDrainSortsByDecodedCreationTimeNotLexicalFilename]' passed (0.002 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchActionRequestQueueTests testDrainSortsByDecodedCreationTimeNotLexicalFilename]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchActionRequestQueueTests testEnqueueDropsDuplicateFingerprintWhilePendingSoDrainReturnsOne]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchActionRequestQueueTests testEnqueueDropsDuplicateFingerprintWhilePendingSoDrainReturnsOne]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchActionRequestQueueTests testEnqueueKeepsRequestsThatDifferOnlyByAFingerprintField]' started.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchActionRequestQueueTests testEnqueueKeepsRequestsThatDifferOnlyByAFingerprintField]' passed (0.002 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchActionRequestQueueTests testEnqueueKeepsRequestsThatDifferOnlyByAFingerprintField]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchActionRequestQueueTests testQueueRoundTripsAndDrainsRequestsInFileOrder]' started.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchActionRequestQueueTests testQueueRoundTripsAndDrainsRequestsInFileOrder]' passed (0.002 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchActionRequestQueueTests testQueueRoundTripsAndDrainsRequestsInFileOrder]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchActionRequestQueueTests testRecoverUnconfirmedReturnsNothingWhenProcessingIsEmptyOrAbsent]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchActionRequestQueueTests testRecoverUnconfirmedReturnsNothingWhenProcessingIsEmptyOrAbsent]' passed (0.000 seconds).
-Test Suite 'WorkbenchActionRequestQueueTests' passed at 2026-06-14 16:07:15.364.
-	 Executed 8 tests, with 0 failures (0 unexpected) in 0.014 (0.014) seconds
-Test Suite 'WorkbenchBootstrapperTests' started at 2026-06-14 16:07:15.364.
+Test Suite 'WorkbenchActionRequestQueueTests' passed at 2026-06-14 16:15:07.390.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.008 (0.008) seconds
+Test Suite 'WorkbenchBootstrapperTests' started at 2026-06-14 16:15:07.390.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapCreatesDefaultProjectAndLocalShellOnly]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapCreatesDefaultProjectAndLocalShellOnly]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapDeduplicatesEntriesSharingAnID]' started.
@@ -1791,9 +1797,9 @@ Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapRepa
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapRepairsAndDoesNotDuplicateExistingLocalShell]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapSetupModeCreatesUnsortedWorkspaceWithoutLocalShell]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapSetupModeCreatesUnsortedWorkspaceWithoutLocalShell]' passed (0.000 seconds).
-Test Suite 'WorkbenchBootstrapperTests' passed at 2026-06-14 16:07:15.367.
-	 Executed 8 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
-Test Suite 'WorkbenchCommandPaletteTests' started at 2026-06-14 16:07:15.367.
+Test Suite 'WorkbenchBootstrapperTests' passed at 2026-06-14 16:15:07.391.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.001 (0.002) seconds
+Test Suite 'WorkbenchCommandPaletteTests' started at 2026-06-14 16:15:07.391.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchCommandPaletteTests testDescriptorDecodesWithoutPayloadForBackwardsCompatibility]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchCommandPaletteTests testDescriptorDecodesWithoutPayloadForBackwardsCompatibility]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchCommandPaletteTests testDescriptorPayloadRoundTripsThroughCoding]' started.
@@ -1818,18 +1824,18 @@ Test Case '-[OuroWorkbenchCoreTests.WorkbenchCommandPaletteTests testRecoverAllC
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchCommandPaletteTests testRecoverAllCrashedCommandIDIsPresent]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchCommandPaletteTests testStopAllRunningCommandIDIsPresent]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchCommandPaletteTests testStopAllRunningCommandIDIsPresent]' passed (0.000 seconds).
-Test Suite 'WorkbenchCommandPaletteTests' passed at 2026-06-14 16:07:15.370.
-	 Executed 12 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
-Test Suite 'WorkbenchCycleDirectionTests' started at 2026-06-14 16:07:15.370.
+Test Suite 'WorkbenchCommandPaletteTests' passed at 2026-06-14 16:15:07.393.
+	 Executed 12 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
+Test Suite 'WorkbenchCycleDirectionTests' started at 2026-06-14 16:15:07.393.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchCycleDirectionTests testCodableRoundTrip]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchCycleDirectionTests testCodableRoundTrip]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchCycleDirectionTests testCycleDirectionHasExactlyTwoCases]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchCycleDirectionTests testCycleDirectionHasExactlyTwoCases]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchCycleDirectionTests testRawValuesMatchUserFacingNames]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchCycleDirectionTests testRawValuesMatchUserFacingNames]' passed (0.000 seconds).
-Test Suite 'WorkbenchCycleDirectionTests' passed at 2026-06-14 16:07:15.370.
+Test Suite 'WorkbenchCycleDirectionTests' passed at 2026-06-14 16:15:07.394.
 	 Executed 3 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
-Test Suite 'WorkbenchElapsedFormatterTests' started at 2026-06-14 16:07:15.370.
+Test Suite 'WorkbenchElapsedFormatterTests' started at 2026-06-14 16:15:07.394.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchElapsedFormatterTests testNegativeDurationsClampToZero]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchElapsedFormatterTests testNegativeDurationsClampToZero]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchElapsedFormatterTests testRendersExactHoursWithoutMinuteSuffix]' started.
@@ -1840,9 +1846,9 @@ Test Case '-[OuroWorkbenchCoreTests.WorkbenchElapsedFormatterTests testRendersMi
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchElapsedFormatterTests testRendersMinutesAfterOneMinute]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchElapsedFormatterTests testRendersSecondsWhenUnderOneMinute]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchElapsedFormatterTests testRendersSecondsWhenUnderOneMinute]' passed (0.000 seconds).
-Test Suite 'WorkbenchElapsedFormatterTests' passed at 2026-06-14 16:07:15.371.
+Test Suite 'WorkbenchElapsedFormatterTests' passed at 2026-06-14 16:15:07.395.
 	 Executed 5 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
-Test Suite 'WorkbenchEntryReorderTests' started at 2026-06-14 16:07:15.371.
+Test Suite 'WorkbenchEntryReorderTests' started at 2026-06-14 16:15:07.395.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchEntryReorderTests testEmptyMoveLeavesArrayUnchanged]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchEntryReorderTests testEmptyMoveLeavesArrayUnchanged]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchEntryReorderTests testMoveToEndOfVisibleRange]' started.
@@ -1853,22 +1859,22 @@ Test Case '-[OuroWorkbenchCoreTests.WorkbenchEntryReorderTests testMultipleSelec
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchEntryReorderTests testMultipleSelectionMovesAsContiguousBlock]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchEntryReorderTests testOutOfBoundsDestinationLeavesArrayUnchanged]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchEntryReorderTests testOutOfBoundsDestinationLeavesArrayUnchanged]' passed (0.000 seconds).
-Test Suite 'WorkbenchEntryReorderTests' passed at 2026-06-14 16:07:15.372.
+Test Suite 'WorkbenchEntryReorderTests' passed at 2026-06-14 16:15:07.396.
 	 Executed 5 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
-Test Suite 'WorkbenchFactoryResetTests' started at 2026-06-14 16:07:15.372.
+Test Suite 'WorkbenchFactoryResetTests' started at 2026-06-14 16:15:07.396.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchFactoryResetTests testBacksUpStateFileToTimestampedSiblingAndClearsAllPreferences]' started.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchFactoryResetTests testBacksUpStateFileToTimestampedSiblingAndClearsAllPreferences]' passed (0.004 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchFactoryResetTests testBacksUpStateFileToTimestampedSiblingAndClearsAllPreferences]' passed (0.002 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchFactoryResetTests testFactoryResetRequestsFirstRunSetupAfterWipe]' started.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchFactoryResetTests testFactoryResetRequestsFirstRunSetupAfterWipe]' passed (0.003 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchFactoryResetTests testFactoryResetRequestsFirstRunSetupAfterWipe]' passed (0.002 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchFactoryResetTests testNoStateFileStillClearsPreferencesAndReturnsNil]' started.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchFactoryResetTests testNoStateFileStillClearsPreferencesAndReturnsNil]' passed (0.002 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchFactoryResetTests testNoStateFileStillClearsPreferencesAndReturnsNil]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchFactoryResetTests testRequestsAndConsumesFirstRunSetupMarker]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchFactoryResetTests testRequestsAndConsumesFirstRunSetupMarker]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchFactoryResetTests testSecondResetInSameSecondDoesNotThrowAndOverwritesBackup]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchFactoryResetTests testSecondResetInSameSecondDoesNotThrowAndOverwritesBackup]' passed (0.001 seconds).
-Test Suite 'WorkbenchFactoryResetTests' passed at 2026-06-14 16:07:15.383.
-	 Executed 5 tests, with 0 failures (0 unexpected) in 0.010 (0.011) seconds
-Test Suite 'WorkbenchGroupColorTests' started at 2026-06-14 16:07:15.383.
+Test Suite 'WorkbenchFactoryResetTests' passed at 2026-06-14 16:15:07.403.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.008 (0.008) seconds
+Test Suite 'WorkbenchGroupColorTests' started at 2026-06-14 16:15:07.403.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchGroupColorTests testFromTagParsesKnownColors]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchGroupColorTests testFromTagParsesKnownColors]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchGroupColorTests testFromTagReturnsNilForNilOrUnknown]' started.
@@ -1877,9 +1883,9 @@ Test Case '-[OuroWorkbenchCoreTests.WorkbenchGroupColorTests testProjectColorTag
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchGroupColorTests testProjectColorTagSurvivesCodingRoundTrip]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchGroupColorTests testProjectDecodesWithoutColorTagForBackwardsCompatibility]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchGroupColorTests testProjectDecodesWithoutColorTagForBackwardsCompatibility]' passed (0.000 seconds).
-Test Suite 'WorkbenchGroupColorTests' passed at 2026-06-14 16:07:15.384.
+Test Suite 'WorkbenchGroupColorTests' passed at 2026-06-14 16:15:07.404.
 	 Executed 4 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
-Test Suite 'WorkbenchGuideTests' started at 2026-06-14 16:07:15.384.
+Test Suite 'WorkbenchGuideTests' started at 2026-06-14 16:15:07.404.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchGuideTests testActionVerbsMatchTheCanonicalActionEnum]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchGuideTests testActionVerbsMatchTheCanonicalActionEnum]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchGuideTests testBossToolsCoverTheAdvertisedSurface]' started.
@@ -1887,7 +1893,7 @@ Test Case '-[OuroWorkbenchCoreTests.WorkbenchGuideTests testBossToolsCoverTheAdv
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchGuideTests testContextFileWritesRenderedDocument]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchGuideTests testContextFileWritesRenderedDocument]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchGuideTests testGuideDocListsEveryBossTool]' started.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchGuideTests testGuideDocListsEveryBossTool]' passed (0.006 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchGuideTests testGuideDocListsEveryBossTool]' passed (0.005 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchGuideTests testInnerAgentContextDescribesHostAndControls]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchGuideTests testInnerAgentContextDescribesHostAndControls]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchGuideTests testInnerAgentContextWithoutBossStaysGeneric]' started.
@@ -1898,9 +1904,9 @@ Test Case '-[OuroWorkbenchCoreTests.WorkbenchGuideTests testShortcutCategoriesAr
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchGuideTests testShortcutCategoriesAreNonEmptyAndPopulated]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchGuideTests testShortcutsMarkdownRendersKnownBindings]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchGuideTests testShortcutsMarkdownRendersKnownBindings]' passed (0.000 seconds).
-Test Suite 'WorkbenchGuideTests' passed at 2026-06-14 16:07:15.393.
-	 Executed 9 tests, with 0 failures (0 unexpected) in 0.008 (0.009) seconds
-Test Suite 'WorkbenchLaunchDiagnosticsTests' started at 2026-06-14 16:07:15.393.
+Test Suite 'WorkbenchGuideTests' passed at 2026-06-14 16:15:07.412.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 0.007 (0.008) seconds
+Test Suite 'WorkbenchLaunchDiagnosticsTests' started at 2026-06-14 16:15:07.412.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchLaunchDiagnosticsTests testParseAppSupportRootAndAutoLaunchOverride]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchLaunchDiagnosticsTests testParseAppSupportRootAndAutoLaunchOverride]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchLaunchDiagnosticsTests testParseDumpRecentSessionsDiagnostic]' started.
@@ -1919,9 +1925,9 @@ Test Case '-[OuroWorkbenchCoreTests.WorkbenchLaunchDiagnosticsTests testParseReq
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchLaunchDiagnosticsTests testParseRequiresAppSupportRootPath]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchLaunchDiagnosticsTests testParseScanHomeRootRequiresPath]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchLaunchDiagnosticsTests testParseScanHomeRootRequiresPath]' passed (0.000 seconds).
-Test Suite 'WorkbenchLaunchDiagnosticsTests' passed at 2026-06-14 16:07:15.395.
-	 Executed 9 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
-Test Suite 'WorkbenchMCPRegistrationActionTests' started at 2026-06-14 16:07:15.395.
+Test Suite 'WorkbenchLaunchDiagnosticsTests' passed at 2026-06-14 16:15:07.413.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'WorkbenchMCPRegistrationActionTests' started at 2026-06-14 16:15:07.413.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchMCPRegistrationActionTests testAuditDetailCarriesRegistrarLanguageAndAgent]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchMCPRegistrationActionTests testAuditDetailCarriesRegistrarLanguageAndAgent]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchMCPRegistrationActionTests testClassifyNeedsManualWhenSnapshotUnrecoverable]' started.
@@ -1939,7 +1945,7 @@ Test Case '-[OuroWorkbenchCoreTests.WorkbenchMCPRegistrationActionTests testNeed
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchMCPRegistrationActionTests testOutcomeResultLineIsSeamFreeAndAuditDetailNamesAgent]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchMCPRegistrationActionTests testOutcomeResultLineIsSeamFreeAndAuditDetailNamesAgent]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchMCPRegistrationActionTests testRunnerClassifiesNeedsManualWhenBinaryMissing]' started.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchMCPRegistrationActionTests testRunnerClassifiesNeedsManualWhenBinaryMissing]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchMCPRegistrationActionTests testRunnerClassifiesNeedsManualWhenBinaryMissing]' passed (0.110 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchMCPRegistrationActionTests testRunnerClassifiesNeedsManualWhenSnapshotUnrecoverable]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchMCPRegistrationActionTests testRunnerClassifiesNeedsManualWhenSnapshotUnrecoverable]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchMCPRegistrationActionTests testRunnerClassifiesRegisteredFromSnapshotNotThrow]' started.
@@ -1950,27 +1956,27 @@ Test Case '-[OuroWorkbenchCoreTests.WorkbenchMCPRegistrationActionTests testRunn
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchMCPRegistrationActionTests testRunnerPassesExplicitAgentNameToBothRunAndSnapshot]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchMCPRegistrationActionTests testRunnerRejectsEmptyAgentNameWithoutRunningCommand]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchMCPRegistrationActionTests testRunnerRejectsEmptyAgentNameWithoutRunningCommand]' passed (0.000 seconds).
-Test Suite 'WorkbenchMCPRegistrationActionTests' passed at 2026-06-14 16:07:15.399.
-	 Executed 14 tests, with 0 failures (0 unexpected) in 0.003 (0.004) seconds
-Test Suite 'WorkbenchReleaseTests' started at 2026-06-14 16:07:15.399.
+Test Suite 'WorkbenchMCPRegistrationActionTests' passed at 2026-06-14 16:15:07.526.
+	 Executed 14 tests, with 0 failures (0 unexpected) in 0.112 (0.113) seconds
+Test Suite 'WorkbenchReleaseTests' started at 2026-06-14 16:15:07.526.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchReleaseTests testReleaseMetadataIsValidForNativeBundleAndMCP]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchReleaseTests testReleaseMetadataIsValidForNativeBundleAndMCP]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchReleaseTests testReleaseVersionMatchesVersionFile]' started.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchReleaseTests testReleaseVersionMatchesVersionFile]' passed (0.000 seconds).
-Test Suite 'WorkbenchReleaseTests' passed at 2026-06-14 16:07:15.401.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchReleaseTests testReleaseVersionMatchesVersionFile]' passed (0.002 seconds).
+Test Suite 'WorkbenchReleaseTests' passed at 2026-06-14 16:15:07.528.
 	 Executed 2 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
-Test Suite 'WorkbenchScenarioMatrixTests' started at 2026-06-14 16:07:15.401.
+Test Suite 'WorkbenchScenarioMatrixTests' started at 2026-06-14 16:15:07.528.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchScenarioMatrixTests testAllFiveThousandScenarioRowsMatchRecoveryReadinessAndCommandPlanning]' started.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchScenarioMatrixTests testAllFiveThousandScenarioRowsMatchRecoveryReadinessAndCommandPlanning]' passed (0.538 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchScenarioMatrixTests testAllFiveThousandScenarioRowsMatchRecoveryReadinessAndCommandPlanning]' passed (0.456 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchScenarioMatrixTests testAllFiveThousandScenarioRowsSatisfySurfaceChromeContracts]' started.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchScenarioMatrixTests testAllFiveThousandScenarioRowsSatisfySurfaceChromeContracts]' passed (0.141 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchScenarioMatrixTests testAllFiveThousandScenarioRowsSatisfySurfaceChromeContracts]' passed (0.133 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchScenarioMatrixTests testScenarioMatrixContainsExactlyFiveThousandCasesWithOptimalOutcomes]' started.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchScenarioMatrixTests testScenarioMatrixContainsExactlyFiveThousandCasesWithOptimalOutcomes]' passed (0.143 seconds).
-Test Suite 'WorkbenchScenarioMatrixTests' passed at 2026-06-14 16:07:16.222.
-	 Executed 3 tests, with 0 failures (0 unexpected) in 0.821 (0.822) seconds
-Test Suite 'WorkbenchSessionsRendererTests' started at 2026-06-14 16:07:16.222.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchScenarioMatrixTests testScenarioMatrixContainsExactlyFiveThousandCasesWithOptimalOutcomes]' passed (0.133 seconds).
+Test Suite 'WorkbenchScenarioMatrixTests' passed at 2026-06-14 16:15:08.250.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.721 (0.721) seconds
+Test Suite 'WorkbenchSessionsRendererTests' started at 2026-06-14 16:15:08.250.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchSessionsRendererTests testEncodedJSONOmitsNilOptionals]' started.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchSessionsRendererTests testEncodedJSONOmitsNilOptionals]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSessionsRendererTests testEncodedJSONOmitsNilOptionals]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchSessionsRendererTests testExcludesArchivedByDefaultAndMapsCoreFields]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchSessionsRendererTests testExcludesArchivedByDefaultAndMapsCoreFields]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchSessionsRendererTests testIncludeArchivedReturnsAll]' started.
@@ -1981,11 +1987,11 @@ Test Case '-[OuroWorkbenchCoreTests.WorkbenchSessionsRendererTests testOwnerFilt
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchSessionsRendererTests testOwnerFilterReturnsOnlyThatAgentsSessions]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchSessionsRendererTests testPicksLatestRunAndMapsAgentOwner]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchSessionsRendererTests testPicksLatestRunAndMapsAgentOwner]' passed (0.000 seconds).
-Test Suite 'WorkbenchSessionsRendererTests' passed at 2026-06-14 16:07:16.224.
-	 Executed 6 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
-Test Suite 'WorkbenchStoreTests' started at 2026-06-14 16:07:16.224.
+Test Suite 'WorkbenchSessionsRendererTests' passed at 2026-06-14 16:15:08.251.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'WorkbenchStoreTests' started at 2026-06-14 16:15:08.251.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchStoreTests testCorruptStateFileIsQuarantinedNotOverwritten]' started.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchStoreTests testCorruptStateFileIsQuarantinedNotOverwritten]' passed (0.003 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchStoreTests testCorruptStateFileIsQuarantinedNotOverwritten]' passed (0.002 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchStoreTests testLenientDecodeSkipsCorruptElementsKeepsGoodOnes]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchStoreTests testLenientDecodeSkipsCorruptElementsKeepsGoodOnes]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchStoreTests testReadOnlyLoadDoesNotQuarantineCorruptFile]' started.
@@ -1995,12 +2001,12 @@ Test Case '-[OuroWorkbenchCoreTests.WorkbenchStoreTests testStoreLoadsStateBefor
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchStoreTests testStoreRoundTripsWorkspaceState]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchStoreTests testStoreRoundTripsWorkspaceState]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchStoreTests testUnknownEnumRawValueDecodesToFallbackNotThrow]' started.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchStoreTests testUnknownEnumRawValueDecodesToFallbackNotThrow]' passed (0.001 seconds).
-Test Suite 'WorkbenchStoreTests' passed at 2026-06-14 16:07:16.232.
-	 Executed 6 tests, with 0 failures (0 unexpected) in 0.007 (0.008) seconds
-Test Suite 'WorkbenchSurfacePolicyTests' started at 2026-06-14 16:07:16.232.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchStoreTests testUnknownEnumRawValueDecodesToFallbackNotThrow]' passed (0.000 seconds).
+Test Suite 'WorkbenchStoreTests' passed at 2026-06-14 16:15:08.257.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.006 (0.006) seconds
+Test Suite 'WorkbenchSurfacePolicyTests' started at 2026-06-14 16:15:08.257.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testAppWorkspaceCopyIsWiredThroughSurfacePolicy]' started.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testAppWorkspaceCopyIsWiredThroughSurfacePolicy]' passed (0.114 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testAppWorkspaceCopyIsWiredThroughSurfacePolicy]' passed (0.109 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testArchivedSessionShowsNoPrimaryOrAdvancedActions]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testArchivedSessionShowsNoPrimaryOrAdvancedActions]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testBossStatusLabelsStayCompact]' started.
@@ -2024,12 +2030,12 @@ Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testSidebarPrima
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testStoppedSessionShowsLaunchAsPrimaryAction]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testStoppedSessionShowsLaunchAsPrimaryAction]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testTitleStripUsesSessionControlPolicyWithoutPrimaryRestartLeak]' started.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testTitleStripUsesSessionControlPolicyWithoutPrimaryRestartLeak]' passed (0.026 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testTitleStripUsesSessionControlPolicyWithoutPrimaryRestartLeak]' passed (0.024 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testWorkspaceManagementCopyUsesWorkspaceNouns]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testWorkspaceManagementCopyUsesWorkspaceNouns]' passed (0.000 seconds).
-Test Suite 'WorkbenchSurfacePolicyTests' passed at 2026-06-14 16:07:16.374.
-	 Executed 14 tests, with 0 failures (0 unexpected) in 0.141 (0.142) seconds
-Test Suite 'WorkbenchUpdateTests' started at 2026-06-14 16:07:16.374.
+Test Suite 'WorkbenchSurfacePolicyTests' passed at 2026-06-14 16:15:08.392.
+	 Executed 14 tests, with 0 failures (0 unexpected) in 0.134 (0.135) seconds
+Test Suite 'WorkbenchUpdateTests' started at 2026-06-14 16:15:08.392.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchUpdateTests testAutoUpdatePolicyChecksAfterInterval]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchUpdateTests testAutoUpdatePolicyChecksAfterInterval]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchUpdateTests testAutoUpdatePolicyChecksWhenNeverCheckedBefore]' started.
@@ -2039,7 +2045,7 @@ Test Case '-[OuroWorkbenchCoreTests.WorkbenchUpdateTests testAutoUpdatePolicySki
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchUpdateTests testAutoUpdatePolicyThrottlesWithinInterval]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchUpdateTests testAutoUpdatePolicyThrottlesWithinInterval]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchUpdateTests testManifestDecodesFromReleaseJSON]' started.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchUpdateTests testManifestDecodesFromReleaseJSON]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchUpdateTests testManifestDecodesFromReleaseJSON]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchUpdateTests testPlanFailsWhenArchiveMissing]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchUpdateTests testPlanFailsWhenArchiveMissing]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchUpdateTests testPlanFailsWhenManifestMissing]' started.
@@ -2060,18 +2066,18 @@ Test Case '-[OuroWorkbenchCoreTests.WorkbenchUpdateTests testVerifyFailsWhenNotN
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchUpdateTests testVerifyFailsWhenNotNewerThanCurrent]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchUpdateTests testVerifyPassesWhenEverythingMatches]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchUpdateTests testVerifyPassesWhenEverythingMatches]' passed (0.000 seconds).
-Test Suite 'WorkbenchUpdateTests' passed at 2026-06-14 16:07:16.377.
-	 Executed 15 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
-Test Suite 'WorkbenchVisibilityTests' started at 2026-06-14 16:07:16.377.
+Test Suite 'WorkbenchUpdateTests' passed at 2026-06-14 16:15:08.396.
+	 Executed 15 tests, with 0 failures (0 unexpected) in 0.003 (0.004) seconds
+Test Suite 'WorkbenchVisibilityTests' started at 2026-06-14 16:15:08.396.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchVisibilityTests testBuildsTypedUnavailableWorkCardWithoutFalseZeroes]' started.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchVisibilityTests testBuildsTypedUnavailableWorkCardWithoutFalseZeroes]' passed (0.002 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchVisibilityTests testBuildsTypedUnavailableWorkCardWithoutFalseZeroes]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchVisibilityTests testDecodesHarnessWorkCardAndPreservesUnavailableClaims]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchVisibilityTests testDecodesHarnessWorkCardAndPreservesUnavailableClaims]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchVisibilityTests testWorkCardReaderDecodesJSONAndReportsFailures]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchVisibilityTests testWorkCardReaderDecodesJSONAndReportsFailures]' passed (0.000 seconds).
-Test Suite 'WorkbenchVisibilityTests' passed at 2026-06-14 16:07:16.380.
-	 Executed 3 tests, with 0 failures (0 unexpected) in 0.003 (0.003) seconds
-Test Suite 'WorkbenchWorkspaceConfigTests' started at 2026-06-14 16:07:16.380.
+Test Suite 'WorkbenchVisibilityTests' passed at 2026-06-14 16:15:08.398.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
+Test Suite 'WorkbenchWorkspaceConfigTests' started at 2026-06-14 16:15:08.398.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchWorkspaceConfigTests testLoadDecodesAllFields]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchWorkspaceConfigTests testLoadDecodesAllFields]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchWorkspaceConfigTests testLoadFailsOnMalformedJSON]' started.
@@ -2079,7 +2085,7 @@ Test Case '-[OuroWorkbenchCoreTests.WorkbenchWorkspaceConfigTests testLoadFailsO
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchWorkspaceConfigTests testLoadFailsWhenFileMissing]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchWorkspaceConfigTests testLoadFailsWhenFileMissing]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchWorkspaceConfigTests testLoadFailsWhenTerminalsEmpty]' started.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchWorkspaceConfigTests testLoadFailsWhenTerminalsEmpty]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchWorkspaceConfigTests testLoadFailsWhenTerminalsEmpty]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchWorkspaceConfigTests testResolvedGroupNameFallsBackToRootBasename]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchWorkspaceConfigTests testResolvedGroupNameFallsBackToRootBasename]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchWorkspaceConfigTests testResolvedGroupNameUsesConfiguredValue]' started.
@@ -2090,9 +2096,9 @@ Test Case '-[OuroWorkbenchCoreTests.WorkbenchWorkspaceConfigTests testResolvedRo
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchWorkspaceConfigTests testResolvedRootPathFallsBackToConfigDirectory]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchWorkspaceConfigTests testResolvedWorkingDirectoryHandlesDotAndRelativePaths]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchWorkspaceConfigTests testResolvedWorkingDirectoryHandlesDotAndRelativePaths]' passed (0.000 seconds).
-Test Suite 'WorkbenchWorkspaceConfigTests' passed at 2026-06-14 16:07:16.385.
-	 Executed 9 tests, with 0 failures (0 unexpected) in 0.005 (0.005) seconds
-Test Suite 'WorkspaceSummaryTests' started at 2026-06-14 16:07:16.385.
+Test Suite 'WorkbenchWorkspaceConfigTests' passed at 2026-06-14 16:15:08.402.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 0.003 (0.004) seconds
+Test Suite 'WorkspaceSummaryTests' started at 2026-06-14 16:15:08.402.
 Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testBossPromptIncludesProcessAndRecoveryTruth]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testBossPromptIncludesProcessAndRecoveryTruth]' passed (0.002 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testBossPromptIncludesRecentWorkspaceChanges]' started.
@@ -2101,12 +2107,12 @@ Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testChangeSummarizerCa
 Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testChangeSummarizerCapturesRunStatusAttentionArchiveAndActions]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testSummarySurfacesHumanWaitsFirst]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testSummarySurfacesHumanWaitsFirst]' passed (0.000 seconds).
-Test Suite 'WorkspaceSummaryTests' passed at 2026-06-14 16:07:16.388.
+Test Suite 'WorkspaceSummaryTests' passed at 2026-06-14 16:15:08.405.
 	 Executed 4 tests, with 0 failures (0 unexpected) in 0.003 (0.003) seconds
-Test Suite 'OuroWorkbenchPackageTests.xctest' passed at 2026-06-14 16:07:16.389.
-	 Executed 919 tests, with 1 test skipped and 0 failures (0 unexpected) in 6.670 (6.723) seconds
-Test Suite 'All tests' passed at 2026-06-14 16:07:16.389.
-	 Executed 919 tests, with 1 test skipped and 0 failures (0 unexpected) in 6.670 (6.724) seconds
+Test Suite 'OuroWorkbenchPackageTests.xctest' passed at 2026-06-14 16:15:08.405.
+	 Executed 922 tests, with 1 test skipped and 0 failures (0 unexpected) in 5.963 (6.014) seconds
+Test Suite 'All tests' passed at 2026-06-14 16:15:08.405.
+	 Executed 922 tests, with 1 test skipped and 0 failures (0 unexpected) in 5.963 (6.015) seconds
 ◇ Test run started.
 ↳ Testing Library Version: 1902
 ↳ Target Platform: arm64e-apple-macos14.0
