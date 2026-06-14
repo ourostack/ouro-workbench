@@ -20,10 +20,8 @@ Gate state:
 - Spec: written and committed
 - Audit: written and committed
 - Planning review: converged and approved
-- Doing review: granularity, validation/source-fidelity, and ambiguity Round 2 converged; quality Round 2 findings addressed in doc
-- Implementation: not started
+- Doing review: converged; doing doc ready
+- Implementation: starting Unit 0
 - Live validation: pending
 
-Next action: rerun quality doing review, mark doing doc ready after reviewer
-convergence, then execute units directly with TDD and sub-agent reviews where
-useful.
+Next action: complete Unit 0 research, then begin Unit 1a red tests.

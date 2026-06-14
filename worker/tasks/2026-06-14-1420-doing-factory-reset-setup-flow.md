@@ -1,6 +1,6 @@
 # Doing: Factory Reset Setup Flow
 
-**Status**: drafting
+**Status**: ready
 **Execution Mode**: direct
 **Created**: 2026-06-14 14:42
 **Planning**: ./2026-06-14-1420-planning-factory-reset-setup-flow.md
@@ -345,3 +345,4 @@ grep -F 'PASS import_scanner' "$ART/e2e-import-scanner.md"
 ## Progress Log
 
 - 2026-06-14 14:42 Created from planning doc
+- 2026-06-14 15:15 Doing doc reviewer gates converged; status set to ready for direct execution.
