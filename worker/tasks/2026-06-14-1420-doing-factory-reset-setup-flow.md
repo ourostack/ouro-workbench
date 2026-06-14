@@ -106,40 +106,65 @@ The immediate blocker is the post-factory-reset first-run experience: Workbench 
 **Output**: Test output saved to artifacts.
 **Acceptance**: New scanner code has coverage for happy path, stale path, malformed/partial path, and dedupe/union behavior.
 
-### ⬜ Unit 3a: Primary Chrome Policy - Tests
-**What**: Add focused core tests for any extracted pure policy that drives primary UI labels/visibility: setup-mode sidebar sections, recovery visibility, workspace noun copy, and running-session primary controls.
-**Output**: Failing tests in a new or existing `Tests/OuroWorkbenchCoreTests/*` file.
-**Acceptance**: Tests fail before implementation because policies/copy do not yet match the spec.
+### ⬜ Unit 3a: Sidebar Workspace Policy - Tests
+**What**: Add failing tests for a pure sidebar/setup surface policy. Target a new `Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift` covering workspace noun copy, setup-mode project name, boss section label/status, hidden healthy recovery, and shown actionable recovery.
+**Output**: Failing tests specify exact expected values: section title `Workspaces`, setup workspace name `Unsorted Sessions`, no `This Mac` workspace name, compact boss status labels, and recovery visibility only when recoverable count is greater than zero.
+**Acceptance**: Focused policy tests fail before implementation because `WorkbenchSurfacePolicy` does not exist or returns old `Groups`/always-recovery behavior.
 
-### ⬜ Unit 3b: Primary Chrome Policy - Implementation
-**What**: Update `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift` and any small core helper so primary UI uses `Workspaces`, hides healthy `Recovery`, replaces permanent `Agents` section with compact boss status/setup affordance, removes `This Mac` as reset/fresh workspace copy, and collapses low-level running controls into a labeled `Session Controls` menu with stop as the only visible running action.
-**Output**: App UI code reflects the surface spec without broad storage/model renames.
-**Acceptance**: Unit 3a tests pass; `swift build` succeeds; manual source inspection confirms no primary `Groups` section label, no primary low-level icon strip, and no primary restart button.
+### ⬜ Unit 3b: Sidebar Workspace Policy - Implementation
+**What**: Add `Sources/OuroWorkbenchCore/WorkbenchSurfacePolicy.swift` and wire `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift` sidebar/setup labels through it. Replace primary `Groups` text with `Workspaces`, use `Unsorted Sessions` for setup-mode bootstrap, replace permanent `Agents` section title with compact `Boss`, and hide the sidebar `Recovery` section when `model.recoverableEntries.isEmpty`.
+**Output**: Core policy plus app sidebar copy/visibility changes.
+**Acceptance**: Unit 3a tests pass; `swift build` succeeds; `rg -n 'Section\\(\"Groups\"\\)|New Group|Move to Group|Delete Terminal Group|Groups with terminals' Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift` returns no primary user-facing sidebar/header strings.
 
-### ⬜ Unit 3c: Primary Chrome Policy - Coverage & Refactor
-**What**: Run focused UI-policy/core tests and build. Refactor only small helper naming or duplicated label code.
-**Output**: Test/build output saved to artifacts.
-**Acceptance**: Tests remain green, no warnings, and primary-chrome implementation stays scoped to reset/sidebar/header/onboarding surfaces.
+### ⬜ Unit 3c: Sidebar Workspace Policy - Coverage & Refactor
+**What**: Run `swift test --filter WorkbenchSurfacePolicyTests` and `swift build`. Keep any refactor limited to `WorkbenchSurfacePolicy` naming and call sites already changed in Unit 3b.
+**Output**: Test/build output saved to `2026-06-14-1420-doing-factory-reset-setup-flow/unit-3-sidebar-policy.log`.
+**Acceptance**: Policy branches for setup mode, normal mode, healthy recovery, and actionable recovery are covered and green.
 
-### ⬜ Unit 4a: Boss-Led Onboarding Narrative - Tests
-**What**: Add failing tests for pure onboarding narrative/copy helpers that describe the post-agent boss-led welcome, scan, proposal, ambiguous/low-confidence handling, and duplicate-outside-Workbench cleanup guidance.
-**Output**: Tests in `Tests/OuroWorkbenchCoreTests/OnboardingTests.swift` or a new onboarding-copy test file.
-**Acceptance**: Tests fail before implementation because the new narrative helper/copy does not exist.
+### ⬜ Unit 4a: Running Session Controls Policy - Tests
+**What**: Add failing tests for a pure running-session chrome policy in `Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift`. Cover visible primary actions for running, stopped, archived, and recoverable sessions.
+**Output**: Tests require running sessions to expose only `stop` as a primary action and to expose `focus`, `redraw`, `restart`, `controlC`, `escape`, and `eof` only as advanced session controls.
+**Acceptance**: Tests fail before implementation because the policy does not exist or still treats low-level controls/restart as primary.
 
-### ⬜ Unit 4b: Boss-Led Onboarding Narrative - Implementation
-**What**: Rework onboarding copy and flow in `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift` with supporting core copy helpers if useful. Keep the traditional wizard limited to boss setup/readiness; once ready, present a boss-narrated welcome/import proposal with visual cards and duplicate cleanup guidance after arrange.
-**Output**: Onboarding UI and import summary read as boss-led/conversational and mention local Codex/Claude/Copilot/cmux/shell scan coverage.
-**Acceptance**: Unit 4a tests pass; `swift build` succeeds; source inspection confirms setup/import copy no longer presents import as a static standalone wizard.
+### ⬜ Unit 4b: Running Session Controls Policy - Implementation
+**What**: Extend `Sources/OuroWorkbenchCore/WorkbenchSurfacePolicy.swift` for session chrome actions and update `RunningSessionHeaderControls` in `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift` so the header shows a visible Stop button plus a labeled `Session Controls` menu containing Focus, Redraw, Restart, Ctrl-C, Esc, EOF, Copy Launch Command, and Open Working Directory.
+**Output**: Header UI no longer shows the screenshot's row of unlabeled low-level icons; advanced actions remain reachable with labels/tooltips.
+**Acceptance**: Unit 4a tests pass; `swift build` succeeds; `rg -n 'RunningSessionHeaderControls|Session Controls|Ctrl-C|EOF|Restart' Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift` shows the actions under the menu implementation, not as separate primary image buttons.
 
-### ⬜ Unit 4c: Boss-Led Onboarding Narrative - Coverage & Refactor
-**What**: Run onboarding tests plus build. Refactor copy helper only if tests or call sites are awkward.
-**Output**: Test/build output saved to artifacts.
-**Acceptance**: New narrative helper is fully covered and app copy remains consistent with `docs/workbench-surface-spec.md`.
+### ⬜ Unit 4c: Running Session Controls Policy - Coverage & Refactor
+**What**: Run `swift test --filter WorkbenchSurfacePolicyTests` and `swift build`. Keep refactor scoped to the policy enum/action naming and `RunningSessionHeaderControls`.
+**Output**: Test/build output saved to `2026-06-14-1420-doing-factory-reset-setup-flow/unit-4-session-controls.log`.
+**Acceptance**: Running/stopped/archived/recoverable action policies are covered and green.
 
-### ⬜ Unit 5: Full Verification And Live E2E
+### ⬜ Unit 5a: Boss-Led Onboarding Copy - Tests
+**What**: Add failing tests for a pure onboarding narrative helper. Target `Tests/OuroWorkbenchCoreTests/OnboardingTests.swift` or a new `Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift`.
+**Output**: Tests require copy for boss-ready welcome, scan intro, proposal summary, ambiguous/low-confidence explanation, and duplicate external session cleanup guidance.
+**Acceptance**: Tests fail before implementation because `WorkbenchOnboardingNarrative` does not exist or old copy omits boss-led import/cleanup language.
+
+### ⬜ Unit 5b: Boss-Led Onboarding Copy - Implementation
+**What**: Add `Sources/OuroWorkbenchCore/WorkbenchOnboardingNarrative.swift` and use it in `OnboardingWelcomePage`, `OnboardingBootstrapView`, `OnboardingGroupProposalView`, `OnboardingSessionPreviewSheet`, and import summary/banner copy in `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift`.
+**Output**: Onboarding copy says the boss can see this Mac, will scan local coding-agent sessions, will ask before unclear imports, and will guide cleanup of duplicates after Workbench resumes approved sessions.
+**Acceptance**: Unit 5a tests pass; `swift build` succeeds; source inspection confirms setup/import copy no longer frames import as a static app-only wizard.
+
+### ⬜ Unit 5c: Boss-Led Onboarding Flow Policy - Tests
+**What**: Add failing tests for pure onboarding flow decisions in `Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift`: wizard phase before boss readiness, boss-led import phase after readiness, proposal visual support when candidates exist, ambiguity prompt when low-confidence candidates exist, and duplicate cleanup guidance after import.
+**Output**: Tests define `WorkbenchOnboardingFlowPolicy` inputs and expected phase/prompt values.
+**Acceptance**: Tests fail before implementation because flow policy does not exist or old readiness/import states do not distinguish boss-led phases.
+
+### ⬜ Unit 5d: Boss-Led Onboarding Flow Policy - Implementation
+**What**: Add `WorkbenchOnboardingFlowPolicy` in `Sources/OuroWorkbenchCore/WorkbenchOnboardingNarrative.swift` and wire `WorkbenchOnboardingSheet.advance`, `primaryActionTitle`, `OnboardingBootstrapView`, and `handleOnboardingInstruction` through it where those functions choose setup/import/arrange behavior.
+**Output**: Traditional wizard remains limited to boss setup/readiness; after readiness, the boss-led import phase drives scan/proposal/arrange and duplicate cleanup messaging.
+**Acceptance**: Unit 5c tests pass; `swift build` succeeds; source inspection shows `OnboardingBootstrapView` using policy/narrative values for scan, proposal, ambiguity, and cleanup text.
+
+### ⬜ Unit 5e: Boss-Led Onboarding - Coverage & Refactor
+**What**: Run onboarding narrative/flow tests, existing `OnboardingTests`, and `swift build`. Refactor only helper names or call-site duplication created in Units 5b/5d.
+**Output**: Test/build output saved to `2026-06-14-1420-doing-factory-reset-setup-flow/unit-5-onboarding.log`.
+**Acceptance**: Narrative and flow helpers have branch coverage for not-ready, ready-no-proposal, proposal-with-selected, proposal-with-low-confidence, and imported/cleanup states.
+
+### ⬜ Unit 6: Full Verification And Live E2E
 **What**: Run `swift test`, `swift build`, relevant scenario verifier command, package/install current app build, and live-validate reset/setup/import surfaces with computer use or native UI automation. Preserve screenshots/logs in artifacts.
-**Output**: Verification logs and screenshots under `2026-06-14-1420-doing-factory-reset-setup-flow/`.
-**Acceptance**: Live app from current source relaunches into setup after reset, has no undeletable shell-only dead end, shows Workspaces/Boss/conditional Recovery posture, hides low-level controls behind `Session Controls`, and scanner proposal includes representative local Codex/Claude sources.
+**Output**: Verification logs and screenshots under `2026-06-14-1420-doing-factory-reset-setup-flow/`, including `full-swift-test.log`, `swift-build.log`, `scenario-verifier.log`, `installed-app-version.txt`, `e2e-reset-setup.md`, `e2e-sidebar.md`, `e2e-session-controls.md`, and `e2e-import-scanner.md`.
+**Acceptance**: Each E2E artifact has an explicit pass/fail line. Live app from current source relaunches into setup after reset, has no undeletable shell-only dead end, shows Workspaces/Boss/conditional Recovery posture, hides low-level controls behind `Session Controls`, and scanner proposal includes representative local Codex/Claude sources.
 
 ## Execution
 
@@ -154,4 +179,3 @@ The immediate blocker is the post-factory-reset first-run experience: Workbench 
 ## Progress Log
 
 - 2026-06-14 14:42 Created from planning doc
-

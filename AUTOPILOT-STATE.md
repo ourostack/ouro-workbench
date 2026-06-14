@@ -20,10 +20,10 @@ Gate state:
 - Spec: written and committed
 - Audit: written and committed
 - Planning review: Round 2 in progress
-- Doing review: pending
+- Doing review: granularity Round 1 findings addressed; Round 2 pending
 - Implementation: not started
 - Live validation: pending
 
-Next action: finish planning/doing reviewer gates, mark doing doc ready, then
-execute units directly with TDD and sub-agent reviews where useful.
-
+Next action: rerun granularity review, finish remaining doing review passes,
+mark doing doc ready, then execute units directly with TDD and sub-agent reviews
+where useful.
