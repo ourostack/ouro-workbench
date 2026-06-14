@@ -1,6 +1,6 @@
 # Doing: Factory Reset Setup Flow
 
-**Status**: ready
+**Status**: done
 **Execution Mode**: direct
 **Created**: 2026-06-14 14:42
 **Planning**: ./2026-06-14-1420-planning-factory-reset-setup-flow.md
@@ -30,21 +30,21 @@ The immediate blocker is the post-factory-reset first-run experience: Workbench 
 
 ## Completion Criteria
 
-- [ ] After `Reset to Factory Defaults`, the next launch presents the setup/import flow even when the selected boss/harness readiness would otherwise be `.ready`.
-- [ ] First-run setup first resolves the Ouro agent: select an existing functioning agent or hatch/configure a new one. No terminal import/chrome complexity blocks that step.
-- [ ] Once the boss agent is functioning, setup switches to a conversational welcome/import flow rather than a static wizard-only experience.
-- [ ] A fresh/post-reset workspace does not show an undeletable `Local Shell` as the only apparent thing to do before setup/import.
-- [ ] If a fallback local shell is still present somewhere, it has a clear, tested removal/archive path or is intentionally hidden/deferred until after setup/import.
-- [ ] The selected-session header no longer exposes the full low-level control strip as primary chrome in normal use. Advanced controls remain reachable when needed, with clear labels/tooltips.
-- [ ] Running sessions show stop as the only primary action. Restart/relaunch moves into `Session Controls`. Launch/resume/recover stays visible for inactive or recoverable sessions.
-- [ ] Primary sidebar/setup copy uses `Workspaces`, not `Groups`; `This Mac` appears only as machine scope; selected boss appears as compact boss status, not a permanent `Agents` peer; `Recovery` is hidden unless actionable.
-- [ ] There is a clear path for the boss/import flow to surface likely sessions, ambiguous sessions, proposed organization, and duplicate-outside-Workbench guidance.
-- [ ] The recent-session scanner returns candidates from representative Codex archived JSONL/manual-recovery files and representative Claude task records, with evidence paths and resume commands.
-- [ ] Existing scanner tests for Claude project history, live cmux/Claude panels, Codex SQLite/index, shell history, and grouping still pass.
-- [ ] Factory reset tests prove the explicit setup marker is set/cleared correctly and cannot be immediately overwritten by quit-time save.
-- [ ] 100% test coverage on all new code
-- [ ] All tests pass
-- [ ] No warnings
+- [x] After `Reset to Factory Defaults`, the next launch presents the setup/import flow even when the selected boss/harness readiness would otherwise be `.ready`.
+- [x] First-run setup first resolves the Ouro agent: select an existing functioning agent or hatch/configure a new one. No terminal import/chrome complexity blocks that step.
+- [x] Once the boss agent is functioning, setup switches to a conversational welcome/import flow rather than a static wizard-only experience.
+- [x] A fresh/post-reset workspace does not show an undeletable `Local Shell` as the only apparent thing to do before setup/import.
+- [x] If a fallback local shell is still present somewhere, it has a clear, tested removal/archive path or is intentionally hidden/deferred until after setup/import.
+- [x] The selected-session header no longer exposes the full low-level control strip as primary chrome in normal use. Advanced controls remain reachable when needed, with clear labels/tooltips.
+- [x] Running sessions show stop as the only primary action. Restart/relaunch moves into `Session Controls`. Launch/resume/recover stays visible for inactive or recoverable sessions.
+- [x] Primary sidebar/setup copy uses `Workspaces`, not `Groups`; `This Mac` appears only as machine scope; selected boss appears as compact boss status, not a permanent `Agents` peer; `Recovery` is hidden unless actionable.
+- [x] There is a clear path for the boss/import flow to surface likely sessions, ambiguous sessions, proposed organization, and duplicate-outside-Workbench guidance.
+- [x] The recent-session scanner returns candidates from representative Codex archived JSONL/manual-recovery files and representative Claude task records, with evidence paths and resume commands.
+- [x] Existing scanner tests for Claude project history, live cmux/Claude panels, Codex SQLite/index, shell history, and grouping still pass.
+- [x] Factory reset tests prove the explicit setup marker is set/cleared correctly and cannot be immediately overwritten by quit-time save.
+- [x] 100% test coverage on all new code
+- [x] All tests pass
+- [x] No warnings
 
 ## Code Coverage Requirements
 
@@ -297,7 +297,7 @@ trap - EXIT
 **Output**: Save notes and screenshots to `2026-06-14-1420-doing-factory-reset-setup-flow/e2e-sidebar-session-controls.md`.
 **Acceptance**: Artifact has `PASS`; visible primary labels use `Workspaces`/`Boss`; healthy recovery is hidden; running-session header shows Stop and labeled `Session Controls`; focus/redraw/restart/Ctrl-C/Esc/EOF are not a row of primary icon buttons.
 
-### ⬜ Unit 6f: Live Import Scanner E2E
+### ✅ Unit 6f: Live Import Scanner E2E
 **What**: Create and run `worker/tasks/2026-06-14-1420-doing-factory-reset-setup-flow/validate-import-scanner.sh`. The script must seed deterministic synthetic harness stores under an isolated scan home, run the read-only diagnostic added in Unit 2b against the installed current-source app, and verify source coverage with `jq`:
 
 ```bash
@@ -371,6 +371,9 @@ grep -F 'PASS import_scanner' "$ART/e2e-import-scanner.md"
 - 2026-06-14 16:07 Unit 6b complete: scenario verifier checked 5,000 rows / 25,000 render passes with failures: 0; log saved to scenario-verifier.log.
 - 2026-06-14 16:09 Unit 6c complete: packaged, installed, and verified app bundle; installed version/build match source version 0.1.155 build 300.
 - 2026-06-14 16:14 Unit 5 cold-review findings fixed: Review Duplicates now asks the boss without dismissing, Scan With Boss is no longer selection-gated, cleanup state is scoped to onboarding Arrange, and remaining import chrome was renamed; red/green logs saved to unit-5-review-*.log.
-- 2026-06-14 16:15 Unit 6a/6c refreshed after review fixes: full suite now runs 922 tests with 1 skip and 0 failures; installed bundle matches source version 0.1.155 build 305.
+- 2026-06-14 16:15 Unit 6a refreshed after review fixes: full suite now runs 922 tests with 1 skip and 0 failures.
 - 2026-06-14 16:16 Unit 6d complete: live reset/setup script passed with PID-checked Workbench foreground screenshot, marker consumed, no Local Shell, and setup workspace named Unsorted Sessions.
 - 2026-06-14 16:18 Unit 6e complete: live sidebar/session-controls script passed with PID-checked Workbench screenshot showing Boss, Workspaces, running fixture session, Stop, and Session Controls.
+- 2026-06-14 16:20 Unit 6f complete: isolated scanner diagnostic reported synthetic Codex archived/manual-recovery and Claude task/project candidates with evidence paths and resume commands.
+- 2026-06-14 16:21 Scenario verifier refreshed after review fixes: 5,000 rows / 25,000 render passes with failures: 0.
+- 2026-06-14 16:22 Final package proof refreshed: installed bundle matches source version 0.1.155 build 312.
