@@ -68,12 +68,37 @@ Canonical product spec for this implementation campaign: `docs/workbench-surface
 - Add focused view-model/core coverage for whichever state drives simplified primary chrome, if extracted behind a pure helper.
 - Add app/view-model-level tests only if existing seams allow it without brittle UI automation; otherwise cover through pure core seams and small injectable helpers.
 
-# Open Questions
+# Autonomy Rule
 
-- Should a normal never-reset first launch still include `Local Shell`, or should all fresh launches defer shell creation until after setup/import? Current diagnosis suggests post-reset setup mode should defer it, while ordinary empty fallback behavior may remain useful.
-- Which Claude Desktop app store path is canonical for this machine beyond `~/.claude/tasks` and `~/.claude/projects`? Investigation found `~/.claude/tasks` records locally; no separate `Library/Application Support/Claude*` session store was confirmed yet.
-- Should older Codex archived sessions outside the normal lookback be offered in a separate "older sessions" group, or should this patch keep the existing lookback filter for signal quality?
-- Which existing surfaces should be removed versus hidden as advanced in this pass? Candidate primary-chrome removals from the screenshot: focus, redraw, send Ctrl-C, send Esc, send EOF, standalone stop cluster.
+Ari explicitly delegated product and implementation judgement for this campaign on
+2026-06-14. Do not return control for further human approval, review, naming,
+scope, credential, or UI decisions. Use best judgement against
+`docs/workbench-surface-spec.md`, keep changes auditable, and continue through
+implementation plus live validation.
+
+# Resolved Decisions
+
+- Fresh first-run and post-reset setup both defer `Local Shell`; the terminal list
+  should start from boss setup/import rather than a shell-only fallback. A local
+  shell may still be created later through explicit user action or advanced
+  fallback behavior.
+- The primary UI noun is `Workspaces`. Existing internal model names may remain
+  `project`/`group` where a broad storage migration would add risk, but visible
+  primary copy should not teach `Groups`.
+- `This Mac` is machine scope copy only. It must not appear as the default
+  workspace after reset or fresh first-run.
+- Codex/Claude scanning keeps the existing recency lookback for signal quality
+  while adding deterministic adapters for observed archived/manual-recovery/task
+  stores. Older-session UX can be added later.
+- No separate canonical Claude Desktop store has been proven beyond local
+  `~/.claude/projects` and `~/.claude/tasks`; this pass scans those plus bounded
+  evidence discovered under them.
+- Running-session primary chrome keeps a visible stop action when a session is
+  running and moves focus, redraw, Ctrl-C, Esc, and EOF into a labeled advanced
+  `Session Controls` menu.
+- Validation uses a build/install from the current source tree. The stale
+  `/Applications/Ouro Workbench.app` `0.1.125` build is only historical evidence
+  for the reported symptom.
 
 # Decisions Made
 
@@ -121,7 +146,11 @@ Canonical product spec for this implementation campaign: `docs/workbench-surface
   - Add importer helpers for bounded JSONL/file enumeration under Codex archived/manual-recovery paths and Claude task directories.
 - Guard against a trap: if the reset marker lives in the same defaults domain removed by `wipeData`, setting order matters. The marker must survive the wipe and only be consumed by the next launch.
 - Existing root `AGENTS.md` product truth says terminal/TUI agents are first-class and restart recovery is P0; this plan keeps that intact by importing/resuming rather than replacing terminal agents.
-- Ari gave an explicit no-human-gates/autopilot mandate on 2026-06-14: complete the comprehensive spec, whole-system audit, work-suite plan, implementation, and live end-to-end validation without returning control except for true human-only blockers. Reviewer gates substitute for human approval unless credentials, irreversible destructive actions outside Workbench-owned state, or an unrecoverable spec contradiction appears.
+- Ari gave an explicit no-human-gates/autopilot mandate on 2026-06-14:
+  complete the comprehensive spec, whole-system audit, work-suite plan,
+  implementation, and live end-to-end validation without returning control.
+  Reviewer gates substitute for human approval, and any missed judgement calls
+  are resolved by best judgement against the canonical spec.
 
 # Progress Log
 
