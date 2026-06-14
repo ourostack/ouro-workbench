@@ -21,7 +21,7 @@ Gate state:
 - Audit: written and committed
 - Planning review: converged and approved
 - Doing review: converged; doing doc ready
-- Implementation: Unit 2 complete; Unit 2 cold review pending; starting Unit 3a
+- Implementation: Unit 3a complete; Unit 2 cold review pending; starting Unit 3b
 - Live validation: pending
 
-Next action: dispatch Unit 2 cold review, then write Unit 3a failing surface policy tests.
+Next action: implement sidebar surface policy and fixture diagnostic while Unit 2 review runs.
