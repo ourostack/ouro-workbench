@@ -1,18 +1,14 @@
 [0/1] Planning build
 Building for production...
-[0/5] Write sources
-[2/5] Write swift-version--58304C5D6DBC2206.txt
-[4/6] Compiling OuroWorkbenchCore AgentPreset.swift
-[5/7] Compiling OuroWorkbenchApp OuroWorkbenchApp.swift
-[5/7] Write Objects.LinkFileList
-[6/7] Linking OuroWorkbench
-Build of product 'OuroWorkbench' complete! (56.89s)
+[0/2] Write swift-version--58304C5D6DBC2206.txt
+[1/3] Write sources
+[3/4] Compiling OuroWorkbenchApp OuroWorkbenchApp.swift
+[3/5] Write Objects.LinkFileList
+[4/5] Linking OuroWorkbench
+Build of product 'OuroWorkbench' complete! (36.55s)
 Building for production...
-[0/3] Write swift-version--58304C5D6DBC2206.txt
-[2/4] Compiling OuroWorkbenchMCP main.swift
-[2/4] Write Objects.LinkFileList
-[3/4] Linking OuroWorkbenchMCP
-Build of product 'OuroWorkbenchMCP' complete! (2.34s)
+[0/2] Write swift-version--58304C5D6DBC2206.txt
+Build of product 'OuroWorkbenchMCP' complete! (0.16s)
 /Users/arimendelow/Projects/ouro-workbench/dist/Ouro Workbench.app: replacing existing signature
 /Users/arimendelow/Projects/ouro-workbench/dist/Ouro Workbench.app
 /Users/arimendelow/Projects/ouro-workbench/dist/Ouro Workbench.app: replacing existing signature
