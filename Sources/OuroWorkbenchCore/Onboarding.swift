@@ -848,13 +848,14 @@ public struct RecentSessionScanner {
     }
 
     private func codexCandidate(from object: [String: Any], evidenceURL: URL) -> RecentSessionCandidate? {
-        guard let sessionId = firstString(object, keys: ["id", "sessionId", "session_id", "threadId", "thread_id"]) else {
+        let record = payloadObject(object)
+        guard let sessionId = firstString(record, keys: ["id", "sessionId", "session_id", "threadId", "thread_id"]) else {
             return nil
         }
-        let cwd = firstString(object, keys: ["cwd", "workingDirectory", "working_directory"])
-        let titleSeed = firstString(object, keys: ["prompt", "summary", "title", "thread_name", "message", "content"])
+        let cwd = firstString(record, keys: ["cwd", "workingDirectory", "working_directory"])
+        let titleSeed = firstString(record, keys: ["prompt", "summary", "title", "thread_name", "message", "content"])
             ?? sessionId
-        let lastActive = firstDate(object, keys: ["timestamp", "updatedAt", "updated_at", "lastActiveAt", "last_active_at"])
+        let lastActive = firstDate(record, keys: ["timestamp", "updatedAt", "updated_at", "lastActiveAt", "last_active_at"])
             ?? modificationDate(evidenceURL)
         guard isRecent(lastActive) else {
             return nil
@@ -985,6 +986,13 @@ public struct RecentSessionScanner {
             return nil
         }
         return object
+    }
+
+    private func payloadObject(_ object: [String: Any]) -> [String: Any] {
+        guard let payload = object["payload"] as? [String: Any] else {
+            return object
+        }
+        return payload.merging(object) { payloadValue, _ in payloadValue }
     }
 
     private func evidencePath(_ url: URL) -> String {
