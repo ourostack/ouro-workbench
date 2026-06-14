@@ -20,7 +20,7 @@ Gate state:
 - Spec: written and committed
 - Audit: written and committed
 - Planning review: Round 2 in progress
-- Doing review: granularity converged; validation/source-fidelity in progress
+- Doing review: granularity and validation/source-fidelity converged; ambiguity and quality in progress
 - Implementation: not started
 - Live validation: pending
 
