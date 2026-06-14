@@ -186,7 +186,7 @@ swift test --filter OnboardingTests
 **Output**: Save command output to `2026-06-14-1420-doing-factory-reset-setup-flow/scenario-verifier.log` and generated verifier files under `2026-06-14-1420-doing-factory-reset-setup-flow/scenario-verifier/`.
 **Acceptance**: Command exits 0 and the log records zero scenario failures.
 
-### ⬜ Unit 6c: Package Install Version Proof
+### ✅ Unit 6c: Package Install Version Proof
 **What**: Run these exact commands from repo root:
 
 ```bash
@@ -369,3 +369,4 @@ grep -F 'PASS import_scanner' "$ART/e2e-import-scanner.md"
 - 2026-06-14 16:06 Unit 5e complete: reran OnboardingNarrativeTests, OnboardingTests, build, and old-copy source scan; log saved to unit-5-onboarding.log.
 - 2026-06-14 16:07 Unit 6a complete: full swift test ran 919 tests with 1 skip and 0 failures; swift build passed; logs saved to full-swift-test.log and swift-build.log.
 - 2026-06-14 16:07 Unit 6b complete: scenario verifier checked 5,000 rows / 25,000 render passes with failures: 0; log saved to scenario-verifier.log.
+- 2026-06-14 16:09 Unit 6c complete: packaged, installed, and verified app bundle; installed version/build match source version 0.1.155 build 300.

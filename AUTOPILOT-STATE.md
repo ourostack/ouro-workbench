@@ -22,6 +22,6 @@ Gate state:
 - Planning review: converged and approved
 - Doing review: converged; doing doc ready
 - Implementation: Unit 5e complete; Unit 4 cold-review findings fixed
-- Live validation: Unit 6b complete; starting Unit 6c
+- Live validation: Unit 6c complete; starting Unit 6d
 
-Next action: package, install, verify, and record installed app version/build for Unit 6c.
+Next action: create and run live reset/setup E2E script for Unit 6d.
