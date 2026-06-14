@@ -4991,7 +4991,7 @@ struct WorkbenchOnboardingSheet: View {
             case .connect:
                 return "Connect"
             case .importWork:
-                return "Import"
+                return "Arrange Work"
             }
         }
 
@@ -5127,11 +5127,6 @@ struct WorkbenchOnboardingSheet: View {
             if model.onboardingIsScanning || model.onboardingReadiness?.isReady != true {
                 return true
             }
-            if model.onboardingFlowDecision.phase == .scanProposal,
-               model.onboardingProposal != nil,
-               model.onboardingProposal?.selectedTerminalCount == 0 {
-                return true
-            }
             return false
         }
     }
@@ -5169,7 +5164,7 @@ struct WorkbenchOnboardingSheet: View {
                 }
             case .duplicateCleanup:
                 instructionStatus = model.onboardingFlowDecision.notice
-                dismiss()
+                Task { await model.runBossQuickQuestion(WorkbenchOnboardingNarrative.duplicateCleanup) }
             case .bossSetupWizard:
                 page = .connect
             }
@@ -5382,7 +5377,7 @@ private struct OnboardingAssistantBox: View {
             }
 
             HStack(alignment: .center, spacing: 8) {
-                TextField("Ask about setup, providers, or which sessions to import", text: $instruction)
+                TextField("Ask about setup, providers, or which sessions to arrange", text: $instruction)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit(onSubmit)
                     .disabled(model.bossCheckInIsRunning)
@@ -9096,6 +9091,7 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var onboardingCandidates: [RecentSessionCandidate] = []
     @Published var onboardingProposal: WorkbenchImportProposal?
     @Published var onboardingIsScanning = false
+    @Published var onboardingImportSummaryHasImports = false
     @Published var lastImportSummary: WorkbenchImportApplyResult?
     /// Whether the native provider-config form (the one human gate) is presented. Flipped true
     /// by `requestProviderConfig` (and the native onboarding provider-setup affordance).
@@ -9801,7 +9797,7 @@ final class WorkbenchViewModel: ObservableObject {
             hasProposal: onboardingProposal != nil,
             selectedTerminalCount: onboardingProposal?.selectedTerminalCount ?? 0,
             ambiguousCandidateCount: onboardingAmbiguousCandidateCount,
-            importSummaryHasImports: lastImportSummary?.hasImports == true
+            importSummaryHasImports: onboardingImportSummaryHasImports
         )
     }
 
@@ -12664,7 +12660,7 @@ final class WorkbenchViewModel: ObservableObject {
             refreshOnboardingReadiness()
             guard onboardingReadiness?.isReady == true else {
                 runOnboardingProviderChecksIfNeeded()
-                return "Finish connecting the boss first. Import stays locked until provider checks pass."
+                return "Finish connecting the boss first. Arrange stays locked until provider checks pass."
             }
             applyOnboardingProposal()
             return WorkbenchOnboardingNarrative.duplicateCleanup
@@ -12694,6 +12690,7 @@ final class WorkbenchViewModel: ObservableObject {
             return
         }
         onboardingIsScanning = true
+        onboardingImportSummaryHasImports = false
         let currentState = state
         Task {
             let candidates = await Task.detached(priority: .userInitiated) {
@@ -12805,6 +12802,7 @@ final class WorkbenchViewModel: ObservableObject {
             skippedNames: skipped,
             firstSelectedEntryID: createdEntries.first?.id
         )
+        onboardingImportSummaryHasImports = result.hasImports
         lastImportSummary = result
         return result
     }
