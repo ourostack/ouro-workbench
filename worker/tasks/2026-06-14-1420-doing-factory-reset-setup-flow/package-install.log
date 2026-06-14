@@ -1,0 +1,20 @@
+[0/1] Planning build
+Building for production...
+[0/5] Write sources
+[2/5] Write swift-version--58304C5D6DBC2206.txt
+[4/6] Compiling OuroWorkbenchCore AgentPreset.swift
+[5/7] Compiling OuroWorkbenchApp OuroWorkbenchApp.swift
+[5/7] Write Objects.LinkFileList
+[6/7] Linking OuroWorkbench
+Build of product 'OuroWorkbench' complete! (56.89s)
+Building for production...
+[0/3] Write swift-version--58304C5D6DBC2206.txt
+[2/4] Compiling OuroWorkbenchMCP main.swift
+[2/4] Write Objects.LinkFileList
+[3/4] Linking OuroWorkbenchMCP
+Build of product 'OuroWorkbenchMCP' complete! (2.34s)
+/Users/arimendelow/Projects/ouro-workbench/dist/Ouro Workbench.app: replacing existing signature
+/Users/arimendelow/Projects/ouro-workbench/dist/Ouro Workbench.app
+/Users/arimendelow/Projects/ouro-workbench/dist/Ouro Workbench.app: replacing existing signature
+Installed /Users/arimendelow/Applications/Ouro Workbench.app
+Verified app bundle: /Users/arimendelow/Applications/Ouro Workbench.app
