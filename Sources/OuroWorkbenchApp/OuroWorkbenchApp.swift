@@ -26,7 +26,7 @@ struct OuroWorkbenchApp: App {
 
     var body: some Scene {
         WindowGroup("") {
-            WorkbenchRootView()
+            WorkbenchRootView(diagnostics: workbenchLaunchDiagnostics)
                 .frame(minWidth: 1100, minHeight: 700)
         }
         .windowStyle(.hiddenTitleBar)
@@ -205,11 +205,19 @@ extension Notification.Name {
 }
 
 struct WorkbenchRootView: View {
-    @StateObject private var model = WorkbenchViewModel()
+    @StateObject private var model: WorkbenchViewModel
     /// Sidebar collapse state. Bound to NavigationSplitView's column
     /// visibility so ⌃⌘B can flip between "show only the terminal" and
     /// "show the sidebar." Matches VSCode's chrome-toggle binding.
     @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
+
+    init(diagnostics: WorkbenchLaunchDiagnostics) {
+        let paths = WorkbenchPaths(rootURL: diagnostics.appSupportRoot ?? WorkbenchPaths.defaultPaths().rootURL)
+        _model = StateObject(wrappedValue: WorkbenchViewModel(
+            paths: paths,
+            autoLaunchResumableForE2E: diagnostics.autoLaunchResumableForE2E
+        ))
+    }
 
     /// Flip the sidebar between visible and collapsed. `.automatic` lands
     /// at the system's preferred layout (sidebar shown); `.detailOnly`
@@ -382,7 +390,7 @@ struct WorkbenchRootView: View {
             model.refreshSessionActivity()
             model.refreshOnboardingReadiness()
             await model.refreshBossDashboard()
-            if model.shouldPresentOnboardingOnLaunch && !model.onboardingHasAutoPresented {
+            if model.canAutoPresentOnboardingOnLaunch {
                 model.isOnboardingPresented = true
                 model.onboardingHasAutoPresented = true
             } else {
@@ -9005,6 +9013,7 @@ final class WorkbenchViewModel: ObservableObject {
     /// Set once `resetToFirstRun()` begins; suppresses all persistence so the
     /// wiped state file isn't rewritten before the relaunch.
     private var isResettingToFirstRun = false
+    private var isFirstRunSetupForcedOnLaunch = false
     @Published var onboardingCandidates: [RecentSessionCandidate] = []
     @Published var onboardingProposal: WorkbenchImportProposal?
     @Published var onboardingIsScanning = false
@@ -9108,7 +9117,8 @@ final class WorkbenchViewModel: ObservableObject {
         ouroAgentInventory: OuroAgentInventory = OuroAgentInventory(),
         executableHealthChecker: ExecutableHealthChecker = ExecutableHealthChecker(),
         releaseUpdateChecker: ReleaseUpdateChecker = ReleaseUpdateChecker(),
-        workCardReader: OuroWorkCardReader = OuroWorkCardReader()
+        workCardReader: OuroWorkCardReader = OuroWorkCardReader(),
+        autoLaunchResumableForE2E: Bool = false
     ) {
         self.paths = paths
         self.store = WorkbenchStore(paths: paths)
@@ -9130,6 +9140,10 @@ final class WorkbenchViewModel: ObservableObject {
         self.workCardReader = workCardReader
         self.externalActionQueue = WorkbenchActionRequestQueue(paths: paths)
         self.state = WorkspaceState()
+        self.isFirstRunSetupForcedOnLaunch = WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: paths.rootURL)
+        if autoLaunchResumableForE2E {
+            self.autoLaunchResumableOnStartup = true
+        }
         // Seed the palette's static override from the persisted setting so
         // every terminal view that asks for a theme honors the user's pin
         // even before any view model property gets re-read.
@@ -9243,7 +9257,7 @@ final class WorkbenchViewModel: ObservableObject {
         //    fresh — the bootstrapper treats a missing file as first run) and
         //    clear *all* Workbench preferences for a true factory state, not a
         //    half-reset. This data wipe is unit-tested via `WorkbenchFactoryReset`.
-        WorkbenchFactoryReset.wipeData(
+        WorkbenchFactoryReset.resetToFactoryDefaults(
             stateURL: paths.stateURL,
             defaults: .standard,
             defaultsDomain: WorkbenchRelease.bundleIdentifier,
@@ -9666,10 +9680,17 @@ final class WorkbenchViewModel: ObservableObject {
     /// task runs those checks in the background so readiness flips to ready
     /// on its own.
     var shouldPresentOnboardingOnLaunch: Bool {
+        if isFirstRunSetupForcedOnLaunch {
+            return true
+        }
         guard let readiness = onboardingReadiness, !readiness.isReady else {
             return false
         }
         return readiness.state == .needsAgent || onboardingHasConfigGap
+    }
+
+    var canAutoPresentOnboardingOnLaunch: Bool {
+        shouldPresentOnboardingOnLaunch && (!onboardingHasAutoPresented || isFirstRunSetupForcedOnLaunch)
     }
 
     var onboardingPhaseLabel: String {
@@ -15953,6 +15974,24 @@ final class WorkbenchViewModel: ObservableObject {
     static let terminalFontSizeBounds: ClosedRange<CGFloat> = 9...28
 
     private func load() {
+        if isFirstRunSetupForcedOnLaunch {
+            state = bootstrapper.bootstrappedState(
+                from: WorkspaceState(),
+                defaults: .firstRunSetup()
+            )
+            bossWatchIsEnabled = state.bossWatchEnabled
+            bossWatchBaselineState = nil
+            selectedProjectID = state.projects.first?.id
+            selectedEntryID = nil
+            detailSplit = nil
+            activePaneID = .primary
+            do {
+                try store.save(state)
+            } catch {
+                errorMessage = String(describing: error)
+            }
+            return
+        }
         do {
             let loaded = try store.load()
             state = startupRecoveryReconciler.reconcile(bootstrapper.bootstrappedState(from: loaded))

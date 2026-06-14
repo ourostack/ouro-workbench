@@ -10,6 +10,72 @@ import Foundation
 /// history* — that lives with the agent's own harness (Claude / Codex / cmux),
 /// never inside Workbench — so a factory reset is non-destructive to your work.
 public enum WorkbenchFactoryReset {
+    public static let firstRunSetupMarkerName = "force-first-run-setup"
+
+    public struct Result: Equatable, Sendable {
+        public var backupURL: URL?
+        public var setupMarkerURL: URL
+
+        public init(backupURL: URL?, setupMarkerURL: URL) {
+            self.backupURL = backupURL
+            self.setupMarkerURL = setupMarkerURL
+        }
+    }
+
+    public static func firstRunSetupMarkerURL(rootURL: URL) -> URL {
+        rootURL.appendingPathComponent(firstRunSetupMarkerName)
+    }
+
+    @discardableResult
+    public static func requestFirstRunSetup(
+        rootURL: URL,
+        fileManager: FileManager = .default
+    ) throws -> URL {
+        try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        let markerURL = firstRunSetupMarkerURL(rootURL: rootURL)
+        try? fileManager.removeItem(at: markerURL)
+        try Data("reset\n".utf8).write(to: markerURL, options: [.atomic])
+        return markerURL
+    }
+
+    public static func consumeFirstRunSetupRequest(
+        rootURL: URL,
+        fileManager: FileManager = .default
+    ) -> Bool {
+        let markerURL = firstRunSetupMarkerURL(rootURL: rootURL)
+        guard fileManager.fileExists(atPath: markerURL.path) else {
+            return false
+        }
+        do {
+            try fileManager.removeItem(at: markerURL)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    @discardableResult
+    public static func resetToFactoryDefaults(
+        stateURL: URL,
+        defaults: UserDefaults,
+        defaultsDomain: String,
+        timestamp: Date,
+        fileManager: FileManager = .default
+    ) -> Result {
+        let backupURL = wipeData(
+            stateURL: stateURL,
+            defaults: defaults,
+            defaultsDomain: defaultsDomain,
+            timestamp: timestamp,
+            fileManager: fileManager
+        )
+        let markerURL = (try? requestFirstRunSetup(
+            rootURL: stateURL.deletingLastPathComponent(),
+            fileManager: fileManager
+        )) ?? firstRunSetupMarkerURL(rootURL: stateURL.deletingLastPathComponent())
+        return Result(backupURL: backupURL, setupMarkerURL: markerURL)
+    }
+
     /// Back up the workspace state file to a timestamped sibling and remove it,
     /// then clear **all** Workbench preferences by removing the whole
     /// preference domain.

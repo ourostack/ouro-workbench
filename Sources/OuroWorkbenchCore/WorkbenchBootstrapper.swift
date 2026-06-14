@@ -17,6 +17,17 @@ public struct WorkbenchDefaults: Sendable {
         self.boss = boss
         self.includeLocalShell = includeLocalShell
     }
+
+    public static func firstRunSetup(
+        projectRootPath: String = FileManager.default.homeDirectoryForCurrentUser.path
+    ) -> WorkbenchDefaults {
+        WorkbenchDefaults(
+            projectName: "Unsorted Sessions",
+            projectRootPath: projectRootPath,
+            boss: BossAgentSelection(),
+            includeLocalShell: false
+        )
+    }
 }
 
 public struct WorkbenchBootstrapper: Sendable {
