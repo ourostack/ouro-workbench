@@ -71,7 +71,7 @@ The immediate blocker is the post-factory-reset first-run experience: Workbench 
 
 **CRITICAL: Every unit header MUST start with status emoji (⬜ for new units).**
 
-### ⬜ Unit 0: Setup/Research
+### ✅ Unit 0: Setup/Research
 **What**: Re-read `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift`, `Sources/OuroWorkbenchCore/WorkbenchFactoryReset.swift`, `Sources/OuroWorkbenchCore/WorkbenchBootstrapper.swift`, `Sources/OuroWorkbenchCore/Onboarding.swift`, and the existing reset/bootstrap/onboarding tests. Record current git status and source-of-truth skill availability in artifacts.
 **Output**: `2026-06-14-1420-doing-factory-reset-setup-flow/unit-0-research.md`
 **Acceptance**: Artifact records branch, status, exact target files, test files, and the decision that implementation can proceed without human input.
@@ -346,3 +346,4 @@ grep -F 'PASS import_scanner' "$ART/e2e-import-scanner.md"
 
 - 2026-06-14 14:42 Created from planning doc
 - 2026-06-14 15:15 Doing doc reviewer gates converged; status set to ready for direct execution.
+- 2026-06-14 15:16 Unit 0 complete: recorded branch, clean status, target files, skill-source availability, and no-human-blocker decision.

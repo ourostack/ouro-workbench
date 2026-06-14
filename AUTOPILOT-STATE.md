@@ -21,7 +21,7 @@ Gate state:
 - Audit: written and committed
 - Planning review: converged and approved
 - Doing review: converged; doing doc ready
-- Implementation: starting Unit 0
+- Implementation: Unit 0 complete; starting Unit 1a red tests
 - Live validation: pending
 
-Next action: complete Unit 0 research, then begin Unit 1a red tests.
+Next action: write and run Unit 1a failing reset/setup diagnostic tests.
