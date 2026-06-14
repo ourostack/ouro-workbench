@@ -206,7 +206,7 @@ scripts/verify-app-bundle.sh "$APP" >> "$ART/package-install.log" 2>&1
 **Output**: Save package/install output to `2026-06-14-1420-doing-factory-reset-setup-flow/package-install.log` and installed version proof to `2026-06-14-1420-doing-factory-reset-setup-flow/installed-app-version.txt`.
 **Acceptance**: Installed app version/build match the current source artifact, not the stale `0.1.125` / `201` evidence build.
 
-### ⬜ Unit 6d: Live Reset Setup E2E
+### ✅ Unit 6d: Live Reset Setup E2E
 **What**: Create and run `worker/tasks/2026-06-14-1420-doing-factory-reset-setup-flow/validate-reset-setup.sh`. The script must run these exact validation steps with an isolated app support root:
 
 ```bash
@@ -370,3 +370,6 @@ grep -F 'PASS import_scanner' "$ART/e2e-import-scanner.md"
 - 2026-06-14 16:07 Unit 6a complete: full swift test ran 919 tests with 1 skip and 0 failures; swift build passed; logs saved to full-swift-test.log and swift-build.log.
 - 2026-06-14 16:07 Unit 6b complete: scenario verifier checked 5,000 rows / 25,000 render passes with failures: 0; log saved to scenario-verifier.log.
 - 2026-06-14 16:09 Unit 6c complete: packaged, installed, and verified app bundle; installed version/build match source version 0.1.155 build 300.
+- 2026-06-14 16:14 Unit 5 cold-review findings fixed: Review Duplicates now asks the boss without dismissing, Scan With Boss is no longer selection-gated, cleanup state is scoped to onboarding Arrange, and remaining import chrome was renamed; red/green logs saved to unit-5-review-*.log.
+- 2026-06-14 16:15 Unit 6a/6c refreshed after review fixes: full suite now runs 922 tests with 1 skip and 0 failures; installed bundle matches source version 0.1.155 build 305.
+- 2026-06-14 16:16 Unit 6d complete: live reset/setup script passed with PID-checked Workbench foreground screenshot, marker consumed, no Local Shell, and setup workspace named Unsorted Sessions.
