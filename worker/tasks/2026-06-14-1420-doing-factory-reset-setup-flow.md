@@ -354,3 +354,4 @@ grep -F 'PASS import_scanner' "$ART/e2e-import-scanner.md"
 - 2026-06-14 15:37 Unit 2b complete: implemented Codex archived/manual-recovery/index/sqlite union, Claude task/project JSON scanning, and dump-recent-sessions JSON diagnostic; green log saved to unit-2b-green.log.
 - 2026-06-14 15:38 Unit 2c complete: reran exact scanner edge coverage commands and full OnboardingTests; log saved to unit-2-scanner.log.
 - 2026-06-14 15:39 Unit 3a complete: added failing sidebar surface policy and e2e fixture diagnostic tests; red log saved to unit-3a-red.log.
+- 2026-06-14 15:43 Unit 2 review finding addressed: added red/green coverage for Codex `session_meta.payload` archive/manual-recovery JSONL records.
