@@ -76,7 +76,7 @@ The immediate blocker is the post-factory-reset first-run experience: Workbench 
 **Output**: `2026-06-14-1420-doing-factory-reset-setup-flow/unit-0-research.md`
 **Acceptance**: Artifact records branch, status, exact target files, test files, and the decision that implementation can proceed without human input.
 
-### ⬜ Unit 1a: Reset Setup Intent - Tests
+### ✅ Unit 1a: Reset Setup Intent - Tests
 **What**: Write failing tests for a core setup intent marker, setup-mode bootstrap, and testable launch diagnostics. Target `Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift`, `Tests/OuroWorkbenchCoreTests/WorkbenchBootstrapperTests.swift`, and a new `Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift`.
 **Output**: Failing tests prove a setup intent marker file named `force-first-run-setup` can be requested under Workbench app support, survives a factory defaults wipe when written after the wipe, can be consumed/cleared, and bootstrapping with `includeLocalShell: false` creates no local shell while using a non-`This Mac` workspace name. Add a failing `WorkbenchFactoryResetTests/testFactoryResetRequestsFirstRunSetupAfterWipe` that seeds a state file and stale marker, calls a core reset helper, and expects the state file removed/backed up, preferences cleared, and a fresh `force-first-run-setup` marker present after the wipe. Diagnostic tests define `WorkbenchLaunchDiagnostics.parse(_:)` expectations for `--app-support-root PATH`, `--auto-launch-resumable-for-e2e`, `--factory-reset-for-e2e`, absent flags, missing required path, and unknown passthrough args before any app diagnostic implementation exists.
 **Acceptance**: Focused test command fails for the new expectations before implementation.
@@ -347,3 +347,4 @@ grep -F 'PASS import_scanner' "$ART/e2e-import-scanner.md"
 - 2026-06-14 14:42 Created from planning doc
 - 2026-06-14 15:15 Doing doc reviewer gates converged; status set to ready for direct execution.
 - 2026-06-14 15:16 Unit 0 complete: recorded branch, clean status, target files, skill-source availability, and no-human-blocker decision.
+- 2026-06-14 15:18 Unit 1a complete: added failing reset marker, setup bootstrap, and launch diagnostic tests; red log saved to unit-1a-red.log.
