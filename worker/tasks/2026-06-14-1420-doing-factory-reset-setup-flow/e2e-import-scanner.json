@@ -1,0 +1,93 @@
+[
+  {
+    "agentKind" : "claudeCode",
+    "confidence" : 0.86,
+    "evidencePaths" : [
+      "process:81126"
+    ],
+    "id" : "claude:9a4ee386-01cd-41ca-99a6-06e06985e5bb",
+    "lastActiveAt" : "2026-06-14T23:20:26Z",
+    "repositoryRoot" : "\/Users\/arimendelow\/Projects\/ouro-workbench",
+    "resumeCommand" : [
+      "claude",
+      "--resume",
+      "9a4ee386-01cd-41ca-99a6-06e06985e5bb"
+    ],
+    "source" : "claudeCode",
+    "summary" : "Live Claude Code process detected from the local process table.",
+    "title" : "Live Claude Code session 9a4ee386",
+    "workingDirectory" : "\/Users\/arimendelow\/Projects\/ouro-workbench\/worker\/tasks\/2026-06-14-1420-doing-factory-reset-setup-flow\/live-scan-home"
+  },
+  {
+    "agentKind" : "claudeCode",
+    "confidence" : 0.9,
+    "evidencePaths" : [
+      "\/Users\/arimendelow\/Projects\/ouro-workbench\/worker\/tasks\/2026-06-14-1420-doing-factory-reset-setup-flow\/live-scan-home\/.claude\/projects\/-Users-arimendelow-Projects-fixture\/session.json"
+    ],
+    "id" : "claude:claude-project-live",
+    "lastActiveAt" : "2026-06-14T23:20:26Z",
+    "resumeCommand" : [
+      "claude",
+      "--resume",
+      "claude-project-live"
+    ],
+    "source" : "claudeCode",
+    "summary" : "Claude project fixture",
+    "title" : "Claude project fixture",
+    "workingDirectory" : "\/Users\/arimendelow\/Projects\/fixture"
+  },
+  {
+    "agentKind" : "claudeCode",
+    "confidence" : 0.9,
+    "evidencePaths" : [
+      "\/Users\/arimendelow\/Projects\/ouro-workbench\/worker\/tasks\/2026-06-14-1420-doing-factory-reset-setup-flow\/live-scan-home\/.claude\/tasks\/task.json"
+    ],
+    "id" : "claude:claude-task-live",
+    "lastActiveAt" : "2026-06-14T23:20:26Z",
+    "resumeCommand" : [
+      "claude",
+      "--resume",
+      "claude-task-live"
+    ],
+    "source" : "claudeCode",
+    "summary" : "Claude task fixture",
+    "title" : "Claude task fixture",
+    "workingDirectory" : "\/Users\/arimendelow\/Projects\/fixture"
+  },
+  {
+    "agentKind" : "openAICodex",
+    "confidence" : 0.88,
+    "evidencePaths" : [
+      "\/Users\/arimendelow\/Projects\/ouro-workbench\/worker\/tasks\/2026-06-14-1420-doing-factory-reset-setup-flow\/live-scan-home\/.codex\/archived_sessions\/session.jsonl"
+    ],
+    "id" : "codex:codex-archive-live",
+    "lastActiveAt" : "2026-06-14T23:20:26Z",
+    "resumeCommand" : [
+      "codex",
+      "resume",
+      "codex-archive-live"
+    ],
+    "source" : "openAICodex",
+    "summary" : "continue fixture archive",
+    "title" : "continue fixture archive",
+    "workingDirectory" : "\/Users\/arimendelow\/Projects\/fixture"
+  },
+  {
+    "agentKind" : "openAICodex",
+    "confidence" : 0.88,
+    "evidencePaths" : [
+      "\/Users\/arimendelow\/Projects\/ouro-workbench\/worker\/tasks\/2026-06-14-1420-doing-factory-reset-setup-flow\/live-scan-home\/.codex\/manual-recovery-20260614\/recovery.jsonl"
+    ],
+    "id" : "codex:codex-manual-live",
+    "lastActiveAt" : "2026-06-14T23:20:26Z",
+    "resumeCommand" : [
+      "codex",
+      "resume",
+      "codex-manual-live"
+    ],
+    "source" : "openAICodex",
+    "summary" : "manual recovery fixture",
+    "title" : "manual recovery fixture",
+    "workingDirectory" : "\/Users\/arimendelow\/Projects\/fixture"
+  }
+]
