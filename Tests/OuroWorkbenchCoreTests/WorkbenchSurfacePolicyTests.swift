@@ -39,10 +39,15 @@ final class WorkbenchSurfacePolicyTests: XCTestCase {
 
     func testTitleStripUsesSessionControlPolicyWithoutPrimaryRestartLeak() throws {
         let source = try appSource()
+        let titleStrip = try sourceSlice(
+            in: source,
+            from: "private struct SessionTitleStrip: View",
+            to: "    @ViewBuilder\n    private var statusDot: some View"
+        )
 
-        XCTAssertTrue(source.contains("RunningSessionHeaderControls(entry: entry, model: model)"))
-        XCTAssertFalse(source.contains("if model.activeSession(for: entry) != nil {\n                    RunningSessionHeaderControls"))
-        XCTAssertFalse(source.contains("model.activeSession(for: entry) == nil ? \"Launch\" : \"Restart\""))
+        XCTAssertTrue(titleStrip.contains("RunningSessionHeaderControls(entry: entry, model: model)"))
+        XCTAssertFalse(titleStrip.contains("if model.activeSession(for: entry) != nil {\n                    RunningSessionHeaderControls"))
+        XCTAssertFalse(titleStrip.contains("model.activeSession(for: entry) == nil ? \"Launch\" : \"Restart\""))
         XCTAssertFalse(source.contains("Move this session to another group"))
     }
 
@@ -128,5 +133,11 @@ final class WorkbenchSurfacePolicyTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
+    }
+
+    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
+        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound)
+        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound)
+        return String(source[start..<end])
     }
 }

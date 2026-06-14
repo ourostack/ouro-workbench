@@ -7357,10 +7357,8 @@ private struct SessionTitleStrip: View {
                 .controlSize(.small)
                 .fixedSize()
             } else {
-                if model.activeSession(for: entry) != nil {
-                    RunningSessionHeaderControls(entry: entry, model: model)
-                        .fixedSize()
-                }
+                RunningSessionHeaderControls(entry: entry, model: model)
+                    .fixedSize()
                 Menu {
                     Button {
                         Task { await model.runBossQuestion(about: entry) }
@@ -7425,19 +7423,6 @@ private struct SessionTitleStrip: View {
                 .controlSize(.small)
                 .fixedSize()
                 .help("More actions for this terminal")
-
-                Button {
-                    model.launch(entry)
-                } label: {
-                    Label(
-                        model.activeSession(for: entry) == nil ? "Launch" : "Restart",
-                        systemImage: "play.fill"
-                    )
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-                .keyboardShortcut(.return, modifiers: [.command])
-                .fixedSize()
             }
         }
         .padding(.horizontal, 14)
@@ -7654,7 +7639,7 @@ struct CustomSessionManagementBar: View {
                 Label("Move", systemImage: "folder")
             }
             .disabled(isRunning || model.state.projects.count < 2)
-            .help(isRunning ? "Stop this session before moving it" : "Move this session to another group")
+            .help(isRunning ? "Stop this session before moving it" : "Move this session to another workspace")
 
             if entry.isArchived {
                 Button {
