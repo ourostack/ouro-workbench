@@ -250,7 +250,7 @@ trap - EXIT
 **Output**: Save notes and screenshots to `2026-06-14-1420-doing-factory-reset-setup-flow/e2e-reset-setup.md`.
 **Acceptance**: Artifact has `PASS`; the validation first runs the reset data path through `--factory-reset-for-e2e`, proves the stale marker was replaced after the wipe and a state backup exists, next launch presents onboarding/setup, no default `Local Shell` is selected/launched before setup/import, and `workspace-state.json` does not contain a reset-created shell-only dead end.
 
-### ⬜ Unit 6e: Live Sidebar And Session Controls E2E
+### ✅ Unit 6e: Live Sidebar And Session Controls E2E
 **What**: Create and run `worker/tasks/2026-06-14-1420-doing-factory-reset-setup-flow/validate-sidebar-session-controls.sh`. The script must launch the installed app with an isolated home seeded by the Unit 3b diagnostic fixture, capture a screenshot, and run these exact commands:
 
 ```bash
@@ -373,3 +373,4 @@ grep -F 'PASS import_scanner' "$ART/e2e-import-scanner.md"
 - 2026-06-14 16:14 Unit 5 cold-review findings fixed: Review Duplicates now asks the boss without dismissing, Scan With Boss is no longer selection-gated, cleanup state is scoped to onboarding Arrange, and remaining import chrome was renamed; red/green logs saved to unit-5-review-*.log.
 - 2026-06-14 16:15 Unit 6a/6c refreshed after review fixes: full suite now runs 922 tests with 1 skip and 0 failures; installed bundle matches source version 0.1.155 build 305.
 - 2026-06-14 16:16 Unit 6d complete: live reset/setup script passed with PID-checked Workbench foreground screenshot, marker consumed, no Local Shell, and setup workspace named Unsorted Sessions.
+- 2026-06-14 16:18 Unit 6e complete: live sidebar/session-controls script passed with PID-checked Workbench screenshot showing Boss, Workspaces, running fixture session, Stop, and Session Controls.

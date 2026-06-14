@@ -22,6 +22,6 @@ Gate state:
 - Planning review: converged and approved
 - Doing review: converged; doing doc ready
 - Implementation: Unit 5e complete; Unit 4 cold-review findings fixed
-- Live validation: Unit 6d complete; starting Unit 6e
+- Live validation: Unit 6e complete; starting Unit 6f
 
-Next action: create and run live sidebar/session-controls E2E script for Unit 6e.
+Next action: create and run isolated import scanner E2E script for Unit 6f.
