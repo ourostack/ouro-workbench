@@ -1,0 +1,85 @@
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/10] Write swift-version--58304C5D6DBC2206.txt
+Build complete! (1.14s)
+Test Suite 'Selected tests' started at 2026-06-14 15:55:19.812.
+Test Suite 'OuroWorkbenchPackageTests.xctest' started at 2026-06-14 15:55:19.813.
+Test Suite 'WorkbenchSurfacePolicyTests' started at 2026-06-14 15:55:19.813.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testAppWorkspaceCopyIsWiredThroughSurfacePolicy]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testAppWorkspaceCopyIsWiredThroughSurfacePolicy]' passed (0.113 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testArchivedSessionShowsNoPrimaryOrAdvancedActions]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testArchivedSessionShowsNoPrimaryOrAdvancedActions]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testBossStatusLabelsStayCompact]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testBossStatusLabelsStayCompact]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testParseSidebarSessionControlsFixtureAction]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testParseSidebarSessionControlsFixtureAction]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testParseSidebarSessionControlsFixtureRequiresPath]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testParseSidebarSessionControlsFixtureRequiresPath]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testRecoverableSessionShowsRecoverAsPrimaryAction]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testRecoverableSessionShowsRecoverAsPrimaryAction]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testRecoverySectionIsHiddenWhenThereIsNothingActionable]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testRecoverySectionIsHiddenWhenThereIsNothingActionable]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testRecoverySectionIsShownWhenActionable]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testRecoverySectionIsShownWhenActionable]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testRunningSessionShowsOnlyStopAsPrimaryAction]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testRunningSessionShowsOnlyStopAsPrimaryAction]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testSetupWorkspaceNameIsUnsortedSessionsNotThisMac]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testSetupWorkspaceNameIsUnsortedSessionsNotThisMac]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testSidebarPrimaryLabelsUseWorkbenchStoryNouns]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testSidebarPrimaryLabelsUseWorkbenchStoryNouns]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testStoppedSessionShowsLaunchAsPrimaryAction]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testStoppedSessionShowsLaunchAsPrimaryAction]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testWorkspaceManagementCopyUsesWorkspaceNouns]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testWorkspaceManagementCopyUsesWorkspaceNouns]' passed (0.000 seconds).
+Test Suite 'WorkbenchSurfacePolicyTests' passed at 2026-06-14 15:55:19.928.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.114 (0.115) seconds
+Test Suite 'OuroWorkbenchPackageTests.xctest' passed at 2026-06-14 15:55:19.928.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.114 (0.115) seconds
+Test Suite 'Selected tests' passed at 2026-06-14 15:55:19.928.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.114 (0.116) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/9] Write swift-version--58304C5D6DBC2206.txt
+Build complete! (0.37s)
+1009:            Text("Restarts your agent's background runtime so it can respond again. Safe to run when it's already online — Workbench just re-checks what this machine needs. Runs quietly in the background.")
+1061:                        : "Restart and refresh your agent's background runtime.",
+2959:                    model.activeSession(for: entry) == nil ? "Launch" : "Restart",
+7328:                    RunningSessionHeaderControls(entry: entry, model: model)
+7400:                        model.activeSession(for: entry) == nil ? "Launch" : "Restart",
+7843:struct RunningSessionHeaderControls: View {
+7875:                Label("Session Controls", systemImage: "slider.horizontal.3")
+7877:            .help("Session Controls")
+7935:                Label("Restart", systemImage: "play.fill")
+7937:            .help("Restart this terminal")
+7942:                Label("Ctrl-C", systemImage: "command")
+7944:            .help("Send Ctrl-C to this terminal")
+7954:                model.sendEOF(to: entry)
+7956:                Label("EOF", systemImage: "eject")
+7958:            .help("Send Ctrl-D / EOF to this terminal")
+8006:                .help("Send Ctrl-C to this terminal")
+8007:                .accessibilityLabel("Ctrl-C")
+8018:                    model.sendEOF(to: entry)
+8022:                .help("Send Ctrl-D / EOF to this terminal")
+8023:                .accessibilityLabel("EOF")
+10030:                    activeSession(for: selectedEntry) == nil ? "Launch \(selectedEntry.name)" : "Restart \(selectedEntry.name)",
+10084:                        "Send Ctrl-C To \(selectedEntry.name)",
+10097:                        .sendEOFToSelectedSession,
+10098:                        "Send EOF To \(selectedEntry.name)",
+13222:        case .sendEOFToSelectedSession:
+13227:            sendEOF(to: selectedEntry)
+14080:            entry.lastSummary = "Sent Ctrl-C to \(entry.name)"
+14087:            result: "Sent Ctrl-C to \(entry.name)",
+14135:    func sendEOF(to entry: ProcessEntry) {
+14143:            entry.lastSummary = "Sent EOF to \(entry.name)"
+14147:            action: "sendEOF",
+14150:            result: "Sent Ctrl-D / EOF to \(entry.name)",
+2968:                    Label("Stop", systemImage: "stop.fill")
+7889:                Label("Stop", systemImage: "stop.fill")
