@@ -161,10 +161,35 @@ The immediate blocker is the post-factory-reset first-run experience: Workbench 
 **Output**: Test/build output saved to `2026-06-14-1420-doing-factory-reset-setup-flow/unit-5-onboarding.log`.
 **Acceptance**: Narrative and flow helpers have branch coverage for not-ready, ready-no-proposal, proposal-with-selected, proposal-with-low-confidence, and imported/cleanup states.
 
-### ⬜ Unit 6: Full Verification And Live E2E
-**What**: Run `swift test`, `swift build`, relevant scenario verifier command, package/install current app build, and live-validate reset/setup/import surfaces with computer use or native UI automation. Preserve screenshots/logs in artifacts.
-**Output**: Verification logs and screenshots under `2026-06-14-1420-doing-factory-reset-setup-flow/`, including `full-swift-test.log`, `swift-build.log`, `scenario-verifier.log`, `installed-app-version.txt`, `e2e-reset-setup.md`, `e2e-sidebar.md`, `e2e-session-controls.md`, and `e2e-import-scanner.md`.
-**Acceptance**: Each E2E artifact has an explicit pass/fail line. Live app from current source relaunches into setup after reset, has no undeletable shell-only dead end, shows Workspaces/Boss/conditional Recovery posture, hides low-level controls behind `Session Controls`, and scanner proposal includes representative local Codex/Claude sources.
+### ⬜ Unit 6a: Automated Suite Verification
+**What**: Run `swift test` and `swift build`.
+**Output**: Save output to `2026-06-14-1420-doing-factory-reset-setup-flow/full-swift-test.log` and `2026-06-14-1420-doing-factory-reset-setup-flow/swift-build.log`.
+**Acceptance**: Both commands exit 0, logs contain no warnings, and failures are fixed before continuing.
+
+### ⬜ Unit 6b: Scenario Verifier
+**What**: Run `swift run OuroWorkbenchScenarioVerifier --out worker/tasks/2026-06-14-1420-doing-factory-reset-setup-flow/scenario-verifier --no-samples`.
+**Output**: Save command output to `2026-06-14-1420-doing-factory-reset-setup-flow/scenario-verifier.log` and generated verifier files under `2026-06-14-1420-doing-factory-reset-setup-flow/scenario-verifier/`.
+**Acceptance**: Command exits 0 and the log records zero scenario failures.
+
+### ⬜ Unit 6c: Package Install Version Proof
+**What**: Run `scripts/package-app.sh`, install the resulting current-source app with `scripts/install-app.sh --no-open` if that flag exists, otherwise use the documented non-interactive install path in `scripts/install-app.sh`, then read the installed app bundle `CFBundleShortVersionString` and `CFBundleVersion`.
+**Output**: Save package/install output to `2026-06-14-1420-doing-factory-reset-setup-flow/package-install.log` and installed version proof to `2026-06-14-1420-doing-factory-reset-setup-flow/installed-app-version.txt`.
+**Acceptance**: Installed app version/build match the current source artifact, not the stale `0.1.125` / `201` evidence build.
+
+### ⬜ Unit 6d: Live Reset Setup E2E
+**What**: Use macOS UI automation through `osascript`, `open`, `defaults`, `plutil`, `ps`, and screenshots to launch the installed current-source app, trigger or simulate factory reset through the app-supported reset path without deleting harness-owned stores, relaunch, and inspect the resulting app state.
+**Output**: Save notes and screenshots to `2026-06-14-1420-doing-factory-reset-setup-flow/e2e-reset-setup.md`.
+**Acceptance**: Artifact has `PASS`; next launch presents onboarding/setup, no default `Local Shell` is selected/launched before setup/import, and `workspace-state.json` does not contain a reset-created shell-only dead end.
+
+### ⬜ Unit 6e: Live Sidebar And Session Controls E2E
+**What**: Use the installed current-source app plus a test Workbench state to inspect normal primary chrome with screenshots and app-state evidence.
+**Output**: Save notes and screenshots to `2026-06-14-1420-doing-factory-reset-setup-flow/e2e-sidebar-session-controls.md`.
+**Acceptance**: Artifact has `PASS`; visible primary labels use `Workspaces`/`Boss`; healthy recovery is hidden; running-session header shows Stop and labeled `Session Controls`; focus/redraw/restart/Ctrl-C/Esc/EOF are not a row of primary icon buttons.
+
+### ⬜ Unit 6f: Live Import Scanner E2E
+**What**: Run a small Swift or app-supported scanner invocation against the real current machine stores in read-only mode and compare with synthetic fixture coverage from tests.
+**Output**: Save scanner output summary to `2026-06-14-1420-doing-factory-reset-setup-flow/e2e-import-scanner.md`.
+**Acceptance**: Artifact has `PASS`; scanner reports candidates from at least one real or synthetic Codex archived/manual-recovery source and one Claude task/project source, with evidence paths and resume commands, without mutating any external harness store.
 
 ## Execution
 

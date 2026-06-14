@@ -20,7 +20,7 @@ Gate state:
 - Spec: written and committed
 - Audit: written and committed
 - Planning review: Round 2 in progress
-- Doing review: granularity Round 1 findings addressed; Round 2 pending
+- Doing review: granularity Round 2 findings addressed; Round 3 pending
 - Implementation: not started
 - Live validation: pending
 
