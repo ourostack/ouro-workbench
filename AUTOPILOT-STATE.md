@@ -21,7 +21,7 @@ Gate state:
 - Audit: written and committed
 - Planning review: converged and approved
 - Doing review: converged; doing doc ready
-- Implementation: Unit 5d complete; Unit 4 cold-review findings fixed; starting Unit 5e
-- Live validation: pending
+- Implementation: Unit 5e complete; Unit 4 cold-review findings fixed
+- Live validation: starting Unit 6a
 
-Next action: run Unit 5e onboarding narrative/flow coverage, existing OnboardingTests, and build.
+Next action: run full swift test and build logs for Unit 6a.

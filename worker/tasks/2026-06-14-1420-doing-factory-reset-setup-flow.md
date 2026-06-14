@@ -171,7 +171,7 @@ swift test --filter OnboardingTests
 **Output**: Traditional wizard remains limited to boss setup/readiness; after readiness, the boss-led import phase drives scan/proposal/arrange and duplicate cleanup messaging using the exact phase cases and CTA strings tested in Unit 5c.
 **Acceptance**: Unit 5c tests pass; `swift build` succeeds; `rg -n 'WorkbenchOnboardingFlowPolicy|WorkbenchOnboardingNarrative' Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift Sources/OuroWorkbenchCore/WorkbenchOnboardingNarrative.swift` shows both app wiring and core policy/narrative definitions.
 
-### ⬜ Unit 5e: Boss-Led Onboarding - Coverage & Refactor
+### ✅ Unit 5e: Boss-Led Onboarding - Coverage & Refactor
 **What**: Run onboarding narrative/flow tests, existing `OnboardingTests`, and `swift build`. Refactor only helper names or call-site duplication created in Units 5b/5d.
 **Output**: Test/build output saved to `2026-06-14-1420-doing-factory-reset-setup-flow/unit-5-onboarding.log`.
 **Acceptance**: Narrative and flow helpers have branch coverage for not-ready, ready-no-proposal, proposal-with-selected, proposal-with-low-confidence, and imported/cleanup states.
@@ -366,3 +366,4 @@ grep -F 'PASS import_scanner' "$ART/e2e-import-scanner.md"
 - 2026-06-14 16:00 Unit 5c complete: added failing boss-led onboarding phase/CTA tests; red log saved to unit-5c-red.log.
 - 2026-06-14 16:03 Unit 5d complete: added WorkbenchOnboardingFlowPolicy and wired onboarding CTA/advance behavior through it; green log saved to unit-5d-green.log.
 - 2026-06-14 16:05 Unit 4 cold-review findings fixed: title strip now uses session controls policy for active/inactive/recoverable sessions, primary Restart leak removed, and leftover group tooltip changed to workspace; red/green logs saved to unit-4-review-*.log.
+- 2026-06-14 16:06 Unit 5e complete: reran OnboardingNarrativeTests, OnboardingTests, build, and old-copy source scan; log saved to unit-5-onboarding.log.
