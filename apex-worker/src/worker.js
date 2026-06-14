@@ -1,30 +1,37 @@
 /**
  * ouro.bot apex Worker.
  *
- * Single job: make `https://ouro.bot/workbench-install.sh` serve the Workbench
- * one-line installer, mirroring the canonical copy hosted on Cloudflare Pages
- * (ouro-workbench-install.pages.dev, also reachable at install.ouro.bot).
+ * Job: serve the Ouro one-line installers under the apex host —
+ *   https://ouro.bot/workbench-install.sh  (Ouro Workbench)
+ *   https://ouro.bot/ouro-md-install.sh     (Ouro MD)
+ * — each mirroring its canonical source.
  *
  * Every other apex path keeps the pre-existing behavior: a 302 to
  * https://ouroboros.bot/ — the same forward the Porkbun URL-forward used to do.
  * The Worker owns the apex end-to-end so it never depends on the apex origin
  * (the Porkbun CNAME) being reachable once the record is proxied.
  *
- * Source of truth for the script stays in ourostack/ouro-workbench:web/ →
- * the Pages project. This Worker only re-serves that file under the apex host.
+ * Sources of truth stay in their product repos:
+ *   workbench-install.sh -> ourostack/ouro-workbench:web/ (via its Pages project)
+ *   ouro-md-install.sh   -> ourostack/ouro-md:web/        (via GitHub raw on main)
+ * This Worker only re-serves those files under the apex host.
  */
 
-const INSTALL_PATH = "/workbench-install.sh";
-const INSTALL_UPSTREAM =
-  "https://ouro-workbench-install.pages.dev/workbench-install.sh";
+const INSTALL_UPSTREAMS = {
+  "/workbench-install.sh":
+    "https://ouro-workbench-install.pages.dev/workbench-install.sh",
+  "/ouro-md-install.sh":
+    "https://raw.githubusercontent.com/ourostack/ouro-md/main/web/ouro-md-install.sh",
+};
 const APEX_FORWARD = "https://ouroboros.bot/";
 
 export default {
   async fetch(request) {
     const url = new URL(request.url);
 
-    if (url.pathname === INSTALL_PATH) {
-      const upstream = await fetch(INSTALL_UPSTREAM, {
+    const upstreamURL = INSTALL_UPSTREAMS[url.pathname];
+    if (upstreamURL) {
+      const upstream = await fetch(upstreamURL, {
         cf: { cacheTtl: 300, cacheEverything: true },
       });
       const headers = new Headers(upstream.headers);
