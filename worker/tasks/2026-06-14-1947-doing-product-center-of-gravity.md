@@ -79,48 +79,48 @@ behavior.
 **CRITICAL: Every unit header MUST start with status emoji (⬜ for new units).**
 
 ### ⬜ Unit 0: Setup/Research
-**What**: Re-read the current branch state and target files before code edits: `Sources/OuroWorkbenchCore/WorkbenchBootstrapper.swift`, `Sources/OuroWorkbenchCore/CustomTerminalSession.swift`, `Sources/OuroWorkbenchCore/RecoveryPlanner.swift`, `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift`, `Sources/OuroWorkbenchMCP/main.swift`, scenario files, and active product docs. Record branch, git status, source-of-truth skill status, and exact target list.
+**What**: Re-read the current branch state and target files before code edits: `Sources/OuroWorkbenchCore/WorkbenchBootstrapper.swift`, `Sources/OuroWorkbenchCore/CustomTerminalSession.swift`, `Sources/OuroWorkbenchCore/RecoveryPlanner.swift`, `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift`, `Sources/OuroWorkbenchMCP/main.swift`, `Sources/OuroWorkbenchCore/WorkbenchScenarioMatrix.swift`, `Sources/OuroWorkbenchScenarioVerifier/main.swift`, `README.md`, `docs/guide.md`, `docs/roadmap.md`, and `docs/workbench-surface-spec.md`. Record branch, git status, source-of-truth skill status, and exact target list.
 **Output**: `2026-06-14-1947-doing-product-center-of-gravity/unit-0-research.md`
 **Acceptance**: Artifact records branch, status, target files, test files, and the decisions that `.shell` persists as compatibility state while built-in shell creation/repair/launch authority is removed.
 
 ### ⬜ Unit 1a: Bootstrap And MCP Truth — Tests
-**What**: Write failing tests for no-default-shell bootstrap and MCP/read-only bootstrap defaults. Update `Tests/OuroWorkbenchCoreTests/WorkbenchBootstrapperTests.swift` and add a core-tested helper file if needed for MCP/app shared defaults.
-**Output**: Tests require: default empty bootstrap uses `WorkbenchSurfacePolicy.setupWorkspaceName`, default empty bootstrap has zero `processEntries`, default empty bootstrap does not create `This Mac`, untouched legacy agent scaffold cleanup leaves zero entries instead of a shell, bootstrapping existing agent terminals does not add a shell, and a persisted `.shell` row named `Local Shell` is preserved exactly rather than repaired. Add a test for the helper used by MCP read-only state loading proving it uses no-shell defaults.
-**Acceptance**: Focused command `swift test --filter WorkbenchBootstrapperTests` fails before implementation for the new expectations.
+**What**: Write failing tests for no-default-shell bootstrap and MCP/read-only bootstrap defaults. Update `Tests/OuroWorkbenchCoreTests/WorkbenchBootstrapperTests.swift`. Use `WorkbenchDefaults()` as the shared app/MCP no-shell contract; no new helper is planned for this pass.
+**Output**: Tests require: default empty bootstrap uses `WorkbenchSurfacePolicy.setupWorkspaceName`, default empty bootstrap has zero `processEntries`, default empty bootstrap does not create `This Mac`, untouched legacy agent scaffold cleanup leaves zero entries instead of a shell, bootstrapping existing agent terminals does not add a shell, and a persisted `.shell` row named `Local Shell` is preserved exactly rather than repaired. Add a test proving `WorkbenchDefaults()` carries no-shell defaults for MCP read-only state loading.
+**Acceptance**: Focused commands for every new bootstrap/defaults test fail before implementation; at minimum `swift test --filter WorkbenchBootstrapperTests` fails for the new expectations.
 
 ### ⬜ Unit 1b: Bootstrap And MCP Truth — Implementation
-**What**: Remove normal built-in shell creation/repair authority. Update `WorkbenchDefaults` default project name and `includeLocalShell` posture, remove or neutralize `BuiltInWorkbenchSessions` creation/repair/auto-launch use, update app load fallback to no-shell defaults, and update MCP `currentState()` to use the same no-shell truth through a core helper instead of default shell synthesis.
-**Output**: Changes in `Sources/OuroWorkbenchCore/WorkbenchBootstrapper.swift`, any new core helper needed for shared bootstrap defaults, `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift`, and `Sources/OuroWorkbenchMCP/main.swift`.
+**What**: Delete or bypass every call path that creates, repairs, selects, or launches `BuiltInWorkbenchSessions.localShell` during empty bootstrap, app fallback loading, startup fallback launch, and MCP state loading. Update `WorkbenchDefaults` default project name and default shell posture, update app load fallback to `WorkbenchDefaults()` no-shell truth, and make MCP `currentState()` rely on that same no-shell default state instead of default shell synthesis.
+**Output**: Changes in `Sources/OuroWorkbenchCore/WorkbenchBootstrapper.swift`, `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift`, and `Sources/OuroWorkbenchMCP/main.swift`.
 **Acceptance**: `swift test --filter WorkbenchBootstrapperTests` passes and `swift build` succeeds with no warnings.
 
 ### ⬜ Unit 1c: Bootstrap And MCP Truth — Coverage & Refactor
 **What**: Run focused bootstrap/MCP helper tests and build. Refactor only names or helper boundaries introduced in Unit 1b.
 **Output**: Save output to `2026-06-14-1947-doing-product-center-of-gravity/unit-1-bootstrap-mcp.log`.
-**Acceptance**: New code paths cover empty bootstrap, setup bootstrap, existing agent terminal, legacy scaffold cleanup, persisted shell preservation, and MCP/app no-shell default helper.
+**Acceptance**: New code paths cover empty bootstrap, setup bootstrap, existing agent terminal, legacy scaffold cleanup, persisted shell preservation, and `WorkbenchDefaults()` as the MCP/app no-shell default contract.
 
 ### ⬜ Unit 2a: Managed Shell Sessions — Tests
-**What**: Write failing tests proving `.shell` entries are ordinary managed terminal sessions. Update `Tests/OuroWorkbenchCoreTests/CustomTerminalSessionTests.swift`; add focused core tests for a management policy helper if app delete/request guards need extraction.
-**Output**: Tests require `CustomTerminalSessionManager.isCustomSession` accepts `.shell`, `draft(from:)` renders direct shell command tokens, `updatedEntry` preserves id/project/archive/attention/owner/pin/friend for shell entries, `duplicateEntry` works for shell entries, `archivedEntry` and `restoredEntry` work for shell entries, and non-terminal `.command` entries still throw `.notCustomSession`. If a deletion guard helper is extracted, test that `.shell` is deletable/manageable while `.command` is not.
-**Acceptance**: Focused command `swift test --filter CustomTerminalSessionTests` fails before implementation for shell manageability.
+**What**: Write failing tests proving `.shell` entries are ordinary managed terminal sessions. Update `Tests/OuroWorkbenchCoreTests/CustomTerminalSessionTests.swift`. Do not extract a new delete/request helper unless compilation of the narrow app call-site changes requires it.
+**Output**: Tests require `CustomTerminalSessionManager.isCustomSession` accepts `.shell`, `draft(from:)` renders direct shell command tokens, `updatedEntry` preserves id/project/archive/attention/owner/pin/friend for shell entries, `duplicateEntry` works for shell entries, `archivedEntry` and `restoredEntry` work for shell entries, and non-terminal `.command` entries still throw `.notCustomSession`.
+**Acceptance**: Focused commands for every new managed-shell test fail before implementation; at minimum `swift test --filter CustomTerminalSessionTests` fails for shell manageability.
 
 ### ⬜ Unit 2b: Managed Shell Sessions — Implementation
-**What**: Make `.shell` rows manageable without changing load-time identity. Update `CustomTerminalSessionManager` to accept `.terminalAgent` and `.shell`, produce drafts from direct executable/arguments, and preserve identity fields on update/duplicate/archive/restore. Update app guards and user-facing error text only where necessary so sidebar/header/boss archive/restore paths no longer reject `.shell`.
-**Output**: Changes in `Sources/OuroWorkbenchCore/CustomTerminalSession.swift` and narrowly scoped app call-site text/guards in `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift`.
+**What**: Make `.shell` rows manageable without changing load-time identity. Update `CustomTerminalSessionManager` to accept `.terminalAgent` and `.shell`, produce drafts from direct executable/arguments, and preserve identity fields on update/duplicate/archive/restore. Update every guard/error path that currently rejects `.shell` because it is not `.terminalAgent`; leave unrelated UI copy unchanged.
+**Output**: Changes in `Sources/OuroWorkbenchCore/CustomTerminalSession.swift` and only call sites in `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift` that gate create/edit/duplicate/archive/restore/delete behavior for terminal session entries.
 **Acceptance**: `swift test --filter CustomTerminalSessionTests` passes and `swift build` succeeds with no warnings.
 
 ### ⬜ Unit 2c: Managed Shell Sessions — Coverage & Refactor
-**What**: Run focused managed-session tests, any helper tests added in Unit 2a, and build. Refactor only behavior-preserving naming or helper duplication from Unit 2b.
+**What**: Run focused managed-session tests and build. Refactor only behavior-preserving naming or helper duplication from Unit 2b.
 **Output**: Save output to `2026-06-14-1947-doing-product-center-of-gravity/unit-2-managed-shell.log`.
 **Acceptance**: Shell draft/update/duplicate/archive/restore and non-terminal rejection branches are covered and green.
 
 ### ⬜ Unit 3a: Scenario And Product Docs Drift — Tests
 **What**: Write failing tests and validation checks for scenario/docs drift. Update `Tests/OuroWorkbenchCoreTests/WorkbenchScenarioMatrixTests.swift` so the generated matrix contains generic shell coverage but does not use `local_shell` or `Local Shell` as canonical terminal identity. Create an artifact validation script `2026-06-14-1947-doing-product-center-of-gravity/validate-product-center-docs.sh` that greps active docs for forbidden current-guidance phrases.
 **Output**: Tests/checks require current scenario rows use a generic/manual shell identity, not `local_shell` / `Local Shell`; active docs `README.md`, `docs/guide.md`, `docs/roadmap.md`, and `docs/workbench-surface-spec.md` do not recommend a default `Local Shell` or call Workbench a local terminal wrapper.
-**Acceptance**: `swift test --filter WorkbenchScenarioMatrixTests` or the doc validation script fails before implementation.
+**Acceptance**: Both `swift test --filter WorkbenchScenarioMatrixTests` and `2026-06-14-1947-doing-product-center-of-gravity/validate-product-center-docs.sh` are run; every newly added scenario/doc check fails before implementation, or the artifact records why a specific check already passes at HEAD.
 
 ### ⬜ Unit 3b: Scenario And Product Docs Drift — Implementation
-**What**: Rename scenario generator/matrix shell identity to generic/manual shell while preserving shell coverage. Regenerate scenario docs/TSV if generator output changes. Update active product docs and roadmap lines to reflect boss-led terminal workbench center. Do not rewrite historical completed task artifacts or old E2E evidence logs.
-**Output**: Changes in `Sources/OuroWorkbenchCore/WorkbenchScenarioMatrix.swift`, `Sources/OuroWorkbenchScenarioVerifier/main.swift`, generated scenario docs/TSV if required, `README.md`, `docs/guide.md`, `docs/roadmap.md`, and `docs/workbench-surface-spec.md`.
+**What**: Rename scenario generator/matrix shell identity to generic/manual shell while preserving shell coverage. After changing the generator, run `scripts/generate-workbench-5000-matrix.rb` and commit generated docs/TSV only when their diff changes. Update current product docs and roadmap lines in `README.md`, `docs/guide.md`, `docs/roadmap.md`, and `docs/workbench-surface-spec.md` to reflect boss-led terminal workbench center. Do not rewrite historical completed task artifacts or old E2E evidence logs.
+**Output**: Changes in `Sources/OuroWorkbenchCore/WorkbenchScenarioMatrix.swift`, `Sources/OuroWorkbenchScenarioVerifier/main.swift`, generated scenario docs/TSV when their diff changes, `README.md`, `docs/guide.md`, `docs/roadmap.md`, and `docs/workbench-surface-spec.md`.
 **Acceptance**: Unit 3a tests/checks pass; scenario verifier still has 5,000 rows and zero failures.
 
 ### ⬜ Unit 3c: Scenario And Product Docs Drift — Coverage & Refactor
@@ -139,21 +139,36 @@ behavior.
 **Acceptance**: `swift test` exits 0, `swift build` exits 0, and logs contain no warnings.
 
 ### ⬜ Unit 6: Package Install Version Proof
-**What**: Package and install the current source app to `$HOME/Applications`, then record source and installed version/build.
+**What**: Run `scripts/package-app.sh`, then `scripts/install-app.sh --install-dir "$HOME/Applications"`, then `scripts/verify-app-bundle.sh "$HOME/Applications/Ouro Workbench.app"`. Record `CFBundleShortVersionString` and `CFBundleVersion` from both `dist/Ouro Workbench.app` and `$HOME/Applications/Ouro Workbench.app`.
 **Output**: Save package/install output to `2026-06-14-1947-doing-product-center-of-gravity/package-install.log` and version proof to `2026-06-14-1947-doing-product-center-of-gravity/installed-app-version.txt`.
-**Acceptance**: Installed app version/build match current source version/build, and bundle verification succeeds.
+**Acceptance**: Built bundle version/build and installed bundle version/build are exactly equal, and bundle verification succeeds.
 
-### ⬜ Unit 7: Live Fresh/Reset/Legacy Shell E2E
-**What**: Create and run `2026-06-14-1947-doing-product-center-of-gravity/validate-product-center-e2e.sh` against the installed app with isolated support roots. Validate three live flows: fresh empty support root, reset from stale `This Mac` + `Local Shell`, and a legacy persisted shell fixture.
-**Output**: Save screenshots, app logs, state dumps, and summary to `2026-06-14-1947-doing-product-center-of-gravity/e2e-product-center.md`.
-**Acceptance**: Summary contains `PASS product_center_e2e`; fresh and reset states contain no `Local Shell`, no selected shell, and no default-shell launch action; reset consumes setup marker and shows setup/onboarding path; legacy shell fixture remains present with its original executable/trust/auto-resume and appears as a managed session with edit/archive/delete or equivalent affordances in live UI.
+### ⬜ Unit 7a: Live E2E Script And Fixtures
+**What**: Create `2026-06-14-1947-doing-product-center-of-gravity/validate-product-center-e2e.sh` with isolated app-support roots for fresh, reset, and legacy-shell flows. The script must start the installed app, capture screenshots, dump `workspace-state.json` through `plutil -p`, and write separate summary sections for `fresh`, `reset`, and `legacy_shell`.
+**Output**: Validation script plus seeded fixture JSON files under `2026-06-14-1947-doing-product-center-of-gravity/e2e-fixtures/`.
+**Acceptance**: Script is executable and `shellcheck` is run if available; otherwise `zsh -n` passes. The fixture JSON includes stale reset state with `This Mac` + `Local Shell` and legacy shell state with a non-default executable/trust/auto-resume combination.
+
+### ⬜ Unit 7b: Live Fresh And Reset E2E
+**What**: Run the Unit 7a script for the fresh and reset flows against the installed app.
+**Output**: Save fresh/reset screenshots, app logs, state dumps, and summary sections to `2026-06-14-1947-doing-product-center-of-gravity/e2e-product-center.md`.
+**Acceptance**: Summary contains `PASS fresh` and `PASS reset`; fresh and reset states contain no `Local Shell`, no selected shell, and no default-shell launch action; reset consumes setup marker and visible screenshot shows setup workspace/onboarding UI.
+
+### ⬜ Unit 7c: Live Legacy Shell E2E
+**What**: Run the Unit 7a script for the legacy shell fixture against the installed app.
+**Output**: Save legacy shell screenshot, app log, state dump, and summary section to `2026-06-14-1947-doing-product-center-of-gravity/e2e-product-center.md`.
+**Acceptance**: Summary contains `PASS legacy_shell`; legacy shell fixture remains present with its original executable, arguments, trust, auto-resume, working directory, and id; live UI screenshot shows visible Edit Session, Archive Session, and Delete Session actions, or the artifact records matching accessibility/menu text for those exact actions.
+
+### ⬜ Unit 7d: Live E2E Evidence Consolidation
+**What**: Verify all Unit 7 summaries, screenshots, logs, and state dumps exist and update completion criteria with exact evidence paths.
+**Output**: Final `2026-06-14-1947-doing-product-center-of-gravity/e2e-product-center.md` summary.
+**Acceptance**: Summary contains `PASS product_center_e2e`, `PASS fresh`, `PASS reset`, and `PASS legacy_shell`, with paths to every screenshot and state dump.
 
 ## Execution
 
 - **TDD strictly enforced**: tests → red → implement → green → refactor
-- Commit after each phase (1a, 1b, 1c)
-- Push after each unit complete
-- Run full test suite before marking unit done
+- Commit red-test units after red proof is captured; those commits may contain intentionally failing focused tests and are immediately followed by the matching implementation unit.
+- Commit green implementation and coverage/refactor units after their focused tests and build pass.
+- Run the full suite before marking verification units and the whole doing doc complete.
 - **All artifacts**: Save outputs, logs, data to `./2026-06-14-1947-doing-product-center-of-gravity/` directory
 - **Fixes/blockers**: Spawn sub-agent immediately — don't ask, just do it
 - **Decisions made**: Update docs immediately, commit right away
