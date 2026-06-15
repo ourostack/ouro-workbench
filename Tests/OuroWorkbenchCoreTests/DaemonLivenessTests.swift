@@ -102,6 +102,10 @@ final class DaemonLivenessTests: XCTestCase {
         // so the human-facing layer can stay seam-free while audit stays precise.
         XCTAssertTrue(DaemonRecoveryTruth.respawned.auditDetail.contains("ouro up"))
         XCTAssertFalse(DaemonRecoveryTruth.resumed.auditDetail.contains("ouro up"))
+        XCTAssertEqual(
+            DaemonRecoveryTruth.needsManual.auditDetail,
+            "Daemon still unreachable after start attempt; manual recovery required."
+        )
     }
 
     func testDefaultReachabilityProbeURLIsLocalMailbox() {
@@ -109,6 +113,23 @@ final class DaemonLivenessTests: XCTestCase {
             DaemonLivenessConfiguration().reachabilityURL.absoluteString,
             "http://127.0.0.1:6876/api/machine"
         )
+    }
+
+    func testDefaultReachabilityReturnsFalseForNonHTTPResponse() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("DaemonLivenessTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let fileURL = root.appendingPathComponent("machine.json")
+        try Data(#"{"ok":true}"#.utf8).write(to: fileURL)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let reachable = try await DaemonLivenessProbe.defaultReachability(url: fileURL, timeoutSeconds: 0.1)
+
+        XCTAssertFalse(reachable)
+    }
+
+    func testDefaultReachabilityWrapperMapsLocalConnectionFailureToThrow() async {
+        await XCTAssertThrowsErrorAsync(try await DaemonLivenessProbe.defaultReachability(timeoutSeconds: 0.001)) { _ in }
     }
 
     // MARK: - Synchronous probe (the MCP request-loop bridge)
@@ -162,6 +183,54 @@ final class DaemonLivenessTests: XCTestCase {
         _ = probe.probeSynchronously()
 
         XCTAssertEqual(seen.value, 0.25)
+    }
+
+    func testDefaultSyncReachabilityReturnsFalseForNonHTTPResponseAndWrapperFailure() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("DaemonLivenessTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let fileURL = root.appendingPathComponent("machine.json")
+        try Data(#"{"ok":true}"#.utf8).write(to: fileURL)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        XCTAssertFalse(DaemonLivenessProbe.defaultSyncReachability(url: fileURL, timeoutSeconds: 0.1))
+        XCTAssertFalse(DaemonLivenessProbe.defaultSyncReachability(timeoutSeconds: 0.001))
+        XCTAssertFalse(DaemonLivenessProbe.defaultSyncReachability(url: fileURL, timeoutSeconds: -1))
+    }
+
+    func testDaemonManagerDefaultInitializerAndDetachedStartUsesOuroFromPath() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("DaemonLivenessTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let ouro = root.appendingPathComponent("ouro")
+        try """
+        #!/usr/bin/env bash
+        exit 0
+        """.write(to: ouro, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: ouro.path)
+        let previousPath = ProcessInfo.processInfo.environment["PATH"] ?? ""
+        setenv("PATH", "\(root.path):\(previousPath)", 1)
+        defer {
+            setenv("PATH", previousPath, 1)
+            try? FileManager.default.removeItem(at: root)
+        }
+
+        _ = DaemonManager()
+        try await DaemonManager.detachedStart()
+    }
+
+    private func XCTAssertThrowsErrorAsync<T>(
+        _ expression: @autoclosure () async throws -> T,
+        _ errorHandler: (Error) -> Void,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        do {
+            _ = try await expression()
+            XCTFail("Expected error", file: file, line: line)
+        } catch {
+            errorHandler(error)
+        }
     }
 }
 

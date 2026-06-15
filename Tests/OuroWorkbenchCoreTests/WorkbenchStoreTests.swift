@@ -3,6 +3,62 @@ import XCTest
 @testable import OuroWorkbenchCore
 
 final class WorkbenchStoreTests: XCTestCase {
+    func testMissingStateFileLoadsEmptyWorkspace() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let loaded = try WorkbenchStore(stateURL: root.appendingPathComponent("workspace.json")).load()
+
+        XCTAssertTrue(loaded.projects.isEmpty)
+        XCTAssertTrue(loaded.processEntries.isEmpty)
+        XCTAssertEqual(loaded.schemaVersion, 1)
+    }
+
+    func testConvenienceInitUsesWorkbenchPathsStateURL() {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("WorkbenchStoreTests-\(UUID().uuidString)", isDirectory: true)
+        let paths = WorkbenchPaths(rootURL: root)
+        XCTAssertEqual(WorkbenchStore(paths: paths).stateURL, paths.stateURL)
+    }
+
+    func testUnreadableStateDirectoryIsQuarantinedOrThrownForReadOnly() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("WorkbenchStoreTests-\(UUID().uuidString)", isDirectory: true)
+        let stateURL = root.appendingPathComponent("workspace.json", isDirectory: true)
+        try FileManager.default.createDirectory(at: stateURL, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        XCTAssertThrowsError(try WorkbenchStore(stateURL: stateURL).load(quarantineCorruptFile: false))
+        XCTAssertThrowsError(try WorkbenchStore(stateURL: stateURL).load()) { error in
+            guard case let WorkbenchStoreError.unreadableState(quarantineURL, reason) = error else {
+                return XCTFail("Unexpected error \(error)")
+            }
+            XCTAssertTrue(reason.contains("read failed"))
+            XCTAssertTrue(quarantineURL.lastPathComponent.hasPrefix("workspace.json.corrupt-"))
+        }
+    }
+
+    func testStoreErrorEqualityIgnoresUnreadableReasonButKeepsCaseAndVersion() {
+        let a = URL(fileURLWithPath: "/state-a")
+        let b = URL(fileURLWithPath: "/state-b")
+
+        XCTAssertEqual(WorkbenchStoreError.unsupportedStateVersion(2), .unsupportedStateVersion(2))
+        XCTAssertNotEqual(WorkbenchStoreError.unsupportedStateVersion(2), .unsupportedStateVersion(3))
+        XCTAssertEqual(
+            WorkbenchStoreError.unreadableState(quarantineURL: a, reason: "decode failed"),
+            .unreadableState(quarantineURL: a, reason: "read failed")
+        )
+        XCTAssertNotEqual(
+            WorkbenchStoreError.unreadableState(quarantineURL: a, reason: "decode failed"),
+            .unreadableState(quarantineURL: b, reason: "decode failed")
+        )
+        XCTAssertNotEqual(
+            WorkbenchStoreError.unreadableState(quarantineURL: a, reason: "decode failed"),
+            .unsupportedStateVersion(1)
+        )
+    }
+
     func testStoreRoundTripsWorkspaceState() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -159,6 +215,59 @@ final class WorkbenchStoreTests: XCTestCase {
             XCTAssertFalse(siblings.contains { $0.contains(".corrupt-") })
         }
         try? FileManager.default.removeItem(at: root)
+    }
+
+    func testReadOnlyLoadReportsUnsupportedSchemaWithoutQuarantine() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let stateURL = root.appendingPathComponent("workspace.json")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let json = """
+        {
+          "boss": { "agentName": "slugger", "scope": "machine" },
+          "processEntries": [],
+          "processRuns": [],
+          "projects": [],
+          "schemaVersion": 99,
+          "updatedAt": "2026-05-23T00:00:00Z"
+        }
+        """
+        try Data(json.utf8).write(to: stateURL)
+
+        XCTAssertThrowsError(try WorkbenchStore(stateURL: stateURL).load(quarantineCorruptFile: false)) { error in
+            XCTAssertEqual(error as? WorkbenchStoreError, .unsupportedStateVersion(99))
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: stateURL.path))
+    }
+
+    func testUnsupportedSchemaIsQuarantinedByOwningStore() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let stateURL = root.appendingPathComponent("workspace.json")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let json = """
+        {
+          "boss": { "agentName": "slugger", "scope": "machine" },
+          "processEntries": [],
+          "processRuns": [],
+          "projects": [],
+          "schemaVersion": 99,
+          "updatedAt": "2026-05-23T00:00:00Z"
+        }
+        """
+        try Data(json.utf8).write(to: stateURL)
+
+        XCTAssertThrowsError(try WorkbenchStore(stateURL: stateURL).load()) { error in
+            guard case let WorkbenchStoreError.unreadableState(quarantineURL, reason) = error else {
+                return XCTFail("Unexpected error \(error)")
+            }
+            XCTAssertTrue(quarantineURL.lastPathComponent.hasPrefix("workspace.json.corrupt-"))
+            XCTAssertTrue(reason.contains("unsupported schema version 99"))
+            XCTAssertTrue(FileManager.default.fileExists(atPath: quarantineURL.path))
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: stateURL.path))
     }
 
     func testLenientDecodeSkipsCorruptElementsKeepsGoodOnes() throws {

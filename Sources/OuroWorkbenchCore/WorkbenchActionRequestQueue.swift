@@ -196,7 +196,7 @@ public final class WorkbenchActionRequestQueue {
     /// True when a pending request file carries the same action fingerprint as
     /// `request`. Reads the files present in the queue dir at enqueue time;
     /// undecodable files are ignored (they can't be a meaningful duplicate).
-    private func hasPendingDuplicate(of request: WorkbenchActionRequest) -> Bool {
+    func hasPendingDuplicate(of request: WorkbenchActionRequest) -> Bool {
         let fingerprint = request.fingerprint
         guard let urls = try? pendingRequestFileURLs() else {
             return false

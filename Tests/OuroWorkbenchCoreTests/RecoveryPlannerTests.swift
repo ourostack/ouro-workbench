@@ -33,6 +33,29 @@ final class RecoveryPlannerTests: XCTestCase {
         ])
     }
 
+    func testPlanRecoveryUsesMostRecentRunForEachEntry() {
+        let project = WorkbenchProject(name: "Harness", rootPath: "/repo")
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "Claude",
+            kind: .terminalAgent,
+            agentKind: .claudeCode,
+            executable: "claude",
+            workingDirectory: "/repo",
+            trust: .trusted,
+            autoResume: true
+        )
+        let old = ProcessRun(entryId: entry.id, status: .needsRecovery, startedAt: Date(timeIntervalSince1970: 1))
+        let newest = ProcessRun(entryId: entry.id, status: .exited, startedAt: Date(timeIntervalSince1970: 2))
+        let state = WorkspaceState(projects: [project], processEntries: [entry], processRuns: [old, newest])
+
+        let plan = RecoveryPlanner().planRecovery(for: state)
+
+        XCTAssertEqual(plan.first?.runId, newest.id)
+        XCTAssertEqual(plan.first?.action, .noAction)
+        XCTAssertEqual(plan.first?.reason, "latest run status is exited")
+    }
+
     func testCopilotRespawnsFromCheckpointUntilNativeResumeIsVerified() {
         let project = WorkbenchProject(name: "Harness", rootPath: "/repo")
         let entry = ProcessEntry(
@@ -95,6 +118,62 @@ final class RecoveryPlannerTests: XCTestCase {
 
         XCTAssertEqual(plan.first?.action, .autoResume)
         XCTAssertEqual(plan.first?.reason, "Claude Code can continue the most recent session in this working directory")
+    }
+
+    func testNativeResumePresetWithoutFallbackRequiresManualActionWithoutSessionID() {
+        let project = WorkbenchProject(name: "Harness", rootPath: "/repo")
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "Claude",
+            kind: .terminalAgent,
+            agentKind: .claudeCode,
+            executable: "claude",
+            workingDirectory: "/repo",
+            trust: .trusted,
+            autoResume: true
+        )
+        let run = ProcessRun(entryId: entry.id, status: .needsRecovery)
+        let preset = TerminalAgentPreset(
+            id: .claudeCode,
+            displayName: "Claude Code",
+            executable: "claude",
+            defaultArguments: [],
+            yoloArguments: [],
+            resumeStrategy: ResumeStrategy(kind: .nativeResumeCommand, notes: "native only")
+        )
+
+        let plan = RecoveryPlanner().planRecovery(for: entry, latestRun: run, presetFor: { _ in preset })
+
+        XCTAssertEqual(plan.action, .manualActionNeeded)
+        XCTAssertEqual(plan.reason, "Claude Code lacks a persisted session id")
+    }
+
+    func testManualPresetRequiresManualRecovery() {
+        let project = WorkbenchProject(name: "Harness", rootPath: "/repo")
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "Manual Agent",
+            kind: .terminalAgent,
+            agentKind: .claudeCode,
+            executable: "manual",
+            workingDirectory: "/repo",
+            trust: .trusted,
+            autoResume: true
+        )
+        let run = ProcessRun(entryId: entry.id, status: .needsRecovery)
+        let preset = TerminalAgentPreset(
+            id: .claudeCode,
+            displayName: "Manual Agent",
+            executable: "manual",
+            defaultArguments: [],
+            yoloArguments: [],
+            resumeStrategy: ResumeStrategy(kind: .manual, notes: "manual")
+        )
+
+        let plan = RecoveryPlanner().planRecovery(for: entry, latestRun: run, presetFor: { _ in preset })
+
+        XCTAssertEqual(plan.action, .manualActionNeeded)
+        XCTAssertEqual(plan.reason, "Manual Agent requires manual recovery")
     }
 
     func testUntrustedEntriesNeverAutoResume() {

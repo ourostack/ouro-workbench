@@ -42,6 +42,29 @@ final class ExecutableHealthTests: XCTestCase {
         XCTAssertNil(health.resolvedPath)
     }
 
+    func testReportsEmptyExecutableAsMissingConfiguration() {
+        let checker = ExecutableHealthChecker(
+            environment: TerminalEnvironment(values: ["PATH": temporaryDirectory.path])
+        )
+
+        let health = checker.health(for: " \n\t ")
+
+        XCTAssertEqual(health.status, .missing)
+        XCTAssertNil(health.resolvedPath)
+        XCTAssertEqual(health.detail, "No executable configured.")
+    }
+
+    func testReportsMissingAbsolutePathWithResolvedPath() {
+        let missingPath = temporaryDirectory.appendingPathComponent("absent-tool").path
+        let checker = ExecutableHealthChecker()
+
+        let health = checker.health(for: missingPath)
+
+        XCTAssertEqual(health.status, .missing)
+        XCTAssertEqual(health.resolvedPath, missingPath)
+        XCTAssertEqual(health.detail, "\(missingPath) does not exist.")
+    }
+
     func testReportsNotExecutableAbsolutePath() throws {
         let executableURL = temporaryDirectory.appendingPathComponent("claude")
         try Data("#!/bin/sh\n".utf8).write(to: executableURL)

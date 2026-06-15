@@ -7,6 +7,14 @@ final class WorkbenchGroupColorTests: XCTestCase {
         XCTAssertEqual(WorkbenchGroupColor.from(tag: "teal"), .teal)
     }
 
+    func testPaletteCasesExposeStableIdentifiersAndLabels() {
+        XCTAssertEqual(WorkbenchGroupColor.gray.id, "gray")
+        XCTAssertEqual(WorkbenchGroupColor.purple.label, "Purple")
+        XCTAssertEqual(WorkbenchGroupColor.allCases.map(\.id), [
+            "gray", "blue", "green", "orange", "red", "purple", "pink", "teal"
+        ])
+    }
+
     func testFromTagReturnsNilForNilOrUnknown() {
         XCTAssertNil(WorkbenchGroupColor.from(tag: nil))
         XCTAssertNil(WorkbenchGroupColor.from(tag: ""))

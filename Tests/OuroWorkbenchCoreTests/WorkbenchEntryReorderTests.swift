@@ -45,6 +45,33 @@ final class WorkbenchEntryReorderTests: XCTestCase {
         XCTAssertEqual(result.map(\.id), ["x2", "x3", "x1"])
     }
 
+    func testMoveToEndWithEmptyVisibleUsesGlobalEndAsAnchor() {
+        let global: [Item] = [Item(id: "a", group: "A"), Item(id: "b", group: "B")]
+
+        let result = WorkbenchEntryReorder.move(
+            global: global,
+            visible: [],
+            fromOffsets: IndexSet(),
+            toOffset: 0
+        )
+
+        XCTAssertEqual(result.map(\.id), ["a", "b"])
+    }
+
+    func testMissingDestinationAnchorFallsBackToEndOfGlobalOrder() {
+        let global: [Item] = [Item(id: "a", group: "A"), Item(id: "b", group: "A")]
+        let visible = [Item(id: "ghost", group: "A"), Item(id: "a", group: "A")]
+
+        let result = WorkbenchEntryReorder.move(
+            global: global,
+            visible: visible,
+            fromOffsets: IndexSet(integer: 1),
+            toOffset: 0
+        )
+
+        XCTAssertEqual(result.map(\.id), ["b", "a"])
+    }
+
     func testMultipleSelectionMovesAsContiguousBlock() {
         let global: [Item] = [
             Item(id: "a", group: "A"),

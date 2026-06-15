@@ -27,6 +27,42 @@ final class WorkbenchActionRequestQueueTests: XCTestCase {
         try? FileManager.default.removeItem(at: root)
     }
 
+    func testDrainingMissingDirectoryAndPendingCountAreEmpty() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let queue = WorkbenchActionRequestQueue(directoryURL: root)
+
+        XCTAssertEqual(try queue.drain(), [])
+        XCTAssertEqual(queue.pendingCount(), 0)
+        XCTAssertEqual(queue.recoverUnconfirmed(), [])
+    }
+
+    func testConvenienceInitUsesWorkbenchPathsActionRequestDirectory() {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("WorkbenchActionRequestQueueTests-\(UUID().uuidString)", isDirectory: true)
+        let paths = WorkbenchPaths(rootURL: root)
+        XCTAssertEqual(WorkbenchActionRequestQueue(paths: paths).directoryURL, paths.actionRequestsURL)
+    }
+
+    func testPendingCountFallsBackToZeroWhenQueuePathIsNotDirectory() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let fileURL = root.appendingPathComponent("requests")
+        try Data("not a directory".utf8).write(to: fileURL)
+
+        XCTAssertEqual(WorkbenchActionRequestQueue(directoryURL: fileURL).pendingCount(), 0)
+    }
+
+    func testDuplicateCheckReturnsFalseWhenPendingDirectoryCannotBeListed() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let fileURL = root.appendingPathComponent("requests")
+        try Data("not a directory".utf8).write(to: fileURL)
+        let request = WorkbenchActionRequest(source: "slugger", action: BossWorkbenchAction(action: .launch, entry: "Claude"))
+
+        XCTAssertFalse(WorkbenchActionRequestQueue(directoryURL: fileURL).hasPendingDuplicate(of: request))
+    }
+
     func testDrainSortsByDecodedCreationTimeNotLexicalFilename() throws {
         let root = try temporaryDirectory()
         let queue = WorkbenchActionRequestQueue(directoryURL: root)
@@ -50,6 +86,29 @@ final class WorkbenchActionRequestQueueTests: XCTestCase {
         try? FileManager.default.removeItem(at: root)
     }
 
+    func testDrainTieBreaksSameCreationTimeByRequestID() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let queue = WorkbenchActionRequestQueue(directoryURL: root)
+        let laterID = WorkbenchActionRequest(
+            id: UUID(uuidString: "00000000-0000-0000-0000-0000000000ff")!,
+            createdAt: Date(timeIntervalSince1970: 1),
+            source: "slugger",
+            action: BossWorkbenchAction(action: .launch, entry: "Later ID")
+        )
+        let earlierID = WorkbenchActionRequest(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
+            createdAt: Date(timeIntervalSince1970: 1),
+            source: "slugger",
+            action: BossWorkbenchAction(action: .launch, entry: "Earlier ID")
+        )
+
+        try queue.enqueue(laterID)
+        try queue.enqueue(earlierID)
+
+        XCTAssertEqual(try queue.drain().map(\.id), [earlierID.id, laterID.id])
+    }
+
     func testDrainQuarantinesMalformedRequestsAndContinues() throws {
         let root = try temporaryDirectory()
         let queue = WorkbenchActionRequestQueue(directoryURL: root)
@@ -68,6 +127,18 @@ final class WorkbenchActionRequestQueueTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: queue.rejectedDirectoryURL.appendingPathComponent(badURL.lastPathComponent).path))
         XCTAssertEqual(try queue.drain(), [])
         try? FileManager.default.removeItem(at: root)
+    }
+
+    func testQuarantineRemovesMalformedFileWhenRejectedPathCannotBeCreated() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let queue = WorkbenchActionRequestQueue(directoryURL: root)
+        try Data("not a directory".utf8).write(to: queue.rejectedDirectoryURL)
+        let badURL = root.appendingPathComponent("bad.json")
+        try Data("{".utf8).write(to: badURL)
+
+        XCTAssertEqual(try queue.drain(), [])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: badURL.path))
     }
 
     func testCreateSessionRequestRoundTripsCarryingOwnerAndParams() throws {
@@ -139,6 +210,27 @@ final class WorkbenchActionRequestQueueTests: XCTestCase {
         XCTAssertEqual(drained.first?.id, first.id)
         XCTAssertEqual(try queue.drain(), [])
         try? FileManager.default.removeItem(at: root)
+    }
+
+    func testAppendNewlineParticipatesInDuplicateFingerprint() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let queue = WorkbenchActionRequestQueue(directoryURL: root)
+        let withNewline = WorkbenchActionRequest(
+            createdAt: Date(timeIntervalSince1970: 1),
+            source: "ouro-workbench-mcp",
+            action: BossWorkbenchAction(action: .sendInput, entry: "Claude Code", text: "continue", appendNewline: true)
+        )
+        let withoutNewline = WorkbenchActionRequest(
+            createdAt: Date(timeIntervalSince1970: 2),
+            source: "ouro-workbench-mcp",
+            action: BossWorkbenchAction(action: .sendInput, entry: "Claude Code", text: "continue", appendNewline: false)
+        )
+
+        try queue.enqueue(withNewline)
+        try queue.enqueue(withoutNewline)
+
+        XCTAssertEqual(try queue.drain().map(\.action.appendNewline), [true, false])
     }
 
     func testEnqueueKeepsRequestsThatDifferOnlyByAFingerprintField() throws {
@@ -235,10 +327,85 @@ final class WorkbenchActionRequestQueueTests: XCTestCase {
         try? FileManager.default.removeItem(at: root)
     }
 
+    func testDrainReplacesStaleProcessingFileForSameRequestID() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let queue = WorkbenchActionRequestQueue(directoryURL: root)
+        let request = WorkbenchActionRequest(
+            id: UUID(uuidString: "00000000-0000-0000-0000-0000000000d1")!,
+            createdAt: Date(timeIntervalSince1970: 1),
+            source: "ouro-workbench-mcp",
+            action: BossWorkbenchAction(action: .launch, entry: "Claude Code")
+        )
+        try FileManager.default.createDirectory(at: queue.processingDirectoryURL, withIntermediateDirectories: true)
+        try Data("stale".utf8).write(to: queue.processingDirectoryURL.appendingPathComponent("\(request.id.uuidString).json"))
+        try queue.enqueue(request)
+
+        XCTAssertEqual(try queue.drain(), [request])
+        XCTAssertEqual(queue.recoverUnconfirmed(), [request])
+    }
+
+    func testRecoverUnconfirmedQuarantinesMalformedProcessingFilesAndSortsByID() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let queue = WorkbenchActionRequestQueue(directoryURL: root)
+        try FileManager.default.createDirectory(at: queue.processingDirectoryURL, withIntermediateDirectories: true)
+        let badURL = queue.processingDirectoryURL.appendingPathComponent("bad.json")
+        try Data("{".utf8).write(to: badURL)
+        let second = WorkbenchActionRequest(
+            id: UUID(uuidString: "00000000-0000-0000-0000-0000000000e2")!,
+            createdAt: Date(timeIntervalSince1970: 1),
+            source: "mcp",
+            action: BossWorkbenchAction(action: .launch, entry: "Second")
+        )
+        let first = WorkbenchActionRequest(
+            id: UUID(uuidString: "00000000-0000-0000-0000-0000000000e1")!,
+            createdAt: Date(timeIntervalSince1970: 1),
+            source: "mcp",
+            action: BossWorkbenchAction(action: .launch, entry: "First")
+        )
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        try encoder.encode(second).write(to: queue.processingDirectoryURL.appendingPathComponent("second.json"))
+        try encoder.encode(first).write(to: queue.processingDirectoryURL.appendingPathComponent("first.json"))
+
+        XCTAssertEqual(queue.recoverUnconfirmed().map(\.id), [first.id, second.id])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: badURL.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: queue.rejectedDirectoryURL.appendingPathComponent("bad.json").path))
+    }
+
+    func testQuarantineAvoidsOverwritingExistingRejectedFile() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let queue = WorkbenchActionRequestQueue(directoryURL: root)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: queue.rejectedDirectoryURL, withIntermediateDirectories: true)
+        try Data("old".utf8).write(to: queue.rejectedDirectoryURL.appendingPathComponent("bad.json"))
+        try Data("{".utf8).write(to: root.appendingPathComponent("bad.json"))
+
+        XCTAssertEqual(try queue.drain(), [])
+        let rejected = try FileManager.default.contentsOfDirectory(at: queue.rejectedDirectoryURL, includingPropertiesForKeys: nil)
+            .map(\.lastPathComponent)
+
+        XCTAssertEqual(rejected.count, 2)
+        XCTAssertTrue(rejected.contains("bad.json"))
+        XCTAssertTrue(rejected.contains { $0.hasSuffix("-bad.json") })
+    }
+
     func testRecoverUnconfirmedReturnsNothingWhenProcessingIsEmptyOrAbsent() throws {
         let root = try temporaryDirectory()
         let queue = WorkbenchActionRequestQueue(directoryURL: root)
         // No drain has happened, so processing/ doesn't exist yet.
+        XCTAssertEqual(queue.recoverUnconfirmed(), [])
+    }
+
+    func testRecoverUnconfirmedReturnsEmptyWhenProcessingPathCannotBeListed() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let queue = WorkbenchActionRequestQueue(directoryURL: root)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try Data("not a directory".utf8).write(to: queue.processingDirectoryURL)
+
         XCTAssertEqual(queue.recoverUnconfirmed(), [])
         try? FileManager.default.removeItem(at: root)
     }
