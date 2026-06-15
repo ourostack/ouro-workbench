@@ -23,7 +23,7 @@ Gate state:
   into the handoff.
 - Full-system audit addendum: completed; A-011 through A-014 routed.
 - Planning review: converged and approved.
-- Doing doc: drafted; conversion review passes in progress.
+- Doing doc: `READY_FOR_EXECUTION`; conversion review converged after
+  granularity and ambiguity fixes.
 
-Next action: complete doing-doc conversion review chain, mark doing
-`READY_FOR_EXECUTION`, then execute units directly with strict TDD and live E2E.
+Next action: execute units directly with strict TDD and live E2E.
