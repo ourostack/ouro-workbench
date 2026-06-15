@@ -83,7 +83,7 @@ behavior.
 **Output**: `2026-06-14-1947-doing-product-center-of-gravity/unit-0-research.md`
 **Acceptance**: Artifact records branch, status, target files, test files, and the decisions that `.shell` persists as compatibility state while built-in shell creation/repair/launch authority is removed.
 
-### ⬜ Unit 1a: Bootstrap And MCP Truth — Tests
+### ✅ Unit 1a: Bootstrap And MCP Truth — Tests
 **What**: Write failing tests for no-default-shell bootstrap and MCP/read-only bootstrap defaults. Update `Tests/OuroWorkbenchCoreTests/WorkbenchBootstrapperTests.swift` and `Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift`. Use `WorkbenchDefaults()` as the shared app/MCP no-shell contract; no new helper is planned for this pass.
 **Output**: Tests require: default empty bootstrap uses `WorkbenchSurfacePolicy.setupWorkspaceName`, default empty bootstrap has zero `processEntries`, default empty bootstrap does not create `This Mac`, untouched legacy agent scaffold cleanup leaves zero entries instead of a shell, bootstrapping existing agent terminals does not add a shell, and a persisted `.shell` row named `Local Shell` is preserved exactly rather than repaired. Add a test proving `WorkbenchDefaults()` carries no-shell defaults for MCP read-only state loading. Add or update launch-diagnostics coverage proving `--app-support-root` remains parsed for deterministic app/MCP runtime isolation.
 **Acceptance**: Run `swift test --filter WorkbenchBootstrapperTests` and `swift test --filter WorkbenchLaunchDiagnosticsTests`; every newly added bootstrap/defaults/runtime-isolation check fails before implementation, or the Unit 1 artifact records that a specific check already passed at HEAD.
@@ -178,3 +178,4 @@ behavior.
 - 2026-06-14 19:47 Created from planning doc.
 - 2026-06-14 20:22 Doing conversion review converged after granularity and ambiguity fixes; ready for direct execution.
 - 2026-06-14 20:29 Completed Unit 0 research artifact.
+- 2026-06-14 20:31 Completed Unit 1a red tests. `WorkbenchBootstrapperTests` fails with default `This Mac`, inserted `Local Shell`, and repaired shell expectations; `WorkbenchLaunchDiagnosticsTests` already passes for existing parser coverage.
