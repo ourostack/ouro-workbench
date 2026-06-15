@@ -87,7 +87,15 @@ public struct AutonomyReadinessSnapshot: Codable, Equatable, Sendable {
 }
 
 public struct AutonomyReadinessBuilder: Sendable {
-    public init() {}
+    private let presetProvider: @Sendable (TerminalAgentKind) -> TerminalAgentPreset?
+
+    public init() {
+        self.presetProvider = { TerminalAgentPresets.preset(for: $0) }
+    }
+
+    init(presetProvider: @escaping @Sendable (TerminalAgentKind) -> TerminalAgentPreset?) {
+        self.presetProvider = presetProvider
+    }
 
     public func build(
         state: WorkspaceState,
@@ -228,7 +236,7 @@ public struct AutonomyReadinessBuilder: Sendable {
             guard let agentKind = TerminalAgentDetector.detect(entry: entry) else {
                 return false
             }
-            guard let preset = TerminalAgentPresets.preset(for: agentKind) else {
+            guard let preset = presetProvider(agentKind) else {
                 return false
             }
             return preset.resumeStrategy.kind == .manual

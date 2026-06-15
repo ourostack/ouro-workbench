@@ -115,6 +115,39 @@ final class BossAgentMCPClientTests: XCTestCase {
         )
     }
 
+    func testAskCallsAskToolAndErrorDescriptionsCoverAllCases() async throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OuroWorkbenchMCPClientTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let mockOuro = temporaryDirectory.appendingPathComponent("ouro")
+        let script = """
+        #!/bin/sh
+        read initialize
+        read tool_call
+        echo '{"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":"Ari"}],"isError":false}}'
+        """
+        try script.write(to: mockOuro, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: mockOuro.path)
+        let oldPath = getenv("PATH").map { String(cString: $0) }
+        setenv("PATH", "\(temporaryDirectory.path):\(oldPath ?? "")", 1)
+        defer {
+            if let oldPath { setenv("PATH", oldPath, 1) } else { unsetenv("PATH") }
+        }
+
+        let answer = try await BossAgentMCPClient(timeoutNanoseconds: 2_000_000_000).ask(agentName: "slugger", question: "who")
+
+        XCTAssertEqual(answer, "Ari")
+        XCTAssertEqual(BossAgentMCPClientError.processNotAvailable("").errorDescription, "Ouro MCP process is not available.")
+        XCTAssertEqual(BossAgentMCPClientError.timeout.errorDescription, "Ouro MCP request timed out.")
+        XCTAssertEqual(BossAgentMCPClientError.closed.errorDescription, "Ouro MCP process closed before returning a response.")
+        XCTAssertEqual(BossAgentMCPClientError.malformedResponse.errorDescription, "Ouro MCP returned a malformed response.")
+        XCTAssertEqual(BossAgentMCPClientError.rpcError("rpc").errorDescription, "rpc")
+        XCTAssertEqual(BossAgentMCPClientError.toolError("tool").errorDescription, "tool")
+        XCTAssertTrue(BossAgentMCPClientError.emptyResult.localizedDescription.contains("didn't respond"))
+    }
+
     func testExtractsToolTextResponse() throws {
         let line = """
         {"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":"hello boss"}],"isError":false}}
@@ -195,6 +228,164 @@ final class BossAgentMCPClientTests: XCTestCase {
         XCTAssertEqual(text, "string id ok")
     }
 
+    func testMalformedResponsesAreRejected() {
+        XCTAssertThrowsError(try BossAgentMCPClient.extractText(fromJSONLine: #"{"jsonrpc":"2.0","id":2}"#)) { error in
+            XCTAssertEqual(error as? BossAgentMCPClientError, .malformedResponse)
+        }
+        XCTAssertThrowsError(try BossAgentMCPClient.extractText(fromOutput: #"{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"wrong"}],"isError":false}}"#, id: 2)) { error in
+            XCTAssertEqual(error as? BossAgentMCPClientError, .malformedResponse)
+        }
+        XCTAssertNil(try BossAgentMCPClient.extractTextIfMatching(line: "not json", id: 2))
+        XCTAssertNil(try BossAgentMCPClient.extractTextIfMatching(line: #"{"jsonrpc":"2.0","id":true}"#, id: 2))
+        XCTAssertNil(try BossAgentMCPClient.extractTextIfMatching(line: #"{"jsonrpc":"2.0","id":2.5}"#, id: 2))
+    }
+
+    func testReadsFinalResponseWithoutTrailingNewline() async throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OuroWorkbenchMCPClientTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let mockOuro = temporaryDirectory.appendingPathComponent("ouro")
+        let script = """
+        #!/bin/sh
+        read initialize
+        read tool_call
+        printf '%s' '{"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":"no newline"}],"isError":false}}'
+        """
+        try script.write(to: mockOuro, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: mockOuro.path)
+        let oldPath = getenv("PATH").map { String(cString: $0) }
+        setenv("PATH", "\(temporaryDirectory.path):\(oldPath ?? "")", 1)
+        defer {
+            if let oldPath { setenv("PATH", oldPath, 1) } else { unsetenv("PATH") }
+        }
+
+        let text = try await BossAgentMCPClient(timeoutNanoseconds: 2_000_000_000).status(agentName: "slugger")
+
+        XCTAssertEqual(text, "no newline")
+    }
+
+    func testCallToolTimesOutAndClosesCleanlyWhenServerNeverAnswers() async throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OuroWorkbenchMCPClientTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let mockOuro = temporaryDirectory.appendingPathComponent("ouro")
+        let script = """
+        #!/bin/sh
+        read initialize
+        read tool_call
+        while :; do :; done
+        """
+        try script.write(to: mockOuro, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: mockOuro.path)
+        let oldPath = getenv("PATH").map { String(cString: $0) }
+        setenv("PATH", "\(temporaryDirectory.path):\(oldPath ?? "")", 1)
+        defer {
+            if let oldPath { setenv("PATH", oldPath, 1) } else { unsetenv("PATH") }
+        }
+
+        do {
+            _ = try await BossAgentMCPClient(timeoutNanoseconds: 50_000_000).status(agentName: "slugger")
+            XCTFail("Expected timeout")
+        } catch {
+            XCTAssertEqual(error as? BossAgentMCPClientError, .timeout)
+        }
+    }
+
+    func testTimeoutForceKillsProcessThatIgnoresTerminate() async throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OuroWorkbenchMCPClientTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let mockOuro = temporaryDirectory.appendingPathComponent("ouro")
+        let script = """
+        #!/bin/sh
+        trap '' TERM
+        read initialize
+        read tool_call
+        while :; do :; done
+        """
+        try script.write(to: mockOuro, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: mockOuro.path)
+        let oldPath = getenv("PATH").map { String(cString: $0) }
+        setenv("PATH", "\(temporaryDirectory.path):\(oldPath ?? "")", 1)
+        defer {
+            if let oldPath { setenv("PATH", oldPath, 1) } else { unsetenv("PATH") }
+        }
+
+        do {
+            _ = try await BossAgentMCPClient(timeoutNanoseconds: 20_000_000).status(agentName: "slugger")
+            XCTFail("Expected timeout")
+        } catch {
+            XCTAssertEqual(error as? BossAgentMCPClientError, .timeout)
+        }
+    }
+
+    func testCallToolReportsClosedWhenServerExitsWithoutResponse() async throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OuroWorkbenchMCPClientTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let mockOuro = temporaryDirectory.appendingPathComponent("ouro")
+        let script = """
+        #!/bin/sh
+        read initialize
+        read tool_call
+        exit 0
+        """
+        try script.write(to: mockOuro, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: mockOuro.path)
+        let oldPath = getenv("PATH").map { String(cString: $0) }
+        setenv("PATH", "\(temporaryDirectory.path):\(oldPath ?? "")", 1)
+        defer {
+            if let oldPath { setenv("PATH", oldPath, 1) } else { unsetenv("PATH") }
+        }
+
+        do {
+            _ = try await BossAgentMCPClient(timeoutNanoseconds: 2_000_000_000).status(agentName: "slugger")
+            XCTFail("Expected closed")
+        } catch {
+            XCTAssertEqual(error as? BossAgentMCPClientError, .closed)
+        }
+    }
+
+    func testTimeoutForceKillsPythonProcessThatIgnoresTerminate() async throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OuroWorkbenchMCPClientTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let mockOuro = temporaryDirectory.appendingPathComponent("ouro")
+        let script = """
+        #!/usr/bin/env python3
+        import signal, sys, time
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        sys.stdin.readline()
+        sys.stdin.readline()
+        while True:
+            time.sleep(0.05)
+        """
+        try script.write(to: mockOuro, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: mockOuro.path)
+        let oldPath = getenv("PATH").map { String(cString: $0) }
+        setenv("PATH", "\(temporaryDirectory.path):\(oldPath ?? "")", 1)
+        defer {
+            if let oldPath { setenv("PATH", oldPath, 1) } else { unsetenv("PATH") }
+        }
+
+        do {
+            _ = try await BossAgentMCPClient(timeoutNanoseconds: 20_000_000).status(agentName: "slugger")
+            XCTFail("Expected timeout")
+        } catch {
+            XCTAssertEqual(error as? BossAgentMCPClientError, .timeout)
+        }
+    }
+
     // MARK: - retryingOnEmpty
 
     func testRetryingOnEmptyReturnsFirstSuccessWithoutRetry() async throws {
@@ -218,6 +409,21 @@ final class BossAgentMCPClientTests: XCTestCase {
         let count = await calls.count
         XCTAssertEqual(result, "answer on attempt 2")
         XCTAssertEqual(count, 2, "an empty first answer must retry exactly once")
+    }
+
+    func testRetryingOnEmptyHonorsRetryVeto() async {
+        let calls = CallRecorder()
+        do {
+            _ = try await BossAgentMCPClient.retryingOnEmpty(canRetry: { false }) {
+                _ = await calls.increment()
+                throw BossAgentMCPClientError.emptyResult
+            }
+            XCTFail("Expected emptyResult to propagate when retry is vetoed")
+        } catch {
+            XCTAssertEqual(error as? BossAgentMCPClientError, .emptyResult)
+        }
+        let count = await calls.count
+        XCTAssertEqual(count, 1)
     }
 
     func testRetryingOnEmptyRethrowsWhenRetryAlsoEmpty() async {

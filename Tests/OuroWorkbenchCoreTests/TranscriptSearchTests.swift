@@ -83,6 +83,23 @@ final class TranscriptSearchTests: XCTestCase {
         XCTAssertEqual(matches.map(\.line), ["needle one", "needle two"])
     }
 
+    func testSearchSkipsExistingPathThatCannotBeOpenedAsTranscriptAndKeepsFirstDuplicateEntry() throws {
+        let entryId = UUID()
+        let first = ProcessEntry(id: entryId, projectId: UUID(), name: "First", kind: .shell, executable: "/bin/zsh", workingDirectory: "/repo")
+        let duplicate = ProcessEntry(id: entryId, projectId: UUID(), name: "Duplicate", kind: .shell, executable: "/bin/zsh", workingDirectory: "/repo")
+        let directoryPath = temporaryDirectory.appendingPathComponent("directory", isDirectory: true)
+        try FileManager.default.createDirectory(at: directoryPath, withIntermediateDirectories: true)
+        let transcriptPath = try writeTranscript(name: "duplicate.log", text: "needle\n")
+        let directoryRun = ProcessRun(entryId: entryId, status: .exited, transcriptPath: directoryPath.path)
+        let realRun = ProcessRun(entryId: entryId, status: .exited, transcriptPath: transcriptPath)
+        let state = WorkspaceState(processEntries: [first, duplicate], processRuns: [directoryRun, realRun])
+
+        let matches = TranscriptSearcher().search(query: "needle", state: state)
+
+        XCTAssertEqual(matches.map(\.entryName), ["First"])
+        XCTAssertEqual(matches.map(\.transcriptPath), [transcriptPath])
+    }
+
     func testSearchHandlesCRLFLinesAndDiacriticInsensitiveMatches() throws {
         let project = WorkbenchProject(name: "Project", rootPath: "/repo")
         let entry = ProcessEntry(
@@ -151,6 +168,50 @@ final class TranscriptSearchTests: XCTestCase {
         let state = WorkspaceState()
 
         XCTAssertEqual(TranscriptSearcher().search(query: "  ", state: state), [])
+        XCTAssertEqual(TranscriptSearcher().search(query: "needle", state: state, maxMatches: 0), [])
+    }
+
+    func testMatchIdCombinesRunAndLineNumber() {
+        let runId = UUID(uuidString: "00000000-0000-0000-0000-000000000123")!
+        let match = TranscriptSearchMatch(
+            entryId: UUID(),
+            entryName: "Shell",
+            runId: runId,
+            transcriptPath: "/Users/example/transcript.log",
+            lineNumber: 42,
+            line: "needle"
+        )
+
+        XCTAssertEqual(match.id, "\(runId.uuidString):42")
+    }
+
+    func testSearchHandlesShortFinalLineWithoutTrailingNewlineAndMissingEntryFallback() throws {
+        let entryId = UUID(uuidString: "00000000-0000-0000-0000-00000000feed")!
+        let transcriptPath = try writeTranscript(name: "final-line.log", text: "final needle")
+        let run = ProcessRun(entryId: entryId, status: .exited, transcriptPath: transcriptPath)
+        let state = WorkspaceState(processRuns: [run])
+
+        let matches = TranscriptSearcher().search(query: "needle", state: state)
+
+        XCTAssertEqual(matches.map(\.lineNumber), [1])
+        XCTAssertEqual(matches.map(\.entryName), [entryId.uuidString])
+        XCTAssertEqual(matches.map(\.line), ["final needle"])
+    }
+
+    func testClippedLineDefensiveFallbackWhenQueryIsAbsent() {
+        let longLine = String(repeating: "a", count: TranscriptSearchLimit.maximumLineCharacters + 10)
+
+        let clipped = TranscriptSearcher().clippedLine(longLine, query: "needle")
+
+        XCTAssertEqual(clipped, "\(longLine.prefix(TranscriptSearchLimit.maximumLineCharacters))...")
+    }
+
+    func testClippedLineOmitsPrefixOrSuffixWhenMatchTouchesBoundary() {
+        let longAfter = "needle" + String(repeating: "a", count: TranscriptSearchLimit.maximumLineCharacters + 10)
+        let longBefore = String(repeating: "a", count: TranscriptSearchLimit.maximumLineCharacters + 10) + "needle"
+
+        XCTAssertFalse(TranscriptSearcher().clippedLine(longAfter, query: "needle").hasPrefix("..."))
+        XCTAssertFalse(TranscriptSearcher().clippedLine(longBefore, query: "needle").hasSuffix("..."))
     }
 
     func testTranscriptSearchLimitClampsCallerProvidedValues() {

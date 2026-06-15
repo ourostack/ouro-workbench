@@ -543,7 +543,7 @@ public struct RecentSessionScanner {
     /// Fill in each candidate's git repository root (the natural grouping unit)
     /// by walking up from its working directory. Cheap — a few `stat`s per
     /// candidate — and cached per directory so repeated cwds aren't re-walked.
-    private func resolveRepositoryRoots(_ candidates: [RecentSessionCandidate]) -> [RecentSessionCandidate] {
+    func resolveRepositoryRoots(_ candidates: [RecentSessionCandidate]) -> [RecentSessionCandidate] {
         var cache: [String: String?] = [:]
         return candidates.map { candidate in
             guard candidate.repositoryRoot == nil else {
@@ -862,7 +862,7 @@ public struct RecentSessionScanner {
         }
     }
 
-    private func recentFiles(under root: URL, pathExtension: String) -> [URL] {
+    func recentFiles(under root: URL, pathExtension: String) -> [URL] {
         guard let enumerator = fileManager.enumerator(
             at: root,
             includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
@@ -880,7 +880,7 @@ public struct RecentSessionScanner {
         return urls
     }
 
-    private func jsonLineObjects(_ url: URL) -> [[String: Any]] {
+    func jsonLineObjects(_ url: URL) -> [[String: Any]] {
         guard let raw = try? String(contentsOf: url, encoding: .utf8) else {
             return []
         }
@@ -896,7 +896,7 @@ public struct RecentSessionScanner {
             }
     }
 
-    private func firstString(_ records: [[String: Any]], keys: [String]) -> String? {
+    func firstString(_ records: [[String: Any]], keys: [String]) -> String? {
         for record in records {
             for key in keys {
                 if let value = record[key] as? String, !value.isEmpty {
@@ -907,7 +907,7 @@ public struct RecentSessionScanner {
         return nil
     }
 
-    private func firstPrompt(_ records: [[String: Any]]) -> String? {
+    func firstPrompt(_ records: [[String: Any]]) -> String? {
         for record in records {
             for key in ["content", "message", "summary"] {
                 if let value = stringValue(record[key]), !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -918,7 +918,7 @@ public struct RecentSessionScanner {
         return nil
     }
 
-    private func stringValue(_ value: Any?) -> String? {
+    func stringValue(_ value: Any?) -> String? {
         if let string = value as? String {
             return string
         }
@@ -931,11 +931,11 @@ public struct RecentSessionScanner {
         return nil
     }
 
-    private func newestDate(in records: [[String: Any]]) -> Date? {
+    func newestDate(in records: [[String: Any]]) -> Date? {
         records.compactMap { parseDate($0["timestamp"] as? String) }.max()
     }
 
-    private func parseDate(_ raw: String?) -> Date? {
+    func parseDate(_ raw: String?) -> Date? {
         guard let raw else {
             return nil
         }
@@ -952,14 +952,14 @@ public struct RecentSessionScanner {
         (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
     }
 
-    private func isRecent(_ date: Date?) -> Bool {
+    func isRecent(_ date: Date?) -> Bool {
         guard let date else {
             return false
         }
         return date >= now.addingTimeInterval(-lookback)
     }
 
-    private func inferredClaudeProjectPath(from fileURL: URL) -> String? {
+    func inferredClaudeProjectPath(from fileURL: URL) -> String? {
         let projectDirectory = fileURL.deletingLastPathComponent().lastPathComponent
         guard projectDirectory.hasPrefix("-") else {
             return nil
@@ -968,7 +968,7 @@ public struct RecentSessionScanner {
         return path.isEmpty ? nil : path
     }
 
-    private func parseZshHistoryLine(_ line: String) -> (epoch: Int, command: String)? {
+    func parseZshHistoryLine(_ line: String) -> (epoch: Int, command: String)? {
         guard line.hasPrefix(": ") else {
             return nil
         }
@@ -1004,7 +1004,7 @@ public struct RecentSessionScanner {
         }
     }
 
-    private static func parseProcessLine(_ line: Substring) -> LiveTerminalProcess? {
+    static func parseProcessLine(_ line: Substring) -> LiveTerminalProcess? {
         let pieces = line.split(separator: " ", maxSplits: 2, omittingEmptySubsequences: true)
         guard pieces.count == 3, let pid = Int(pieces[0]) else {
             return nil
@@ -1016,7 +1016,7 @@ public struct RecentSessionScanner {
         )
     }
 
-    private func candidateById(_ candidates: [RecentSessionCandidate]) -> [String: RecentSessionCandidate] {
+    func candidateById(_ candidates: [RecentSessionCandidate]) -> [String: RecentSessionCandidate] {
         var byId: [String: RecentSessionCandidate] = [:]
         for candidate in candidates {
             if let existing = byId[candidate.id], existing.confidence >= candidate.confidence {
@@ -1027,14 +1027,14 @@ public struct RecentSessionScanner {
         return byId
     }
 
-    private func isClaudeProcess(command: String) -> Bool {
+    func isClaudeProcess(command: String) -> Bool {
         guard let parsed = canonicalCommandTokens(command) else {
             return false
         }
         return URL(fileURLWithPath: parsed.executable).lastPathComponent.lowercased() == "claude"
     }
 
-    private func claudeSessionId(from command: String) -> String? {
+    func claudeSessionId(from command: String) -> String? {
         guard let parsed = canonicalCommandTokens(command) else {
             return nil
         }
@@ -1056,7 +1056,7 @@ public struct RecentSessionScanner {
         ["claude"] + preservedClaudeResumeArguments(from: command) + ["--resume", sessionId]
     }
 
-    private func preservedClaudeResumeArguments(from command: String) -> [String] {
+    func preservedClaudeResumeArguments(from command: String) -> [String] {
         guard let parsed = canonicalCommandTokens(command) else {
             return []
         }
@@ -1089,7 +1089,7 @@ public struct RecentSessionScanner {
         return preserved
     }
 
-    private func canonicalCommandTokens(_ command: String) -> TerminalCommandTokens? {
+    func canonicalCommandTokens(_ command: String) -> TerminalCommandTokens? {
         guard let parsed = TerminalCommandParser.parse(command) else {
             return nil
         }
@@ -1138,7 +1138,7 @@ public struct RecentSessionScanner {
         )
     }
 
-    private func cleanedCmuxTitle(_ raw: String?) -> String? {
+    func cleanedCmuxTitle(_ raw: String?) -> String? {
         guard var title = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty else {
             return nil
         }
@@ -1153,7 +1153,7 @@ public struct RecentSessionScanner {
         return title.isEmpty ? nil : title
     }
 
-    private func normalizedTTYName(_ ttyName: String?) -> String? {
+    func normalizedTTYName(_ ttyName: String?) -> String? {
         guard let ttyName, !ttyName.isEmpty, ttyName != "??" else {
             return nil
         }

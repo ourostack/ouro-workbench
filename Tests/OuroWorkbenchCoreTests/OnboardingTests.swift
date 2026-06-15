@@ -77,6 +77,26 @@ final class OnboardingTests: XCTestCase {
         XCTAssertTrue(readiness.repairSteps.allSatisfy { $0.actor == .humanChoice })
     }
 
+    func testMissingNamedBossUsesInstalledBundleCopyAndReportAuditCommands() {
+        let readiness = WorkbenchOnboardingAdvisor().readiness(
+            boss: BossAgentSelection(agentName: "missing"),
+            agents: [readyAgentWithBothLanes(name: "slugger")],
+            mcpRegistration: nil
+        )
+
+        XCTAssertEqual(readiness.state, .needsAgent)
+        XCTAssertTrue(readiness.detail.contains("selected boss missing is not installed"))
+
+        let rendered = OnboardingReadinessReportRenderer().render(OnboardingReadiness(
+            state: .needsAgent,
+            headline: "Set up",
+            detail: "Do it",
+            selectedBossName: "missing",
+            repairSteps: [OnboardingRepairStep(id: "hatch", actor: .humanChoice, title: "Hatch", detail: "Create", command: ["ouro", "hatch"])]
+        ))
+        XCTAssertTrue(rendered.contains("- hatch: ouro hatch"))
+    }
+
     func testAdvisorSurfacesProviderAndMCPRepairs() {
         let readiness = WorkbenchOnboardingAdvisor().readiness(
             boss: BossAgentSelection(agentName: "slugger"),
@@ -202,6 +222,45 @@ final class OnboardingTests: XCTestCase {
         XCTAssertEqual(readiness.state, .needsRepair)
         XCTAssertTrue(readiness.repairSteps.contains { $0.id == "check-outward" && $0.actor == .agentRunnable })
         XCTAssertTrue(readiness.repairSteps.contains { $0.id == "check-inner" && $0.actor == .agentRunnable })
+    }
+
+    func testAdvisorOffersHatchAndCloneWhenNoAgentsExist() {
+        let readiness = WorkbenchOnboardingAdvisor().readiness(
+            boss: BossAgentSelection(agentName: "slugger"),
+            agents: [],
+            mcpRegistration: nil
+        )
+
+        XCTAssertEqual(readiness.state, .needsAgent)
+        XCTAssertEqual(readiness.repairSteps.map(\.id), ["hatch", "clone"])
+        XCTAssertEqual(readiness.repairSteps.compactMap(\.commandLine).count, 2)
+    }
+
+    func testAdvisorRepairsSelectedAgentConfigAndRunningProviderCheck() {
+        let readiness = WorkbenchOnboardingAdvisor().readiness(
+            boss: BossAgentSelection(agentName: "slugger"),
+            agents: [
+                OuroAgentRecord(
+                    name: "slugger",
+                    bundlePath: "/bundles/slugger.ouro",
+                    configPath: "/bundles/slugger.ouro/agent.json",
+                    status: .invalidConfig,
+                    detail: "missing model",
+                    humanFacing: OuroAgentLane(provider: "minimax", model: "MiniMax-M2.7"),
+                    agentFacing: OuroAgentLane(provider: "openai-codex", model: "gpt-5.5")
+                )
+            ],
+            mcpRegistration: nil,
+            providerChecks: [
+                "outward": OnboardingProviderCheckResult(lane: "outward", state: .running, detail: "checking"),
+                "inner": OnboardingProviderCheckResult(lane: "inner", state: .passed, detail: "ok")
+            ]
+        )
+
+        XCTAssertEqual(readiness.state, .needsRepair)
+        XCTAssertTrue(readiness.repairSteps.contains { $0.id == "repair-agent-config" && $0.command == ["ouro", "repair", "--agent", "slugger"] })
+        XCTAssertTrue(readiness.repairSteps.contains { $0.id == "check-outward" && $0.title == "Checking outward provider" })
+        XCTAssertTrue(readiness.repairSteps.contains { $0.id == "workbench-mcp" && $0.detail.contains("aren't available") })
     }
 
     func testAdvisorBlocksOnFailedProviderCheck() {
@@ -574,6 +633,154 @@ final class OnboardingTests: XCTestCase {
         XCTAssertTrue(candidate.evidencePaths.contains("process:456"))
     }
 
+    func testRecentCandidateCommandLineAndWorkbenchScanCoverShellAndSkipApps() throws {
+        let project = WorkbenchProject(name: "Project", rootPath: "/Users/ari/code/project")
+        let shell = ProcessEntry(projectId: project.id, name: "Shell", kind: .shell, executable: "/bin/zsh", arguments: ["-l"], workingDirectory: project.rootPath, notes: " shell notes ")
+        let app = ProcessEntry(projectId: project.id, name: "App", kind: .command, executable: "/Applications/App.app", workingDirectory: project.rootPath)
+        let run = ProcessRun(entryId: shell.id, status: .running, startedAt: Date(timeIntervalSince1970: 1), lastOutputAt: Date(timeIntervalSince1970: 2))
+        let state = WorkspaceState(projects: [project], processEntries: [shell, app], processRuns: [run])
+
+        let candidates = RecentSessionScanner(homeURL: temporaryDirectory).scanWorkbench(state: state)
+
+        let candidate = try XCTUnwrap(candidates.first)
+        XCTAssertEqual(candidates.count, 1)
+        XCTAssertEqual(candidate.source, RecentSessionSource.workbench)
+        XCTAssertEqual(candidate.summary, "shell notes")
+        XCTAssertEqual(candidate.resumeCommandLine, "/bin/zsh -l")
+    }
+
+    func testScannerCoversClaudeCodexShellAndSortingFallbackBranches() throws {
+        let now = ISO8601DateFormatter().date(from: "2026-05-26T12:00:00Z")!
+        let claudeProject = temporaryDirectory.appendingPathComponent(".claude/projects/-Users-ari-code-repo")
+        try FileManager.default.createDirectory(at: claudeProject, withIntermediateDirectories: true)
+        try #"{"content":[{"text":"Summarize a very long onboarding transcript that must be clipped on a word boundary before it becomes a proposal title for the UI because otherwise it is too long"}],"timestamp":"2026-05-26T11:00:00Z"}"#
+            .write(to: claudeProject.appendingPathComponent("fallback-session.jsonl"), atomically: true, encoding: .utf8)
+        try #"not-json"#
+            .write(to: claudeProject.appendingPathComponent("ignored.jsonl"), atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: 100)], ofItemAtPath: claudeProject.appendingPathComponent("ignored.jsonl").path)
+
+        let codexURL = temporaryDirectory.appendingPathComponent(".codex/session_index.jsonl")
+        try FileManager.default.createDirectory(at: codexURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try [
+            #"{"thread_name":"missing id","updated_at":"2026-05-26T10:00:00Z"}"#,
+            #"{"id":"old","thread_name":"old","updated_at":"2020-01-01T00:00:00Z"}"#,
+            #"{"id":"codex-fallback","updated_at":"2026-05-26T10:00:00Z"}"#
+        ].joined(separator: "\n").write(to: codexURL, atomically: true, encoding: .utf8)
+
+        let historyURL = temporaryDirectory.appendingPathComponent(".zsh_history")
+        try [
+            "not zsh",
+            ": not-an-epoch:0;claude",
+            ": 100:0;claude --session-id old",
+            ": 1779796800:0;echo not-agent",
+            ": 1779796800:0;gh copilot"
+        ].joined(separator: "\n").write(to: historyURL, atomically: true, encoding: .utf8)
+
+        let scanner = RecentSessionScanner(
+            homeURL: temporaryDirectory,
+            now: now,
+            lookback: 7 * 24 * 60 * 60,
+            sqlite3URL: temporaryDirectory.appendingPathComponent("missing-sqlite3"),
+            liveProcessLister: {
+                [
+                    RecentSessionScanner.LiveTerminalProcess(pid: 1, ttyName: nil, command: "not claude"),
+                    RecentSessionScanner.LiveTerminalProcess(pid: 2, ttyName: "??", command: "claude --model opus --add-dir /repo --session-id=live-eq")
+                ]
+            }
+        )
+
+        let candidates = scanner.scan()
+
+        XCTAssertTrue(candidates.contains { $0.id == "claude:fallback-session" && $0.workingDirectory == "/Users/ari/code/repo" && $0.confidence == 0.92 })
+        XCTAssertTrue(candidates.contains { $0.id == "codex:codex-fallback" && $0.title == "codex-fallback" })
+        XCTAssertTrue(candidates.contains { $0.id == "claude:live-eq" && $0.resumeCommand == ["claude", "--model", "opus", "--add-dir", "/repo", "--resume", "live-eq"] })
+        XCTAssertTrue(candidates.contains { $0.source == .githubCopilotCLI && $0.resumeCommand == ["gh", "copilot"] })
+        XCTAssertEqual(RecentSessionScanner.titleFromPrompt(String(repeating: "x", count: 80))?.count, 72)
+        XCTAssertNil(RecentSessionScanner.titleFromPrompt(" \n "))
+    }
+
+    func testRecentSessionScannerInternalHelpersCoverDefensiveBranches() throws {
+        let now = ISO8601DateFormatter().date(from: "2026-05-26T12:00:00Z")!
+        let scanner = RecentSessionScanner(homeURL: temporaryDirectory, now: now, sqlite3URL: temporaryDirectory.appendingPathComponent("missing"), liveProcessLister: { [] })
+
+        let preRooted = RecentSessionCandidate(id: "rooted", source: .shellHistory, agentKind: nil, title: "Rooted", workingDirectory: temporaryDirectory.path, lastActiveAt: nil, resumeCommand: ["bash"], summary: "", evidencePaths: [], confidence: 0.6, repositoryRoot: "/repo")
+        let dated = RecentSessionCandidate(id: "dated", source: .shellHistory, agentKind: nil, title: "Dated", workingDirectory: temporaryDirectory.path, lastActiveAt: now, resumeCommand: ["bash"], summary: "", evidencePaths: [], confidence: 0.6)
+        let resolved = scanner.resolveRepositoryRoots([preRooted, dated])
+        XCTAssertEqual(resolved.first?.id, "dated")
+        XCTAssertEqual(resolved.first { $0.id == "rooted" }?.repositoryRoot, "/repo")
+
+        XCTAssertTrue(scanner.recentFiles(under: temporaryDirectory.appendingPathComponent("missing"), pathExtension: "jsonl").isEmpty)
+        let jsonURL = temporaryDirectory.appendingPathComponent("helpers.jsonl")
+        try #"{"a":"first","content":{"text":"Nested text"},"timestamp":"2026-05-26T11:00:00Z"}"#
+            .write(to: jsonURL, atomically: true, encoding: .utf8)
+        let records = scanner.jsonLineObjects(jsonURL)
+        XCTAssertEqual(scanner.firstString(records, keys: ["missing", "a"]), "first")
+        XCTAssertNil(scanner.firstString([[:]], keys: ["missing"]))
+        XCTAssertEqual(scanner.firstPrompt(records), "Nested text")
+        XCTAssertNil(scanner.firstPrompt([["content": "   "]]))
+        XCTAssertEqual(scanner.stringValue(["content": ["text": "object text"]]), "object text")
+        XCTAssertEqual(scanner.stringValue([["text": "one"], ["text": "two"]]), "one\ntwo")
+        XCTAssertNil(scanner.stringValue(42))
+        XCTAssertNotNil(scanner.newestDate(in: records))
+        XCTAssertNil(scanner.parseDate(nil))
+        XCTAssertNotNil(scanner.parseDate("2026-05-26T11:00:00Z"))
+        XCTAssertFalse(scanner.isRecent(nil))
+        XCTAssertNil(scanner.inferredClaudeProjectPath(from: temporaryDirectory.appendingPathComponent("plain/session.jsonl")))
+        XCTAssertEqual(scanner.parseZshHistoryLine(": 1779796800:0;claude")?.command, "claude")
+        XCTAssertNil(scanner.parseZshHistoryLine("bad"))
+        XCTAssertNil(scanner.parseZshHistoryLine(": bad;claude"))
+        XCTAssertNil(RecentSessionScanner.parseProcessLine("bad line"))
+        XCTAssertEqual(RecentSessionScanner.parseProcessLine("123 ttys001 claude --session-id abc")?.pid, 123)
+        XCTAssertFalse(scanner.isClaudeProcess(command: " "))
+        XCTAssertNil(scanner.claudeSessionId(from: "claude"))
+        XCTAssertNil(scanner.claudeSessionId(from: " "))
+        XCTAssertTrue(scanner.preservedClaudeResumeArguments(from: " ").isEmpty)
+        XCTAssertEqual(scanner.preservedClaudeResumeArguments(from: "claude --model"), [])
+        XCTAssertEqual(scanner.preservedClaudeResumeArguments(from: "claude --permission-mode=acceptEdits --add-dir=/repo --yolo"), ["--permission-mode=acceptEdits", "--add-dir=/repo", "--yolo"])
+        XCTAssertNil(scanner.canonicalCommandTokens(" "))
+        let low = RecentSessionCandidate(id: "same", source: .shellHistory, agentKind: nil, title: "low", workingDirectory: "/", lastActiveAt: nil, resumeCommand: [], summary: "", evidencePaths: [], confidence: 0.1)
+        let high = RecentSessionCandidate(id: "same", source: .shellHistory, agentKind: nil, title: "high", workingDirectory: "/", lastActiveAt: nil, resumeCommand: [], summary: "", evidencePaths: [], confidence: 0.9)
+        XCTAssertEqual(scanner.candidateById([high, low])["same"]?.title, "high")
+        XCTAssertNil(scanner.cleanedCmuxTitle(" !!! "))
+        XCTAssertEqual(scanner.normalizedTTYName("console"), "console")
+    }
+
+    func testCmuxScannerSkipsMalformedPanelsAndUsesFallbacks() throws {
+        let now = ISO8601DateFormatter().date(from: "2026-05-26T12:00:00Z")!
+        let cmuxURL = temporaryDirectory.appendingPathComponent("cmux-fallbacks.json")
+        try """
+        {
+          "windows": [
+            {"tabManager": {}},
+            {"tabManager": {"workspaces": [{
+              "processTitle": "Fallback Process",
+              "statusEntries": [],
+              "panels": [
+                {"title": "!!!", "ttyName": null},
+                {"title": "!!!", "ttyName": "ttys010"}
+              ]
+            }]}}
+          ]
+        }
+        """.write(to: cmuxURL, atomically: true, encoding: .utf8)
+        let scanner = RecentSessionScanner(
+            homeURL: temporaryDirectory,
+            now: now,
+            sqlite3URL: temporaryDirectory.appendingPathComponent("missing-sqlite3"),
+            cmuxSessionURL: cmuxURL,
+            liveProcessLister: {
+                [RecentSessionScanner.LiveTerminalProcess(pid: 7, ttyName: "ttys010", command: "claude --session-id cmux-fallback")]
+            }
+        )
+
+        let candidate = try XCTUnwrap(scanner.scanCmuxSessions().first)
+
+        XCTAssertEqual(candidate.title, "Live Claude Code session cmux-fal")
+        XCTAssertEqual(candidate.workingDirectory, temporaryDirectory.path)
+        XCTAssertEqual(candidate.summary, "Live cmux Claude Code panel in Fallback Process.")
+        XCTAssertTrue(candidate.evidencePaths.contains("tty:ttys010"))
+    }
+
     func testCodexSQLiteScannerUsesSingleValidOrderByQuery() throws {
         let now = ISO8601DateFormatter().date(from: "2026-05-26T12:00:00Z")!
         let codexURL = temporaryDirectory.appendingPathComponent(".codex/state_5.sqlite")
@@ -604,6 +811,35 @@ final class OnboardingTests: XCTestCase {
         let candidate = try XCTUnwrap(scanner.scan().first { $0.id == "codex:codex-live" })
         XCTAssertEqual(candidate.workingDirectory, "/Users/ari/Projects/ouro-workbench")
         XCTAssertEqual(candidate.resumeCommand, ["codex", "resume", "codex-live"])
+    }
+
+    func testCodexSQLiteScannerHandlesMalformedRowsHomeFallbackAndFailures() throws {
+        let now = ISO8601DateFormatter().date(from: "2026-05-26T12:00:00Z")!
+        let codexURL = temporaryDirectory.appendingPathComponent(".codex/state_5.sqlite")
+        try FileManager.default.createDirectory(at: codexURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: codexURL.path, contents: Data())
+
+        let sqliteURL = temporaryDirectory.appendingPathComponent("sqlite3")
+        try """
+        #!/bin/sh
+        printf 'bad\\n'
+        printf 'codex-empty\\t\\t\\tmain\\t0\\n'
+        """.write(to: sqliteURL, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: sqliteURL.path)
+
+        let scanner = RecentSessionScanner(homeURL: temporaryDirectory, now: now, sqlite3URL: sqliteURL, liveProcessLister: { [] })
+        let candidate = try XCTUnwrap(scanner.scanCodex().first { $0.id == "codex:codex-empty" })
+
+        XCTAssertEqual(candidate.title, "codex-empty")
+        XCTAssertEqual(candidate.workingDirectory, temporaryDirectory.path)
+        XCTAssertEqual(candidate.lastActiveAt, nil)
+        XCTAssertEqual(candidate.summary, "codex-empty")
+        XCTAssertEqual(candidate.confidence, 0.74)
+
+        let failingSQLite = temporaryDirectory.appendingPathComponent("sqlite3-fail")
+        try "#!/bin/sh\nexit 1\n".write(to: failingSQLite, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: failingSQLite.path)
+        XCTAssertTrue(RecentSessionScanner(homeURL: temporaryDirectory, now: now, sqlite3URL: failingSQLite, liveProcessLister: { [] }).scanCodex().isEmpty)
     }
 
     func testImportProposalGroupsClaudeWorktreesByOwningProject() {
@@ -645,6 +881,13 @@ final class OnboardingTests: XCTestCase {
     func testRepositoryRootReturnsDirectoryItselfWhenItIsTheRoot() {
         let resolved = WorkspaceGrouping.repositoryRoot(for: "/Users/ari/code/myrepo/") { $0 == "/Users/ari/code/myrepo" }
         XCTAssertEqual(resolved, "/Users/ari/code/myrepo")
+    }
+
+    func testRepositoryRootHandlesEmptyRootAndHomeParent() {
+        XCTAssertNil(WorkspaceGrouping.repositoryRoot(for: "") { _ in true })
+        XCTAssertEqual(WorkspaceGrouping.parentDirectory(of: "/Users"), "/")
+        XCTAssertNil(WorkspaceGrouping.parentDirectory(of: "/"))
+        XCTAssertEqual(WorkspaceGrouping.standardizedDirectory("/Users/ari///"), "/Users/ari")
     }
 
     func testImportProposalGroupsSameRepoDifferentSubdirsIntoOneGroup() {
@@ -750,6 +993,25 @@ final class OnboardingTests: XCTestCase {
         XCTAssertEqual(Set(ids).count, 2, "group ids must be unique: \(ids)")
     }
 
+    func testImportProposalCoversNamesSortingIgnoredAndSelectionGuards() {
+        let sameTime = Date(timeIntervalSince1970: 10)
+        let candidates = [
+            RecentSessionCandidate(id: "copilot", source: .githubCopilotCLI, agentKind: .githubCopilotCLI, title: "Copilot task", workingDirectory: "/", lastActiveAt: sameTime, resumeCommand: ["gh", "copilot"], summary: "", evidencePaths: [], confidence: 0.8),
+            RecentSessionCandidate(id: "terminal", source: .shellHistory, agentKind: nil, title: "", workingDirectory: "/", lastActiveAt: sameTime, resumeCommand: ["bash"], summary: "", evidencePaths: [], confidence: 0.8),
+            RecentSessionCandidate(id: "ignored", source: .shellHistory, agentKind: nil, title: "ignored", workingDirectory: "/ignored", lastActiveAt: nil, resumeCommand: ["bash"], summary: "", evidencePaths: [], confidence: 0.49)
+        ]
+
+        var proposal = WorkbenchImportProposalBuilder(maxSelectedPerGroup: 1, maxSelectedTotal: 1).build(candidates: candidates, now: sameTime)
+
+        XCTAssertFalse(proposal.groups.isEmpty)
+        XCTAssertEqual(proposal.ignoredCandidates.map(\.id), ["ignored"])
+        XCTAssertTrue(proposal.groups.flatMap(\.terminals).contains { $0.name == "Copilot: Copilot task" })
+        XCTAssertTrue(proposal.groups.flatMap(\.terminals).contains { $0.name == "Terminal: Session" })
+        proposal.setSelection(groupID: "missing", selected: true)
+        XCTAssertEqual(proposal.selectedTerminalCount, 1)
+        XCTAssertEqual(WorkbenchImportProposalBuilder().slug("!!!"), "workbench-import")
+    }
+
     func testImportProposalCuratesDefaultSelectionsInsteadOfStampedingTabs() {
         let candidates = (1...10).map { index in
             RecentSessionCandidate(
@@ -813,6 +1075,24 @@ final class OnboardingTests: XCTestCase {
         XCTAssertTrue(rendered.contains("Boss Check In"))
     }
 
+    func testDeskBridgePlansAndSenseReadinessCopy() {
+        let codex = DeskBridgePlanner().plan(agentName: "slugger", terminalKind: .openAICodex)
+        XCTAssertEqual(codex.commandLine, "ouro setup --tool codex --agent slugger")
+        XCTAssertNil(DeskBridgePlanner().plan(agentName: "slugger", terminalKind: .githubCopilotCLI).commandLine)
+        XCTAssertNil(DeskBridgePlanner().plan(agentName: "slugger", terminalKind: .custom).setupCommand)
+
+        let project = WorkbenchProject(name: "Empty", rootPath: temporaryDirectory.path)
+        let readiness = OnboardingReadiness(state: .needsRepair, headline: "Repair", detail: "Detail", selectedBossName: "slugger", repairSteps: [])
+        let rendered = WorkbenchSenseRenderer().render(
+            state: WorkspaceState(boss: BossAgentSelection(agentName: "slugger"), projects: [project]),
+            summary: WorkspaceSummary(boss: BossAgentSelection(agentName: "slugger"), processSnapshots: [], recoveryPlans: []),
+            readiness: readiness
+        )
+
+        XCTAssertTrue(rendered.contains("readiness: needsRepair - Repair"))
+        XCTAssertTrue(rendered.contains("- Empty: 0 active terminals"))
+    }
+
     func testToggleSelectionFlipsTerminalSelectionAndCount() {
         var proposal = makeTwoTerminalProposal()
         XCTAssertEqual(proposal.selectedTerminalCount, 1, "second terminal should start unselected")
@@ -845,6 +1125,144 @@ final class OnboardingTests: XCTestCase {
         proposal.setSelection(groupID: "g", selected: false)
         XCTAssertEqual(proposal.selectedTerminalCount, 0)
         XCTAssertTrue(proposal.groups[0].terminals.allSatisfy { !$0.selectedByDefault })
+    }
+
+    func testOnboardingCoverageTargetedBranches() throws {
+        let now = ISO8601DateFormatter().date(from: "2026-05-26T12:00:00Z")!
+        let scanner = RecentSessionScanner(
+            homeURL: temporaryDirectory,
+            now: now,
+            lookback: 7 * 24 * 60 * 60,
+            sqlite3URL: temporaryDirectory.appendingPathComponent("missing-sqlite3"),
+            liveProcessLister: {
+                [RecentSessionScanner.LiveTerminalProcess(pid: 99, ttyName: nil, command: "claude --session-id live-nil-tty")]
+            }
+        )
+
+        let old = RecentSessionCandidate(id: "old", source: .shellHistory, agentKind: nil, title: "Old", workingDirectory: "/old", lastActiveAt: Date(timeIntervalSince1970: 1), resumeCommand: ["bash"], summary: "", evidencePaths: [], confidence: 0.9)
+        let undated = RecentSessionCandidate(id: "undated", source: .shellHistory, agentKind: nil, title: "Undated", workingDirectory: "/undated", lastActiveAt: nil, resumeCommand: ["bash"], summary: "", evidencePaths: [], confidence: 0.9)
+        XCTAssertEqual(scanner.resolveRepositoryRoots([undated, old]).map(\.id), ["old", "undated"])
+
+        let live = try XCTUnwrap(scanner.scanLiveClaudeCode().first)
+        XCTAssertEqual(live.id, "claude:live-nil-tty")
+        XCTAssertEqual(live.source, .claudeCode)
+
+        let claudeURL = temporaryDirectory.appendingPathComponent(".claude/projects/plain-session/stale.jsonl")
+        try FileManager.default.createDirectory(at: claudeURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try #"{"sessionId":"stale","timestamp":"2020-01-01T00:00:00Z"}"#.write(to: claudeURL, atomically: true, encoding: .utf8)
+        XCTAssertTrue(scanner.scanClaudeCode().isEmpty)
+
+        let malformed = temporaryDirectory.appendingPathComponent("malformed.jsonl")
+        try #"not-json"#.write(to: malformed, atomically: true, encoding: .utf8)
+        XCTAssertTrue(scanner.jsonLineObjects(malformed).isEmpty)
+        XCTAssertNil(RecentSessionScanner.parseProcessLine("abc tty command"))
+        XCTAssertNil(scanner.cleanedCmuxTitle(nil))
+        XCTAssertEqual(WorkspaceGrouping.repositoryRoot(for: "/a/b") { _ in false }, nil)
+    }
+
+    func testImportProposalTieBreakersHomeDisplayAndSlugCollisions() {
+        let sameTime = Date(timeIntervalSince1970: 123)
+        let candidates = [
+            RecentSessionCandidate(id: "z", source: .shellHistory, agentKind: nil, title: "Z", workingDirectory: "/", lastActiveAt: sameTime, resumeCommand: ["z"], summary: "", evidencePaths: [], confidence: 0.9, preferredGroupName: "Zoo"),
+            RecentSessionCandidate(id: "a", source: .shellHistory, agentKind: nil, title: "A", workingDirectory: "/", lastActiveAt: sameTime, resumeCommand: ["a"], summary: "", evidencePaths: [], confidence: 0.9, preferredGroupName: "Alpha"),
+            RecentSessionCandidate(id: "dup1", source: .shellHistory, agentKind: nil, title: "D1", workingDirectory: "/one", lastActiveAt: Date(timeIntervalSince1970: 1), resumeCommand: [], summary: "", evidencePaths: [], confidence: 0.9, preferredGroupName: "Dup"),
+            RecentSessionCandidate(id: "dup2", source: .shellHistory, agentKind: nil, title: "D2", workingDirectory: "/two", lastActiveAt: Date(timeIntervalSince1970: 2), resumeCommand: [], summary: "", evidencePaths: [], confidence: 0.9, preferredGroupName: "Dup!"),
+            RecentSessionCandidate(id: "dup3", source: .shellHistory, agentKind: nil, title: "D3", workingDirectory: "/three", lastActiveAt: Date(timeIntervalSince1970: 3), resumeCommand: [], summary: "", evidencePaths: [], confidence: 0.9, preferredGroupName: "Dup?"),
+            RecentSessionCandidate(id: "home", source: .shellHistory, agentKind: nil, title: "Home", workingDirectory: "", lastActiveAt: Date(timeIntervalSince1970: 4), resumeCommand: [], summary: "", evidencePaths: [], confidence: 0.9)
+        ]
+
+        let builder = WorkbenchImportProposalBuilder(maxSelectedPerGroup: 3, maxSelectedTotal: 10)
+        let proposal = builder.build(candidates: candidates, now: sameTime)
+        let alphaIndex = proposal.groups.firstIndex { $0.name == "Alpha" }
+        let zooIndex = proposal.groups.firstIndex { $0.name == "Zoo" }
+
+        XCTAssertNotNil(alphaIndex)
+        XCTAssertNotNil(zooIndex)
+        XCTAssertLessThan(alphaIndex!, zooIndex!, "same-time groups should sort case-insensitively by name")
+        XCTAssertTrue(proposal.groups.contains { $0.name == "ouro-workbench-wt-1" && $0.rootPath == "" })
+        XCTAssertTrue(proposal.groups.map(\.id).contains("dup-3"))
+        XCTAssertEqual(builder.displayName(for: ""), "ouro-workbench-wt-1")
+        XCTAssertEqual(builder.workspaceRoot(for: "/Users/ari/Projects/App/Subdir/File"), "/Users/ari/Projects/App")
+    }
+
+    func testOnboardingAdditionalBranchCoverage() throws {
+        let now = ISO8601DateFormatter().date(from: "2026-05-26T12:00:00Z")!
+        let scanner = RecentSessionScanner(homeURL: temporaryDirectory, now: now, lookback: 7 * 24 * 60 * 60, sqlite3URL: temporaryDirectory.appendingPathComponent("missing"), liveProcessLister: { [] })
+
+        let rightDated = RecentSessionCandidate(id: "right", source: .shellHistory, agentKind: nil, title: "right", workingDirectory: "/right", lastActiveAt: now, resumeCommand: [], summary: "", evidencePaths: [], confidence: 0.1)
+        let leftNil = RecentSessionCandidate(id: "left", source: .shellHistory, agentKind: nil, title: "left", workingDirectory: "/left", lastActiveAt: nil, resumeCommand: [], summary: "", evidencePaths: [], confidence: 0.99)
+        XCTAssertEqual(scanner.resolveRepositoryRoots([leftNil, rightDated]).first?.id, "right")
+
+        let fileRoot = temporaryDirectory.appendingPathComponent("not-a-directory")
+        try "file".write(to: fileRoot, atomically: true, encoding: .utf8)
+        XCTAssertTrue(scanner.recentFiles(under: fileRoot, pathExtension: "jsonl").isEmpty)
+
+        let claudeURL = temporaryDirectory.appendingPathComponent(".claude/projects/-Users-ari-home/defaults.jsonl")
+        try FileManager.default.createDirectory(at: claudeURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try #"{"sessionId":"defaulted","timestamp":"not a date"}"#.write(to: claudeURL, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.modificationDate: now], ofItemAtPath: claudeURL.path)
+        let claude = try XCTUnwrap(scanner.scanClaudeCode().first { $0.id == "claude:defaulted" })
+        XCTAssertEqual(claude.summary, "Recent Claude Code session.")
+        XCTAssertEqual(claude.lastActiveAt, now)
+
+        let historyURL = temporaryDirectory.appendingPathComponent(".zsh_history")
+        try [
+            ": 1779796800:0;claude --session-id shell-claude",
+            ": 1779796800:0;gh copilot explain this | cat"
+        ].joined(separator: "\n").write(to: historyURL, atomically: true, encoding: .utf8)
+        let shellCandidates = scanner.scanShellHistory()
+        XCTAssertTrue(shellCandidates.contains { $0.source == .shellHistory && $0.agentKind == .claudeCode })
+        XCTAssertTrue(shellCandidates.contains { $0.source == .githubCopilotCLI && $0.agentKind == .githubCopilotCLI && $0.resumeCommand == ["gh", "copilot", "explain", "this", "|", "cat"] })
+
+        let codexURL = temporaryDirectory.appendingPathComponent(".codex/state_5.sqlite")
+        try FileManager.default.createDirectory(at: codexURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: codexURL.path, contents: Data())
+        let sqliteDir = temporaryDirectory.appendingPathComponent("sqlite-as-directory", isDirectory: true)
+        try FileManager.default.createDirectory(at: sqliteDir, withIntermediateDirectories: true)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: sqliteDir.path)
+        XCTAssertTrue(RecentSessionScanner(homeURL: temporaryDirectory, now: now, sqlite3URL: sqliteDir, liveProcessLister: { [] }).scanCodex().isEmpty)
+    }
+
+    func testCmuxSkipsClaudeProcessWithoutSessionAndReadsSparseJSON() throws {
+        let cmuxURL = temporaryDirectory.appendingPathComponent("cmux-sparse.json")
+        try """
+        {"windows":[{"tabManager":{"workspaces":[{"panels":[{"ttyName":"ttys011"}]}]}}]}
+        """.write(to: cmuxURL, atomically: true, encoding: .utf8)
+        let scanner = RecentSessionScanner(
+            homeURL: temporaryDirectory,
+            cmuxSessionURL: cmuxURL,
+            liveProcessLister: {
+                [RecentSessionScanner.LiveTerminalProcess(pid: 11, ttyName: "ttys011", command: "claude")]
+            }
+        )
+
+        XCTAssertTrue(scanner.scanCmuxSessions().isEmpty)
+    }
+
+    func testRendererAndWorkbenchFallbackCopyBranches() {
+        let rendered = OnboardingReadinessReportRenderer().render(OnboardingReadiness(
+            state: .ready,
+            headline: "Ready",
+            detail: "All set",
+            selectedBossName: "slugger",
+            repairSteps: [OnboardingRepairStep(id: "manual", actor: .humanChoice, title: "Manual", detail: "No command")]
+        ))
+        XCTAssertTrue(rendered.contains("- none"))
+
+        let project = WorkbenchProject(name: "Project", rootPath: "/repo")
+        let entry = ProcessEntry(projectId: project.id, name: "Bare", kind: .terminalAgent, executable: "/bin/zsh", workingDirectory: "/repo")
+        let candidate = RecentSessionScanner(homeURL: temporaryDirectory).scanWorkbench(state: WorkspaceState(projects: [project], processEntries: [entry])).first
+        XCTAssertEqual(candidate?.summary, "Existing Workbench terminal.")
+    }
+
+    func testImportProposalNilDateFallbackOrdering() {
+        let candidates = [
+            RecentSessionCandidate(id: "b", source: .shellHistory, agentKind: nil, title: "B", workingDirectory: "/b", lastActiveAt: nil, resumeCommand: [], summary: "", evidencePaths: [], confidence: 0.9, repositoryRoot: "/b"),
+            RecentSessionCandidate(id: "a", source: .shellHistory, agentKind: nil, title: "A", workingDirectory: "/a", lastActiveAt: nil, resumeCommand: [], summary: "", evidencePaths: [], confidence: 0.9, repositoryRoot: "/a")
+        ]
+        let proposal = WorkbenchImportProposalBuilder().build(candidates: candidates)
+        XCTAssertEqual(proposal.groups.map(\.name), ["a", "b"])
+        XCTAssertEqual(proposal.groups.first?.terminals.map(\.id), ["a"])
     }
 
     private func makeTwoTerminalProposal() -> WorkbenchImportProposal {

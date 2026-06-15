@@ -243,7 +243,7 @@ public final class BossAgentMCPClient: @unchecked Sendable {
         ]
     }
 
-    fileprivate static func extractTextIfMatching(line: String, id: Int) throws -> String? {
+    static func extractTextIfMatching(line: String, id: Int) throws -> String? {
         let data = Data(line.utf8)
         guard
             let raw = try? JSONSerialization.jsonObject(with: data) as? [String: Any],

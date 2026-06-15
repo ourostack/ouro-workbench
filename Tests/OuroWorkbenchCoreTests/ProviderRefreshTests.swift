@@ -111,6 +111,39 @@ final class ProviderRefreshTests: XCTestCase {
         let outcome = await runner.refresh(agentName: "slugger")
         XCTAssertFalse(outcome.humanFacingLine.lowercased().contains("ouro"))
         XCTAssertTrue(outcome.auditDetail.contains("ouro provider refresh --agent slugger"))
+        XCTAssertFalse(outcome.needsManualRecovery)
+    }
+
+    func testDefaultRunnerCanBeConstructedWithoutAttemptingCommandForBlankAgent() async {
+        let runner = ProviderRefreshRunner(verifyProbe: { _ in .healthy })
+
+        let outcome = await runner.refresh(agentName: "\n")
+
+        XCTAssertEqual(outcome.truth, .needsManual)
+        XCTAssertFalse(outcome.commandAttempted)
+    }
+
+    func testDefaultRunnerUsesHeadlessRefreshWhenAgentNamePresent() async throws {
+        let harness = try HeadlessOuroHarness()
+        try await harness.withPathPrepended {
+            let runner = ProviderRefreshRunner(verifyProbe: { _ in .healthy })
+
+            let outcome = await runner.refresh(agentName: "slugger")
+
+            XCTAssertEqual(outcome.truth, .refreshed)
+            XCTAssertTrue(outcome.commandAttempted)
+        }
+
+        XCTAssertEqual(try harness.invocations(), [["provider", "refresh", "--agent", "slugger"]])
+    }
+
+    func testHeadlessRefreshInvokesOuroProviderRefreshFromPath() async throws {
+        let harness = try HeadlessOuroHarness()
+        try await harness.withPathPrepended {
+            try await ProviderRefreshRunner.headlessRefresh(agentName: "slugger")
+        }
+
+        XCTAssertEqual(try harness.invocations(), [["provider", "refresh", "--agent", "slugger"]])
     }
 }
 
@@ -128,4 +161,41 @@ private final class RefreshStringBox: @unchecked Sendable {
     private var stored: String?
     func set(_ value: String) { lock.lock(); stored = value; lock.unlock() }
     var value: String? { lock.lock(); defer { lock.unlock() }; return stored }
+}
+
+private final class HeadlessOuroHarness {
+    private let root: URL
+    private let bin: URL
+    private let log: URL
+
+    init() throws {
+        root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        bin = root.appendingPathComponent("bin", isDirectory: true)
+        log = root.appendingPathComponent("invocations.txt")
+        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
+        let script = """
+        #!/bin/sh
+        printf '%s\\n' "$*" >> "\(log.path)"
+        exit 0
+        """
+        let ouro = bin.appendingPathComponent("ouro")
+        try script.write(to: ouro, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: ouro.path)
+    }
+
+    deinit {
+        try? FileManager.default.removeItem(at: root)
+    }
+
+    func withPathPrepended<T>(_ body: () async throws -> T) async rethrows -> T {
+        let oldPath = getenv("PATH").map { String(cString: $0) } ?? ""
+        setenv("PATH", "\(bin.path):\(oldPath)", 1)
+        defer { setenv("PATH", oldPath, 1) }
+        return try await body()
+    }
+
+    func invocations() throws -> [[String]] {
+        let text = try String(contentsOf: log, encoding: .utf8)
+        return text.split(separator: "\n").map { $0.split(separator: " ").map(String.init) }
+    }
 }
