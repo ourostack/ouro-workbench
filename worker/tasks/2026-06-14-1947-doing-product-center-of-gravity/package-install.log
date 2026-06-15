@@ -1,24 +1,21 @@
 ## Package-time git
-ead107a320e2f5e4e7f357b9bfeb169dd6175d95
-?? worker/tasks/2026-06-14-1947-doing-product-center-of-gravity/package-install.log
+c734e3051767ddcb511e73f9b60b03385530c9f3
+ M worker/tasks/2026-06-14-1947-doing-product-center-of-gravity/full-swift-test.log
+ M worker/tasks/2026-06-14-1947-doing-product-center-of-gravity/package-install.log
+ M worker/tasks/2026-06-14-1947-doing-product-center-of-gravity/swift-build.log
 
 ## scripts/package-app.sh
 [0/1] Planning build
 Building for production...
-[0/4] Write sources
-[2/4] Write swift-version--58304C5D6DBC2206.txt
-[4/5] Compiling OuroWorkbenchCore AgentPreset.swift
-[5/6] Compiling OuroWorkbenchApp OuroWorkbenchApp.swift
-[5/7] Write Objects.LinkFileList
-[6/7] Linking OuroWorkbench
-Build of product 'OuroWorkbench' complete! (55.71s)
+[0/3] Write sources
+[1/3] Write swift-version--58304C5D6DBC2206.txt
+[3/4] Compiling OuroWorkbenchApp OuroWorkbenchApp.swift
+[3/5] Write Objects.LinkFileList
+[4/5] Linking OuroWorkbench
+Build of product 'OuroWorkbench' complete! (36.29s)
 Building for production...
 [0/2] Write swift-version--58304C5D6DBC2206.txt
-[1/4] Write sources
-[3/5] Compiling OuroWorkbenchMCP main.swift
-[3/5] Write Objects.LinkFileList
-[4/5] Linking OuroWorkbenchMCP
-Build of product 'OuroWorkbenchMCP' complete! (2.84s)
+Build of product 'OuroWorkbenchMCP' complete! (0.17s)
 /Users/arimendelow/Projects/ouro-workbench/dist/Ouro Workbench.app: replacing existing signature
 /Users/arimendelow/Projects/ouro-workbench/dist/Ouro Workbench.app
 

@@ -1,0 +1,91 @@
+{
+  "actionLog" => [
+    0 => {
+      "action" => "ensureDaemon"
+      "id" => "2B56F067-CAAE-4316-AE12-F2C016494C26"
+      "occurredAt" => "2026-06-15T04:12:05Z"
+      "result" => "Daemon already reachable; reused existing process (no spawn)."
+      "source" => "boss:slugger"
+      "succeeded" => true
+      "targetName" => "slugger"
+    }
+    1 => {
+      "action" => "ensureDaemon"
+      "id" => "DE2333AE-19D0-42E2-B084-F295B7EB6738"
+      "occurredAt" => "2026-06-15T04:12:04Z"
+      "result" => "Daemon already reachable; reused existing process (no spawn)."
+      "source" => "native"
+      "succeeded" => true
+      "targetName" => "launch"
+    }
+  ]
+  "boss" => {
+    "agentName" => "slugger"
+    "scope" => "machine"
+  }
+  "bossPaneCollapsed" => true
+  "bossWatchEnabled" => true
+  "decisionLog" => [
+  ]
+  "processEntries" => [
+    0 => {
+      "arguments" => [
+        0 => "-lc"
+        1 => "echo original"
+      ]
+      "attention" => "idle"
+      "autoResume" => true
+      "executable" => "/bin/zsh"
+      "id" => "22222222-2222-2222-2222-222222222222"
+      "isArchived" => false
+      "isPinned" => false
+      "kind" => "shell"
+      "lastSummary" => "Legacy shell fixture"
+      "name" => "Legacy User Shell"
+      "owner" => {
+        "kind" => "human"
+      }
+      "projectId" => "11111111-1111-1111-1111-111111111111"
+      "trust" => "trusted"
+      "workingDirectory" => "/tmp"
+    }
+    1 => {
+      "arguments" => [
+        0 => "-lc"
+        1 => "echo delete"
+      ]
+      "attention" => "idle"
+      "autoResume" => false
+      "executable" => "/bin/zsh"
+      "id" => "33333333-3333-3333-3333-333333333333"
+      "isArchived" => false
+      "isPinned" => false
+      "kind" => "shell"
+      "lastSummary" => "Delete target"
+      "name" => "Legacy User Shell Delete Target"
+      "owner" => {
+        "kind" => "human"
+      }
+      "projectId" => "11111111-1111-1111-1111-111111111111"
+      "trust" => "trusted"
+      "workingDirectory" => "/tmp"
+    }
+  ]
+  "processRuns" => [
+  ]
+  "projects" => [
+    0 => {
+      "boss" => {
+        "agentName" => "slugger"
+        "scope" => "machine"
+      }
+      "id" => "11111111-1111-1111-1111-111111111111"
+      "name" => "Legacy Shell Workspace"
+      "rootPath" => "/tmp"
+    }
+  ]
+  "schemaVersion" => 1
+  "selectedEntryId" => "33333333-3333-3333-3333-333333333333"
+  "selectedProjectId" => "11111111-1111-1111-1111-111111111111"
+  "updatedAt" => "2026-06-15T04:12:05Z"
+}

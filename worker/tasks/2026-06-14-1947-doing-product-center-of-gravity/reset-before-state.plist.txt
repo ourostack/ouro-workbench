@@ -1,0 +1,69 @@
+{
+  "actionLog" => [
+    0 => {
+      "action" => "ensureDaemon"
+      "id" => "FA094362-2ED3-4C08-A33A-1CCBDFE053A1"
+      "occurredAt" => "2026-06-15T04:11:56Z"
+      "result" => "Daemon already reachable; reused existing process (no spawn)."
+      "source" => "boss:slugger"
+      "succeeded" => true
+      "targetName" => "slugger"
+    }
+    1 => {
+      "action" => "ensureDaemon"
+      "id" => "8497A769-1352-47DB-B7DD-25E45062EC7F"
+      "occurredAt" => "2026-06-15T04:11:55Z"
+      "result" => "Daemon already reachable; reused existing process (no spawn)."
+      "source" => "native"
+      "succeeded" => true
+      "targetName" => "launch"
+    }
+  ]
+  "boss" => {
+    "agentName" => "slugger"
+    "scope" => "machine"
+  }
+  "bossPaneCollapsed" => true
+  "bossWatchEnabled" => true
+  "decisionLog" => [
+  ]
+  "processEntries" => [
+    0 => {
+      "arguments" => [
+        0 => "-l"
+      ]
+      "attention" => "idle"
+      "autoResume" => true
+      "executable" => "/bin/zsh"
+      "id" => "BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB"
+      "isArchived" => false
+      "isPinned" => false
+      "kind" => "shell"
+      "lastSummary" => "Stale reset fixture"
+      "name" => "Local Shell"
+      "owner" => {
+        "kind" => "human"
+      }
+      "projectId" => "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA"
+      "trust" => "trusted"
+      "workingDirectory" => "/tmp"
+    }
+  ]
+  "processRuns" => [
+  ]
+  "projects" => [
+    0 => {
+      "boss" => {
+        "agentName" => "slugger"
+        "scope" => "machine"
+      }
+      "id" => "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA"
+      "name" => "This Mac"
+      "rootPath" => "/tmp"
+    }
+  ]
+  "schemaVersion" => 1
+  "selectedEntryId" => "BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB"
+  "selectedProjectId" => "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA"
+  "updatedAt" => "2026-06-15T04:11:56Z"
+}

@@ -1,0 +1,48 @@
+{
+  "actionLog" => [
+    0 => {
+      "action" => "ensureDaemon"
+      "id" => "B91D6FF1-082A-4EFA-9A53-C14830C107B6"
+      "occurredAt" => "2026-06-15T04:11:52Z"
+      "result" => "Daemon already reachable; reused existing process (no spawn)."
+      "source" => "boss:slugger"
+      "succeeded" => true
+      "targetName" => "slugger"
+    }
+    1 => {
+      "action" => "ensureDaemon"
+      "id" => "A89BF9F8-E0F8-4AA8-A5CA-CA53D01FD5F5"
+      "occurredAt" => "2026-06-15T04:11:51Z"
+      "result" => "Daemon already reachable; reused existing process (no spawn)."
+      "source" => "native"
+      "succeeded" => true
+      "targetName" => "launch"
+    }
+  ]
+  "boss" => {
+    "agentName" => "slugger"
+    "scope" => "machine"
+  }
+  "bossPaneCollapsed" => true
+  "bossWatchEnabled" => true
+  "decisionLog" => [
+  ]
+  "processEntries" => [
+  ]
+  "processRuns" => [
+  ]
+  "projects" => [
+    0 => {
+      "boss" => {
+        "agentName" => "slugger"
+        "scope" => "machine"
+      }
+      "id" => "6DBEB9B5-19DD-4646-9F45-04643F5F657C"
+      "name" => "Unsorted Sessions"
+      "rootPath" => "/Users/arimendelow"
+    }
+  ]
+  "schemaVersion" => 1
+  "selectedProjectId" => "6DBEB9B5-19DD-4646-9F45-04643F5F657C"
+  "updatedAt" => "2026-06-15T04:11:52Z"
+}

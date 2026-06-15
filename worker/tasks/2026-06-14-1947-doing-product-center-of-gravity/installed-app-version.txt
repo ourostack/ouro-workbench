@@ -1,27 +1,29 @@
 ## Package-time HEAD
-ead107a320e2f5e4e7f357b9bfeb169dd6175d95
+c734e3051767ddcb511e73f9b60b03385530c9f3
 
 ## Current HEAD
-ead107a320e2f5e4e7f357b9bfeb169dd6175d95
+c734e3051767ddcb511e73f9b60b03385530c9f3
 
 ## Package-time status
-?? worker/tasks/2026-06-14-1947-doing-product-center-of-gravity/package-install.log
+ M worker/tasks/2026-06-14-1947-doing-product-center-of-gravity/full-swift-test.log
+ M worker/tasks/2026-06-14-1947-doing-product-center-of-gravity/package-install.log
+ M worker/tasks/2026-06-14-1947-doing-product-center-of-gravity/swift-build.log
 
 
 ## Dist Info.plist
 0.1.155
-335
+337
 
 ## Installed Info.plist
 0.1.155
-335
+337
 
 ## Dist executable hashes
-81d2b4b363ccba28ee832104b7458cedc6a2758213cd7e79d462d7947d6fc05b  dist/Ouro Workbench.app/Contents/MacOS/OuroWorkbench
+ac5dac09d027ccf67c4c810e54116197423f8351b5e301066910cf5f9969668b  dist/Ouro Workbench.app/Contents/MacOS/OuroWorkbench
 83d6e65f56c71313df8096f474ed4d6e885cfa8e5e0d4ba8f69132e7707562fd  dist/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP
 
 ## Installed executable hashes
-81d2b4b363ccba28ee832104b7458cedc6a2758213cd7e79d462d7947d6fc05b  /Users/arimendelow/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbench
+ac5dac09d027ccf67c4c810e54116197423f8351b5e301066910cf5f9969668b  /Users/arimendelow/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbench
 83d6e65f56c71313df8096f474ed4d6e885cfa8e5e0d4ba8f69132e7707562fd  /Users/arimendelow/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP
 
 ## Bundle verification
