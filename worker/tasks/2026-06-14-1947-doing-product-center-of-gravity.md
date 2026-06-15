@@ -133,7 +133,7 @@ behavior.
 **Output**: Docs show A-011 through A-014 fixed or superseded only after tests verify behavior; the spec states shells are ordinary managed sessions and built-in fallback shell creation is absent.
 **Acceptance**: `if rg -n 'Status\\*\\*: in-progress|default Local Shell|persistent Local Shell terminal as the first default' worker/tasks/audit-backlog.md docs/workbench-surface-spec.md; then exit 1; fi` exits 0.
 
-### ⬜ Unit 5: Automated Suite Verification
+### ✅ Unit 5: Automated Suite Verification
 **What**: Run full unit tests and build from repo root.
 **Output**: Save output to `2026-06-14-1947-doing-product-center-of-gravity/full-swift-test.log` and `2026-06-14-1947-doing-product-center-of-gravity/swift-build.log`.
 **Acceptance**: `swift test` exits 0, `swift build` exits 0, and logs contain no warnings.
@@ -187,3 +187,4 @@ behavior.
 - 2026-06-14 20:46 Completed Unit 3b: renamed scenario shell identity to `user_shell` / `User Shell`, regenerated matrix artifacts with stable second-run diff, and updated current README/roadmap product framing.
 - 2026-06-14 20:48 Completed Unit 3c: scenario tests, docs validation, and scenario verifier passed; verifier covered 5,000 rows, 25,000 render passes, zero failures, and 1,000 `user_shell` rows.
 - 2026-06-14 20:52 Completed Unit 4: audit backlog/report now route A-011 through A-014 to fixed behavior, and the surface spec states shells are ordinary managed sessions rather than bootstrap chrome.
+- 2026-06-14 20:55 Completed Unit 5: full `swift test` passed 932 tests with 0 failures and `swift build` passed; warning/error scan across both logs returned empty.
