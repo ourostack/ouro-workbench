@@ -121,7 +121,7 @@ surface in the simplified product unless a future spec reintroduces it.
 | Sidebar `Archived` section | Contextual | Show only when archived sessions exist. |
 | Sidebar `Recovery` section | Contextual | Show only when recovery needs action. |
 | `This Mac` default project | Remove/Defer | Machine scope only. Do not create as default workspace after reset. |
-| Built-in `Local Shell` | Remove/Defer | Do not seed before setup/import. If created later, it must be removable. |
+| Built-in default shell session | Remove/Defer | Do not seed before setup/import. If created later, it must be removable. |
 | Header boss controls | Merge | Replace with compact boss status plus conversation entry point. |
 | Boss selector | Contextual | First-run/setup or advanced boss management. |
 | Autonomy status button/popover | Advanced | Boss can explain readiness. Show only compact status if needed. |

@@ -11,8 +11,8 @@ on the human, and what should keep moving.
 ## Product Shape
 
 - Native macOS app first.
-- Workbench is a cmux-style terminal workbench: named groups in the sidebar,
-  with any number of terminal tabs inside each group.
+- Workbench is a cmux-style terminal workbench: named workspaces in the sidebar,
+  with any number of terminal sessions inside each workspace.
 - Claude Code, GitHub Copilot CLI, and OpenAI Codex are detected from the
   terminal command instead of living in separate hard-coded tabs.
 - Arbitrary terminal/TUI agents are first-class citizens.
@@ -46,7 +46,7 @@ Run the native prototype:
 swift run OuroWorkbench
 ```
 
-Use `New Group` to create a project/workspace scope, then `New Terminal` to add
+Use `New Workspace` to create a project/workspace scope, then `New Terminal` to add
 Claude Code, GitHub Copilot CLI, OpenAI Codex, local shells, or any other
 terminal/TUI agent inside that group. Workbench detects known CLI identities
 from the command and adjusts recovery, health, and boss prompts accordingly.
@@ -143,7 +143,7 @@ used for the proposal.
 
 When migrating from cmux, onboarding also reads cmux's saved workspace state,
 matches live Claude Code panes by TTY/session id, preserves cmux workspace names
-as Workbench groups, and keeps high-trust Claude launch flags such as
+as Workbench workspaces, and keeps high-trust Claude launch flags such as
 `--dangerously-skip-permissions` on the generated resume command. Workbench
 does not take over the live cmux PTY; it creates a clean Workbench-owned resume
 tab from Claude's session metadata.
@@ -170,7 +170,7 @@ Ouro CLI. The quick asks cover "what is going on?", "is anything waiting on me?"
 "keep moving", and "respond for me"; boss replies can include auditable
 Workbench actions that the native app applies through the same trust gates as
 external MCP requests. Those actions can operate terminals and organize the
-workspace: launch, recover, stop, send input, create groups, create terminals,
+workspace: launch, recover, stop, send input, create workspaces, create terminals,
 move stopped sessions, change trust/restart posture, archive, and restore.
 
 Running terminals include `Redraw`, `Ctrl-C`, `Esc`, and `EOF` controls in both

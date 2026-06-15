@@ -7,11 +7,15 @@ cd "$ROOT_DIR"
 docs=(
   README.md
   docs/guide.md
+  docs/product-tour.md
   docs/roadmap.md
+  docs/surface-audit.md
   docs/workbench-surface-spec.md
+  docs/cmux-workbench-test-matrix.md
 )
 
 patterns=(
+  'Local Shell'
   'local terminal wrapper'
   'local shell wrapper'
   'persistent `Local Shell`'
