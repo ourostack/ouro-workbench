@@ -15,13 +15,13 @@ writes a setup marker after wiping state, setup-mode bootstrap uses `Unsorted
 Sessions`, and the live E2E artifact proves no reset-created `Local Shell` is
 present in first-run setup.
 
-The user's follow-up correctly identified a deeper issue: the product still has
-a built-in `Local Shell` primitive in normal bootstrap and startup code. That is
+The user's follow-up correctly identified a deeper issue: the product still had
+a built-in `Local Shell` primitive in normal bootstrap and startup code. That was
 architectural drift, not just copy drift. The correct center of gravity is:
 Workbench is a boss-coordinated terminal/TUI multiplexer; shells are ordinary
 managed sessions, never default identity.
 
-Current evidence:
+Original evidence:
 
 - `Sources/OuroWorkbenchCore/WorkbenchBootstrapper.swift:10` still defaults the
   empty workspace name to `This Mac`.
@@ -46,21 +46,34 @@ Current evidence:
 - `README.md:5`, `docs/roadmap.md:9`, and `docs/roadmap.md:184` still encode the
   old wrapper/default-shell story.
 
+Landed behavior in `worker/tasks/2026-06-14-1947-doing-product-center-of-gravity.md`:
+
+- Empty bootstrap now creates `Unsorted Sessions` with zero process entries.
+- Normal bootstrap, app startup, and MCP read-only state no longer create,
+  repair, select, or auto-launch a built-in shell.
+- Persisted `.shell` rows remain compatibility/user state and are manageable:
+  draft, edit/update, duplicate, archive, restore, and app delete guards accept
+  them as managed terminal sessions.
+- Scenario shell coverage remains under `user_shell` / `User Shell` with
+  fixture `kind == .shell`, and the scenario verifier passed 5,000 rows and
+  25,000 render passes with zero failures.
+- Current README/roadmap product copy now frames Workbench as a boss-led native
+  terminal-agent workbench, not a local terminal wrapper or default-shell app.
+
 New routed findings:
 
 - **A-011 - Built-in shell remains the normal empty-state center.**
-  The reset-specific path opts out, but ordinary empty-state bootstrap and app
-  startup still assert that Workbench should create/launch a special shell.
+  Fixed: ordinary empty-state bootstrap, app startup, and MCP read-only state no
+  longer create or launch a special shell.
 - **A-012 - Persisted shell rows are not normal managed sessions.**
-  Any existing `.shell` row still lacks the normal edit/archive/delete lifecycle
-  because custom-session management only accepts `.terminalAgent`.
+  Fixed: existing `.shell` rows are managed terminal sessions while preserving
+  shell identity.
 - **A-013 - Docs still teach the old shell/wrapper story.**
-  README/guide/roadmap copy can steer implementation back toward a local shell
-  launcher even after the UI behavior is corrected.
+  Fixed in current product docs; historical artifacts are left intact as
+  evidence.
 - **A-014 - Scenario fixtures still canonize `Local Shell`.**
-  Scenario coverage may include shell sessions, but naming them `Local Shell`
-  as a canonical identity keeps the old product story alive in generated
-  validation artifacts.
+  Fixed: scenario fixtures use `user_shell` / `User Shell` and still cover
+  shell recovery behavior.
 
 ## Summary
 

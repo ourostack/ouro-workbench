@@ -198,6 +198,10 @@ setup actions itself.
 No terminal-session import UI, session-management chrome, or default local shell
 should block this step.
 
+Plain shell sessions are compatibility/user state, not bootstrap chrome. When a
+shell is imported or explicitly created, it is a normal managed terminal session
+with edit, duplicate, archive, restore, and delete affordances.
+
 ### Step 2: Agent Welcome
 
 Once the boss agent can answer through Workbench tools, the wizard ends and the

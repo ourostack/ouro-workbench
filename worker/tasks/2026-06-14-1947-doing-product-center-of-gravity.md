@@ -128,7 +128,7 @@ behavior.
 **Output**: Save output to `2026-06-14-1947-doing-product-center-of-gravity/unit-3-scenario-docs.log` and verifier files under `2026-06-14-1947-doing-product-center-of-gravity/scenario-verifier/`.
 **Acceptance**: `swift test --filter WorkbenchScenarioMatrixTests`, `2026-06-14-1947-doing-product-center-of-gravity/validate-product-center-docs.sh`, and `swift run OuroWorkbenchScenarioVerifier --out 2026-06-14-1947-doing-product-center-of-gravity/scenario-verifier` exit 0. Scenario/docs drift checks are green; shell coverage remains present under `user_shell` / `User Shell` with fixture `kind == .shell`.
 
-### ⬜ Unit 4: Audit/Spec State Update
+### ✅ Unit 4: Audit/Spec State Update
 **What**: Update `worker/tasks/audit-report.md`, `worker/tasks/audit-backlog.md`, and `docs/workbench-surface-spec.md` to reflect landed behavior and route/close A-011 through A-014 accurately.
 **Output**: Docs show A-011 through A-014 fixed or superseded only after tests verify behavior; the spec states shells are ordinary managed sessions and built-in fallback shell creation is absent.
 **Acceptance**: `if rg -n 'Status\\*\\*: in-progress|default Local Shell|persistent Local Shell terminal as the first default' worker/tasks/audit-backlog.md docs/workbench-surface-spec.md; then exit 1; fi` exits 0.
@@ -186,3 +186,4 @@ behavior.
 - 2026-06-14 20:43 Completed Unit 3a red checks. Scenario matrix still uses `local_shell`; docs validation fails on README wrapper framing and roadmap default `Local Shell` guidance.
 - 2026-06-14 20:46 Completed Unit 3b: renamed scenario shell identity to `user_shell` / `User Shell`, regenerated matrix artifacts with stable second-run diff, and updated current README/roadmap product framing.
 - 2026-06-14 20:48 Completed Unit 3c: scenario tests, docs validation, and scenario verifier passed; verifier covered 5,000 rows, 25,000 render passes, zero failures, and 1,000 `user_shell` rows.
+- 2026-06-14 20:52 Completed Unit 4: audit backlog/report now route A-011 through A-014 to fixed behavior, and the surface spec states shells are ordinary managed sessions rather than bootstrap chrome.

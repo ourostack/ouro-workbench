@@ -196,9 +196,9 @@ Canonical report: `worker/tasks/audit-report.md`
 **Recommended lane**: planner-required
 **Suggested supporting skills**: work-ideator, full-systems-audit, work-planner, work-doer
 **Verification**: Unit-test empty bootstrap and MCP current-state behavior; live-validate fresh/reset launch with no synthesized `Local Shell`, no selected shell, and no default-shell auto-launch action.
-**Status**: in-progress
-**Linked work**: `worker/tasks/2026-06-14-1939-ideation-product-center-of-gravity.md`
-**Notes**: Keep persisted shell rows; remove creation/repair/launch authority.
+**Status**: fixed
+**Linked work**: `worker/tasks/2026-06-14-1939-ideation-product-center-of-gravity.md`, `worker/tasks/2026-06-14-1947-planning-product-center-of-gravity.md`, `worker/tasks/2026-06-14-1947-doing-product-center-of-gravity.md`
+**Notes**: Fixed by making `WorkbenchDefaults()` use setup/unsorted naming with no process entries, deleting built-in shell creation/repair code, removing app default-shell auto-launch, and proving MCP empty/sentinel roots report no synthesized shell. Evidence: `worker/tasks/2026-06-14-1947-doing-product-center-of-gravity/unit-1-bootstrap-mcp.log`.
 
 ---
 
@@ -214,9 +214,9 @@ Canonical report: `worker/tasks/audit-report.md`
 **Recommended lane**: planner-required
 **Suggested supporting skills**: work-planner, work-doer
 **Verification**: Unit-test shell draft/edit/archive/restore/duplicate behavior and live-validate a manually created or seeded shell has edit/archive/delete in the UI and boss archive/restore works.
-**Status**: in-progress
-**Linked work**: `worker/tasks/2026-06-14-1939-ideation-product-center-of-gravity.md`
-**Notes**: Rename manager APIs if useful, but preserve compatibility for existing app call sites.
+**Status**: fixed
+**Linked work**: `worker/tasks/2026-06-14-1939-ideation-product-center-of-gravity.md`, `worker/tasks/2026-06-14-1947-planning-product-center-of-gravity.md`, `worker/tasks/2026-06-14-1947-doing-product-center-of-gravity.md`
+**Notes**: Fixed by treating `.shell` and `.terminalAgent` as managed terminal sessions, preserving shell kind through edit/duplicate/archive/restore, and updating app guard copy. Evidence: `worker/tasks/2026-06-14-1947-doing-product-center-of-gravity/unit-2-managed-shell.log`.
 
 ---
 
@@ -232,9 +232,9 @@ Canonical report: `worker/tasks/audit-report.md`
 **Recommended lane**: planner-required
 **Suggested supporting skills**: work-planner, work-doer
 **Verification**: Grep docs for `Local Shell`, `default local shell`, and `local terminal wrapper`; update only user/contributor-facing product claims, not historical artifact logs.
-**Status**: in-progress
-**Linked work**: `worker/tasks/2026-06-14-1939-ideation-product-center-of-gravity.md`
-**Notes**: Historical E2E artifacts and old task notes can keep evidence strings; product docs should not.
+**Status**: fixed
+**Linked work**: `worker/tasks/2026-06-14-1939-ideation-product-center-of-gravity.md`, `worker/tasks/2026-06-14-1947-planning-product-center-of-gravity.md`, `worker/tasks/2026-06-14-1947-doing-product-center-of-gravity.md`
+**Notes**: Fixed in current product docs by replacing wrapper/default-shell framing with boss-led terminal workbench framing. Historical E2E artifacts and old task notes keep evidence strings. Evidence: `worker/tasks/2026-06-14-1947-doing-product-center-of-gravity/unit-3-scenario-docs.log`.
 
 ---
 
@@ -250,8 +250,8 @@ Canonical report: `worker/tasks/audit-report.md`
 **Recommended lane**: planner-required
 **Suggested supporting skills**: work-planner, work-doer
 **Verification**: Regenerate/run scenario verifier after renaming shell identity to generic/manual shell and ensuring no expected output uses `Local Shell` as default.
-**Status**: in-progress
-**Linked work**: `worker/tasks/2026-06-14-1939-ideation-product-center-of-gravity.md`
-**Notes**: Keep shell coverage; remove default/local-shell branding.
+**Status**: fixed
+**Linked work**: `worker/tasks/2026-06-14-1939-ideation-product-center-of-gravity.md`, `worker/tasks/2026-06-14-1947-planning-product-center-of-gravity.md`, `worker/tasks/2026-06-14-1947-doing-product-center-of-gravity.md`
+**Notes**: Fixed by renaming canonical scenario shell identity to `user_shell` / `User Shell`, preserving fixture `kind == .shell`, regenerating the 5,000-row matrix, and running the scenario verifier. Evidence: `worker/tasks/2026-06-14-1947-doing-product-center-of-gravity/scenario-verifier/summary.json`.
 
 ---
