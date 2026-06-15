@@ -1,27 +1,29 @@
 # Autopilot State
 
-Objective: Create a comprehensive Ouro Workbench surface/behavior spec, audit
-the whole system against it, produce a work-suite implementation plan, implement
-the plan, and validate live end-to-end against the spec without returning
-control.
+Objective: Re-center Ouro Workbench around boss-owned terminal/TUI
+multiplexing by removing the remaining built-in `Local Shell` default lifecycle
+from bootstrap, startup, MCP truth, tests, scenarios, current docs, and live
+validation while preserving user-owned shell sessions.
 
-Current branch: `worker/factory-reset-setup-flow`
+Current branch: `worker/product-center-of-gravity`
 
 Canonical docs:
 
 - Spec: `docs/workbench-surface-spec.md`
-- Planning: `worker/tasks/2026-06-14-1420-planning-factory-reset-setup-flow.md`
+- Ideation: `worker/tasks/2026-06-14-1939-ideation-product-center-of-gravity.md`
 - Audit report: `worker/tasks/audit-report.md`
 - Audit backlog: `worker/tasks/audit-backlog.md`
-- Doing: `worker/tasks/2026-06-14-1420-doing-factory-reset-setup-flow.md`
+- Planning: `worker/tasks/2026-06-14-1947-planning-product-center-of-gravity.md`
+- Doing: `worker/tasks/2026-06-14-1947-doing-product-center-of-gravity.md`
+- Artifacts: `worker/tasks/2026-06-14-1947-doing-product-center-of-gravity/`
 
 Gate state:
 
-- Spec: written and committed
-- Audit: written and committed
-- Planning review: converged and approved
-- Doing review: converged; doing doc ready
-- Implementation: complete; Unit 4 and Unit 5 cold-review findings fixed
-- Live validation: complete; Units 6a-6f passed and artifacts committed
+- Work Ideator: completed; Tinfoil Hat and Stranger With Candy findings folded
+  into the handoff.
+- Full-system audit addendum: completed; A-011 through A-014 routed.
+- Planning review: converged and approved.
+- Doing doc: drafted; conversion review passes in progress.
 
-Next action: final completion audit and goal closure.
+Next action: complete doing-doc conversion review chain, mark doing
+`READY_FOR_EXECUTION`, then execute units directly with strict TDD and live E2E.
