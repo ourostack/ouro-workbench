@@ -37,6 +37,23 @@ final class WorkbenchSurfacePolicyTests: XCTestCase {
         XCTAssertFalse(source.contains("Keep at least one terminal group"))
     }
 
+    func testEmptyStateLeadsWithWorkbenchSetupInsteadOfTerminalFirst() throws {
+        let source = try appSource()
+        let emptyState = try sourceSlice(
+            in: source,
+            from: "struct AgentHomeEmptyState: View",
+            to: "                if !model.ouroAgents.isEmpty {"
+        )
+
+        XCTAssertTrue(emptyState.contains("Text(\"Set up Workbench\")"))
+        XCTAssertFalse(emptyState.contains("Pick a terminal"))
+        XCTAssertFalse(emptyState.contains("Ouro Workbench is a calm home for your terminal agents."))
+
+        let setupLabel = try XCTUnwrap(emptyState.range(of: "Label(\"Set Up Workbench\""))
+        let newTerminalLabel = try XCTUnwrap(emptyState.range(of: "Label(\"New Terminal\""))
+        XCTAssertLessThan(setupLabel.lowerBound, newTerminalLabel.lowerBound)
+    }
+
     func testTitleStripUsesSessionControlPolicyWithoutPrimaryRestartLeak() throws {
         let source = try appSource()
         let titleStrip = try sourceSlice(

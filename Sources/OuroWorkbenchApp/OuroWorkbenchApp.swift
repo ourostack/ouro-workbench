@@ -2470,10 +2470,10 @@ struct AgentHomeEmptyState: View {
                     Image(systemName: "infinity")
                         .font(.system(size: 38, weight: .semibold))
                         .foregroundStyle(Color.accentColor)
-                    Text("Pick a terminal — or hatch a new one")
+                    Text("Set up Workbench")
                         .font(.title2.weight(.semibold))
                         .multilineTextAlignment(.center)
-                    Text("Ouro Workbench is a calm home for your terminal agents. Choose one on the left to open its live session, or set up a fresh Ouro agent below.")
+                    Text("Choose a boss agent, scan this Mac for coding-agent sessions, and let Workbench propose what to import. You can still open a blank terminal whenever you need one.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -2482,24 +2482,24 @@ struct AgentHomeEmptyState: View {
                 }
                 HStack(spacing: 12) {
                     Button {
-                        model.isOuroAgentInstallSheetPresented = true
-                    } label: {
-                        Label("Hatch an Agent", systemImage: "sparkles")
-                            .frame(minWidth: 160)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .help("Install or refresh an Ouro agent bundle on this Mac.")
-
-                    Button {
                         model.presentOnboarding()
                     } label: {
                         Label("Set Up Workbench", systemImage: "wand.and.stars")
                             .frame(minWidth: 160)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.borderedProminent)
                     .controlSize(.large)
                     .help("Choose a boss, connect MCP tools, and import recent terminals.")
+
+                    Button {
+                        model.isOuroAgentInstallSheetPresented = true
+                    } label: {
+                        Label("Hatch an Agent", systemImage: "sparkles")
+                            .frame(minWidth: 160)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                    .help("Install or refresh an Ouro agent bundle on this Mac.")
 
                     Button {
                         model.isNewSessionSheetPresented = true
