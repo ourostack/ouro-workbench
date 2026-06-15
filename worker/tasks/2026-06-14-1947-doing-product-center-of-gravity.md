@@ -138,7 +138,7 @@ behavior.
 **Output**: Save output to `2026-06-14-1947-doing-product-center-of-gravity/full-swift-test.log` and `2026-06-14-1947-doing-product-center-of-gravity/swift-build.log`.
 **Acceptance**: `swift test` exits 0, `swift build` exits 0, and logs contain no warnings.
 
-### ⬜ Unit 6: Package Install Version Proof
+### ✅ Unit 6: Package Install Version Proof
 **What**: Record `git rev-parse HEAD` and `git status --short`, run `scripts/package-app.sh`, then `scripts/install-app.sh --install-dir "$HOME/Applications"`, then `scripts/verify-app-bundle.sh "$HOME/Applications/Ouro Workbench.app"`. Record `CFBundleShortVersionString`, `CFBundleVersion`, and `shasum -a 256` from both app executables (`OuroWorkbench`, `OuroWorkbenchMCP`) in `dist/Ouro Workbench.app/Contents/MacOS/` and `$HOME/Applications/Ouro Workbench.app/Contents/MacOS/`.
 **Output**: Save package/install output to `2026-06-14-1947-doing-product-center-of-gravity/package-install.log` and version proof to `2026-06-14-1947-doing-product-center-of-gravity/installed-app-version.txt`.
 **Acceptance**: Built bundle version/build and installed bundle version/build are exactly equal, dist/installed hashes match for both `OuroWorkbench` and `OuroWorkbenchMCP`, recorded git SHA matches HEAD at package time, and bundle verification succeeds. Package-time `git status --short` is empty except for `worker/tasks/2026-06-14-1947-doing-product-center-of-gravity*` evidence artifacts; any dirty path under `Sources/`, `Tests/`, `scripts/`, `docs/`, `Package.swift`, `Package.resolved`, `VERSION`, or `dist/` fails the unit before packaging.
@@ -188,3 +188,4 @@ behavior.
 - 2026-06-14 20:48 Completed Unit 3c: scenario tests, docs validation, and scenario verifier passed; verifier covered 5,000 rows, 25,000 render passes, zero failures, and 1,000 `user_shell` rows.
 - 2026-06-14 20:52 Completed Unit 4: audit backlog/report now route A-011 through A-014 to fixed behavior, and the surface spec states shells are ordinary managed sessions rather than bootstrap chrome.
 - 2026-06-14 20:55 Completed Unit 5: full `swift test` passed 932 tests with 0 failures and `swift build` passed; warning/error scan across both logs returned empty.
+- 2026-06-14 20:59 Completed Unit 6: packaged and installed `Ouro Workbench.app` at version `0.1.155` build `335`; dist and installed app/MCP executable hashes match and bundle verification passed.

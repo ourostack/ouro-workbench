@@ -1,0 +1,30 @@
+## Package-time git
+ead107a320e2f5e4e7f357b9bfeb169dd6175d95
+?? worker/tasks/2026-06-14-1947-doing-product-center-of-gravity/package-install.log
+
+## scripts/package-app.sh
+[0/1] Planning build
+Building for production...
+[0/4] Write sources
+[2/4] Write swift-version--58304C5D6DBC2206.txt
+[4/5] Compiling OuroWorkbenchCore AgentPreset.swift
+[5/6] Compiling OuroWorkbenchApp OuroWorkbenchApp.swift
+[5/7] Write Objects.LinkFileList
+[6/7] Linking OuroWorkbench
+Build of product 'OuroWorkbench' complete! (55.71s)
+Building for production...
+[0/2] Write swift-version--58304C5D6DBC2206.txt
+[1/4] Write sources
+[3/5] Compiling OuroWorkbenchMCP main.swift
+[3/5] Write Objects.LinkFileList
+[4/5] Linking OuroWorkbenchMCP
+Build of product 'OuroWorkbenchMCP' complete! (2.84s)
+/Users/arimendelow/Projects/ouro-workbench/dist/Ouro Workbench.app: replacing existing signature
+/Users/arimendelow/Projects/ouro-workbench/dist/Ouro Workbench.app
+
+## scripts/install-app.sh --install-dir "$HOME/Applications"
+/Users/arimendelow/Projects/ouro-workbench/dist/Ouro Workbench.app: replacing existing signature
+Installed /Users/arimendelow/Applications/Ouro Workbench.app
+
+## scripts/verify-app-bundle.sh "$HOME/Applications/Ouro Workbench.app"
+Verified app bundle: /Users/arimendelow/Applications/Ouro Workbench.app
