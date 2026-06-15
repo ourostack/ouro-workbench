@@ -47,7 +47,7 @@ behavior.
 - [x] Scenario verifier passes.
 - [x] Packaged and installed app from current source passes live E2E:
   - fresh app-support root has no `Local Shell`, no selected shell, no default shell launch action, and setup/onboarding path is available,
-  - legacy shell fixture appears as a normal managed session with edit/archive or delete affordances,
+  - imported shell fixture appears as a normal managed session with edit/archive or delete affordances,
   - reset still enters setup and does not create a shell.
 - [x] 100% test coverage on all new code
 - [x] All tests pass
@@ -85,7 +85,7 @@ behavior.
 
 ### ✅ Unit 1a: Bootstrap And MCP Truth — Tests
 **What**: Write failing tests for no-default-shell bootstrap and MCP/read-only bootstrap defaults. Update `Tests/OuroWorkbenchCoreTests/WorkbenchBootstrapperTests.swift` and `Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift`. Use `WorkbenchDefaults()` as the shared app/MCP no-shell contract; no new helper is planned for this pass.
-**Output**: Tests require: default empty bootstrap uses `WorkbenchSurfacePolicy.setupWorkspaceName`, default empty bootstrap has zero `processEntries`, default empty bootstrap does not create `This Mac`, untouched legacy agent scaffold cleanup leaves zero entries instead of a shell, bootstrapping existing agent terminals does not add a shell, and a persisted `.shell` row named `Local Shell` is preserved exactly rather than repaired. Add a test proving `WorkbenchDefaults()` carries no-shell defaults for MCP read-only state loading. Add or update launch-diagnostics coverage proving `--app-support-root` remains parsed for deterministic app/MCP runtime isolation.
+**Output**: Tests require: default empty bootstrap uses `WorkbenchSurfacePolicy.setupWorkspaceName`, default empty bootstrap has zero `processEntries`, default empty bootstrap does not create `This Mac`, untouched generated agent scaffold cleanup leaves zero entries instead of a shell, bootstrapping existing agent terminals does not add a shell, and a persisted `.shell` row named `Local Shell` is preserved exactly rather than repaired. Add a test proving `WorkbenchDefaults()` carries no-shell defaults for MCP read-only state loading. Add or update launch-diagnostics coverage proving `--app-support-root` remains parsed for deterministic app/MCP runtime isolation.
 **Acceptance**: Run `swift test --filter WorkbenchBootstrapperTests` and `swift test --filter WorkbenchLaunchDiagnosticsTests`; every newly added bootstrap/defaults/runtime-isolation check fails before implementation, or the Unit 1 artifact records that a specific check already passed at HEAD.
 
 ### ✅ Unit 1b: Bootstrap And MCP Truth — Implementation
@@ -144,24 +144,24 @@ behavior.
 **Acceptance**: Built bundle version/build and installed bundle version/build are exactly equal, dist/installed hashes match for both `OuroWorkbench` and `OuroWorkbenchMCP`, recorded git SHA matches HEAD at package time, and bundle verification succeeds. Package-time `git status --short` is empty except for `worker/tasks/2026-06-14-1947-doing-product-center-of-gravity*` evidence artifacts; any dirty path under `Sources/`, `Tests/`, `scripts/`, `docs/`, `Package.swift`, `Package.resolved`, `VERSION`, or `dist/` fails the unit before packaging.
 
 ### ✅ Unit 7a: Live E2E Script And Fixtures
-**What**: Create `2026-06-14-1947-doing-product-center-of-gravity/validate-product-center-e2e.sh` with flow selectors `fresh`, `reset`, `legacy_shell`, and `verify`, plus isolated app-support roots for fresh, reset, and legacy-shell flows. The script must start the installed app, capture screenshots, dump `workspace-state.json` through `plutil -p`, and write separate summary sections for `fresh`, `reset`, and `legacy_shell`.
+**What**: Create `2026-06-14-1947-doing-product-center-of-gravity/validate-product-center-e2e.sh` with flow selectors `fresh`, `reset`, `imported_shell`, and `verify`, plus isolated app-support roots for fresh, reset, and imported-shell flows. The script must start the installed app, capture screenshots, dump `workspace-state.json` through `plutil -p`, and write separate summary sections for `fresh`, `reset`, and `imported_shell`.
 **Output**: Validation script plus seeded fixture JSON files under `2026-06-14-1947-doing-product-center-of-gravity/e2e-fixtures/`.
-**Acceptance**: Script is executable and `shellcheck` is run if available; otherwise `zsh -n` passes. The fixture JSON includes stale reset state with `This Mac` + `Local Shell` and legacy shell state with a non-default executable/trust/auto-resume combination.
+**Acceptance**: Script is executable and `shellcheck` is run if available; otherwise `zsh -n` passes. The fixture JSON includes stale reset state with `This Mac` + `Local Shell` and imported shell state with a non-default executable/trust/auto-resume combination.
 
 ### ✅ Unit 7b: Live Fresh And Reset E2E
 **What**: Run `2026-06-14-1947-doing-product-center-of-gravity/validate-product-center-e2e.sh fresh reset` against the installed app. The reset flow must first launch the installed app against stale `This Mac` + `Local Shell` state, then invoke the installed app executable with `--factory-reset-for-e2e --app-support-root "$reset_root"`, then relaunch the app against the same reset root.
 **Output**: Save fresh/reset screenshots, app logs, state dumps, and summary sections to `2026-06-14-1947-doing-product-center-of-gravity/e2e-product-center.md`.
 **Acceptance**: Summary contains `PASS fresh` and `PASS reset`; fresh and reset states contain no `Local Shell`, no selected shell, and no default-shell launch action; reset consumes setup marker and visible screenshot shows setup workspace/onboarding UI.
 
-### ✅ Unit 7c: Live Legacy Shell E2E
-**What**: Run `2026-06-14-1947-doing-product-center-of-gravity/validate-product-center-e2e.sh legacy_shell` against the installed app.
-**Output**: Save legacy shell screenshot, app log, state dump, and summary section to `2026-06-14-1947-doing-product-center-of-gravity/e2e-product-center.md`.
-**Acceptance**: Summary contains `PASS legacy_shell`; legacy shell fixture remains present with its original executable, arguments, trust, auto-resume, working directory, and id; live UI screenshot shows visible Edit Session, Archive Session, and Delete Session actions, or the artifact records matching accessibility/menu text for those exact actions; the flow performs archive, restore, and delete-confirm actions against a throwaway duplicate or copied fixture state, proves none reject `.shell`, proves the deleted target `.shell` entry is absent from persisted state after confirmation, and proves the original legacy fixture remains when the delete target is a duplicate/copy.
+### ✅ Unit 7c: Live Imported Shell E2E
+**What**: Run `2026-06-14-1947-doing-product-center-of-gravity/validate-product-center-e2e.sh imported_shell` against the installed app.
+**Output**: Save imported shell screenshot, app log, state dump, and summary section to `2026-06-14-1947-doing-product-center-of-gravity/e2e-product-center.md`.
+**Acceptance**: Summary contains `PASS imported_shell`; imported shell fixture remains present with its original executable, arguments, trust, auto-resume, working directory, and id; live UI screenshot shows visible Edit Session, Archive Session, and Delete Session actions, or the artifact records matching accessibility/menu text for those exact actions; the flow performs archive, restore, and delete-confirm actions against a throwaway duplicate or copied fixture state, proves none reject `.shell`, proves the deleted target `.shell` entry is absent from persisted state after confirmation, and proves the original imported fixture remains when the delete target is a duplicate/copy.
 
 ### ✅ Unit 7d: Live E2E Evidence Consolidation
 **What**: Run `2026-06-14-1947-doing-product-center-of-gravity/validate-product-center-e2e.sh verify`, verify all Unit 7 summaries, screenshots, logs, and state dumps exist, and update completion criteria with exact evidence paths.
 **Output**: Final `2026-06-14-1947-doing-product-center-of-gravity/e2e-product-center.md` summary.
-**Acceptance**: Summary contains `PASS product_center_e2e`, `PASS fresh`, `PASS reset`, and `PASS legacy_shell`, with paths to every screenshot and state dump.
+**Acceptance**: Summary contains `PASS product_center_e2e`, `PASS fresh`, `PASS reset`, and `PASS imported_shell`, with paths to every screenshot and state dump.
 
 ## Execution
 
@@ -192,4 +192,4 @@ behavior.
 - 2026-06-14 20:58 Added and verified a final empty-state correction after live smoke exposed terminal-first copy; the empty state now leads with setup/import and keeps manual terminal creation secondary.
 - 2026-06-14 21:00 Re-ran Unit 5 on final code: full `swift test` passed 933 tests with 0 failures and `swift build` passed; warning/error scan across suite/build/package logs returned empty.
 - 2026-06-14 21:04 Re-ran Unit 6 on final code: packaged and installed `Ouro Workbench.app` at version `0.1.155` build `337`; dist and installed app/MCP executable hashes match and bundle verification passed.
-- 2026-06-14 21:12 Completed Units 7a-7d: live installed-app E2E passed fresh, reset, legacy shell archive/restore/delete, and final verify. Evidence summary: `worker/tasks/2026-06-14-1947-doing-product-center-of-gravity/e2e-product-center.md`.
+- 2026-06-14 21:12 Completed Units 7a-7d: live installed-app E2E passed fresh, reset, imported shell archive/restore/delete, and final verify. Evidence summary: `worker/tasks/2026-06-14-1947-doing-product-center-of-gravity/e2e-product-center.md`.

@@ -82,8 +82,8 @@ center without unnecessary schema churn:
 - MCP read-only state rendering uses the same no-shell truth.
 - The app stops calling `launchDefaultShellIfNeeded()` as a first-run/fallback
   path.
-- `BuiltInWorkbenchSessions` loses repair/auto-launch authority; if a legacy
-  `Local Shell` exists, it is just an editable/removable session.
+- `BuiltInWorkbenchSessions` loses repair/auto-launch authority; if an older
+  persisted `Local Shell` exists, it is just an editable/removable session.
 - `CustomTerminalSessionManager` treats `.shell` rows as managed sessions and
   can produce drafts from direct executable/arguments.
 - Tests/docs/scenario wording stop presenting `Local Shell` as the desired
@@ -100,7 +100,7 @@ Tinfoil Hat and Stranger With Candy findings changed the implementation shape:
   already supports it and persisted rows may exist.
 - MCP read paths must also stop synthesizing default shell state; otherwise the
   boss sees a fabricated Workbench reality.
-- Canonical state is the post-load JSON that bootstrap saves, so legacy shell
+- Canonical state is the post-load JSON that bootstrap saves, so imported shell
   rows must be preserved through load rather than repaired in place.
 - `custom session` is the lying word. The capability should be thought of as
   managed terminal sessions; implementation may preserve the existing type name
@@ -112,7 +112,7 @@ Tinfoil Hat and Stranger With Candy findings changed the implementation shape:
 - `This Mac` is part of the same drift. Normal empty bootstrap should not
   create a workspace named `This Mac`; use the setup/unsorted workspace until
   imported or created work gives a better name.
-- Scenario coverage should keep generic/legacy shell regression coverage without
+- Scenario coverage should keep generic/imported shell regression coverage without
   naming `Local Shell` as a canonical identity.
 
 ## Thin Slice
@@ -121,7 +121,7 @@ Tinfoil Hat and Stranger With Candy findings changed the implementation shape:
    - empty bootstrap creates a workspace but no terminal rows,
    - default empty bootstrap does not create `This Mac`,
    - MCP read-only current-state bootstrapping does not synthesize a shell,
-   - legacy `Local Shell` is preserved, not repaired or duplicated,
+   - older persisted `Local Shell` is preserved, not repaired or duplicated,
    - `.shell` entries are manageable custom sessions,
    - built-in default-shell startup launch path is gone or inert,
    - scenario names/docs no longer encode `Local Shell` as default.
@@ -178,7 +178,7 @@ Acceptance signals:
 
 Risks:
 
-- Some tests currently assume the legacy default shell; update them to the new
+- Some tests currently assume the previous default shell; update them to the new
   center rather than preserving the old behavior.
 - Removing default launch must not break explicit auto-resume; preserve
   `RecoveryPlanner.autoLaunchEligibleEntries`.

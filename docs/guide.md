@@ -708,7 +708,7 @@ inside can detect and describe its host:
 | `OURO_WORKBENCH_GROUP` | The group the session lives in. |
 | `OURO_WORKBENCH_SESSION` | The terminal's display name. |
 | `OURO_WORKBENCH_BOSS` | The selected boss agent. |
-| `TERM_PROGRAM=OuroWorkbench` | Legacy marker, still set. |
+| `TERM_PROGRAM=OuroWorkbench` | Compatibility marker, still set. |
 
 The context file (`…/Application Support/OuroWorkbench/agent-context.md`,
 refreshed on every launch) is the same `WorkbenchGuide` catalog rendered for the

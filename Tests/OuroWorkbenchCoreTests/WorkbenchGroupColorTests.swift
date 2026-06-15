@@ -25,16 +25,16 @@ final class WorkbenchGroupColorTests: XCTestCase {
     func testProjectDecodesWithoutColorTagForBackwardsCompatibility() throws {
         // Pre-colorTag persisted projects had no such key; decoding must
         // succeed with colorTag == nil rather than throwing.
-        let legacyJSON = """
+        let olderJSON = """
         {
             "id": "00000000-0000-0000-0000-000000000001",
-            "name": "legacy",
-            "rootPath": "/tmp/legacy",
+            "name": "older",
+            "rootPath": "/tmp/older",
             "boss": { "agentName": "slugger", "scope": "machine" }
         }
         """.data(using: .utf8)!
-        let decoded = try JSONDecoder().decode(WorkbenchProject.self, from: legacyJSON)
+        let decoded = try JSONDecoder().decode(WorkbenchProject.self, from: olderJSON)
         XCTAssertNil(decoded.colorTag)
-        XCTAssertEqual(decoded.name, "legacy")
+        XCTAssertEqual(decoded.name, "older")
     }
 }

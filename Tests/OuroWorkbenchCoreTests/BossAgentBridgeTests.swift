@@ -52,7 +52,7 @@ final class BossAgentBridgeTests: XCTestCase {
     }
 
     func testBossMcpServePlanOmitsWorkbenchMCPFlagWhenNotRequested() {
-        // The path-less default (`nil`) preserves the legacy arg shape for callers that
+        // The path-less default (`nil`) preserves the existing arg shape for callers that
         // don't opt into runtime injection.
         let plan = BossAgentBridgePlanner().mcpServePlan(
             for: BossAgentSelection(agentName: "slugger"),

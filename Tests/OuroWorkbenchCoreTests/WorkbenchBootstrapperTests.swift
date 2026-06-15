@@ -61,7 +61,7 @@ final class WorkbenchBootstrapperTests: XCTestCase {
         XCTAssertFalse(bootstrapped.processEntries.contains { $0.name == "Local Shell" })
     }
 
-    func testBootstrapRemovesUntouchedLegacyAgentScaffolds() {
+    func testBootstrapRemovesUntouchedGeneratedAgentScaffolds() {
         let project = WorkbenchProject(name: "Existing", rootPath: "/tmp/existing")
         let copilot = ProcessEntry(
             projectId: project.id,
@@ -107,7 +107,7 @@ final class WorkbenchBootstrapperTests: XCTestCase {
         XCTAssertTrue(bootstrapped.processEntries.isEmpty)
     }
 
-    func testBootstrapKeepsLegacyAgentScaffoldsWithRuns() {
+    func testBootstrapKeepsGeneratedAgentScaffoldsWithRuns() {
         let project = WorkbenchProject(name: "Existing", rootPath: "/tmp/existing")
         let codex = ProcessEntry(
             projectId: project.id,
@@ -129,7 +129,7 @@ final class WorkbenchBootstrapperTests: XCTestCase {
         XCTAssertFalse(bootstrapped.processEntries.contains { $0.name == "Local Shell" })
     }
 
-    func testBootstrapDetectsKnownCLIFromShellWrappedLegacyTerminal() throws {
+    func testBootstrapDetectsKnownCLIFromShellWrappedImportedTerminal() throws {
         let project = WorkbenchProject(name: "Existing", rootPath: "/tmp/existing")
         let existing = ProcessEntry(
             projectId: project.id,

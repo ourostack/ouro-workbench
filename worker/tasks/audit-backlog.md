@@ -206,7 +206,7 @@ Canonical report: `worker/tasks/audit-report.md`
 
 **Source**: audit
 **What**: `.shell` rows can launch/recover, but management affordances reject them because `CustomTerminalSessionManager` only treats `.terminalAgent` as custom.
-**Why it matters**: Any legacy shell row remains less editable/removable than other terminals, preserving the feeling of a built-in dead end.
+**Why it matters**: Any imported shell row remains less editable/removable than other terminals, preserving the feeling of a built-in dead end.
 **Evidence**: `Sources/OuroWorkbenchCore/CustomTerminalSession.swift:108`, `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:3003`, `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:14490`, `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:14502`, `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:14772`
 **Severity**: high
 **Blast radius**: affects multiple modules

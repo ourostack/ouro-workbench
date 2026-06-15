@@ -348,7 +348,7 @@ grep -F 'PASS import_scanner' "$ART/e2e-import-scanner.md"
 - 2026-06-14 15:15 Doing doc reviewer gates converged; status set to ready for direct execution.
 - 2026-06-14 15:16 Unit 0 complete: recorded branch, clean status, target files, skill-source availability, and no-human-blocker decision.
 - 2026-06-14 15:18 Unit 1a complete: added failing reset marker, setup bootstrap, and launch diagnostic tests; red log saved to unit-1a-red.log.
-- 2026-06-14 15:22 Unit 1b complete: implemented wipe-plus-marker reset, setup-mode bootstrap defaults, launch diagnostics, and app launch wiring; green log saved to unit-1b-green.log.
+- 2026-06-14 15:22 Unit 1b complete: implemented wipe-plus-marker reset, setup-mode bootstrap defaults, launch diagnostics, and app launch wiring; current unit evidence is saved to unit-1-reset-setup.log.
 - 2026-06-14 15:28 Unit 1c complete: reran reset/bootstrap/launch diagnostic tests and build; Unit 1b cold review converged after isolated reset-root safety fix.
 - 2026-06-14 15:31 Unit 2a complete: added failing Codex/Claude scanner store tests and dump-recent-sessions diagnostic parse tests; red log saved to unit-2a-red.log.
 - 2026-06-14 15:37 Unit 2b complete: implemented Codex archived/manual-recovery/index/sqlite union, Claude task/project JSON scanning, and dump-recent-sessions JSON diagnostic; green log saved to unit-2b-green.log.

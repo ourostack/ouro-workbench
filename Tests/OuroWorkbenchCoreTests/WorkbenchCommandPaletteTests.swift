@@ -84,7 +84,7 @@ final class WorkbenchCommandPaletteTests: XCTestCase {
     func testDescriptorDecodesWithoutPayloadForBackwardsCompatibility() throws {
         // Older persisted descriptors had no payload field; decoding should
         // succeed and yield a nil payload rather than throwing.
-        let legacyJSON = """
+        let olderJSON = """
         {
             "id": "refreshWorkspace",
             "title": "Refresh Workspace",
@@ -93,7 +93,7 @@ final class WorkbenchCommandPaletteTests: XCTestCase {
             "keywords": ["sync"]
         }
         """.data(using: .utf8)!
-        let decoded = try JSONDecoder().decode(WorkbenchCommandDescriptor.self, from: legacyJSON)
+        let decoded = try JSONDecoder().decode(WorkbenchCommandDescriptor.self, from: olderJSON)
         XCTAssertEqual(decoded.id, .refreshWorkspace)
         XCTAssertNil(decoded.payload)
     }

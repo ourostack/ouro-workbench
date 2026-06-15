@@ -33,7 +33,7 @@ public struct BossAgentBridgePlanner: Sendable {
     /// turn at runtime (per-turn, boss-aware) — nothing is written to the synced agent bundle. A
     /// non-nil but EMPTY path passes the flag path-less (`--workbench-mcp` with no value) so the
     /// `ouro` side self-discovers the binary. A `nil` path (the default) omits the flag entirely,
-    /// preserving the legacy arg shape for callers that don't opt into runtime injection.
+    /// preserving the existing arg shape for callers that don't opt into runtime injection.
     public func mcpServePlan(
         for boss: BossAgentSelection,
         workbenchMCPPath: String? = nil

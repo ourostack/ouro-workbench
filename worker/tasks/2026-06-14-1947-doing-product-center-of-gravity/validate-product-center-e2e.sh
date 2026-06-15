@@ -182,19 +182,19 @@ flow_reset() {
   kill_workbench
 }
 
-flow_legacy_shell() {
-  local root="$ROOTS_DIR/legacy-shell"
+flow_imported_shell() {
+  local root="$ROOTS_DIR/imported-shell"
   local sx sy sw sh
   rm -rf "$root"
   mkdir -p "$root"
-  cp "$FIXTURE_DIR/legacy-shell-workspace-state.json" "$root/workspace-state.json"
+  cp "$FIXTURE_DIR/imported-shell-workspace-state.json" "$root/workspace-state.json"
   kill_workbench
-  launch_app "$root" "legacy-shell"
-  screenshot "legacy-shell-live"
-  dump_state "$root" "legacy-shell-start"
+  launch_app "$root" "imported-shell"
+  screenshot "imported-shell-live"
+  dump_state "$root" "imported-shell-start"
   jq -e --arg id "$ORIGINAL_ID" '
     .processEntries[] | select(.id == $id)
-    | .name == "Legacy User Shell"
+    | .name == "Imported User Shell"
       and .kind == "shell"
       and .executable == "/bin/zsh"
       and .arguments == ["-lc", "echo original"]
@@ -204,51 +204,51 @@ flow_legacy_shell() {
       and .isArchived == false
   ' "$root/workspace-state.json" >/dev/null
 
-  mcp_request_action "$root" "legacy-shell" "archive" "$DELETE_ID"
+  mcp_request_action "$root" "imported-shell" "archive" "$DELETE_ID"
   wait_for_jq "$root/workspace-state.json" --arg id "$DELETE_ID" '.processEntries[] | select(.id == $id) | .isArchived == true'
-  dump_state "$root" "legacy-shell-archived"
+  dump_state "$root" "imported-shell-archived"
 
-  mcp_request_action "$root" "legacy-shell" "restore" "$DELETE_ID"
+  mcp_request_action "$root" "imported-shell" "restore" "$DELETE_ID"
   wait_for_jq "$root/workspace-state.json" --arg id "$DELETE_ID" '.processEntries[] | select(.id == $id) | .isArchived == false'
-  dump_state "$root" "legacy-shell-restored"
+  dump_state "$root" "imported-shell-restored"
 
   read -r sx sy sw sh <<< "$(window_geometry)"
   right_click_at "$((sx + 95))" "$((sy + 395))"
   sleep 0.5
-  screenshot "legacy-shell-context-menu"
+  screenshot "imported-shell-context-menu"
   osascript -e 'tell application "System Events" to click at {'"$((sx + 165))"', '"$((sy + 685))"'}' >/dev/null
   sleep 1
-  screenshot "legacy-shell-delete-dialog"
+  screenshot "imported-shell-delete-dialog"
   osascript -e 'tell application "System Events" to tell process "OuroWorkbench" to click button 1 of sheet 1 of window 1' >/dev/null
   wait_for_jq "$root/workspace-state.json" --arg original "$ORIGINAL_ID" --arg deleted "$DELETE_ID" '
     ([.processEntries[] | select(.id == $original)] | length) == 1
     and ([.processEntries[] | select(.id == $deleted)] | length) == 0
   '
-  screenshot "legacy-shell-after-delete"
-  dump_state "$root" "legacy-shell-after-delete"
-  append_summary "PASS legacy_shell"
-  append_summary "- start screenshot: $ARTIFACT_DIR/legacy-shell-live.png"
-  append_summary "- context menu screenshot: $ARTIFACT_DIR/legacy-shell-context-menu.png"
-  append_summary "- delete dialog screenshot: $ARTIFACT_DIR/legacy-shell-delete-dialog.png"
-  append_summary "- after-delete state: $ARTIFACT_DIR/legacy-shell-after-delete-workspace-state.json"
+  screenshot "imported-shell-after-delete"
+  dump_state "$root" "imported-shell-after-delete"
+  append_summary "PASS imported_shell"
+  append_summary "- start screenshot: $ARTIFACT_DIR/imported-shell-live.png"
+  append_summary "- context menu screenshot: $ARTIFACT_DIR/imported-shell-context-menu.png"
+  append_summary "- delete dialog screenshot: $ARTIFACT_DIR/imported-shell-delete-dialog.png"
+  append_summary "- after-delete state: $ARTIFACT_DIR/imported-shell-after-delete-workspace-state.json"
   kill_workbench
 }
 
 flow_verify() {
   grep -F "PASS fresh" "$SUMMARY" >/dev/null
   grep -F "PASS reset" "$SUMMARY" >/dev/null
-  grep -F "PASS legacy_shell" "$SUMMARY" >/dev/null
+  grep -F "PASS imported_shell" "$SUMMARY" >/dev/null
   for path in \
     "$ARTIFACT_DIR/fresh-live.png" \
     "$ARTIFACT_DIR/reset-before-live.png" \
     "$ARTIFACT_DIR/reset-after-live.png" \
-    "$ARTIFACT_DIR/legacy-shell-live.png" \
-    "$ARTIFACT_DIR/legacy-shell-context-menu.png" \
-    "$ARTIFACT_DIR/legacy-shell-delete-dialog.png" \
-    "$ARTIFACT_DIR/legacy-shell-after-delete.png" \
+    "$ARTIFACT_DIR/imported-shell-live.png" \
+    "$ARTIFACT_DIR/imported-shell-context-menu.png" \
+    "$ARTIFACT_DIR/imported-shell-delete-dialog.png" \
+    "$ARTIFACT_DIR/imported-shell-after-delete.png" \
     "$ARTIFACT_DIR/fresh-workspace-state.json" \
     "$ARTIFACT_DIR/reset-after-workspace-state.json" \
-    "$ARTIFACT_DIR/legacy-shell-after-delete-workspace-state.json"; do
+    "$ARTIFACT_DIR/imported-shell-after-delete-workspace-state.json"; do
     [[ -s "$path" ]] || die "missing E2E artifact: $path"
   done
   append_summary "PASS product_center_e2e"
@@ -260,7 +260,7 @@ main() {
   mkdir -p "$ROOTS_DIR"
   local args="$*"
   if [[ $# -eq 0 ]]; then
-    set -- fresh reset legacy_shell verify
+    set -- fresh reset imported_shell verify
   fi
   if [[ " $args " == *" fresh "* || ! -f "$SUMMARY" ]]; then
     {
@@ -274,7 +274,7 @@ main() {
     case "$flow" in
       fresh) flow_fresh ;;
       reset) flow_reset ;;
-      legacy_shell) flow_legacy_shell ;;
+      imported_shell) flow_imported_shell ;;
       verify) flow_verify ;;
       *) die "unknown flow: $flow" ;;
     esac

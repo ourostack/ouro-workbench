@@ -31,7 +31,7 @@ and user-facing docs.
 - Fixed-tab product model: replaced hard-coded Claude/Copilot/Codex top-level
   tabs with group-scoped terminals whose CLI identity is detected from command
   shape.
-- Legacy scaffold cleanup: untouched generated Copilot/Codex/Demo terminals are
+- Generated scaffold cleanup: untouched generated Copilot/Codex/Demo terminals are
   removed on bootstrap, while terminals with real run history stay as ordinary
   user-owned tabs.
 - Claude restart smoke failure: Workbench-launched terminals now include

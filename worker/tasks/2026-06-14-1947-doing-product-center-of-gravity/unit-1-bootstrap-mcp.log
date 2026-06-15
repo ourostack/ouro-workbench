@@ -1,51 +1,32 @@
-## swift test --filter WorkbenchBootstrapperTests
-[0/1] Planning build
-[1/1] Compiling plugin GenerateManual
-[2/2] Compiling plugin GenerateDoccReference
-Building for debugging...
-[2/10] Write swift-version--58304C5D6DBC2206.txt
-Build complete! (1.46s)
-Test Suite 'Selected tests' started at 2026-06-14 20:24:46.515.
-Test Suite 'OuroWorkbenchPackageTests.xctest' started at 2026-06-14 20:24:46.517.
-Test Suite 'WorkbenchBootstrapperTests' started at 2026-06-14 20:24:46.517.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapCreatesCustomProjectWithoutLocalShell]' started.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapCreatesCustomProjectWithoutLocalShell]' passed (0.003 seconds).
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapDeduplicatesEntriesSharingAnID]' started.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapDeduplicatesEntriesSharingAnID]' passed (0.001 seconds).
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapDetectsKnownCLIFromShellWrappedLegacyTerminal]' started.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapDetectsKnownCLIFromShellWrappedLegacyTerminal]' passed (0.001 seconds).
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapKeepsLegacyAgentScaffoldsWithRuns]' started.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapKeepsLegacyAgentScaffoldsWithRuns]' passed (0.000 seconds).
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapPreservesExistingAgentTerminalWithoutCreatingFixedScaffolds]' started.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapPreservesExistingAgentTerminalWithoutCreatingFixedScaffolds]' passed (0.000 seconds).
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapPreservesPersistedLocalShellWithoutRepairingIt]' started.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapPreservesPersistedLocalShellWithoutRepairingIt]' passed (0.000 seconds).
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapRemovesUntouchedLegacyAgentScaffolds]' started.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapRemovesUntouchedLegacyAgentScaffolds]' passed (0.000 seconds).
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapSetupModeCreatesUnsortedWorkspaceWithoutLocalShell]' started.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapSetupModeCreatesUnsortedWorkspaceWithoutLocalShell]' passed (0.000 seconds).
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testDefaultBootstrapCreatesUnsortedWorkspaceWithoutLocalShell]' started.
-Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testDefaultBootstrapCreatesUnsortedWorkspaceWithoutLocalShell]' passed (0.000 seconds).
-Test Suite 'WorkbenchBootstrapperTests' passed at 2026-06-14 20:24:46.524.
-	 Executed 9 tests, with 0 failures (0 unexpected) in 0.006 (0.006) seconds
-Test Suite 'OuroWorkbenchPackageTests.xctest' passed at 2026-06-14 20:24:46.524.
-	 Executed 9 tests, with 0 failures (0 unexpected) in 0.006 (0.006) seconds
-Test Suite 'Selected tests' passed at 2026-06-14 20:24:46.524.
-	 Executed 9 tests, with 0 failures (0 unexpected) in 0.006 (0.009) seconds
-◇ Test run started.
-↳ Testing Library Version: 1902
-↳ Target Platform: arm64e-apple-macos14.0
-✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
-
-## swift test --filter WorkbenchLaunchDiagnosticsTests
 [1/1] Compiling plugin GenerateManual
 [2/2] Compiling plugin GenerateDoccReference
 Building for debugging...
 [2/10] Write swift-version--58304C5D6DBC2206.txt
 Build complete! (0.13s)
-Test Suite 'Selected tests' started at 2026-06-14 20:24:47.228.
-Test Suite 'OuroWorkbenchPackageTests.xctest' started at 2026-06-14 20:24:47.228.
-Test Suite 'WorkbenchLaunchDiagnosticsTests' started at 2026-06-14 20:24:47.228.
+Test Suite 'Selected tests' started at 2026-06-14 21:33:07.871.
+Test Suite 'OuroWorkbenchPackageTests.xctest' started at 2026-06-14 21:33:07.872.
+Test Suite 'WorkbenchBootstrapperTests' started at 2026-06-14 21:33:07.872.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapCreatesCustomProjectWithoutLocalShell]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapCreatesCustomProjectWithoutLocalShell]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapDeduplicatesEntriesSharingAnID]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapDeduplicatesEntriesSharingAnID]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapDetectsKnownCLIFromShellWrappedImportedTerminal]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapDetectsKnownCLIFromShellWrappedImportedTerminal]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapKeepsGeneratedAgentScaffoldsWithRuns]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapKeepsGeneratedAgentScaffoldsWithRuns]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapPreservesExistingAgentTerminalWithoutCreatingFixedScaffolds]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapPreservesExistingAgentTerminalWithoutCreatingFixedScaffolds]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapPreservesPersistedLocalShellWithoutRepairingIt]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapPreservesPersistedLocalShellWithoutRepairingIt]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapRemovesUntouchedGeneratedAgentScaffolds]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapRemovesUntouchedGeneratedAgentScaffolds]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapSetupModeCreatesUnsortedWorkspaceWithoutLocalShell]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testBootstrapSetupModeCreatesUnsortedWorkspaceWithoutLocalShell]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testDefaultBootstrapCreatesUnsortedWorkspaceWithoutLocalShell]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchBootstrapperTests testDefaultBootstrapCreatesUnsortedWorkspaceWithoutLocalShell]' passed (0.000 seconds).
+Test Suite 'WorkbenchBootstrapperTests' passed at 2026-06-14 21:33:07.874.
+	 Executed 9 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
+Test Suite 'WorkbenchLaunchDiagnosticsTests' started at 2026-06-14 21:33:07.874.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchLaunchDiagnosticsTests testParseAppSupportRootAndAutoLaunchOverride]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchLaunchDiagnosticsTests testParseAppSupportRootAndAutoLaunchOverride]' passed (0.001 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchLaunchDiagnosticsTests testParseDumpRecentSessionsDiagnostic]' started.
@@ -64,41 +45,13 @@ Test Case '-[OuroWorkbenchCoreTests.WorkbenchLaunchDiagnosticsTests testParseReq
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchLaunchDiagnosticsTests testParseRequiresAppSupportRootPath]' passed (0.000 seconds).
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchLaunchDiagnosticsTests testParseScanHomeRootRequiresPath]' started.
 Test Case '-[OuroWorkbenchCoreTests.WorkbenchLaunchDiagnosticsTests testParseScanHomeRootRequiresPath]' passed (0.000 seconds).
-Test Suite 'WorkbenchLaunchDiagnosticsTests' passed at 2026-06-14 20:24:47.231.
+Test Suite 'WorkbenchLaunchDiagnosticsTests' passed at 2026-06-14 21:33:07.877.
 	 Executed 9 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
-Test Suite 'OuroWorkbenchPackageTests.xctest' passed at 2026-06-14 20:24:47.231.
-	 Executed 9 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
-Test Suite 'Selected tests' passed at 2026-06-14 20:24:47.231.
-	 Executed 9 tests, with 0 failures (0 unexpected) in 0.002 (0.004) seconds
+Test Suite 'OuroWorkbenchPackageTests.xctest' passed at 2026-06-14 21:33:07.877.
+	 Executed 18 tests, with 0 failures (0 unexpected) in 0.004 (0.005) seconds
+Test Suite 'Selected tests' passed at 2026-06-14 21:33:07.877.
+	 Executed 18 tests, with 0 failures (0 unexpected) in 0.004 (0.006) seconds
 ◇ Test run started.
 ↳ Testing Library Version: 1902
 ↳ Target Platform: arm64e-apple-macos14.0
 ✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
-
-## swift build
-[0/1] Planning build
-[1/1] Compiling plugin GenerateManual
-[2/2] Compiling plugin GenerateDoccReference
-Building for debugging...
-[2/9] Write swift-version--58304C5D6DBC2206.txt
-Build complete! (0.34s)
-
-## MCP empty root proof
-Building for debugging...
-[0/3] Write swift-version--58304C5D6DBC2206.txt
-Build of product 'OuroWorkbenchMCP' complete! (0.13s)
-{"sessions":[]}
-{"sessions":[]}
-empty_root=/var/folders/md/_fkq3wc92_z55cgtlrfrcfh40000gn/T//ouro-workbench-mcp-empty.k3czZf
-
-## MCP sentinel root proof
-Building for debugging...
-[0/3] Write swift-version--58304C5D6DBC2206.txt
-Build of product 'OuroWorkbench' complete! (0.13s)
-wrote e2e state /var/folders/md/_fkq3wc92_z55cgtlrfrcfh40000gn/T//ouro-workbench-mcp-sentinel.ecKuX4/workspace-state.json
-Building for debugging...
-[0/3] Write swift-version--58304C5D6DBC2206.txt
-Build of product 'OuroWorkbenchMCP' complete! (0.14s)
-{"sessions":[{"attention":"idle","autoResume":true,"group":"Fixture Workspace","id":"578455B4-12B1-475A-AB2B-F34D777EFC38","isArchived":false,"isPinned":false,"kind":"terminalAgent","name":"Fixture Running Session","needsHuman":false,"owner":{"kind":"human"},"status":"configured","trust":"trusted","workingDirectory":"\/Users\/arimendelow"}]}
-{"sessions":[{"attention":"idle","autoResume":true,"group":"Fixture Workspace","id":"578455B4-12B1-475A-AB2B-F34D777EFC38","isArchived":false,"isPinned":false,"kind":"terminalAgent","name":"Fixture Running Session","needsHuman":false,"owner":{"kind":"human"},"status":"configured","trust":"trusted","workingDirectory":"\/Users\/arimendelow"}]}
-sentinel_root=/var/folders/md/_fkq3wc92_z55cgtlrfrcfh40000gn/T//ouro-workbench-mcp-sentinel.ecKuX4

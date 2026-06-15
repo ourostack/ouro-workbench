@@ -54,7 +54,7 @@ public struct WorkbenchBootstrapper: Sendable {
             return next
         }
 
-        removeUntouchedLegacyScaffolds(from: &next)
+        removeUntouchedBootstrapScaffolds(from: &next)
 
         for index in next.processEntries.indices where next.processEntries[index].kind == .terminalAgent {
             if next.processEntries[index].agentKind == nil {
@@ -77,10 +77,10 @@ public struct WorkbenchBootstrapper: Sendable {
         return entries.filter { seen.insert($0.id).inserted }
     }
 
-    private func removeUntouchedLegacyScaffolds(from state: inout WorkspaceState) {
+    private func removeUntouchedBootstrapScaffolds(from state: inout WorkspaceState) {
         let removableIDs = Set(
             state.processEntries
-                .filter { isUntouchedLegacyScaffold($0, in: state) }
+                .filter { isUntouchedBootstrapScaffold($0, in: state) }
                 .map(\.id)
         )
         guard !removableIDs.isEmpty else {
@@ -93,7 +93,7 @@ public struct WorkbenchBootstrapper: Sendable {
         }
     }
 
-    private func isUntouchedLegacyScaffold(_ entry: ProcessEntry, in state: WorkspaceState) -> Bool {
+    private func isUntouchedBootstrapScaffold(_ entry: ProcessEntry, in state: WorkspaceState) -> Bool {
         guard !entry.isArchived,
               !state.processRuns.contains(where: { $0.entryId == entry.id }),
               !state.actionLog.contains(where: { $0.targetEntryId == entry.id })
@@ -101,13 +101,13 @@ public struct WorkbenchBootstrapper: Sendable {
             return false
         }
 
-        if isLegacyAgentScaffold(entry) || isLegacyDemoAgent(entry) {
+        if isGeneratedPresetScaffold(entry) || isGeneratedDemoScaffold(entry) {
             return true
         }
         return false
     }
 
-    private func isLegacyAgentScaffold(_ entry: ProcessEntry) -> Bool {
+    private func isGeneratedPresetScaffold(_ entry: ProcessEntry) -> Bool {
         TerminalAgentPresets.all.contains { preset in
             entry.kind == .terminalAgent
                 && entry.name == preset.displayName
@@ -116,7 +116,7 @@ public struct WorkbenchBootstrapper: Sendable {
         }
     }
 
-    private func isLegacyDemoAgent(_ entry: ProcessEntry) -> Bool {
+    private func isGeneratedDemoScaffold(_ entry: ProcessEntry) -> Bool {
         entry.kind == .terminalAgent
             && entry.name == "Demo Agent"
             && entry.executable == "/bin/zsh"

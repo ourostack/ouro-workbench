@@ -44,17 +44,17 @@ behavior.
   move, archive, restore, delete, and boss archive/restore paths.
 - Update tests that currently assert the old default shell behavior:
   - invert default bootstrap tests around no process entries,
-  - add legacy shell preservation tests,
+  - add imported shell preservation tests,
   - add managed shell lifecycle tests,
   - cover MCP/read-only bootstrap if a test seam exists or can be introduced
     cleanly.
 - Rename scenario fixtures away from canonical `local_shell` / `Local Shell`
-  product language while keeping generic/legacy shell coverage.
+  product language while keeping generic/imported shell coverage.
 - Update current product docs and active roadmap lines that teach Workbench as a
   local shell/default terminal launcher.
 - Update active audit/spec/backlog status after implementation.
 - Run full unit tests, scenario verifier, build/package/install, and live E2E
-  validation against a fresh support root and a legacy shell fixture.
+  validation against a fresh support root and a imported shell fixture.
 
 ### Out of Scope
 
@@ -98,14 +98,14 @@ behavior.
 - Packaged and installed app from current source passes live E2E:
   - fresh app-support root has no `Local Shell`, no selected shell, no default
     shell launch action, and setup/onboarding path is available,
-  - legacy shell fixture appears as a normal managed session with edit/archive
+  - imported shell fixture appears as a normal managed session with edit/archive
     or delete affordances,
   - reset still enters setup and does not create a shell.
 
 ## Code Coverage Requirements
 
 - Update `Tests/OuroWorkbenchCoreTests/WorkbenchBootstrapperTests.swift` to
-  cover no-default-shell bootstrap, no-`This Mac` default, and legacy shell
+  cover no-default-shell bootstrap, no-`This Mac` default, and imported shell
   preservation.
 - Update or add `Tests/OuroWorkbenchCoreTests/CustomTerminalSessionTests.swift`
   to cover `.shell` draft/update/duplicate/archive/restore behavior.
@@ -138,8 +138,8 @@ all judgment calls here are resolved by source-grounded reviewer gates.
   automatic built-in fallback shell launch.
 - MCP must report persisted truth. Read-only consumers should not create or
   normalize a shell that the app would not show.
-- Scenario coverage should keep a generic shell identity and optionally a legacy
-  shell regression case, but not canonize `Local Shell` as the product's normal
+- Scenario coverage should keep a generic shell identity and optionally an
+  imported shell regression case, but not canonize `Local Shell` as the product's normal
   terminal identity.
 
 ## Context / References

@@ -53,7 +53,7 @@ final class PaneLayoutStateTests: XCTestCase {
         // Pre-increment-2 state files have no `detailLayout` key. They MUST
         // decode with `detailLayout == nil` (classic single pane) at
         // schemaVersion 1 — no bump, no quarantine.
-        let legacyJSON = """
+        let olderJSON = """
         {
             "schemaVersion": 1,
             "boss": { "agentName": "slugger", "scope": "machine" },
@@ -69,7 +69,7 @@ final class PaneLayoutStateTests: XCTestCase {
         """.data(using: .utf8)!
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        let state = try decoder.decode(WorkspaceState.self, from: legacyJSON)
+        let state = try decoder.decode(WorkspaceState.self, from: olderJSON)
         XCTAssertEqual(state.schemaVersion, 1)
         XCTAssertNil(state.detailLayout)
     }

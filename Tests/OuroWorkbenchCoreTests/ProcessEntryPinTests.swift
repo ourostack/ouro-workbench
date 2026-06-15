@@ -34,11 +34,11 @@ final class ProcessEntryPinTests: XCTestCase {
     func testDecodesWithoutIsPinnedForBackwardsCompatibility() throws {
         // Pre-pin persisted entries lack the key; decode must default to
         // false rather than throwing.
-        let legacyJSON = """
+        let olderJSON = """
         {
             "id": "00000000-0000-0000-0000-000000000009",
             "projectId": "00000000-0000-0000-0000-0000000000aa",
-            "name": "legacy",
+            "name": "older",
             "kind": "terminalAgent",
             "executable": "/bin/zsh",
             "arguments": [],
@@ -47,20 +47,20 @@ final class ProcessEntryPinTests: XCTestCase {
             "autoResume": false
         }
         """.data(using: .utf8)!
-        let decoded = try JSONDecoder().decode(ProcessEntry.self, from: legacyJSON)
+        let decoded = try JSONDecoder().decode(ProcessEntry.self, from: olderJSON)
         XCTAssertFalse(decoded.isPinned)
-        XCTAssertEqual(decoded.name, "legacy")
+        XCTAssertEqual(decoded.name, "older")
     }
 
     func testDecodesIgnoringStaleDeskTaskSlugKey() throws {
         // The Workbench->desk mirror (and its `deskTaskSlug` field) was removed.
         // Workspace state persisted before that removal still carries the stale
         // key; decode must ignore it rather than throwing.
-        let legacyJSON = """
+        let olderJSON = """
         {
             "id": "00000000-0000-0000-0000-000000000009",
             "projectId": "00000000-0000-0000-0000-0000000000aa",
-            "name": "legacy",
+            "name": "older",
             "kind": "terminalAgent",
             "executable": "/bin/zsh",
             "arguments": [],
@@ -70,8 +70,8 @@ final class ProcessEntryPinTests: XCTestCase {
             "deskTaskSlug": "ship-the-thing"
         }
         """.data(using: .utf8)!
-        let decoded = try JSONDecoder().decode(ProcessEntry.self, from: legacyJSON)
-        XCTAssertEqual(decoded.name, "legacy")
+        let decoded = try JSONDecoder().decode(ProcessEntry.self, from: olderJSON)
+        XCTAssertEqual(decoded.name, "older")
     }
 
     /// Mirrors the WorkbenchViewModel.sessionEntries partition: pinned float
