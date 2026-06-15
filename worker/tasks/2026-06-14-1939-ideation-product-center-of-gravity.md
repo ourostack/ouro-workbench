@@ -1,6 +1,6 @@
 # Product Center Of Gravity Ideation
 
-Status: ready for scrutiny
+Status: planner handoff ready
 Date: 2026-06-14
 Branch: `worker/product-center-of-gravity`
 
@@ -35,6 +35,9 @@ The center must be:
   repaired back to `/bin/zsh -l`, `trusted`, and `autoResume: true`.
 - App startup still calls `launchDefaultShellIfNeeded()` after startup recovery
   and auto-resume.
+- The MCP server read path bootstraps state with the same defaults, so the boss
+  can be shown a fabricated `Local Shell` even if the app should be reporting
+  setup/no imported sessions truth.
 - `CustomTerminalSessionManager.isCustomSession(_:)` returns true only for
   `.terminalAgent`, so `.shell` rows do not get normal edit/archive/delete
   actions in the sidebar context menu.
@@ -75,7 +78,8 @@ center without unnecessary schema churn:
 - `WorkbenchDefaults.includeLocalShell` should default false, or be renamed /
   deprecated toward no default terminal.
 - Normal bootstrap creates the minimal workspace state only, with no process
-  entry.
+  entry and no default `This Mac` workspace name.
+- MCP read-only state rendering uses the same no-shell truth.
 - The app stops calling `launchDefaultShellIfNeeded()` as a first-run/fallback
   path.
 - `BuiltInWorkbenchSessions` loses repair/auto-launch authority; if a legacy
@@ -88,24 +92,38 @@ center without unnecessary schema churn:
 
 ## Scrutiny Notes
 
-Initial self-scrutiny:
+Tinfoil Hat and Stranger With Candy findings changed the implementation shape:
 
 - Merely hiding `Local Shell` during setup is insufficient; normal empty-state
   bootstrap and startup launch can still reintroduce it.
 - Removing `.shell` entirely is more churn than signal; recovery/autonomy code
   already supports it and persisted rows may exist.
-- `New Terminal` should remain, because the product is still a terminal
-  multiplexer. The issue is not terminal creation; it is default shell identity.
-- Docs matter here because old roadmap/README lines can keep steering agents
-  back toward the wrong center.
+- MCP read paths must also stop synthesizing default shell state; otherwise the
+  boss sees a fabricated Workbench reality.
+- Canonical state is the post-load JSON that bootstrap saves, so legacy shell
+  rows must be preserved through load rather than repaired in place.
+- `custom session` is the lying word. The capability should be thought of as
+  managed terminal sessions; implementation may preserve the existing type name
+  for scope, but tests must prove `.shell` rows are manageable and are not
+  silently transmuted on load.
+- User-owned shells may still auto-launch through the explicit
+  `autoLaunchResumableOnStartup` preference. The product bug is built-in
+  fallback shell creation/repair/launch, not shell support.
+- `This Mac` is part of the same drift. Normal empty bootstrap should not
+  create a workspace named `This Mac`; use the setup/unsorted workspace until
+  imported or created work gives a better name.
+- Scenario coverage should keep generic/legacy shell regression coverage without
+  naming `Local Shell` as a canonical identity.
 
 ## Thin Slice
 
 1. Add failing tests that express the center:
    - empty bootstrap creates a workspace but no terminal rows,
+   - default empty bootstrap does not create `This Mac`,
+   - MCP read-only current-state bootstrapping does not synthesize a shell,
    - legacy `Local Shell` is preserved, not repaired or duplicated,
    - `.shell` entries are manageable custom sessions,
-   - default-shell startup launch path is gone or inert,
+   - built-in default-shell startup launch path is gone or inert,
    - scenario names/docs no longer encode `Local Shell` as default.
 2. Implement minimal core/app changes to make those tests pass.
 3. Update the surface spec, audit report/backlog, README/guide/roadmap lines
@@ -118,6 +136,7 @@ Initial self-scrutiny:
 
 - No schema migration that deletes user shell sessions.
 - No removal of terminal/TUI support.
+- No disabling explicit user-owned shell auto-resume/recovery.
 - No MCP action rename from `group` to `workspace` in this tranche unless a
   user-facing string is directly implicated.
 - No split of `OuroWorkbenchApp.swift`; that remains a follow-up after the
@@ -149,6 +168,8 @@ Likely files:
 Acceptance signals:
 
 - no fresh/reset state creates or auto-launches `Local Shell`,
+- no empty state creates a default `This Mac` workspace,
+- MCP read-only state does not synthesize a local shell,
 - any existing shell row has edit/archive/delete in normal UI,
 - tests prove shell rows are preserved as user data rather than repaired into a
   built-in,

@@ -16,9 +16,9 @@ Canonical report: `worker/tasks/audit-report.md`
 **Recommended lane**: planner-required
 **Suggested supporting skills**: work-planner, work-doer
 **Verification**: Add unit coverage for marker set/consume behavior and run a live reset/relaunch smoke that proves onboarding appears even when boss readiness is healthy.
-**Status**: in-progress
-**Linked work**: `worker/tasks/2026-06-14-1420-planning-factory-reset-setup-flow.md`
-**Notes**: Marker must survive `removePersistentDomain`; either set it after wipe or use a domain/key not removed by reset.
+**Status**: fixed
+**Linked work**: `worker/tasks/2026-06-14-1420-planning-factory-reset-setup-flow.md`, `worker/tasks/2026-06-14-1420-doing-factory-reset-setup-flow.md`, commit `bdb7c3f`
+**Notes**: Fixed by writing `force-first-run-setup` after the wipe and consuming it on next launch. Live E2E artifact `worker/tasks/2026-06-14-1420-doing-factory-reset-setup-flow/e2e-reset-setup.md` passed.
 
 ---
 
@@ -34,9 +34,9 @@ Canonical report: `worker/tasks/audit-report.md`
 **Recommended lane**: planner-required
 **Suggested supporting skills**: work-planner, work-doer
 **Verification**: Add bootstrap tests for setup mode with `includeLocalShell: false`; add startup logic coverage or a live smoke proving no auto-launched shell appears before setup/import.
-**Status**: in-progress
-**Linked work**: `worker/tasks/2026-06-14-1420-planning-factory-reset-setup-flow.md`
-**Notes**: Preserve ordinary fallback-shell behavior only if tests prove it does not affect reset/setup mode.
+**Status**: fixed
+**Linked work**: `worker/tasks/2026-06-14-1420-planning-factory-reset-setup-flow.md`, `worker/tasks/2026-06-14-1420-doing-factory-reset-setup-flow.md`, commit `bdb7c3f`; residual product-center follow-up A-011
+**Notes**: Fixed for reset/setup mode by bootstrapping `Unsorted Sessions` with no local shell. A-011 tracks the deeper normal-bootstrap built-in shell removal.
 
 ---
 
@@ -52,9 +52,9 @@ Canonical report: `worker/tasks/audit-report.md`
 **Recommended lane**: planner-required
 **Suggested supporting skills**: work-doer
 **Verification**: Unit-test the removability helper if extracted; otherwise live-validate that fallback shell is absent during setup and removable after manual creation/fallback.
-**Status**: in-progress
-**Linked work**: `worker/tasks/2026-06-14-1420-planning-factory-reset-setup-flow.md`
-**Notes**: The best first fix may be hiding/defering the shell in setup mode rather than broadening delete behavior for all built-ins.
+**Status**: superseded
+**Linked work**: `worker/tasks/2026-06-14-1420-planning-factory-reset-setup-flow.md`, `worker/tasks/2026-06-14-1939-ideation-product-center-of-gravity.md`; replacement A-012
+**Notes**: The immediate reset-created shell dead end is fixed by not creating that shell. The broader persisted-shell management issue is now tracked by A-012.
 
 ---
 
@@ -70,9 +70,9 @@ Canonical report: `worker/tasks/audit-report.md`
 **Recommended lane**: planner-required
 **Suggested supporting skills**: frontend-design, work-doer
 **Verification**: Build/run UI, inspect running session header at desktop/mobile-ish widths, and confirm advanced controls are behind a labeled menu with tooltips.
-**Status**: in-progress
+**Status**: fixed
 **Linked work**: `worker/tasks/2026-06-14-1420-planning-factory-reset-setup-flow.md`
-**Notes**: Keep keyboard shortcuts and boss actions; change primary discoverability.
+**Notes**: Running-session primary chrome moved low-level controls behind a labeled `Session Controls` menu in the reset/setup flow branch; live sidebar/session-control E2E passed.
 
 ---
 
@@ -88,7 +88,7 @@ Canonical report: `worker/tasks/audit-report.md`
 **Recommended lane**: planner-required
 **Suggested supporting skills**: frontend-design, work-doer
 **Verification**: Live UI should show `Workspaces`, not `Groups`, should not show `This Mac` as an imported workspace after reset, and should hide recovery when healthy.
-**Status**: in-progress
+**Status**: fixed
 **Linked work**: `worker/tasks/2026-06-14-1420-planning-factory-reset-setup-flow.md`
 **Notes**: Full model rename can be staged; primary UI text should change in this pass.
 
@@ -106,7 +106,7 @@ Canonical report: `worker/tasks/audit-report.md`
 **Recommended lane**: planner-required
 **Suggested supporting skills**: work-planner, work-doer
 **Verification**: Live onboarding after boss readiness should present boss-narrated welcome/import steps and proposal support without making import a separate traditional wizard.
-**Status**: in-progress
+**Status**: fixed
 **Linked work**: `worker/tasks/2026-06-14-1420-planning-factory-reset-setup-flow.md`
 **Notes**: Reuse existing scanner/proposal data; do not build a new dashboard.
 
@@ -124,7 +124,7 @@ Canonical report: `worker/tasks/audit-report.md`
 **Recommended lane**: planner-required
 **Suggested supporting skills**: work-doer
 **Verification**: Add representative fixture tests for Codex archived JSONL, Codex manual-recovery JSONL, Claude task records, and SQLite-plus-index union behavior.
-**Status**: in-progress
+**Status**: fixed
 **Linked work**: `worker/tasks/2026-06-14-1420-planning-factory-reset-setup-flow.md`
 **Notes**: Preserve lookback filtering for signal quality unless future UX adds an older-sessions path.
 
@@ -184,3 +184,74 @@ Canonical report: `worker/tasks/audit-report.md`
 
 ---
 
+## A-011 - Built-in shell remains the normal empty-state center
+
+**Source**: audit
+**What**: Outside reset/setup mode, empty-state bootstrap still creates and startup still auto-launches a special `Local Shell`.
+**Why it matters**: The app can still present itself as a local shell launcher instead of a boss-led terminal workbench, and MCP can report a fabricated shell to agents as if it were user state.
+**Evidence**: `Sources/OuroWorkbenchCore/WorkbenchBootstrapper.swift:10`, `Sources/OuroWorkbenchCore/WorkbenchBootstrapper.swift:13`, `Sources/OuroWorkbenchCore/WorkbenchBootstrapper.swift:63`, `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:387`, `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:14012`, `Sources/OuroWorkbenchMCP/main.swift:477`
+**Severity**: high
+**Blast radius**: affects multiple modules
+**Dependencies**: A-001, A-002
+**Recommended lane**: planner-required
+**Suggested supporting skills**: work-ideator, full-systems-audit, work-planner, work-doer
+**Verification**: Unit-test empty bootstrap and MCP current-state behavior; live-validate fresh/reset launch with no synthesized `Local Shell`, no selected shell, and no default-shell auto-launch action.
+**Status**: in-progress
+**Linked work**: `worker/tasks/2026-06-14-1939-ideation-product-center-of-gravity.md`
+**Notes**: Keep persisted shell rows; remove creation/repair/launch authority.
+
+---
+
+## A-012 - Persisted shell rows are not normal managed sessions
+
+**Source**: audit
+**What**: `.shell` rows can launch/recover, but management affordances reject them because `CustomTerminalSessionManager` only treats `.terminalAgent` as custom.
+**Why it matters**: Any legacy shell row remains less editable/removable than other terminals, preserving the feeling of a built-in dead end.
+**Evidence**: `Sources/OuroWorkbenchCore/CustomTerminalSession.swift:108`, `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:3003`, `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:14490`, `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:14502`, `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:14772`
+**Severity**: high
+**Blast radius**: affects multiple modules
+**Dependencies**: A-011
+**Recommended lane**: planner-required
+**Suggested supporting skills**: work-planner, work-doer
+**Verification**: Unit-test shell draft/edit/archive/restore/duplicate behavior and live-validate a manually created or seeded shell has edit/archive/delete in the UI and boss archive/restore works.
+**Status**: in-progress
+**Linked work**: `worker/tasks/2026-06-14-1939-ideation-product-center-of-gravity.md`
+**Notes**: Rename manager APIs if useful, but preserve compatibility for existing app call sites.
+
+---
+
+## A-013 - Docs still teach the old shell/wrapper story
+
+**Source**: audit
+**What**: README/guide/roadmap copy still frames Workbench as a local terminal wrapper or explicitly calls for a default `Local Shell`.
+**Why it matters**: Future agents and contributors will reintroduce the wrong center if documentation keeps naming the old product.
+**Evidence**: `README.md:5`, `README.md:49`, `docs/guide.md:58`, `docs/roadmap.md:9`, `docs/roadmap.md:184`
+**Severity**: medium
+**Blast radius**: affects multiple modules
+**Dependencies**: A-011, A-012
+**Recommended lane**: planner-required
+**Suggested supporting skills**: work-planner, work-doer
+**Verification**: Grep docs for `Local Shell`, `default local shell`, and `local terminal wrapper`; update only user/contributor-facing product claims, not historical artifact logs.
+**Status**: in-progress
+**Linked work**: `worker/tasks/2026-06-14-1939-ideation-product-center-of-gravity.md`
+**Notes**: Historical E2E artifacts and old task notes can keep evidence strings; product docs should not.
+
+---
+
+## A-014 - Scenario fixtures canonize `Local Shell`
+
+**Source**: audit
+**What**: Scenario generation still uses `local_shell` / `Local Shell` as a canonical terminal identity.
+**Why it matters**: Scenario matrices double as product contracts for future agents; canonizing `Local Shell` keeps the old default identity alive in tests.
+**Evidence**: `Sources/OuroWorkbenchCore/WorkbenchScenarioMatrix.swift:179`, `Sources/OuroWorkbenchScenarioVerifier/main.swift:325`, `Sources/OuroWorkbenchScenarioVerifier/main.swift:344`, `docs/workbench-5000-scenario-matrix.md:10`
+**Severity**: medium
+**Blast radius**: affects multiple modules
+**Dependencies**: A-011
+**Recommended lane**: planner-required
+**Suggested supporting skills**: work-planner, work-doer
+**Verification**: Regenerate/run scenario verifier after renaming shell identity to generic/manual shell and ensuring no expected output uses `Local Shell` as default.
+**Status**: in-progress
+**Linked work**: `worker/tasks/2026-06-14-1939-ideation-product-center-of-gravity.md`
+**Notes**: Keep shell coverage; remove default/local-shell branding.
+
+---

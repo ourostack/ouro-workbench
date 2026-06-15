@@ -5,6 +5,63 @@ Date: 2026-06-14
 Canonical spec: `docs/workbench-surface-spec.md`
 Planning doc: `worker/tasks/2026-06-14-1420-planning-factory-reset-setup-flow.md`
 
+## Addendum: Product Center Of Gravity Pass
+
+Date: 2026-06-14
+Ideation doc: `worker/tasks/2026-06-14-1939-ideation-product-center-of-gravity.md`
+
+The reset/setup tranche fixed the immediate screenshot path: factory reset now
+writes a setup marker after wiping state, setup-mode bootstrap uses `Unsorted
+Sessions`, and the live E2E artifact proves no reset-created `Local Shell` is
+present in first-run setup.
+
+The user's follow-up correctly identified a deeper issue: the product still has
+a built-in `Local Shell` primitive in normal bootstrap and startup code. That is
+architectural drift, not just copy drift. The correct center of gravity is:
+Workbench is a boss-coordinated terminal/TUI multiplexer; shells are ordinary
+managed sessions, never default identity.
+
+Current evidence:
+
+- `Sources/OuroWorkbenchCore/WorkbenchBootstrapper.swift:10` still defaults the
+  empty workspace name to `This Mac`.
+- `Sources/OuroWorkbenchCore/WorkbenchBootstrapper.swift:13` still defaults
+  `includeLocalShell` to true.
+- `Sources/OuroWorkbenchCore/WorkbenchBootstrapper.swift:63` inserts or repairs
+  `BuiltInWorkbenchSessions.localShell` when that flag is true.
+- `Sources/OuroWorkbenchCore/WorkbenchBootstrapper.swift:147` still gives the
+  shell a dedicated built-in lifecycle and `Local Shell` name.
+- `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:387` still calls
+  `launchDefaultShellIfNeeded()` during app startup.
+- `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:14012` still auto-launches
+  the first auto-launchable built-in shell when no sessions are active.
+- `Sources/OuroWorkbenchMCP/main.swift:477` bootstraps read-only state with the
+  same defaults, so the boss-facing MCP can synthesize a `Local Shell` even
+  when the app should report setup/no imported sessions truth.
+- `Sources/OuroWorkbenchCore/CustomTerminalSession.swift:108` treats only
+  `.terminalAgent` rows as managed custom sessions, so persisted `.shell` rows
+  do not receive edit/archive/delete affordances.
+- `Tests/OuroWorkbenchCoreTests/WorkbenchBootstrapperTests.swift:5` still
+  asserts the old desired behavior: empty bootstrap creates `Local Shell` only.
+- `README.md:5`, `docs/roadmap.md:9`, and `docs/roadmap.md:184` still encode the
+  old wrapper/default-shell story.
+
+New routed findings:
+
+- **A-011 - Built-in shell remains the normal empty-state center.**
+  The reset-specific path opts out, but ordinary empty-state bootstrap and app
+  startup still assert that Workbench should create/launch a special shell.
+- **A-012 - Persisted shell rows are not normal managed sessions.**
+  Any existing `.shell` row still lacks the normal edit/archive/delete lifecycle
+  because custom-session management only accepts `.terminalAgent`.
+- **A-013 - Docs still teach the old shell/wrapper story.**
+  README/guide/roadmap copy can steer implementation back toward a local shell
+  launcher even after the UI behavior is corrected.
+- **A-014 - Scenario fixtures still canonize `Local Shell`.**
+  Scenario coverage may include shell sessions, but naming them `Local Shell`
+  as a canonical identity keeps the old product story alive in generated
+  validation artifacts.
+
 ## Summary
 
 The reported experience is explained by three interacting defects:
@@ -243,4 +300,3 @@ The immediate implementation should:
    conversational, using the existing proposal visual as support.
 7. Expand deterministic import adapters for Codex archived/manual-recovery
    JSONL and Claude task stores, preserving existing coverage.
-
