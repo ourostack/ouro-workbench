@@ -4,18 +4,15 @@ public struct WorkbenchDefaults: Sendable {
     public var projectName: String
     public var projectRootPath: String
     public var boss: BossAgentSelection
-    public var includeLocalShell: Bool
 
     public init(
-        projectName: String = "This Mac",
+        projectName: String = WorkbenchSurfacePolicy.setupWorkspaceName,
         projectRootPath: String = FileManager.default.homeDirectoryForCurrentUser.path,
-        boss: BossAgentSelection = BossAgentSelection(),
-        includeLocalShell: Bool = true
+        boss: BossAgentSelection = BossAgentSelection()
     ) {
         self.projectName = projectName
         self.projectRootPath = projectRootPath
         self.boss = boss
-        self.includeLocalShell = includeLocalShell
     }
 
     public static func firstRunSetup(
@@ -24,8 +21,7 @@ public struct WorkbenchDefaults: Sendable {
         WorkbenchDefaults(
             projectName: WorkbenchSurfacePolicy.setupWorkspaceName,
             projectRootPath: projectRootPath,
-            boss: BossAgentSelection(),
-            includeLocalShell: false
+            boss: BossAgentSelection()
         )
     }
 }
@@ -59,21 +55,6 @@ public struct WorkbenchBootstrapper: Sendable {
         }
 
         removeUntouchedLegacyScaffolds(from: &next)
-
-        if defaults.includeLocalShell {
-            if let existingIndex = next.processEntries.firstIndex(where: { entry in
-                entry.projectId == project.id && BuiltInWorkbenchSessions.isLocalShell(entry)
-            }) {
-                var shell = next.processEntries.remove(at: existingIndex)
-                BuiltInWorkbenchSessions.repairLocalShell(&shell, project: project)
-                next.processEntries.insert(shell, at: 0)
-            } else {
-                next.processEntries.insert(
-                    BuiltInWorkbenchSessions.localShell(project: project),
-                    at: 0
-                )
-            }
-        }
 
         for index in next.processEntries.indices where next.processEntries[index].kind == .terminalAgent {
             if next.processEntries[index].agentKind == nil {
@@ -141,68 +122,5 @@ public struct WorkbenchBootstrapper: Sendable {
             && entry.executable == "/bin/zsh"
             && entry.arguments == ["-lc", "echo hello from demo"]
             && entry.lastSummary == "Custom terminal session: echo hello from demo"
-    }
-}
-
-public enum BuiltInWorkbenchSessions {
-    public static let localShellName = "Local Shell"
-    public static let localShellExecutable = "/bin/zsh"
-    public static let localShellArguments = ["-l"]
-
-    public static func localShell(project: WorkbenchProject) -> ProcessEntry {
-        ProcessEntry(
-            projectId: project.id,
-            name: localShellName,
-            kind: .shell,
-            executable: localShellExecutable,
-            arguments: localShellArguments,
-            workingDirectory: project.rootPath,
-            trust: .trusted,
-            autoResume: true,
-            attention: .idle,
-            lastSummary: "Ready local shell"
-        )
-    }
-
-    public static func isLocalShell(_ entry: ProcessEntry) -> Bool {
-        entry.kind == .shell && entry.name == localShellName
-    }
-
-    public static func isAutoLaunchableLocalShell(_ entry: ProcessEntry) -> Bool {
-        isLocalShell(entry)
-            && entry.executable == localShellExecutable
-            && entry.arguments == localShellArguments
-            && entry.trust == .trusted
-            && entry.autoResume
-    }
-
-    public static func repairLocalShell(_ entry: inout ProcessEntry, project: WorkbenchProject) {
-        entry.name = localShellName
-        entry.kind = .shell
-        entry.agentKind = nil
-        entry.executable = localShellExecutable
-        entry.arguments = localShellArguments
-        entry.workingDirectory = entry.workingDirectory.isEmpty ? project.rootPath : entry.workingDirectory
-        entry.trust = .trusted
-        entry.autoResume = true
-        if entry.lastSummary == nil {
-            entry.lastSummary = "Ready local shell"
-        }
-    }
-
-    public static func repairTerminalAgentTemplate(
-        _ entry: inout ProcessEntry,
-        preset: TerminalAgentPreset,
-        project: WorkbenchProject
-    ) {
-        entry.name = preset.displayName
-        entry.kind = .terminalAgent
-        entry.agentKind = preset.id
-        entry.executable = preset.executable
-        entry.arguments = entry.trust == .trusted ? preset.yoloArguments : preset.defaultArguments
-        entry.workingDirectory = entry.workingDirectory.isEmpty ? project.rootPath : entry.workingDirectory
-        if entry.lastSummary == nil || entry.lastSummary?.hasPrefix("Configured ") == true {
-            entry.lastSummary = "Configured \(preset.displayName) terminal"
-        }
     }
 }

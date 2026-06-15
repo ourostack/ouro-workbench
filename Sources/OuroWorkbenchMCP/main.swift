@@ -5,7 +5,14 @@ import OuroWorkbenchCore
 @main
 struct OuroWorkbenchMCP {
     static func main() {
-        WorkbenchMCPServer().run()
+        do {
+            let diagnostics = try WorkbenchLaunchDiagnostics.parse(CommandLine.arguments)
+            let paths = diagnostics.appSupportRoot.map { WorkbenchPaths(rootURL: $0) } ?? .defaultPaths()
+            WorkbenchMCPServer(paths: paths).run()
+        } catch {
+            FileHandle.standardError.write(Data("Invalid Workbench MCP arguments: \(error.localizedDescription)\n".utf8))
+            Darwin.exit(2)
+        }
     }
 }
 

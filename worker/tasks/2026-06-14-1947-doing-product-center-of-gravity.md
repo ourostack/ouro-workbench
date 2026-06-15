@@ -88,7 +88,7 @@ behavior.
 **Output**: Tests require: default empty bootstrap uses `WorkbenchSurfacePolicy.setupWorkspaceName`, default empty bootstrap has zero `processEntries`, default empty bootstrap does not create `This Mac`, untouched legacy agent scaffold cleanup leaves zero entries instead of a shell, bootstrapping existing agent terminals does not add a shell, and a persisted `.shell` row named `Local Shell` is preserved exactly rather than repaired. Add a test proving `WorkbenchDefaults()` carries no-shell defaults for MCP read-only state loading. Add or update launch-diagnostics coverage proving `--app-support-root` remains parsed for deterministic app/MCP runtime isolation.
 **Acceptance**: Run `swift test --filter WorkbenchBootstrapperTests` and `swift test --filter WorkbenchLaunchDiagnosticsTests`; every newly added bootstrap/defaults/runtime-isolation check fails before implementation, or the Unit 1 artifact records that a specific check already passed at HEAD.
 
-### ⬜ Unit 1b: Bootstrap And MCP Truth — Implementation
+### ✅ Unit 1b: Bootstrap And MCP Truth — Implementation
 **What**: Delete or bypass every call path that creates, repairs, selects, or launches `BuiltInWorkbenchSessions.localShell` during empty bootstrap, app fallback loading, startup fallback launch, and MCP state loading. Update `WorkbenchDefaults` default project name and default shell posture, update app load fallback to `WorkbenchDefaults()` no-shell truth, and make MCP `currentState()` rely on that same no-shell default state instead of default shell synthesis. Add MCP support for the existing `--app-support-root PATH` runtime-isolation flag by parsing `WorkbenchLaunchDiagnostics` in `Sources/OuroWorkbenchMCP/main.swift` and constructing `WorkbenchPaths(rootURL:)` when provided.
 **Output**: Changes in `Sources/OuroWorkbenchCore/WorkbenchBootstrapper.swift`, `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift`, and `Sources/OuroWorkbenchMCP/main.swift`.
 **Acceptance**: `swift test --filter WorkbenchBootstrapperTests` passes and `swift build` succeeds with no warnings.
@@ -179,3 +179,4 @@ behavior.
 - 2026-06-14 20:22 Doing conversion review converged after granularity and ambiguity fixes; ready for direct execution.
 - 2026-06-14 20:29 Completed Unit 0 research artifact.
 - 2026-06-14 20:31 Completed Unit 1a red tests. `WorkbenchBootstrapperTests` fails with default `This Mac`, inserted `Local Shell`, and repaired shell expectations; `WorkbenchLaunchDiagnosticsTests` already passes for existing parser coverage.
+- 2026-06-14 20:34 Completed Unit 1b implementation: removed built-in shell bootstrap/repair/launch authority and added MCP `--app-support-root` parsing.

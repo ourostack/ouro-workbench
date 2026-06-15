@@ -384,7 +384,6 @@ struct WorkbenchRootView: View {
             await model.refreshLiveScreenSessions()
             model.recoverEligibleSessionsOnStartup()
             model.launchAutoResumeSessionsOnStartup()
-            model.launchDefaultShellIfNeeded()
             model.refreshExecutableHealth()
             model.refreshGitStatus()
             model.refreshSessionActivity()
@@ -9159,7 +9158,6 @@ final class WorkbenchViewModel: ObservableObject {
     private var lastEventDrivenCheckInAt: Date?
     private let eventDrivenCheckInCooldown: TimeInterval = 15
     private var didAttemptStartupRecovery = false
-    private var didAttemptDefaultShellLaunch = false
     private var didAttemptAutoResumeLaunch = false
     /// Last time we posted an unexpected-exit notification per entry, to
     /// throttle banner spam when a session crash-loops or several are
@@ -14007,28 +14005,6 @@ final class WorkbenchViewModel: ObservableObject {
         guard enabled != autoLaunchResumableOnStartup else { return }
         autoLaunchResumableOnStartup = enabled
         UserDefaults.standard.set(enabled, forKey: Self.autoLaunchResumableOnStartupDefaultsKey)
-    }
-
-    func launchDefaultShellIfNeeded() {
-        guard !didAttemptDefaultShellLaunch else {
-            return
-        }
-        didAttemptDefaultShellLaunch = true
-        guard activeSessions.isEmpty else {
-            return
-        }
-        guard let shell = state.processEntries.first(where: BuiltInWorkbenchSessions.isAutoLaunchableLocalShell) else {
-            return
-        }
-        selectedEntryID = shell.id
-        guard activeSessions[shell.id] == nil else {
-            return
-        }
-        if let latestRun = latestRun(for: shell),
-           latestRun.status == .needsRecovery || latestRun.status == .manualActionNeeded {
-            return
-        }
-        launch(shell)
     }
 
     func recover(_ entry: ProcessEntry) {
