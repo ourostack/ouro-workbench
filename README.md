@@ -2,11 +2,11 @@
 
 Native macOS workbench for terminal agents, with Ouro boss-agent coordination.
 
-Ouro Workbench is a local terminal wrapper for Claude Code, GitHub Copilot CLI,
-OpenAI Codex, and arbitrary terminal/TUI agents. It gives those agents durable
-workspace state, restart recovery, and a selectable Ouro boss agent that can
-answer what is going on, what is waiting on the human, and what should keep
-moving.
+Ouro Workbench is a native macOS terminal-agent workbench for Claude Code,
+GitHub Copilot CLI, OpenAI Codex, plain shells, and arbitrary terminal/TUI
+agents. It gives those sessions durable workspace state, restart recovery, and
+a selectable Ouro boss agent that can answer what is going on, what is waiting
+on the human, and what should keep moving.
 
 ## Product Shape
 

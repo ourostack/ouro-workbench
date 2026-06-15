@@ -12,7 +12,7 @@ TERMINALS = {
   "codex" => "OpenAI Codex terminal",
   "copilot" => "GitHub Copilot CLI terminal",
   "generic_tui" => "generic terminal/TUI agent",
-  "local_shell" => "local shell"
+  "user_shell" => "user shell"
 }.freeze
 
 LIFECYCLES = {
@@ -52,10 +52,10 @@ EXECUTABLE_HEALTH = {
 }.freeze
 
 NATIVE_RESUME_TERMINALS = %w[claude codex].freeze
-CHECKPOINT_TERMINALS = %w[copilot generic_tui local_shell].freeze
+CHECKPOINT_TERMINALS = %w[copilot generic_tui user_shell].freeze
 
 def terminal_agent?(terminal)
-  terminal != "local_shell"
+  terminal != "user_shell"
 end
 
 def recovery_for(terminal:, lifecycle:, trust_resume:, surface:)
@@ -97,7 +97,7 @@ def readiness_for(terminal:, lifecycle:, trust_resume:, surface:, boss_bridge:, 
       blockers << "terminal agent auto-resume is disabled" unless posture.fetch(:auto)
     end
   else
-    warnings << "only a local shell is active, so no boss-managed agent terminal exists" unless archived
+    warnings << "only a user shell is active, so no boss-managed agent terminal exists" unless archived
     warnings << "no active terminal agents remain after archive filtering" if archived
   end
 
@@ -234,7 +234,7 @@ summary = <<~MARKDOWN
   Dimensions:
 
   - 5 terminal identities: Claude Code, OpenAI Codex, GitHub Copilot CLI, generic
-    terminal/TUI agent, local shell.
+    terminal/TUI agent, user shell.
   - 5 lifecycle states: configured, running, waiting for input, needs recovery,
     manual action needed.
   - 5 trust/resume/metadata postures.

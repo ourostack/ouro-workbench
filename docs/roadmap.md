@@ -5,10 +5,12 @@ agent-aware terminal workbench rather than a launcher with terminal panes.
 
 ## Immediate Terminal Feel
 
-- Open to a real terminal session by default.
-- Keep a persistent `Local Shell` terminal as the first default tab.
-- Auto-start the local shell on app launch when no other session is running or
-  recovering.
+- Open fresh/reset into boss setup and session import instead of a synthetic
+  terminal.
+- Keep plain shells as ordinary managed sessions the user or boss creates or
+  imports.
+- Auto-start only explicit Auto Resume sessions on app launch, after recovery
+  planning has checked for already-running or crashed work.
 - Show a terminal-shaped inactive surface for stopped sessions, not an empty
   settings pane.
 - Make launch/restart/recover actions visually obvious in the session header.
@@ -179,11 +181,13 @@ Release** above.
 
 ## Current Thin Slice
 
-Make Workbench open like a terminal:
+Make Workbench open around the boss-led workbench setup story:
 
-- Add a default `Local Shell` session.
-- Select it first.
-- Auto-start it on app launch when nothing else is running.
+- Fresh/reset state enters setup with an unsorted workspace and no synthetic
+  session.
+- The selected Ouro boss welcomes the user, scans for recent coding-agent
+  sessions, and proposes imports.
+- User-created or imported plain shells remain normal managed sessions.
 - Show inactive sessions in a terminal-shaped surface.
 - Keep existing terminal tabs and boss controls intact while migrating away from
   fixed named agent tabs.

@@ -7,7 +7,7 @@ can parse it without markdown-table ambiguity.
 Dimensions:
 
 - 5 terminal identities: Claude Code, OpenAI Codex, GitHub Copilot CLI, generic
-  terminal/TUI agent, local shell.
+  terminal/TUI agent, user shell.
 - 5 lifecycle states: configured, running, waiting for input, needs recovery,
   manual action needed.
 - 5 trust/resume/metadata postures.
