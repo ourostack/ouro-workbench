@@ -123,7 +123,7 @@ behavior.
 **Output**: Changes in `Sources/OuroWorkbenchCore/WorkbenchScenarioMatrix.swift`, `Sources/OuroWorkbenchScenarioVerifier/main.swift`, `scripts/generate-workbench-5000-matrix.rb`, generated scenario docs/TSV when their diff changes, `README.md`, `docs/guide.md`, `docs/roadmap.md`, and `docs/workbench-surface-spec.md`.
 **Acceptance**: Unit 3a tests/checks pass; scenario verifier still has 5,000 rows and zero failures; after generated docs/TSV are updated, capture the generated-file diff for `docs/workbench-5000-scenario-matrix.md` and `docs/workbench-5000-scenario-matrix.tsv`, run `scripts/generate-workbench-5000-matrix.rb` a second time, and prove the generated-file diff is byte-for-byte unchanged.
 
-### ⬜ Unit 3c: Scenario And Product Docs Drift — Coverage & Refactor
+### ✅ Unit 3c: Scenario And Product Docs Drift — Coverage & Refactor
 **What**: Run scenario matrix tests, doc validation script, and scenario verifier.
 **Output**: Save output to `2026-06-14-1947-doing-product-center-of-gravity/unit-3-scenario-docs.log` and verifier files under `2026-06-14-1947-doing-product-center-of-gravity/scenario-verifier/`.
 **Acceptance**: `swift test --filter WorkbenchScenarioMatrixTests`, `2026-06-14-1947-doing-product-center-of-gravity/validate-product-center-docs.sh`, and `swift run OuroWorkbenchScenarioVerifier --out 2026-06-14-1947-doing-product-center-of-gravity/scenario-verifier` exit 0. Scenario/docs drift checks are green; shell coverage remains present under `user_shell` / `User Shell` with fixture `kind == .shell`.
@@ -185,3 +185,4 @@ behavior.
 - 2026-06-14 20:41 Completed Units 2b/2c: `.shell` entries are managed terminal sessions, retain shell kind through edit/duplicate/archive/restore, app guard copy is updated, and focused tests/build pass with no warnings.
 - 2026-06-14 20:43 Completed Unit 3a red checks. Scenario matrix still uses `local_shell`; docs validation fails on README wrapper framing and roadmap default `Local Shell` guidance.
 - 2026-06-14 20:46 Completed Unit 3b: renamed scenario shell identity to `user_shell` / `User Shell`, regenerated matrix artifacts with stable second-run diff, and updated current README/roadmap product framing.
+- 2026-06-14 20:48 Completed Unit 3c: scenario tests, docs validation, and scenario verifier passed; verifier covered 5,000 rows, 25,000 render passes, zero failures, and 1,000 `user_shell` rows.
