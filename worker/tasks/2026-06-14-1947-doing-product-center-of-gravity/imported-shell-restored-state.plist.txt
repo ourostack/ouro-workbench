@@ -2,8 +2,8 @@
   "actionLog" => [
     0 => {
       "action" => "restore"
-      "id" => "B7504013-C6B6-49A8-9783-500DF61E4731"
-      "occurredAt" => "2026-06-15T04:33:59Z"
+      "id" => "6D97620A-6343-4585-9296-2080DDC915FB"
+      "occurredAt" => "2026-06-15T04:50:56Z"
       "result" => "Restored Imported User Shell Delete Target"
       "source" => "external:product-center-e2e"
       "succeeded" => true
@@ -12,8 +12,8 @@
     }
     1 => {
       "action" => "archive"
-      "id" => "D252C54F-D6EB-4B43-8F9E-F8014C58D3E3"
-      "occurredAt" => "2026-06-15T04:33:57Z"
+      "id" => "AE755E94-DF80-4FAF-BCF7-F7851EFD0275"
+      "occurredAt" => "2026-06-15T04:50:54Z"
       "result" => "Archived Imported User Shell Delete Target"
       "source" => "external:product-center-e2e"
       "succeeded" => true
@@ -22,8 +22,8 @@
     }
     2 => {
       "action" => "ensureDaemon"
-      "id" => "58DA3F82-2598-4874-9D7F-F92A80E50224"
-      "occurredAt" => "2026-06-15T04:33:54Z"
+      "id" => "C9A80218-3DE5-4A3A-B92C-CDF6B024E28B"
+      "occurredAt" => "2026-06-15T04:50:51Z"
       "result" => "Daemon already reachable; reused existing process (no spawn)."
       "source" => "boss:slugger"
       "succeeded" => true
@@ -31,8 +31,8 @@
     }
     3 => {
       "action" => "ensureDaemon"
-      "id" => "C2DDB265-368C-4298-9D47-DE28323E62C9"
-      "occurredAt" => "2026-06-15T04:33:53Z"
+      "id" => "202CF159-3C47-4EF0-B761-5126CAF5C39C"
+      "occurredAt" => "2026-06-15T04:50:50Z"
       "result" => "Daemon already reachable; reused existing process (no spawn)."
       "source" => "native"
       "succeeded" => true
@@ -107,5 +107,5 @@
   "schemaVersion" => 1
   "selectedEntryId" => "33333333-3333-3333-3333-333333333333"
   "selectedProjectId" => "11111111-1111-1111-1111-111111111111"
-  "updatedAt" => "2026-06-15T04:33:59Z"
+  "updatedAt" => "2026-06-15T04:50:56Z"
 }
