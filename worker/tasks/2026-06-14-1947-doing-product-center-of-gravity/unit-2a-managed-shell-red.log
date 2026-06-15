@@ -1,0 +1,65 @@
+## swift test --filter CustomTerminalSessionTests
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/11] Write sources
+[3/11] Write swift-version--58304C5D6DBC2206.txt
+[5/8] Compiling OuroWorkbenchCoreTests BossWorkbenchActionAuthorizerTests.swift
+[6/8] Compiling OuroWorkbenchCoreTests CustomTerminalSessionTests.swift
+[7/8] Emitting module OuroWorkbenchCoreTests
+[7/9] Write Objects.LinkFileList
+[8/9] Linking OuroWorkbenchPackageTests
+Build complete! (3.43s)
+Test Suite 'Selected tests' started at 2026-06-14 20:26:32.237.
+Test Suite 'OuroWorkbenchPackageTests.xctest' started at 2026-06-14 20:26:32.238.
+Test Suite 'CustomTerminalSessionTests' started at 2026-06-14 20:26:32.238.
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testCustomSessionCreatesShellWrappedTerminalEntry]' started.
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testCustomSessionCreatesShellWrappedTerminalEntry]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testCustomSessionDetectsKnownCLIAndStoresDirectCommand]' started.
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testCustomSessionDetectsKnownCLIAndStoresDirectCommand]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testCustomSessionDetectsKnownCLIWithLeadingEnvironmentWithoutDroppingShellCommand]' started.
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testCustomSessionDetectsKnownCLIWithLeadingEnvironmentWithoutDroppingShellCommand]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testCustomSessionRequiresNameCommandAndWorkingDirectory]' started.
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testCustomSessionRequiresNameCommandAndWorkingDirectory]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerAcceptsPersistedShellAsManagedSession]' started.
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/CustomTerminalSessionTests.swift:142: error: -[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerAcceptsPersistedShellAsManagedSession] : XCTAssertTrue failed
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerAcceptsPersistedShellAsManagedSession]' failed (0.229 seconds).
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerArchivesAndRestoresCustomSession]' started.
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerArchivesAndRestoresCustomSession]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerArchivesAndRestoresPersistedShellSession]' started.
+/Users/arimendelow/Projects/ouro-workbench/Sources/OuroWorkbenchCore/CustomTerminalSession.swift:164: error: -[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerArchivesAndRestoresPersistedShellSession] : failed: caught error: "notCustomSession"
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerArchivesAndRestoresPersistedShellSession]' failed (0.003 seconds).
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerDuplicatesCustomSessionWithRequestedName]' started.
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerDuplicatesCustomSessionWithRequestedName]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerDuplicatesPersistedShellAsShell]' started.
+/Users/arimendelow/Projects/ouro-workbench/Sources/OuroWorkbenchCore/CustomTerminalSession.swift:114: error: -[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerDuplicatesPersistedShellAsShell] : failed: caught error: "notCustomSession"
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerDuplicatesPersistedShellAsShell]' failed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerExtractsDraftFromCustomSession]' started.
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerExtractsDraftFromCustomSession]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerExtractsDraftFromDetectedAgentTerminal]' started.
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerExtractsDraftFromDetectedAgentTerminal]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerExtractsDraftFromDirectGenericTerminal]' started.
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerExtractsDraftFromDirectGenericTerminal]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerExtractsDraftFromPersistedShellSession]' started.
+/Users/arimendelow/Projects/ouro-workbench/Sources/OuroWorkbenchCore/CustomTerminalSession.swift:114: error: -[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerExtractsDraftFromPersistedShellSession] : failed: caught error: "notCustomSession"
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerExtractsDraftFromPersistedShellSession]' failed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerRejectsCommandEntriesForManagedSessionOperations]' started.
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerRejectsCommandEntriesForManagedSessionOperations]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerUpdatePreservesOwnerPinAndFriend]' started.
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerUpdatePreservesOwnerPinAndFriend]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerUpdatesCustomSessionWhilePreservingIdentityAndArchiveState]' started.
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerUpdatesCustomSessionWhilePreservingIdentityAndArchiveState]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerUpdatesPersistedShellWhilePreservingKindAndIdentity]' started.
+/Users/arimendelow/Projects/ouro-workbench/Sources/OuroWorkbenchCore/CustomTerminalSession.swift:137: error: -[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerUpdatesPersistedShellWhilePreservingKindAndIdentity] : failed: caught error: "notCustomSession"
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerUpdatesPersistedShellWhilePreservingKindAndIdentity]' failed (0.000 seconds).
+Test Suite 'CustomTerminalSessionTests' failed at 2026-06-14 20:26:32.476.
+	 Executed 17 tests, with 5 failures (4 unexpected) in 0.236 (0.238) seconds
+Test Suite 'OuroWorkbenchPackageTests.xctest' failed at 2026-06-14 20:26:32.476.
+	 Executed 17 tests, with 5 failures (4 unexpected) in 0.236 (0.238) seconds
+Test Suite 'Selected tests' failed at 2026-06-14 20:26:32.476.
+	 Executed 17 tests, with 5 failures (4 unexpected) in 0.236 (0.239) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
