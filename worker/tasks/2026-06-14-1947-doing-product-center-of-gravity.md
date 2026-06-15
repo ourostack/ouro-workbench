@@ -93,7 +93,7 @@ behavior.
 **Output**: Changes in `Sources/OuroWorkbenchCore/WorkbenchBootstrapper.swift`, `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift`, and `Sources/OuroWorkbenchMCP/main.swift`.
 **Acceptance**: `swift test --filter WorkbenchBootstrapperTests` passes and `swift build` succeeds with no warnings.
 
-### ⬜ Unit 1c: Bootstrap And MCP Truth — Coverage & Refactor
+### ✅ Unit 1c: Bootstrap And MCP Truth — Coverage & Refactor
 **What**: Run focused bootstrap/runtime-isolation tests, direct MCP JSON-RPC empty-state proof, and build. Refactor only names or helper boundaries introduced in Unit 1b.
 **Output**: Save output to `2026-06-14-1947-doing-product-center-of-gravity/unit-1-bootstrap-mcp.log`.
 **Acceptance**: `swift test --filter WorkbenchBootstrapperTests`, `swift test --filter WorkbenchLaunchDiagnosticsTests`, and `swift build` exit 0. Direct MCP proof runs two JSON-RPC checks and parses `.result.content[0].text` from each response before assertions: first, `mcp_empty_root="$(mktemp -d "${TMPDIR:-/tmp}/ouro-workbench-mcp-empty.XXXXXX")"; printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"workbench_sessions","arguments":{"format":"json"}}}' | swift run OuroWorkbenchMCP --app-support-root "$mcp_empty_root"` has parsed tool text containing `"sessions":[]` and no `Local Shell`; second, `mcp_sentinel_root="$(mktemp -d "${TMPDIR:-/tmp}/ouro-workbench-mcp-sentinel.XXXXXX")"; swift run OuroWorkbench --write-e2e-state sidebar-session-controls "$mcp_sentinel_root/workspace-state.json"; printf '%s\n' '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"workbench_sessions","arguments":{"format":"json"}}}' | swift run OuroWorkbenchMCP --app-support-root "$mcp_sentinel_root"` has parsed tool text containing `Fixture Running Session` and no `Local Shell`. The sentinel check proves `--app-support-root` isolation is honored instead of accidentally reading default app-support state.
@@ -180,3 +180,4 @@ behavior.
 - 2026-06-14 20:29 Completed Unit 0 research artifact.
 - 2026-06-14 20:31 Completed Unit 1a red tests. `WorkbenchBootstrapperTests` fails with default `This Mac`, inserted `Local Shell`, and repaired shell expectations; `WorkbenchLaunchDiagnosticsTests` already passes for existing parser coverage.
 - 2026-06-14 20:34 Completed Unit 1b implementation: removed built-in shell bootstrap/repair/launch authority and added MCP `--app-support-root` parsing.
+- 2026-06-14 20:36 Completed Unit 1c focused coverage: bootstrap tests, launch diagnostics tests, build, and MCP empty/sentinel app-support root proofs pass with no warnings.
