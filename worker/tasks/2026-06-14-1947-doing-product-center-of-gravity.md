@@ -78,7 +78,7 @@ behavior.
 
 **CRITICAL: Every unit header MUST start with status emoji (⬜ for new units).**
 
-### ⬜ Unit 0: Setup/Research
+### ✅ Unit 0: Setup/Research
 **What**: Re-read the current branch state and target files before code edits: `Sources/OuroWorkbenchCore/WorkbenchBootstrapper.swift`, `Sources/OuroWorkbenchCore/CustomTerminalSession.swift`, `Sources/OuroWorkbenchCore/RecoveryPlanner.swift`, `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift`, `Sources/OuroWorkbenchMCP/main.swift`, `Sources/OuroWorkbenchCore/WorkbenchScenarioMatrix.swift`, `Sources/OuroWorkbenchScenarioVerifier/main.swift`, `README.md`, `docs/guide.md`, `docs/roadmap.md`, and `docs/workbench-surface-spec.md`. Record branch, git status, source-of-truth skill status, and exact target list.
 **Output**: `2026-06-14-1947-doing-product-center-of-gravity/unit-0-research.md`
 **Acceptance**: Artifact records branch, status, target files, test files, and the decisions that `.shell` persists as compatibility state while built-in shell creation/repair/launch authority is removed.
@@ -177,3 +177,4 @@ behavior.
 
 - 2026-06-14 19:47 Created from planning doc.
 - 2026-06-14 20:22 Doing conversion review converged after granularity and ambiguity fixes; ready for direct execution.
+- 2026-06-14 20:29 Completed Unit 0 research artifact.
