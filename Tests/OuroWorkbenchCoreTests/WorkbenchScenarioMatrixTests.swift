@@ -97,6 +97,20 @@ final class WorkbenchScenarioMatrixTests: XCTestCase {
         XCTAssertTrue(mismatches.isEmpty, mismatches.joined(separator: "\n"))
     }
 
+    func testScenarioMatrixUsesUserShellIdentityWithoutLocalShellDefault() throws {
+        let matrix = try loadMatrix()
+        let rows = matrix.rows
+        let shellRows = rows.filter { $0.terminal == "user_shell" }
+
+        XCTAssertFalse(shellRows.isEmpty, "Matrix must keep explicit shell coverage under user_shell")
+        XCTAssertFalse(rows.contains { $0.terminal == "local_shell" }, "local_shell must not remain canonical")
+        for row in shellRows.prefix(20) {
+            let fixture = try matrix.fixture(for: row)
+            XCTAssertEqual(fixture.entry.kind, .shell, "\(row.caseID) must remain a shell fixture")
+            XCTAssertEqual(fixture.entry.name, "User Shell")
+        }
+    }
+
     private func loadMatrix() throws -> WorkbenchScenarioMatrix {
         let packageRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
         return try WorkbenchScenarioMatrix.load(from: WorkbenchScenarioMatrix.defaultMatrixURL(packageRoot: packageRoot))

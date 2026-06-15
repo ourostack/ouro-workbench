@@ -1,0 +1,7 @@
+## validate-product-center-docs.sh
+README.md:5:Ouro Workbench is a local terminal wrapper for Claude Code, GitHub Copilot CLI,
+docs/roadmap.md:9:- Keep a persistent `Local Shell` terminal as the first default tab.
+docs/roadmap.md:184:- Add a default `Local Shell` session.
+docs/roadmap.md:184:- Add a default `Local Shell` session.
+docs/roadmap.md:9:- Keep a persistent `Local Shell` terminal as the first default tab.
+Product-center doc validation failed: current docs still recommend default Local Shell or wrapper framing.

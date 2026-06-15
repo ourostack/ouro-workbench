@@ -113,7 +113,7 @@ behavior.
 **Output**: Save output to `2026-06-14-1947-doing-product-center-of-gravity/unit-2-managed-shell.log`.
 **Acceptance**: `swift test --filter CustomTerminalSessionTests`, `swift test --filter BossWorkbenchActionAuthorizerTests`, and `swift build` exit 0. Shell draft/update/duplicate/archive/restore/delete-request guard, boss archive/restore authorization, and non-terminal rejection branches are covered and green.
 
-### ⬜ Unit 3a: Scenario And Product Docs Drift — Tests
+### ✅ Unit 3a: Scenario And Product Docs Drift — Tests
 **What**: Write failing tests and validation checks for scenario/docs drift. Update `Tests/OuroWorkbenchCoreTests/WorkbenchScenarioMatrixTests.swift` so the generated matrix contains generic shell coverage under row key `user_shell`, display name `User Shell`, and fixture `kind == .shell`, but does not use `local_shell` or `Local Shell` as canonical terminal identity. Create an artifact validation script `2026-06-14-1947-doing-product-center-of-gravity/validate-product-center-docs.sh` that greps active docs for forbidden current-guidance phrases.
 **Output**: Tests/checks require current scenario rows use `user_shell` / `User Shell` with shell fixtures, not `local_shell` / `Local Shell`; active docs `README.md`, `docs/guide.md`, `docs/roadmap.md`, and `docs/workbench-surface-spec.md` do not recommend a default `Local Shell` or call Workbench a local terminal wrapper.
 **Acceptance**: Both `swift test --filter WorkbenchScenarioMatrixTests` and `2026-06-14-1947-doing-product-center-of-gravity/validate-product-center-docs.sh` are run; every newly added scenario/doc check fails before implementation, or the artifact records why a specific check already passes at HEAD.
@@ -183,3 +183,4 @@ behavior.
 - 2026-06-14 20:36 Completed Unit 1c focused coverage: bootstrap tests, launch diagnostics tests, build, and MCP empty/sentinel app-support root proofs pass with no warnings.
 - 2026-06-14 20:38 Completed Unit 2a red tests. `CustomTerminalSessionTests` fails because `.shell` is not managed; boss authorizer shell archive/restore coverage already passes.
 - 2026-06-14 20:41 Completed Units 2b/2c: `.shell` entries are managed terminal sessions, retain shell kind through edit/duplicate/archive/restore, app guard copy is updated, and focused tests/build pass with no warnings.
+- 2026-06-14 20:43 Completed Unit 3a red checks. Scenario matrix still uses `local_shell`; docs validation fails on README wrapper framing and roadmap default `Local Shell` guidance.
