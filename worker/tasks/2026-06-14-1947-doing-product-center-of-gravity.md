@@ -103,12 +103,12 @@ behavior.
 **Output**: Tests require `CustomTerminalSessionManager.isCustomSession` accepts `.shell`, `draft(from:)` renders direct shell command tokens, `updatedEntry` preserves id/project/archive/attention/owner/pin/friend/kind for shell entries, `duplicateEntry` works for shell entries and preserves shell kind, `archivedEntry` and `restoredEntry` work for shell entries, any delete/request guard accepts `.shell` and rejects `.command`, and non-terminal `.command` entries still throw `.notCustomSession`. Boss action tests require trusted `.shell` entries can be authorized for archive and restore while untrusted `.shell` entries remain denied.
 **Acceptance**: Run `swift test --filter CustomTerminalSessionTests` and `swift test --filter BossWorkbenchActionAuthorizerTests`; every newly added managed-shell/boss-action check fails before implementation, or the Unit 2 artifact records that a specific check already passed at HEAD.
 
-### ⬜ Unit 2b: Managed Shell Sessions — Implementation
+### ✅ Unit 2b: Managed Shell Sessions — Implementation
 **What**: Make `.shell` rows manageable without changing load-time identity. Update `CustomTerminalSessionManager` to accept `.terminalAgent` and `.shell`, produce drafts from direct executable/arguments, preserve identity fields on update/duplicate/archive/restore, and expose the same managed-session predicate to app delete/request guards. Update every guard/error path that currently rejects `.shell` because it is not `.terminalAgent`; leave unrelated UI copy unchanged.
 **Output**: Changes in `Sources/OuroWorkbenchCore/CustomTerminalSession.swift` and only call sites in `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift` that gate create/edit/duplicate/archive/restore/delete behavior for terminal session entries.
 **Acceptance**: `swift test --filter CustomTerminalSessionTests` passes and `swift build` succeeds with no warnings.
 
-### ⬜ Unit 2c: Managed Shell Sessions — Coverage & Refactor
+### ✅ Unit 2c: Managed Shell Sessions — Coverage & Refactor
 **What**: Run focused managed-session and boss-action tests plus build. Refactor only behavior-preserving naming or helper duplication from Unit 2b.
 **Output**: Save output to `2026-06-14-1947-doing-product-center-of-gravity/unit-2-managed-shell.log`.
 **Acceptance**: `swift test --filter CustomTerminalSessionTests`, `swift test --filter BossWorkbenchActionAuthorizerTests`, and `swift build` exit 0. Shell draft/update/duplicate/archive/restore/delete-request guard, boss archive/restore authorization, and non-terminal rejection branches are covered and green.
@@ -182,3 +182,4 @@ behavior.
 - 2026-06-14 20:34 Completed Unit 1b implementation: removed built-in shell bootstrap/repair/launch authority and added MCP `--app-support-root` parsing.
 - 2026-06-14 20:36 Completed Unit 1c focused coverage: bootstrap tests, launch diagnostics tests, build, and MCP empty/sentinel app-support root proofs pass with no warnings.
 - 2026-06-14 20:38 Completed Unit 2a red tests. `CustomTerminalSessionTests` fails because `.shell` is not managed; boss authorizer shell archive/restore coverage already passes.
+- 2026-06-14 20:41 Completed Units 2b/2c: `.shell` entries are managed terminal sessions, retain shell kind through edit/duplicate/archive/restore, app guard copy is updated, and focused tests/build pass with no warnings.

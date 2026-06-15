@@ -14348,7 +14348,7 @@ final class WorkbenchViewModel: ObservableObject {
 
     func beginEditingSession(_ entry: ProcessEntry) {
         guard customSessionManager.isCustomSession(entry) else {
-            errorMessage = "\(entry.name) is not a custom session"
+            errorMessage = "\(entry.name) is not a managed terminal session"
             return
         }
         guard activeSessions[entry.id] == nil else {
@@ -14464,7 +14464,7 @@ final class WorkbenchViewModel: ObservableObject {
             return
         }
         guard customSessionManager.isCustomSession(entry) else {
-            errorMessage = "\(entry.name) is not a custom session"
+            errorMessage = "\(entry.name) is not a managed terminal session"
             return
         }
         pendingDeleteSession = entry
@@ -14476,7 +14476,7 @@ final class WorkbenchViewModel: ObservableObject {
             return
         }
         guard customSessionManager.isCustomSession(entry) else {
-            errorMessage = "\(entry.name) is not a custom session"
+            errorMessage = "\(entry.name) is not a managed terminal session"
             return
         }
         state.processEntries.removeAll { $0.id == entry.id }

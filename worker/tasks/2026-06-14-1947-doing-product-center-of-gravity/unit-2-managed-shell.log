@@ -1,0 +1,158 @@
+## swift test --filter CustomTerminalSessionTests
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/12] Write sources
+[4/12] Write swift-version--58304C5D6DBC2206.txt
+[6/14] Compiling OuroWorkbenchCore CustomTerminalSession.swift
+[7/14] Emitting module OuroWorkbenchCore
+[7/17] Write Objects.LinkFileList
+[10/19] Linking OuroWorkbenchMCP
+[11/19] Applying OuroWorkbenchMCP
+[12/19] Linking OuroWorkbenchScenarioVerifier
+[13/19] Applying OuroWorkbenchScenarioVerifier
+[14/19] Linking OuroWorkbenchPackageTests
+[16/19] Emitting module OuroWorkbenchApp
+[17/19] Compiling OuroWorkbenchApp OuroWorkbenchApp.swift
+[17/20] Write Objects.LinkFileList
+[18/20] Linking OuroWorkbench
+[19/20] Applying OuroWorkbench
+Build complete! (22.64s)
+Test Suite 'Selected tests' started at 2026-06-14 20:28:05.001.
+Test Suite 'OuroWorkbenchPackageTests.xctest' started at 2026-06-14 20:28:05.002.
+Test Suite 'CustomTerminalSessionTests' started at 2026-06-14 20:28:05.002.
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testCustomSessionCreatesShellWrappedTerminalEntry]' started.
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testCustomSessionCreatesShellWrappedTerminalEntry]' passed (0.003 seconds).
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testCustomSessionDetectsKnownCLIAndStoresDirectCommand]' started.
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testCustomSessionDetectsKnownCLIAndStoresDirectCommand]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testCustomSessionDetectsKnownCLIWithLeadingEnvironmentWithoutDroppingShellCommand]' started.
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testCustomSessionDetectsKnownCLIWithLeadingEnvironmentWithoutDroppingShellCommand]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testCustomSessionRequiresNameCommandAndWorkingDirectory]' started.
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testCustomSessionRequiresNameCommandAndWorkingDirectory]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerAcceptsPersistedShellAsManagedSession]' started.
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerAcceptsPersistedShellAsManagedSession]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerArchivesAndRestoresCustomSession]' started.
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerArchivesAndRestoresCustomSession]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerArchivesAndRestoresPersistedShellSession]' started.
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerArchivesAndRestoresPersistedShellSession]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerDuplicatesCustomSessionWithRequestedName]' started.
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerDuplicatesCustomSessionWithRequestedName]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerDuplicatesPersistedShellAsShell]' started.
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerDuplicatesPersistedShellAsShell]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerExtractsDraftFromCustomSession]' started.
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerExtractsDraftFromCustomSession]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerExtractsDraftFromDetectedAgentTerminal]' started.
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerExtractsDraftFromDetectedAgentTerminal]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerExtractsDraftFromDirectGenericTerminal]' started.
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerExtractsDraftFromDirectGenericTerminal]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerExtractsDraftFromPersistedShellSession]' started.
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerExtractsDraftFromPersistedShellSession]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerRejectsCommandEntriesForManagedSessionOperations]' started.
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerRejectsCommandEntriesForManagedSessionOperations]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerUpdatePreservesOwnerPinAndFriend]' started.
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerUpdatePreservesOwnerPinAndFriend]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerUpdatesCustomSessionWhilePreservingIdentityAndArchiveState]' started.
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerUpdatesCustomSessionWhilePreservingIdentityAndArchiveState]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerUpdatesPersistedShellWhilePreservingKindAndIdentity]' started.
+Test Case '-[OuroWorkbenchCoreTests.CustomTerminalSessionTests testManagerUpdatesPersistedShellWhilePreservingKindAndIdentity]' passed (0.000 seconds).
+Test Suite 'CustomTerminalSessionTests' passed at 2026-06-14 20:28:05.010.
+	 Executed 17 tests, with 0 failures (0 unexpected) in 0.007 (0.008) seconds
+Test Suite 'OuroWorkbenchPackageTests.xctest' passed at 2026-06-14 20:28:05.010.
+	 Executed 17 tests, with 0 failures (0 unexpected) in 0.007 (0.008) seconds
+Test Suite 'Selected tests' passed at 2026-06-14 20:28:05.010.
+	 Executed 17 tests, with 0 failures (0 unexpected) in 0.007 (0.009) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
+
+## swift test --filter BossWorkbenchActionAuthorizerTests
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/10] Write swift-version--58304C5D6DBC2206.txt
+Build complete! (0.15s)
+Test Suite 'Selected tests' started at 2026-06-14 20:28:05.764.
+Test Suite 'OuroWorkbenchPackageTests.xctest' started at 2026-06-14 20:28:05.765.
+Test Suite 'BossWorkbenchActionAuthorizerTests' started at 2026-06-14 20:28:05.765.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testArchivedEntriesCannotReceiveBossActions]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testArchivedEntriesCannotReceiveBossActions]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEnqueueGateAllowsKnownEntrylessKinds]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEnqueueGateAllowsKnownEntrylessKinds]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEnqueueGateAllowsRepairAgentUnderTrustedOnboarding]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEnqueueGateAllowsRepairAgentUnderTrustedOnboarding]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEnqueueGateAllowsSlice4OnboardingActionsWithRawKindTarget]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEnqueueGateAllowsSlice4OnboardingActionsWithRawKindTarget]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEnqueueGatePreservesLivePromptFloorWhenEntryPresent]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEnqueueGatePreservesLivePromptFloorWhenEntryPresent]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEnqueueGateRejectsUnknownEntrylessActionWithRawTarget]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEnqueueGateRejectsUnknownEntrylessActionWithRawTarget]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessAgentTargetedOnboardingActionsAreAllowedUnderTrustedOnboarding]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessAgentTargetedOnboardingActionsAreAllowedUnderTrustedOnboarding]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessAgentTargetedOnboardingActionsWithoutAgentNameAreDenied]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessAgentTargetedOnboardingActionsWithoutAgentNameAreDenied]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessCreateGroupRemainsExplicitlyAuthorized]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessCreateGroupRemainsExplicitlyAuthorized]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessCreateSessionRemainsExplicitlyAuthorized]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessCreateSessionRemainsExplicitlyAuthorized]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessCreateTerminalRemainsExplicitlyAuthorized]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessCreateTerminalRemainsExplicitlyAuthorized]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessEnsureDaemonIsAllowedUnderTrustedOnboardingWithNoAgentName]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessEnsureDaemonIsAllowedUnderTrustedOnboardingWithNoAgentName]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessEntryScopedActionIsDenied]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessEntryScopedActionIsDenied]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessRepairAgentIsAllowedUnderTrustedOnboarding]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessRepairAgentIsAllowedUnderTrustedOnboarding]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessRepairAgentWithoutAgentNameIsDenied]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessRepairAgentWithoutAgentNameIsDenied]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessSendInputIsDenied]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessSendInputIsDenied]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testSafeSendInputToSafePromptIsAllowedOnTrustedSession]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testSafeSendInputToSafePromptIsAllowedOnTrustedSession]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testSendInputToDestructiveLivePromptIsWithheld]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testSendInputToDestructiveLivePromptIsWithheld]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testSendInputToSecretBearingLivePromptIsWithheld]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testSendInputToSecretBearingLivePromptIsWithheld]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testTrustedArchivedEntriesCanBeRestoredByBossActions]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testTrustedArchivedEntriesCanBeRestoredByBossActions]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testTrustedEntriesCanReceiveBossActions]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testTrustedEntriesCanReceiveBossActions]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testTrustedShellEntriesCanBeArchivedAndRestoredByBossActions]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testTrustedShellEntriesCanBeArchivedAndRestoredByBossActions]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUnifiedAuthorizeAllowsKnownEntrylessCreateGroup]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUnifiedAuthorizeAllowsKnownEntrylessCreateGroup]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUnifiedAuthorizeDeniesUnknownEntrylessAction]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUnifiedAuthorizeDeniesUnknownEntrylessAction]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUnifiedAuthorizeDispatchesToEntrylessWhenNoEntry]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUnifiedAuthorizeDispatchesToEntrylessWhenNoEntry]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUnifiedAuthorizeDispatchesToEntryScopedWhenEntryPresent]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUnifiedAuthorizeDispatchesToEntryScopedWhenEntryPresent]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUnifiedFrontDoorPreservesLivePromptSafetyFloorForDangerousSendInput]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUnifiedFrontDoorPreservesLivePromptSafetyFloorForDangerousSendInput]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUnifiedFrontDoorPreservesLivePromptSafetyFloorForSecretBearingPrompt]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUnifiedFrontDoorPreservesLivePromptSafetyFloorForSecretBearingPrompt]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUnsafeSendInputIsWithheldEvenOnTrustedSession]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUnsafeSendInputIsWithheldEvenOnTrustedSession]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUntrustedEntriesCannotReceiveBossActions]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUntrustedEntriesCannotReceiveBossActions]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUntrustedShellEntriesCannotBeArchivedOrRestoredByBossActions]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUntrustedShellEntriesCannotBeArchivedOrRestoredByBossActions]' passed (0.000 seconds).
+Test Suite 'BossWorkbenchActionAuthorizerTests' passed at 2026-06-14 20:28:05.771.
+	 Executed 31 tests, with 0 failures (0 unexpected) in 0.005 (0.006) seconds
+Test Suite 'OuroWorkbenchPackageTests.xctest' passed at 2026-06-14 20:28:05.771.
+	 Executed 31 tests, with 0 failures (0 unexpected) in 0.005 (0.007) seconds
+Test Suite 'Selected tests' passed at 2026-06-14 20:28:05.771.
+	 Executed 31 tests, with 0 failures (0 unexpected) in 0.005 (0.007) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
+
+## swift build
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/9] Write swift-version--58304C5D6DBC2206.txt
+Build complete! (1.17s)

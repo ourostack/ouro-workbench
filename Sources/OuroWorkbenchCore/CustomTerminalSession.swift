@@ -16,7 +16,7 @@ public enum CustomTerminalSessionError: Error, Equatable, LocalizedError {
         case .emptyWorkingDirectory:
             return "Working directory is required"
         case .notCustomSession:
-            return "Only custom terminal sessions can be managed here"
+            return "Only managed terminal sessions can be managed here"
         case .unavailableCommand:
             return "Custom terminal session command is unavailable"
         }
@@ -106,7 +106,7 @@ public struct CustomTerminalSessionManager: Sendable {
     }
 
     public func isCustomSession(_ entry: ProcessEntry) -> Bool {
-        entry.kind == .terminalAgent
+        entry.kind == .terminalAgent || entry.kind == .shell
     }
 
     public func draft(from entry: ProcessEntry) throws -> CustomTerminalSessionDraft {
@@ -150,13 +150,22 @@ public struct CustomTerminalSessionManager: Sendable {
         next.owner = entry.owner
         next.isPinned = entry.isPinned
         next.friend = entry.friend
+        if entry.kind == .shell {
+            next.kind = .shell
+            next.agentKind = entry.agentKind
+        }
         return next
     }
 
     public func duplicateEntry(_ entry: ProcessEntry, name: String) throws -> ProcessEntry {
         var draft = try draft(from: entry)
         draft.name = name
-        return try factory.makeEntry(projectId: entry.projectId, draft: draft)
+        var duplicate = try factory.makeEntry(projectId: entry.projectId, draft: draft)
+        if entry.kind == .shell {
+            duplicate.kind = .shell
+            duplicate.agentKind = entry.agentKind
+        }
+        return duplicate
     }
 
     public func archivedEntry(_ entry: ProcessEntry) throws -> ProcessEntry {
