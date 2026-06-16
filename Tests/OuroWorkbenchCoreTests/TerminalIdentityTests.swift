@@ -66,6 +66,19 @@ final class TerminalIdentityTests: XCTestCase {
         XCTAssertEqual(parsed?.arguments, ["path\\"])
     }
 
+    func testParserAppliesMidTokenBackslashEscapes() {
+        // A backslash before a non-terminal character escapes it: an escaped
+        // space joins the surrounding token instead of splitting it.
+        let escapedSpace = TerminalCommandParser.parse("claude a\\ b")
+        XCTAssertEqual(escapedSpace?.executable, "claude")
+        XCTAssertEqual(escapedSpace?.arguments, ["a b"])
+
+        // An escaped ordinary character contributes literally to the token.
+        let escapedLetter = TerminalCommandParser.parse("cl\\aude --model opus")
+        XCTAssertEqual(escapedLetter?.executable, "claude")
+        XCTAssertEqual(escapedLetter?.arguments, ["--model", "opus"])
+    }
+
     func testCanonicalTokensLeaveUnparseableWrappersUntouched() {
         let shellMissingCommand = TerminalAgentDetector.canonicalTokens(executable: "sh", arguments: ["-c"])
         XCTAssertEqual(shellMissingCommand, TerminalCommandTokens(executable: "sh", arguments: ["-c"]))
