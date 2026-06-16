@@ -335,7 +335,7 @@ final class WorkbenchVisibilityTests: XCTestCase {
 
         let timedOut = try OuroWorkCardReader.defaultRunner(
             executable: "/bin/sh",
-            arguments: ["-c", "echo busy >&2; trap '' TERM; while true; do :; done"],
+            arguments: ["-c", "echo busy >&2; trap '' TERM; sleep 300"],
             timeout: 0.05
         )
 
@@ -344,7 +344,7 @@ final class WorkbenchVisibilityTests: XCTestCase {
 
         let timedOutWithoutStderr = try OuroWorkCardReader.defaultRunner(
             executable: "/bin/sh",
-            arguments: ["-c", "trap '' TERM; while true; do :; done"],
+            arguments: ["-c", "trap '' TERM; sleep 300"],
             timeout: 0.05
         )
 

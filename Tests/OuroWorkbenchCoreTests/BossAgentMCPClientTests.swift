@@ -17,7 +17,7 @@ final class BossAgentMCPClientTests: XCTestCase {
         read initialize
         read tool_call
         echo '{"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":"mock status"}],"isError":false}}'
-        while :; do :; done
+        sleep 300
         """
         try script.write(to: mockOuro, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: mockOuro.path)
@@ -277,7 +277,7 @@ final class BossAgentMCPClientTests: XCTestCase {
         #!/bin/sh
         read initialize
         read tool_call
-        while :; do :; done
+        sleep 300
         """
         try script.write(to: mockOuro, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: mockOuro.path)
@@ -307,7 +307,7 @@ final class BossAgentMCPClientTests: XCTestCase {
         trap '' TERM
         read initialize
         read tool_call
-        while :; do :; done
+        sleep 300
         """
         try script.write(to: mockOuro, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: mockOuro.path)
