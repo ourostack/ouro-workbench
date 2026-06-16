@@ -283,15 +283,22 @@ private struct MCPTextContent: Decodable {
     var text: String
 }
 
-private final class ProcessIOBox: @unchecked Sendable {
+final class ProcessIOBox: @unchecked Sendable {
     private let process: Process
     private let stdout: FileHandle
     private let stderr: FileHandle
+    private let processKiller: @Sendable (pid_t, Int32) -> Int32
 
-    init(process: Process, stdout: FileHandle, stderr: FileHandle) {
+    init(
+        process: Process,
+        stdout: FileHandle,
+        stderr: FileHandle,
+        processKiller: @escaping @Sendable (pid_t, Int32) -> Int32 = { kill($0, $1) }
+    ) {
         self.process = process
         self.stdout = stdout
         self.stderr = stderr
+        self.processKiller = processKiller
     }
 
     func readResponse(id: Int) throws -> String {
@@ -331,7 +338,7 @@ private final class ProcessIOBox: @unchecked Sendable {
 
     func forceKill() {
         if process.isRunning {
-            kill(process.processIdentifier, SIGKILL)
+            _ = processKiller(process.processIdentifier, SIGKILL)
         }
     }
 

@@ -89,4 +89,62 @@ final class FinalCoverageTests: XCTestCase {
         let reader = SessionActivityReader(homeURL: tmp, maxBytes: 256_000)
         XCTAssertNil(reader.activity(forDirectory: "/work/dir", agentKind: .claudeCode))
     }
+
+    // No codex rollout matches the requested cwd → the scan loop falls through
+    // to `return nil`.
+    func testSessionActivityCodexTranscriptURLReturnsNilWhenNothingMatches() {
+        let reader = SessionActivityReader(homeURL: tmp, maxBytes: 256_000)
+        XCTAssertNil(reader.codexTranscriptURL(forDirectory: "/unmatched"))
+    }
+
+    // MARK: - MailboxClient
+
+    // Constructing with the default dataLoader evaluates the default-argument
+    // expression; the URL builder resolves a normal endpoint.
+    func testMailboxClientDefaultLoaderBuildsEndpointURL() throws {
+        let client = MailboxClient(configuration: MailboxClientConfiguration())
+        let url = try client.url(for: .machine)
+        XCTAssertEqual(url.path, "/api/machine")
+    }
+
+    // MARK: - BossAgentMCPClient.ProcessIOBox.forceKill
+
+    private final class SignalRecorder: @unchecked Sendable {
+        private let lock = NSLock()
+        private var stored: (pid: pid_t, sig: Int32)?
+        func record(_ pid: pid_t, _ sig: Int32) { lock.lock(); stored = (pid, sig); lock.unlock() }
+        func reset() { lock.lock(); stored = nil; lock.unlock() }
+        var value: (pid: pid_t, sig: Int32)? { lock.lock(); defer { lock.unlock() }; return stored }
+    }
+
+    // forceKill signals a running process with SIGKILL (injected killer spy),
+    // and is a no-op once the process has exited.
+    func testProcessIOBoxForceKillSendsSIGKILLToRunningProcessOnly() throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        process.arguments = ["30"]
+        let out = Pipe(), err = Pipe()
+        process.standardOutput = out
+        process.standardError = err
+
+        let recorder = SignalRecorder()
+        let box = ProcessIOBox(
+            process: process,
+            stdout: out.fileHandleForReading,
+            stderr: err.fileHandleForReading,
+            processKiller: { pid, sig in recorder.record(pid, sig); return 0 })
+
+        try process.run()
+        XCTAssertTrue(process.isRunning)
+        box.forceKill()
+        XCTAssertEqual(recorder.value?.sig, SIGKILL)
+        XCTAssertEqual(recorder.value?.pid, process.processIdentifier)
+
+        // Real cleanup (the spy did not actually kill it), then forceKill is a no-op.
+        process.terminate()
+        process.waitUntilExit()
+        recorder.reset()
+        box.forceKill()
+        XCTAssertNil(recorder.value)
+    }
 }
