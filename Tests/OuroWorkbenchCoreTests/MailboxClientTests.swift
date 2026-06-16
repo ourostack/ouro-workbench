@@ -91,6 +91,36 @@ final class MailboxClientTests: XCTestCase {
         }
     }
 
+    func testFetchReportsBadHTTPStatus() async {
+        let client = MailboxClient { url in
+            let response = HTTPURLResponse(url: url, statusCode: 503, httpVersion: nil, headerFields: nil)!
+            return (Data(#"{"agents":[]}"#.utf8), response)
+        }
+
+        await XCTAssertThrowsErrorAsync(try await client.fetch(.machine, as: MailboxMachineView.self)) { error in
+            XCTAssertEqual(error as? MailboxClientError, .badStatus(503))
+        }
+    }
+
+    func testMailboxClientErrorDescriptions() {
+        XCTAssertEqual(MailboxClientError.invalidURL.errorDescription, "The Ouro mailbox URL is invalid.")
+        XCTAssertEqual(MailboxClientError.badStatus(418).errorDescription, "The Ouro mailbox returned HTTP 418.")
+        XCTAssertEqual(MailboxClientError.timeout.errorDescription, "The Ouro mailbox did not answer before the Workbench timeout.")
+    }
+
+    func testDefaultDataLoaderRejectsNonHTTPResponses() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("MailboxClientTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let fileURL = root.appendingPathComponent("payload.json")
+        try Data(#"{"ok":true}"#.utf8).write(to: fileURL)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        await XCTAssertThrowsErrorAsync(try await MailboxClient.defaultDataLoader(url: fileURL)) { error in
+            XCTAssertEqual(error as? MailboxClientError, .invalidURL)
+        }
+    }
+
     private func XCTAssertThrowsErrorAsync<T>(
         _ expression: @autoclosure () async throws -> T,
         _ errorHandler: (Error) -> Void,
@@ -145,6 +175,22 @@ final class MailboxClientTests: XCTestCase {
         XCTAssertEqual(needsMe.items.first?.ref?.focus, "obl_1")
         XCTAssertEqual(coding.items.first?.runner, "codex")
         XCTAssertEqual(coding.items.first?.checkpoint, "tests green")
+        XCTAssertEqual(needsMe.items.first?.id, "blocking-obligation-Review PR-waiting for merge decision")
+        XCTAssertEqual(MailboxNavigationRef(tab: "work", focus: "obl_1"), needsMe.items.first?.ref)
+    }
+
+    func testMailboxModelInitializersExposeStoredValues() {
+        let ref = MailboxNavigationRef(tab: "habit", focus: nil)
+        let message = MailboxHabitSummaryMessage(recipient: "ari", channel: "sms", result: "queued")
+        let produced = MailboxHabitSummaryProducedRef(kind: "receipt", locator: "receipts/run.json")
+
+        XCTAssertEqual(ref.tab, "habit")
+        XCTAssertNil(ref.focus)
+        XCTAssertEqual(message.recipient, "ari")
+        XCTAssertEqual(message.channel, "sms")
+        XCTAssertEqual(message.result, "queued")
+        XCTAssertEqual(produced.kind, "receipt")
+        XCTAssertEqual(produced.locator, "receipts/run.json")
     }
 
     func testDecodesHabitSessionSummaryView() throws {

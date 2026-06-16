@@ -95,6 +95,20 @@ public struct RecoveryPlanner: Sendable {
         latestRun: ProcessRun?,
         liveSessionNames: Set<String> = []
     ) -> RecoveryPlan {
+        planRecovery(
+            for: entry,
+            latestRun: latestRun,
+            liveSessionNames: liveSessionNames,
+            presetFor: TerminalAgentPresets.preset(for:)
+        )
+    }
+
+    func planRecovery(
+        for entry: ProcessEntry,
+        latestRun: ProcessRun?,
+        liveSessionNames: Set<String> = [],
+        presetFor: (TerminalAgentKind) -> TerminalAgentPreset?
+    ) -> RecoveryPlan {
         guard !entry.isArchived else {
             return RecoveryPlan(
                 entryId: entry.id,
@@ -162,7 +176,7 @@ public struct RecoveryPlanner: Sendable {
         }
 
         if entry.kind == .terminalAgent, let agentKind = TerminalAgentDetector.detect(entry: entry) {
-            guard let preset = TerminalAgentPresets.preset(for: agentKind) else {
+            guard let preset = presetFor(agentKind) else {
                 return RecoveryPlan(
                     entryId: entry.id,
                     runId: latestRun.id,

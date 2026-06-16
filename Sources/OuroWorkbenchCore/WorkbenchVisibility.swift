@@ -492,10 +492,22 @@ public struct OuroWorkCardReader: Sendable {
     private let timeout: TimeInterval
     private let runner: WorkCardCommandRunner
 
+    public init() {
+        self.executable = "/usr/bin/env"
+        self.timeout = 4
+        self.runner = Self.defaultRunner
+    }
+
+    public init(executable: String = "/usr/bin/env", timeout: TimeInterval = 4) {
+        self.executable = executable
+        self.timeout = timeout
+        self.runner = Self.defaultRunner
+    }
+
     public init(
         executable: String = "/usr/bin/env",
         timeout: TimeInterval = 4,
-        runner: @escaping WorkCardCommandRunner = OuroWorkCardReader.defaultRunner
+        runner: @escaping WorkCardCommandRunner
     ) {
         self.executable = executable
         self.timeout = timeout
@@ -621,7 +633,7 @@ public struct OuroWorkCardReader: Sendable {
     }
 }
 
-private final class ProcessOutputBuffer: @unchecked Sendable {
+final class ProcessOutputBuffer: @unchecked Sendable {
     private let limit: Int
     private let lock = NSLock()
     private var data = Data()

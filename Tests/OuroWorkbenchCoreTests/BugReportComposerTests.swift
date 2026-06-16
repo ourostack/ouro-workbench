@@ -118,6 +118,12 @@ final class BugReportComposerTests: XCTestCase {
         XCTAssertTrue(md.contains("waitingOnHuman"))
     }
 
+    func testMarkdownRendersEmptySessionFacetsAsDashes() {
+        let session = BugReportSession(name: "plain", status: "idle", attention: "none", trust: "untrusted")
+        let md = BugReportComposer.markdown(content(sessions: [session]))
+        XCTAssertTrue(md.contains("| plain | idle | none | untrusted | — | — | — |"))
+    }
+
     func testMarkdownRendersDecisionWithWhyAndCollapsesNewlines() {
         let decision = BossInboxDecision(
             occurredAt: date(2026, 5, 28, 13, 0, 0),
@@ -169,6 +175,26 @@ final class BugReportComposerTests: XCTestCase {
         let md = BugReportComposer.markdown(content(warnings: ["Screenshot capture failed"]))
         XCTAssertTrue(md.contains("## Collection warnings"))
         XCTAssertTrue(md.contains("- Screenshot capture failed"))
+    }
+
+    func testMarkdownClampsLongInlineWarningAndIgnoresWhitespaceOptionalFields() {
+        let warning = String(repeating: "word ", count: 80)
+        let decision = BossInboxDecision(
+            source: "boss",
+            sessionName: "api",
+            friendName: "   ",
+            prompt: "p",
+            kind: .escalate,
+            proposedInput: "   ",
+            preferenceCited: "   ",
+            reasoning: "   "
+        )
+        let md = BugReportComposer.markdown(content(decisions: [decision], warnings: [warning]))
+        XCTAssertTrue(md.contains("word word"))
+        XCTAssertTrue(md.contains("…"))
+        XCTAssertFalse(md.contains("  - friend:"))
+        XCTAssertFalse(md.contains("sent `"))
+        XCTAssertFalse(md.contains("  - reasoning:"))
     }
 
     func testMarkdownEndsWithTrailingNewline() {

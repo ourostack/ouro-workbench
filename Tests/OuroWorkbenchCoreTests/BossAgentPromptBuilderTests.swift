@@ -125,4 +125,316 @@ final class BossAgentPromptBuilderTests: XCTestCase {
         // materially shorter than the full embed for the same inputs.
         XCTAssertLessThan(trigger.count, fullPrompt.count)
     }
+
+    func testCheckInPromptRendersMailboxAgentsChangesGitRecoveryAndActionLogDetails() {
+        let selectedProject = WorkbenchProject(id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!, name: "Selected", rootPath: "/work/selected")
+        let otherProject = WorkbenchProject(id: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!, name: "Other", rootPath: "/work/other")
+        let primary = ProcessEntry(
+            id: UUID(uuidString: "33333333-3333-3333-3333-333333333333")!,
+            projectId: selectedProject.id,
+            name: "Primary",
+            kind: .terminalAgent,
+            agentKind: .openAICodex,
+            executable: "codex",
+            workingDirectory: "/work/selected",
+            trust: .trusted,
+            autoResume: true,
+            attention: .waitingOnHuman,
+            lastSummary: "Needs a choice",
+            notes: "multi\nline notes",
+            owner: .human
+        )
+        let secondary = ProcessEntry(
+            id: UUID(uuidString: "44444444-4444-4444-4444-444444444444")!,
+            projectId: otherProject.id,
+            name: "Archived Agent",
+            kind: .terminalAgent,
+            agentKind: .custom,
+            executable: "agent",
+            workingDirectory: "/work/other",
+            trust: .untrusted,
+            isArchived: true,
+            owner: .agent(name: "bot")
+        )
+        let run = ProcessRun(
+            id: UUID(uuidString: "55555555-5555-5555-5555-555555555555")!,
+            entryId: primary.id,
+            pid: 123,
+            status: .waitingForInput,
+            startedAt: Date(timeIntervalSince1970: 400),
+            transcriptPath: "/logs/primary.txt"
+        )
+        let olderRun = ProcessRun(
+            id: UUID(uuidString: "55555555-5555-5555-5555-555555555556")!,
+            entryId: primary.id,
+            pid: 122,
+            status: .running,
+            startedAt: Date(timeIntervalSince1970: 100),
+            transcriptPath: "/logs/older.txt"
+        )
+        let state = WorkspaceState(
+            boss: BossAgentSelection(agentName: "Bossy"),
+            bossWatchEnabled: false,
+            bossPaneCollapsed: true,
+            selectedProjectId: selectedProject.id,
+            projects: [selectedProject, otherProject],
+            processEntries: [primary, secondary],
+            processRuns: [olderRun, run],
+            actionLog: [
+                WorkbenchActionLogEntry(
+                    occurredAt: Date(timeIntervalSince1970: 200),
+                    source: "boss",
+                    action: "sendInput",
+                    targetName: "Primary",
+                    result: "sent continue",
+                    succeeded: true
+                ),
+                WorkbenchActionLogEntry(
+                    occurredAt: Date(timeIntervalSince1970: 100),
+                    source: "operator",
+                    action: "recover",
+                    result: "not trusted",
+                    succeeded: false
+                )
+            ]
+        )
+        var summary = WorkspaceSummarizer().summarize(state)
+        summary.recoveryPlans = [
+            RecoveryPlan(entryId: primary.id, runId: run.id, action: .autoResume, reason: "trusted auto-resume"),
+            RecoveryPlan(entryId: UUID(uuidString: "66666666-6666-6666-6666-666666666666")!, runId: nil, action: .manualActionNeeded, reason: "missing entry still reported")
+        ]
+        let dashboard = BossDashboardSnapshot(
+            agentName: "Bossy",
+            daemonStatus: "ok",
+            daemonMode: "managed",
+            attentionLabel: "focused",
+            openObligations: 2,
+            activeCodingAgents: 3,
+            blockedCodingAgents: 1,
+            needsMeItems: [
+                MailboxNeedsMeItem(
+                    urgency: "high",
+                    label: "Approve deploy",
+                    detail: "Production rollout?",
+                    ref: MailboxNavigationRef(tab: "needs-me", focus: "deploy"),
+                    ageMs: 42
+                )
+            ],
+            codingItems: [
+                MailboxCodingItem(
+                    id: "coding-1",
+                    runner: "codex",
+                    status: "blocked",
+                    workdir: "/repo",
+                    lastActivityAt: "2026-01-01T00:00:00Z",
+                    checkpoint: nil,
+                    taskRef: "T1"
+                )
+            ],
+            habitHistory: HabitHistoryPanelModel(summaries: [
+                MailboxHabitSessionSummary(
+                    runId: "habit-1",
+                    habitName: "Morning check",
+                    operationId: nil,
+                    status: "succeeded",
+                    triggeredAt: "2026-01-01T00:00:00Z",
+                    completedAt: "2026-01-01T00:01:00Z",
+                    summary: "line one\nline two",
+                    decisions: [],
+                    pending: MailboxHabitSummaryPending(count: 0, files: []),
+                    messagesSent: [],
+                    toolsUsed: [],
+                    producedRefs: [],
+                    errors: [],
+                    warnings: [],
+                    nextLikelyStep: nil,
+                    sources: MailboxHabitSummarySources(
+                        receipt: "receipt.json",
+                        session: "session.json",
+                        pending: "pending.json",
+                        runtimeState: "state.json"
+                    )
+                )
+            ]),
+            observedAt: "2026-01-01T00:02:00Z",
+            availability: .mailbox(
+                machineIssue: "machine: offline",
+                needsMeIssue: nil,
+                codingIssue: nil,
+                habitHistoryIssue: nil
+            ),
+            knownAgentNames: ["Bossy"]
+        )
+
+        let prompt = BossAgentPromptBuilder(ownerName: "Dana").checkInPrompt(
+            question: "status?",
+            state: state,
+            summary: summary,
+            dashboard: dashboard,
+            executableHealth: [
+                primary.id: ExecutableHealth(executable: "codex", resolvedPath: "/usr/bin/codex", status: .available, detail: "ok")
+            ],
+            gitStatus: [
+                primary.id: GitSessionStatus(isRepo: true, branch: "feature", dirty: true, ahead: 2, behind: 1)
+            ],
+            machineFriend: SessionFriend(name: "Dana", kind: .human, trust: .friend),
+            waitingPrompts: [primary.id: "Proceed?\n1) yes"],
+            ouroAgents: [
+                OuroAgentRecord(
+                    name: "Bossy",
+                    bundlePath: "/agents/bossy",
+                    configPath: "/agents/bossy/config",
+                    status: .ready,
+                    detail: "ready",
+                    humanFacing: OuroAgentLane(provider: "openai", model: "gpt"),
+                    agentFacing: OuroAgentLane(provider: "anthropic", model: "sonnet")
+                )
+            ],
+            recentChanges: [
+                WorkspaceChangeSummary(occurredAt: Date(timeIntervalSince1970: 300), entryId: primary.id, title: "Transcript updated", detail: "Primary wrote output")
+            ]
+        )
+
+        XCTAssertTrue(prompt.contains("Boss Watch: paused"))
+        XCTAssertTrue(prompt.contains("Boss Pane: collapsed"))
+        XCTAssertTrue(prompt.contains("Selected group: Selected"))
+        XCTAssertTrue(prompt.contains("Local Ouro agents:"))
+        XCTAssertTrue(prompt.contains("Bossy: selected_boss=true, status=ready"))
+        XCTAssertTrue(prompt.contains("Mailbox warnings: machine: offline"))
+        XCTAssertTrue(prompt.contains("Mailbox status: daemon=ok, attention=focused, needs_me=1, active_coding=3, blocked_coding=1"))
+        XCTAssertTrue(prompt.contains("Needs me:"))
+        XCTAssertTrue(prompt.contains("high: Approve deploy - Production rollout?"))
+        XCTAssertTrue(prompt.contains("codex coding-1: status=blocked, workdir=/repo, checkpoint=none"))
+        XCTAssertTrue(prompt.contains("Morning check: outcome=succeeded, ended=2026-01-01T00:01:00Z, operation=none, receipt=receipt.json, summary=line one line two"))
+        XCTAssertTrue(prompt.contains("Recent workspace changes:"))
+        XCTAssertTrue(prompt.contains("Transcript updated - Primary wrote output"))
+        XCTAssertTrue(prompt.contains("* Selected"))
+        XCTAssertTrue(prompt.contains("- Other"))
+        XCTAssertTrue(prompt.contains("git=feature (dirty, +2/-1)"))
+        XCTAssertTrue(prompt.contains("friend=Dana (human, friend)"))
+        XCTAssertTrue(prompt.contains("transcript=/logs/primary.txt"))
+        XCTAssertTrue(prompt.contains("notes=multi line notes"))
+        XCTAssertTrue(prompt.contains("Waiting prompts"))
+        XCTAssertTrue(prompt.contains("Proceed? 1) yes"))
+        XCTAssertTrue(prompt.contains("Primary: action=autoResume, reason=trusted auto-resume"))
+        XCTAssertTrue(prompt.contains("66666666-6666-6666-6666-666666666666: action=manualActionNeeded"))
+        XCTAssertTrue(prompt.contains("ok, source=boss, action=sendInput, target=Primary, result=sent continue"))
+        XCTAssertTrue(prompt.contains("skipped, source=operator, action=recover, target=none, result=not trusted"))
+    }
+
+    func testCheckInPromptRendersUnavailableAndEmptyMailboxVariants() {
+        let dashboard = BossDashboardSnapshot(
+            agentName: "Boss",
+            daemonStatus: "unknown",
+            daemonMode: "unknown",
+            attentionLabel: "quiet",
+            openObligations: 0,
+            activeCodingAgents: 0,
+            blockedCodingAgents: 0,
+            needsMeItems: [],
+            codingItems: [],
+            habitHistory: HabitHistoryPanelModel(summaries: []),
+            observedAt: nil,
+            availability: .mailbox(
+                machineIssue: nil,
+                needsMeIssue: "needs-me: unavailable",
+                codingIssue: "coding: unavailable",
+                habitHistoryIssue: nil
+            )
+        )
+        let state = WorkspaceState(projects: [])
+        let summary = WorkspaceSummarizer().summarize(state)
+
+        let prompt = BossAgentPromptBuilder().checkInPrompt(
+            question: "status?",
+            state: state,
+            summary: summary,
+            dashboard: dashboard
+        )
+
+        XCTAssertTrue(prompt.contains("Selected group: none"))
+        XCTAssertTrue(prompt.contains("Mailbox warnings: needs-me: unavailable; coding: unavailable"))
+        XCTAssertTrue(prompt.contains("needs_me=unknown, active_coding=unknown, blocked_coding=unknown"))
+        XCTAssertTrue(prompt.contains("Habit history: no recent runs"))
+        XCTAssertTrue(prompt.contains("- no configured recovery plans"))
+    }
+
+    func testCheckInPromptRendersHabitHistoryUnavailable() {
+        let dashboard = BossDashboardSnapshot(
+            agentName: "Boss",
+            daemonStatus: "unknown",
+            daemonMode: "unknown",
+            attentionLabel: "quiet",
+            openObligations: 0,
+            activeCodingAgents: 0,
+            blockedCodingAgents: 0,
+            needsMeItems: [],
+            codingItems: [],
+            habitHistory: HabitHistoryPanelModel(summaries: [], isAvailable: false, issue: "habit-history: sync failed"),
+            observedAt: nil,
+            availability: BossDashboardAvailability(
+                machineAvailable: true,
+                needsMeAvailable: true,
+                codingAvailable: true,
+                habitHistoryAvailable: false,
+                issues: ["habit-history: sync failed"]
+            )
+        )
+        let prompt = BossAgentPromptBuilder().checkInPrompt(
+            question: "status?",
+            state: WorkspaceState(),
+            summary: WorkspaceSummarizer().summarize(WorkspaceState()),
+            dashboard: dashboard
+        )
+
+        XCTAssertTrue(prompt.contains("Habit history unavailable: habit-history: sync failed"))
+    }
+
+    func testCheckInPromptRendersFallbacksForOrphanSnapshotsCleanGitAndExpandedPane() {
+        var unavailableHistory = HabitHistoryPanelModel(summaries: [], isAvailable: false, issue: nil)
+        unavailableHistory.statusMessage = nil
+        let dashboard = BossDashboardSnapshot(
+            agentName: "Boss",
+            daemonStatus: "unknown",
+            daemonMode: "unknown",
+            attentionLabel: "quiet",
+            openObligations: 0,
+            activeCodingAgents: 0,
+            blockedCodingAgents: 0,
+            needsMeItems: [],
+            codingItems: [],
+            habitHistory: unavailableHistory,
+            observedAt: nil
+        )
+        let orphanId = UUID(uuidString: "77777777-7777-7777-7777-777777777777")!
+        let state = WorkspaceState(
+            bossPaneCollapsed: false,
+            projects: [WorkbenchProject(name: "Only", rootPath: "/only")]
+        )
+        let summary = WorkspaceSummary(
+            boss: BossAgentSelection(agentName: "Boss"),
+            processSnapshots: [
+                ProcessSnapshot(id: orphanId, name: "Orphan", status: .running, attention: .idle, latestRunId: nil, summary: "No matching entry")
+            ],
+            recoveryPlans: []
+        )
+
+        let prompt = BossAgentPromptBuilder().checkInPrompt(
+            question: "status?",
+            state: state,
+            summary: summary,
+            dashboard: dashboard,
+            gitStatus: [orphanId: GitSessionStatus(isRepo: true, branch: "main", dirty: false)],
+            waitingPrompts: [orphanId: "ignored fallback"]
+        )
+
+        XCTAssertTrue(prompt.contains("Boss Pane: expanded"))
+        XCTAssertTrue(prompt.contains("Habit history unavailable"))
+        XCTAssertTrue(prompt.contains("group=unknown"))
+        XCTAssertTrue(prompt.contains("trust=unknown"))
+        XCTAssertTrue(prompt.contains("archived=false"))
+        XCTAssertTrue(prompt.contains("owner=unknown"))
+        XCTAssertTrue(prompt.contains("git=main (clean)"))
+        XCTAssertTrue(prompt.contains("ignored fallback"))
+    }
 }

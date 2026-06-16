@@ -88,6 +88,11 @@ final class SidebarSessionFilterTests: XCTestCase {
         XCTAssertFalse(matches(attention: .active, query: "status:attention"))
     }
 
+    func testUnknownStatusValueFallsBackToRawAttentionStateSubstring() {
+        XCTAssertTrue(matches(attention: .waitingOnHuman, query: "status:uman"))
+        XCTAssertFalse(matches(attention: .idle, query: "status:uman"))
+    }
+
     func testTokensCombineAcrossDimensions() {
         // Agent-owned AND waiting AND name contains "recipe".
         XCTAssertTrue(matches(

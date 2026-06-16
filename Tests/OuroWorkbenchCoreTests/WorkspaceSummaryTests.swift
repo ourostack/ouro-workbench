@@ -187,6 +187,82 @@ final class WorkspaceSummaryTests: XCTestCase {
         XCTAssertTrue(changes.contains { $0.title == "Action applied" && $0.detail.contains("Sent input to Codex") })
     }
 
+    func testChangeSummarizerReplacesLatestRunAndIgnoresExistingActions() {
+        let project = WorkbenchProject(name: "Project", rootPath: "/Users/example/project")
+        let entry = ProcessEntry(projectId: project.id, name: "Agent", kind: .terminalAgent, agentKind: .custom, executable: "ouro", arguments: ["run"], workingDirectory: project.rootPath)
+        let older = ProcessRun(entryId: entry.id, status: .exited, startedAt: Date(timeIntervalSince1970: 1), exitCode: 1)
+        let newer = ProcessRun(entryId: entry.id, pid: 42, status: .running, startedAt: Date(timeIntervalSince1970: 2))
+        let existingAction = WorkbenchActionLogEntry(occurredAt: Date(timeIntervalSince1970: 3), source: "boss:slugger", action: "note", targetEntryId: entry.id, targetName: entry.name, result: "old", succeeded: true)
+        let newAction = WorkbenchActionLogEntry(occurredAt: Date(timeIntervalSince1970: 4), source: "boss:slugger", action: "note", targetEntryId: entry.id, targetName: entry.name, result: "new", succeeded: true)
+        let previous = WorkspaceState(projects: [project], processEntries: [entry], processRuns: [older], actionLog: [existingAction])
+        let current = WorkspaceState(projects: [project], processEntries: [entry], processRuns: [older, newer], actionLog: [existingAction, newAction])
+
+        let changes = WorkspaceChangeSummarizer().summarize(previous: previous, current: current, occurredAt: Date(timeIntervalSince1970: 5))
+
+        XCTAssertTrue(changes.contains { $0.title.contains("Run") && $0.detail.contains(newer.id.uuidString) })
+        XCTAssertFalse(changes.contains { $0.detail.contains("old") })
+        XCTAssertTrue(changes.contains { $0.title == "Action applied" && $0.detail.contains("new") })
+    }
+
+    func testChangeSummarizerCapturesAddedRenamedRestoredRemovedSkippedAndRunStarted() {
+        let project = WorkbenchProject(name: "Project", rootPath: "/Users/example/project")
+        let removed = ProcessEntry(projectId: project.id, name: "Removed", kind: .shell, executable: "/bin/zsh", workingDirectory: project.rootPath)
+        var renamed = ProcessEntry(projectId: project.id, name: "Old Name", kind: .shell, executable: "/bin/zsh", workingDirectory: project.rootPath, isArchived: true)
+        let previous = WorkspaceState(projects: [project], processEntries: [removed, renamed])
+        renamed.name = "New Name"
+        renamed.isArchived = false
+        let added = ProcessEntry(projectId: project.id, name: "Added", kind: .shell, executable: "/bin/zsh", workingDirectory: project.rootPath)
+        let run = ProcessRun(entryId: renamed.id, status: .running, startedAt: Date(timeIntervalSince1970: 10))
+        let skipped = WorkbenchActionLogEntry(
+            occurredAt: Date(timeIntervalSince1970: 20),
+            source: "boss:slugger",
+            action: "recover",
+            targetEntryId: renamed.id,
+            targetName: renamed.name,
+            result: "Already running",
+            succeeded: false
+        )
+        let current = WorkspaceState(projects: [project], processEntries: [renamed, added], processRuns: [run], actionLog: [skipped])
+
+        let changes = WorkspaceChangeSummarizer().summarize(previous: previous, current: current, occurredAt: Date(timeIntervalSince1970: 30))
+
+        XCTAssertTrue(changes.contains { $0.title == "Session added" && $0.detail == "Added was added to the workbench" })
+        XCTAssertTrue(changes.contains { $0.title == "Session renamed" && $0.detail == "Old Name is now New Name" })
+        XCTAssertTrue(changes.contains { $0.title == "Session restored" && $0.detail == "New Name is active" })
+        XCTAssertTrue(changes.contains { $0.title == "Session removed" && $0.detail == "Removed was removed from the workbench" })
+        XCTAssertTrue(changes.contains { $0.title == "Run started" && $0.detail.contains(run.id.uuidString) })
+        XCTAssertTrue(changes.contains { $0.title == "Action skipped" && $0.detail.contains("Already running") })
+    }
+
+    func testLatestRunSelectionAndDefaultSummariesCoverExitedAndConfigured() {
+        let project = WorkbenchProject(name: "Project", rootPath: "/Users/example/project")
+        let exited = ProcessEntry(projectId: project.id, name: "Exited", kind: .shell, executable: "/bin/zsh", workingDirectory: project.rootPath)
+        let configured = ProcessEntry(projectId: project.id, name: "Configured", kind: .shell, executable: "/bin/zsh", workingDirectory: project.rootPath)
+        let exitedWithCode = ProcessEntry(projectId: project.id, name: "Exited Code", kind: .shell, executable: "/bin/zsh", workingDirectory: project.rootPath)
+        let older = ProcessRun(entryId: exited.id, status: .running, startedAt: Date(timeIntervalSince1970: 1))
+        let newer = ProcessRun(entryId: exited.id, status: .exited, startedAt: Date(timeIntervalSince1970: 2), exitCode: nil)
+        let codeRun = ProcessRun(entryId: exitedWithCode.id, status: .exited, startedAt: Date(timeIntervalSince1970: 3), exitCode: 7)
+        let state = WorkspaceState(projects: [project], processEntries: [exited, configured, exitedWithCode], processRuns: [older, newer, codeRun])
+
+        let summary = WorkspaceSummarizer().summarize(state)
+
+        XCTAssertTrue(summary.processSnapshots.contains { $0.name == "Exited" && $0.summary == "Exited exited with code unknown" && $0.latestRunId == newer.id })
+        XCTAssertTrue(summary.processSnapshots.contains { $0.name == "Exited Code" && $0.summary == "Exited Code exited with code 7" })
+        XCTAssertTrue(summary.processSnapshots.contains { $0.name == "Configured" && $0.summary == "Configured is configured" })
+        XCTAssertEqual(summary.oneLineStatus, "0 running, 0 recovery actions")
+    }
+
+    func testConfiguredLatestRunUsesConfiguredSummary() {
+        let project = WorkbenchProject(name: "Project", rootPath: "/Users/example/project")
+        let configured = ProcessEntry(projectId: project.id, name: "Configured Run", kind: .shell, executable: "/bin/zsh", workingDirectory: project.rootPath)
+        let run = ProcessRun(entryId: configured.id, status: .configured, startedAt: Date(timeIntervalSince1970: 1))
+        let state = WorkspaceState(projects: [project], processEntries: [configured], processRuns: [run])
+
+        let summary = WorkspaceSummarizer().summarize(state)
+
+        XCTAssertEqual(summary.processSnapshots.first?.summary, "Configured Run is configured")
+    }
+
     func testBossPromptIncludesRecentWorkspaceChanges() {
         let project = WorkbenchProject(name: "Project", rootPath: "/tmp/project")
         let entry = ProcessEntry(

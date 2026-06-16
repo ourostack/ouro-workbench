@@ -47,6 +47,16 @@ public final class TranscriptRecorder {
         self.box = HandleBox(handle)
     }
 
+    /// Test seam: wrap an already-open (or deliberately closed) handle without
+    /// touching the filesystem, so the non-fatal write-failure path — a write
+    /// onto a dead descriptor — can be exercised. Once constructed it behaves
+    /// exactly like the `url` init.
+    init(unsafeHandle handle: FileHandle?, url: URL) {
+        self.url = url
+        self.queue = DispatchQueue(label: "com.ourostack.workbench.transcript-recorder.test")
+        self.box = HandleBox(handle)
+    }
+
     deinit {
         close()
     }

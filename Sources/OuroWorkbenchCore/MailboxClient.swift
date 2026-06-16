@@ -41,13 +41,25 @@ public enum MailboxEndpoint: Equatable, Sendable {
     private static func escape(_ value: String) -> String {
         var allowed = CharacterSet.urlPathAllowed
         allowed.remove(charactersIn: "/")
-        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+        return percentEncoded(value, allowed: allowed)
     }
 
     private static func escapeQuery(_ value: String) -> String {
         var allowed = CharacterSet.alphanumerics
         allowed.insert(charactersIn: "-._~")
-        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+        return percentEncoded(value, allowed: allowed)
+    }
+
+    /// Percent-encodes `value`, falling back to the raw value if the encoder
+    /// can't represent it. The encoder is injectable (default = Foundation's)
+    /// so the fallback arm is testable — Foundation never returns nil for a
+    /// valid Swift `String`.
+    static func percentEncoded(
+        _ value: String,
+        allowed: CharacterSet,
+        encode: (String, CharacterSet) -> String? = { $0.addingPercentEncoding(withAllowedCharacters: $1) }
+    ) -> String {
+        encode(value, allowed) ?? value
     }
 
     private static func queryString(_ items: [(String, String?)]) -> String {
@@ -131,7 +143,18 @@ public struct MailboxClient: Sendable {
     }
 
     public func url(for endpoint: MailboxEndpoint) throws -> URL {
-        guard let url = URL(string: endpoint.path, relativeTo: configuration.baseURL)?.absoluteURL else {
+        try Self.resolveURL(path: endpoint.path, relativeTo: configuration.baseURL)
+    }
+
+    /// Resolves an endpoint path against the base URL, rejecting a path the URL
+    /// machinery can't parse. The builder is injectable (default = `URL(string:relativeTo:)`)
+    /// so the rejection branch is deterministically testable across SDK URL-parsing modes.
+    static func resolveURL(
+        path: String,
+        relativeTo base: URL,
+        build: (String, URL) -> URL? = { URL(string: $0, relativeTo: $1)?.absoluteURL }
+    ) throws -> URL {
+        guard let url = build(path, base) else {
             throw MailboxClientError.invalidURL
         }
         return url
@@ -160,15 +183,16 @@ public struct MailboxClient: Sendable {
                 try await Task.sleep(nanoseconds: configuration.requestTimeoutNanoseconds)
                 throw MailboxClientError.timeout
             }
-            guard let result = try await group.next() else {
-                throw MailboxClientError.timeout
-            }
-            return result
+            return try await firstTaskResult(of: &group, orThrow: MailboxClientError.timeout)
         }
     }
 
     public static func defaultDataLoader(url: URL) async throws -> (Data, HTTPURLResponse) {
-        let (data, response) = try await URLSession.shared.data(from: url)
+        try await defaultDataLoader(url: url, session: .shared)
+    }
+
+    static func defaultDataLoader(url: URL, session: URLSession) async throws -> (Data, HTTPURLResponse) {
+        let (data, response) = try await session.data(from: url)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw MailboxClientError.invalidURL
         }

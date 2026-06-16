@@ -5,9 +5,19 @@ public struct MailboxDashboardSnapshotReader: Sendable {
     private let dataLoader: @Sendable (URL, TimeInterval) throws -> (Data, Int)
     private let builder: BossDashboardBuilder
 
+    public init() {
+        self.init(configuration: MailboxClientConfiguration(requestTimeoutNanoseconds: 1_000_000_000))
+    }
+
+    public init(configuration: MailboxClientConfiguration) {
+        self.configuration = configuration
+        self.dataLoader = Self.defaultDataLoader
+        self.builder = BossDashboardBuilder()
+    }
+
     public init(
         configuration: MailboxClientConfiguration = MailboxClientConfiguration(requestTimeoutNanoseconds: 1_000_000_000),
-        dataLoader: @escaping @Sendable (URL, TimeInterval) throws -> (Data, Int) = MailboxDashboardSnapshotReader.defaultDataLoader,
+        dataLoader: @escaping @Sendable (URL, TimeInterval) throws -> (Data, Int),
         builder: BossDashboardBuilder = BossDashboardBuilder()
     ) {
         self.configuration = configuration
@@ -37,13 +47,29 @@ public struct MailboxDashboardSnapshotReader: Sendable {
     }
 
     public static func defaultDataLoader(url: URL, timeoutSeconds: TimeInterval) throws -> (Data, Int) {
+        try syncDataLoader(
+            url: url,
+            timeoutSeconds: timeoutSeconds,
+            makeTask: { request, completion in
+                let task = URLSession.shared.dataTask(with: request, completionHandler: completion)
+                return MailboxSyncTask(resume: { task.resume() }, cancel: { task.cancel() })
+            }
+        )
+    }
+
+    static func syncDataLoader(
+        url: URL,
+        timeoutSeconds: TimeInterval,
+        makeTask: @Sendable (URLRequest, @escaping @Sendable (Data?, URLResponse?, Error?) -> Void) -> MailboxSyncTask,
+        waitOverride: (@Sendable (DispatchSemaphore, DispatchTime) -> DispatchTimeoutResult)? = nil
+    ) throws -> (Data, Int) {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.timeoutInterval = timeoutSeconds
 
         let semaphore = DispatchSemaphore(value: 0)
         let box = SyncMailboxResponseBox()
-        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+        let task = makeTask(request) { data, response, error in
             if let error {
                 box.result = .failure(error)
             } else if let http = response as? HTTPURLResponse {
@@ -55,7 +81,8 @@ public struct MailboxDashboardSnapshotReader: Sendable {
         }
         task.resume()
 
-        if semaphore.wait(timeout: .now() + timeoutSeconds + 0.25) == .timedOut {
+        let waitResult = waitOverride?(semaphore, .now() + timeoutSeconds + 0.25) ?? semaphore.wait(timeout: .now() + timeoutSeconds + 0.25)
+        if waitResult == .timedOut {
             task.cancel()
             throw MailboxClientError.timeout
         }
@@ -65,8 +92,17 @@ public struct MailboxDashboardSnapshotReader: Sendable {
         return try result.get()
     }
 
+    struct MailboxSyncTask: Sendable {
+        var resume: @Sendable () -> Void
+        var cancel: @Sendable () -> Void
+    }
+
     private func url(for endpoint: MailboxEndpoint) throws -> URL {
-        guard let url = URL(string: endpoint.path, relativeTo: configuration.baseURL)?.absoluteURL else {
+        try Self.resolvedURL(path: endpoint.path, baseURL: configuration.baseURL)
+    }
+
+    static func resolvedURL(path: String, baseURL: URL) throws -> URL {
+        guard let url = URL(string: path, relativeTo: baseURL)?.absoluteURL else {
             throw MailboxClientError.invalidURL
         }
         return url

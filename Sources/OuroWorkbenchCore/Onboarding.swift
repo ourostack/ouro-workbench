@@ -153,7 +153,9 @@ public struct OnboardingReadinessReportRenderer: Sendable {
             lines.append("- none")
         } else {
             for step in auditableSteps {
-                lines.append("- \(step.id): \(step.commandLine ?? "")")
+                if let commandLine = step.commandLine {
+                    lines.append("- \(step.id): \(commandLine)")
+                }
             }
         }
         return lines.joined(separator: "\n")
@@ -392,7 +394,7 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
                     id: "repair-\(lane)-provider",
                     actor: .humanRequired,
                     title: "Repair \(laneName) provider",
-                    detail: check?.detail ?? "The \(laneName) provider failed its live check.",
+                    detail: check!.detail,
                     command: ["ouro", "connect", "providers", "--agent", agent.name]
                 )
             ]
@@ -507,6 +509,8 @@ public struct RecentSessionScanner {
     public var sqlite3URL: URL
     public var cmuxSessionURL: URL
     public var liveProcessLister: () -> [LiveTerminalProcess]
+    var codexSQLiteWatchdogDelay: TimeInterval
+    var commandParser: (String) -> TerminalCommandTokens?
 
     public init(
         homeURL: URL = FileManager.default.homeDirectoryForCurrentUser,
@@ -515,7 +519,9 @@ public struct RecentSessionScanner {
         lookback: TimeInterval = 7 * 24 * 60 * 60,
         sqlite3URL: URL = URL(fileURLWithPath: "/usr/bin/sqlite3"),
         cmuxSessionURL: URL? = nil,
-        liveProcessLister: (() -> [LiveTerminalProcess])? = nil
+        liveProcessLister: (() -> [LiveTerminalProcess])? = nil,
+        codexSQLiteWatchdogDelay: TimeInterval = 5,
+        commandParser: @escaping (String) -> TerminalCommandTokens? = TerminalCommandParser.parse
     ) {
         self.homeURL = homeURL
         self.fileManager = fileManager
@@ -524,7 +530,9 @@ public struct RecentSessionScanner {
         self.sqlite3URL = sqlite3URL
         self.cmuxSessionURL = cmuxSessionURL ?? homeURL
             .appendingPathComponent("Library/Application Support/cmux/session-com.cmuxterm.app.json")
-        self.liveProcessLister = liveProcessLister ?? Self.systemLiveTerminalProcesses
+        self.liveProcessLister = liveProcessLister ?? { Self.systemLiveTerminalProcesses() }
+        self.codexSQLiteWatchdogDelay = codexSQLiteWatchdogDelay
+        self.commandParser = commandParser
     }
 
     public func scan() -> [RecentSessionCandidate] {
@@ -543,7 +551,7 @@ public struct RecentSessionScanner {
     /// Fill in each candidate's git repository root (the natural grouping unit)
     /// by walking up from its working directory. Cheap — a few `stat`s per
     /// candidate — and cached per directory so repeated cwds aren't re-walked.
-    private func resolveRepositoryRoots(_ candidates: [RecentSessionCandidate]) -> [RecentSessionCandidate] {
+    func resolveRepositoryRoots(_ candidates: [RecentSessionCandidate]) -> [RecentSessionCandidate] {
         var cache: [String: String?] = [:]
         return candidates.map { candidate in
             guard candidate.repositoryRoot == nil else {
@@ -601,7 +609,7 @@ public struct RecentSessionScanner {
                 resumeCommand: claudeResumeCommand(sessionId: sessionId, from: process.command),
                 summary: history?.summary ?? "Live Claude Code process detected from the local process table.",
                 evidencePaths: (history?.evidencePaths ?? []) + ["process:\(process.pid)"],
-                confidence: history == nil ? 0.86 : max(0.95, history?.confidence ?? 0)
+                confidence: history.map { max(0.95, $0.confidence) } ?? 0.86
             )
         }
     }
@@ -617,7 +625,14 @@ public struct RecentSessionScanner {
         }
 
         let processes = liveProcesses ?? liveProcessLister()
-        let processesByTTY = Dictionary(grouping: processes, by: { normalizedTTYName($0.ttyName) ?? "" })
+        var processesByTTY: [String: [LiveTerminalProcess]] = [:]
+        for process in processes {
+            if let tty = normalizedTTYName(process.ttyName) {
+                processesByTTY[tty, default: []].append(process)
+            } else {
+                processesByTTY["", default: []].append(process)
+            }
+        }
         let historyById = candidateById(claudeHistory)
 
         return cmuxWorkspaces(in: root).flatMap { workspace in
@@ -662,7 +677,7 @@ public struct RecentSessionScanner {
                     ),
                     resumeCommand: claudeResumeCommand(sessionId: sessionId, from: liveProcess.command),
                     summary: "Live cmux Claude Code panel in \(workspace.customTitle ?? workspace.processTitle ?? "cmux").\(statusSentence)",
-                    evidencePaths: (history?.evidencePaths ?? []) + [cmuxSessionURL.path, "tty:\(panel.ttyName ?? "unknown")"],
+                    evidencePaths: (history?.evidencePaths ?? []) + [cmuxSessionURL.path, "tty:\(panelTTY)"],
                     confidence: 0.99,
                     preferredGroupName: workspace.customTitle
                 )
@@ -767,7 +782,7 @@ public struct RecentSessionScanner {
                     return nil
                 }
                 let command = parsed.command.trimmingCharacters(in: .whitespacesAndNewlines)
-                let tokens = TerminalCommandParser.parse(command)
+                let tokens = commandParser(command)
                 let kind = tokens.flatMap { TerminalAgentDetector.detect(executable: $0.executable, arguments: $0.arguments) }
                 guard kind != nil || command.hasPrefix("gh copilot") || command.contains(" gh copilot") else {
                     return nil
@@ -776,11 +791,17 @@ public struct RecentSessionScanner {
                 guard isRecent(date) else {
                     return nil
                 }
-                let fallbackTokens = tokens.map { [$0.executable] + $0.arguments } ?? command.split(whereSeparator: \.isWhitespace).map(String.init)
+                let fallbackTokens: [String]
+                if let tokens {
+                    fallbackTokens = [tokens.executable] + tokens.arguments
+                } else {
+                    fallbackTokens = command.split(whereSeparator: \.isWhitespace).map(String.init)
+                }
+                let isCopilot = command.contains("copilot")
                 return RecentSessionCandidate(
                     id: "shell:\(parsed.epoch):\(command.hashValue)",
-                    source: command.contains("copilot") ? .githubCopilotCLI : .shellHistory,
-                    agentKind: kind ?? (command.contains("copilot") ? .githubCopilotCLI : nil),
+                    source: isCopilot ? .githubCopilotCLI : .shellHistory,
+                    agentKind: kind ?? .githubCopilotCLI,
                     title: command,
                     workingDirectory: homeURL.path,
                     lastActiveAt: date,
@@ -826,7 +847,7 @@ public struct RecentSessionScanner {
             let watchdog = DispatchWorkItem {
                 if process.isRunning { process.terminate() }
             }
-            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 5, execute: watchdog)
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + codexSQLiteWatchdogDelay, execute: watchdog)
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             process.waitUntilExit()
             watchdog.cancel()
@@ -842,7 +863,12 @@ public struct RecentSessionScanner {
                 let id = fields[0]
                 let title = Self.titleFromPrompt(fields[1]) ?? id
                 let cwd = fields[2].isEmpty ? homeURL.path : fields[2]
-                let milliseconds = Double(fields[4]) ?? 0
+                let milliseconds: Double
+                if let parsedMilliseconds = Double(fields[4]) {
+                    milliseconds = parsedMilliseconds
+                } else {
+                    milliseconds = 0
+                }
                 let lastActive = milliseconds > 0 ? Date(timeIntervalSince1970: milliseconds / 1000) : nil
                 return RecentSessionCandidate(
                     id: "codex:\(id)",
@@ -862,12 +888,22 @@ public struct RecentSessionScanner {
         }
     }
 
-    private func recentFiles(under root: URL, pathExtension: String) -> [URL] {
-        guard let enumerator = fileManager.enumerator(
-            at: root,
-            includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
-            options: [.skipsHiddenFiles]
-        ) else {
+    func recentFiles(
+        under root: URL,
+        pathExtension: String,
+        makeEnumerator: ((URL) -> FileManager.DirectoryEnumerator?)? = nil
+    ) -> [URL] {
+        let enumerator: FileManager.DirectoryEnumerator?
+        if let makeEnumerator {
+            enumerator = makeEnumerator(root)
+        } else {
+            enumerator = fileManager.enumerator(
+                at: root,
+                includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
+                options: [.skipsHiddenFiles]
+            )
+        }
+        guard let enumerator else {
             return []
         }
         var urls: [URL] = []
@@ -880,7 +916,7 @@ public struct RecentSessionScanner {
         return urls
     }
 
-    private func jsonLineObjects(_ url: URL) -> [[String: Any]] {
+    func jsonLineObjects(_ url: URL) -> [[String: Any]] {
         guard let raw = try? String(contentsOf: url, encoding: .utf8) else {
             return []
         }
@@ -896,7 +932,7 @@ public struct RecentSessionScanner {
             }
     }
 
-    private func firstString(_ records: [[String: Any]], keys: [String]) -> String? {
+    func firstString(_ records: [[String: Any]], keys: [String]) -> String? {
         for record in records {
             for key in keys {
                 if let value = record[key] as? String, !value.isEmpty {
@@ -907,7 +943,7 @@ public struct RecentSessionScanner {
         return nil
     }
 
-    private func firstPrompt(_ records: [[String: Any]]) -> String? {
+    func firstPrompt(_ records: [[String: Any]]) -> String? {
         for record in records {
             for key in ["content", "message", "summary"] {
                 if let value = stringValue(record[key]), !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -918,7 +954,7 @@ public struct RecentSessionScanner {
         return nil
     }
 
-    private func stringValue(_ value: Any?) -> String? {
+    func stringValue(_ value: Any?) -> String? {
         if let string = value as? String {
             return string
         }
@@ -931,11 +967,11 @@ public struct RecentSessionScanner {
         return nil
     }
 
-    private func newestDate(in records: [[String: Any]]) -> Date? {
+    func newestDate(in records: [[String: Any]]) -> Date? {
         records.compactMap { parseDate($0["timestamp"] as? String) }.max()
     }
 
-    private func parseDate(_ raw: String?) -> Date? {
+    func parseDate(_ raw: String?) -> Date? {
         guard let raw else {
             return nil
         }
@@ -952,23 +988,23 @@ public struct RecentSessionScanner {
         (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
     }
 
-    private func isRecent(_ date: Date?) -> Bool {
+    func isRecent(_ date: Date?) -> Bool {
         guard let date else {
             return false
         }
         return date >= now.addingTimeInterval(-lookback)
     }
 
-    private func inferredClaudeProjectPath(from fileURL: URL) -> String? {
+    func inferredClaudeProjectPath(from fileURL: URL) -> String? {
         let projectDirectory = fileURL.deletingLastPathComponent().lastPathComponent
         guard projectDirectory.hasPrefix("-") else {
             return nil
         }
         let path = "/" + projectDirectory.dropFirst().replacingOccurrences(of: "-", with: "/")
-        return path.isEmpty ? nil : path
+        return path
     }
 
-    private func parseZshHistoryLine(_ line: String) -> (epoch: Int, command: String)? {
+    func parseZshHistoryLine(_ line: String) -> (epoch: Int, command: String)? {
         guard line.hasPrefix(": ") else {
             return nil
         }
@@ -982,11 +1018,14 @@ public struct RecentSessionScanner {
         return (epoch, String(pieces[1]))
     }
 
-    private static func systemLiveTerminalProcesses() -> [LiveTerminalProcess] {
+    static func systemLiveTerminalProcesses(
+        executableURL: URL = URL(fileURLWithPath: "/bin/ps"),
+        arguments: [String] = ["-axo", "pid=,tt=,command="]
+    ) -> [LiveTerminalProcess] {
         let process = Process()
         let pipe = Pipe()
-        process.executableURL = URL(fileURLWithPath: "/bin/ps")
-        process.arguments = ["-axo", "pid=,tt=,command="]
+        process.executableURL = executableURL
+        process.arguments = arguments
         process.standardOutput = pipe
         process.standardError = Pipe()
         do {
@@ -1004,7 +1043,7 @@ public struct RecentSessionScanner {
         }
     }
 
-    private static func parseProcessLine(_ line: Substring) -> LiveTerminalProcess? {
+    static func parseProcessLine(_ line: Substring) -> LiveTerminalProcess? {
         let pieces = line.split(separator: " ", maxSplits: 2, omittingEmptySubsequences: true)
         guard pieces.count == 3, let pid = Int(pieces[0]) else {
             return nil
@@ -1016,7 +1055,7 @@ public struct RecentSessionScanner {
         )
     }
 
-    private func candidateById(_ candidates: [RecentSessionCandidate]) -> [String: RecentSessionCandidate] {
+    func candidateById(_ candidates: [RecentSessionCandidate]) -> [String: RecentSessionCandidate] {
         var byId: [String: RecentSessionCandidate] = [:]
         for candidate in candidates {
             if let existing = byId[candidate.id], existing.confidence >= candidate.confidence {
@@ -1027,14 +1066,14 @@ public struct RecentSessionScanner {
         return byId
     }
 
-    private func isClaudeProcess(command: String) -> Bool {
+    func isClaudeProcess(command: String) -> Bool {
         guard let parsed = canonicalCommandTokens(command) else {
             return false
         }
         return URL(fileURLWithPath: parsed.executable).lastPathComponent.lowercased() == "claude"
     }
 
-    private func claudeSessionId(from command: String) -> String? {
+    func claudeSessionId(from command: String) -> String? {
         guard let parsed = canonicalCommandTokens(command) else {
             return nil
         }
@@ -1056,7 +1095,7 @@ public struct RecentSessionScanner {
         ["claude"] + preservedClaudeResumeArguments(from: command) + ["--resume", sessionId]
     }
 
-    private func preservedClaudeResumeArguments(from command: String) -> [String] {
+    func preservedClaudeResumeArguments(from command: String) -> [String] {
         guard let parsed = canonicalCommandTokens(command) else {
             return []
         }
@@ -1089,7 +1128,7 @@ public struct RecentSessionScanner {
         return preserved
     }
 
-    private func canonicalCommandTokens(_ command: String) -> TerminalCommandTokens? {
+    func canonicalCommandTokens(_ command: String) -> TerminalCommandTokens? {
         guard let parsed = TerminalCommandParser.parse(command) else {
             return nil
         }
@@ -1097,7 +1136,12 @@ public struct RecentSessionScanner {
     }
 
     private func cmuxWorkspaces(in root: [String: Any]) -> [CmuxWorkspace] {
-        let windows = root["windows"] as? [[String: Any]] ?? []
+        let windows: [[String: Any]]
+        if let parsedWindows = root["windows"] as? [[String: Any]] {
+            windows = parsedWindows
+        } else {
+            windows = []
+        }
         return windows.flatMap { window -> [CmuxWorkspace] in
             guard let tabManager = window["tabManager"] as? [String: Any],
                   let workspaces = tabManager["workspaces"] as? [[String: Any]]
@@ -1109,8 +1153,10 @@ public struct RecentSessionScanner {
     }
 
     private func cmuxWorkspace(_ object: [String: Any]) -> CmuxWorkspace {
-        let panels = (object["panels"] as? [[String: Any]] ?? []).map(cmuxPanel)
-        let statusEntries = (object["statusEntries"] as? [[String: Any]] ?? []).map(cmuxStatusEntry)
+        let panelObjects = object["panels"] as? [[String: Any]] ?? []
+        let statusObjects = object["statusEntries"] as? [[String: Any]] ?? []
+        let panels = panelObjects.map(cmuxPanel)
+        let statusEntries = statusObjects.map(cmuxStatusEntry)
         return CmuxWorkspace(
             customTitle: object["customTitle"] as? String,
             currentDirectory: object["currentDirectory"] as? String,
@@ -1138,7 +1184,7 @@ public struct RecentSessionScanner {
         )
     }
 
-    private func cleanedCmuxTitle(_ raw: String?) -> String? {
+    func cleanedCmuxTitle(_ raw: String?) -> String? {
         guard var title = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty else {
             return nil
         }
@@ -1153,7 +1199,7 @@ public struct RecentSessionScanner {
         return title.isEmpty ? nil : title
     }
 
-    private func normalizedTTYName(_ ttyName: String?) -> String? {
+    func normalizedTTYName(_ ttyName: String?) -> String? {
         guard let ttyName, !ttyName.isEmpty, ttyName != "??" else {
             return nil
         }
@@ -1350,7 +1396,7 @@ public enum WorkspaceGrouping {
             return nil
         }
         let parent = URL(fileURLWithPath: path).deletingLastPathComponent().path
-        return parent.isEmpty ? "/" : parent
+        return parent
     }
 }
 
@@ -1370,13 +1416,13 @@ public struct WorkbenchImportProposalBuilder: Sendable {
         var groups = grouped.map { key, groupCandidates in
             let newest = groupCandidates.max {
                 ($0.lastActiveAt ?? .distantPast) < ($1.lastActiveAt ?? .distantPast)
-            }
+            }!
             let groupName: String
             let groupRootPath: String
             switch key {
             case let .named(name):
                 groupName = name
-                groupRootPath = newest?.repositoryRoot ?? newest?.workingDirectory ?? ""
+                groupRootPath = newest.repositoryRoot ?? newest.workingDirectory
             case let .root(root):
                 groupName = displayName(for: root)
                 groupRootPath = root
@@ -1471,8 +1517,11 @@ public struct WorkbenchImportProposalBuilder: Sendable {
     }
 
     public func displayName(for rootPath: String) -> String {
+        guard !rootPath.isEmpty else {
+            return "Home"
+        }
         let last = URL(fileURLWithPath: rootPath, isDirectory: true).lastPathComponent
-        return last.isEmpty ? "Home" : last
+        return last
     }
 
     public func terminalName(for candidate: RecentSessionCandidate) -> String {

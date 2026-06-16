@@ -39,21 +39,22 @@ public struct RecoveryDrillResult: Codable, Equatable, Sendable {
 
 public struct RecoveryDrill: Sendable {
     private let reconciler: StartupRecoveryReconciler
-    private let recoveryPlanner: RecoveryPlanner
+    private let planRecovery: @Sendable (WorkspaceState) -> [RecoveryPlan]
 
     public init(
         reconciler: StartupRecoveryReconciler = StartupRecoveryReconciler(),
-        recoveryPlanner: RecoveryPlanner = RecoveryPlanner()
+        recoveryPlanner: RecoveryPlanner = RecoveryPlanner(),
+        planRecovery: (@Sendable (WorkspaceState) -> [RecoveryPlan])? = nil
     ) {
         self.reconciler = reconciler
-        self.recoveryPlanner = recoveryPlanner
+        self.planRecovery = planRecovery ?? { recoveryPlanner.planRecovery(for: $0) }
     }
 
     public func run(state: WorkspaceState, now: Date = Date()) -> RecoveryDrillResult {
         let simulated = reconciler.reconcile(state, now: now)
         let beforeRuns = latestRunsByEntry(in: state)
         let afterRuns = latestRunsByEntry(in: simulated)
-        let plans = Dictionary(uniqueKeysWithValues: recoveryPlanner.planRecovery(for: simulated).map { ($0.entryId, $0) })
+        let plans = Dictionary(uniqueKeysWithValues: planRecovery(simulated).map { ($0.entryId, $0) })
         let items = simulated.processEntries.map { entry in
             let plan = plans[entry.id] ?? RecoveryPlan(
                 entryId: entry.id,

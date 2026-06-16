@@ -142,6 +142,13 @@ public enum SessionPricing {
     ]
 
     public static func rate(forModel model: String?) -> Rate? {
+        rate(forModel: model, in: table)
+    }
+
+    /// Test seam: longest-prefix-wins lookup against an arbitrary table, so the
+    /// "a later, longer prefix also matches" tie-break can be exercised — the
+    /// real `table` has no overlapping prefixes. Identical behaviour for `table`.
+    static func rate(forModel model: String?, in table: [(prefix: String, rate: Rate)]) -> Rate? {
         guard let model = model?.lowercased() else { return nil }
         var best: (len: Int, rate: Rate)?
         for entry in table where model.hasPrefix(entry.prefix) {

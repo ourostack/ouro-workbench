@@ -62,7 +62,7 @@ public struct OuroAgentInstallCommandBuilder: Sendable {
         )
     }
 
-    private func normalizedAgentName(_ agentName: String) throws -> String {
+    func normalizedAgentName(_ agentName: String) throws -> String {
         let normalizedAgentName = agentName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedAgentName.isEmpty else {
             throw OuroAgentInstallCommandError.emptyAgentName

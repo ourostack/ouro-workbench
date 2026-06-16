@@ -32,7 +32,7 @@ final class WorkbenchBootstrapperTests: XCTestCase {
             kind: .terminalAgent,
             agentKind: .claudeCode,
             executable: "claude",
-            workingDirectory: "/tmp/existing"
+            workingDirectory: ""
         )
         let state = WorkspaceState(projects: [project], processEntries: [existing])
 
@@ -40,6 +40,7 @@ final class WorkbenchBootstrapperTests: XCTestCase {
 
         XCTAssertEqual(bootstrapped.processEntries.filter { $0.agentKind == .claudeCode }.count, 1)
         XCTAssertEqual(bootstrapped.processEntries.count, 2)
+        XCTAssertEqual(bootstrapped.processEntries.first { $0.id == existing.id }?.workingDirectory, "/tmp/existing")
     }
 
     func testBootstrapRemovesUntouchedLegacyAgentScaffolds() {
@@ -107,6 +108,35 @@ final class WorkbenchBootstrapperTests: XCTestCase {
 
         XCTAssertTrue(bootstrapped.processEntries.contains { $0.id == codex.id })
         XCTAssertEqual(bootstrapped.processEntries.count, 2)
+    }
+
+    func testBootstrapKeepsLegacyAgentScaffoldsWithActionLog() {
+        let project = WorkbenchProject(name: "Project", rootPath: "/repo")
+        let preset = TerminalAgentPresets.preset(for: .claudeCode)!
+        let legacy = ProcessEntry(
+            projectId: project.id,
+            name: preset.displayName,
+            kind: .terminalAgent,
+            agentKind: preset.id,
+            executable: preset.executable,
+            workingDirectory: "/repo",
+            lastSummary: "Configured \(preset.displayName) lane"
+        )
+        let action = WorkbenchActionLogEntry(
+            source: "test",
+            action: "launch",
+            targetEntryId: legacy.id,
+            targetName: legacy.name,
+            result: "launched",
+            succeeded: true
+        )
+
+        let bootstrapped = WorkbenchBootstrapper().bootstrappedState(
+            from: WorkspaceState(projects: [project], processEntries: [legacy], actionLog: [action]),
+            defaults: WorkbenchDefaults(includeLocalShell: false)
+        )
+
+        XCTAssertEqual(bootstrapped.processEntries.map(\.id), [legacy.id])
     }
 
     func testBootstrapDetectsKnownCLIFromShellWrappedLegacyTerminal() throws {
@@ -199,5 +229,74 @@ final class WorkbenchBootstrapperTests: XCTestCase {
         XCTAssertEqual(bootstrapped.processEntries.first?.trust, .trusted)
         XCTAssertEqual(bootstrapped.processEntries.first?.autoResume, true)
         XCTAssertTrue(BuiltInWorkbenchSessions.isAutoLaunchableLocalShell(bootstrapped.processEntries[0]))
+    }
+
+    func testBootstrapWithoutLocalShellCanReturnProjectOnlyState() {
+        let state = WorkbenchBootstrapper().bootstrappedState(
+            from: WorkspaceState(),
+            defaults: WorkbenchDefaults(projectName: "Workbench", projectRootPath: "/tmp/workbench", includeLocalShell: false)
+        )
+
+        XCTAssertEqual(state.projects.map(\.rootPath), ["/tmp/workbench"])
+        XCTAssertTrue(state.processEntries.isEmpty)
+    }
+
+    func testBootstrapLeavesStateAloneWhenDefaultProjectCannotBeCreated() {
+        let state = WorkbenchBootstrapper().bootstrappedState(from: WorkspaceState(), makeDefaultProject: { nil })
+
+        XCTAssertTrue(state.projects.isEmpty)
+        XCTAssertTrue(state.processEntries.isEmpty)
+    }
+
+    func testRepairTerminalAgentTemplateUsesTrustAndPreservesCustomSummaryAndDirectory() {
+        let project = WorkbenchProject(name: "Project", rootPath: "/repo")
+        let preset = TerminalAgentPresets.preset(for: .openAICodex)!
+        var trusted = ProcessEntry(
+            projectId: project.id,
+            name: "Old",
+            kind: .command,
+            executable: "old",
+            workingDirectory: "",
+            trust: .trusted,
+            lastSummary: "Configured OpenAI Codex lane"
+        )
+        BuiltInWorkbenchSessions.repairTerminalAgentTemplate(&trusted, preset: preset, project: project)
+        XCTAssertEqual(trusted.name, "OpenAI Codex")
+        XCTAssertEqual(trusted.arguments, ["--yolo"])
+        XCTAssertEqual(trusted.workingDirectory, "/repo")
+        XCTAssertEqual(trusted.lastSummary, "Configured OpenAI Codex terminal")
+
+        var untrusted = ProcessEntry(
+            projectId: project.id,
+            name: "Old",
+            kind: .command,
+            executable: "old",
+            arguments: ["old"],
+            workingDirectory: "/custom",
+            trust: .untrusted,
+            lastSummary: "Keep my note"
+        )
+        BuiltInWorkbenchSessions.repairTerminalAgentTemplate(&untrusted, preset: preset, project: project)
+        XCTAssertEqual(untrusted.arguments, [])
+        XCTAssertEqual(untrusted.workingDirectory, "/custom")
+        XCTAssertEqual(untrusted.lastSummary, "Keep my note")
+    }
+
+    func testRepairLocalShellPreservesExistingWorkingDirectory() {
+        let project = WorkbenchProject(name: "Project", rootPath: "/repo")
+        var entry = ProcessEntry(projectId: project.id, name: "Custom", kind: .command, executable: "zsh", workingDirectory: "/custom")
+
+        BuiltInWorkbenchSessions.repairLocalShell(&entry, project: project)
+
+        XCTAssertEqual(entry.workingDirectory, "/custom")
+    }
+
+    func testRepairLocalShellFillsEmptyWorkingDirectory() {
+        let project = WorkbenchProject(name: "Project", rootPath: "/repo")
+        var entry = ProcessEntry(projectId: project.id, name: "Custom", kind: .command, executable: "zsh", workingDirectory: "")
+
+        BuiltInWorkbenchSessions.repairLocalShell(&entry, project: project)
+
+        XCTAssertEqual(entry.workingDirectory, "/repo")
     }
 }

@@ -9,6 +9,25 @@ final class TranscriptTailReaderTests: XCTestCase {
         XCTAssertNil(tail)
     }
 
+    func testNilEmptyPathAndZeroByteLimitReturnNil() throws {
+        let url = try transcript(contents: "hello")
+
+        XCTAssertNil(TranscriptTailReader(maxBytes: 100).read(path: nil))
+        XCTAssertNil(TranscriptTailReader(maxBytes: 100).read(path: ""))
+        XCTAssertNil(TranscriptTailReader(maxBytes: 0).read(path: url.path))
+
+        try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
+    }
+
+    func testReadReturnsNilWhenExistingPathCannotBeReadAsFile() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("TranscriptTailReaderTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        XCTAssertNil(TranscriptTailReader().read(path: dir.path))
+    }
+
     func testReadsWholeTranscriptWhenUnderLimit() throws {
         let url = try transcript(contents: "hello\nworld\n")
 

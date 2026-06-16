@@ -31,6 +31,10 @@ final class GitSessionStatusTests: XCTestCase {
         XCTAssertEqual(s.ahead, 3)
         XCTAssertEqual(s.behind, 2)
         XCTAssertEqual(s.aheadBehindLabel, "↑3↓2")
+
+        let invalidCounts = GitSessionStatus.parse(porcelainV2: "# branch.head feature\n# branch.ab +bad -bad")
+        XCTAssertEqual(invalidCounts.ahead, 0)
+        XCTAssertEqual(invalidCounts.behind, 0)
     }
 
     func testDirtyFromTrackedStagedUnmergedAndUntracked() {
@@ -80,6 +84,7 @@ final class GitSessionStatusTests: XCTestCase {
     func testNotARepoSentinel() {
         XCTAssertFalse(GitSessionStatus.notARepo.isRepo)
         XCTAssertNil(GitSessionStatus.notARepo.branchLabel)
+        XCTAssertEqual(GitSessionStatus(isRepo: true).branchLabel, "(unknown)")
     }
 
     func testReaderReturnsRepoStatusForThisCheckout() throws {
@@ -93,5 +98,52 @@ final class GitSessionStatusTests: XCTestCase {
         let s = reader.status(forDirectory: here)
         XCTAssertTrue(s.isRepo, "expected the package checkout to be a git repo")
         XCTAssertNotNil(s.branchLabel)
+    }
+
+    func testResolveGitFallsBackToPathWhenKnownLocationsAreNotExecutable() throws {
+        let fm = CoverageBatch2FileManager()
+        fm.executablePaths = ["/custom/bin/git"]
+        let environment = TerminalEnvironment(values: ["PATH": "/custom/bin", "HOME": "/home/test"])
+
+        let reader = GitStatusReader(environment: environment, fileManager: fm)
+
+        XCTAssertEqual(reader.resolvedGitPath, "/custom/bin/git")
+
+        let missing = GitStatusReader(
+            environment: TerminalEnvironment(values: ["PATH": "/missing/bin", "HOME": "/home/test"]),
+            fileManager: fm
+        )
+        XCTAssertNil(missing.resolvedGitPath)
+    }
+
+    func testReaderReturnsNotARepoWhenDirectoryIsEmptyOrGitFails() throws {
+        let root = try coverageBatch2TemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let git = root.appendingPathComponent("git")
+        try "#!/bin/sh\nexit 128\n".write(to: git, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: git.path)
+
+        var reader = GitStatusReader(timeout: 1)
+        reader.resolvedGitPath = git.path
+
+        XCTAssertEqual(reader.status(forDirectory: ""), .notARepo)
+        XCTAssertEqual(reader.status(forDirectory: root.path), .notARepo)
+    }
+
+    func testReaderReturnsNotARepoWhenGitCannotLaunchOrTimesOut() throws {
+        let root = try coverageBatch2TemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        var missing = GitStatusReader(timeout: 1)
+        missing.resolvedGitPath = root.appendingPathComponent("missing-git").path
+        XCTAssertEqual(missing.status(forDirectory: root.path), .notARepo)
+
+        let hangingGit = root.appendingPathComponent("git")
+        try "#!/bin/sh\nwhile true; do :; done\n".write(to: hangingGit, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: hangingGit.path)
+        var hanging = GitStatusReader(timeout: 0.05)
+        hanging.resolvedGitPath = hangingGit.path
+
+        XCTAssertEqual(hanging.status(forDirectory: root.path), .notARepo)
     }
 }

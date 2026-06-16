@@ -1,0 +1,18 @@
+# Intentionally-uncovered code in OuroWorkbenchCore that no test can reach.
+# The gate tolerates ONLY these exact counts; any new gap fails, and if one is
+# fixed the count must be lowered here. Keep this list as close to empty as
+# possible — every entry needs a real structural justification.
+#
+# Format: <File.swift> <max_uncovered_lines> <max_uncovered_regions>
+
+# readResponse(id:) reads the MCP subprocess with a `while true` loop that only
+# exits via `return`/`throw`; the closing brace + its fall-through regions after
+# the loop are unreachable by construction. Restructuring battle-tested PTY-read
+# IO solely to colour a brace would be worse than the exclusion.
+BossAgentMCPClient.swift 1 3
+
+# 100% line, every identifiable branch covered. One synthesized region (a
+# default-argument / branch region the Swift `llvm-cov --show-regions` view does
+# not surface as an uncovered arm) remains uncountable; there is no source line
+# or branch a test can target for it.
+SessionActivityReader.swift 0 1

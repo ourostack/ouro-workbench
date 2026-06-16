@@ -90,6 +90,53 @@ final class OuroAgentInventoryTests: XCTestCase {
         XCTAssertEqual(agent.agentFacing?.summary, "openai/gpt-5.2")
     }
 
+    func testLaneSummaryCoversProviderOnlyModelOnlyAndEmpty() {
+        XCTAssertEqual(OuroAgentLane(provider: "anthropic").summary, "anthropic")
+        XCTAssertEqual(OuroAgentLane(model: "claude-sonnet").summary, "claude-sonnet")
+        XCTAssertNil(OuroAgentLane().summary)
+    }
+
+    func testRecordIdIsAgentNameAndSummaryLineIncludesAvailableLanes() {
+        let record = OuroAgentRecord(
+            name: "slugger",
+            bundlePath: "/Users/example/AgentBundles/slugger.ouro",
+            configPath: "/Users/example/AgentBundles/slugger.ouro/agent.json",
+            status: .ready,
+            detail: "ready",
+            humanFacing: OuroAgentLane(provider: "anthropic"),
+            agentFacing: OuroAgentLane(model: "gpt-5.2")
+        )
+
+        XCTAssertEqual(record.id, "slugger")
+        XCTAssertEqual(record.summaryLine, "ready · human anthropic · agent gpt-5.2")
+    }
+
+    func testScanReturnsEmptyWhenBundleDirectoryCannotBeRead() {
+        let missing = temporaryDirectory.appendingPathComponent("missing", isDirectory: true)
+
+        XCTAssertEqual(OuroAgentInventory(agentBundlesURL: missing).scan(), [])
+    }
+
+    func testEmptyLaneObjectsAreIgnored() throws {
+        try writeAgent(
+            "empty-lanes",
+            json: """
+            {
+              "humanFacing": {},
+              "agentFacing": {},
+              "outward": {},
+              "inner": {}
+            }
+            """
+        )
+
+        let agent = try XCTUnwrap(OuroAgentInventory(agentBundlesURL: temporaryDirectory).scan().first)
+
+        XCTAssertNil(agent.humanFacing)
+        XCTAssertNil(agent.agentFacing)
+        XCTAssertEqual(agent.summaryLine, "ready")
+    }
+
     private func writeAgent(_ name: String, json: String) throws {
         let bundleURL = temporaryDirectory.appendingPathComponent("\(name).ouro", isDirectory: true)
         try FileManager.default.createDirectory(at: bundleURL, withIntermediateDirectories: true)

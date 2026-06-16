@@ -52,6 +52,26 @@ final class BossInboxDecisionTests: XCTestCase {
         XCTAssertEqual(decoded, original)
     }
 
+    func testDecisionInputInitializerStoresAllFields() {
+        let input = BossInboxDecisionInput(
+            entry: "Codex",
+            kind: .autoAdvance,
+            proposedInput: "1",
+            preferenceCited: "tests are okay",
+            confidence: 0.9,
+            reasoning: "matches preference",
+            prompt: "Run tests?"
+        )
+
+        XCTAssertEqual(input.entry, "Codex")
+        XCTAssertEqual(input.kind, .autoAdvance)
+        XCTAssertEqual(input.proposedInput, "1")
+        XCTAssertEqual(input.preferenceCited, "tests are okay")
+        XCTAssertEqual(input.confidence, 0.9)
+        XCTAssertEqual(input.reasoning, "matches preference")
+        XCTAssertEqual(input.prompt, "Run tests?")
+    }
+
     func testWorkspaceStateWithoutDecisionLogDecodesToEmpty() throws {
         // A pre-decision-log persisted state (no `decisionLog` key) loads with [].
         // Default JSONDecoder date strategy is numeric (seconds since reference date).
@@ -224,6 +244,15 @@ final class BossInboxDecisionTests: XCTestCase {
         XCTAssertEqual(try BossDecisionParser().parse("just prose, no decisions").count, 0)
     }
 
+    func testParserIgnoresUnclosedFencedBlock() throws {
+        let reply = """
+        ```ouro-workbench-decisions
+        [{"entry":"PROC-1","kind":"autoAdvance","reasoning":"ok"}]
+        """
+
+        XCTAssertEqual(try BossDecisionParser().parse(reply).count, 0)
+    }
+
     func testParsesMarkerDecisionsWithTrailingProse() throws {
         // The marker fallback (no ```ouro-workbench-decisions fence) must capture
         // only the balanced JSON array — trailing prose after it used to make
@@ -287,6 +316,15 @@ final class BossInboxDecisionTests: XCTestCase {
         XCTAssertEqual(state.decisionLog[0].triage, .resolved(at: t1), "resolve overwrites snooze")
     }
 
+    func testTriageDecodeDefaultsMissingDatesToNowEquivalentStates() throws {
+        let snoozed = try JSONDecoder().decode(DecisionTriage.self, from: Data(#"{"state":"snoozed"}"#.utf8))
+        if case let .snoozed(until) = snoozed {
+            XCTAssertLessThan(abs(until.timeIntervalSinceNow), 5)
+        } else {
+            XCTFail("Expected missing snooze date to decode as snoozed")
+        }
+    }
+
     func testTriageMutationForUnknownIDIsNoOp() {
         var state = WorkspaceState()
         state.recordDecision(BossInboxDecision(source: "boss", entryId: UUID(), prompt: "p", kind: .escalate, reasoning: "r"))
@@ -327,6 +365,20 @@ final class BossInboxDecisionTests: XCTestCase {
 
     func testSeverityIsAtMostFourTiers() {
         XCTAssertLessThanOrEqual(DecisionSeverity.allCases.count, 4, "anti-alarm-fatigue: keep severity tiers ≤4")
+    }
+
+    func testSeverityLabelsAndGroupIDAreStable() {
+        XCTAssertEqual(DecisionSeverity.low.label, "Low")
+        XCTAssertEqual(DecisionSeverity.normal.label, "Normal")
+        XCTAssertEqual(DecisionSeverity.elevated.label, "Needs you")
+        XCTAssertEqual(DecisionSeverity.critical.label, "Critical")
+        XCTAssertEqual(InboxSeverityGroup(severity: .critical, decisions: []).id, DecisionSeverity.critical.rawValue)
+    }
+
+    func testUntilEndOfDayFallsBackWhenCalendarCannotResolveNextDay() {
+        let interval = WorkbenchTriageInterval.untilEndOfDay(now: Date(timeIntervalSince1970: 0)) { _, _, _, _ in nil }
+
+        XCTAssertEqual(interval, 86_400)
     }
 
     // MARK: - openInbox filtering & ordering
@@ -381,6 +433,16 @@ final class BossInboxDecisionTests: XCTestCase {
             [oldDestructive.id, newPlain.id, midPlain.id],
             "critical first despite being oldest; within the elevated tier, newer before older"
         )
+    }
+
+    func testOpenInboxPreservesLogOrderWhenSeverityAndDateTie() {
+        let now = Date()
+        var state = WorkspaceState()
+        let firstInLog = BossInboxDecision(occurredAt: now, source: "b", entryId: nil, prompt: "A?", kind: .escalate, reasoning: "newer")
+        let secondInLog = BossInboxDecision(occurredAt: now, source: "b", entryId: nil, prompt: "B?", kind: .escalate, reasoning: "older")
+        state.decisionLog = [firstInLog, secondInLog]
+
+        XCTAssertEqual(state.openInbox(now: now).map(\.id), [firstInLog.id, secondInLog.id])
     }
 
     func testOpenInboxIncludesHoldAndBlockedAutoAdvanceButNotAppliedAutoAdvance() {
@@ -473,6 +535,29 @@ final class BossInboxDecisionTests: XCTestCase {
         let data = try JSONEncoder().encode(state)
         let decoded = try JSONDecoder().decode(WorkspaceState.self, from: data)
         XCTAssertEqual(decoded.decisionLog.first?.triage, .snoozed(until: now.addingTimeInterval(3600)), "triage survives a persistence round-trip")
+    }
+
+    func testAcknowledgedAndResolvedTriageRoundTripAndDefaultMissingDates() throws {
+        let now = Date(timeIntervalSinceReferenceDate: 1000)
+        for triage in [DecisionTriage.acknowledged(at: now), .resolved(at: now)] {
+            let data = try JSONEncoder().encode(triage)
+            let decoded = try JSONDecoder().decode(DecisionTriage.self, from: data)
+            XCTAssertEqual(decoded, triage)
+        }
+
+        let acknowledgedWithoutDate = try JSONDecoder().decode(DecisionTriage.self, from: Data(#"{"state":"acknowledged"}"#.utf8))
+        if case .acknowledged = acknowledgedWithoutDate {
+            XCTAssertFalse(acknowledgedWithoutDate.isOpen(at: Date()))
+        } else {
+            XCTFail("expected acknowledged default date")
+        }
+
+        let resolvedWithoutDate = try JSONDecoder().decode(DecisionTriage.self, from: Data(#"{"state":"resolved"}"#.utf8))
+        if case .resolved = resolvedWithoutDate {
+            XCTAssertFalse(resolvedWithoutDate.isOpen(at: Date()))
+        } else {
+            XCTFail("expected resolved default date")
+        }
     }
 
     // MARK: - Snooze interval helper

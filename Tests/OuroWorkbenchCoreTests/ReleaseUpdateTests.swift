@@ -77,4 +77,128 @@ final class ReleaseUpdateTests: XCTestCase {
         XCTAssertEqual(snapshot.currentVersion, WorkbenchRelease.version)
         XCTAssertTrue(snapshot.detail.contains("Release update check failed"))
     }
+
+    func testAsyncCheckUsesConfiguredVersionAndLoadedReleaseData() async throws {
+        let defaultChecker = ReleaseUpdateChecker()
+        XCTAssertEqual(defaultChecker.configuration.currentVersion, WorkbenchRelease.version)
+        let releasesURL = URL(string: "https://coverage-batch-2.test/releases")!
+        let configuredDefaultLoader = ReleaseUpdateChecker(
+            configuration: ReleaseUpdateConfiguration(
+                repository: "example/repo",
+                currentVersion: "0.1.0",
+                releasesURL: releasesURL
+            )
+        )
+        XCTAssertEqual(configuredDefaultLoader.configuration.releasesURL, releasesURL)
+        URLProtocol.registerClass(CoverageBatch2URLProtocol.self)
+        defer {
+            CoverageBatch2URLProtocol.reset()
+            URLProtocol.unregisterClass(CoverageBatch2URLProtocol.self)
+        }
+        CoverageBatch2URLProtocol.handler = { request in
+            XCTAssertEqual(request.url, releasesURL)
+            return (
+                HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                Data("""
+                [
+                  {
+                    "tag_name": "v0.2.0",
+                    "html_url": "https://github.com/ourostack/ouro-workbench/releases/tag/v0.2.0",
+                    "draft": false,
+                    "prerelease": false,
+                    "assets": []
+                  }
+                ]
+                """.utf8)
+            )
+        }
+        let configuredDefaultSnapshot = await configuredDefaultLoader.check()
+        XCTAssertEqual(configuredDefaultSnapshot.status, .updateAvailable)
+
+        let checker = ReleaseUpdateChecker(
+            configuration: ReleaseUpdateConfiguration(
+                repository: "example/repo",
+                currentVersion: "0.1.0",
+                releasesURL: releasesURL
+            ),
+            dataLoader: { url in
+                XCTAssertEqual(url, releasesURL)
+                return Data("""
+                [
+                  {"tag_name":"v0.1.1","html_url":"https://example.test/v0.1.1","draft":false,"prerelease":false,"assets":[]}
+                ]
+                """.utf8)
+            }
+        )
+
+        let snapshot = await checker.check()
+
+        XCTAssertEqual(snapshot.status, .updateAvailable)
+        XCTAssertEqual(snapshot.currentVersion, "0.1.0")
+        XCTAssertEqual(snapshot.latestVersion, "0.1.1")
+    }
+
+    func testSnapshotReportsUnavailableWhenVersionCannotBeCompared() throws {
+        let data = Data("""
+        [
+          {"tag_name":"release-candidate","html_url":"https://example.test/rc","draft":false,"prerelease":true,"assets":[]}
+        ]
+        """.utf8)
+
+        let snapshot = try ReleaseUpdateChecker.snapshot(from: data, currentVersion: "0.1.0")
+
+        XCTAssertEqual(snapshot.status, .unavailable)
+        XCTAssertEqual(snapshot.latestVersion, "release-candidate")
+        XCTAssertEqual(snapshot.detail, "Latest release release-candidate could not be compared to 0.1.0.")
+    }
+
+    func testSemanticVersionComparisonCoversMajorMinorAndPatch() {
+        XCTAssertLessThan(SemanticVersion("2.0.0")!, SemanticVersion("3.0.0")!)
+        XCTAssertLessThan(SemanticVersion("2.1.0")!, SemanticVersion("2.2.0")!)
+        XCTAssertLessThan(SemanticVersion("2.1.0-build.1")!, SemanticVersion("2.1.1")!)
+        XCTAssertNil(SemanticVersion("not-semver"))
+        XCTAssertNil(SemanticVersion(""))
+    }
+
+    func testDefaultDataLoaderReturnsDataAndMapsBadStatus() async throws {
+        URLProtocol.registerClass(CoverageBatch2URLProtocol.self)
+        defer {
+            CoverageBatch2URLProtocol.reset()
+            URLProtocol.unregisterClass(CoverageBatch2URLProtocol.self)
+        }
+
+        CoverageBatch2URLProtocol.handler = { request in
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Accept"), "application/vnd.github+json")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "User-Agent"), "OuroWorkbench/\(WorkbenchRelease.version)")
+            return (
+                HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                Data("[]".utf8)
+            )
+        }
+
+        let data = try await ReleaseUpdateChecker.defaultDataLoader(url: URL(string: "https://coverage-batch-2.test/releases")!)
+        XCTAssertEqual(String(decoding: data, as: UTF8.self), "[]")
+
+        CoverageBatch2URLProtocol.handler = { request in
+            (HTTPURLResponse(url: request.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!, Data())
+        }
+
+        await XCTAssertThrowsErrorAsync(try await ReleaseUpdateChecker.defaultDataLoader(url: URL(string: "https://coverage-batch-2.test/releases")!)) { error in
+            XCTAssertEqual(error as? ReleaseUpdateError, .badResponse)
+        }
+    }
+}
+
+private func XCTAssertThrowsErrorAsync(
+    _ expression: @autoclosure () async throws -> some Any,
+    _ handler: (Error) -> Void,
+    file: StaticString = #filePath,
+    line: UInt = #line
+) async {
+    do {
+        _ = try await expression()
+        XCTFail("expected async expression to throw", file: file, line: line)
+    } catch {
+        handler(error)
+    }
 }

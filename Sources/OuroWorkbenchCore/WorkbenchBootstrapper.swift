@@ -23,6 +23,20 @@ public struct WorkbenchBootstrapper: Sendable {
     public init() {}
 
     public func bootstrappedState(from state: WorkspaceState, defaults: WorkbenchDefaults = WorkbenchDefaults()) -> WorkspaceState {
+        bootstrappedState(from: state, defaults: defaults) {
+            WorkbenchProject(
+                name: defaults.projectName,
+                rootPath: defaults.projectRootPath,
+                boss: defaults.boss
+            )
+        }
+    }
+
+    func bootstrappedState(
+        from state: WorkspaceState,
+        defaults: WorkbenchDefaults = WorkbenchDefaults(),
+        makeDefaultProject: () -> WorkbenchProject?
+    ) -> WorkspaceState {
         var next = state
         // De-duplicate process entries by id (keep the first occurrence). A
         // malformed or torn state file with two entries sharing an id would
@@ -31,12 +45,7 @@ public struct WorkbenchBootstrapper: Sendable {
         // path (app and MCP server) runs through here, so this protects them all.
         next.processEntries = dedupedByID(next.processEntries)
         if next.projects.isEmpty {
-            let project = WorkbenchProject(
-                name: defaults.projectName,
-                rootPath: defaults.projectRootPath,
-                boss: defaults.boss
-            )
-            next.projects = [project]
+            next.projects = makeDefaultProject().map { [$0] } ?? []
         }
 
         if next.boss.agentName.isEmpty {

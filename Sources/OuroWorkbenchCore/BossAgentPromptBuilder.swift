@@ -140,7 +140,7 @@ public struct BossAgentPromptBuilder: Sendable {
             lines.append("")
             lines.append("Waiting prompts (decide each via ouro-workbench-decisions):")
             for snapshot in waiting {
-                let snippet = Self.oneLine(waitingPrompts[snapshot.id] ?? "")
+                let snippet = Self.oneLine(waitingPrompts[snapshot.id]!)
                 lines.append("- \(snapshot.name) (id=\(snapshot.id.uuidString)): \(snippet)")
             }
         }

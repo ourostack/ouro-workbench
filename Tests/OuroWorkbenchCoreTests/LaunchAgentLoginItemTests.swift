@@ -94,6 +94,39 @@ final class LaunchAgentLoginItemTests: XCTestCase {
         try? FileManager.default.removeItem(at: root)
     }
 
+    func testErrorDescriptionIncludesMissingBundlePath() {
+        XCTAssertEqual(
+            LaunchAgentLoginItemError.appBundleMissing("/Applications/Missing.app").errorDescription,
+            "App bundle is missing at /Applications/Missing.app"
+        )
+    }
+
+    func testUninstallIsNoOpWhenPlistIsAlreadyMissing() throws {
+        let root = try temporaryDirectory()
+        let appURL = root.appendingPathComponent("Applications/Ouro Workbench.app", isDirectory: true)
+        try FileManager.default.createDirectory(at: appURL, withIntermediateDirectories: true)
+        let loginItem = LaunchAgentLoginItem(appURL: appURL, homeURL: root)
+
+        XCTAssertNoThrow(try loginItem.uninstall())
+        XCTAssertEqual(loginItem.status(), .notInstalled)
+        try? FileManager.default.removeItem(at: root)
+    }
+
+    func testMalformedPlistNeedsUpdate() throws {
+        let root = try temporaryDirectory()
+        let appURL = root.appendingPathComponent("Applications/Ouro Workbench.app", isDirectory: true)
+        try FileManager.default.createDirectory(at: appURL, withIntermediateDirectories: true)
+        let loginItem = LaunchAgentLoginItem(appURL: appURL, homeURL: root)
+        try FileManager.default.createDirectory(
+            at: loginItem.plistURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Data("not a plist".utf8).write(to: loginItem.plistURL)
+
+        XCTAssertEqual(loginItem.status(), .needsUpdate)
+        try? FileManager.default.removeItem(at: root)
+    }
+
     private func temporaryDirectory() throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

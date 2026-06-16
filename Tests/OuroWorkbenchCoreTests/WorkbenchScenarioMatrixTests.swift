@@ -2,6 +2,58 @@ import XCTest
 @testable import OuroWorkbenchCore
 
 final class WorkbenchScenarioMatrixTests: XCTestCase {
+    func testMatrixLoadRejectsEmptyFileInvalidHeaderAndWrongColumnCount() throws {
+        let emptyURL = try writeMatrix("empty", "")
+        XCTAssertThrowsError(try WorkbenchScenarioMatrix.load(from: emptyURL)) { error in
+            XCTAssertEqual(error as? WorkbenchScenarioMatrixError, .emptyMatrix)
+            XCTAssertEqual(String(describing: error), "scenario matrix is empty")
+        }
+
+        let badHeaderURL = try writeMatrix("bad-header", "case_id\tterminal\n")
+        XCTAssertThrowsError(try WorkbenchScenarioMatrix.load(from: badHeaderURL)) { error in
+            XCTAssertEqual(error as? WorkbenchScenarioMatrixError, .invalidHeader(["case_id", "terminal"]))
+            XCTAssertEqual(String(describing: error), "invalid matrix header: case_id,terminal")
+        }
+
+        let shortRowURL = try writeMatrix("short-row", WorkbenchScenarioMatrix.expectedHeader.joined(separator: "\t") + "\nWB-1\tclaude\n")
+        XCTAssertThrowsError(try WorkbenchScenarioMatrix.load(from: shortRowURL)) { error in
+            XCTAssertEqual(error as? WorkbenchScenarioMatrixError, .invalidColumnCount(line: 2, count: 2))
+            XCTAssertEqual(String(describing: error), "line 2 has 2 columns")
+        }
+    }
+
+    func testMatrixFixtureRejectsInvalidTerminalLifecycleTrustAndSurfaceValues() throws {
+        var row = validRow()
+        row.terminal = "mystery"
+        XCTAssertThrowsError(try WorkbenchScenarioMatrix(rows: []).fixture(for: row)) { error in
+            XCTAssertEqual(error as? WorkbenchScenarioMatrixError, .invalidValue("terminal mystery"))
+        }
+
+        row = validRow()
+        row.lifecycle = "paused"
+        XCTAssertThrowsError(try WorkbenchScenarioMatrix(rows: []).fixture(for: row)) { error in
+            XCTAssertEqual(error as? WorkbenchScenarioMatrixError, .invalidValue("lifecycle paused"))
+        }
+
+        XCTAssertThrowsError(try WorkbenchTrustResumePosture(rawValue: "unknown")) { error in
+            XCTAssertEqual(error as? WorkbenchScenarioMatrixError, .invalidValue("trust_resume_metadata unknown"))
+        }
+        XCTAssertThrowsError(try WorkbenchSurfacePosture(rawValue: "unknown")) { error in
+            XCTAssertEqual(error as? WorkbenchScenarioMatrixError, .invalidValue("surface unknown"))
+            XCTAssertEqual(String(describing: error), "invalid matrix value: surface unknown")
+        }
+    }
+
+    func testRegistrationDefaultsUnknownBridgeToInvalidConfig() throws {
+        var row = validRow()
+        row.bossBridge = "future_status"
+
+        let registration = WorkbenchScenarioMatrix(rows: []).registration(for: row)
+
+        XCTAssertEqual(registration.status, .invalidConfig)
+        XCTAssertEqual(registration.detail, "invalidConfig")
+    }
+
     func testScenarioMatrixContainsExactlyFiveThousandCasesWithOptimalOutcomes() throws {
         let rows = try loadMatrix().rows
 
@@ -100,5 +152,34 @@ final class WorkbenchScenarioMatrixTests: XCTestCase {
     private func loadMatrix() throws -> WorkbenchScenarioMatrix {
         let packageRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
         return try WorkbenchScenarioMatrix.load(from: WorkbenchScenarioMatrix.defaultMatrixURL(packageRoot: packageRoot))
+    }
+
+    private func validRow() -> WorkbenchScenarioRow {
+        try! WorkbenchScenarioRow(
+            columns: [
+                "WB-X",
+                "claude",
+                "running",
+                "trusted_auto_session",
+                "sidebar_dashboard",
+                "registered",
+                "available",
+                "reattach",
+                "false",
+                "ready",
+                "operator outcome",
+                "boss outcome"
+            ],
+            lineNumber: 2
+        )
+    }
+
+    private func writeMatrix(_ name: String, _ contents: String) throws -> URL {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("WorkbenchScenarioMatrixTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let url = root.appendingPathComponent("\(name).tsv")
+        try contents.write(to: url, atomically: true, encoding: .utf8)
+        return url
     }
 }
