@@ -154,4 +154,81 @@ final class FinalCoverageTests: XCTestCase {
             stderr: Pipe().fileHandleForReading)
         defaulted.forceKill() // not running → no-op, default killer never fires
     }
+
+    // A codex rollout whose head records a matching cwd (payload form and
+    // top-level form) is located by scanning, covering the match + cwd-extract arms.
+    func testSessionActivityCodexMatchesByRecordedCwd() throws {
+        let day = tmp.appendingPathComponent(".codex/sessions/2026/06/15", isDirectory: true)
+        try FileManager.default.createDirectory(at: day, withIntermediateDirectories: true)
+        try "{\"payload\":{\"cwd\":\"/work/dir\"}}\n"
+            .write(to: day.appendingPathComponent("payload.jsonl"), atomically: true, encoding: .utf8)
+        let reader = SessionActivityReader(homeURL: tmp, maxBytes: 256_000)
+        // Resolves the rollout via the recorded cwd (no crash; activity may be empty).
+        _ = reader.activity(forDirectory: "/work/dir", agentKind: .openAICodex)
+        XCTAssertEqual(reader.codexTranscriptURL(forDirectory: "/work/dir")?.lastPathComponent, "payload.jsonl")
+    }
+
+    func testSessionActivityCodexMatchesByTopLevelCwd() throws {
+        let day = tmp.appendingPathComponent(".codex/sessions/2026/06/15", isDirectory: true)
+        try FileManager.default.createDirectory(at: day, withIntermediateDirectories: true)
+        try "{\"cwd\":\"/top/level\"}\n"
+            .write(to: day.appendingPathComponent("top.jsonl"), atomically: true, encoding: .utf8)
+        let reader = SessionActivityReader(homeURL: tmp, maxBytes: 256_000)
+        XCTAssertEqual(reader.codexTranscriptURL(forDirectory: "/top/level")?.lastPathComponent, "top.jsonl")
+    }
+
+    // MARK: - MailboxClient.defaultDataLoader (real URLSession adapter, stubbed transport)
+
+    func testDefaultDataLoaderReturnsHTTPResponse() async throws {
+        MailboxStubURLProtocol.respond = { url in
+            (Data("{}".utf8), HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+        }
+        defer { MailboxStubURLProtocol.respond = nil }
+        let (data, response) = try await MailboxClient.defaultDataLoader(
+            url: URL(string: "https://example.test/api")!, session: Self.stubSession())
+        XCTAssertEqual(response.statusCode, 200)
+        XCTAssertEqual(data, Data("{}".utf8))
+    }
+
+    func testDefaultDataLoaderRejectsNonHTTPResponse() async {
+        MailboxStubURLProtocol.respond = { url in
+            (Data(), URLResponse(url: url, mimeType: nil, expectedContentLength: 0, textEncodingName: nil))
+        }
+        defer { MailboxStubURLProtocol.respond = nil }
+        do {
+            _ = try await MailboxClient.defaultDataLoader(
+                url: URL(string: "https://example.test/api")!, session: Self.stubSession())
+            XCTFail("expected invalidURL")
+        } catch {
+            XCTAssertEqual(error as? MailboxClientError, .invalidURL)
+        }
+    }
+
+    // The default-loader argument is exercised by constructing without it.
+    func testMailboxClientUsesDefaultLoaderWhenUnspecified() throws {
+        XCTAssertEqual(try MailboxClient().url(for: .events).path, "/api/events")
+    }
+
+    private static func stubSession() -> URLSession {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [MailboxStubURLProtocol.self]
+        return URLSession(configuration: config)
+    }
+}
+
+/// In-process transport stub so the real `defaultDataLoader` adapter can be
+/// exercised without touching the network.
+final class MailboxStubURLProtocol: URLProtocol {
+    nonisolated(unsafe) static var respond: ((URL) -> (Data, URLResponse))?
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        if let url = request.url, let (data, response) = Self.respond?(url) {
+            client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+            client?.urlProtocol(self, didLoad: data)
+        }
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
 }

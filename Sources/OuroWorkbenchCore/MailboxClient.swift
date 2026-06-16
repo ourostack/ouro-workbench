@@ -168,7 +168,11 @@ public struct MailboxClient: Sendable {
     }
 
     public static func defaultDataLoader(url: URL) async throws -> (Data, HTTPURLResponse) {
-        let (data, response) = try await URLSession.shared.data(from: url)
+        try await defaultDataLoader(url: url, session: .shared)
+    }
+
+    static func defaultDataLoader(url: URL, session: URLSession) async throws -> (Data, HTTPURLResponse) {
+        let (data, response) = try await session.data(from: url)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw MailboxClientError.invalidURL
         }
