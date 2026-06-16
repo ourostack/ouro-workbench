@@ -75,7 +75,7 @@ swift run OuroWorkbenchScenarioVerifier \
   --expect-matrix-rows 5000 \
   --expect-deep-rows 0 \
   --expect-render-passes 25000 \
-  --expect-coverage-digest 567dc7ec0c45835b
+  --expect-coverage-digest 89292786bde2e133
 ```
 
 Full local preflight, including the required native verifier contract and app
@@ -100,13 +100,13 @@ run count, and viewport coverage.
 
 ## Current Local Baseline
 
-Last local run on 2026-05-25:
+Last local run on 2026-06-16:
 
 ```text
 rows verified: 5000
 render passes: 25000
 viewports: standard, short-window, compact-terminal, tall-workspace, wide-workspace
-coverage digest: 567dc7ec0c45835b
+coverage digest: 89292786bde2e133
 failures: 0
 ```
 

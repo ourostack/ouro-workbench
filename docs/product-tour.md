@@ -115,5 +115,5 @@ swift run OuroWorkbenchScenarioVerifier \
   --expect-matrix-rows 5000 \
   --expect-deep-rows 0 \
   --expect-render-passes 25000 \
-  --expect-coverage-digest 567dc7ec0c45835b
+  --expect-coverage-digest 89292786bde2e133
 ```

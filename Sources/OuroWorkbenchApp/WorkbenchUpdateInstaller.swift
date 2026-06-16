@@ -11,16 +11,16 @@ import OuroWorkbenchCore
 /// What "Check for Updates…" should tell the user, driving a single
 /// confirmation dialog from the More menu / ⌘K.
 enum WorkbenchUpdatePrompt: Equatable {
-    case installable(version: String)
-    case upToDate(version: String)
+    case installable(release: String)
+    case upToDate(release: String)
     case failed(detail: String)
 
     var message: String {
         switch self {
-        case let .installable(version):
-            return "Ouro Workbench \(version) is available. Install it now and relaunch? Your running terminals keep running across the update."
-        case let .upToDate(version):
-            return "You're on the latest version (\(version))."
+        case let .installable(release):
+            return "Ouro Workbench \(release) is available. Install it now and relaunch? Your running terminals keep running across the update."
+        case let .upToDate(release):
+            return "You're on the latest release (\(release))."
         case let .failed(detail):
             return detail
         }
@@ -35,11 +35,17 @@ enum WorkbenchUpdatePrompt: Equatable {
 struct WorkbenchUpdateInstaller: Sendable {
     var bundleIdentifier: String
     var currentVersion: String
+    var currentBuild: String?
 
     struct Staged: Sendable {
         var appURL: URL
         var stagingRoot: URL
         var version: String
+        var build: String
+
+        var releaseLabel: String {
+            "\(version) (build \(build))"
+        }
     }
 
     enum InstallError: LocalizedError, Equatable {
@@ -105,7 +111,8 @@ struct WorkbenchUpdateInstaller: Sendable {
             downloadedSHA256: sha,
             downloadedBytes: archiveData.count,
             expectedBundleIdentifier: bundleIdentifier,
-            currentVersion: currentVersion
+            currentVersion: currentVersion,
+            currentBuild: currentBuild
         ) {
             throw InstallError.verification(failure)
         }
@@ -147,7 +154,7 @@ struct WorkbenchUpdateInstaller: Sendable {
             throw InstallError.codesignFailed(codesign.stderr.isEmpty ? "codesign exited \(codesign.status)" : codesign.stderr)
         }
 
-        return Staged(appURL: appURL, stagingRoot: root, version: manifest.version)
+        return Staged(appURL: appURL, stagingRoot: root, version: manifest.version, build: manifest.build)
     }
 
     /// Spawn a detached helper that waits for this process to exit, swaps the

@@ -35,12 +35,14 @@ public struct WorkbenchUpdateManifest: Codable, Equatable, Sendable {
 /// fetch (the app `.zip` and its `.manifest.json`) and the version they carry.
 public struct WorkbenchUpdatePlan: Equatable, Sendable {
     public var version: String
+    public var build: String?
     public var archiveURL: URL
     public var archiveName: String
     public var manifestURL: URL
 
-    public init(version: String, archiveURL: URL, archiveName: String, manifestURL: URL) {
+    public init(version: String, build: String? = nil, archiveURL: URL, archiveName: String, manifestURL: URL) {
         self.version = version
+        self.build = build
         self.archiveURL = archiveURL
         self.archiveName = archiveName
         self.manifestURL = manifestURL
@@ -74,10 +76,11 @@ public enum WorkbenchUpdatePlanner {
         guard snapshot.status == .updateAvailable, let version = snapshot.latestVersion else {
             return .failure(.notAnUpdate)
         }
-        guard let archive = snapshot.assets.first(where: { $0.name.hasSuffix(".zip") }) else {
+        let assets = snapshot.installableAssets
+        guard let archive = assets.first(where: { $0.name.hasSuffix(".zip") }) else {
             return .failure(.missingArchiveAsset)
         }
-        guard let manifest = snapshot.assets.first(where: { $0.name.hasSuffix(".manifest.json") }) else {
+        guard let manifest = assets.first(where: { $0.name.hasSuffix(".manifest.json") }) else {
             return .failure(.missingManifestAsset)
         }
         guard let archiveURL = URL(string: archive.downloadURL),
@@ -87,6 +90,7 @@ public enum WorkbenchUpdatePlanner {
         return .success(
             WorkbenchUpdatePlan(
                 version: version,
+                build: snapshot.latestBuild,
                 archiveURL: archiveURL,
                 archiveName: archive.name,
                 manifestURL: manifestURL
@@ -152,7 +156,8 @@ public enum WorkbenchUpdateVerification {
         downloadedSHA256: String,
         downloadedBytes: Int,
         expectedBundleIdentifier: String,
-        currentVersion: String
+        currentVersion: String,
+        currentBuild: String? = nil
     ) -> Failure? {
         guard downloadedArchiveName == manifest.archive else {
             return .archiveNameMismatch(expected: manifest.archive, got: downloadedArchiveName)
@@ -168,12 +173,13 @@ public enum WorkbenchUpdateVerification {
         guard manifest.bundleIdentifier == expectedBundleIdentifier else {
             return .bundleIdentifierMismatch(expected: expectedBundleIdentifier, got: manifest.bundleIdentifier)
         }
-        guard let candidate = SemanticVersion(manifest.version),
-              let current = SemanticVersion(currentVersion) else {
+        let candidate = ReleaseVersionIdentity(version: manifest.version, build: manifest.build)
+        let current = ReleaseVersionIdentity(version: currentVersion, build: currentBuild)
+        guard let isNewer = candidate.isNewer(than: current) else {
             return .unreadableVersion(manifest: manifest.version, current: currentVersion)
         }
-        guard candidate > current else {
-            return .notNewerThanCurrent(current: currentVersion, candidate: manifest.version)
+        guard isNewer else {
+            return .notNewerThanCurrent(current: current.display, candidate: candidate.display)
         }
         return nil
     }

@@ -37,6 +37,14 @@ struct OuroWorkbenchApp: App {
         // which a view-level shortcut would let the terminal swallow. Each item
         // posts a `WorkbenchMenuCommand`; the root view dispatches it.
         .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("About Ouro Workbench…") {
+                    NotificationCenter.default.post(name: .workbenchMenuCommand, object: WorkbenchMenuCommand.about)
+                }
+                Button("Check for Updates…") {
+                    NotificationCenter.default.post(name: .workbenchMenuCommand, object: WorkbenchMenuCommand.checkForUpdates)
+                }
+            }
             CommandGroup(replacing: .newItem) {
                 menuCommand("New Terminal", .newTerminal, "n")
                 menuCommand("New Terminal Tab", .newTerminal, "t")
@@ -121,7 +129,7 @@ enum WorkbenchMenuCommand {
     case toggleSidebar, toggleFocus, fontIncrease, fontDecrease, fontReset
     case prevTerminal, nextTerminal, prevGroup, nextGroup
     case findInTerminal, redraw, stopSelected
-    case settings, shortcutsHelp
+    case settings, shortcutsHelp, about, checkForUpdates
     case selectTerminal(Int)
     case splitRight, splitDown, closePane, focusOtherPane
 }
@@ -288,6 +296,10 @@ struct WorkbenchRootView: View {
             model.isSettingsSheetPresented = true
         case .shortcutsHelp:
             model.isShortcutHelpPresented = true
+        case .about:
+            model.isAboutSheetPresented = true
+        case .checkForUpdates:
+            Task { await model.checkForUpdatesAndPromptInstall() }
         case let .selectTerminal(index):
             _ = model.selectTerminal(atOneIndexedPosition: index)
         }
@@ -430,7 +442,7 @@ struct WorkbenchRootView: View {
             SettingsSheet(model: model)
         }
         .sheet(isPresented: $model.isAboutSheetPresented) {
-            AboutSheet()
+            AboutSheet(model: model)
         }
         .sheet(isPresented: $model.isHarnessStatusPresented) {
             HarnessStatusSheet(model: model)
@@ -1530,6 +1542,7 @@ struct SettingsSheet: View {
                     appearanceSection
                     chromeSection
                     startupSection
+                    updatesSection
                     bossSection
                     advancedSection
                 }
@@ -1640,13 +1653,20 @@ struct SettingsSheet: View {
                 }
             }
             .toggleStyle(.switch)
+        }
+    }
+
+    @ViewBuilder
+    private var updatesSection: some View {
+        SettingsSection(title: "Software Updates", systemImage: "arrow.down.app") {
+            ReleaseUpdateControls(model: model, showTitle: false)
             Toggle(isOn: Binding(
                 get: { model.autoUpdateEnabled },
                 set: { model.setAutoUpdateEnabled($0) }
             )) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Automatically check for updates and install on quit")
-                    Text("Quietly checks GitHub on launch and downloads + verifies a newer release in the background. The update applies the next time you quit Workbench — never a surprise relaunch. An \u{201C}Update\u{201D} badge appears in the header when one is ready; click it to install immediately.")
+                    Text("Workbench verifies the release manifest and applies staged updates the next time you quit.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -1787,6 +1807,7 @@ struct ImportSummaryBanner: View {
 /// hidden title bar prevents the system's built-in About from surfacing,
 /// so the More-menu route is the primary entry.
 struct AboutSheet: View {
+    @ObservedObject var model: WorkbenchViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var copiedFeedback = false
 
@@ -1845,6 +1866,7 @@ struct AboutSheet: View {
                     )
                 }
             }
+            ReleaseUpdateControls(model: model, showTitle: false)
             Spacer(minLength: 0)
             HStack {
                 Spacer()
@@ -1853,7 +1875,7 @@ struct AboutSheet: View {
             }
         }
         .padding(20)
-        .frame(width: 360, height: 320)
+        .frame(width: 460, height: 380)
     }
 }
 
@@ -8525,56 +8547,31 @@ struct ReleaseUpdateView: View {
     @ObservedObject var model: WorkbenchViewModel
 
     var body: some View {
+        ReleaseUpdateControls(model: model, showTitle: true)
+    }
+}
+
+struct ReleaseUpdateControls: View {
+    @ObservedObject var model: WorkbenchViewModel
+    var showTitle: Bool
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 12) {
-                DashboardRowLabel(title: "Release Updates", systemImage: "arrow.down.app")
-                DashboardStatusLine(
-                    text: model.releaseUpdateStatusLine,
-                    color: model.releaseUpdateStatusColor
-                )
-                if model.releaseUpdateIsChecking {
-                    ProgressView()
-                        .controlSize(.small)
-                        .fixedSize()
+            if showTitle {
+                HStack(spacing: 12) {
+                    DashboardRowLabel(title: "Release Updates", systemImage: "arrow.down.app")
+                    updateStatus
+                    updateProgress
+                    updateButtons
                 }
-                Button {
-                    Task {
-                        await model.checkForReleaseUpdate()
-                    }
-                } label: {
-                    Label("Check", systemImage: "arrow.clockwise")
+            } else {
+                HStack(spacing: 8) {
+                    updateStatus
+                    updateProgress
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(model.releaseUpdateIsChecking)
-                .fixedSize()
-                if let snapshot = model.releaseUpdateSnapshot,
-                   snapshot.status == .updateAvailable,
-                   snapshot.hasInstallableAssets {
-                    Button {
-                        Task { await model.installReleaseUpdate() }
-                    } label: {
-                        Label("Install & Relaunch", systemImage: "arrow.down.app.fill")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                    .disabled(model.releaseUpdateIsInstalling)
-                    .fixedSize()
-                }
-                if model.releaseUpdateIsInstalling {
-                    ProgressView()
-                        .controlSize(.small)
-                        .fixedSize()
-                }
-                if model.releaseUpdateURL != nil {
-                    Button {
-                        model.openReleaseUpdate()
-                    } label: {
-                        Label("Open Release", systemImage: "safari")
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .fixedSize()
+                HStack(spacing: 8) {
+                    Spacer(minLength: 0)
+                    updateButtons
                 }
             }
             if let status = model.releaseUpdateInstallStatus, model.releaseUpdateIsInstalling {
@@ -8593,6 +8590,62 @@ struct ReleaseUpdateView: View {
                     .font(.caption)
                     .foregroundStyle(snapshot.hasInstallableAssets ? SwiftUI.Color.secondary : SwiftUI.Color.orange)
             }
+        }
+    }
+
+    private var updateStatus: some View {
+        DashboardStatusLine(
+            text: model.releaseUpdateStatusLine,
+            color: model.releaseUpdateStatusColor
+        )
+    }
+
+    @ViewBuilder
+    private var updateProgress: some View {
+        if model.releaseUpdateIsChecking || model.releaseUpdateIsInstalling {
+            ProgressView()
+                .controlSize(.small)
+                .fixedSize()
+        }
+    }
+
+    @ViewBuilder
+    private var updateButtons: some View {
+        Button {
+            Task {
+                await model.checkForUpdatesAndPromptInstall()
+            }
+        } label: {
+            Label("Check for Updates…", systemImage: "arrow.clockwise")
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .disabled(model.releaseUpdateIsChecking)
+        .fixedSize()
+
+        if let snapshot = model.releaseUpdateSnapshot,
+           snapshot.status == .updateAvailable,
+           snapshot.hasInstallableAssets {
+            Button {
+                Task { await model.installReleaseUpdate() }
+            } label: {
+                Label("Install & Relaunch", systemImage: "arrow.down.app.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .disabled(model.releaseUpdateIsInstalling)
+            .fixedSize()
+        }
+
+        if model.releaseUpdateURL != nil {
+            Button {
+                model.openReleaseUpdate()
+            } label: {
+                Label("Open Release", systemImage: "safari")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .fixedSize()
         }
     }
 }
@@ -11970,13 +12023,13 @@ final class WorkbenchViewModel: ObservableObject {
         }
         switch snapshot.status {
         case .updateAvailable:
-            if snapshot.hasInstallableAssets, let version = snapshot.latestVersion {
-                updatePrompt = .installable(version: version)
+            if snapshot.hasInstallableAssets, let release = snapshot.latestReleaseLabelForPrompt {
+                updatePrompt = .installable(release: release)
             } else {
                 updatePrompt = .failed(detail: "A newer version is published but has no installable assets yet — try the release page.")
             }
         case .current:
-            updatePrompt = .upToDate(version: snapshot.currentVersion)
+            updatePrompt = .upToDate(release: snapshot.currentReleaseLabelForPrompt)
         case .unavailable:
             updatePrompt = .failed(detail: snapshot.detail)
         }
@@ -11994,12 +12047,12 @@ final class WorkbenchViewModel: ObservableObject {
         // Fast path: the background auto-updater already downloaded + verified
         // this version, so installing is just the swap + relaunch.
         if let staged = pendingStagedUpdate {
-            releaseUpdateInstallStatus = "Installing \(staged.version) and relaunching…"
+            releaseUpdateInstallStatus = "Installing \(staged.releaseLabel) and relaunching…"
             isApplyingManualUpdate = true
             recordActionLog(
                 source: "native",
                 action: "installReleaseUpdate",
-                result: "Applying staged \(staged.version); relaunching",
+                result: "Applying staged \(staged.releaseLabel); relaunching",
                 succeeded: true
             )
             WorkbenchUpdateInstaller.applyAndRelaunch(
@@ -12029,18 +12082,19 @@ final class WorkbenchViewModel: ObservableObject {
 
         let installer = WorkbenchUpdateInstaller(
             bundleIdentifier: WorkbenchRelease.bundleIdentifier,
-            currentVersion: WorkbenchRelease.version
+            currentVersion: WorkbenchRelease.version,
+            currentBuild: Self.buildHashString()
         )
         do {
             let staged = try await installer.stage(plan: plan) { [weak self] line in
                 await MainActor.run { self?.releaseUpdateInstallStatus = line }
             }
-            releaseUpdateInstallStatus = "Installing \(staged.version) and relaunching…"
+            releaseUpdateInstallStatus = "Installing \(staged.releaseLabel) and relaunching…"
             isApplyingManualUpdate = true
             recordActionLog(
                 source: "native",
                 action: "installReleaseUpdate",
-                result: "Staged \(staged.version); swapping bundle and relaunching",
+                result: "Staged \(staged.releaseLabel); swapping bundle and relaunching",
                 succeeded: true
             )
             WorkbenchUpdateInstaller.applyAndRelaunch(
@@ -12076,8 +12130,8 @@ final class WorkbenchViewModel: ObservableObject {
         if let snapshot = releaseUpdateSnapshot,
            snapshot.status == .updateAvailable,
            snapshot.hasInstallableAssets,
-           let version = snapshot.latestVersion {
-            return "Update \(version)"
+           let release = snapshot.latestReleaseLabelForPrompt {
+            return "Update \(release)"
         }
         return nil
     }
@@ -12085,12 +12139,12 @@ final class WorkbenchViewModel: ObservableObject {
     /// Badge tap / "review update" → reuse the Software Update dialog.
     func presentUpdatePrompt() {
         if let version = stagedUpdateVersion {
-            updatePrompt = .installable(version: version)
+            updatePrompt = .installable(release: version)
         } else if let snapshot = releaseUpdateSnapshot,
                   snapshot.status == .updateAvailable,
                   snapshot.hasInstallableAssets,
-                  let version = snapshot.latestVersion {
-            updatePrompt = .installable(version: version)
+                  let release = snapshot.latestReleaseLabelForPrompt {
+            updatePrompt = .installable(release: release)
         }
     }
 
@@ -12129,16 +12183,17 @@ final class WorkbenchViewModel: ObservableObject {
         guard case let .success(plan) = WorkbenchUpdatePlanner.plan(from: snapshot) else { return }
         let installer = WorkbenchUpdateInstaller(
             bundleIdentifier: WorkbenchRelease.bundleIdentifier,
-            currentVersion: WorkbenchRelease.version
+            currentVersion: WorkbenchRelease.version,
+            currentBuild: Self.buildHashString()
         )
         do {
             let staged = try await installer.stage(plan: plan) { _ in }
             pendingStagedUpdate = staged
-            stagedUpdateVersion = staged.version
+            stagedUpdateVersion = staged.releaseLabel
             recordActionLog(
                 source: "native",
                 action: "autoStageUpdate",
-                result: "Staged \(staged.version) in background; will install on quit",
+                result: "Staged \(staged.releaseLabel) in background; will install on quit",
                 succeeded: true
             )
         } catch {

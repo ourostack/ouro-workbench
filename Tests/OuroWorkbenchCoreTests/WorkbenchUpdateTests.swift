@@ -10,7 +10,9 @@ final class WorkbenchUpdateTests: XCTestCase {
         ReleaseUpdateSnapshot(
             status: status,
             currentVersion: "0.1.120",
+            currentBuild: "198",
             latestVersion: latest,
+            latestBuild: "199",
             tagName: latest.map { "v\($0)" },
             htmlURL: "https://github.com/ourostack/ouro-workbench/releases/latest",
             assets: assets,
@@ -40,9 +42,42 @@ final class WorkbenchUpdateTests: XCTestCase {
             from: snapshot(status: .updateAvailable, latest: "0.1.122", assets: installableAssets)
         ).get()
         XCTAssertEqual(plan.version, "0.1.122")
+        XCTAssertEqual(plan.build, "199")
         XCTAssertEqual(plan.archiveName, "OuroWorkbench-0.1.122-build.199-779ed85.zip")
         XCTAssertEqual(plan.archiveURL.lastPathComponent, "OuroWorkbench-0.1.122-build.199-779ed85.zip")
         XCTAssertEqual(plan.manifestURL.lastPathComponent, "OuroWorkbench-0.1.122-build.199-779ed85.manifest.json")
+    }
+
+    func testPlanIgnoresAssetsFromOtherVersionsAndBuilds() throws {
+        let assets = [
+            ReleaseUpdateAsset(
+                name: "OuroWorkbench-0.1.121-build.999-deadbee.zip",
+                downloadURL: "https://example.com/wrong-version.zip",
+                size: 3_600_000
+            ),
+            ReleaseUpdateAsset(
+                name: "OuroWorkbench-0.1.122-build.198-deadbee.zip",
+                downloadURL: "https://example.com/wrong-build.zip",
+                size: 3_600_000
+            ),
+            ReleaseUpdateAsset(
+                name: "OuroWorkbench-0.1.122-build.199-779ed85.zip",
+                downloadURL: "https://example.com/right.zip",
+                size: 3_600_000
+            ),
+            ReleaseUpdateAsset(
+                name: "OuroWorkbench-0.1.122-build.199-779ed85.manifest.json",
+                downloadURL: "https://example.com/right.manifest.json",
+                size: 320
+            )
+        ]
+
+        let plan = try WorkbenchUpdatePlanner.plan(
+            from: snapshot(status: .updateAvailable, latest: "0.1.122", assets: assets)
+        ).get()
+
+        XCTAssertEqual(plan.archiveURL.absoluteString, "https://example.com/right.zip")
+        XCTAssertEqual(plan.manifestURL.absoluteString, "https://example.com/right.manifest.json")
     }
 
     func testPlanFailsWhenNotAnUpdate() {
@@ -96,6 +131,19 @@ final class WorkbenchUpdateTests: XCTestCase {
             downloadedBytes: 3_600_000,
             expectedBundleIdentifier: "com.ourostack.workbench",
             currentVersion: "0.1.120"
+        )
+        XCTAssertNil(failure)
+    }
+
+    func testVerifyPassesWhenSameVersionHasNewerBuild() {
+        let failure = WorkbenchUpdateVerification.verify(
+            manifest: manifest(version: "0.1.120"),
+            downloadedArchiveName: "OuroWorkbench-0.1.122-build.199-779ed85.zip",
+            downloadedSHA256: "abc123",
+            downloadedBytes: 3_600_000,
+            expectedBundleIdentifier: "com.ourostack.workbench",
+            currentVersion: "0.1.120",
+            currentBuild: "198"
         )
         XCTAssertNil(failure)
     }
@@ -158,9 +206,16 @@ final class WorkbenchUpdateTests: XCTestCase {
             downloadedSHA256: "abc123",
             downloadedBytes: 3_600_000,
             expectedBundleIdentifier: "com.ourostack.workbench",
-            currentVersion: "0.1.120"
+            currentVersion: "0.1.120",
+            currentBuild: "199"
         )
-        XCTAssertEqual(failure, .notNewerThanCurrent(current: "0.1.120", candidate: "0.1.120"))
+        XCTAssertEqual(
+            failure,
+            .notNewerThanCurrent(
+                current: "Version 0.1.120 (build 199)",
+                candidate: "Version 0.1.120 (build 199)"
+            )
+        )
     }
 
     // MARK: - Auto-update policy

@@ -21,7 +21,9 @@ public struct ReleaseUpdateAsset: Codable, Equatable, Sendable {
 public struct ReleaseUpdateSnapshot: Codable, Equatable, Sendable {
     public var status: ReleaseUpdateStatus
     public var currentVersion: String
+    public var currentBuild: String?
     public var latestVersion: String?
+    public var latestBuild: String?
     public var tagName: String?
     public var htmlURL: String?
     public var assets: [ReleaseUpdateAsset]
@@ -30,7 +32,9 @@ public struct ReleaseUpdateSnapshot: Codable, Equatable, Sendable {
     public init(
         status: ReleaseUpdateStatus,
         currentVersion: String,
+        currentBuild: String? = nil,
         latestVersion: String?,
+        latestBuild: String? = nil,
         tagName: String?,
         htmlURL: String?,
         assets: [ReleaseUpdateAsset],
@@ -38,7 +42,9 @@ public struct ReleaseUpdateSnapshot: Codable, Equatable, Sendable {
     ) {
         self.status = status
         self.currentVersion = currentVersion
+        self.currentBuild = currentBuild
         self.latestVersion = latestVersion
+        self.latestBuild = latestBuild
         self.tagName = tagName
         self.htmlURL = htmlURL
         self.assets = assets
@@ -46,24 +52,71 @@ public struct ReleaseUpdateSnapshot: Codable, Equatable, Sendable {
     }
 
     public var hasInstallableAssets: Bool {
-        assets.contains { $0.name.hasSuffix(".zip") }
-            && assets.contains { $0.name.hasSuffix(".manifest.json") }
+        installableAssets.contains { $0.name.hasSuffix(".zip") }
+            && installableAssets.contains { $0.name.hasSuffix(".manifest.json") }
+    }
+
+    public var installableAssets: [ReleaseUpdateAsset] {
+        guard let latestVersion else {
+            return []
+        }
+        return assets.filter {
+            Self.isInstallableAssetName($0.name, version: latestVersion, build: latestBuild)
+        }
+    }
+
+    public var currentReleaseLabel: String {
+        ReleaseVersionIdentity(version: currentVersion, build: currentBuild).display
+    }
+
+    public var currentReleaseLabelForPrompt: String {
+        ReleaseVersionIdentity(version: currentVersion, build: currentBuild).label
+    }
+
+    public var latestReleaseLabel: String? {
+        guard let latestVersion else { return nil }
+        return ReleaseVersionIdentity(version: latestVersion, build: latestBuild).display
+    }
+
+    public var latestReleaseLabelForPrompt: String? {
+        guard let latestVersion else { return nil }
+        return ReleaseVersionIdentity(version: latestVersion, build: latestBuild).label
+    }
+
+    private static func isInstallableAssetName(_ name: String, version: String, build: String?) -> Bool {
+        let prefix = "OuroWorkbench-\(version)-build."
+        guard name.hasPrefix(prefix) else {
+            return false
+        }
+        if let build {
+            guard name.hasPrefix("\(prefix)\(build)-") else {
+                return false
+            }
+        }
+        return name.hasSuffix(".zip") || name.hasSuffix(".manifest.json")
     }
 }
 
 public struct ReleaseUpdateConfiguration: Equatable, Sendable {
     public var repository: String
     public var currentVersion: String
+    public var currentBuild: String?
     public var releasesURL: URL
 
     public init(
         repository: String = "ourostack/ouro-workbench",
         currentVersion: String = WorkbenchRelease.version,
+        currentBuild: String? = ReleaseUpdateConfiguration.defaultCurrentBuild(),
         releasesURL: URL? = nil
     ) {
         self.repository = repository
         self.currentVersion = currentVersion
+        self.currentBuild = currentBuild
         self.releasesURL = releasesURL ?? URL(string: "https://api.github.com/repos/\(repository)/releases?per_page=10")!
+    }
+
+    public static func defaultCurrentBuild() -> String? {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String
     }
 }
 
@@ -84,13 +137,16 @@ public struct ReleaseUpdateChecker: Sendable {
             let data = try await dataLoader(configuration.releasesURL)
             return try Self.snapshot(
                 from: data,
-                currentVersion: configuration.currentVersion
+                currentVersion: configuration.currentVersion,
+                currentBuild: configuration.currentBuild
             )
         } catch {
             return ReleaseUpdateSnapshot(
                 status: .unavailable,
                 currentVersion: configuration.currentVersion,
+                currentBuild: configuration.currentBuild,
                 latestVersion: nil,
+                latestBuild: nil,
                 tagName: nil,
                 htmlURL: nil,
                 assets: [],
@@ -99,13 +155,15 @@ public struct ReleaseUpdateChecker: Sendable {
         }
     }
 
-    public static func snapshot(from data: Data, currentVersion: String) throws -> ReleaseUpdateSnapshot {
+    public static func snapshot(from data: Data, currentVersion: String, currentBuild: String? = nil) throws -> ReleaseUpdateSnapshot {
         let releases = try JSONDecoder().decode([GitHubRelease].self, from: data)
         guard let latest = releases.first(where: { !$0.draft }) else {
             return ReleaseUpdateSnapshot(
                 status: .unavailable,
                 currentVersion: currentVersion,
+                currentBuild: currentBuild,
                 latestVersion: nil,
+                latestBuild: nil,
                 tagName: nil,
                 htmlURL: nil,
                 assets: [],
@@ -114,16 +172,22 @@ public struct ReleaseUpdateChecker: Sendable {
         }
 
         let latestVersion = Self.version(fromTag: latest.tagName)
-        let status = Self.status(currentVersion: currentVersion, latestVersion: latestVersion)
+        let latestBuild = Self.latestBuild(from: latest.assets, version: latestVersion)
+        let status = Self.status(
+            currentVersion: currentVersion,
+            currentBuild: currentBuild,
+            latestVersion: latestVersion,
+            latestBuild: latestBuild
+        )
         let assets = latest.assets.map {
             ReleaseUpdateAsset(name: $0.name, downloadURL: $0.browserDownloadURL, size: $0.size)
         }
         let detail: String
         switch status {
         case .updateAvailable:
-            detail = "Version \(latestVersion) is available."
+            detail = "\(ReleaseVersionIdentity(version: latestVersion, build: latestBuild).display) is available."
         case .current:
-            detail = "Version \(currentVersion) is current."
+            detail = "\(ReleaseVersionIdentity(version: currentVersion, build: currentBuild).display) is current."
         case .unavailable:
             detail = "Latest release \(latest.tagName) could not be compared to \(currentVersion)."
         }
@@ -131,7 +195,9 @@ public struct ReleaseUpdateChecker: Sendable {
         return ReleaseUpdateSnapshot(
             status: status,
             currentVersion: currentVersion,
+            currentBuild: currentBuild,
             latestVersion: latestVersion,
+            latestBuild: latestBuild,
             tagName: latest.tagName,
             htmlURL: latest.htmlURL,
             assets: assets,
@@ -150,15 +216,45 @@ public struct ReleaseUpdateChecker: Sendable {
         return data
     }
 
-    private static func status(currentVersion: String, latestVersion: String) -> ReleaseUpdateStatus {
-        guard let current = SemanticVersion(currentVersion), let latest = SemanticVersion(latestVersion) else {
+    private static func status(
+        currentVersion: String,
+        currentBuild: String?,
+        latestVersion: String,
+        latestBuild: String?
+    ) -> ReleaseUpdateStatus {
+        let current = ReleaseVersionIdentity(version: currentVersion, build: currentBuild)
+        let latest = ReleaseVersionIdentity(version: latestVersion, build: latestBuild)
+        guard let isNewer = latest.isNewer(than: current) else {
             return .unavailable
         }
-        return latest > current ? .updateAvailable : .current
+        return isNewer ? .updateAvailable : .current
     }
 
     private static func version(fromTag tagName: String) -> String {
         tagName.hasPrefix("v") ? String(tagName.dropFirst()) : tagName
+    }
+
+    private static func latestBuild(from assets: [GitHubReleaseAsset], version: String) -> String? {
+        let builds = assets.compactMap { asset -> Int? in
+            guard asset.name.hasSuffix(".zip") || asset.name.hasSuffix(".manifest.json") else {
+                return nil
+            }
+            return buildNumber(fromAssetName: asset.name, version: version)
+        }
+        return builds.max().map(String.init)
+    }
+
+    private static func buildNumber(fromAssetName name: String, version: String) -> Int? {
+        let marker = "OuroWorkbench-\(version)-build."
+        guard name.hasPrefix(marker) else {
+            return nil
+        }
+        let tail = name.dropFirst(marker.count)
+        let digits = tail.prefix { $0.isNumber }
+        guard !digits.isEmpty else {
+            return nil
+        }
+        return Int(digits)
     }
 }
 
@@ -229,5 +325,43 @@ struct SemanticVersion: Comparable {
             return lhs.minor < rhs.minor
         }
         return lhs.patch < rhs.patch
+    }
+}
+
+struct ReleaseVersionIdentity: Equatable, Sendable {
+    var version: String
+    var build: String?
+
+    var display: String {
+        "Version \(label)"
+    }
+
+    var label: String {
+        guard let build, !build.isEmpty else {
+            return version
+        }
+        return "\(version) (build \(build))"
+    }
+
+    func isNewer(than current: ReleaseVersionIdentity) -> Bool? {
+        guard let candidateVersion = SemanticVersion(version),
+              let currentVersion = SemanticVersion(current.version) else {
+            return nil
+        }
+        if candidateVersion != currentVersion {
+            return candidateVersion > currentVersion
+        }
+        guard let candidateBuild = numericBuild,
+              let currentBuild = current.numericBuild else {
+            return false
+        }
+        return candidateBuild > currentBuild
+    }
+
+    private var numericBuild: Int? {
+        guard let build else {
+            return nil
+        }
+        return Int(build)
     }
 }

@@ -102,7 +102,7 @@ Expected smoke result:
 
 ```text
 156 tests pass; 5000 scenario rows render through 25,000 native verifier passes
-with zero failures and coverage digest `567dc7ec0c45835b`; deep sweep renders
+with zero failures and coverage digest `89292786bde2e133`; deep sweep renders
 20,000 rows through 100,000 verifier passes with zero failures and coverage
 digest `0fd57795f807596d`; installed app shows only user-created/imported
 sessions; packaged MCP returns tool definitions and workspace-aware status;
