@@ -146,5 +146,12 @@ final class FinalCoverageTests: XCTestCase {
         recorder.reset()
         box.forceKill()
         XCTAssertNil(recorder.value)
+
+        // Constructing without an explicit killer exercises the production default.
+        let defaulted = ProcessIOBox(
+            process: Process(),
+            stdout: Pipe().fileHandleForReading,
+            stderr: Pipe().fileHandleForReading)
+        defaulted.forceKill() // not running → no-op, default killer never fires
     }
 }
