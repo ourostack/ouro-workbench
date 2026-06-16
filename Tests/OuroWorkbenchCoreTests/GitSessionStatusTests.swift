@@ -139,7 +139,7 @@ final class GitSessionStatusTests: XCTestCase {
         XCTAssertEqual(missing.status(forDirectory: root.path), .notARepo)
 
         let hangingGit = root.appendingPathComponent("git")
-        try "#!/bin/sh\nsleep 300\n".write(to: hangingGit, atomically: true, encoding: .utf8)
+        try "#!/bin/sh\nwhile true; do :; done\n".write(to: hangingGit, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: hangingGit.path)
         var hanging = GitStatusReader(timeout: 0.05)
         hanging.resolvedGitPath = hangingGit.path

@@ -1427,7 +1427,7 @@ final class OnboardingTests: XCTestCase {
         FileManager.default.createFile(atPath: codexURL.path, contents: Data())
 
         let sqliteURL = temporaryDirectory.appendingPathComponent("sqlite-hangs")
-        try "#!/bin/sh\nsleep 300\n"
+        try "#!/bin/sh\nwhile true; do :; done\n"
             .write(to: sqliteURL, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: sqliteURL.path)
 
