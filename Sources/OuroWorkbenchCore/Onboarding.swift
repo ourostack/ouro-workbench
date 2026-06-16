@@ -847,7 +847,6 @@ public struct RecentSessionScanner {
                 ?? inferredClaudeProjectPath(from: fileURL)
                 ?? homeURL.path
             let titleSeed = firstString(object, keys: ["summary", "title", "prompt", "message", "content"])
-                ?? sessionId
             let lastActive = firstDate(object, keys: ["updatedAt", "updated_at", "timestamp", "lastActiveAt"])
                 ?? modificationDate(fileURL)
             guard isRecent(lastActive) else {
@@ -857,11 +856,11 @@ public struct RecentSessionScanner {
                 id: "claude:\(sessionId)",
                 source: .claudeCode,
                 agentKind: .claudeCode,
-                title: Self.titleFromPrompt(titleSeed) ?? sessionId,
+                title: titleSeed.flatMap(Self.titleFromPrompt) ?? sessionId,
                 workingDirectory: cwd,
                 lastActiveAt: lastActive,
                 resumeCommand: ["claude", "--resume", sessionId],
-                summary: titleSeed,
+                summary: titleSeed ?? sessionId,
                 evidencePaths: [evidencePath(fileURL)],
                 confidence: cwd == homeURL.path ? 0.7 : 0.9
             )
@@ -875,7 +874,6 @@ public struct RecentSessionScanner {
         }
         let cwd = firstString(record, keys: ["cwd", "workingDirectory", "working_directory"])
         let titleSeed = firstString(record, keys: ["prompt", "summary", "title", "thread_name", "message", "content"])
-            ?? sessionId
         let lastActive = firstDate(record, keys: ["timestamp", "updatedAt", "updated_at", "lastActiveAt", "last_active_at"])
             ?? modificationDate(evidenceURL)
         guard isRecent(lastActive) else {
@@ -886,11 +884,11 @@ public struct RecentSessionScanner {
             id: "codex:\(sessionId)",
             source: .openAICodex,
             agentKind: .openAICodex,
-            title: Self.titleFromPrompt(titleSeed) ?? sessionId,
+            title: titleSeed.flatMap(Self.titleFromPrompt) ?? sessionId,
             workingDirectory: workingDirectory,
             lastActiveAt: lastActive,
             resumeCommand: ["codex", "resume", sessionId],
-            summary: titleSeed,
+            summary: titleSeed ?? sessionId,
             evidencePaths: [evidencePath(evidenceURL)],
             confidence: cwd == nil ? 0.7 : 0.88
         )
@@ -1031,7 +1029,7 @@ public struct RecentSessionScanner {
         return payload.merging(object) { payloadValue, _ in payloadValue }
     }
 
-    private func evidencePath(_ url: URL) -> String {
+    func evidencePath(_ url: URL) -> String {
         let path = url.path
         let privateHomePrefix = "/private" + homeURL.path
         if path.hasPrefix(privateHomePrefix) {
@@ -1066,11 +1064,9 @@ public struct RecentSessionScanner {
             if let date = parseDate(object[key] as? String) {
                 return date
             }
-            if let milliseconds = object[key] as? Double, milliseconds > 0 {
-                return Date(timeIntervalSince1970: milliseconds / 1000)
-            }
-            if let seconds = object[key] as? Int, seconds > 0 {
-                return Date(timeIntervalSince1970: TimeInterval(seconds))
+            if let numericTimestamp = object[key] as? Double, numericTimestamp > 0 {
+                let seconds = numericTimestamp > 10_000_000_000 ? numericTimestamp / 1000 : numericTimestamp
+                return Date(timeIntervalSince1970: seconds)
             }
         }
         return nil

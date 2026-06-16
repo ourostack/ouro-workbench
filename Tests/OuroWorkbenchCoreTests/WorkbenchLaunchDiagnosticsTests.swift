@@ -9,6 +9,10 @@ final class WorkbenchLaunchDiagnosticsTests: XCTestCase {
         XCTAssertFalse(diagnostics.autoLaunchResumableForE2E)
         XCTAssertNil(diagnostics.action)
         XCTAssertEqual(diagnostics.passthroughArguments, [])
+
+        let processless = try WorkbenchLaunchDiagnostics.parse([])
+        XCTAssertNil(processless.action)
+        XCTAssertEqual(processless.passthroughArguments, [])
     }
 
     func testParseAppSupportRootAndAutoLaunchOverride() throws {
@@ -41,7 +45,10 @@ final class WorkbenchLaunchDiagnosticsTests: XCTestCase {
         XCTAssertThrowsError(try WorkbenchLaunchDiagnostics.parse([
             "OuroWorkbench",
             "--factory-reset-for-e2e"
-        ]))
+        ])) { error in
+            XCTAssertEqual(error as? WorkbenchLaunchDiagnostics.ParseError, .factoryResetRequiresAppSupportRoot)
+            XCTAssertEqual(error.localizedDescription, "--factory-reset-for-e2e requires --app-support-root")
+        }
     }
 
     func testParseDumpRecentSessionsDiagnostic() throws {
@@ -72,14 +79,49 @@ final class WorkbenchLaunchDiagnosticsTests: XCTestCase {
             "OuroWorkbench",
             "--dump-recent-sessions-json",
             "--scan-home-root"
-        ]))
+        ])) { error in
+            XCTAssertEqual(error as? WorkbenchLaunchDiagnostics.ParseError, .missingValue("--scan-home-root"))
+            XCTAssertEqual(error.localizedDescription, "--scan-home-root requires a value")
+        }
     }
 
     func testParseRequiresAppSupportRootPath() {
         XCTAssertThrowsError(try WorkbenchLaunchDiagnostics.parse([
             "OuroWorkbench",
             "--app-support-root"
-        ]))
+        ])) { error in
+            XCTAssertEqual(error as? WorkbenchLaunchDiagnostics.ParseError, .missingValue("--app-support-root"))
+            XCTAssertEqual(error.localizedDescription, "--app-support-root requires a value")
+        }
+    }
+
+    func testParseWriteE2EStateRequiresFixtureAndPath() {
+        XCTAssertThrowsError(try WorkbenchLaunchDiagnostics.parse([
+            "OuroWorkbench",
+            "--write-e2e-state"
+        ])) { error in
+            XCTAssertEqual(error as? WorkbenchLaunchDiagnostics.ParseError, .missingValue("--write-e2e-state"))
+        }
+
+        XCTAssertThrowsError(try WorkbenchLaunchDiagnostics.parse([
+            "OuroWorkbench",
+            "--write-e2e-state",
+            "sidebar-session-controls"
+        ])) { error in
+            XCTAssertEqual(error as? WorkbenchLaunchDiagnostics.ParseError, .missingValue("sidebar-session-controls"))
+        }
+    }
+
+    func testParseWriteE2EStateKeepsUnknownFixtureAsPassthrough() throws {
+        let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+            "OuroWorkbench",
+            "--write-e2e-state",
+            "unknown-fixture",
+            "/tmp/state.json"
+        ])
+
+        XCTAssertNil(diagnostics.action)
+        XCTAssertEqual(diagnostics.passthroughArguments, ["--write-e2e-state", "unknown-fixture", "/tmp/state.json"])
     }
 
     func testParseKeepsUnknownArgumentsForExistingLaunchHandling() throws {

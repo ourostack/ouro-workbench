@@ -68,6 +68,7 @@ final class CoverageBatch2FileManager: FileManager, @unchecked Sendable {
     var executablePaths: Set<String> = []
     var existingPaths: Set<String> = []
     var moveError: Error?
+    var removeError: Error?
     var removedPaths: [String] = []
     var movedPairs: [(String, String)] = []
 
@@ -89,6 +90,9 @@ final class CoverageBatch2FileManager: FileManager, @unchecked Sendable {
 
     override func removeItem(at URL: URL) throws {
         removedPaths.append(URL.path)
+        if let removeError {
+            throw removeError
+        }
         try? super.removeItem(at: URL)
     }
 }

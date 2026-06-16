@@ -19,6 +19,10 @@ final class OnboardingNarrativeTests: XCTestCase {
 
     func testAmbiguousCandidateCopyIncludesCount() {
         XCTAssertEqual(
+            WorkbenchOnboardingNarrative.ambiguousCandidates(count: 1),
+            "I found 1 unclear session. I will ask before importing them."
+        )
+        XCTAssertEqual(
             WorkbenchOnboardingNarrative.ambiguousCandidates(count: 2),
             "I found 2 unclear sessions. I will ask before importing them."
         )
@@ -32,6 +36,10 @@ final class OnboardingNarrativeTests: XCTestCase {
     }
 
     func testProposalSummaryCopyUsesWorkspaces() {
+        XCTAssertEqual(
+            WorkbenchOnboardingNarrative.proposalSummary(groupCount: 1, selectedCount: 1),
+            "I found 1 likely session across 1 workspace."
+        )
         XCTAssertEqual(
             WorkbenchOnboardingNarrative.proposalSummary(groupCount: 3, selectedCount: 5),
             "I found 5 likely sessions across 3 workspaces."

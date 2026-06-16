@@ -68,7 +68,57 @@ final class ReleaseUpdateTests: XCTestCase {
         XCTAssertEqual(snapshot.latestVersion, "0.1.155")
         XCTAssertEqual(snapshot.latestBuild, "340")
         XCTAssertEqual(snapshot.detail, "Version 0.1.155 (build 340) is available.")
+        XCTAssertEqual(snapshot.currentReleaseLabel, "Version 0.1.155 (build 238)")
+        XCTAssertEqual(snapshot.currentReleaseLabelForPrompt, "0.1.155 (build 238)")
+        XCTAssertEqual(snapshot.latestReleaseLabel, "Version 0.1.155 (build 340)")
         XCTAssertEqual(snapshot.latestReleaseLabelForPrompt, "0.1.155 (build 340)")
+    }
+
+    func testSnapshotLabelsAndAssetsWhenNoLatestReleaseExists() {
+        let snapshot = ReleaseUpdateSnapshot(
+            status: .unavailable,
+            currentVersion: "0.1.155",
+            currentBuild: nil,
+            latestVersion: nil,
+            latestBuild: nil,
+            tagName: nil,
+            htmlURL: nil,
+            assets: [
+                ReleaseUpdateAsset(name: "OuroWorkbench-0.1.155-build.238-app.zip", downloadURL: "https://example.test/app.zip", size: 10)
+            ],
+            detail: "No release"
+        )
+
+        XCTAssertEqual(snapshot.installableAssets, [])
+        XCTAssertFalse(snapshot.hasInstallableAssets)
+        XCTAssertEqual(snapshot.currentReleaseLabel, "Version 0.1.155")
+        XCTAssertEqual(snapshot.currentReleaseLabelForPrompt, "0.1.155")
+        XCTAssertNil(snapshot.latestReleaseLabel)
+        XCTAssertNil(snapshot.latestReleaseLabelForPrompt)
+    }
+
+    func testLatestBuildIgnoresNonBuildReleaseAssets() throws {
+        let data = Data("""
+        [
+          {
+            "tag_name": "v0.1.155",
+            "html_url": "https://github.com/ourostack/ouro-workbench/releases/tag/v0.1.155",
+            "draft": false,
+            "prerelease": true,
+            "assets": [
+              {"name": "README.txt", "browser_download_url": "https://example.test/readme.txt", "size": 1},
+              {"name": "OtherWorkbench-0.1.155-build.999.zip", "browser_download_url": "https://example.test/other.zip", "size": 1},
+              {"name": "OuroWorkbench-0.1.155-build.-bad.zip", "browser_download_url": "https://example.test/bad.zip", "size": 1}
+            ]
+          }
+        ]
+        """.utf8)
+
+        let snapshot = try ReleaseUpdateChecker.snapshot(from: data, currentVersion: "0.1.154")
+
+        XCTAssertEqual(snapshot.status, .updateAvailable)
+        XCTAssertNil(snapshot.latestBuild)
+        XCTAssertFalse(snapshot.hasInstallableAssets)
     }
 
     func testSnapshotReportsCurrentWhenSameVersionBuildIsNotNewer() throws {
