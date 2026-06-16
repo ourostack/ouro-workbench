@@ -142,8 +142,12 @@ final class DaemonLivenessTests: XCTestCase {
         XCTAssertFalse(reachable)
     }
 
-    func testDefaultReachabilityWrapperMapsLocalConnectionFailureToThrow() async {
-        await XCTAssertThrowsErrorAsync(try await DaemonLivenessProbe.defaultReachability(timeoutSeconds: 0.001)) { _ in }
+    func testDefaultReachabilityWrapperMapsLocalConnectionFailureToThrow() async throws {
+        try await StubURLProtocol.withHandler(start: { loader in
+            loader.client?.urlProtocol(loader, didFailWithError: URLError(.cannotConnectToHost))
+        }) {
+            await XCTAssertThrowsErrorAsync(try await DaemonLivenessProbe.defaultReachability(timeoutSeconds: 2)) { _ in }
+        }
     }
 
     func testDefaultReachabilityTreatsHTTPStatusesBelow500AsReachable() async throws {
@@ -177,14 +181,25 @@ final class DaemonLivenessTests: XCTestCase {
         }
     }
 
-    func testDefaultProbeInitializersUseDefaultReachabilitySeams() async {
-        let probe = DaemonLivenessProbe(
-            configuration: DaemonLivenessConfiguration(probeTimeoutNanoseconds: 1_000_000)
-        )
-
-        let asyncLiveness = await probe.probe()
-        XCTAssertTrue([DaemonLiveness.up, .down].contains(asyncLiveness))
-        XCTAssertTrue([DaemonLiveness.up, .down].contains(probe.probeSynchronously()))
+    func testDefaultProbeInitializersUseDefaultReachabilitySeams() async throws {
+        try await StubURLProtocol.withHandler(start: { loader in
+            let response = HTTPURLResponse(url: loader.request.url!, statusCode: 204, httpVersion: nil, headerFields: nil)!
+            loader.client?.urlProtocol(loader, didReceive: response, cacheStoragePolicy: .notAllowed)
+            loader.client?.urlProtocol(loader, didLoad: Data())
+            loader.client?.urlProtocolDidFinishLoading(loader)
+        }) {
+            let probe = DaemonLivenessProbe(
+                configuration: DaemonLivenessConfiguration(probeTimeoutNanoseconds: 1_000_000)
+            )
+            let asyncLiveness = await probe.probe()
+            XCTAssertTrue([DaemonLiveness.up, .down].contains(asyncLiveness))
+            // probeSynchronously() blocks on a semaphore; run it OFF the cooperative
+            // executor (a dedicated thread) so it can't starve the async test thread.
+            let syncLiveness = await withCheckedContinuation { (cont: CheckedContinuation<DaemonLiveness, Never>) in
+                Thread.detachNewThread { cont.resume(returning: probe.probeSynchronously()) }
+            }
+            XCTAssertTrue([DaemonLiveness.up, .down].contains(syncLiveness))
+        }
     }
 
     // MARK: - Synchronous probe (the MCP request-loop bridge)
@@ -249,7 +264,11 @@ final class DaemonLivenessTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: root) }
 
         XCTAssertFalse(DaemonLivenessProbe.defaultSyncReachability(url: fileURL, timeoutSeconds: 0.1))
-        XCTAssertFalse(DaemonLivenessProbe.defaultSyncReachability(timeoutSeconds: 0.001))
+        try StubURLProtocol.withHandler(start: { loader in
+            loader.client?.urlProtocol(loader, didFailWithError: URLError(.cannotConnectToHost))
+        }) {
+            XCTAssertFalse(DaemonLivenessProbe.defaultSyncReachability(timeoutSeconds: 2))
+        }
         XCTAssertFalse(DaemonLivenessProbe.defaultSyncReachability(url: fileURL, timeoutSeconds: -1))
     }
 
