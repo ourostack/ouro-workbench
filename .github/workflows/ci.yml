@@ -135,3 +135,21 @@ jobs:
             artifacts/OuroWorkbench-*.manifest.json
           if-no-files-found: error
           retention-days: 7
+
+  coverage:
+    name: Coverage
+    runs-on: macos-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Show toolchain
+        run: |
+          swift --version
+          xcodebuild -version
+
+      - name: Resolve dependencies
+        run: swift package resolve
+
+      - name: Enforce 100% line+region coverage on OuroWorkbenchCore
+        run: scripts/check-coverage.sh

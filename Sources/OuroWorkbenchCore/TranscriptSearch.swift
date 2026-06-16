@@ -199,7 +199,7 @@ public struct TranscriptSearcher {
         ))
     }
 
-    private func clippedLine(_ line: String, query: String) -> String {
+    func clippedLine(_ line: String, query: String) -> String {
         guard line.count > TranscriptSearchLimit.maximumLineCharacters else {
             return line
         }

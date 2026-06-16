@@ -101,6 +101,12 @@ final class PromptSafetyClassifierTests: XCTestCase {
         XCTAssertEqual(result.reason, "force push")
     }
 
+    func testSafeReasonIsNilAndBlockedGateReasonIsNilWhenAllowed() {
+        XCTAssertNil(PromptSafety.safe.reason)
+        XCTAssertNil(AutoAdvanceGate.allow.blockedReason)
+        XCTAssertFalse(AutoAdvanceGate.block("held").allows)
+    }
+
     // MARK: - Auto-advance gate
 
     private let trustedFriend = SessionFriend(id: "ari", name: "Ari", kind: .human, trust: .family)
@@ -127,6 +133,7 @@ final class PromptSafetyClassifierTests: XCTestCase {
 
     func testGateAllowsWhenEverythingTrustedRunningWaitingAndSafe() {
         XCTAssertTrue(gate().allows)
+        XCTAssertNil(gate().blockedReason)
     }
 
     func testGateBlocksWhenDisabled() {

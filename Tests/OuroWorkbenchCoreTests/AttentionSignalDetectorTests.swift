@@ -25,6 +25,11 @@ final class AttentionSignalDetectorTests: XCTestCase {
         XCTAssertEqual(AttentionSignalDetector.classify(tail: tail), .waitingOnHuman)
     }
 
+    func testArrowSelectedOptionAcceptsSupportedSeparators() {
+        XCTAssertTrue(AttentionSignalDetector.isArrowSelectedOption("❯ 1) Yes"))
+        XCTAssertTrue(AttentionSignalDetector.isArrowSelectedOption("❯ 1 Yes"))
+    }
+
     func testLowercaseYesNoPromptIsWaiting() {
         XCTAssertEqual(
             AttentionSignalDetector.classify(tail: "Proceed with deployment? (y/N) "),
@@ -35,6 +40,13 @@ final class AttentionSignalDetectorTests: XCTestCase {
     func testBracketedYesNoIsWaiting() {
         XCTAssertEqual(
             AttentionSignalDetector.classify(tail: "Overwrite existing file? [y/n]"),
+            .waitingOnHuman
+        )
+    }
+
+    func testBracketedYesNoAllVariantIsWaiting() {
+        XCTAssertEqual(
+            AttentionSignalDetector.classify(tail: "Apply changes? [Y/n/a]"),
             .waitingOnHuman
         )
     }
@@ -64,6 +76,23 @@ final class AttentionSignalDetectorTests: XCTestCase {
         // The menu line wrapped in ANSI color/cursor codes must still match.
         let tail = "\u{1B}[2m? \u{1B}[0m\u{1B}[1mDo you want to proceed?\u{1B}[0m\n\u{1B}[36m❯ 1. Yes\u{1B}[0m"
         XCTAssertEqual(AttentionSignalDetector.classify(tail: tail), .waitingOnHuman)
+    }
+
+    func testWaitingSurvivesOscAndLoneEscapeControlCodes() {
+        let oscWithBel = "\u{1B}]0;title\u{07}Do you want to proceed? "
+        let oscWithST = "\u{1B}]0;title\u{1B}\\Proceed now? (y/N)"
+        let loneEscape = "\u{1B}xAllow command? (y/N)"
+
+        XCTAssertEqual(AttentionSignalDetector.classify(tail: oscWithBel), .waitingOnHuman)
+        XCTAssertEqual(AttentionSignalDetector.classify(tail: oscWithST), .waitingOnHuman)
+        XCTAssertEqual(AttentionSignalDetector.classify(tail: loneEscape), .waitingOnHuman)
+    }
+
+    func testCarriageReturnsAreIgnoredBeforeClassifying() {
+        XCTAssertEqual(
+            AttentionSignalDetector.classify(tail: "building\rDo you want to proceed? "),
+            .waitingOnHuman
+        )
     }
 
     // MARK: - Negative: must NOT cry wolf
@@ -107,6 +136,10 @@ final class AttentionSignalDetectorTests: XCTestCase {
     func testArrowWithoutNumberIsNotWaiting() {
         // A powerlevel10k-style arrow prompt with no numbered option must not match.
         XCTAssertEqual(AttentionSignalDetector.classify(tail: "❯ git status"), .unknown)
+    }
+
+    func testArrowWithBareNumberIsNotWaiting() {
+        XCTAssertEqual(AttentionSignalDetector.classify(tail: "❯ 1"), .unknown)
     }
 
     func testRhetoricalQuestionInLogIsNotWaiting() {

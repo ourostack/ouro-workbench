@@ -192,13 +192,29 @@ final class CommandPlannerTests: XCTestCase {
     func testPersistentTerminalSessionDetectsListedSessionNames() {
         let output = """
         There is a screen on:
+            ouro-wb-exact\t(Detached)
             12345.ouro-wb-abc123\t(Detached)
+            malformed-without-dot (Detached)
         1 Socket in /var/folders/example.
         """
 
+        XCTAssertTrue(PersistentTerminalSession.listOutput(output, contains: "ouro-wb-exact"))
         XCTAssertTrue(PersistentTerminalSession.listOutput(output, contains: "ouro-wb-abc123"))
         XCTAssertFalse(PersistentTerminalSession.listOutput(output, contains: "ouro-wb-missing"))
         XCTAssertFalse(PersistentTerminalSession.listOutput(output, contains: "ouro-wb-abc12"))
+        XCTAssertFalse(PersistentTerminalSession.listOutput("   \n", contains: "ouro-wb-exact"))
+    }
+
+    func testDisplayCommandQuotesEmptyAndShellSensitiveArguments() {
+        let plan = TerminalCommandPlan(
+            entryId: UUID(),
+            executable: "",
+            arguments: ["two words", "it's", "$HOME"],
+            workingDirectory: "/Users/example/project",
+            reason: "quote"
+        )
+
+        XCTAssertEqual(plan.displayCommand, "'' 'two words' 'it'\\''s' '$HOME'")
     }
 
     func testLiveSessionNamesIncludesAttachedDetachedAndExcludesDead() {
@@ -321,6 +337,99 @@ final class CommandPlannerTests: XCTestCase {
         XCTAssertEqual(plan.reason, "resume Claude Scratch using latest-session fallback")
     }
 
+    func testNativeResumeWithCustomAgentKindFailsAsUnknownPreset() {
+        let entry = ProcessEntry(
+            projectId: UUID(),
+            name: "Custom",
+            kind: .terminalAgent,
+            agentKind: .custom,
+            executable: "custom-agent",
+            workingDirectory: "/Users/example/project",
+            trust: .trusted,
+            autoResume: true
+        )
+
+        XCTAssertThrowsError(try WorkbenchCommandPlanner().recoveryPlan(for: entry, latestRun: nil, action: .autoResume)) { error in
+            XCTAssertEqual(error as? CommandPlanningError, .unknownTerminalAgentPreset(.custom))
+        }
+    }
+
+    func testNativeResumeWithoutFallbackThrowsWhenSessionIdMissing() {
+        let entry = ProcessEntry(
+            projectId: UUID(),
+            name: "GitHub Copilot CLI",
+            kind: .terminalAgent,
+            agentKind: .githubCopilotCLI,
+            executable: "gh",
+            arguments: ["copilot"],
+            workingDirectory: "/Users/example/project",
+            trust: .trusted,
+            autoResume: true
+        )
+
+        XCTAssertThrowsError(try WorkbenchCommandPlanner().recoveryPlan(for: entry, latestRun: nil, action: .autoResume)) { error in
+            XCTAssertEqual(error as? CommandPlanningError, .missingSessionId(entryName: "GitHub Copilot CLI"))
+        }
+    }
+
+    func testNativeResumeForCheckpointPresetWithSessionIdFallsBackToEntryExecutable() throws {
+        let entry = ProcessEntry(
+            projectId: UUID(),
+            name: "GitHub Copilot CLI",
+            kind: .terminalAgent,
+            agentKind: .githubCopilotCLI,
+            executable: "gh",
+            arguments: ["copilot", "--", "--yolo"],
+            workingDirectory: "/Users/example/project",
+            trust: .trusted,
+            autoResume: true
+        )
+        let run = ProcessRun(entryId: entry.id, status: .needsRecovery, terminalSessionId: "ignored")
+
+        let plan = try WorkbenchCommandPlanner().recoveryPlan(for: entry, latestRun: run, action: .autoResume)
+
+        XCTAssertEqual(plan.executable, "gh")
+        XCTAssertEqual(plan.arguments, ["copilot", "--", "--yolo"])
+        XCTAssertEqual(plan.reason, "resume GitHub Copilot CLI using native session metadata")
+    }
+
+    func testAutoResumeForUndetectedAgentFallsBackToLaunchPlan() throws {
+        let entry = ProcessEntry(
+            projectId: UUID(),
+            name: "Unknown TUI",
+            kind: .terminalAgent,
+            executable: "aider",
+            arguments: ["--yes"],
+            workingDirectory: "/Users/example/project",
+            trust: .trusted,
+            autoResume: true
+        )
+
+        let plan = try WorkbenchCommandPlanner().recoveryPlan(for: entry, latestRun: nil, action: .autoResume)
+
+        XCTAssertEqual(plan.executable, "aider")
+        XCTAssertEqual(plan.arguments, ["--yes"])
+        XCTAssertEqual(plan.recoveryAction, .autoResume)
+    }
+
+    func testRespawnForCustomAgentKindUsesCheckpointPrompt() throws {
+        let entry = ProcessEntry(
+            projectId: UUID(),
+            name: "Custom Agent",
+            kind: .terminalAgent,
+            agentKind: .custom,
+            executable: "custom-agent",
+            workingDirectory: "/Users/example/project",
+            trust: .trusted,
+            autoResume: true
+        )
+
+        let plan = try WorkbenchCommandPlanner().recoveryPlan(for: entry, latestRun: nil, action: .respawn)
+
+        XCTAssertEqual(plan.reason, "respawn Custom Agent with checkpoint recovery prompt")
+        XCTAssertTrue(plan.arguments.last?.contains("Recover this Ouro Workbench terminal-agent session") == true)
+    }
+
     func testCheckpointRespawnIncludesRecoveryPrompt() throws {
         let project = WorkbenchProject(name: "Project", rootPath: "/tmp/project")
         let entry = ProcessEntry(
@@ -403,5 +512,40 @@ final class CommandPlannerTests: XCTestCase {
         XCTAssertEqual(plan.reason, "respawn Generic TUI with checkpoint recovery prompt")
         XCTAssertTrue(plan.arguments.last?.contains("Recover this Ouro Workbench terminal-agent session") == true)
         XCTAssertTrue(plan.arguments.last?.contains("/tmp/generic-transcript.log") == true)
+    }
+
+    func testCheckpointRespawnWithoutTranscriptUsesReconstructionGuidance() throws {
+        let entry = ProcessEntry(
+            projectId: UUID(),
+            name: "Generic TUI",
+            kind: .terminalAgent,
+            executable: "/bin/zsh",
+            arguments: ["-lc", "aider --yes"],
+            workingDirectory: "/Users/example/project",
+            trust: .trusted,
+            autoResume: true
+        )
+        let run = ProcessRun(entryId: entry.id, status: .needsRecovery, transcriptPath: nil)
+
+        let plan = try WorkbenchCommandPlanner().recoveryPlan(for: entry, latestRun: run, action: .respawn)
+
+        XCTAssertTrue(plan.arguments.last?.contains("No previous transcript path is available") == true)
+    }
+
+    func testManualAndNoActionRecoveryPlansAreForReview() throws {
+        let entry = ProcessEntry(
+            projectId: UUID(),
+            name: "Shell",
+            kind: .shell,
+            executable: "/bin/zsh",
+            workingDirectory: "/Users/example/project",
+            trust: .trusted
+        )
+
+        for action in [RecoveryAction.manualActionNeeded, .noAction] {
+            let plan = try WorkbenchCommandPlanner().recoveryPlan(for: entry, latestRun: nil, action: action)
+            XCTAssertEqual(plan.recoveryAction, action)
+            XCTAssertEqual(plan.reason, "prepare Shell command for manual review")
+        }
     }
 }

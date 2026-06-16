@@ -263,4 +263,43 @@ final class BossDashboardTests: XCTestCase {
         XCTAssertTrue(prompt.contains("needs_me=unknown"))
         XCTAssertFalse(prompt.contains("needs_me=0"))
     }
+
+    func testOneLineStatusCoversCodingAvailabilityActivePluralityAndAttentionFallback() {
+        XCTAssertEqual(
+            BossDashboardSnapshot(
+                agentName: "slugger",
+                daemonStatus: "running",
+                daemonMode: "dev",
+                attentionLabel: "idle",
+                openObligations: 0,
+                activeCodingAgents: 0,
+                blockedCodingAgents: 0,
+                needsMeItems: [],
+                codingItems: [],
+                observedAt: nil,
+                availability: BossDashboardAvailability(machineAvailable: true, needsMeAvailable: true, codingAvailable: false)
+            ).oneLineStatus,
+            "Coding status unavailable"
+        )
+        XCTAssertEqual(
+            BossDashboardSnapshot(agentName: "slugger", daemonStatus: "running", daemonMode: "dev", attentionLabel: "idle", openObligations: 0, activeCodingAgents: 2, blockedCodingAgents: 0, needsMeItems: [], codingItems: [], observedAt: nil).oneLineStatus,
+            "2 active coding agents"
+        )
+        XCTAssertEqual(
+            BossDashboardSnapshot(agentName: "slugger", daemonStatus: "running", daemonMode: "dev", attentionLabel: "idle", openObligations: 2, activeCodingAgents: 0, blockedCodingAgents: 0, needsMeItems: [
+                MailboxNeedsMeItem(urgency: "u", label: "one", detail: "d", ref: nil, ageMs: nil),
+                MailboxNeedsMeItem(urgency: "u", label: "two", detail: "d", ref: nil, ageMs: nil)
+            ], codingItems: [], observedAt: nil).oneLineStatus,
+            "2 items waiting on you"
+        )
+        XCTAssertEqual(
+            BossDashboardSnapshot(agentName: "slugger", daemonStatus: "running", daemonMode: "dev", attentionLabel: "idle", openObligations: 0, activeCodingAgents: 1, blockedCodingAgents: 0, needsMeItems: [], codingItems: [], observedAt: nil).oneLineStatus,
+            "1 active coding agent"
+        )
+        XCTAssertEqual(
+            BossDashboardSnapshot(agentName: "slugger", daemonStatus: "running", daemonMode: "dev", attentionLabel: "idle", openObligations: 0, activeCodingAgents: 0, blockedCodingAgents: 0, needsMeItems: [], codingItems: [], observedAt: nil).oneLineStatus,
+            "idle"
+        )
+        XCTAssertEqual(HabitHistoryPanelModel(isAvailable: false).statusMessage, "Habit history unavailable")
+    }
 }

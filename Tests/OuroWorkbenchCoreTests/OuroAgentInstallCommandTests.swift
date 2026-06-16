@@ -38,4 +38,23 @@ final class OuroAgentInstallCommandTests: XCTestCase {
             XCTAssertEqual(error as? OuroAgentInstallCommandError, .invalidAgentName("../sprout"))
         }
     }
+
+    func testErrorDescriptionsAreOperatorReadable() {
+        XCTAssertEqual(OuroAgentInstallCommandError.emptyAgentName.errorDescription, "Agent name is required.")
+        XCTAssertEqual(OuroAgentInstallCommandError.invalidAgentName("../sprout").errorDescription, "Agent name cannot be used as a bundle name: ../sprout")
+        XCTAssertEqual(OuroAgentInstallCommandError.emptyRemote.errorDescription, "Clone remote is required.")
+    }
+
+    func testBlankOptionalAgentNameFallsBackToGenericClonePlan() throws {
+        let plan = try OuroAgentInstallCommandBuilder().clone(remote: "git@example.com:repo.git", agentName: " \n ")
+
+        XCTAssertEqual(plan.sessionName, "Clone Ouro Agent")
+        XCTAssertEqual(plan.commandLine, "ouro clone git@example.com:repo.git")
+    }
+
+    func testNormalizedAgentNameRejectsBlankDefensiveInput() {
+        XCTAssertThrowsError(try OuroAgentInstallCommandBuilder().normalizedAgentName(" \n ")) { error in
+            XCTAssertEqual(error as? OuroAgentInstallCommandError, .emptyAgentName)
+        }
+    }
 }

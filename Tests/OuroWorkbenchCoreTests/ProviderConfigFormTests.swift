@@ -148,6 +148,18 @@ final class ProviderConfigFormTests: XCTestCase {
         XCTAssertFalse(message.contains("--endpoint"))
     }
 
+    func testMissingCredentialLabelsTreatAbsentKeysAsMissing() {
+        let fields = [
+            ProviderCredentialField(key: "present", label: "Present", isSecret: true),
+            ProviderCredentialField(key: "absent", label: "Absent", isSecret: false),
+        ]
+
+        XCTAssertEqual(
+            ProviderConfigForm.missingCredentialLabels(fields: fields, trimmed: ["present": "value"]),
+            ["Absent"]
+        )
+    }
+
     func testBlankAgentNameYieldsValidationError() {
         let form = ProviderConfigForm(agentName: "   ", humanName: "Ari")
         let outcome = form.submit(provider: .minimax, values: ["apiKey": "mm-123"])
@@ -200,6 +212,29 @@ final class ProviderConfigFormTests: XCTestCase {
         XCTAssertNotNil(WorkbenchProvider.minimax.hatchCredential(from: ["apiKey": "mm-123"]))
     }
 
+    func testProviderHatchCredentialMappingsUseTrimmedValuesByKey() {
+        XCTAssertEqual(
+            WorkbenchProvider.anthropic.hatchCredential(from: ["setupToken": "setup"]),
+            .setupToken("setup")
+        )
+        XCTAssertEqual(
+            WorkbenchProvider.openaiCodex.hatchCredential(from: ["oauthToken": "oauth"]),
+            .oauthToken("oauth")
+        )
+        XCTAssertEqual(
+            WorkbenchProvider.minimax.hatchCredential(from: ["apiKey": "mm"]),
+            .apiKey("mm")
+        )
+        XCTAssertEqual(
+            WorkbenchProvider.azure.hatchCredential(from: ["endpoint": "https://example", "deployment": "gpt"]),
+            .endpoint(endpoint: "https://example", deployment: "gpt")
+        )
+        XCTAssertEqual(WorkbenchProvider.anthropic.hatchCredential(from: [:]), .setupToken(""))
+        XCTAssertEqual(WorkbenchProvider.openaiCodex.hatchCredential(from: [:]), .oauthToken(""))
+        XCTAssertEqual(WorkbenchProvider.minimax.hatchCredential(from: [:]), .apiKey(""))
+        XCTAssertEqual(WorkbenchProvider.azure.hatchCredential(from: [:]), .endpoint(endpoint: "", deployment: ""))
+    }
+
     func testProviderAndFieldIdentifiers() {
         // Identifiable conformance powers the SwiftUI ForEach over providers/fields.
         XCTAssertEqual(WorkbenchProvider.azure.id, "azure")
@@ -245,6 +280,29 @@ final class ProviderConfigFormTests: XCTestCase {
             return XCTFail("expected coldStartHatch, got \(outcome)")
         }
         XCTAssertEqual(plan.tokens.last, "mm-123")
+    }
+
+    func testAzureApiKeyInsertionFallsBackSafelyWhenProviderTokenIsAbsent() {
+        let form = ProviderConfigForm(agentName: "slugger", humanName: "Ari")
+        let plan = BootstrapAgentProvisionPlan(tokens: ["ouro", "hatch"])
+
+        let outcome = form.submit(provider: .azure, values: [
+            "apiKey": "az-key",
+            "endpoint": "https://example.openai.azure.com",
+            "deployment": "gpt-4o",
+        ])
+
+        guard case let .coldStartHatch(realPlan) = outcome else {
+            return XCTFail("expected coldStartHatch, got \(outcome)")
+        }
+        XCTAssertEqual(realPlan.tokens[realPlan.tokens.firstIndex(of: "azure")! + 1], "--api-key")
+
+        let fallback = form.withAzureApiKey("az-key", into: plan, provider: .azure)
+        XCTAssertEqual(fallback.tokens, ["ouro", "hatch", "--api-key", "az-key"])
+    }
+
+    func testColdStartRunnerCanExecuteFiniteHeadlessCommand() async throws {
+        try await ColdStartHatchRunner.runHeadless(plan: BootstrapAgentProvisionPlan(tokens: ["true"]))
     }
 
     // MARK: - Helpers

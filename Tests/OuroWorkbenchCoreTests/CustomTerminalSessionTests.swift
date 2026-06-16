@@ -416,6 +416,88 @@ final class CustomTerminalSessionTests: XCTestCase {
         XCTAssertEqual(draft.command, "/usr/bin/env aider")
     }
 
+    func testErrorDescriptionsCoverEveryValidationCase() {
+        XCTAssertEqual(CustomTerminalSessionError.emptyName.errorDescription, "Session name is required")
+        XCTAssertEqual(CustomTerminalSessionError.emptyCommand.errorDescription, "Session command is required")
+        XCTAssertEqual(CustomTerminalSessionError.emptyWorkingDirectory.errorDescription, "Working directory is required")
+        XCTAssertEqual(CustomTerminalSessionError.notCustomSession.errorDescription, "Only managed terminal sessions can be managed here")
+        XCTAssertEqual(CustomTerminalSessionError.unavailableCommand.errorDescription, "Custom terminal session command is unavailable")
+    }
+
+    func testManagerRejectsNonTerminalSessionsForEditOperations() {
+        let entry = ProcessEntry(
+            projectId: UUID(),
+            name: "Web",
+            kind: .command,
+            executable: "open",
+            workingDirectory: "/repo",
+            trust: .trusted
+        )
+        let manager = CustomTerminalSessionManager()
+
+        XCTAssertThrowsError(try manager.draft(from: entry)) { error in
+            XCTAssertEqual(error as? CustomTerminalSessionError, .notCustomSession)
+        }
+        XCTAssertThrowsError(try manager.updatedEntry(entry, draft: CustomTerminalSessionDraft(name: "x", command: "x", workingDirectory: "/repo", trust: .trusted, autoResume: true))) { error in
+            XCTAssertEqual(error as? CustomTerminalSessionError, .notCustomSession)
+        }
+        XCTAssertThrowsError(try manager.archivedEntry(entry)) { error in
+            XCTAssertEqual(error as? CustomTerminalSessionError, .notCustomSession)
+        }
+        XCTAssertThrowsError(try manager.restoredEntry(entry)) { error in
+            XCTAssertEqual(error as? CustomTerminalSessionError, .notCustomSession)
+        }
+    }
+
+    func testFactoryFallsBackToShellWrapperForUnparseableAndCanonicalizedCommands() throws {
+        let factory = CustomTerminalSessionFactory()
+        let unparseable = try factory.makeEntry(
+            projectId: UUID(),
+            draft: CustomTerminalSessionDraft(
+                name: "Broken Quote",
+                command: "echo hi | claude",
+                workingDirectory: "/repo",
+                trust: .trusted,
+                autoResume: true
+            )
+        )
+        XCTAssertNil(unparseable.agentKind)
+        XCTAssertEqual(unparseable.executable, "/bin/zsh")
+        XCTAssertEqual(unparseable.arguments, ["-lc", "echo hi | claude"])
+        XCTAssertNil(unparseable.notes)
+
+        let canonicalized = try factory.makeEntry(
+            projectId: UUID(),
+            draft: CustomTerminalSessionDraft(
+                name: "Claude via env",
+                command: "/usr/bin/env claude --model opus",
+                workingDirectory: "/repo",
+                trust: .trusted,
+                autoResume: false
+            )
+        )
+        XCTAssertEqual(canonicalized.agentKind, .claudeCode)
+        XCTAssertEqual(canonicalized.executable, "/bin/zsh")
+        XCTAssertEqual(canonicalized.arguments, ["-lc", "/usr/bin/env claude --model opus"])
+        XCTAssertEqual(canonicalized.lastSummary, "Detected Claude Code: /usr/bin/env claude --model opus")
+    }
+
+    func testDraftQuotesEmptyAndShellSensitiveArguments() throws {
+        let entry = ProcessEntry(
+            projectId: UUID(),
+            name: "Quoted",
+            kind: .terminalAgent,
+            executable: "/usr/bin/env",
+            arguments: ["", "two words", "it's", "$HOME"],
+            workingDirectory: "/repo",
+            trust: .trusted
+        )
+
+        let draft = try CustomTerminalSessionManager().draft(from: entry)
+
+        XCTAssertEqual(draft.command, "/usr/bin/env '' 'two words' 'it'\\''s' '$HOME'")
+    }
+
     private func makeShellEntry(
         executable: String = "/bin/zsh",
         arguments: [String] = ["-l"],

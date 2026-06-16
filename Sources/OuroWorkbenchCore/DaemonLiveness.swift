@@ -113,7 +113,7 @@ public struct DaemonLivenessProbe: Sendable {
                 try? await Task.sleep(nanoseconds: timeoutNanos)
                 return false
             }
-            let first = await group.next() ?? false
+            let first = await group.next()!
             group.cancelAll()
             return first
         }
@@ -182,7 +182,12 @@ public struct DaemonLivenessProbe: Sendable {
         )
     }
 
-    static func defaultSyncReachability(url: URL, timeoutSeconds: TimeInterval?) -> Bool {
+    static func defaultSyncReachability(
+        url: URL,
+        timeoutSeconds: TimeInterval?,
+        cancelTask: (URLSessionDataTask) -> Void = { $0.cancel() },
+        waitTimeoutPadding: TimeInterval = 0.25
+    ) -> Bool {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         let budget = (timeoutSeconds ?? 1.5) > 0 ? (timeoutSeconds ?? 1.5) : 1.5
@@ -196,8 +201,8 @@ public struct DaemonLivenessProbe: Sendable {
             semaphore.signal()
         }
         task.resume()
-        if semaphore.wait(timeout: .now() + budget + 0.25) == .timedOut {
-            task.cancel()
+        if semaphore.wait(timeout: .now() + budget + waitTimeoutPadding) == .timedOut {
+            cancelTask(task)
             return false
         }
         return box.reachable
@@ -340,17 +345,15 @@ public struct DaemonManager: Sendable {
     /// budget genuinely elapses (the honest "couldn't bring it back" case). The first probe is
     /// immediate, so an already-fast start adds zero latency.
     private func verifyStartedWithinBudget() async -> DaemonLiveness {
-        var attempt = 0
-        while true {
+        for attempt in 0..<verifyConfig.maxProbeAttempts {
             if await probe.probe() == .up {
                 return .up
             }
-            attempt += 1
-            if attempt >= verifyConfig.maxProbeAttempts {
-                return .down
+            if attempt < verifyConfig.maxProbeAttempts - 1 {
+                await sleep(verifyConfig.probeIntervalNanoseconds)
             }
-            await sleep(verifyConfig.probeIntervalNanoseconds)
         }
+        return .down
     }
 
     /// Default start: spawn `ouro up` DETACHED from Workbench so the daemon outlives the app.

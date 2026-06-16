@@ -142,4 +142,28 @@ final class WorkbenchFactoryResetTests: XCTestCase {
         XCTAssertEqual(secondBackup, firstBackup)
         XCTAssertEqual(try String(contentsOf: XCTUnwrap(secondBackup)), "second")
     }
+
+    func testMoveFailureFallsBackToRemovingStateAndStillClearsPreferences() {
+        let domain = "com.ourostack.workbench.test.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: domain)!
+        defer { defaults.removePersistentDomain(forName: domain) }
+        defaults.set(true, forKey: "ouro.workbench.onboardingAutoPresented")
+
+        let stateURL = URL(fileURLWithPath: "/virtual/workspace-state.json")
+        let fileManager = CoverageBatch2FileManager()
+        fileManager.existingPaths = [stateURL.path]
+        fileManager.moveError = CoverageBatch2Error.boom
+
+        let backup = WorkbenchFactoryReset.wipeData(
+            stateURL: stateURL,
+            defaults: defaults,
+            defaultsDomain: domain,
+            timestamp: Date(timeIntervalSince1970: 1_700_000_000),
+            fileManager: fileManager
+        )
+
+        XCTAssertNil(backup, "a failed backup move must not report a backup URL")
+        XCTAssertTrue(fileManager.removedPaths.contains(stateURL.path), "state slot is removed so next launch starts fresh")
+        XCTAssertFalse(defaults.bool(forKey: "ouro.workbench.onboardingAutoPresented"))
+    }
 }

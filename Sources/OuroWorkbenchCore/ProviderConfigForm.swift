@@ -194,9 +194,7 @@ public struct ProviderConfigForm: Sendable {
         }
 
         // Every required field must be present (seam-free message names the human labels).
-        let missingLabels = provider.credentialFields
-            .filter { (trimmed[$0.key] ?? "").isEmpty }
-            .map(\.label)
+        let missingLabels = Self.missingCredentialLabels(fields: provider.credentialFields, trimmed: trimmed)
         guard missingLabels.isEmpty else {
             return .invalid("Please fill in: \(missingLabels.joined(separator: ", ")).")
         }
@@ -229,16 +227,23 @@ public struct ProviderConfigForm: Sendable {
             guard provider == .azure, let apiKey = trimmed["apiKey"], !apiKey.isEmpty else {
                 return .coldStartHatch(plan)
             }
+
             return .coldStartHatch(withAzureApiKey(apiKey, into: plan, provider: provider))
         } catch {
             return .invalid("Workbench couldn't set up your agent. Please reopen Workbench and try again.")
         }
     }
 
+    static func missingCredentialLabels(fields: [ProviderCredentialField], trimmed: [String: String]) -> [String] {
+        fields
+            .filter { (trimmed[$0.key] ?? "").isEmpty }
+            .map(\.label)
+    }
+
     /// Weave Azure's `--api-key` flag in right after the `--provider azure` value so the argv
     /// reads provider → api-key → endpoint → deployment. The provider value is always present in
     /// a freshly-built hatch plan, so the index always resolves.
-    private func withAzureApiKey(
+    func withAzureApiKey(
         _ apiKey: String,
         into plan: BootstrapAgentProvisionPlan,
         provider: WorkbenchProvider

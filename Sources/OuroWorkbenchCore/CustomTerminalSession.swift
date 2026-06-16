@@ -78,8 +78,15 @@ public struct CustomTerminalSessionFactory: Sendable {
             && canonical != nil
             && parsed?.executable == canonical?.executable
             && parsed?.arguments == canonical?.arguments
-        let executable = detectedAgentKind != nil && canStoreDirectly ? (parsed?.executable ?? "/bin/zsh") : "/bin/zsh"
-        let arguments = detectedAgentKind != nil && canStoreDirectly ? (parsed?.arguments ?? ["-lc", command]) : ["-lc", command]
+        let executable: String
+        let arguments: [String]
+        if detectedAgentKind != nil, canStoreDirectly, let parsed {
+            executable = parsed.executable
+            arguments = parsed.arguments
+        } else {
+            executable = "/bin/zsh"
+            arguments = ["-lc", command]
+        }
 
         return ProcessEntry(
             projectId: projectId,

@@ -545,9 +545,11 @@ public enum GitHubIssueFiler {
         bundlePath: String,
         note: String,
         repo: String,
+        cliURL: URL? = nil,
+        bodyDirectory: URL? = nil,
         fileManager: FileManager = .default
     ) -> Result<String, GitHubIssueFilingError> {
-        guard let gh = resolveCLI(fileManager: fileManager) else {
+        guard let gh = cliURL ?? resolveCLI(fileManager: fileManager) else {
             return .failure(.cliMissing)
         }
 
@@ -559,7 +561,7 @@ public enum GitHubIssueFiler {
         }
 
         let draft = GitHubIssueComposer.draft(note: note, reportMarkdown: markdown, bundlePath: bundlePath)
-        return run(gh: gh, draft: draft, repo: repo, withBugLabel: true, fileManager: fileManager)
+        return run(gh: gh, draft: draft, repo: repo, withBugLabel: true, bodyDirectory: bodyDirectory, fileManager: fileManager)
     }
 
     private static func run(
@@ -567,9 +569,10 @@ public enum GitHubIssueFiler {
         draft: GitHubIssueDraft,
         repo: String,
         withBugLabel: Bool,
+        bodyDirectory: URL?,
         fileManager: FileManager
     ) -> Result<String, GitHubIssueFilingError> {
-        let bodyURL = fileManager.temporaryDirectory
+        let bodyURL = (bodyDirectory ?? fileManager.temporaryDirectory)
             .appendingPathComponent("ouro-workbench-issue-\(UUID().uuidString).md")
         do {
             try draft.body.write(to: bodyURL, atomically: true, encoding: .utf8)
@@ -609,7 +612,7 @@ public enum GitHubIssueFiler {
             // A missing `bug` label fails the whole call; retry once without it
             // rather than make the venue depend on a label existing in the repo.
             if withBugLabel, output.lowercased().contains("label") {
-                return run(gh: gh, draft: draft, repo: repo, withBugLabel: false, fileManager: fileManager)
+                return run(gh: gh, draft: draft, repo: repo, withBugLabel: false, bodyDirectory: bodyDirectory, fileManager: fileManager)
             }
             return .failure(.commandFailed(output.isEmpty ? "gh exited with status \(process.terminationStatus)" : output))
         }

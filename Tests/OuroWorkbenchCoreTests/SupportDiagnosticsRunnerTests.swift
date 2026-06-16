@@ -32,6 +32,15 @@ final class SupportDiagnosticsRunnerTests: XCTestCase {
         XCTAssertEqual(runner.scriptURL()?.standardizedFileURL, bundled.standardizedFileURL)
     }
 
+    func testCandidateScriptURLsDeduplicateSameResourceAndRepoDirectory() {
+        let runner = SupportDiagnosticsRunner(resourceDirectory: temporaryDirectory.appendingPathComponent("scripts"), currentDirectory: temporaryDirectory)
+
+        let paths = runner.candidateScriptURLs.map(\.standardizedFileURL.path)
+
+        XCTAssertEqual(Set(paths).count, paths.count)
+        XCTAssertEqual(paths.count, 2)
+    }
+
     func testLocatesRepoDiagnosticsScriptWhenBundleScriptIsMissing() throws {
         let repo = temporaryDirectory.appendingPathComponent("repo", isDirectory: true)
         let repoScripts = repo.appendingPathComponent("scripts", isDirectory: true)
@@ -100,6 +109,7 @@ final class SupportDiagnosticsRunnerTests: XCTestCase {
 
         XCTAssertThrowsError(try runner.run()) { error in
             XCTAssertEqual(error as? SupportDiagnosticsRunnerError, .scriptMissing(runner.candidateScriptURLs.map(\.path)))
+            XCTAssertTrue(error.localizedDescription.contains("Support diagnostics helper is missing."))
         }
     }
 
@@ -120,6 +130,51 @@ final class SupportDiagnosticsRunnerTests: XCTestCase {
             }
             XCTAssertEqual(status, 42)
             XCTAssertTrue(output.contains("boom"))
+            XCTAssertTrue(error.localizedDescription.contains("Support diagnostics exited with status 42"))
+        }
+    }
+
+    func testRunReportsLaunchFailureWhenExecutableCandidateIsDirectory() throws {
+        let resources = temporaryDirectory.appendingPathComponent("Resources", isDirectory: true)
+        let scriptDirectory = resources.appendingPathComponent("collect-support-diagnostics.sh", isDirectory: true)
+        try FileManager.default.createDirectory(at: scriptDirectory, withIntermediateDirectories: true)
+
+        XCTAssertThrowsError(try SupportDiagnosticsRunner(resourceDirectory: resources, currentDirectory: temporaryDirectory).run()) { error in
+            guard case .launchFailed = error as? SupportDiagnosticsRunnerError else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+        }
+    }
+
+    func testRunFallsBackToEmptyOutputWhenScriptEmitsInvalidUTF8() throws {
+        let resources = temporaryDirectory.appendingPathComponent("Resources", isDirectory: true)
+        try FileManager.default.createDirectory(at: resources, withIntermediateDirectories: true)
+        let script = resources.appendingPathComponent("collect-support-diagnostics.sh")
+        try """
+        #!/usr/bin/env bash
+        printf '\\xff'
+        exit 5
+        """.write(to: script, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+
+        XCTAssertThrowsError(try SupportDiagnosticsRunner(resourceDirectory: resources, currentDirectory: temporaryDirectory).run()) { error in
+            XCTAssertEqual(error as? SupportDiagnosticsRunnerError, .failed(status: 5, output: ""))
+        }
+    }
+
+    func testRunFailsWhenScriptDoesNotReportArchivePath() throws {
+        let resources = temporaryDirectory.appendingPathComponent("Resources", isDirectory: true)
+        try FileManager.default.createDirectory(at: resources, withIntermediateDirectories: true)
+        let script = resources.appendingPathComponent("collect-support-diagnostics.sh")
+        try """
+        #!/usr/bin/env bash
+        printf 'done without archive\\n'
+        """.write(to: script, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+
+        XCTAssertThrowsError(try SupportDiagnosticsRunner(resourceDirectory: resources, currentDirectory: temporaryDirectory).run()) { error in
+            XCTAssertEqual(error as? SupportDiagnosticsRunnerError, .archivePathMissing("done without archive\n"))
+            XCTAssertTrue(error.localizedDescription.contains("did not report an archive path"))
         }
     }
 
@@ -136,7 +191,20 @@ final class SupportDiagnosticsRunnerTests: XCTestCase {
 
         XCTAssertThrowsError(try SupportDiagnosticsRunner(resourceDirectory: resources, currentDirectory: temporaryDirectory).run()) { error in
             XCTAssertEqual(error as? SupportDiagnosticsRunnerError, .archiveMissing(archive.path))
+            XCTAssertEqual(error.localizedDescription, "Support diagnostics reported a missing archive: \(archive.path)")
         }
+    }
+
+    func testParseArchiveURLIgnoresNonMatchingAndBlankArchiveLines() {
+        XCTAssertNil(SupportDiagnosticsRunner.parseArchiveURL(from: "no archive here"))
+        XCTAssertNil(SupportDiagnosticsRunner.parseArchiveURL(from: "Wrote diagnostics:    \n"))
+    }
+
+    func testLaunchFailedDescriptionIncludesUnderlyingMessage() {
+        XCTAssertEqual(
+            SupportDiagnosticsRunnerError.launchFailed("permission denied").errorDescription,
+            "Support diagnostics could not start: permission denied"
+        )
     }
 
     func testDefaultOutputDirectoryUsesApplicationSupport() {

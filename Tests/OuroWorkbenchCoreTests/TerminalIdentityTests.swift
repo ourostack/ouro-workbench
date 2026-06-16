@@ -57,4 +57,61 @@ final class TerminalIdentityTests: XCTestCase {
         XCTAssertEqual(shellWrapped.arguments, ["--dangerously-skip-permissions"])
         XCTAssertEqual(TerminalAgentDetector.detect(executable: shellWrapped.executable, arguments: shellWrapped.arguments), .claudeCode)
     }
+
+    func testParserReturnsNilForBlankCommandAndPreservesTrailingBackslash() {
+        XCTAssertNil(TerminalCommandParser.parse("   \n\t  "))
+
+        let parsed = TerminalCommandParser.parse("claude path\\")
+        XCTAssertEqual(parsed?.executable, "claude")
+        XCTAssertEqual(parsed?.arguments, ["path\\"])
+    }
+
+    func testParserAppliesMidTokenBackslashEscapes() {
+        // A backslash before a non-terminal character escapes it: an escaped
+        // space joins the surrounding token instead of splitting it.
+        let escapedSpace = TerminalCommandParser.parse("claude a\\ b")
+        XCTAssertEqual(escapedSpace?.executable, "claude")
+        XCTAssertEqual(escapedSpace?.arguments, ["a b"])
+
+        // An escaped ordinary character contributes literally to the token.
+        let escapedLetter = TerminalCommandParser.parse("cl\\aude --model opus")
+        XCTAssertEqual(escapedLetter?.executable, "claude")
+        XCTAssertEqual(escapedLetter?.arguments, ["--model", "opus"])
+    }
+
+    func testCanonicalTokensLeaveUnparseableWrappersUntouched() {
+        let shellMissingCommand = TerminalAgentDetector.canonicalTokens(executable: "sh", arguments: ["-c"])
+        XCTAssertEqual(shellMissingCommand, TerminalCommandTokens(executable: "sh", arguments: ["-c"]))
+
+        let envWithOnlyOptions = TerminalAgentDetector.canonicalTokens(executable: "env", arguments: ["-u", "PATH", "--ignore-environment"])
+        XCTAssertEqual(envWithOnlyOptions, TerminalCommandTokens(executable: "env", arguments: ["-u", "PATH", "--ignore-environment"]))
+
+        let execWithoutTarget = TerminalAgentDetector.canonicalTokens(executable: "exec", arguments: [])
+        XCTAssertEqual(execWithoutTarget, TerminalCommandTokens(executable: "exec", arguments: []))
+    }
+
+    func testEnvUnwrapSkipsUnsetOptionsAndRejectsInvalidAssignments() {
+        let unwrapped = TerminalAgentDetector.canonicalTokens(
+            executable: "env",
+            arguments: ["-u", "PATH", "--debug", "FOO_1=bar", "codex", "--yolo"]
+        )
+        XCTAssertEqual(unwrapped, TerminalCommandTokens(executable: "codex", arguments: ["--yolo"]))
+
+        let invalidAssignmentIsExecutable = TerminalAgentDetector.canonicalTokens(
+            executable: "env",
+            arguments: ["1BAD=value", "claude"]
+        )
+        XCTAssertEqual(invalidAssignmentIsExecutable, TerminalCommandTokens(executable: "1BAD=value", arguments: ["claude"]))
+
+        let invalidAssignmentCharacterIsExecutable = TerminalAgentDetector.canonicalTokens(
+            executable: "env",
+            arguments: ["BAD-NAME=value", "claude"]
+        )
+        XCTAssertEqual(invalidAssignmentCharacterIsExecutable, TerminalCommandTokens(executable: "BAD-NAME=value", arguments: ["claude"]))
+    }
+
+    func testDisplayNameHandlesNilKind() {
+        XCTAssertNil(TerminalAgentDetector.displayName(for: nil))
+        XCTAssertEqual(TerminalAgentDetector.displayName(for: .custom), "custom")
+    }
 }

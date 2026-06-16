@@ -124,9 +124,18 @@ public struct ReleaseUpdateChecker: Sendable {
     public var configuration: ReleaseUpdateConfiguration
     private let dataLoader: @Sendable (URL) async throws -> Data
 
+    public init() {
+        self.init(configuration: ReleaseUpdateConfiguration())
+    }
+
+    public init(configuration: ReleaseUpdateConfiguration) {
+        self.configuration = configuration
+        self.dataLoader = Self.defaultDataLoader
+    }
+
     public init(
         configuration: ReleaseUpdateConfiguration = ReleaseUpdateConfiguration(),
-        dataLoader: @escaping @Sendable (URL) async throws -> Data = ReleaseUpdateChecker.defaultDataLoader
+        dataLoader: @escaping @Sendable (URL) async throws -> Data
     ) {
         self.configuration = configuration
         self.dataLoader = dataLoader

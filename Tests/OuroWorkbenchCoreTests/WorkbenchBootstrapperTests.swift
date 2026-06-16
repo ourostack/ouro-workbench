@@ -50,7 +50,7 @@ final class WorkbenchBootstrapperTests: XCTestCase {
             kind: .terminalAgent,
             agentKind: .claudeCode,
             executable: "claude",
-            workingDirectory: "/tmp/existing"
+            workingDirectory: ""
         )
         let state = WorkspaceState(projects: [project], processEntries: [existing])
 
@@ -59,6 +59,7 @@ final class WorkbenchBootstrapperTests: XCTestCase {
         XCTAssertEqual(bootstrapped.processEntries.filter { $0.agentKind == .claudeCode }.count, 1)
         XCTAssertEqual(bootstrapped.processEntries.count, 1)
         XCTAssertFalse(bootstrapped.processEntries.contains { $0.name == "Local Shell" })
+        XCTAssertEqual(bootstrapped.processEntries.first { $0.id == existing.id }?.workingDirectory, "/tmp/existing")
     }
 
     func testBootstrapRemovesUntouchedGeneratedAgentScaffolds() {
@@ -126,6 +127,35 @@ final class WorkbenchBootstrapperTests: XCTestCase {
 
         XCTAssertTrue(bootstrapped.processEntries.contains { $0.id == codex.id })
         XCTAssertEqual(bootstrapped.processEntries.count, 1)
+        XCTAssertFalse(bootstrapped.processEntries.contains { $0.name == "Local Shell" })
+    }
+
+    func testBootstrapKeepsGeneratedAgentScaffoldsWithActionLog() {
+        let project = WorkbenchProject(name: "Project", rootPath: "/repo")
+        let preset = TerminalAgentPresets.preset(for: .claudeCode)!
+        let generated = ProcessEntry(
+            projectId: project.id,
+            name: preset.displayName,
+            kind: .terminalAgent,
+            agentKind: preset.id,
+            executable: preset.executable,
+            workingDirectory: "/repo",
+            lastSummary: "Configured \(preset.displayName) lane"
+        )
+        let action = WorkbenchActionLogEntry(
+            source: "test",
+            action: "launch",
+            targetEntryId: generated.id,
+            targetName: generated.name,
+            result: "launched",
+            succeeded: true
+        )
+
+        let bootstrapped = WorkbenchBootstrapper().bootstrappedState(
+            from: WorkspaceState(projects: [project], processEntries: [generated], actionLog: [action])
+        )
+
+        XCTAssertEqual(bootstrapped.processEntries.map(\.id), [generated.id])
         XCTAssertFalse(bootstrapped.processEntries.contains { $0.name == "Local Shell" })
     }
 
@@ -220,5 +250,12 @@ final class WorkbenchBootstrapperTests: XCTestCase {
         XCTAssertEqual(bootstrapped.processEntries.first?.trust, .untrusted)
         XCTAssertEqual(bootstrapped.processEntries.first?.autoResume, false)
         XCTAssertNil(bootstrapped.processEntries.first?.lastSummary)
+    }
+
+    func testBootstrapLeavesStateAloneWhenDefaultProjectCannotBeCreated() {
+        let state = WorkbenchBootstrapper().bootstrappedState(from: WorkspaceState(), makeDefaultProject: { nil })
+
+        XCTAssertTrue(state.projects.isEmpty)
+        XCTAssertTrue(state.processEntries.isEmpty)
     }
 }

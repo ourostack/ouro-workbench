@@ -192,8 +192,9 @@ public final class BossAgentMCPClient: @unchecked Sendable {
     private func readResponse(_ processBox: ProcessIOBox, id: Int, timeoutNanoseconds: UInt64) async throws -> String {
         try await withThrowingTaskGroup(of: String.self) { group in
             // Cancel the sibling on every exit path, including the timeout
-            // rethrow. (The timeout task also terminates the subprocess so
-            // the blocking read unwinds; this keeps the group tidy regardless.)
+            // rethrow. The timeout task force-kills the subprocess so the
+            // *uncancellable* blocking read always unwinds (EOF on closed stdout)
+            // — terminate() alone deadlocks the group when the child ignores SIGTERM.
             defer { group.cancelAll() }
             group.addTask {
                 try processBox.readResponse(id: id)
@@ -201,12 +202,10 @@ public final class BossAgentMCPClient: @unchecked Sendable {
             group.addTask {
                 try await Task.sleep(nanoseconds: timeoutNanoseconds)
                 processBox.terminate()
+                processBox.forceKill()
                 throw BossAgentMCPClientError.timeout
             }
-            guard let data = try await group.next() else {
-                throw BossAgentMCPClientError.closed
-            }
-            return data
+            return try await firstTaskResult(of: &group, orThrow: BossAgentMCPClientError.closed)
         }
     }
 
@@ -243,7 +242,7 @@ public final class BossAgentMCPClient: @unchecked Sendable {
         ]
     }
 
-    fileprivate static func extractTextIfMatching(line: String, id: Int) throws -> String? {
+    static func extractTextIfMatching(line: String, id: Int) throws -> String? {
         let data = Data(line.utf8)
         guard
             let raw = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -283,15 +282,22 @@ private struct MCPTextContent: Decodable {
     var text: String
 }
 
-private final class ProcessIOBox: @unchecked Sendable {
+final class ProcessIOBox: @unchecked Sendable {
     private let process: Process
     private let stdout: FileHandle
     private let stderr: FileHandle
+    private let processKiller: @Sendable (pid_t, Int32) -> Int32
 
-    init(process: Process, stdout: FileHandle, stderr: FileHandle) {
+    init(
+        process: Process,
+        stdout: FileHandle,
+        stderr: FileHandle,
+        processKiller: @escaping @Sendable (pid_t, Int32) -> Int32 = { kill($0, $1) }
+    ) {
         self.process = process
         self.stdout = stdout
         self.stderr = stderr
+        self.processKiller = processKiller
     }
 
     func readResponse(id: Int) throws -> String {
@@ -331,7 +337,7 @@ private final class ProcessIOBox: @unchecked Sendable {
 
     func forceKill() {
         if process.isRunning {
-            kill(process.processIdentifier, SIGKILL)
+            _ = processKiller(process.processIdentifier, SIGKILL)
         }
     }
 

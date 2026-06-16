@@ -85,6 +85,7 @@ final class WorkbenchUpdateTests: XCTestCase {
             from: snapshot(status: .current, latest: "0.1.120", assets: installableAssets)
         )
         XCTAssertEqual(result, .failure(.notAnUpdate))
+        XCTAssertEqual(WorkbenchUpdatePlanError.notAnUpdate.errorDescription, "No newer release is available to install.")
     }
 
     func testPlanFailsWhenArchiveMissing() {
@@ -93,6 +94,7 @@ final class WorkbenchUpdateTests: XCTestCase {
             from: snapshot(status: .updateAvailable, latest: "0.1.122", assets: onlyManifest)
         )
         XCTAssertEqual(result, .failure(.missingArchiveAsset))
+        XCTAssertEqual(WorkbenchUpdatePlanError.missingArchiveAsset.errorDescription, "The release is missing a downloadable app archive (.zip).")
     }
 
     func testPlanFailsWhenManifestMissing() {
@@ -101,6 +103,29 @@ final class WorkbenchUpdateTests: XCTestCase {
             from: snapshot(status: .updateAvailable, latest: "0.1.122", assets: onlyZip)
         )
         XCTAssertEqual(result, .failure(.missingManifestAsset))
+        XCTAssertEqual(WorkbenchUpdatePlanError.missingManifestAsset.errorDescription, "The release is missing its artifact manifest (.manifest.json).")
+    }
+
+    func testPlanFailsWhenAssetURLIsMalformed() {
+        let assets = [
+            ReleaseUpdateAsset(
+                name: "OuroWorkbench-0.1.122-build.199-779ed85.zip",
+                downloadURL: "http://[",
+                size: 10
+            ),
+            ReleaseUpdateAsset(
+                name: "OuroWorkbench-0.1.122-build.199-779ed85.manifest.json",
+                downloadURL: "https://example.com/app.manifest.json",
+                size: 10
+            ),
+        ]
+
+        let result = WorkbenchUpdatePlanner.plan(
+            from: snapshot(status: .updateAvailable, latest: "0.1.122", assets: assets)
+        )
+
+        XCTAssertEqual(result, .failure(.badAssetURL))
+        XCTAssertEqual(WorkbenchUpdatePlanError.badAssetURL.errorDescription, "The release asset download URL was not valid.")
     }
 
     // MARK: - Verification
@@ -197,6 +222,10 @@ final class WorkbenchUpdateTests: XCTestCase {
             failure,
             .archiveNameMismatch(expected: "OuroWorkbench-0.1.122-build.199-779ed85.zip", got: "something-else.zip")
         )
+        XCTAssertEqual(
+            failure?.errorDescription,
+            "Downloaded archive name something-else.zip did not match the manifest (OuroWorkbench-0.1.122-build.199-779ed85.zip)."
+        )
     }
 
     func testVerifyFailsWhenNotNewerThanCurrent() {
@@ -215,6 +244,39 @@ final class WorkbenchUpdateTests: XCTestCase {
                 current: "Version 0.1.120 (build 199)",
                 candidate: "Version 0.1.120 (build 199)"
             )
+        )
+        XCTAssertEqual(
+            failure?.errorDescription,
+            "Update version Version 0.1.120 (build 199) is not newer than the installed Version 0.1.120 (build 199)."
+        )
+    }
+
+    func testVerifyFailsWhenVersionCannotBeCompared() {
+        let failure = WorkbenchUpdateVerification.verify(
+            manifest: manifest(version: "banana"),
+            downloadedArchiveName: "OuroWorkbench-0.1.122-build.199-779ed85.zip",
+            downloadedSHA256: "abc123",
+            downloadedBytes: 3_600_000,
+            expectedBundleIdentifier: "com.ourostack.workbench",
+            currentVersion: "0.1.120"
+        )
+
+        XCTAssertEqual(failure, .unreadableVersion(manifest: "banana", current: "0.1.120"))
+        XCTAssertEqual(failure?.errorDescription, "Could not compare the update version (banana) to the current version (0.1.120).")
+    }
+
+    func testVerificationFailureDescriptions() {
+        XCTAssertEqual(
+            WorkbenchUpdateVerification.Failure.sha256Mismatch(expected: "abc", got: "def").errorDescription,
+            "Downloaded archive failed its SHA-256 integrity check."
+        )
+        XCTAssertEqual(
+            WorkbenchUpdateVerification.Failure.byteCountMismatch(expected: 10, got: 9).errorDescription,
+            "Downloaded archive size (9 bytes) did not match the manifest (10 bytes)."
+        )
+        XCTAssertEqual(
+            WorkbenchUpdateVerification.Failure.bundleIdentifierMismatch(expected: "com.ouro", got: "com.other").errorDescription,
+            "Update bundle identifier com.other did not match this app (com.ouro)."
         )
     }
 

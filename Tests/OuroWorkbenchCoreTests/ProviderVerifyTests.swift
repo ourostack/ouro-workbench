@@ -82,6 +82,12 @@ final class ProviderVerifyTests: XCTestCase {
     // MARK: - Runner: explicit agent-name guard (never default-agent resolution)
 
     func testRunnerRejectsEmptyAgentNameWithoutRunningCommand() async {
+        let defaultVerifyRunner = ProviderVerifyRunner(verifyProbe: { _, _ in .healthy })
+        let defaultOutcome = await defaultVerifyRunner.verify(agentName: "   ", lane: nil)
+        XCTAssertFalse(defaultOutcome.commandAttempted)
+        let defaultCommandOutcome = await defaultVerifyRunner.verify(agentName: "slugger", lane: nil)
+        XCTAssertTrue(defaultCommandOutcome.commandAttempted)
+        XCTAssertEqual(defaultCommandOutcome.truth, .verified)
         let didRun = ProviderVerifyBoolFlag()
         let runner = ProviderVerifyRunner(
             runVerify: { _, _ in didRun.set() },
@@ -159,6 +165,31 @@ final class ProviderVerifyTests: XCTestCase {
 
         XCTAssertFalse(outcome.humanFacingLine.lowercased().contains("ouro"))
         XCTAssertTrue(outcome.auditDetail.contains("ouro auth verify --agent slugger"))
+    }
+
+    func testOutcomeNeedsManualRecoveryDelegatesToTruth() {
+        let manual = ProviderVerifyOutcome(agentName: "slugger", lane: nil, truth: .needsManual, commandAttempted: true)
+        let verified = ProviderVerifyOutcome(agentName: "slugger", lane: nil, truth: .verified, commandAttempted: true)
+
+        XCTAssertTrue(manual.needsManualRecovery)
+        XCTAssertFalse(verified.needsManualRecovery)
+    }
+
+    func testDefaultHeadlessVerifyRunsLaneAndWholeAgentCommands() async throws {
+        let root = try coverageBatch2TemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let argsFile = root.appendingPathComponent("args.txt")
+        let oldPath = try coverageBatch2InstallFakeOuro(
+            in: root,
+            body: "printf '%s\\n' \"$@\" > '\(argsFile.path)'\nexit 0\n"
+        )
+        defer { setenv("PATH", oldPath, 1) }
+
+        try await ProviderVerifyRunner.headlessVerify(agentName: "slugger", lane: .inner)
+        XCTAssertEqual(try String(contentsOf: argsFile, encoding: .utf8), "check\n--agent\nslugger\n--lane\ninner\n")
+
+        try await ProviderVerifyRunner.headlessVerify(agentName: "slugger", lane: nil)
+        XCTAssertEqual(try String(contentsOf: argsFile, encoding: .utf8), "auth\nverify\n--agent\nslugger\n")
     }
 }
 

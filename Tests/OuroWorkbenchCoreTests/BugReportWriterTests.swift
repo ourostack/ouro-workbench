@@ -71,6 +71,25 @@ final class BugReportWriterTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: copied), Data("zip-bytes".utf8))
     }
 
+    func testDiagnosticsArchiveReplacesExistingBundleArchive() throws {
+        let archive = tempRoot.appendingPathComponent("source-diagnostics.zip")
+        try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
+        let reportDir = tempRoot.appendingPathComponent("report-dir", isDirectory: true)
+        try FileManager.default.createDirectory(at: reportDir, withIntermediateDirectories: true)
+        try Data("old".utf8).write(to: reportDir.appendingPathComponent("diagnostics.zip"))
+        try Data("new".utf8).write(to: archive)
+
+        let bundle = try write(diagnostics: archive)
+        let copied = bundle.directoryURL.appendingPathComponent("diagnostics.zip")
+
+        XCTAssertEqual(try Data(contentsOf: copied), Data("new".utf8))
+    }
+
+    func testWorkbenchPathsBugReportsURLUsesAppSupportRoot() {
+        let paths = WorkbenchPaths(rootURL: tempRoot)
+        XCTAssertEqual(paths.bugReportsURL, tempRoot.appendingPathComponent("bug-reports", isDirectory: true))
+    }
+
     func testDiagnosticsFailureBecomesWarning() throws {
         let bundle = try write(diagnostics: nil, diagnosticsError: "script missing")
         XCTAssertFalse(bundle.attachmentNames.contains("diagnostics.zip"))
