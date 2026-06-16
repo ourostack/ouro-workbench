@@ -163,7 +163,7 @@ final class AgentRepairTests: XCTestCase {
 
     func testDefaultRunnerUsesHeadlessRepairWhenAgentNamePresent() async throws {
         let harness = try RepairHeadlessOuroHarness()
-        try await harness.withPathPrepended {
+        await harness.withPathPrepended {
             let runner = AgentRepairRunner(verifyProbe: { _ in .healthy })
 
             let outcome = await runner.repair(agentName: "slugger")

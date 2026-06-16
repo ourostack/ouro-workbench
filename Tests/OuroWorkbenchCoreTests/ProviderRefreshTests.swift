@@ -125,7 +125,7 @@ final class ProviderRefreshTests: XCTestCase {
 
     func testDefaultRunnerUsesHeadlessRefreshWhenAgentNamePresent() async throws {
         let harness = try HeadlessOuroHarness()
-        try await harness.withPathPrepended {
+        await harness.withPathPrepended {
             let runner = ProviderRefreshRunner(verifyProbe: { _ in .healthy })
 
             let outcome = await runner.refresh(agentName: "slugger")
