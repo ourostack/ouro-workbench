@@ -76,7 +76,7 @@ for f in files:
     if ul <= al and ur <= ar:
         exempt.append((name, ul, ur))
     else:
-        below.append((ul, name, L['percent'], R['percent'], ur))
+        below.append((ul, name, L['percent'], R['percent'], ur, f['filename']))
 
 total_files = len(files)
 fully = total_files - len(below) - len(exempt)
@@ -84,12 +84,36 @@ print(f'\nOuroWorkbenchCore: {fully}/{total_files} files at 100% line+region'
       + (f' ({len(exempt)} with allowlisted structural exclusions)' if exempt else ''))
 for name, ul, ur in sorted(exempt):
     print(f'  allow {name:44} ({ul} line, {ur} region exempt — see coverage-allowlist.txt)')
-if below:
-    below.sort(reverse=True)
-    print(f'\n{len(below)} below 100%:')
-    for ul, name, lp, rp, ur in below:
-        print(f'  {name:44} {lp:5.1f}% line  {rp:5.1f}% region  ({ul} lines / {ur} regions uncovered)')
-    print('\nFAIL: OuroWorkbenchCore must be 100% line + region covered (minus the documented allowlist).')
-    sys.exit(1)
-print('\nPASS: OuroWorkbenchCore is 100% line + region covered (documented structural exclusions aside).')
+
+with open('.build/wb-below.txt', 'w') as fh:
+    if below:
+        below.sort(reverse=True)
+        print(f'\n{len(below)} below 100%:')
+        for ul, name, lp, rp, ur, path in below:
+            print(f'  {name:44} {lp:5.1f}% line  {rp:5.1f}% region  ({ul} lines / {ur} regions uncovered)')
+            fh.write(path + '\n')
 PY
+
+# If any file is below 100%, dump its exact uncovered lines/regions so the CI log
+# self-reports what THIS toolchain's llvm-cov sees (coverage can differ across
+# Swift versions), then fail. The diagnostic uses the same artifacts as above.
+if [ -s .build/wb-below.txt ]; then
+  echo ""
+  echo "==> uncovered detail (per failing file, as seen by $(xcrun swift --version 2>/dev/null | head -1)):"
+  while IFS= read -r srcfile; do
+    [ -n "$srcfile" ] || continue
+    echo ""
+    echo "--- $srcfile ---"
+    echo "  uncovered LINES:"
+    xcrun llvm-cov show "$bin" -instr-profile "$prof" "$srcfile" 2>/dev/null \
+      | grep -E '^\s*[0-9]+\|\s*0\|' | sed 's/^/    /' || echo "    (none fully-uncovered; gaps are partial regions)"
+    echo "  uncovered REGIONS (branch arms):"
+    xcrun llvm-cov show "$bin" -instr-profile "$prof" "$srcfile" --show-regions 2>/dev/null \
+      | grep -B1 -E '^\s+\^0([^0-9]|$)' | grep -vE '^\s+\^0|^--' | sed 's/^/    /' | head -40 || true
+  done < .build/wb-below.txt
+  echo ""
+  echo "FAIL: OuroWorkbenchCore must be 100% line + region covered (minus the documented allowlist)."
+  exit 1
+fi
+echo ""
+echo "PASS: OuroWorkbenchCore is 100% line + region covered (documented structural exclusions aside)."
