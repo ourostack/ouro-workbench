@@ -1,0 +1,22 @@
+docs/workbench-surface-spec.md:201:Plain shell sessions are compatibility/user state, not bootstrap chrome. When a
+worker/tasks/audit-backlog.md:19:**Status**: fixed
+worker/tasks/audit-backlog.md:37:**Status**: fixed
+worker/tasks/audit-backlog.md:38:**Linked work**: `worker/tasks/2026-06-14-1420-planning-factory-reset-setup-flow.md`, `worker/tasks/2026-06-14-1420-doing-factory-reset-setup-flow.md`, commit `bdb7c3f`; residual product-center follow-up A-011
+worker/tasks/audit-backlog.md:39:**Notes**: Fixed for reset/setup mode by bootstrapping `Unsorted Sessions` with no local shell. A-011 tracks the deeper normal-bootstrap built-in shell removal.
+worker/tasks/audit-backlog.md:56:**Linked work**: `worker/tasks/2026-06-14-1420-planning-factory-reset-setup-flow.md`, `worker/tasks/2026-06-14-1939-ideation-product-center-of-gravity.md`; replacement A-012
+worker/tasks/audit-backlog.md:57:**Notes**: The immediate reset-created shell dead end is fixed by not creating that shell. The broader persisted-shell management issue is now tracked by A-012.
+worker/tasks/audit-backlog.md:73:**Status**: fixed
+worker/tasks/audit-backlog.md:91:**Status**: fixed
+worker/tasks/audit-backlog.md:109:**Status**: fixed
+worker/tasks/audit-backlog.md:127:**Status**: fixed
+worker/tasks/audit-backlog.md:187:## A-011 - Built-in shell remains the normal empty-state center
+worker/tasks/audit-backlog.md:199:**Status**: fixed
+worker/tasks/audit-backlog.md:205:## A-012 - Persisted shell rows are not normal managed sessions
+worker/tasks/audit-backlog.md:213:**Dependencies**: A-011
+worker/tasks/audit-backlog.md:217:**Status**: fixed
+worker/tasks/audit-backlog.md:223:## A-013 - Docs still teach the old shell/wrapper story
+worker/tasks/audit-backlog.md:231:**Dependencies**: A-011, A-012
+worker/tasks/audit-backlog.md:235:**Status**: fixed
+worker/tasks/audit-backlog.md:241:## A-014 - Scenario fixtures canonize `Local Shell`
+worker/tasks/audit-backlog.md:249:**Dependencies**: A-011
+worker/tasks/audit-backlog.md:253:**Status**: fixed

@@ -1,0 +1,13 @@
+[0/1] Planning build
+Building for debugging...
+[0/3] Write swift-version--58304C5D6DBC2206.txt
+Build of product 'OuroWorkbenchScenarioVerifier' complete! (0.34s)
+Workbench native scenario verifier:
+rows verified: 5000
+matrix rows: 5000
+deep generated rows: 0
+render passes: 25000
+viewports: standard, short-window, compact-terminal, tall-workspace, wide-workspace
+coverage digest: 567dc7ec0c45835b
+sample files: 0
+failures: 0

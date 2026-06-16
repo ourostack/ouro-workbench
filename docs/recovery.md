@@ -51,8 +51,8 @@ discoverable after restart.
 ## Detected Agent Terminals
 
 Workbench detects known agent terminals from the actual command, including
-direct commands such as `claude --dangerously-skip-permissions` and legacy
-shell/env wrappers such as `/bin/zsh -lc "env claude ..."`. Detection is used
+direct commands such as `claude --dangerously-skip-permissions` and older
+persisted shell/env wrappers such as `/bin/zsh -lc "env claude ..."`. Detection is used
 for labels, executable health, recovery planning, and boss context.
 
 ### Claude Code

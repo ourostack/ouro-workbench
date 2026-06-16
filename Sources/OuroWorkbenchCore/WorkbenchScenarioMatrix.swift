@@ -176,11 +176,11 @@ public struct WorkbenchScenarioMatrix: Sendable {
                 autoResume: posture.autoResume,
                 isArchived: surface.isArchived
             )
-        case "local_shell":
+        case "user_shell":
             return ProcessEntry(
                 id: stableUUID("10000000-0000-0000-0000-000000000005"),
                 projectId: projectId,
-                name: "Local Shell",
+                name: "User Shell",
                 kind: .shell,
                 executable: "/bin/zsh",
                 arguments: ["-l"],

@@ -537,7 +537,7 @@ public struct RecentSessionScanner {
 
     public func scan() -> [RecentSessionCandidate] {
         let liveProcesses = liveProcessLister()
-        let claudeHistory = scanClaudeCode()
+        let claudeHistory = scanClaudeCode() + scanClaudeTaskRecords()
         let candidates = scanWorkbench()
             + scanCmuxSessions(liveProcesses: liveProcesses, claudeHistory: claudeHistory)
             + scanLiveClaudeCode(liveProcesses: liveProcesses, claudeHistory: claudeHistory)
@@ -734,17 +734,25 @@ public struct RecentSessionScanner {
                 lastActiveAt: lastActive,
                 resumeCommand: ["claude", "--resume", sessionId],
                 summary: firstPrompt(records) ?? "Recent Claude Code session.",
-                evidencePaths: [fileURL.path],
+                evidencePaths: [evidencePath(fileURL)],
                 confidence: cwd == homeURL.path ? 0.72 : 0.92
             )
         }
     }
 
+    public func scanClaudeTaskRecords() -> [RecentSessionCandidate] {
+        let tasksURL = homeURL.appendingPathComponent(".claude/tasks", isDirectory: true)
+        let projectsURL = homeURL.appendingPathComponent(".claude/projects", isDirectory: true)
+        return scanClaudeJSONRecords(under: tasksURL) + scanClaudeJSONRecords(under: projectsURL)
+    }
+
     public func scanCodex() -> [RecentSessionCandidate] {
-        let sqliteCandidates = scanCodexSQLite()
-        if !sqliteCandidates.isEmpty {
-            return sqliteCandidates
-        }
+        scanCodexSQLite()
+            + scanCodexSessionIndex()
+            + scanCodexRecoveryJSONL()
+    }
+
+    private func scanCodexSessionIndex() -> [RecentSessionCandidate] {
         let indexURL = homeURL.appendingPathComponent(".codex/session_index.jsonl")
         return jsonLineObjects(indexURL).compactMap { object in
             guard let id = object["id"] as? String else {
@@ -768,6 +776,21 @@ public struct RecentSessionScanner {
                 confidence: 0.68
             )
         }
+    }
+
+    private func scanCodexRecoveryJSONL() -> [RecentSessionCandidate] {
+        let codexURL = homeURL.appendingPathComponent(".codex", isDirectory: true)
+        return recentFiles(under: codexURL, pathExtension: "jsonl")
+            .filter { fileURL in
+                let path = fileURL.path
+                return path.contains("/archived_sessions/")
+                    || path.contains("/manual-recovery-")
+            }
+            .flatMap { fileURL in
+                jsonLineObjects(fileURL).compactMap { object in
+                    codexCandidate(from: object, evidenceURL: fileURL)
+                }
+            }
     }
 
     public func scanShellHistory() -> [RecentSessionCandidate] {
@@ -811,6 +834,64 @@ public struct RecentSessionScanner {
                     confidence: 0.42
                 )
             }
+    }
+
+    private func scanClaudeJSONRecords(under root: URL) -> [RecentSessionCandidate] {
+        recentFiles(under: root, pathExtension: "json").compactMap { fileURL in
+            guard let object = jsonObject(fileURL),
+                  let sessionId = firstString(object, keys: ["sessionId", "session_id", "id"])
+            else {
+                return nil
+            }
+            let cwd = firstString(object, keys: ["cwd", "workingDirectory", "working_directory"])
+                ?? inferredClaudeProjectPath(from: fileURL)
+                ?? homeURL.path
+            let titleSeed = firstString(object, keys: ["summary", "title", "prompt", "message", "content"])
+            let lastActive = firstDate(object, keys: ["updatedAt", "updated_at", "timestamp", "lastActiveAt"])
+                ?? modificationDate(fileURL)
+            guard isRecent(lastActive) else {
+                return nil
+            }
+            return RecentSessionCandidate(
+                id: "claude:\(sessionId)",
+                source: .claudeCode,
+                agentKind: .claudeCode,
+                title: titleSeed.flatMap(Self.titleFromPrompt) ?? sessionId,
+                workingDirectory: cwd,
+                lastActiveAt: lastActive,
+                resumeCommand: ["claude", "--resume", sessionId],
+                summary: titleSeed ?? sessionId,
+                evidencePaths: [evidencePath(fileURL)],
+                confidence: cwd == homeURL.path ? 0.7 : 0.9
+            )
+        }
+    }
+
+    private func codexCandidate(from object: [String: Any], evidenceURL: URL) -> RecentSessionCandidate? {
+        let record = payloadObject(object)
+        guard let sessionId = firstString(record, keys: ["id", "sessionId", "session_id", "threadId", "thread_id"]) else {
+            return nil
+        }
+        let cwd = firstString(record, keys: ["cwd", "workingDirectory", "working_directory"])
+        let titleSeed = firstString(record, keys: ["prompt", "summary", "title", "thread_name", "message", "content"])
+        let lastActive = firstDate(record, keys: ["timestamp", "updatedAt", "updated_at", "lastActiveAt", "last_active_at"])
+            ?? modificationDate(evidenceURL)
+        guard isRecent(lastActive) else {
+            return nil
+        }
+        let workingDirectory = cwd ?? homeURL.path
+        return RecentSessionCandidate(
+            id: "codex:\(sessionId)",
+            source: .openAICodex,
+            agentKind: .openAICodex,
+            title: titleSeed.flatMap(Self.titleFromPrompt) ?? sessionId,
+            workingDirectory: workingDirectory,
+            lastActiveAt: lastActive,
+            resumeCommand: ["codex", "resume", sessionId],
+            summary: titleSeed ?? sessionId,
+            evidencePaths: [evidencePath(evidenceURL)],
+            confidence: cwd == nil ? 0.7 : 0.88
+        )
     }
 
     private func scanCodexSQLite() -> [RecentSessionCandidate] {
@@ -932,12 +1013,60 @@ public struct RecentSessionScanner {
             }
     }
 
+    private func jsonObject(_ url: URL) -> [String: Any]? {
+        guard let data = try? Data(contentsOf: url),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+            return nil
+        }
+        return object
+    }
+
+    private func payloadObject(_ object: [String: Any]) -> [String: Any] {
+        guard let payload = object["payload"] as? [String: Any] else {
+            return object
+        }
+        return payload.merging(object) { payloadValue, _ in payloadValue }
+    }
+
+    func evidencePath(_ url: URL) -> String {
+        let path = url.path
+        let privateHomePrefix = "/private" + homeURL.path
+        if path.hasPrefix(privateHomePrefix) {
+            return String(path.dropFirst("/private".count))
+        }
+        return path
+    }
+
     func firstString(_ records: [[String: Any]], keys: [String]) -> String? {
         for record in records {
             for key in keys {
                 if let value = record[key] as? String, !value.isEmpty {
                     return value
                 }
+            }
+        }
+        return nil
+    }
+
+    private func firstString(_ object: [String: Any], keys: [String]) -> String? {
+        for key in keys {
+            if let value = stringValue(object[key])?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !value.isEmpty {
+                return value
+            }
+        }
+        return nil
+    }
+
+    private func firstDate(_ object: [String: Any], keys: [String]) -> Date? {
+        for key in keys {
+            if let date = parseDate(object[key] as? String) {
+                return date
+            }
+            if let numericTimestamp = object[key] as? Double, numericTimestamp > 0 {
+                let seconds = numericTimestamp > 10_000_000_000 ? numericTimestamp / 1000 : numericTimestamp
+                return Date(timeIntervalSince1970: seconds)
             }
         }
         return nil

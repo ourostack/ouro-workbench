@@ -89,6 +89,50 @@ final class BossWorkbenchActionAuthorizerTests: XCTestCase {
         XCTAssertNil(authorization.reason)
     }
 
+    func testTrustedShellEntriesCanBeArchivedAndRestoredByBossActions() throws {
+        let activeShell = ProcessEntry(
+            projectId: UUID(),
+            name: "User Shell",
+            kind: .shell,
+            executable: "/bin/zsh",
+            arguments: ["-l"],
+            workingDirectory: "/repo",
+            trust: .trusted
+        )
+        let archive = BossWorkbenchAction(action: .archive, entry: activeShell.id.uuidString)
+        var archivedShell = activeShell
+        archivedShell.isArchived = true
+        let restore = BossWorkbenchAction(action: .restore, entry: archivedShell.id.uuidString)
+        let authorizer = BossWorkbenchActionAuthorizer()
+
+        XCTAssertTrue(authorizer.authorize(archive, for: activeShell).isAllowed)
+        XCTAssertTrue(authorizer.authorize(restore, for: archivedShell).isAllowed)
+    }
+
+    func testUntrustedShellEntriesCannotBeArchivedOrRestoredByBossActions() throws {
+        let activeShell = ProcessEntry(
+            projectId: UUID(),
+            name: "User Shell",
+            kind: .shell,
+            executable: "/bin/zsh",
+            arguments: ["-l"],
+            workingDirectory: "/repo",
+            trust: .untrusted
+        )
+        var archivedShell = activeShell
+        archivedShell.isArchived = true
+        let authorizer = BossWorkbenchActionAuthorizer()
+
+        XCTAssertEqual(
+            authorizer.authorize(BossWorkbenchAction(action: .archive, entry: activeShell.id.uuidString), for: activeShell).reason,
+            "entry is untrusted"
+        )
+        XCTAssertEqual(
+            authorizer.authorize(BossWorkbenchAction(action: .restore, entry: archivedShell.id.uuidString), for: archivedShell).reason,
+            "entry is untrusted"
+        )
+    }
+
     func testUnsafeSendInputIsWithheldEvenOnTrustedSession() throws {
         let entry = ProcessEntry(
             projectId: UUID(),

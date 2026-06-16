@@ -1,0 +1,29 @@
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/11] Write sources
+[3/11] Write swift-version--58304C5D6DBC2206.txt
+[5/7] Emitting module OuroWorkbenchCoreTests
+[6/7] Compiling OuroWorkbenchCoreTests WorkbenchSurfacePolicyTests.swift
+[6/8] Write Objects.LinkFileList
+[7/8] Linking OuroWorkbenchPackageTests
+Build complete! (2.19s)
+Test Suite 'Selected tests' started at 2026-06-14 16:04:08.972.
+Test Suite 'OuroWorkbenchPackageTests.xctest' started at 2026-06-14 16:04:08.973.
+Test Suite 'WorkbenchSurfacePolicyTests' started at 2026-06-14 16:04:08.973.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testTitleStripUsesSessionControlPolicyWithoutPrimaryRestartLeak]' started.
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift:44: error: -[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testTitleStripUsesSessionControlPolicyWithoutPrimaryRestartLeak] : XCTAssertFalse failed
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift:45: error: -[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testTitleStripUsesSessionControlPolicyWithoutPrimaryRestartLeak] : XCTAssertFalse failed
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift:46: error: -[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testTitleStripUsesSessionControlPolicyWithoutPrimaryRestartLeak] : XCTAssertFalse failed
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testTitleStripUsesSessionControlPolicyWithoutPrimaryRestartLeak]' failed (0.230 seconds).
+Test Suite 'WorkbenchSurfacePolicyTests' failed at 2026-06-14 16:04:09.203.
+	 Executed 1 test, with 3 failures (0 unexpected) in 0.230 (0.230) seconds
+Test Suite 'OuroWorkbenchPackageTests.xctest' failed at 2026-06-14 16:04:09.203.
+	 Executed 1 test, with 3 failures (0 unexpected) in 0.230 (0.231) seconds
+Test Suite 'Selected tests' failed at 2026-06-14 16:04:09.203.
+	 Executed 1 test, with 3 failures (0 unexpected) in 0.230 (0.232) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

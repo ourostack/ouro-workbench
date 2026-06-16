@@ -26,7 +26,7 @@ struct OuroWorkbenchApp: App {
 
     var body: some Scene {
         WindowGroup("") {
-            WorkbenchRootView()
+            WorkbenchRootView(diagnostics: workbenchLaunchDiagnostics)
                 .frame(minWidth: 1100, minHeight: 700)
         }
         .windowStyle(.hiddenTitleBar)
@@ -37,6 +37,14 @@ struct OuroWorkbenchApp: App {
         // which a view-level shortcut would let the terminal swallow. Each item
         // posts a `WorkbenchMenuCommand`; the root view dispatches it.
         .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("About Ouro Workbench…") {
+                    NotificationCenter.default.post(name: .workbenchMenuCommand, object: WorkbenchMenuCommand.about)
+                }
+                Button("Check for Updates…") {
+                    NotificationCenter.default.post(name: .workbenchMenuCommand, object: WorkbenchMenuCommand.checkForUpdates)
+                }
+            }
             CommandGroup(replacing: .newItem) {
                 menuCommand("New Terminal", .newTerminal, "n")
                 menuCommand("New Terminal Tab", .newTerminal, "t")
@@ -59,8 +67,8 @@ struct OuroWorkbenchApp: App {
                 Divider()
                 menuCommand("Previous Terminal", .prevTerminal, "[")
                 menuCommand("Next Terminal", .nextTerminal, "]")
-                menuCommand("Previous Group", .prevGroup, "[", [.command, .shift])
-                menuCommand("Next Group", .nextGroup, "]", [.command, .shift])
+                menuCommand("Previous Workspace", .prevGroup, "[", [.command, .shift])
+                menuCommand("Next Workspace", .nextGroup, "]", [.command, .shift])
                 Divider()
                 Menu("Select Terminal") {
                     ForEach(1...9, id: \.self) { index in
@@ -121,7 +129,7 @@ enum WorkbenchMenuCommand {
     case toggleSidebar, toggleFocus, fontIncrease, fontDecrease, fontReset
     case prevTerminal, nextTerminal, prevGroup, nextGroup
     case findInTerminal, redraw, stopSelected
-    case settings, shortcutsHelp
+    case settings, shortcutsHelp, about, checkForUpdates
     case selectTerminal(Int)
     case splitRight, splitDown, closePane, focusOtherPane
 }
@@ -205,11 +213,19 @@ extension Notification.Name {
 }
 
 struct WorkbenchRootView: View {
-    @StateObject private var model = WorkbenchViewModel()
+    @StateObject private var model: WorkbenchViewModel
     /// Sidebar collapse state. Bound to NavigationSplitView's column
     /// visibility so ⌃⌘B can flip between "show only the terminal" and
     /// "show the sidebar." Matches VSCode's chrome-toggle binding.
     @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
+
+    init(diagnostics: WorkbenchLaunchDiagnostics) {
+        let paths = WorkbenchPaths(rootURL: diagnostics.appSupportRoot ?? WorkbenchPaths.defaultPaths().rootURL)
+        _model = StateObject(wrappedValue: WorkbenchViewModel(
+            paths: paths,
+            autoLaunchResumableForE2E: diagnostics.autoLaunchResumableForE2E
+        ))
+    }
 
     /// Flip the sidebar between visible and collapsed. `.automatic` lands
     /// at the system's preferred layout (sidebar shown); `.detailOnly`
@@ -280,6 +296,10 @@ struct WorkbenchRootView: View {
             model.isSettingsSheetPresented = true
         case .shortcutsHelp:
             model.isShortcutHelpPresented = true
+        case .about:
+            model.isAboutSheetPresented = true
+        case .checkForUpdates:
+            Task { await model.checkForUpdatesAndPromptInstall() }
         case let .selectTerminal(index):
             _ = model.selectTerminal(atOneIndexedPosition: index)
         }
@@ -376,13 +396,12 @@ struct WorkbenchRootView: View {
             await model.refreshLiveScreenSessions()
             model.recoverEligibleSessionsOnStartup()
             model.launchAutoResumeSessionsOnStartup()
-            model.launchDefaultShellIfNeeded()
             model.refreshExecutableHealth()
             model.refreshGitStatus()
             model.refreshSessionActivity()
             model.refreshOnboardingReadiness()
             await model.refreshBossDashboard()
-            if model.shouldPresentOnboardingOnLaunch && !model.onboardingHasAutoPresented {
+            if model.canAutoPresentOnboardingOnLaunch {
                 model.isOnboardingPresented = true
                 model.onboardingHasAutoPresented = true
             } else {
@@ -423,7 +442,7 @@ struct WorkbenchRootView: View {
             SettingsSheet(model: model)
         }
         .sheet(isPresented: $model.isAboutSheetPresented) {
-            AboutSheet()
+            AboutSheet(model: model)
         }
         .sheet(isPresented: $model.isHarnessStatusPresented) {
             HarnessStatusSheet(model: model)
@@ -471,7 +490,7 @@ struct WorkbenchRootView: View {
                 Text("This removes \(entry.name) from the workbench and clears its run records. Transcript files remain on disk.")
             }
         }
-        .confirmationDialog("Delete Terminal Group?", isPresented: model.deleteGroupConfirmationIsPresented) {
+        .confirmationDialog("Delete Workspace?", isPresented: model.deleteGroupConfirmationIsPresented) {
             if let project = model.pendingDeleteGroup {
                 Button("Delete \(project.name)", role: .destructive) {
                     model.deleteGroup(project)
@@ -480,7 +499,7 @@ struct WorkbenchRootView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             if let project = model.pendingDeleteGroup {
-                Text("This removes the empty group \(project.name). Groups with terminals cannot be deleted.")
+                Text("This removes the empty workspace \(project.name). Workspaces with terminals cannot be deleted.")
             }
         }
         .confirmationDialog("Reset to Factory Defaults?", isPresented: $model.isResetFirstRunConfirmationPresented, titleVisibility: .visible) {
@@ -1523,6 +1542,7 @@ struct SettingsSheet: View {
                     appearanceSection
                     chromeSection
                     startupSection
+                    updatesSection
                     bossSection
                     advancedSection
                 }
@@ -1633,13 +1653,20 @@ struct SettingsSheet: View {
                 }
             }
             .toggleStyle(.switch)
+        }
+    }
+
+    @ViewBuilder
+    private var updatesSection: some View {
+        SettingsSection(title: "Software Updates", systemImage: "arrow.down.app") {
+            ReleaseUpdateControls(model: model, showTitle: false)
             Toggle(isOn: Binding(
                 get: { model.autoUpdateEnabled },
                 set: { model.setAutoUpdateEnabled($0) }
             )) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Automatically check for updates and install on quit")
-                    Text("Quietly checks GitHub on launch and downloads + verifies a newer release in the background. The update applies the next time you quit Workbench — never a surprise relaunch. An \u{201C}Update\u{201D} badge appears in the header when one is ready; click it to install immediately.")
+                    Text("Workbench verifies the release manifest and applies staged updates the next time you quit.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -1780,6 +1807,7 @@ struct ImportSummaryBanner: View {
 /// hidden title bar prevents the system's built-in About from surfacing,
 /// so the More-menu route is the primary entry.
 struct AboutSheet: View {
+    @ObservedObject var model: WorkbenchViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var copiedFeedback = false
 
@@ -1838,6 +1866,7 @@ struct AboutSheet: View {
                     )
                 }
             }
+            ReleaseUpdateControls(model: model, showTitle: false)
             Spacer(minLength: 0)
             HStack {
                 Spacer()
@@ -1846,7 +1875,7 @@ struct AboutSheet: View {
             }
         }
         .padding(20)
-        .frame(width: 360, height: 320)
+        .frame(width: 460, height: 380)
     }
 }
 
@@ -2463,10 +2492,10 @@ struct AgentHomeEmptyState: View {
                     Image(systemName: "infinity")
                         .font(.system(size: 38, weight: .semibold))
                         .foregroundStyle(Color.accentColor)
-                    Text("Pick a terminal — or hatch a new one")
+                    Text("Set up Workbench")
                         .font(.title2.weight(.semibold))
                         .multilineTextAlignment(.center)
-                    Text("Ouro Workbench is a calm home for your terminal agents. Choose one on the left to open its live session, or set up a fresh Ouro agent below.")
+                    Text("Choose a boss agent, scan this Mac for coding-agent sessions, and let Workbench propose what to import. You can still open a blank terminal whenever you need one.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -2475,24 +2504,24 @@ struct AgentHomeEmptyState: View {
                 }
                 HStack(spacing: 12) {
                     Button {
-                        model.isOuroAgentInstallSheetPresented = true
-                    } label: {
-                        Label("Hatch an Agent", systemImage: "sparkles")
-                            .frame(minWidth: 160)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .help("Install or refresh an Ouro agent bundle on this Mac.")
-
-                    Button {
                         model.presentOnboarding()
                     } label: {
                         Label("Set Up Workbench", systemImage: "wand.and.stars")
                             .frame(minWidth: 160)
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(.borderedProminent)
                     .controlSize(.large)
                     .help("Choose a boss, connect MCP tools, and import recent terminals.")
+
+                    Button {
+                        model.isOuroAgentInstallSheetPresented = true
+                    } label: {
+                        Label("Hatch an Agent", systemImage: "sparkles")
+                            .frame(minWidth: 160)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                    .help("Install or refresh an Ouro agent bundle on this Mac.")
 
                     Button {
                         model.isNewSessionSheetPresented = true
@@ -2610,7 +2639,7 @@ struct WorkbenchSidebarView: View {
 
     private var sessionList: some View {
         List(selection: $model.selectedEntryID) {
-            Section("Agents") {
+            Section(WorkbenchSurfacePolicy.bossSectionTitle) {
                 ForEach(model.ouroAgents) { agent in
                     SidebarAgentRow(
                         agent: agent,
@@ -2629,7 +2658,7 @@ struct WorkbenchSidebarView: View {
                     }
                 }
             }
-            Section("Groups") {
+            Section(WorkbenchSurfacePolicy.workspaceSectionTitle) {
                 ForEach(model.state.projects) { project in
                     SidebarProjectRow(
                         project: project,
@@ -2658,7 +2687,7 @@ struct WorkbenchSidebarView: View {
                     // equals global.
                     model.moveGroups(fromOffsets: offsets, toOffset: destination)
                 }
-                SidebarActionRow(title: "New Group", systemImage: "folder.badge.plus") {
+                SidebarActionRow(title: WorkbenchSurfacePolicy.newWorkspaceTitle, systemImage: "folder.badge.plus") {
                     model.isNewGroupSheetPresented = true
                 }
             }
@@ -2708,30 +2737,30 @@ struct WorkbenchSidebarView: View {
                     }
                 }
             }
-            Section("Recovery") {
-                Button {
-                    model.isRecoverySheetPresented = true
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "arrow.clockwise.circle")
-                            .foregroundStyle(model.recoverableEntries.isEmpty ? Color.secondary : Color.orange)
-                        Text(model.summary.oneLineStatus)
-                            .font(.caption)
-                            .lineLimit(2)
-                            .truncationMode(.tail)
-                            .multilineTextAlignment(.leading)
-                            .foregroundStyle(.primary)
-                        Spacer(minLength: 0)
-                        Image(systemName: "chevron.right")
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
+            if WorkbenchSurfacePolicy.shouldShowRecovery(recoverableCount: model.recoverableEntries.count) {
+                Section("Recovery") {
+                    Button {
+                        model.isRecoverySheetPresented = true
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "arrow.clockwise.circle")
+                                .foregroundStyle(Color.orange)
+                            Text(model.summary.oneLineStatus)
+                                .font(.caption)
+                                .lineLimit(2)
+                                .truncationMode(.tail)
+                                .multilineTextAlignment(.leading)
+                                .foregroundStyle(.primary)
+                            Spacer(minLength: 0)
+                            Image(systemName: "chevron.right")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                        .contentShape(Rectangle())
                     }
-                    .contentShape(Rectangle())
+                    .buttonStyle(.plain)
+                    .help("\(model.recoverableEntries.count) session\(model.recoverableEntries.count == 1 ? "" : "s") waiting on recovery. Click to inspect.")
                 }
-                .buttonStyle(.plain)
-                .help(model.recoverableEntries.isEmpty
-                      ? "No sessions are currently waiting on recovery"
-                      : "\(model.recoverableEntries.count) session\(model.recoverableEntries.count == 1 ? "" : "s") waiting on recovery. Click to inspect.")
             }
         }
     }
@@ -2785,7 +2814,7 @@ struct SidebarProjectRow: View {
 
             Menu {
                 Button(action: rename) {
-                    Label("Rename Group", systemImage: "pencil")
+                    Label("Rename Workspace", systemImage: "pencil")
                 }
                 Menu {
                     Button {
@@ -2807,15 +2836,15 @@ struct SidebarProjectRow: View {
                     Label("Color Tag", systemImage: "paintpalette")
                 }
                 Button(role: .destructive, action: delete) {
-                    Label("Delete Empty Group", systemImage: "trash")
+                    Label("Delete Empty Workspace", systemImage: "trash")
                 }
                 .disabled(!canDelete)
             } label: {
-                Label("Group Actions", systemImage: "ellipsis.circle")
+                Label("Workspace Actions", systemImage: "ellipsis.circle")
             }
             .labelStyle(.iconOnly)
             .menuStyle(.borderlessButton)
-            .help("Group actions")
+            .help("Workspace actions")
             .fixedSize()
         }
         .padding(.vertical, 1)
@@ -3013,7 +3042,7 @@ struct TerminalRowContextMenu: View {
                         .disabled(project.id == entry.projectId)
                     }
                 } label: {
-                    Label("Move to Group", systemImage: "folder")
+                    Label("Move to Workspace", systemImage: "folder")
                 }
                 .disabled(model.activeSession(for: entry) != nil || model.state.projects.count < 2)
                 if entry.isArchived {
@@ -4983,7 +5012,7 @@ struct WorkbenchOnboardingSheet: View {
             case .connect:
                 return "Connect"
             case .importWork:
-                return "Import"
+                return "Arrange Work"
             }
         }
 
@@ -5083,9 +5112,9 @@ struct WorkbenchOnboardingSheet: View {
         case .boss:
             return "Continue"
         case .connect:
-            return model.onboardingReadiness?.isReady == true ? "Scan Recent Work" : "Finish Setup"
+            return model.onboardingFlowDecision.primaryActionTitle
         case .importWork:
-            return model.onboardingProposal == nil ? "Scan" : "Arrange"
+            return model.onboardingFlowDecision.primaryActionTitle
         }
     }
 
@@ -5094,9 +5123,16 @@ struct WorkbenchOnboardingSheet: View {
         case .welcome, .boss:
             return "chevron.right"
         case .connect:
-            return "magnifyingglass"
+            return model.onboardingFlowDecision.phase == .bossSetupWizard ? "link" : "magnifyingglass"
         case .importWork:
-            return model.onboardingProposal == nil ? "magnifyingglass" : "checkmark.circle"
+            switch model.onboardingFlowDecision.phase {
+            case .arrangeApprovedImports:
+                return "checkmark.circle"
+            case .duplicateCleanup:
+                return "rectangle.stack.badge.minus"
+            default:
+                return "magnifyingglass"
+            }
         }
     }
 
@@ -5107,14 +5143,9 @@ struct WorkbenchOnboardingSheet: View {
         case .boss:
             return model.onboardingBossChoices.contains { $0.isSelected && $0.isUsable } == false
         case .connect:
-            return model.onboardingReadiness?.isReady != true
+            return model.onboardingIsScanning
         case .importWork:
             if model.onboardingIsScanning || model.onboardingReadiness?.isReady != true {
-                return true
-            }
-            // Once a proposal is on screen, Arrange should be gated by whether
-            // anything is actually selected — otherwise the button "does nothing".
-            if let proposal = model.onboardingProposal, proposal.selectedTerminalCount == 0 {
                 return true
             }
             return false
@@ -5128,14 +5159,22 @@ struct WorkbenchOnboardingSheet: View {
         case .boss:
             page = .connect
         case .connect:
+            if model.onboardingFlowDecision.phase == .bossSetupWizard {
+                model.refreshOnboardingReadiness()
+                model.runOnboardingProviderChecksIfNeeded()
+                model.startFirstRunBootstrapIfNeeded()
+                instructionStatus = "Connecting the boss. Workbench is checking provider and tool readiness now."
+                return
+            }
             page = .importWork
-            if model.onboardingReadiness?.isReady == true, model.onboardingProposal == nil {
+            if model.onboardingFlowDecision.phase == .bossReadyWelcome {
                 model.scanForOnboardingSessions()
             }
         case .importWork:
-            if model.onboardingProposal == nil {
+            switch model.onboardingFlowDecision.phase {
+            case .bossReadyWelcome, .scanProposal:
                 model.scanForOnboardingSessions()
-            } else {
+            case .arrangeApprovedImports:
                 let result = model.applyOnboardingProposal()
                 // Whether anything new landed or every selection was already
                 // imported, hand the user back to the workbench with a banner
@@ -5144,6 +5183,11 @@ struct WorkbenchOnboardingSheet: View {
                 if result != nil {
                     dismiss()
                 }
+            case .duplicateCleanup:
+                instructionStatus = model.onboardingFlowDecision.notice
+                Task { await model.runBossQuickQuestion(WorkbenchOnboardingNarrative.duplicateCleanup) }
+            case .bossSetupWizard:
+                page = .connect
             }
         }
     }
@@ -5231,7 +5275,7 @@ private struct OnboardingWelcomePage: View {
             HStack(alignment: .top, spacing: 26) {
                 OnboardingWelcomePoint(systemImage: "terminal", title: "Keep Your Tools", detail: "Claude Code, Codex, Copilot CLI, shells, cmux.")
                 OnboardingWelcomePoint(systemImage: "person.crop.circle.badge.checkmark", title: "Choose a Boss", detail: "One Ouro agent watches this Mac for you.")
-                OnboardingWelcomePoint(systemImage: "square.grid.2x2", title: "Recover the Thread", detail: "Recent work returns as named project groups.")
+                OnboardingWelcomePoint(systemImage: "square.grid.2x2", title: "Recover the Thread", detail: "Recent work returns as Workbench workspaces.")
             }
             .frame(maxWidth: 680)
         }
@@ -5354,7 +5398,7 @@ private struct OnboardingAssistantBox: View {
             }
 
             HStack(alignment: .center, spacing: 8) {
-                TextField("Ask about setup, providers, or which sessions to import", text: $instruction)
+                TextField("Ask about setup, providers, or which sessions to arrange", text: $instruction)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit(onSubmit)
                     .disabled(model.bossCheckInIsRunning)
@@ -5692,7 +5736,7 @@ private struct OnboardingReadinessView: View {
                             .foregroundStyle(Color.green)
                         Text("\(readiness.selectedBossName) is ready")
                             .font(.title3.weight(.semibold))
-                        Text("Next, Workbench can look for recent terminal work and propose project groups.")
+                        Text(WorkbenchOnboardingNarrative.scanIntro)
                             .font(.callout)
                             .foregroundStyle(.secondary)
                             .multilineTextAlignment(.center)
@@ -5842,10 +5886,10 @@ private struct OnboardingBootstrapView: View {
     var body: some View {
         VStack(alignment: .center, spacing: 22) {
             VStack(alignment: .center, spacing: 10) {
-                Text("Bring your work in")
+                Text(WorkbenchOnboardingNarrative.bossReadyWelcome)
                     .font(.largeTitle.weight(.semibold))
                     .multilineTextAlignment(.center)
-                Text("Workbench can find recent cmux, Claude Code, Codex, Copilot CLI, shell, and Workbench sessions from the last week.")
+                Text(WorkbenchOnboardingNarrative.scanIntro)
                     .font(.title3)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -5880,7 +5924,7 @@ private struct OnboardingBootstrapView: View {
                     .help(
                         proposal.selectedTerminalCount == 0
                         ? "Select at least one terminal to arrange."
-                        : "Import \(proposal.selectedTerminalCount) selected terminal\(proposal.selectedTerminalCount == 1 ? "" : "s") into the Workbench."
+                        : "Arrange \(proposal.selectedTerminalCount) selected terminal\(proposal.selectedTerminalCount == 1 ? "" : "s") in Workbench."
                     )
                 }
             }
@@ -5890,16 +5934,26 @@ private struct OnboardingBootstrapView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             } else if model.onboardingIsScanning {
-                Text("Scanning recent local sessions…")
+                Text("Scanning local coding-agent sessions...")
                     .font(.callout)
                     .foregroundStyle(.secondary)
+            } else if let notice = model.onboardingFlowDecision.notice {
+                Text(notice)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 640)
             }
             if let proposal = model.onboardingProposal {
                 VStack(alignment: .leading, spacing: 10) {
                     OnboardingStatusRow(
                         systemImage: "square.grid.2x2.fill",
-                        title: model.onboardingReadiness?.isReady == true ? "Ready to arrange" : "Proposal waiting",
-                        detail: "\(proposal.groups.count) group\(proposal.groups.count == 1 ? "" : "s"), \(proposal.selectedTerminalCount) terminal\(proposal.selectedTerminalCount == 1 ? "" : "s") selected.",
+                        title: model.onboardingReadiness?.isReady == true ? "Proposed workspaces" : "Proposal waiting",
+                        detail: WorkbenchOnboardingNarrative.proposalSummary(
+                            groupCount: proposal.groups.count,
+                            selectedCount: proposal.selectedTerminalCount
+                        ),
                         color: .blue
                     )
                     ForEach(proposal.groups) { group in
@@ -5908,7 +5962,7 @@ private struct OnboardingBootstrapView: View {
                 }
                 .frame(maxWidth: 700)
             } else {
-                Text("Nothing is imported until you review the proposal.")
+                Text(WorkbenchOnboardingNarrative.unclearImport)
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -5944,7 +5998,7 @@ private struct OnboardingGroupProposalView: View {
                         .foregroundStyle(selectedCount == 0 ? Color.secondary : Color.accentColor)
                 }
                 .buttonStyle(.plain)
-                .help(allSelected ? "Deselect every terminal in this group" : "Select every terminal in this group")
+                .help(allSelected ? "Deselect every terminal in this workspace" : "Select every terminal in this workspace")
                 VStack(alignment: .leading, spacing: 1) {
                     Text(group.name)
                         .font(.subheadline.weight(.semibold))
@@ -6094,6 +6148,9 @@ private struct OnboardingSessionPreviewSheet: View {
                         Text(terminal.candidate.summary)
                             .font(.body)
                             .textSelection(.enabled)
+                        Text(WorkbenchOnboardingNarrative.unclearImport)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
@@ -7316,10 +7373,8 @@ private struct SessionTitleStrip: View {
                 .controlSize(.small)
                 .fixedSize()
             } else {
-                if model.activeSession(for: entry) != nil {
-                    RunningSessionHeaderControls(entry: entry, model: model)
-                        .fixedSize()
-                }
+                RunningSessionHeaderControls(entry: entry, model: model)
+                    .fixedSize()
                 Menu {
                     Button {
                         Task { await model.runBossQuestion(about: entry) }
@@ -7360,7 +7415,7 @@ private struct SessionTitleStrip: View {
                                 .disabled(project.id == entry.projectId)
                             }
                         } label: {
-                            Label("Move to Group", systemImage: "folder")
+                            Label("Move to Workspace", systemImage: "folder")
                         }
                         .disabled(model.activeSession(for: entry) != nil || model.state.projects.count < 2)
                         Button {
@@ -7384,19 +7439,6 @@ private struct SessionTitleStrip: View {
                 .controlSize(.small)
                 .fixedSize()
                 .help("More actions for this terminal")
-
-                Button {
-                    model.launch(entry)
-                } label: {
-                    Label(
-                        model.activeSession(for: entry) == nil ? "Launch" : "Restart",
-                        systemImage: "play.fill"
-                    )
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-                .keyboardShortcut(.return, modifiers: [.command])
-                .fixedSize()
             }
         }
         .padding(.horizontal, 14)
@@ -7613,7 +7655,7 @@ struct CustomSessionManagementBar: View {
                 Label("Move", systemImage: "folder")
             }
             .disabled(isRunning || model.state.projects.count < 2)
-            .help(isRunning ? "Stop this session before moving it" : "Move this session to another group")
+            .help(isRunning ? "Stop this session before moving it" : "Move this session to another workspace")
 
             if entry.isArchived {
                 Button {
@@ -7837,62 +7879,120 @@ struct RunningSessionHeaderControls: View {
     @ObservedObject var model: WorkbenchViewModel
 
     var body: some View {
+        let controls = WorkbenchSurfacePolicy.sessionControls(
+            isRunning: model.activeSession(for: entry) != nil,
+            isArchived: entry.isArchived,
+            isRecoverable: model.recoveryPlan(for: entry) != nil
+        )
         HStack(spacing: 8) {
-            Button {
-                model.focusTerminal(entry)
-            } label: {
-                Image(systemName: "arrow.up.left.and.arrow.down.right")
+            ForEach(controls.primaryActions, id: \.self) { action in
+                primaryButton(for: action)
             }
-            .keyboardShortcut("f", modifiers: [.command, .shift])
-            .help("Focus this terminal")
-            .accessibilityLabel("Full Screen")
-            .frame(width: 28)
+            Menu {
+                ForEach(controls.advancedActions, id: \.self) { action in
+                    advancedButton(for: action)
+                }
+                if !controls.advancedActions.isEmpty {
+                    Divider()
+                }
+                Button {
+                    model.copyLaunchCommand(for: entry)
+                } label: {
+                    Label("Copy Launch Command", systemImage: "doc.on.doc")
+                }
+                Button {
+                    model.openWorkingDirectory(for: entry)
+                } label: {
+                    Label("Open Working Directory", systemImage: "folder")
+                }
+            } label: {
+                Label("Session Controls", systemImage: "slider.horizontal.3")
+            }
+            .help("Session Controls")
+        }
+        .controlSize(.small)
+    }
 
-            Button {
-                model.redrawTerminal(entry)
-            } label: {
-                Image(systemName: "arrow.clockwise")
-            }
-            .help("Send Ctrl-L to redraw the terminal")
-            .keyboardShortcut("l", modifiers: [.command])
-            .accessibilityLabel("Redraw")
-            .frame(width: 28)
-
-            Button {
-                model.sendControlC(to: entry)
-            } label: {
-                Image(systemName: "command")
-            }
-            .help("Send Ctrl-C to this terminal")
-            .accessibilityLabel("Ctrl-C")
-            .frame(width: 28)
-            Button {
-                model.sendEscape(to: entry)
-            } label: {
-                Image(systemName: "escape")
-            }
-            .help("Send Esc to this terminal")
-            .accessibilityLabel("Esc")
-            .frame(width: 28)
-            Button {
-                model.sendEOF(to: entry)
-            } label: {
-                Image(systemName: "eject")
-            }
-            .help("Send Ctrl-D / EOF to this terminal")
-            .accessibilityLabel("EOF")
-            .frame(width: 28)
+    @ViewBuilder
+    private func primaryButton(for action: WorkbenchSurfacePolicy.SessionAction) -> some View {
+        switch action {
+        case .stop:
             Button(role: .destructive) {
                 model.terminate(entry)
             } label: {
-                Image(systemName: "stop.fill")
+                Label("Stop", systemImage: "stop.fill")
             }
             .keyboardShortcut(".", modifiers: [.command])
             .help("Stop this terminal")
-            .accessibilityLabel("Stop")
-            .frame(width: 28)
+        case .launch:
+            Button {
+                model.launch(entry)
+            } label: {
+                Label("Launch", systemImage: "play.fill")
+            }
+            .help("Launch this terminal")
+        case .recover:
+            Button {
+                model.recover(entry)
+            } label: {
+                Label("Recover", systemImage: "arrow.clockwise.circle")
+            }
+            .help("Recover this terminal")
+        default:
+            EmptyView()
         }
-        .controlSize(.small)
+    }
+
+    @ViewBuilder
+    private func advancedButton(for action: WorkbenchSurfacePolicy.SessionAction) -> some View {
+        switch action {
+        case .focus:
+            Button {
+                model.focusTerminal(entry)
+            } label: {
+                Label("Focus", systemImage: "arrow.up.left.and.arrow.down.right")
+            }
+            .keyboardShortcut("f", modifiers: [.command, .shift])
+            .help("Focus this terminal")
+        case .redraw:
+            Button {
+                model.redrawTerminal(entry)
+            } label: {
+                Label("Redraw", systemImage: "arrow.clockwise")
+            }
+            .keyboardShortcut("l", modifiers: [.command])
+            .help("Send Ctrl-L to redraw the terminal")
+        case .restart:
+            Button {
+                model.launch(entry)
+            } label: {
+                Label("Restart", systemImage: "play.fill")
+            }
+            .help("Restart this terminal")
+        case .controlC:
+            Button {
+                model.sendControlC(to: entry)
+            } label: {
+                Label("Ctrl-C", systemImage: "command")
+            }
+            .help("Send Ctrl-C to this terminal")
+        case .escape:
+            Button {
+                model.sendEscape(to: entry)
+            } label: {
+                Label("Esc", systemImage: "escape")
+            }
+            .help("Send Esc to this terminal")
+        case .eof:
+            Button {
+                model.sendEOF(to: entry)
+            } label: {
+                Label("EOF", systemImage: "eject")
+            }
+            .help("Send Ctrl-D / EOF to this terminal")
+        default:
+            EmptyView()
+        }
     }
 }
 
@@ -8021,7 +8121,7 @@ struct NewTerminalGroupSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("New Terminal Group")
+            Text(WorkbenchSurfacePolicy.newWorkspaceSheetTitle)
                 .font(.title3.weight(.semibold))
             Form {
                 TextField("Name", text: $name)
@@ -8086,7 +8186,7 @@ struct EditTerminalGroupSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Edit Terminal Group")
+            Text(WorkbenchSurfacePolicy.editWorkspaceSheetTitle)
                 .font(.title3.weight(.semibold))
             Form {
                 TextField("Name", text: $name)
@@ -8447,56 +8547,31 @@ struct ReleaseUpdateView: View {
     @ObservedObject var model: WorkbenchViewModel
 
     var body: some View {
+        ReleaseUpdateControls(model: model, showTitle: true)
+    }
+}
+
+struct ReleaseUpdateControls: View {
+    @ObservedObject var model: WorkbenchViewModel
+    var showTitle: Bool
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 12) {
-                DashboardRowLabel(title: "Release Updates", systemImage: "arrow.down.app")
-                DashboardStatusLine(
-                    text: model.releaseUpdateStatusLine,
-                    color: model.releaseUpdateStatusColor
-                )
-                if model.releaseUpdateIsChecking {
-                    ProgressView()
-                        .controlSize(.small)
-                        .fixedSize()
+            if showTitle {
+                HStack(spacing: 12) {
+                    DashboardRowLabel(title: "Release Updates", systemImage: "arrow.down.app")
+                    updateStatus
+                    updateProgress
+                    updateButtons
                 }
-                Button {
-                    Task {
-                        await model.checkForReleaseUpdate()
-                    }
-                } label: {
-                    Label("Check", systemImage: "arrow.clockwise")
+            } else {
+                HStack(spacing: 8) {
+                    updateStatus
+                    updateProgress
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(model.releaseUpdateIsChecking)
-                .fixedSize()
-                if let snapshot = model.releaseUpdateSnapshot,
-                   snapshot.status == .updateAvailable,
-                   snapshot.hasInstallableAssets {
-                    Button {
-                        Task { await model.installReleaseUpdate() }
-                    } label: {
-                        Label("Install & Relaunch", systemImage: "arrow.down.app.fill")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                    .disabled(model.releaseUpdateIsInstalling)
-                    .fixedSize()
-                }
-                if model.releaseUpdateIsInstalling {
-                    ProgressView()
-                        .controlSize(.small)
-                        .fixedSize()
-                }
-                if model.releaseUpdateURL != nil {
-                    Button {
-                        model.openReleaseUpdate()
-                    } label: {
-                        Label("Open Release", systemImage: "safari")
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .fixedSize()
+                HStack(spacing: 8) {
+                    Spacer(minLength: 0)
+                    updateButtons
                 }
             }
             if let status = model.releaseUpdateInstallStatus, model.releaseUpdateIsInstalling {
@@ -8515,6 +8590,62 @@ struct ReleaseUpdateView: View {
                     .font(.caption)
                     .foregroundStyle(snapshot.hasInstallableAssets ? SwiftUI.Color.secondary : SwiftUI.Color.orange)
             }
+        }
+    }
+
+    private var updateStatus: some View {
+        DashboardStatusLine(
+            text: model.releaseUpdateStatusLine,
+            color: model.releaseUpdateStatusColor
+        )
+    }
+
+    @ViewBuilder
+    private var updateProgress: some View {
+        if model.releaseUpdateIsChecking || model.releaseUpdateIsInstalling {
+            ProgressView()
+                .controlSize(.small)
+                .fixedSize()
+        }
+    }
+
+    @ViewBuilder
+    private var updateButtons: some View {
+        Button {
+            Task {
+                await model.checkForUpdatesAndPromptInstall()
+            }
+        } label: {
+            Label("Check for Updates…", systemImage: "arrow.clockwise")
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .disabled(model.releaseUpdateIsChecking)
+        .fixedSize()
+
+        if let snapshot = model.releaseUpdateSnapshot,
+           snapshot.status == .updateAvailable,
+           snapshot.hasInstallableAssets {
+            Button {
+                Task { await model.installReleaseUpdate() }
+            } label: {
+                Label("Install & Relaunch", systemImage: "arrow.down.app.fill")
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .disabled(model.releaseUpdateIsInstalling)
+            .fixedSize()
+        }
+
+        if model.releaseUpdateURL != nil {
+            Button {
+                model.openReleaseUpdate()
+            } label: {
+                Label("Open Release", systemImage: "safari")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .fixedSize()
         }
     }
 }
@@ -8644,9 +8775,9 @@ struct WorkbenchImportApplyResult: Equatable {
         case (1, _):
             return "Arranged 1 terminal"
         case (let n, 1):
-            return "Arranged \(n) terminals in 1 group"
+            return "Arranged \(n) terminals in 1 workspace"
         case (let n, let g):
-            return "Arranged \(n) terminals across \(g) groups"
+            return "Arranged \(n) terminals across \(g) workspaces"
         }
     }
 
@@ -8657,6 +8788,9 @@ struct WorkbenchImportApplyResult: Equatable {
         }
         if !skippedNames.isEmpty {
             parts.append("Skipped: \(skippedNames.joined(separator: ", "))")
+        }
+        if hasImports {
+            parts.append(WorkbenchOnboardingNarrative.duplicateCleanup)
         }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
@@ -9005,9 +9139,11 @@ final class WorkbenchViewModel: ObservableObject {
     /// Set once `resetToFirstRun()` begins; suppresses all persistence so the
     /// wiped state file isn't rewritten before the relaunch.
     private var isResettingToFirstRun = false
+    private var isFirstRunSetupForcedOnLaunch = false
     @Published var onboardingCandidates: [RecentSessionCandidate] = []
     @Published var onboardingProposal: WorkbenchImportProposal?
     @Published var onboardingIsScanning = false
+    @Published var onboardingImportSummaryHasImports = false
     @Published var lastImportSummary: WorkbenchImportApplyResult?
     /// Whether the native provider-config form (the one human gate) is presented. Flipped true
     /// by `requestProviderConfig` (and the native onboarding provider-setup affordance).
@@ -9075,7 +9211,6 @@ final class WorkbenchViewModel: ObservableObject {
     private var lastEventDrivenCheckInAt: Date?
     private let eventDrivenCheckInCooldown: TimeInterval = 15
     private var didAttemptStartupRecovery = false
-    private var didAttemptDefaultShellLaunch = false
     private var didAttemptAutoResumeLaunch = false
     /// Last time we posted an unexpected-exit notification per entry, to
     /// throttle banner spam when a session crash-loops or several are
@@ -9108,7 +9243,8 @@ final class WorkbenchViewModel: ObservableObject {
         ouroAgentInventory: OuroAgentInventory = OuroAgentInventory(),
         executableHealthChecker: ExecutableHealthChecker = ExecutableHealthChecker(),
         releaseUpdateChecker: ReleaseUpdateChecker = ReleaseUpdateChecker(),
-        workCardReader: OuroWorkCardReader = OuroWorkCardReader()
+        workCardReader: OuroWorkCardReader = OuroWorkCardReader(),
+        autoLaunchResumableForE2E: Bool = false
     ) {
         self.paths = paths
         self.store = WorkbenchStore(paths: paths)
@@ -9130,6 +9266,10 @@ final class WorkbenchViewModel: ObservableObject {
         self.workCardReader = workCardReader
         self.externalActionQueue = WorkbenchActionRequestQueue(paths: paths)
         self.state = WorkspaceState()
+        self.isFirstRunSetupForcedOnLaunch = WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: paths.rootURL)
+        if autoLaunchResumableForE2E {
+            self.autoLaunchResumableOnStartup = true
+        }
         // Seed the palette's static override from the persisted setting so
         // every terminal view that asks for a theme honors the user's pin
         // even before any view model property gets re-read.
@@ -9243,7 +9383,7 @@ final class WorkbenchViewModel: ObservableObject {
         //    fresh — the bootstrapper treats a missing file as first run) and
         //    clear *all* Workbench preferences for a true factory state, not a
         //    half-reset. This data wipe is unit-tested via `WorkbenchFactoryReset`.
-        WorkbenchFactoryReset.wipeData(
+        WorkbenchFactoryReset.resetToFactoryDefaults(
             stateURL: paths.stateURL,
             defaults: .standard,
             defaultsDomain: WorkbenchRelease.bundleIdentifier,
@@ -9666,10 +9806,17 @@ final class WorkbenchViewModel: ObservableObject {
     /// task runs those checks in the background so readiness flips to ready
     /// on its own.
     var shouldPresentOnboardingOnLaunch: Bool {
+        if isFirstRunSetupForcedOnLaunch {
+            return true
+        }
         guard let readiness = onboardingReadiness, !readiness.isReady else {
             return false
         }
         return readiness.state == .needsAgent || onboardingHasConfigGap
+    }
+
+    var canAutoPresentOnboardingOnLaunch: Bool {
+        shouldPresentOnboardingOnLaunch && (!onboardingHasAutoPresented || isFirstRunSetupForcedOnLaunch)
     }
 
     var onboardingPhaseLabel: String {
@@ -9695,14 +9842,38 @@ final class WorkbenchViewModel: ObservableObject {
         return lastImportSummary?.hasImports == true ? .green : .purple
     }
 
+    var onboardingFlowInput: WorkbenchOnboardingFlowInput {
+        WorkbenchOnboardingFlowInput(
+            bossIsReady: onboardingReadiness?.isReady == true,
+            hasProposal: onboardingProposal != nil,
+            selectedTerminalCount: onboardingProposal?.selectedTerminalCount ?? 0,
+            ambiguousCandidateCount: onboardingAmbiguousCandidateCount,
+            importSummaryHasImports: onboardingImportSummaryHasImports
+        )
+    }
+
+    var onboardingFlowDecision: WorkbenchOnboardingFlowDecision {
+        WorkbenchOnboardingFlowPolicy.decision(for: onboardingFlowInput)
+    }
+
+    private var onboardingAmbiguousCandidateCount: Int {
+        if let proposal = onboardingProposal {
+            return proposal.groups
+                .flatMap(\.terminals)
+                .filter { $0.candidate.confidence >= 0.50 && $0.candidate.confidence < 0.70 }
+                .count
+        }
+        return onboardingCandidates.filter { $0.confidence >= 0.50 && $0.confidence < 0.70 }.count
+    }
+
     var onboardingOpeningLine: String {
         if onboardingReadiness?.isReady == true {
-            return "\(state.boss.agentName) is selected as this Mac's boss. Workbench can now scan recent terminal-agent work and arrange it into terminals and groups."
+            return "\(state.boss.agentName) is selected as this Mac's boss. \(WorkbenchOnboardingNarrative.bossReadyWelcome) \(WorkbenchOnboardingNarrative.scanIntro)"
         }
         if ouroAgents.count > 1 {
             return "This Mac has multiple Ouro agents. Choose the one that should be boss for Workbench before importing sessions."
         }
-        return "First choose or repair this Mac's Ouro boss, then Workbench can scan recent sessions and import them as terminals and groups."
+        return "First choose or repair this Mac's Ouro boss, then Workbench can scan recent sessions and arrange them as terminals and workspaces."
     }
 
     var onboardingBossChoices: [OnboardingBossChoice] {
@@ -11132,7 +11303,7 @@ final class WorkbenchViewModel: ObservableObject {
     /// alert path.
     func presentSaveWorkspacePanel() {
         guard let project = selectedProject else {
-            errorMessage = "No group is selected to save"
+            errorMessage = WorkbenchSurfacePolicy.noWorkspaceSelectedToSaveMessage
             return
         }
         let config = exportWorkspaceConfig(for: project)
@@ -11195,11 +11366,11 @@ final class WorkbenchViewModel: ObservableObject {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedRoot = rootPath.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else {
-            errorMessage = "Group name is required"
+            errorMessage = WorkbenchSurfacePolicy.workspaceNameRequiredMessage
             return false
         }
         guard !trimmedRoot.isEmpty else {
-            errorMessage = "Group root path is required"
+            errorMessage = WorkbenchSurfacePolicy.workspaceRootPathRequiredMessage
             return false
         }
         let project = WorkbenchProject(
@@ -11216,7 +11387,7 @@ final class WorkbenchViewModel: ObservableObject {
 
     func beginEditingGroup(_ project: WorkbenchProject) {
         guard state.projects.contains(where: { $0.id == project.id }) else {
-            errorMessage = "Group no longer exists: \(project.name)"
+            errorMessage = WorkbenchSurfacePolicy.workspaceNoLongerExistsMessage(name: project.name)
             return
         }
         editingGroup = project
@@ -11227,15 +11398,15 @@ final class WorkbenchViewModel: ObservableObject {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedRoot = rootPath.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else {
-            errorMessage = "Group name is required"
+            errorMessage = WorkbenchSurfacePolicy.workspaceNameRequiredMessage
             return false
         }
         guard !trimmedRoot.isEmpty else {
-            errorMessage = "Group root path is required"
+            errorMessage = WorkbenchSurfacePolicy.workspaceRootPathRequiredMessage
             return false
         }
         guard let index = state.projects.firstIndex(where: { $0.id == project.id }) else {
-            errorMessage = "Group no longer exists: \(project.name)"
+            errorMessage = WorkbenchSurfacePolicy.workspaceNoLongerExistsMessage(name: project.name)
             return false
         }
         state.projects[index].name = trimmedName
@@ -11245,7 +11416,7 @@ final class WorkbenchViewModel: ObservableObject {
             source: "native",
             action: "editGroup",
             targetName: trimmedName,
-            result: "Edited group \(trimmedName)",
+            result: "Edited workspace \(trimmedName)",
             succeeded: true
         )
         return true
@@ -11253,7 +11424,7 @@ final class WorkbenchViewModel: ObservableObject {
 
     func requestDeleteGroup(_ project: WorkbenchProject) {
         guard state.projects.count > 1 else {
-            errorMessage = "Keep at least one terminal group"
+            errorMessage = WorkbenchSurfacePolicy.keepAtLeastOneWorkspaceMessage
             return
         }
         guard totalTerminalCount(in: project) == 0 else {
@@ -11265,11 +11436,11 @@ final class WorkbenchViewModel: ObservableObject {
 
     func deleteGroup(_ project: WorkbenchProject) {
         guard state.projects.count > 1 else {
-            errorMessage = "Keep at least one terminal group"
+            errorMessage = WorkbenchSurfacePolicy.keepAtLeastOneWorkspaceMessage
             return
         }
         guard totalTerminalCount(in: project) == 0 else {
-            errorMessage = "Move or delete terminals before deleting \(project.name)"
+            errorMessage = WorkbenchSurfacePolicy.moveOrDeleteTerminalsBeforeDeletingMessage(name: project.name)
             pendingDeleteGroup = nil
             return
         }
@@ -11283,14 +11454,14 @@ final class WorkbenchViewModel: ObservableObject {
             source: "native",
             action: "deleteGroup",
             targetName: project.name,
-            result: "Deleted empty group \(project.name)",
+            result: "Deleted empty workspace \(project.name)",
             succeeded: true
         )
     }
 
     func moveSession(_ entry: ProcessEntry, to projectId: UUID, recordNativeAction: Bool = true) {
         guard let project = state.projects.first(where: { $0.id == projectId }) else {
-            errorMessage = "Target group no longer exists"
+            errorMessage = WorkbenchSurfacePolicy.targetWorkspaceNoLongerExistsMessage
             return
         }
         guard activeSessions[entry.id] == nil else {
@@ -11852,13 +12023,13 @@ final class WorkbenchViewModel: ObservableObject {
         }
         switch snapshot.status {
         case .updateAvailable:
-            if snapshot.hasInstallableAssets, let version = snapshot.latestVersion {
-                updatePrompt = .installable(version: version)
+            if snapshot.hasInstallableAssets, let release = snapshot.latestReleaseLabelForPrompt {
+                updatePrompt = .installable(release: release)
             } else {
                 updatePrompt = .failed(detail: "A newer version is published but has no installable assets yet — try the release page.")
             }
         case .current:
-            updatePrompt = .upToDate(version: snapshot.currentVersion)
+            updatePrompt = .upToDate(release: snapshot.currentReleaseLabelForPrompt)
         case .unavailable:
             updatePrompt = .failed(detail: snapshot.detail)
         }
@@ -11876,12 +12047,12 @@ final class WorkbenchViewModel: ObservableObject {
         // Fast path: the background auto-updater already downloaded + verified
         // this version, so installing is just the swap + relaunch.
         if let staged = pendingStagedUpdate {
-            releaseUpdateInstallStatus = "Installing \(staged.version) and relaunching…"
+            releaseUpdateInstallStatus = "Installing \(staged.releaseLabel) and relaunching…"
             isApplyingManualUpdate = true
             recordActionLog(
                 source: "native",
                 action: "installReleaseUpdate",
-                result: "Applying staged \(staged.version); relaunching",
+                result: "Applying staged \(staged.releaseLabel); relaunching",
                 succeeded: true
             )
             WorkbenchUpdateInstaller.applyAndRelaunch(
@@ -11911,18 +12082,19 @@ final class WorkbenchViewModel: ObservableObject {
 
         let installer = WorkbenchUpdateInstaller(
             bundleIdentifier: WorkbenchRelease.bundleIdentifier,
-            currentVersion: WorkbenchRelease.version
+            currentVersion: WorkbenchRelease.version,
+            currentBuild: Self.buildHashString()
         )
         do {
             let staged = try await installer.stage(plan: plan) { [weak self] line in
                 await MainActor.run { self?.releaseUpdateInstallStatus = line }
             }
-            releaseUpdateInstallStatus = "Installing \(staged.version) and relaunching…"
+            releaseUpdateInstallStatus = "Installing \(staged.releaseLabel) and relaunching…"
             isApplyingManualUpdate = true
             recordActionLog(
                 source: "native",
                 action: "installReleaseUpdate",
-                result: "Staged \(staged.version); swapping bundle and relaunching",
+                result: "Staged \(staged.releaseLabel); swapping bundle and relaunching",
                 succeeded: true
             )
             WorkbenchUpdateInstaller.applyAndRelaunch(
@@ -11958,8 +12130,8 @@ final class WorkbenchViewModel: ObservableObject {
         if let snapshot = releaseUpdateSnapshot,
            snapshot.status == .updateAvailable,
            snapshot.hasInstallableAssets,
-           let version = snapshot.latestVersion {
-            return "Update \(version)"
+           let release = snapshot.latestReleaseLabelForPrompt {
+            return "Update \(release)"
         }
         return nil
     }
@@ -11967,12 +12139,12 @@ final class WorkbenchViewModel: ObservableObject {
     /// Badge tap / "review update" → reuse the Software Update dialog.
     func presentUpdatePrompt() {
         if let version = stagedUpdateVersion {
-            updatePrompt = .installable(version: version)
+            updatePrompt = .installable(release: version)
         } else if let snapshot = releaseUpdateSnapshot,
                   snapshot.status == .updateAvailable,
                   snapshot.hasInstallableAssets,
-                  let version = snapshot.latestVersion {
-            updatePrompt = .installable(version: version)
+                  let release = snapshot.latestReleaseLabelForPrompt {
+            updatePrompt = .installable(release: release)
         }
     }
 
@@ -12011,16 +12183,17 @@ final class WorkbenchViewModel: ObservableObject {
         guard case let .success(plan) = WorkbenchUpdatePlanner.plan(from: snapshot) else { return }
         let installer = WorkbenchUpdateInstaller(
             bundleIdentifier: WorkbenchRelease.bundleIdentifier,
-            currentVersion: WorkbenchRelease.version
+            currentVersion: WorkbenchRelease.version,
+            currentBuild: Self.buildHashString()
         )
         do {
             let staged = try await installer.stage(plan: plan) { _ in }
             pendingStagedUpdate = staged
-            stagedUpdateVersion = staged.version
+            stagedUpdateVersion = staged.releaseLabel
             recordActionLog(
                 source: "native",
                 action: "autoStageUpdate",
-                result: "Staged \(staged.version) in background; will install on quit",
+                result: "Staged \(staged.releaseLabel) in background; will install on quit",
                 succeeded: true
             )
         } catch {
@@ -12540,10 +12713,10 @@ final class WorkbenchViewModel: ObservableObject {
             refreshOnboardingReadiness()
             guard onboardingReadiness?.isReady == true else {
                 runOnboardingProviderChecksIfNeeded()
-                return "Finish connecting the boss first. Import stays locked until provider checks pass."
+                return "Finish connecting the boss first. Arrange stays locked until provider checks pass."
             }
             applyOnboardingProposal()
-            return "Arranging proposed sessions into Workbench groups."
+            return WorkbenchOnboardingNarrative.duplicateCleanup
         } else if text.contains("mcp") || text.contains("tool") {
             installWorkbenchMCPForBoss()
             refreshOnboardingReadiness()
@@ -12570,6 +12743,7 @@ final class WorkbenchViewModel: ObservableObject {
             return
         }
         onboardingIsScanning = true
+        onboardingImportSummaryHasImports = false
         let currentState = state
         Task {
             let candidates = await Task.detached(priority: .userInitiated) {
@@ -12681,6 +12855,7 @@ final class WorkbenchViewModel: ObservableObject {
             skippedNames: skipped,
             firstSelectedEntryID: createdEntries.first?.id
         )
+        onboardingImportSummaryHasImports = result.hasImports
         lastImportSummary = result
         return result
     }
@@ -13887,28 +14062,6 @@ final class WorkbenchViewModel: ObservableObject {
         UserDefaults.standard.set(enabled, forKey: Self.autoLaunchResumableOnStartupDefaultsKey)
     }
 
-    func launchDefaultShellIfNeeded() {
-        guard !didAttemptDefaultShellLaunch else {
-            return
-        }
-        didAttemptDefaultShellLaunch = true
-        guard activeSessions.isEmpty else {
-            return
-        }
-        guard let shell = state.processEntries.first(where: BuiltInWorkbenchSessions.isAutoLaunchableLocalShell) else {
-            return
-        }
-        selectedEntryID = shell.id
-        guard activeSessions[shell.id] == nil else {
-            return
-        }
-        if let latestRun = latestRun(for: shell),
-           latestRun.status == .needsRecovery || latestRun.status == .manualActionNeeded {
-            return
-        }
-        launch(shell)
-    }
-
     func recover(_ entry: ProcessEntry) {
         guard !entry.isArchived else {
             errorMessage = "\(entry.name) is archived. Restore it before recovery."
@@ -14250,7 +14403,7 @@ final class WorkbenchViewModel: ObservableObject {
 
     func beginEditingSession(_ entry: ProcessEntry) {
         guard customSessionManager.isCustomSession(entry) else {
-            errorMessage = "\(entry.name) is not a custom session"
+            errorMessage = "\(entry.name) is not a managed terminal session"
             return
         }
         guard activeSessions[entry.id] == nil else {
@@ -14366,7 +14519,7 @@ final class WorkbenchViewModel: ObservableObject {
             return
         }
         guard customSessionManager.isCustomSession(entry) else {
-            errorMessage = "\(entry.name) is not a custom session"
+            errorMessage = "\(entry.name) is not a managed terminal session"
             return
         }
         pendingDeleteSession = entry
@@ -14378,7 +14531,7 @@ final class WorkbenchViewModel: ObservableObject {
             return
         }
         guard customSessionManager.isCustomSession(entry) else {
-            errorMessage = "\(entry.name) is not a custom session"
+            errorMessage = "\(entry.name) is not a managed terminal session"
             return
         }
         state.processEntries.removeAll { $0.id == entry.id }
@@ -15953,6 +16106,24 @@ final class WorkbenchViewModel: ObservableObject {
     static let terminalFontSizeBounds: ClosedRange<CGFloat> = 9...28
 
     private func load() {
+        if isFirstRunSetupForcedOnLaunch {
+            state = bootstrapper.bootstrappedState(
+                from: WorkspaceState(),
+                defaults: .firstRunSetup()
+            )
+            bossWatchIsEnabled = state.bossWatchEnabled
+            bossWatchBaselineState = nil
+            selectedProjectID = state.projects.first?.id
+            selectedEntryID = nil
+            detailSplit = nil
+            activePaneID = .primary
+            do {
+                try store.save(state)
+            } catch {
+                errorMessage = String(describing: error)
+            }
+            return
+        }
         do {
             let loaded = try store.load()
             state = startupRecoveryReconciler.reconcile(bootstrapper.bootstrappedState(from: loaded))

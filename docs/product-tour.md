@@ -15,7 +15,7 @@ answer "what is going on?" without the human spelunking through panes.
 Ouro Workbench is that operating room:
 
 - a native Mac terminal wrapper with persistent `screen`-backed sessions
-- cmux-style groups and terminal tabs for project-scoped work
+- cmux-style workspaces and terminal sessions for project-scoped work
 - first-class CLI detection for Claude Code, OpenAI Codex, GitHub Copilot CLI,
   and arbitrary custom terminal/TUI agents
 - an Ouro boss layer that can inspect status, summarize waiting work, and queue
@@ -26,7 +26,7 @@ Ouro Workbench is that operating room:
 
 ## What The Operator Sees
 
-The main window is the workbench: groups on the left, boss controls across the
+The main window is the workbench: workspaces on the left, boss controls across the
 top, the selected terminal in the work area, and compact trust/recovery posture
 beside each session. The boss pane can expand for coordination or collapse so
 the human can live in the terminal.
@@ -47,7 +47,7 @@ Key controls:
 ## Boss-Control Layer
 
 The selected Ouro boss agent sees a structured Workbench prompt through MCP:
-groups, sessions, CLI identity, trust, executable health, recent action log,
+workspaces, sessions, CLI identity, trust, executable health, recent action log,
 transcripts, recovery plans, and boss-watch posture.
 
 Supported queued actions:
@@ -115,5 +115,5 @@ swift run OuroWorkbenchScenarioVerifier \
   --expect-matrix-rows 5000 \
   --expect-deep-rows 0 \
   --expect-render-passes 25000 \
-  --expect-coverage-digest 567dc7ec0c45835b
+  --expect-coverage-digest 89292786bde2e133
 ```

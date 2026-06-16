@@ -725,6 +725,9 @@ final class OnboardingTests: XCTestCase {
         XCTAssertNil(scanner.parseDate(nil))
         XCTAssertNotNil(scanner.parseDate("2026-05-26T11:00:00Z"))
         XCTAssertFalse(scanner.isRecent(nil))
+        let pathScanner = RecentSessionScanner(homeURL: URL(fileURLWithPath: "/Users/ari"))
+        XCTAssertEqual(pathScanner.evidencePath(URL(fileURLWithPath: "/tmp/evidence.jsonl")), "/tmp/evidence.jsonl")
+        XCTAssertEqual(pathScanner.evidencePath(URL(fileURLWithPath: "/private/Users/ari/.codex/evidence.jsonl")), "/Users/ari/.codex/evidence.jsonl")
         XCTAssertNil(scanner.inferredClaudeProjectPath(from: temporaryDirectory.appendingPathComponent("plain/session.jsonl")))
         XCTAssertEqual(scanner.parseZshHistoryLine(": 1779796800:0;claude")?.command, "claude")
         XCTAssertNil(scanner.parseZshHistoryLine("bad"))
@@ -811,6 +814,318 @@ final class OnboardingTests: XCTestCase {
         let candidate = try XCTUnwrap(scanner.scan().first { $0.id == "codex:codex-live" })
         XCTAssertEqual(candidate.workingDirectory, "/Users/ari/Projects/ouro-workbench")
         XCTAssertEqual(candidate.resumeCommand, ["codex", "resume", "codex-live"])
+    }
+
+    func testRecentSessionScannerReadsCodexArchivedJsonl() throws {
+        let now = ISO8601DateFormatter().date(from: "2026-05-26T12:00:00Z")!
+        let archiveURL = temporaryDirectory
+            .appendingPathComponent(".codex/archived_sessions/session.jsonl")
+        try FileManager.default.createDirectory(at: archiveURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try #"{"id":"archived-1","timestamp":"2026-05-26T11:00:00Z","cwd":"/Users/ari/Projects/archive","prompt":"Ship archive import"}"#
+            .write(to: archiveURL, atomically: true, encoding: .utf8)
+
+        let candidates = RecentSessionScanner(
+            homeURL: temporaryDirectory,
+            now: now,
+            sqlite3URL: temporaryDirectory.appendingPathComponent("missing-sqlite3")
+        ).scan()
+        let candidate = try XCTUnwrap(candidates.first { $0.id == "codex:archived-1" })
+
+        XCTAssertEqual(candidate.source, .openAICodex)
+        XCTAssertEqual(candidate.agentKind, .openAICodex)
+        XCTAssertEqual(candidate.title, "Ship archive import")
+        XCTAssertEqual(candidate.workingDirectory, "/Users/ari/Projects/archive")
+        XCTAssertEqual(candidate.resumeCommand, ["codex", "resume", "archived-1"])
+        XCTAssertTrue(candidate.evidencePaths.contains(archiveURL.path))
+        XCTAssertGreaterThanOrEqual(candidate.confidence, 0.8)
+    }
+
+    func testRecentSessionScannerReadsCodexManualRecoveryJsonl() throws {
+        let now = ISO8601DateFormatter().date(from: "2026-05-26T12:00:00Z")!
+        let recoveryURL = temporaryDirectory
+            .appendingPathComponent(".codex/manual-recovery-20260526/recovery.jsonl")
+        try FileManager.default.createDirectory(at: recoveryURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try #"{"sessionId":"manual-1","updatedAt":"2026-05-26T11:10:00Z","workingDirectory":"/Users/ari/Projects/manual","summary":"Manual recovery fixture"}"#
+            .write(to: recoveryURL, atomically: true, encoding: .utf8)
+
+        let candidates = RecentSessionScanner(
+            homeURL: temporaryDirectory,
+            now: now,
+            sqlite3URL: temporaryDirectory.appendingPathComponent("missing-sqlite3")
+        ).scan()
+        let candidate = try XCTUnwrap(candidates.first { $0.id == "codex:manual-1" })
+
+        XCTAssertEqual(candidate.source, .openAICodex)
+        XCTAssertEqual(candidate.title, "Manual recovery fixture")
+        XCTAssertEqual(candidate.workingDirectory, "/Users/ari/Projects/manual")
+        XCTAssertEqual(candidate.resumeCommand, ["codex", "resume", "manual-1"])
+        XCTAssertTrue(candidate.evidencePaths.contains(recoveryURL.path))
+    }
+
+    func testRecentSessionScannerReadsCodexSessionMetaPayloadJsonl() throws {
+        let now = ISO8601DateFormatter().date(from: "2026-05-26T12:00:00Z")!
+        let archiveURL = temporaryDirectory
+            .appendingPathComponent(".codex/archived_sessions/payload.jsonl")
+        let recoveryURL = temporaryDirectory
+            .appendingPathComponent(".codex/manual-recovery-20260526/payload.jsonl")
+        try FileManager.default.createDirectory(at: archiveURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: recoveryURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try #"{"type":"session_meta","payload":{"id":"payload-archive","timestamp":"2026-05-26T11:30:00Z","cwd":"/Users/ari/Projects/payload-archive","title":"Payload archive fixture"}}"#
+            .write(to: archiveURL, atomically: true, encoding: .utf8)
+        try #"{"type":"session_meta","payload":{"sessionId":"payload-manual","updatedAt":"2026-05-26T11:35:00Z","workingDirectory":"/Users/ari/Projects/payload-manual","summary":"Payload manual fixture"}}"#
+            .write(to: recoveryURL, atomically: true, encoding: .utf8)
+
+        let candidates = RecentSessionScanner(
+            homeURL: temporaryDirectory,
+            now: now,
+            sqlite3URL: temporaryDirectory.appendingPathComponent("missing-sqlite3")
+        ).scan()
+        let archived = try XCTUnwrap(candidates.first { $0.id == "codex:payload-archive" })
+        let manual = try XCTUnwrap(candidates.first { $0.id == "codex:payload-manual" })
+
+        XCTAssertEqual(archived.workingDirectory, "/Users/ari/Projects/payload-archive")
+        XCTAssertEqual(archived.title, "Payload archive fixture")
+        XCTAssertTrue(archived.evidencePaths.contains(archiveURL.path))
+        XCTAssertEqual(manual.workingDirectory, "/Users/ari/Projects/payload-manual")
+        XCTAssertEqual(manual.title, "Payload manual fixture")
+        XCTAssertTrue(manual.evidencePaths.contains(recoveryURL.path))
+    }
+
+    func testRecentSessionScannerReadsClaudeTaskJson() throws {
+        let now = ISO8601DateFormatter().date(from: "2026-05-26T12:00:00Z")!
+        let taskURL = temporaryDirectory
+            .appendingPathComponent(".claude/tasks/task.json")
+        try FileManager.default.createDirectory(at: taskURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try #"{"sessionId":"task-1","updatedAt":"2026-05-26T11:20:00Z","cwd":"/Users/ari/Projects/claude-task","summary":"Claude task fixture"}"#
+            .write(to: taskURL, atomically: true, encoding: .utf8)
+
+        let candidates = RecentSessionScanner(
+            homeURL: temporaryDirectory,
+            now: now,
+            sqlite3URL: temporaryDirectory.appendingPathComponent("missing-sqlite3")
+        ).scan()
+        let candidate = try XCTUnwrap(candidates.first { $0.id == "claude:task-1" })
+
+        XCTAssertEqual(candidate.source, .claudeCode)
+        XCTAssertEqual(candidate.agentKind, .claudeCode)
+        XCTAssertEqual(candidate.title, "Claude task fixture")
+        XCTAssertEqual(candidate.workingDirectory, "/Users/ari/Projects/claude-task")
+        XCTAssertEqual(candidate.resumeCommand, ["claude", "--resume", "task-1"])
+        XCTAssertTrue(candidate.evidencePaths.contains(taskURL.path))
+    }
+
+    func testRecentSessionScannerCoversJSONFallbacksAndNumericDates() throws {
+        let now = ISO8601DateFormatter().date(from: "2026-05-26T12:00:00Z")!
+        let tasksURL = temporaryDirectory.appendingPathComponent(".claude/tasks")
+        try FileManager.default.createDirectory(at: tasksURL, withIntermediateDirectories: true)
+        try "not-json".write(to: tasksURL.appendingPathComponent("malformed.json"), atomically: true, encoding: .utf8)
+        try #"{"summary":"missing id"}"#.write(to: tasksURL.appendingPathComponent("missing-id.json"), atomically: true, encoding: .utf8)
+        try #"{"sessionId":"stale-json","updatedAt":"2020-01-01T00:00:00Z"}"#
+            .write(to: tasksURL.appendingPathComponent("stale.json"), atomically: true, encoding: .utf8)
+        try #"{"sessionId":"millis-json","updatedAt":1779796800000.0}"#
+            .write(to: tasksURL.appendingPathComponent("millis.json"), atomically: true, encoding: .utf8)
+        try #"{"sessionId":"seconds-json","updatedAt":1779796800,"cwd":"/repo/seconds","summary":"Seconds task"}"#
+            .write(to: tasksURL.appendingPathComponent("seconds.json"), atomically: true, encoding: .utf8)
+        try #"{"sessionId":"mtime-title-fallback"}"#
+            .write(to: tasksURL.appendingPathComponent("mtime-title-fallback.json"), atomically: true, encoding: .utf8)
+
+        let codexURL = temporaryDirectory.appendingPathComponent(".codex/manual-recovery-20260526/payload.jsonl")
+        try FileManager.default.createDirectory(at: codexURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try [
+            #"{"id":"stale-codex","timestamp":"2020-01-01T00:00:00Z"}"#,
+            #"{"summary":"codex without id"}"#,
+            #"{"cwd":"/outer","payload":{"id":"payload-wins","timestamp":1779796800000.0,"cwd":"/inner","prompt":"Payload wins"}}"#,
+            #"{"id":"seconds-codex","updatedAt":1779796800,"title":"Seconds Codex"}"#,
+            #"{"id":"mtime-codex"}"#
+        ].joined(separator: "\n").write(to: codexURL, atomically: true, encoding: .utf8)
+
+        let scanner = RecentSessionScanner(
+            homeURL: temporaryDirectory,
+            now: now,
+            sqlite3URL: temporaryDirectory.appendingPathComponent("missing-sqlite3")
+        )
+        let claude = scanner.scanClaudeTaskRecords()
+        let millis = try XCTUnwrap(claude.first { $0.id == "claude:millis-json" })
+        let seconds = try XCTUnwrap(claude.first { $0.id == "claude:seconds-json" })
+        let mtimeTitleFallback = try XCTUnwrap(claude.first { $0.id == "claude:mtime-title-fallback" })
+
+        XCTAssertEqual(millis.workingDirectory, temporaryDirectory.path)
+        XCTAssertEqual(millis.confidence, 0.7)
+        XCTAssertEqual(millis.lastActiveAt, Date(timeIntervalSince1970: 1_779_796_800))
+        XCTAssertEqual(seconds.workingDirectory, "/repo/seconds")
+        XCTAssertEqual(seconds.lastActiveAt, Date(timeIntervalSince1970: 1_779_796_800))
+        XCTAssertEqual(mtimeTitleFallback.title, "mtime-title-fallback")
+        XCTAssertEqual(mtimeTitleFallback.summary, "mtime-title-fallback")
+        XCTAssertFalse(claude.contains { $0.id == "claude:stale-json" })
+
+        let codex = scanner.scanCodex()
+        let payload = try XCTUnwrap(codex.first { $0.id == "codex:payload-wins" })
+        let codexSeconds = try XCTUnwrap(codex.first { $0.id == "codex:seconds-codex" })
+        let codexMTime = try XCTUnwrap(codex.first { $0.id == "codex:mtime-codex" })
+
+        XCTAssertEqual(payload.workingDirectory, "/inner")
+        XCTAssertEqual(payload.title, "Payload wins")
+        XCTAssertEqual(payload.lastActiveAt, Date(timeIntervalSince1970: 1_779_796_800))
+        XCTAssertEqual(codexSeconds.workingDirectory, temporaryDirectory.path)
+        XCTAssertEqual(codexSeconds.confidence, 0.7)
+        XCTAssertEqual(codexMTime.title, "mtime-codex")
+        XCTAssertEqual(codexMTime.summary, "mtime-codex")
+        XCTAssertFalse(codex.contains { $0.id == "codex:stale-codex" })
+
+        let resolvedHome = temporaryDirectory.resolvingSymlinksInPath()
+        let resolvedEvidenceURL = resolvedHome.appendingPathComponent(".codex/manual-recovery-20260526/resolved.jsonl")
+        try #"{"id":"resolved-evidence","timestamp":1779796800,"prompt":"Resolved evidence"}"#
+            .write(to: resolvedEvidenceURL, atomically: true, encoding: .utf8)
+        let resolvedScanner = RecentSessionScanner(
+            homeURL: resolvedHome,
+            now: now,
+            sqlite3URL: resolvedHome.appendingPathComponent("missing-sqlite3")
+        )
+        let resolvedCandidate = try XCTUnwrap(resolvedScanner.scanCodex().first { $0.id == "codex:resolved-evidence" })
+        XCTAssertEqual(resolvedCandidate.evidencePaths, [resolvedEvidenceURL.path])
+    }
+
+    func testRecentSessionScannerUnionsCodexSqliteAndSessionIndex() throws {
+        let now = ISO8601DateFormatter().date(from: "2026-05-26T12:00:00Z")!
+        let codexDir = temporaryDirectory.appendingPathComponent(".codex")
+        try FileManager.default.createDirectory(at: codexDir, withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: codexDir.appendingPathComponent("state_5.sqlite").path, contents: Data())
+        try #"{"id":"codex-index","thread_name":"Index fallback","updated_at":"2026-05-26T11:25:00Z"}"#
+            .write(to: codexDir.appendingPathComponent("session_index.jsonl"), atomically: true, encoding: .utf8)
+
+        let sqliteURL = temporaryDirectory.appendingPathComponent("sqlite3")
+        try """
+        #!/bin/zsh
+        printf "codex-sqlite\\tSQLite task\\t/Users/ari/Projects/sqlite\\tmain\\t1779796200000\\n"
+        """.write(to: sqliteURL, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: sqliteURL.path)
+
+        let candidates = RecentSessionScanner(
+            homeURL: temporaryDirectory,
+            now: now,
+            sqlite3URL: sqliteURL,
+            liveProcessLister: { [] }
+        ).scan()
+
+        XCTAssertTrue(candidates.contains { $0.id == "codex:codex-sqlite" })
+        XCTAssertTrue(candidates.contains { $0.id == "codex:codex-index" })
+    }
+
+    func testRecentSessionScannerIgnoresStaleCodexArchive() throws {
+        let now = ISO8601DateFormatter().date(from: "2026-05-26T12:00:00Z")!
+        let archiveURL = temporaryDirectory
+            .appendingPathComponent(".codex/archived_sessions/stale.jsonl")
+        try FileManager.default.createDirectory(at: archiveURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try #"{"id":"stale-archive","timestamp":"2026-05-01T11:00:00Z","cwd":"/Users/ari/Projects/stale","prompt":"Old work"}"#
+            .write(to: archiveURL, atomically: true, encoding: .utf8)
+
+        let candidates = RecentSessionScanner(
+            homeURL: temporaryDirectory,
+            now: now,
+            sqlite3URL: temporaryDirectory.appendingPathComponent("missing-sqlite3")
+        ).scan()
+
+        XCTAssertFalse(candidates.contains { $0.id == "codex:stale-archive" })
+    }
+
+    func testRecentSessionScannerSkipsMalformedCodexArchiveLines() throws {
+        let now = ISO8601DateFormatter().date(from: "2026-05-26T12:00:00Z")!
+        let archiveURL = temporaryDirectory
+            .appendingPathComponent(".codex/archived_sessions/mixed.jsonl")
+        try FileManager.default.createDirectory(at: archiveURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try [
+            "not-json",
+            #"{"id":"valid-after-malformed","timestamp":"2026-05-26T11:00:00Z","cwd":"/Users/ari/Projects/valid","prompt":"Valid after malformed"}"#
+        ].joined(separator: "\n").write(to: archiveURL, atomically: true, encoding: .utf8)
+
+        let candidates = RecentSessionScanner(
+            homeURL: temporaryDirectory,
+            now: now,
+            sqlite3URL: temporaryDirectory.appendingPathComponent("missing-sqlite3")
+        ).scan()
+
+        XCTAssertTrue(candidates.contains { $0.id == "codex:valid-after-malformed" })
+    }
+
+    func testRecentSessionScannerDropsCodexArchiveWithoutSessionId() throws {
+        let now = ISO8601DateFormatter().date(from: "2026-05-26T12:00:00Z")!
+        let archiveURL = temporaryDirectory
+            .appendingPathComponent(".codex/archived_sessions/no-id.jsonl")
+        try FileManager.default.createDirectory(at: archiveURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try #"{"timestamp":"2026-05-26T11:00:00Z","cwd":"/Users/ari/Projects/no-id","prompt":"No id"}"#
+            .write(to: archiveURL, atomically: true, encoding: .utf8)
+
+        let candidates = RecentSessionScanner(
+            homeURL: temporaryDirectory,
+            now: now,
+            sqlite3URL: temporaryDirectory.appendingPathComponent("missing-sqlite3")
+        ).scan()
+
+        XCTAssertFalse(candidates.contains { $0.workingDirectory == "/Users/ari/Projects/no-id" })
+    }
+
+    func testRecentSessionScannerKeepsCodexArchiveWithoutWorkingDirectoryAsRecoverable() throws {
+        let now = ISO8601DateFormatter().date(from: "2026-05-26T12:00:00Z")!
+        let archiveURL = temporaryDirectory
+            .appendingPathComponent(".codex/archived_sessions/no-cwd.jsonl")
+        try FileManager.default.createDirectory(at: archiveURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try #"{"id":"recoverable-no-cwd","timestamp":"2026-05-26T11:00:00Z","prompt":"Recoverable without cwd"}"#
+            .write(to: archiveURL, atomically: true, encoding: .utf8)
+
+        let candidates = RecentSessionScanner(
+            homeURL: temporaryDirectory,
+            now: now,
+            sqlite3URL: temporaryDirectory.appendingPathComponent("missing-sqlite3")
+        ).scan()
+        let candidate = try XCTUnwrap(candidates.first { $0.id == "codex:recoverable-no-cwd" })
+
+        XCTAssertEqual(candidate.workingDirectory, temporaryDirectory.path)
+        XCTAssertLessThanOrEqual(candidate.confidence, 0.75)
+        XCTAssertEqual(candidate.resumeCommand, ["codex", "resume", "recoverable-no-cwd"])
+    }
+
+    func testRecentSessionScannerPrefersHigherConfidenceDuplicate() throws {
+        let now = ISO8601DateFormatter().date(from: "2026-05-26T12:00:00Z")!
+        let codexDir = temporaryDirectory.appendingPathComponent(".codex")
+        try FileManager.default.createDirectory(
+            at: codexDir.appendingPathComponent("archived_sessions"),
+            withIntermediateDirectories: true
+        )
+        try #"{"id":"duplicate","thread_name":"Index duplicate","updated_at":"2026-05-26T10:00:00Z"}"#
+            .write(to: codexDir.appendingPathComponent("session_index.jsonl"), atomically: true, encoding: .utf8)
+        let archiveURL = codexDir.appendingPathComponent("archived_sessions/duplicate.jsonl")
+        try #"{"id":"duplicate","timestamp":"2026-05-26T11:00:00Z","cwd":"/Users/ari/Projects/high-confidence","prompt":"Archive duplicate"}"#
+            .write(to: archiveURL, atomically: true, encoding: .utf8)
+
+        let candidates = RecentSessionScanner(
+            homeURL: temporaryDirectory,
+            now: now,
+            sqlite3URL: temporaryDirectory.appendingPathComponent("missing-sqlite3")
+        ).scan()
+        let duplicates = candidates.filter { $0.id == "codex:duplicate" }
+
+        XCTAssertEqual(duplicates.count, 1)
+        XCTAssertEqual(duplicates.first?.workingDirectory, "/Users/ari/Projects/high-confidence")
+        XCTAssertTrue(duplicates.first?.evidencePaths.contains(archiveURL.path) == true)
+    }
+
+    func testRecentSessionScannerFallsBackToSessionIndexWhenSqliteMissingOrUnexecutable() throws {
+        let now = ISO8601DateFormatter().date(from: "2026-05-26T12:00:00Z")!
+        let codexDir = temporaryDirectory.appendingPathComponent(".codex")
+        try FileManager.default.createDirectory(at: codexDir, withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: codexDir.appendingPathComponent("state_5.sqlite").path, contents: Data())
+        try #"{"id":"index-only","thread_name":"Index survives missing sqlite","updated_at":"2026-05-26T11:45:00Z"}"#
+            .write(to: codexDir.appendingPathComponent("session_index.jsonl"), atomically: true, encoding: .utf8)
+
+        let candidates = RecentSessionScanner(
+            homeURL: temporaryDirectory,
+            now: now,
+            sqlite3URL: temporaryDirectory.appendingPathComponent("not-executable-sqlite3")
+        ).scan()
+        let candidate = try XCTUnwrap(candidates.first { $0.id == "codex:index-only" })
+
+        XCTAssertEqual(candidate.resumeCommand, ["codex", "resume", "index-only"])
+        XCTAssertEqual(candidate.source, .openAICodex)
     }
 
     func testCodexSQLiteScannerHandlesMalformedRowsHomeFallbackAndFailures() throws {

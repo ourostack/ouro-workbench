@@ -1,0 +1,1423 @@
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/15] Write sources
+[3/15] Write swift-version--58304C5D6DBC2206.txt
+[5/88] Compiling OuroWorkbenchCore WorkbenchEntryReorder.swift
+[6/88] Compiling OuroWorkbenchCore WorkbenchFactoryReset.swift
+[7/88] Compiling OuroWorkbenchCore WorkbenchGroupColor.swift
+[8/88] Compiling OuroWorkbenchCore WorkbenchGuide.swift
+[9/88] Compiling OuroWorkbenchCore WorkbenchMCPRegistrationAction.swift
+[10/88] Compiling OuroWorkbenchCore WorkbenchPaths.swift
+[11/88] Compiling OuroWorkbenchCore WorkbenchRelease.swift
+[12/88] Compiling OuroWorkbenchCore WorkbenchScenarioMatrix.swift
+[13/95] Compiling OuroWorkbenchCore CustomTerminalSession.swift
+[14/95] Compiling OuroWorkbenchCore CycleDirection.swift
+[15/95] Compiling OuroWorkbenchCore DaemonEnsureAction.swift
+[16/95] Compiling OuroWorkbenchCore DaemonLiveness.swift
+[17/95] Compiling OuroWorkbenchCore ExecutableHealth.swift
+[18/95] Compiling OuroWorkbenchCore ExitStatus.swift
+[19/95] Compiling OuroWorkbenchCore FailableDecodable.swift
+[20/95] Compiling OuroWorkbenchCore FirstRunBootstrapDrive.swift
+[21/95] Compiling OuroWorkbenchCore SessionSnapshot.swift
+[22/95] Compiling OuroWorkbenchCore ShellArgumentEscaper.swift
+[23/95] Compiling OuroWorkbenchCore SidebarSessionFilter.swift
+[24/95] Compiling OuroWorkbenchCore StartupRecoveryReconciler.swift
+[25/95] Compiling OuroWorkbenchCore SupportDiagnosticsRunner.swift
+[26/95] Compiling OuroWorkbenchCore TerminalEnvironment.swift
+[27/95] Compiling OuroWorkbenchCore TerminalIdentity.swift
+[28/95] Compiling OuroWorkbenchCore TranscriptRecorder.swift
+[29/95] Compiling OuroWorkbenchCore TranscriptSearch.swift
+[30/95] Compiling OuroWorkbenchCore TranscriptTailReader.swift
+[31/95] Compiling OuroWorkbenchCore TranscriptTextSanitizer.swift
+[32/95] Compiling OuroWorkbenchCore WorkbenchActionRequestQueue.swift
+[33/95] Compiling OuroWorkbenchCore WorkbenchBootstrapper.swift
+[34/95] Compiling OuroWorkbenchCore WorkbenchCommandPalette.swift
+[35/95] Compiling OuroWorkbenchCore WorkbenchContextFile.swift
+[36/95] Compiling OuroWorkbenchCore WorkbenchElapsedFormatter.swift
+[37/95] Compiling OuroWorkbenchCore ProviderRefresh.swift
+[38/95] Compiling OuroWorkbenchCore ProviderVerify.swift
+[39/95] Compiling OuroWorkbenchCore RecoveryDrill.swift
+[40/95] Compiling OuroWorkbenchCore RecoveryPlanner.swift
+[41/95] Compiling OuroWorkbenchCore ReleaseUpdate.swift
+[42/95] Compiling OuroWorkbenchCore SessionActivity.swift
+[43/95] Compiling OuroWorkbenchCore SessionActivityReader.swift
+[44/95] Compiling OuroWorkbenchCore SessionFriend.swift
+[45/95] Compiling OuroWorkbenchCore FirstRunBootstrapEffectsResolver.swift
+[46/95] Compiling OuroWorkbenchCore FriendPreferenceTeaching.swift
+[47/95] Compiling OuroWorkbenchCore GitSessionStatus.swift
+[48/95] Compiling OuroWorkbenchCore HarnessStatus.swift
+[49/95] Compiling OuroWorkbenchCore LaneSelection.swift
+[50/95] Compiling OuroWorkbenchCore LaunchAgentLoginItem.swift
+[51/95] Compiling OuroWorkbenchCore MailboxClient.swift
+[52/95] Compiling OuroWorkbenchCore MailboxDashboardSnapshotReader.swift
+[53/95] Compiling OuroWorkbenchCore AgentPreset.swift
+[54/95] Compiling OuroWorkbenchCore AgentReadinessBootstrap.swift
+[55/95] Compiling OuroWorkbenchCore AgentRepair.swift
+[56/95] Compiling OuroWorkbenchCore AttentionSignalDetector.swift
+[57/95] Compiling OuroWorkbenchCore AutonomyReadiness.swift
+[58/95] Compiling OuroWorkbenchCore BossAgentBridge.swift
+[59/95] Compiling OuroWorkbenchCore BossAgentMCPClient.swift
+[60/95] Compiling OuroWorkbenchCore BossAgentPromptBuilder.swift
+[61/95] Emitting module OuroWorkbenchCore
+[62/95] Compiling OuroWorkbenchCore MarkdownMessage.swift
+[63/95] Compiling OuroWorkbenchCore NativeOnboardingRepairCopy.swift
+[64/95] Compiling OuroWorkbenchCore Onboarding.swift
+[65/95] Compiling OuroWorkbenchCore OuroAgentInstallCommand.swift
+[66/95] Compiling OuroWorkbenchCore OuroAgentInventory.swift
+[67/95] Compiling OuroWorkbenchCore ProcessTerminationPolicy.swift
+[68/95] Compiling OuroWorkbenchCore PromptSafetyClassifier.swift
+[69/95] Compiling OuroWorkbenchCore ProviderConfigForm.swift
+[70/95] Compiling OuroWorkbenchCore BossAutoResolution.swift
+[71/95] Compiling OuroWorkbenchCore BossDashboard.swift
+[72/95] Compiling OuroWorkbenchCore BossInboxDecision.swift
+[73/95] Compiling OuroWorkbenchCore BossWatchEventPolicy.swift
+[74/95] Compiling OuroWorkbenchCore BossWorkbenchAction.swift
+[75/95] Compiling OuroWorkbenchCore BossWorkbenchActionAuthorizer.swift
+[76/95] Compiling OuroWorkbenchCore BugReport.swift
+[77/95] Compiling OuroWorkbenchCore CommandPlanner.swift
+[78/95] Compiling OuroWorkbenchCore WorkbenchStore.swift
+[79/95] Compiling OuroWorkbenchCore WorkbenchSurfaceChrome.swift
+[80/95] Compiling OuroWorkbenchCore WorkbenchUpdate.swift
+[81/95] Compiling OuroWorkbenchCore WorkbenchVisibility.swift
+[82/95] Compiling OuroWorkbenchCore WorkbenchWorkspaceConfig.swift
+[83/95] Compiling OuroWorkbenchCore WorkspaceModels.swift
+[84/95] Compiling OuroWorkbenchCore WorkspaceSummary.swift
+[85/180] Emitting module OuroWorkbenchMCP
+[86/180] Compiling OuroWorkbenchMCP main.swift
+[87/180] Compiling OuroWorkbenchCoreTests SupportDiagnosticsRunnerTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchBootstrapperTests.swift:30:24: error: type 'WorkbenchDefaults' has no member 'firstRunSetup'
+ 28 |         let state = WorkbenchBootstrapper().bootstrappedState(
+ 29 |             from: WorkspaceState(),
+ 30 |             defaults: .firstRunSetup(projectRootPath: "/tmp/workbench")
+    |                        `- error: type 'WorkbenchDefaults' has no member 'firstRunSetup'
+ 31 |         )
+ 32 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchBootstrapperTests.swift:33:43: error: cannot infer key path type from context; consider explicitly specifying a root type
+ 31 |         )
+ 32 | 
+ 33 |         XCTAssertEqual(state.projects.map(\.name), ["Unsorted Sessions"])
+    |                                           `- error: cannot infer key path type from context; consider explicitly specifying a root type
+ 34 |         XCTAssertFalse(state.projects.contains { $0.name == "This Mac" })
+ 35 |         XCTAssertTrue(state.processEntries.isEmpty)
+[88/180] Compiling OuroWorkbenchCoreTests TerminalEnvironmentTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchBootstrapperTests.swift:30:24: error: type 'WorkbenchDefaults' has no member 'firstRunSetup'
+ 28 |         let state = WorkbenchBootstrapper().bootstrappedState(
+ 29 |             from: WorkspaceState(),
+ 30 |             defaults: .firstRunSetup(projectRootPath: "/tmp/workbench")
+    |                        `- error: type 'WorkbenchDefaults' has no member 'firstRunSetup'
+ 31 |         )
+ 32 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchBootstrapperTests.swift:33:43: error: cannot infer key path type from context; consider explicitly specifying a root type
+ 31 |         )
+ 32 | 
+ 33 |         XCTAssertEqual(state.projects.map(\.name), ["Unsorted Sessions"])
+    |                                           `- error: cannot infer key path type from context; consider explicitly specifying a root type
+ 34 |         XCTAssertFalse(state.projects.contains { $0.name == "This Mac" })
+ 35 |         XCTAssertTrue(state.processEntries.isEmpty)
+[89/180] Compiling OuroWorkbenchCoreTests TerminalIdentityTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchBootstrapperTests.swift:30:24: error: type 'WorkbenchDefaults' has no member 'firstRunSetup'
+ 28 |         let state = WorkbenchBootstrapper().bootstrappedState(
+ 29 |             from: WorkspaceState(),
+ 30 |             defaults: .firstRunSetup(projectRootPath: "/tmp/workbench")
+    |                        `- error: type 'WorkbenchDefaults' has no member 'firstRunSetup'
+ 31 |         )
+ 32 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchBootstrapperTests.swift:33:43: error: cannot infer key path type from context; consider explicitly specifying a root type
+ 31 |         )
+ 32 | 
+ 33 |         XCTAssertEqual(state.projects.map(\.name), ["Unsorted Sessions"])
+    |                                           `- error: cannot infer key path type from context; consider explicitly specifying a root type
+ 34 |         XCTAssertFalse(state.projects.contains { $0.name == "This Mac" })
+ 35 |         XCTAssertTrue(state.processEntries.isEmpty)
+[90/180] Compiling OuroWorkbenchCoreTests TranscriptRecorderTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchBootstrapperTests.swift:30:24: error: type 'WorkbenchDefaults' has no member 'firstRunSetup'
+ 28 |         let state = WorkbenchBootstrapper().bootstrappedState(
+ 29 |             from: WorkspaceState(),
+ 30 |             defaults: .firstRunSetup(projectRootPath: "/tmp/workbench")
+    |                        `- error: type 'WorkbenchDefaults' has no member 'firstRunSetup'
+ 31 |         )
+ 32 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchBootstrapperTests.swift:33:43: error: cannot infer key path type from context; consider explicitly specifying a root type
+ 31 |         )
+ 32 | 
+ 33 |         XCTAssertEqual(state.projects.map(\.name), ["Unsorted Sessions"])
+    |                                           `- error: cannot infer key path type from context; consider explicitly specifying a root type
+ 34 |         XCTAssertFalse(state.projects.contains { $0.name == "This Mac" })
+ 35 |         XCTAssertTrue(state.processEntries.isEmpty)
+[91/180] Compiling OuroWorkbenchCoreTests TranscriptSearchTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchBootstrapperTests.swift:30:24: error: type 'WorkbenchDefaults' has no member 'firstRunSetup'
+ 28 |         let state = WorkbenchBootstrapper().bootstrappedState(
+ 29 |             from: WorkspaceState(),
+ 30 |             defaults: .firstRunSetup(projectRootPath: "/tmp/workbench")
+    |                        `- error: type 'WorkbenchDefaults' has no member 'firstRunSetup'
+ 31 |         )
+ 32 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchBootstrapperTests.swift:33:43: error: cannot infer key path type from context; consider explicitly specifying a root type
+ 31 |         )
+ 32 | 
+ 33 |         XCTAssertEqual(state.projects.map(\.name), ["Unsorted Sessions"])
+    |                                           `- error: cannot infer key path type from context; consider explicitly specifying a root type
+ 34 |         XCTAssertFalse(state.projects.contains { $0.name == "This Mac" })
+ 35 |         XCTAssertTrue(state.processEntries.isEmpty)
+[92/180] Compiling OuroWorkbenchCoreTests TranscriptTailReaderTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchBootstrapperTests.swift:30:24: error: type 'WorkbenchDefaults' has no member 'firstRunSetup'
+ 28 |         let state = WorkbenchBootstrapper().bootstrappedState(
+ 29 |             from: WorkspaceState(),
+ 30 |             defaults: .firstRunSetup(projectRootPath: "/tmp/workbench")
+    |                        `- error: type 'WorkbenchDefaults' has no member 'firstRunSetup'
+ 31 |         )
+ 32 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchBootstrapperTests.swift:33:43: error: cannot infer key path type from context; consider explicitly specifying a root type
+ 31 |         )
+ 32 | 
+ 33 |         XCTAssertEqual(state.projects.map(\.name), ["Unsorted Sessions"])
+    |                                           `- error: cannot infer key path type from context; consider explicitly specifying a root type
+ 34 |         XCTAssertFalse(state.projects.contains { $0.name == "This Mac" })
+ 35 |         XCTAssertTrue(state.processEntries.isEmpty)
+[93/180] Compiling OuroWorkbenchCoreTests WorkbenchActionRequestQueueTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchBootstrapperTests.swift:30:24: error: type 'WorkbenchDefaults' has no member 'firstRunSetup'
+ 28 |         let state = WorkbenchBootstrapper().bootstrappedState(
+ 29 |             from: WorkspaceState(),
+ 30 |             defaults: .firstRunSetup(projectRootPath: "/tmp/workbench")
+    |                        `- error: type 'WorkbenchDefaults' has no member 'firstRunSetup'
+ 31 |         )
+ 32 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchBootstrapperTests.swift:33:43: error: cannot infer key path type from context; consider explicitly specifying a root type
+ 31 |         )
+ 32 | 
+ 33 |         XCTAssertEqual(state.projects.map(\.name), ["Unsorted Sessions"])
+    |                                           `- error: cannot infer key path type from context; consider explicitly specifying a root type
+ 34 |         XCTAssertFalse(state.projects.contains { $0.name == "This Mac" })
+ 35 |         XCTAssertTrue(state.processEntries.isEmpty)
+[94/180] Compiling OuroWorkbenchCoreTests WorkbenchBootstrapperTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchBootstrapperTests.swift:30:24: error: type 'WorkbenchDefaults' has no member 'firstRunSetup'
+ 28 |         let state = WorkbenchBootstrapper().bootstrappedState(
+ 29 |             from: WorkspaceState(),
+ 30 |             defaults: .firstRunSetup(projectRootPath: "/tmp/workbench")
+    |                        `- error: type 'WorkbenchDefaults' has no member 'firstRunSetup'
+ 31 |         )
+ 32 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchBootstrapperTests.swift:33:43: error: cannot infer key path type from context; consider explicitly specifying a root type
+ 31 |         )
+ 32 | 
+ 33 |         XCTAssertEqual(state.projects.map(\.name), ["Unsorted Sessions"])
+    |                                           `- error: cannot infer key path type from context; consider explicitly specifying a root type
+ 34 |         XCTAssertFalse(state.projects.contains { $0.name == "This Mac" })
+ 35 |         XCTAssertTrue(state.processEntries.isEmpty)
+[95/187] Compiling OuroWorkbenchCoreTests CustomTerminalSessionTests.swift
+[96/187] Compiling OuroWorkbenchCoreTests CycleDirectionTests.swift
+[97/187] Compiling OuroWorkbenchCoreTests DaemonEnsureActionTests.swift
+[98/187] Compiling OuroWorkbenchCoreTests DaemonLivenessTests.swift
+[99/187] Compiling OuroWorkbenchCoreTests DaemonManagerTests.swift
+[100/187] Compiling OuroWorkbenchCoreTests ExecutableHealthTests.swift
+[101/187] Compiling OuroWorkbenchCoreTests ExitStatusTests.swift
+[102/187] Compiling OuroWorkbenchCoreTests FirstRunBootstrapDriveTests.swift
+[103/187] Compiling OuroWorkbenchCoreTests FirstRunBootstrapEffectsResolverTests.swift
+[103/187] Linking OuroWorkbenchMCP
+[105/187] Compiling OuroWorkbenchCoreTests ProcessRunRecencyTests.swift
+[106/187] Compiling OuroWorkbenchCoreTests ProcessTerminationPolicyTests.swift
+[107/187] Compiling OuroWorkbenchCoreTests PromptSafetyClassifierTests.swift
+[108/187] Compiling OuroWorkbenchCoreTests ProviderConfigFormTests.swift
+[109/187] Compiling OuroWorkbenchCoreTests ProviderRefreshTests.swift
+[110/187] Compiling OuroWorkbenchCoreTests ProviderVerifyTests.swift
+[111/187] Compiling OuroWorkbenchCoreTests RecoveryDrillTests.swift
+[112/187] Compiling OuroWorkbenchCoreTests RecoveryPlannerTests.swift
+[113/187] Compiling OuroWorkbenchCoreTests WorkbenchCommandPaletteTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:77:48: error: type 'WorkbenchFactoryReset' has no member 'requestFirstRunSetup'
+ 75 |         defer { try? fm.removeItem(at: dir) }
+ 76 | 
+ 77 |         let marker = try WorkbenchFactoryReset.requestFirstRunSetup(rootURL: dir)
+    |                                                `- error: type 'WorkbenchFactoryReset' has no member 'requestFirstRunSetup'
+ 78 | 
+ 79 |         XCTAssertEqual(marker.lastPathComponent, "force-first-run-setup")
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:81:45: error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 79 |         XCTAssertEqual(marker.lastPathComponent, "force-first-run-setup")
+ 80 |         XCTAssertTrue(fm.fileExists(atPath: marker.path))
+ 81 |         XCTAssertTrue(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+    |                                             `- error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 82 |         XCTAssertFalse(fm.fileExists(atPath: marker.path))
+ 83 |         XCTAssertFalse(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:83:46: error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 81 |         XCTAssertTrue(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+ 82 |         XCTAssertFalse(fm.fileExists(atPath: marker.path))
+ 83 |         XCTAssertFalse(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+    |                                              `- error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 84 |     }
+ 85 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:101:44: error: type 'WorkbenchFactoryReset' has no member 'resetToFactoryDefaults'
+ 99 |         defaults.set(true, forKey: "ouro.workbench.onboardingAutoPresented")
+100 | 
+101 |         let result = WorkbenchFactoryReset.resetToFactoryDefaults(
+    |                                            `- error: type 'WorkbenchFactoryReset' has no member 'resetToFactoryDefaults'
+102 |             stateURL: stateURL,
+103 |             defaults: defaults,
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:6:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+ 4 | final class WorkbenchLaunchDiagnosticsTests: XCTestCase {
+ 5 |     func testParseEmptyArgumentsUsesDefaultOptions() throws {
+ 6 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse(["OuroWorkbench"])
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+ 7 | 
+ 8 |         XCTAssertNil(diagnostics.appSupportRoot)
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:11:9: error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+ 9 |         XCTAssertFalse(diagnostics.autoLaunchResumableForE2E)
+10 |         XCTAssertNil(diagnostics.action)
+11 |         XCTAssertEqual(diagnostics.passthroughArguments, [])
+   |         |- error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+   |         |- note: only concrete types such as structs, enums and classes can conform to protocols
+   |         `- note: requirement from conditional conformance of '[Any]' to 'Equatable'
+12 |     }
+13 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:15:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+13 | 
+14 |     func testParseAppSupportRootAndAutoLaunchOverride() throws {
+15 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+16 |             "OuroWorkbench",
+17 |             "--app-support-root",
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:25:9: error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+23 |         XCTAssertTrue(diagnostics.autoLaunchResumableForE2E)
+24 |         XCTAssertNil(diagnostics.action)
+25 |         XCTAssertEqual(diagnostics.passthroughArguments, [])
+   |         |- error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+   |         |- note: only concrete types such as structs, enums and classes can conform to protocols
+   |         `- note: requirement from conditional conformance of '[Any]' to 'Equatable'
+26 |     }
+27 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:29:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+27 | 
+28 |     func testParseFactoryResetAction() throws {
+29 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+30 |             "OuroWorkbench",
+31 |             "--factory-reset-for-e2e"
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:34:45: error: type 'Equatable' has no member 'factoryResetForE2E'
+32 |         ])
+33 | 
+34 |         XCTAssertEqual(diagnostics.action, .factoryResetForE2E)
+   |                                             `- error: type 'Equatable' has no member 'factoryResetForE2E'
+35 |     }
+36 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:38:34: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+36 | 
+37 |     func testParseRequiresAppSupportRootPath() {
+38 |         XCTAssertThrowsError(try WorkbenchLaunchDiagnostics.parse([
+   |                                  `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+39 |             "OuroWorkbench",
+40 |             "--app-support-root"
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:45:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+43 | 
+44 |     func testParseKeepsUnknownArgumentsForExistingLaunchHandling() throws {
+45 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+46 |             "OuroWorkbench",
+47 |             "--smoke-launch",
+
+[#ProtocolTypeNonConformance]: <https://docs.swift.org/compiler/documentation/diagnostics/protocol-type-non-conformance>
+[114/187] Compiling OuroWorkbenchCoreTests WorkbenchElapsedFormatterTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:77:48: error: type 'WorkbenchFactoryReset' has no member 'requestFirstRunSetup'
+ 75 |         defer { try? fm.removeItem(at: dir) }
+ 76 | 
+ 77 |         let marker = try WorkbenchFactoryReset.requestFirstRunSetup(rootURL: dir)
+    |                                                `- error: type 'WorkbenchFactoryReset' has no member 'requestFirstRunSetup'
+ 78 | 
+ 79 |         XCTAssertEqual(marker.lastPathComponent, "force-first-run-setup")
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:81:45: error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 79 |         XCTAssertEqual(marker.lastPathComponent, "force-first-run-setup")
+ 80 |         XCTAssertTrue(fm.fileExists(atPath: marker.path))
+ 81 |         XCTAssertTrue(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+    |                                             `- error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 82 |         XCTAssertFalse(fm.fileExists(atPath: marker.path))
+ 83 |         XCTAssertFalse(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:83:46: error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 81 |         XCTAssertTrue(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+ 82 |         XCTAssertFalse(fm.fileExists(atPath: marker.path))
+ 83 |         XCTAssertFalse(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+    |                                              `- error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 84 |     }
+ 85 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:101:44: error: type 'WorkbenchFactoryReset' has no member 'resetToFactoryDefaults'
+ 99 |         defaults.set(true, forKey: "ouro.workbench.onboardingAutoPresented")
+100 | 
+101 |         let result = WorkbenchFactoryReset.resetToFactoryDefaults(
+    |                                            `- error: type 'WorkbenchFactoryReset' has no member 'resetToFactoryDefaults'
+102 |             stateURL: stateURL,
+103 |             defaults: defaults,
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:6:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+ 4 | final class WorkbenchLaunchDiagnosticsTests: XCTestCase {
+ 5 |     func testParseEmptyArgumentsUsesDefaultOptions() throws {
+ 6 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse(["OuroWorkbench"])
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+ 7 | 
+ 8 |         XCTAssertNil(diagnostics.appSupportRoot)
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:11:9: error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+ 9 |         XCTAssertFalse(diagnostics.autoLaunchResumableForE2E)
+10 |         XCTAssertNil(diagnostics.action)
+11 |         XCTAssertEqual(diagnostics.passthroughArguments, [])
+   |         |- error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+   |         |- note: only concrete types such as structs, enums and classes can conform to protocols
+   |         `- note: requirement from conditional conformance of '[Any]' to 'Equatable'
+12 |     }
+13 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:15:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+13 | 
+14 |     func testParseAppSupportRootAndAutoLaunchOverride() throws {
+15 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+16 |             "OuroWorkbench",
+17 |             "--app-support-root",
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:25:9: error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+23 |         XCTAssertTrue(diagnostics.autoLaunchResumableForE2E)
+24 |         XCTAssertNil(diagnostics.action)
+25 |         XCTAssertEqual(diagnostics.passthroughArguments, [])
+   |         |- error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+   |         |- note: only concrete types such as structs, enums and classes can conform to protocols
+   |         `- note: requirement from conditional conformance of '[Any]' to 'Equatable'
+26 |     }
+27 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:29:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+27 | 
+28 |     func testParseFactoryResetAction() throws {
+29 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+30 |             "OuroWorkbench",
+31 |             "--factory-reset-for-e2e"
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:34:45: error: type 'Equatable' has no member 'factoryResetForE2E'
+32 |         ])
+33 | 
+34 |         XCTAssertEqual(diagnostics.action, .factoryResetForE2E)
+   |                                             `- error: type 'Equatable' has no member 'factoryResetForE2E'
+35 |     }
+36 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:38:34: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+36 | 
+37 |     func testParseRequiresAppSupportRootPath() {
+38 |         XCTAssertThrowsError(try WorkbenchLaunchDiagnostics.parse([
+   |                                  `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+39 |             "OuroWorkbench",
+40 |             "--app-support-root"
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:45:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+43 | 
+44 |     func testParseKeepsUnknownArgumentsForExistingLaunchHandling() throws {
+45 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+46 |             "OuroWorkbench",
+47 |             "--smoke-launch",
+
+[#ProtocolTypeNonConformance]: <https://docs.swift.org/compiler/documentation/diagnostics/protocol-type-non-conformance>
+[115/187] Compiling OuroWorkbenchCoreTests WorkbenchEntryReorderTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:77:48: error: type 'WorkbenchFactoryReset' has no member 'requestFirstRunSetup'
+ 75 |         defer { try? fm.removeItem(at: dir) }
+ 76 | 
+ 77 |         let marker = try WorkbenchFactoryReset.requestFirstRunSetup(rootURL: dir)
+    |                                                `- error: type 'WorkbenchFactoryReset' has no member 'requestFirstRunSetup'
+ 78 | 
+ 79 |         XCTAssertEqual(marker.lastPathComponent, "force-first-run-setup")
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:81:45: error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 79 |         XCTAssertEqual(marker.lastPathComponent, "force-first-run-setup")
+ 80 |         XCTAssertTrue(fm.fileExists(atPath: marker.path))
+ 81 |         XCTAssertTrue(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+    |                                             `- error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 82 |         XCTAssertFalse(fm.fileExists(atPath: marker.path))
+ 83 |         XCTAssertFalse(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:83:46: error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 81 |         XCTAssertTrue(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+ 82 |         XCTAssertFalse(fm.fileExists(atPath: marker.path))
+ 83 |         XCTAssertFalse(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+    |                                              `- error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 84 |     }
+ 85 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:101:44: error: type 'WorkbenchFactoryReset' has no member 'resetToFactoryDefaults'
+ 99 |         defaults.set(true, forKey: "ouro.workbench.onboardingAutoPresented")
+100 | 
+101 |         let result = WorkbenchFactoryReset.resetToFactoryDefaults(
+    |                                            `- error: type 'WorkbenchFactoryReset' has no member 'resetToFactoryDefaults'
+102 |             stateURL: stateURL,
+103 |             defaults: defaults,
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:6:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+ 4 | final class WorkbenchLaunchDiagnosticsTests: XCTestCase {
+ 5 |     func testParseEmptyArgumentsUsesDefaultOptions() throws {
+ 6 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse(["OuroWorkbench"])
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+ 7 | 
+ 8 |         XCTAssertNil(diagnostics.appSupportRoot)
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:11:9: error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+ 9 |         XCTAssertFalse(diagnostics.autoLaunchResumableForE2E)
+10 |         XCTAssertNil(diagnostics.action)
+11 |         XCTAssertEqual(diagnostics.passthroughArguments, [])
+   |         |- error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+   |         |- note: only concrete types such as structs, enums and classes can conform to protocols
+   |         `- note: requirement from conditional conformance of '[Any]' to 'Equatable'
+12 |     }
+13 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:15:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+13 | 
+14 |     func testParseAppSupportRootAndAutoLaunchOverride() throws {
+15 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+16 |             "OuroWorkbench",
+17 |             "--app-support-root",
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:25:9: error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+23 |         XCTAssertTrue(diagnostics.autoLaunchResumableForE2E)
+24 |         XCTAssertNil(diagnostics.action)
+25 |         XCTAssertEqual(diagnostics.passthroughArguments, [])
+   |         |- error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+   |         |- note: only concrete types such as structs, enums and classes can conform to protocols
+   |         `- note: requirement from conditional conformance of '[Any]' to 'Equatable'
+26 |     }
+27 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:29:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+27 | 
+28 |     func testParseFactoryResetAction() throws {
+29 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+30 |             "OuroWorkbench",
+31 |             "--factory-reset-for-e2e"
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:34:45: error: type 'Equatable' has no member 'factoryResetForE2E'
+32 |         ])
+33 | 
+34 |         XCTAssertEqual(diagnostics.action, .factoryResetForE2E)
+   |                                             `- error: type 'Equatable' has no member 'factoryResetForE2E'
+35 |     }
+36 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:38:34: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+36 | 
+37 |     func testParseRequiresAppSupportRootPath() {
+38 |         XCTAssertThrowsError(try WorkbenchLaunchDiagnostics.parse([
+   |                                  `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+39 |             "OuroWorkbench",
+40 |             "--app-support-root"
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:45:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+43 | 
+44 |     func testParseKeepsUnknownArgumentsForExistingLaunchHandling() throws {
+45 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+46 |             "OuroWorkbench",
+47 |             "--smoke-launch",
+
+[#ProtocolTypeNonConformance]: <https://docs.swift.org/compiler/documentation/diagnostics/protocol-type-non-conformance>
+[116/187] Compiling OuroWorkbenchCoreTests WorkbenchFactoryResetTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:77:48: error: type 'WorkbenchFactoryReset' has no member 'requestFirstRunSetup'
+ 75 |         defer { try? fm.removeItem(at: dir) }
+ 76 | 
+ 77 |         let marker = try WorkbenchFactoryReset.requestFirstRunSetup(rootURL: dir)
+    |                                                `- error: type 'WorkbenchFactoryReset' has no member 'requestFirstRunSetup'
+ 78 | 
+ 79 |         XCTAssertEqual(marker.lastPathComponent, "force-first-run-setup")
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:81:45: error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 79 |         XCTAssertEqual(marker.lastPathComponent, "force-first-run-setup")
+ 80 |         XCTAssertTrue(fm.fileExists(atPath: marker.path))
+ 81 |         XCTAssertTrue(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+    |                                             `- error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 82 |         XCTAssertFalse(fm.fileExists(atPath: marker.path))
+ 83 |         XCTAssertFalse(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:83:46: error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 81 |         XCTAssertTrue(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+ 82 |         XCTAssertFalse(fm.fileExists(atPath: marker.path))
+ 83 |         XCTAssertFalse(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+    |                                              `- error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 84 |     }
+ 85 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:101:44: error: type 'WorkbenchFactoryReset' has no member 'resetToFactoryDefaults'
+ 99 |         defaults.set(true, forKey: "ouro.workbench.onboardingAutoPresented")
+100 | 
+101 |         let result = WorkbenchFactoryReset.resetToFactoryDefaults(
+    |                                            `- error: type 'WorkbenchFactoryReset' has no member 'resetToFactoryDefaults'
+102 |             stateURL: stateURL,
+103 |             defaults: defaults,
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:6:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+ 4 | final class WorkbenchLaunchDiagnosticsTests: XCTestCase {
+ 5 |     func testParseEmptyArgumentsUsesDefaultOptions() throws {
+ 6 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse(["OuroWorkbench"])
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+ 7 | 
+ 8 |         XCTAssertNil(diagnostics.appSupportRoot)
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:11:9: error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+ 9 |         XCTAssertFalse(diagnostics.autoLaunchResumableForE2E)
+10 |         XCTAssertNil(diagnostics.action)
+11 |         XCTAssertEqual(diagnostics.passthroughArguments, [])
+   |         |- error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+   |         |- note: only concrete types such as structs, enums and classes can conform to protocols
+   |         `- note: requirement from conditional conformance of '[Any]' to 'Equatable'
+12 |     }
+13 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:15:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+13 | 
+14 |     func testParseAppSupportRootAndAutoLaunchOverride() throws {
+15 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+16 |             "OuroWorkbench",
+17 |             "--app-support-root",
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:25:9: error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+23 |         XCTAssertTrue(diagnostics.autoLaunchResumableForE2E)
+24 |         XCTAssertNil(diagnostics.action)
+25 |         XCTAssertEqual(diagnostics.passthroughArguments, [])
+   |         |- error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+   |         |- note: only concrete types such as structs, enums and classes can conform to protocols
+   |         `- note: requirement from conditional conformance of '[Any]' to 'Equatable'
+26 |     }
+27 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:29:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+27 | 
+28 |     func testParseFactoryResetAction() throws {
+29 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+30 |             "OuroWorkbench",
+31 |             "--factory-reset-for-e2e"
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:34:45: error: type 'Equatable' has no member 'factoryResetForE2E'
+32 |         ])
+33 | 
+34 |         XCTAssertEqual(diagnostics.action, .factoryResetForE2E)
+   |                                             `- error: type 'Equatable' has no member 'factoryResetForE2E'
+35 |     }
+36 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:38:34: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+36 | 
+37 |     func testParseRequiresAppSupportRootPath() {
+38 |         XCTAssertThrowsError(try WorkbenchLaunchDiagnostics.parse([
+   |                                  `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+39 |             "OuroWorkbench",
+40 |             "--app-support-root"
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:45:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+43 | 
+44 |     func testParseKeepsUnknownArgumentsForExistingLaunchHandling() throws {
+45 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+46 |             "OuroWorkbench",
+47 |             "--smoke-launch",
+
+[#ProtocolTypeNonConformance]: <https://docs.swift.org/compiler/documentation/diagnostics/protocol-type-non-conformance>
+[117/187] Compiling OuroWorkbenchCoreTests WorkbenchGroupColorTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:77:48: error: type 'WorkbenchFactoryReset' has no member 'requestFirstRunSetup'
+ 75 |         defer { try? fm.removeItem(at: dir) }
+ 76 | 
+ 77 |         let marker = try WorkbenchFactoryReset.requestFirstRunSetup(rootURL: dir)
+    |                                                `- error: type 'WorkbenchFactoryReset' has no member 'requestFirstRunSetup'
+ 78 | 
+ 79 |         XCTAssertEqual(marker.lastPathComponent, "force-first-run-setup")
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:81:45: error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 79 |         XCTAssertEqual(marker.lastPathComponent, "force-first-run-setup")
+ 80 |         XCTAssertTrue(fm.fileExists(atPath: marker.path))
+ 81 |         XCTAssertTrue(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+    |                                             `- error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 82 |         XCTAssertFalse(fm.fileExists(atPath: marker.path))
+ 83 |         XCTAssertFalse(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:83:46: error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 81 |         XCTAssertTrue(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+ 82 |         XCTAssertFalse(fm.fileExists(atPath: marker.path))
+ 83 |         XCTAssertFalse(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+    |                                              `- error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 84 |     }
+ 85 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:101:44: error: type 'WorkbenchFactoryReset' has no member 'resetToFactoryDefaults'
+ 99 |         defaults.set(true, forKey: "ouro.workbench.onboardingAutoPresented")
+100 | 
+101 |         let result = WorkbenchFactoryReset.resetToFactoryDefaults(
+    |                                            `- error: type 'WorkbenchFactoryReset' has no member 'resetToFactoryDefaults'
+102 |             stateURL: stateURL,
+103 |             defaults: defaults,
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:6:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+ 4 | final class WorkbenchLaunchDiagnosticsTests: XCTestCase {
+ 5 |     func testParseEmptyArgumentsUsesDefaultOptions() throws {
+ 6 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse(["OuroWorkbench"])
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+ 7 | 
+ 8 |         XCTAssertNil(diagnostics.appSupportRoot)
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:11:9: error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+ 9 |         XCTAssertFalse(diagnostics.autoLaunchResumableForE2E)
+10 |         XCTAssertNil(diagnostics.action)
+11 |         XCTAssertEqual(diagnostics.passthroughArguments, [])
+   |         |- error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+   |         |- note: only concrete types such as structs, enums and classes can conform to protocols
+   |         `- note: requirement from conditional conformance of '[Any]' to 'Equatable'
+12 |     }
+13 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:15:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+13 | 
+14 |     func testParseAppSupportRootAndAutoLaunchOverride() throws {
+15 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+16 |             "OuroWorkbench",
+17 |             "--app-support-root",
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:25:9: error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+23 |         XCTAssertTrue(diagnostics.autoLaunchResumableForE2E)
+24 |         XCTAssertNil(diagnostics.action)
+25 |         XCTAssertEqual(diagnostics.passthroughArguments, [])
+   |         |- error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+   |         |- note: only concrete types such as structs, enums and classes can conform to protocols
+   |         `- note: requirement from conditional conformance of '[Any]' to 'Equatable'
+26 |     }
+27 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:29:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+27 | 
+28 |     func testParseFactoryResetAction() throws {
+29 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+30 |             "OuroWorkbench",
+31 |             "--factory-reset-for-e2e"
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:34:45: error: type 'Equatable' has no member 'factoryResetForE2E'
+32 |         ])
+33 | 
+34 |         XCTAssertEqual(diagnostics.action, .factoryResetForE2E)
+   |                                             `- error: type 'Equatable' has no member 'factoryResetForE2E'
+35 |     }
+36 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:38:34: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+36 | 
+37 |     func testParseRequiresAppSupportRootPath() {
+38 |         XCTAssertThrowsError(try WorkbenchLaunchDiagnostics.parse([
+   |                                  `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+39 |             "OuroWorkbench",
+40 |             "--app-support-root"
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:45:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+43 | 
+44 |     func testParseKeepsUnknownArgumentsForExistingLaunchHandling() throws {
+45 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+46 |             "OuroWorkbench",
+47 |             "--smoke-launch",
+
+[#ProtocolTypeNonConformance]: <https://docs.swift.org/compiler/documentation/diagnostics/protocol-type-non-conformance>
+[118/187] Compiling OuroWorkbenchCoreTests WorkbenchGuideTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:77:48: error: type 'WorkbenchFactoryReset' has no member 'requestFirstRunSetup'
+ 75 |         defer { try? fm.removeItem(at: dir) }
+ 76 | 
+ 77 |         let marker = try WorkbenchFactoryReset.requestFirstRunSetup(rootURL: dir)
+    |                                                `- error: type 'WorkbenchFactoryReset' has no member 'requestFirstRunSetup'
+ 78 | 
+ 79 |         XCTAssertEqual(marker.lastPathComponent, "force-first-run-setup")
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:81:45: error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 79 |         XCTAssertEqual(marker.lastPathComponent, "force-first-run-setup")
+ 80 |         XCTAssertTrue(fm.fileExists(atPath: marker.path))
+ 81 |         XCTAssertTrue(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+    |                                             `- error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 82 |         XCTAssertFalse(fm.fileExists(atPath: marker.path))
+ 83 |         XCTAssertFalse(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:83:46: error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 81 |         XCTAssertTrue(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+ 82 |         XCTAssertFalse(fm.fileExists(atPath: marker.path))
+ 83 |         XCTAssertFalse(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+    |                                              `- error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 84 |     }
+ 85 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:101:44: error: type 'WorkbenchFactoryReset' has no member 'resetToFactoryDefaults'
+ 99 |         defaults.set(true, forKey: "ouro.workbench.onboardingAutoPresented")
+100 | 
+101 |         let result = WorkbenchFactoryReset.resetToFactoryDefaults(
+    |                                            `- error: type 'WorkbenchFactoryReset' has no member 'resetToFactoryDefaults'
+102 |             stateURL: stateURL,
+103 |             defaults: defaults,
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:6:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+ 4 | final class WorkbenchLaunchDiagnosticsTests: XCTestCase {
+ 5 |     func testParseEmptyArgumentsUsesDefaultOptions() throws {
+ 6 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse(["OuroWorkbench"])
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+ 7 | 
+ 8 |         XCTAssertNil(diagnostics.appSupportRoot)
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:11:9: error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+ 9 |         XCTAssertFalse(diagnostics.autoLaunchResumableForE2E)
+10 |         XCTAssertNil(diagnostics.action)
+11 |         XCTAssertEqual(diagnostics.passthroughArguments, [])
+   |         |- error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+   |         |- note: only concrete types such as structs, enums and classes can conform to protocols
+   |         `- note: requirement from conditional conformance of '[Any]' to 'Equatable'
+12 |     }
+13 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:15:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+13 | 
+14 |     func testParseAppSupportRootAndAutoLaunchOverride() throws {
+15 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+16 |             "OuroWorkbench",
+17 |             "--app-support-root",
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:25:9: error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+23 |         XCTAssertTrue(diagnostics.autoLaunchResumableForE2E)
+24 |         XCTAssertNil(diagnostics.action)
+25 |         XCTAssertEqual(diagnostics.passthroughArguments, [])
+   |         |- error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+   |         |- note: only concrete types such as structs, enums and classes can conform to protocols
+   |         `- note: requirement from conditional conformance of '[Any]' to 'Equatable'
+26 |     }
+27 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:29:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+27 | 
+28 |     func testParseFactoryResetAction() throws {
+29 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+30 |             "OuroWorkbench",
+31 |             "--factory-reset-for-e2e"
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:34:45: error: type 'Equatable' has no member 'factoryResetForE2E'
+32 |         ])
+33 | 
+34 |         XCTAssertEqual(diagnostics.action, .factoryResetForE2E)
+   |                                             `- error: type 'Equatable' has no member 'factoryResetForE2E'
+35 |     }
+36 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:38:34: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+36 | 
+37 |     func testParseRequiresAppSupportRootPath() {
+38 |         XCTAssertThrowsError(try WorkbenchLaunchDiagnostics.parse([
+   |                                  `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+39 |             "OuroWorkbench",
+40 |             "--app-support-root"
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:45:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+43 | 
+44 |     func testParseKeepsUnknownArgumentsForExistingLaunchHandling() throws {
+45 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+46 |             "OuroWorkbench",
+47 |             "--smoke-launch",
+
+[#ProtocolTypeNonConformance]: <https://docs.swift.org/compiler/documentation/diagnostics/protocol-type-non-conformance>
+[119/187] Compiling OuroWorkbenchCoreTests WorkbenchLaunchDiagnosticsTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:77:48: error: type 'WorkbenchFactoryReset' has no member 'requestFirstRunSetup'
+ 75 |         defer { try? fm.removeItem(at: dir) }
+ 76 | 
+ 77 |         let marker = try WorkbenchFactoryReset.requestFirstRunSetup(rootURL: dir)
+    |                                                `- error: type 'WorkbenchFactoryReset' has no member 'requestFirstRunSetup'
+ 78 | 
+ 79 |         XCTAssertEqual(marker.lastPathComponent, "force-first-run-setup")
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:81:45: error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 79 |         XCTAssertEqual(marker.lastPathComponent, "force-first-run-setup")
+ 80 |         XCTAssertTrue(fm.fileExists(atPath: marker.path))
+ 81 |         XCTAssertTrue(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+    |                                             `- error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 82 |         XCTAssertFalse(fm.fileExists(atPath: marker.path))
+ 83 |         XCTAssertFalse(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:83:46: error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 81 |         XCTAssertTrue(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+ 82 |         XCTAssertFalse(fm.fileExists(atPath: marker.path))
+ 83 |         XCTAssertFalse(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+    |                                              `- error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 84 |     }
+ 85 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:101:44: error: type 'WorkbenchFactoryReset' has no member 'resetToFactoryDefaults'
+ 99 |         defaults.set(true, forKey: "ouro.workbench.onboardingAutoPresented")
+100 | 
+101 |         let result = WorkbenchFactoryReset.resetToFactoryDefaults(
+    |                                            `- error: type 'WorkbenchFactoryReset' has no member 'resetToFactoryDefaults'
+102 |             stateURL: stateURL,
+103 |             defaults: defaults,
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:6:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+ 4 | final class WorkbenchLaunchDiagnosticsTests: XCTestCase {
+ 5 |     func testParseEmptyArgumentsUsesDefaultOptions() throws {
+ 6 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse(["OuroWorkbench"])
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+ 7 | 
+ 8 |         XCTAssertNil(diagnostics.appSupportRoot)
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:11:9: error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+ 9 |         XCTAssertFalse(diagnostics.autoLaunchResumableForE2E)
+10 |         XCTAssertNil(diagnostics.action)
+11 |         XCTAssertEqual(diagnostics.passthroughArguments, [])
+   |         |- error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+   |         |- note: only concrete types such as structs, enums and classes can conform to protocols
+   |         `- note: requirement from conditional conformance of '[Any]' to 'Equatable'
+12 |     }
+13 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:15:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+13 | 
+14 |     func testParseAppSupportRootAndAutoLaunchOverride() throws {
+15 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+16 |             "OuroWorkbench",
+17 |             "--app-support-root",
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:25:9: error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+23 |         XCTAssertTrue(diagnostics.autoLaunchResumableForE2E)
+24 |         XCTAssertNil(diagnostics.action)
+25 |         XCTAssertEqual(diagnostics.passthroughArguments, [])
+   |         |- error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+   |         |- note: only concrete types such as structs, enums and classes can conform to protocols
+   |         `- note: requirement from conditional conformance of '[Any]' to 'Equatable'
+26 |     }
+27 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:29:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+27 | 
+28 |     func testParseFactoryResetAction() throws {
+29 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+30 |             "OuroWorkbench",
+31 |             "--factory-reset-for-e2e"
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:34:45: error: type 'Equatable' has no member 'factoryResetForE2E'
+32 |         ])
+33 | 
+34 |         XCTAssertEqual(diagnostics.action, .factoryResetForE2E)
+   |                                             `- error: type 'Equatable' has no member 'factoryResetForE2E'
+35 |     }
+36 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:38:34: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+36 | 
+37 |     func testParseRequiresAppSupportRootPath() {
+38 |         XCTAssertThrowsError(try WorkbenchLaunchDiagnostics.parse([
+   |                                  `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+39 |             "OuroWorkbench",
+40 |             "--app-support-root"
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:45:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+43 | 
+44 |     func testParseKeepsUnknownArgumentsForExistingLaunchHandling() throws {
+45 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+46 |             "OuroWorkbench",
+47 |             "--smoke-launch",
+
+[#ProtocolTypeNonConformance]: <https://docs.swift.org/compiler/documentation/diagnostics/protocol-type-non-conformance>
+[120/187] Compiling OuroWorkbenchCoreTests WorkbenchMCPRegistrationActionTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:77:48: error: type 'WorkbenchFactoryReset' has no member 'requestFirstRunSetup'
+ 75 |         defer { try? fm.removeItem(at: dir) }
+ 76 | 
+ 77 |         let marker = try WorkbenchFactoryReset.requestFirstRunSetup(rootURL: dir)
+    |                                                `- error: type 'WorkbenchFactoryReset' has no member 'requestFirstRunSetup'
+ 78 | 
+ 79 |         XCTAssertEqual(marker.lastPathComponent, "force-first-run-setup")
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:81:45: error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 79 |         XCTAssertEqual(marker.lastPathComponent, "force-first-run-setup")
+ 80 |         XCTAssertTrue(fm.fileExists(atPath: marker.path))
+ 81 |         XCTAssertTrue(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+    |                                             `- error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 82 |         XCTAssertFalse(fm.fileExists(atPath: marker.path))
+ 83 |         XCTAssertFalse(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:83:46: error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 81 |         XCTAssertTrue(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+ 82 |         XCTAssertFalse(fm.fileExists(atPath: marker.path))
+ 83 |         XCTAssertFalse(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+    |                                              `- error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 84 |     }
+ 85 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:101:44: error: type 'WorkbenchFactoryReset' has no member 'resetToFactoryDefaults'
+ 99 |         defaults.set(true, forKey: "ouro.workbench.onboardingAutoPresented")
+100 | 
+101 |         let result = WorkbenchFactoryReset.resetToFactoryDefaults(
+    |                                            `- error: type 'WorkbenchFactoryReset' has no member 'resetToFactoryDefaults'
+102 |             stateURL: stateURL,
+103 |             defaults: defaults,
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:6:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+ 4 | final class WorkbenchLaunchDiagnosticsTests: XCTestCase {
+ 5 |     func testParseEmptyArgumentsUsesDefaultOptions() throws {
+ 6 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse(["OuroWorkbench"])
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+ 7 | 
+ 8 |         XCTAssertNil(diagnostics.appSupportRoot)
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:11:9: error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+ 9 |         XCTAssertFalse(diagnostics.autoLaunchResumableForE2E)
+10 |         XCTAssertNil(diagnostics.action)
+11 |         XCTAssertEqual(diagnostics.passthroughArguments, [])
+   |         |- error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+   |         |- note: only concrete types such as structs, enums and classes can conform to protocols
+   |         `- note: requirement from conditional conformance of '[Any]' to 'Equatable'
+12 |     }
+13 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:15:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+13 | 
+14 |     func testParseAppSupportRootAndAutoLaunchOverride() throws {
+15 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+16 |             "OuroWorkbench",
+17 |             "--app-support-root",
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:25:9: error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+23 |         XCTAssertTrue(diagnostics.autoLaunchResumableForE2E)
+24 |         XCTAssertNil(diagnostics.action)
+25 |         XCTAssertEqual(diagnostics.passthroughArguments, [])
+   |         |- error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+   |         |- note: only concrete types such as structs, enums and classes can conform to protocols
+   |         `- note: requirement from conditional conformance of '[Any]' to 'Equatable'
+26 |     }
+27 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:29:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+27 | 
+28 |     func testParseFactoryResetAction() throws {
+29 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+30 |             "OuroWorkbench",
+31 |             "--factory-reset-for-e2e"
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:34:45: error: type 'Equatable' has no member 'factoryResetForE2E'
+32 |         ])
+33 | 
+34 |         XCTAssertEqual(diagnostics.action, .factoryResetForE2E)
+   |                                             `- error: type 'Equatable' has no member 'factoryResetForE2E'
+35 |     }
+36 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:38:34: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+36 | 
+37 |     func testParseRequiresAppSupportRootPath() {
+38 |         XCTAssertThrowsError(try WorkbenchLaunchDiagnostics.parse([
+   |                                  `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+39 |             "OuroWorkbench",
+40 |             "--app-support-root"
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:45:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+43 | 
+44 |     func testParseKeepsUnknownArgumentsForExistingLaunchHandling() throws {
+45 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+46 |             "OuroWorkbench",
+47 |             "--smoke-launch",
+
+[#ProtocolTypeNonConformance]: <https://docs.swift.org/compiler/documentation/diagnostics/protocol-type-non-conformance>
+[121/187] Emitting module OuroWorkbenchCoreTests
+[122/187] Compiling OuroWorkbenchCoreTests ReleaseUpdateTests.swift
+[123/187] Compiling OuroWorkbenchCoreTests RepairAgentKeystoneTests.swift
+[124/187] Compiling OuroWorkbenchCoreTests SessionActivityTests.swift
+[125/187] Compiling OuroWorkbenchCoreTests SessionFriendTests.swift
+[126/187] Compiling OuroWorkbenchCoreTests SessionOwnerTests.swift
+[127/187] Compiling OuroWorkbenchCoreTests SidebarSessionFilterTests.swift
+[128/187] Compiling OuroWorkbenchCoreTests Slice4OnboardingActionsKeystoneTests.swift
+[129/187] Compiling OuroWorkbenchCoreTests StartupRecoveryReconcilerTests.swift
+[129/187] Applying OuroWorkbenchMCP
+[131/187] Compiling OuroWorkbenchCoreTests NativeOnboardingRepairCopyTests.swift
+[132/187] Compiling OuroWorkbenchCoreTests OnboardingStatusToolTests.swift
+[133/187] Compiling OuroWorkbenchCoreTests OnboardingTests.swift
+[134/187] Compiling OuroWorkbenchCoreTests OuroAgentInstallCommandTests.swift
+[135/187] Compiling OuroWorkbenchCoreTests OuroAgentInventoryTests.swift
+[136/187] Compiling OuroWorkbenchCoreTests PaneLayoutStateTests.swift
+[137/187] Compiling OuroWorkbenchCoreTests PresetTests.swift
+[138/187] Compiling OuroWorkbenchCoreTests ProcessEntryPinTests.swift
+[139/187] Compiling OuroWorkbenchCoreTests FriendPreferenceTeachingTests.swift
+[140/187] Compiling OuroWorkbenchCoreTests GitHubIssueComposerTests.swift
+[141/187] Compiling OuroWorkbenchCoreTests GitSessionStatusTests.swift
+[142/187] Compiling OuroWorkbenchCoreTests HabitHistoryPanelTests.swift
+[143/187] Compiling OuroWorkbenchCoreTests HarnessStatusTests.swift
+[144/187] Compiling OuroWorkbenchCoreTests LaneSelectionTests.swift
+[145/187] Compiling OuroWorkbenchCoreTests LaunchAgentLoginItemTests.swift
+[146/187] Compiling OuroWorkbenchCoreTests MailboxClientTests.swift
+[147/187] Compiling OuroWorkbenchCoreTests MarkdownMessageTests.swift
+[148/187] Compiling OuroWorkbenchCoreTests AgentReadinessBootstrapTests.swift
+[149/187] Compiling OuroWorkbenchCoreTests AgentRepairTests.swift
+[150/187] Compiling OuroWorkbenchCoreTests AttentionSignalDetectorTests.swift
+[151/187] Compiling OuroWorkbenchCoreTests AttentionStateTests.swift
+[152/187] Compiling OuroWorkbenchCoreTests AutomaticBossDefaultsTests.swift
+[153/187] Compiling OuroWorkbenchCoreTests AutonomyReadinessTests.swift
+[154/187] Compiling OuroWorkbenchCoreTests BossAgentBridgeTests.swift
+[155/187] Compiling OuroWorkbenchCoreTests BossAgentMCPClientTests.swift
+[156/187] Compiling OuroWorkbenchCoreTests BossAgentPromptBuilderTests.swift
+[157/187] Emitting module OuroWorkbenchScenarioVerifier
+[158/187] Compiling OuroWorkbenchScenarioVerifier main.swift
+[159/186] Compiling OuroWorkbenchCoreTests BossAutoResolutionTests.swift
+[160/186] Compiling OuroWorkbenchCoreTests BossDashboardTests.swift
+[161/186] Compiling OuroWorkbenchCoreTests BossInboxDecisionTests.swift
+[162/186] Compiling OuroWorkbenchCoreTests BossWatchEventPolicyTests.swift
+[163/186] Compiling OuroWorkbenchCoreTests BossWorkbenchActionAuthorizerTests.swift
+[164/186] Compiling OuroWorkbenchCoreTests BossWorkbenchActionTests.swift
+[165/186] Compiling OuroWorkbenchCoreTests BugReportComposerTests.swift
+[166/186] Compiling OuroWorkbenchCoreTests BugReportWriterTests.swift
+[167/186] Compiling OuroWorkbenchCoreTests CommandPlannerTests.swift
+[168/186] Compiling OuroWorkbenchCoreTests WorkbenchReleaseTests.swift
+[169/186] Compiling OuroWorkbenchCoreTests WorkbenchScenarioMatrixTests.swift
+[170/186] Compiling OuroWorkbenchCoreTests WorkbenchSessionsRendererTests.swift
+[171/186] Compiling OuroWorkbenchCoreTests WorkbenchStoreTests.swift
+[172/186] Compiling OuroWorkbenchCoreTests WorkbenchUpdateTests.swift
+[173/186] Compiling OuroWorkbenchCoreTests WorkbenchVisibilityTests.swift
+[174/186] Compiling OuroWorkbenchCoreTests WorkspaceConfigTests.swift
+[175/186] Compiling OuroWorkbenchCoreTests WorkspaceSummaryTests.swift
+[175/186] Linking OuroWorkbenchScenarioVerifier
+[176/186] Compiling OuroWorkbenchApp WorkbenchUpdateInstaller.swift
+[177/186] Emitting module OuroWorkbenchApp
+[178/186] Compiling OuroWorkbenchApp main.swift
+error: fatalError
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/13] Write swift-version--58304C5D6DBC2206.txt
+[4/29] Compiling OuroWorkbenchApp main.swift
+[5/29] Compiling OuroWorkbenchCoreTests WorkbenchGroupColorTests.swift
+[5/30] Linking OuroWorkbenchScenarioVerifier
+[6/30] Applying OuroWorkbenchScenarioVerifier
+[8/30] Compiling OuroWorkbenchCoreTests WorkbenchGuideTests.swift
+[9/30] Compiling OuroWorkbenchCoreTests WorkbenchEntryReorderTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:77:48: error: type 'WorkbenchFactoryReset' has no member 'requestFirstRunSetup'
+ 75 |         defer { try? fm.removeItem(at: dir) }
+ 76 | 
+ 77 |         let marker = try WorkbenchFactoryReset.requestFirstRunSetup(rootURL: dir)
+    |                                                `- error: type 'WorkbenchFactoryReset' has no member 'requestFirstRunSetup'
+ 78 | 
+ 79 |         XCTAssertEqual(marker.lastPathComponent, "force-first-run-setup")
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:81:45: error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 79 |         XCTAssertEqual(marker.lastPathComponent, "force-first-run-setup")
+ 80 |         XCTAssertTrue(fm.fileExists(atPath: marker.path))
+ 81 |         XCTAssertTrue(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+    |                                             `- error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 82 |         XCTAssertFalse(fm.fileExists(atPath: marker.path))
+ 83 |         XCTAssertFalse(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:83:46: error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 81 |         XCTAssertTrue(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+ 82 |         XCTAssertFalse(fm.fileExists(atPath: marker.path))
+ 83 |         XCTAssertFalse(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+    |                                              `- error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 84 |     }
+ 85 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:101:44: error: type 'WorkbenchFactoryReset' has no member 'resetToFactoryDefaults'
+ 99 |         defaults.set(true, forKey: "ouro.workbench.onboardingAutoPresented")
+100 | 
+101 |         let result = WorkbenchFactoryReset.resetToFactoryDefaults(
+    |                                            `- error: type 'WorkbenchFactoryReset' has no member 'resetToFactoryDefaults'
+102 |             stateURL: stateURL,
+103 |             defaults: defaults,
+[10/30] Compiling OuroWorkbenchCoreTests WorkbenchFactoryResetTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:77:48: error: type 'WorkbenchFactoryReset' has no member 'requestFirstRunSetup'
+ 75 |         defer { try? fm.removeItem(at: dir) }
+ 76 | 
+ 77 |         let marker = try WorkbenchFactoryReset.requestFirstRunSetup(rootURL: dir)
+    |                                                `- error: type 'WorkbenchFactoryReset' has no member 'requestFirstRunSetup'
+ 78 | 
+ 79 |         XCTAssertEqual(marker.lastPathComponent, "force-first-run-setup")
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:81:45: error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 79 |         XCTAssertEqual(marker.lastPathComponent, "force-first-run-setup")
+ 80 |         XCTAssertTrue(fm.fileExists(atPath: marker.path))
+ 81 |         XCTAssertTrue(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+    |                                             `- error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 82 |         XCTAssertFalse(fm.fileExists(atPath: marker.path))
+ 83 |         XCTAssertFalse(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:83:46: error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 81 |         XCTAssertTrue(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+ 82 |         XCTAssertFalse(fm.fileExists(atPath: marker.path))
+ 83 |         XCTAssertFalse(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+    |                                              `- error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 84 |     }
+ 85 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:101:44: error: type 'WorkbenchFactoryReset' has no member 'resetToFactoryDefaults'
+ 99 |         defaults.set(true, forKey: "ouro.workbench.onboardingAutoPresented")
+100 | 
+101 |         let result = WorkbenchFactoryReset.resetToFactoryDefaults(
+    |                                            `- error: type 'WorkbenchFactoryReset' has no member 'resetToFactoryDefaults'
+102 |             stateURL: stateURL,
+103 |             defaults: defaults,
+[11/30] Compiling OuroWorkbenchCoreTests WorkbenchCommandPaletteTests.swift
+[12/30] Compiling OuroWorkbenchCoreTests WorkbenchElapsedFormatterTests.swift
+[13/30] Compiling OuroWorkbenchCoreTests TranscriptSearchTests.swift
+[14/30] Compiling OuroWorkbenchCoreTests TranscriptTailReaderTests.swift
+[15/30] Compiling OuroWorkbenchCoreTests WorkbenchLaunchDiagnosticsTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:6:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+ 4 | final class WorkbenchLaunchDiagnosticsTests: XCTestCase {
+ 5 |     func testParseEmptyArgumentsUsesDefaultOptions() throws {
+ 6 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse(["OuroWorkbench"])
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+ 7 | 
+ 8 |         XCTAssertNil(diagnostics.appSupportRoot)
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:11:9: error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+ 9 |         XCTAssertFalse(diagnostics.autoLaunchResumableForE2E)
+10 |         XCTAssertNil(diagnostics.action)
+11 |         XCTAssertEqual(diagnostics.passthroughArguments, [])
+   |         |- error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+   |         |- note: only concrete types such as structs, enums and classes can conform to protocols
+   |         `- note: requirement from conditional conformance of '[Any]' to 'Equatable'
+12 |     }
+13 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:15:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+13 | 
+14 |     func testParseAppSupportRootAndAutoLaunchOverride() throws {
+15 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+16 |             "OuroWorkbench",
+17 |             "--app-support-root",
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:25:9: error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+23 |         XCTAssertTrue(diagnostics.autoLaunchResumableForE2E)
+24 |         XCTAssertNil(diagnostics.action)
+25 |         XCTAssertEqual(diagnostics.passthroughArguments, [])
+   |         |- error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+   |         |- note: only concrete types such as structs, enums and classes can conform to protocols
+   |         `- note: requirement from conditional conformance of '[Any]' to 'Equatable'
+26 |     }
+27 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:29:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+27 | 
+28 |     func testParseFactoryResetAction() throws {
+29 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+30 |             "OuroWorkbench",
+31 |             "--factory-reset-for-e2e"
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:34:45: error: type 'Equatable' has no member 'factoryResetForE2E'
+32 |         ])
+33 | 
+34 |         XCTAssertEqual(diagnostics.action, .factoryResetForE2E)
+   |                                             `- error: type 'Equatable' has no member 'factoryResetForE2E'
+35 |     }
+36 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:38:34: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+36 | 
+37 |     func testParseRequiresAppSupportRootPath() {
+38 |         XCTAssertThrowsError(try WorkbenchLaunchDiagnostics.parse([
+   |                                  `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+39 |             "OuroWorkbench",
+40 |             "--app-support-root"
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:45:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+43 | 
+44 |     func testParseKeepsUnknownArgumentsForExistingLaunchHandling() throws {
+45 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+46 |             "OuroWorkbench",
+47 |             "--smoke-launch",
+
+[#ProtocolTypeNonConformance]: <https://docs.swift.org/compiler/documentation/diagnostics/protocol-type-non-conformance>
+[16/30] Compiling OuroWorkbenchCoreTests WorkbenchActionRequestQueueTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchBootstrapperTests.swift:30:24: error: type 'WorkbenchDefaults' has no member 'firstRunSetup'
+ 28 |         let state = WorkbenchBootstrapper().bootstrappedState(
+ 29 |             from: WorkspaceState(),
+ 30 |             defaults: .firstRunSetup(projectRootPath: "/tmp/workbench")
+    |                        `- error: type 'WorkbenchDefaults' has no member 'firstRunSetup'
+ 31 |         )
+ 32 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchBootstrapperTests.swift:33:43: error: cannot infer key path type from context; consider explicitly specifying a root type
+ 31 |         )
+ 32 | 
+ 33 |         XCTAssertEqual(state.projects.map(\.name), ["Unsorted Sessions"])
+    |                                           `- error: cannot infer key path type from context; consider explicitly specifying a root type
+ 34 |         XCTAssertFalse(state.projects.contains { $0.name == "This Mac" })
+ 35 |         XCTAssertTrue(state.processEntries.isEmpty)
+[17/30] Compiling OuroWorkbenchCoreTests WorkbenchBootstrapperTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchBootstrapperTests.swift:30:24: error: type 'WorkbenchDefaults' has no member 'firstRunSetup'
+ 28 |         let state = WorkbenchBootstrapper().bootstrappedState(
+ 29 |             from: WorkspaceState(),
+ 30 |             defaults: .firstRunSetup(projectRootPath: "/tmp/workbench")
+    |                        `- error: type 'WorkbenchDefaults' has no member 'firstRunSetup'
+ 31 |         )
+ 32 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchBootstrapperTests.swift:33:43: error: cannot infer key path type from context; consider explicitly specifying a root type
+ 31 |         )
+ 32 | 
+ 33 |         XCTAssertEqual(state.projects.map(\.name), ["Unsorted Sessions"])
+    |                                           `- error: cannot infer key path type from context; consider explicitly specifying a root type
+ 34 |         XCTAssertFalse(state.projects.contains { $0.name == "This Mac" })
+ 35 |         XCTAssertTrue(state.processEntries.isEmpty)
+[18/30] Compiling OuroWorkbenchCoreTests SupportDiagnosticsRunnerTests.swift
+[19/30] Compiling OuroWorkbenchCoreTests TerminalEnvironmentTests.swift
+[20/30] Compiling OuroWorkbenchCoreTests TerminalIdentityTests.swift
+[21/30] Compiling OuroWorkbenchCoreTests TranscriptRecorderTests.swift
+[22/30] Emitting module OuroWorkbenchCoreTests
+[23/30] Compiling OuroWorkbenchCoreTests WorkbenchMCPRegistrationActionTests.swift
+error: fatalError
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/12] Write swift-version--58304C5D6DBC2206.txt
+[4/16] Compiling OuroWorkbenchCoreTests WorkbenchFactoryResetTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:77:48: error: type 'WorkbenchFactoryReset' has no member 'requestFirstRunSetup'
+ 75 |         defer { try? fm.removeItem(at: dir) }
+ 76 | 
+ 77 |         let marker = try WorkbenchFactoryReset.requestFirstRunSetup(rootURL: dir)
+    |                                                `- error: type 'WorkbenchFactoryReset' has no member 'requestFirstRunSetup'
+ 78 | 
+ 79 |         XCTAssertEqual(marker.lastPathComponent, "force-first-run-setup")
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:81:45: error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 79 |         XCTAssertEqual(marker.lastPathComponent, "force-first-run-setup")
+ 80 |         XCTAssertTrue(fm.fileExists(atPath: marker.path))
+ 81 |         XCTAssertTrue(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+    |                                             `- error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 82 |         XCTAssertFalse(fm.fileExists(atPath: marker.path))
+ 83 |         XCTAssertFalse(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:83:46: error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 81 |         XCTAssertTrue(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+ 82 |         XCTAssertFalse(fm.fileExists(atPath: marker.path))
+ 83 |         XCTAssertFalse(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+    |                                              `- error: type 'WorkbenchFactoryReset' has no member 'consumeFirstRunSetupRequest'
+ 84 |     }
+ 85 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchFactoryResetTests.swift:101:44: error: type 'WorkbenchFactoryReset' has no member 'resetToFactoryDefaults'
+ 99 |         defaults.set(true, forKey: "ouro.workbench.onboardingAutoPresented")
+100 | 
+101 |         let result = WorkbenchFactoryReset.resetToFactoryDefaults(
+    |                                            `- error: type 'WorkbenchFactoryReset' has no member 'resetToFactoryDefaults'
+102 |             stateURL: stateURL,
+103 |             defaults: defaults,
+[5/16] Compiling OuroWorkbenchCoreTests WorkbenchEntryReorderTests.swift
+[6/16] Compiling OuroWorkbenchCoreTests WorkbenchActionRequestQueueTests.swift
+[7/16] Compiling OuroWorkbenchCoreTests WorkbenchLaunchDiagnosticsTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:6:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+ 4 | final class WorkbenchLaunchDiagnosticsTests: XCTestCase {
+ 5 |     func testParseEmptyArgumentsUsesDefaultOptions() throws {
+ 6 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse(["OuroWorkbench"])
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+ 7 | 
+ 8 |         XCTAssertNil(diagnostics.appSupportRoot)
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:11:9: error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+ 9 |         XCTAssertFalse(diagnostics.autoLaunchResumableForE2E)
+10 |         XCTAssertNil(diagnostics.action)
+11 |         XCTAssertEqual(diagnostics.passthroughArguments, [])
+   |         |- error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+   |         |- note: only concrete types such as structs, enums and classes can conform to protocols
+   |         `- note: requirement from conditional conformance of '[Any]' to 'Equatable'
+12 |     }
+13 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:15:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+13 | 
+14 |     func testParseAppSupportRootAndAutoLaunchOverride() throws {
+15 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+16 |             "OuroWorkbench",
+17 |             "--app-support-root",
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:25:9: error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+23 |         XCTAssertTrue(diagnostics.autoLaunchResumableForE2E)
+24 |         XCTAssertNil(diagnostics.action)
+25 |         XCTAssertEqual(diagnostics.passthroughArguments, [])
+   |         |- error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+   |         |- note: only concrete types such as structs, enums and classes can conform to protocols
+   |         `- note: requirement from conditional conformance of '[Any]' to 'Equatable'
+26 |     }
+27 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:29:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+27 | 
+28 |     func testParseFactoryResetAction() throws {
+29 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+30 |             "OuroWorkbench",
+31 |             "--factory-reset-for-e2e"
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:34:45: error: type 'Equatable' has no member 'factoryResetForE2E'
+32 |         ])
+33 | 
+34 |         XCTAssertEqual(diagnostics.action, .factoryResetForE2E)
+   |                                             `- error: type 'Equatable' has no member 'factoryResetForE2E'
+35 |     }
+36 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:38:34: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+36 | 
+37 |     func testParseRequiresAppSupportRootPath() {
+38 |         XCTAssertThrowsError(try WorkbenchLaunchDiagnostics.parse([
+   |                                  `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+39 |             "OuroWorkbench",
+40 |             "--app-support-root"
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:45:31: error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+43 | 
+44 |     func testParseKeepsUnknownArgumentsForExistingLaunchHandling() throws {
+45 |         let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+   |                               `- error: cannot find 'WorkbenchLaunchDiagnostics' in scope
+46 |             "OuroWorkbench",
+47 |             "--smoke-launch",
+
+[#ProtocolTypeNonConformance]: <https://docs.swift.org/compiler/documentation/diagnostics/protocol-type-non-conformance>
+[8/16] Compiling OuroWorkbenchCoreTests WorkbenchBootstrapperTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchBootstrapperTests.swift:30:24: error: type 'WorkbenchDefaults' has no member 'firstRunSetup'
+ 28 |         let state = WorkbenchBootstrapper().bootstrappedState(
+ 29 |             from: WorkspaceState(),
+ 30 |             defaults: .firstRunSetup(projectRootPath: "/tmp/workbench")
+    |                        `- error: type 'WorkbenchDefaults' has no member 'firstRunSetup'
+ 31 |         )
+ 32 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchBootstrapperTests.swift:33:43: error: cannot infer key path type from context; consider explicitly specifying a root type
+ 31 |         )
+ 32 | 
+ 33 |         XCTAssertEqual(state.projects.map(\.name), ["Unsorted Sessions"])
+    |                                           `- error: cannot infer key path type from context; consider explicitly specifying a root type
+ 34 |         XCTAssertFalse(state.projects.contains { $0.name == "This Mac" })
+ 35 |         XCTAssertTrue(state.processEntries.isEmpty)
+[9/16] Emitting module OuroWorkbenchCoreTests
+error: fatalError

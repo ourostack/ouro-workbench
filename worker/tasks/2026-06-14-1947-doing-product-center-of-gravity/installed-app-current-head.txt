@@ -1,0 +1,5 @@
+head: fdb646d24cc4c295cb08d9c479fc9de328b9e360
+branch: worker/product-center-of-gravity
+version: 0.1.155
+build: 340
+installed_app: /Users/arimendelow/Applications/Ouro Workbench.app

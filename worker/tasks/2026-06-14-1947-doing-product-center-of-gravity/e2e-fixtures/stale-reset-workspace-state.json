@@ -1,0 +1,48 @@
+{
+  "actionLog" : [
+  ],
+  "boss" : {
+    "agentName" : "",
+    "scope" : "machine"
+  },
+  "bossPaneCollapsed" : true,
+  "bossWatchEnabled" : true,
+  "decisionLog" : [
+  ],
+  "processEntries" : [
+    {
+      "arguments" : [
+        "-l"
+      ],
+      "attention" : "idle",
+      "autoResume" : true,
+      "executable" : "/bin/zsh",
+      "id" : "BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB",
+      "isArchived" : false,
+      "isPinned" : false,
+      "kind" : "shell",
+      "lastSummary" : "Stale reset fixture",
+      "name" : "Local Shell",
+      "projectId" : "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA",
+      "trust" : "trusted",
+      "workingDirectory" : "/tmp"
+    }
+  ],
+  "processRuns" : [
+  ],
+  "projects" : [
+    {
+      "boss" : {
+        "agentName" : "",
+        "scope" : "machine"
+      },
+      "id" : "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA",
+      "name" : "This Mac",
+      "rootPath" : "/tmp"
+    }
+  ],
+  "schemaVersion" : 1,
+  "selectedEntryId" : "BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB",
+  "selectedProjectId" : "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA",
+  "updatedAt" : "2026-06-14T20:00:00Z"
+}

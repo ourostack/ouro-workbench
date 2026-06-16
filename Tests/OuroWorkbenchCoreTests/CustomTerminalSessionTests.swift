@@ -136,6 +136,73 @@ final class CustomTerminalSessionTests: XCTestCase {
         ))
     }
 
+    func testManagerAcceptsPersistedShellAsManagedSession() throws {
+        let shell = makeShellEntry()
+
+        XCTAssertTrue(CustomTerminalSessionManager().isCustomSession(shell))
+    }
+
+    func testManagerExtractsDraftFromPersistedShellSession() throws {
+        let shell = makeShellEntry(
+            executable: "/usr/bin/env",
+            arguments: ["bash", "-l"],
+            trust: .untrusted,
+            autoResume: false,
+            notes: "Imported from old workbench state."
+        )
+
+        let draft = try CustomTerminalSessionManager().draft(from: shell)
+
+        XCTAssertEqual(draft, CustomTerminalSessionDraft(
+            name: "User Shell",
+            command: "/usr/bin/env bash -l",
+            workingDirectory: "/repo",
+            trust: .untrusted,
+            autoResume: false,
+            notes: "Imported from old workbench state."
+        ))
+    }
+
+    func testManagerUpdatesPersistedShellWhilePreservingKindAndIdentity() throws {
+        let friend = SessionFriend(name: "Ari", kind: .human, trust: .family)
+        var shell = makeShellEntry(
+            trust: .trusted,
+            autoResume: true,
+            isArchived: true,
+            isPinned: true,
+            attention: .waitingOnHuman,
+            friend: friend,
+            owner: .agent(name: "slugger")
+        )
+        shell.lastSummary = "Waiting on imported shell"
+
+        let updated = try CustomTerminalSessionManager().updatedEntry(
+            shell,
+            draft: CustomTerminalSessionDraft(
+                name: "User Shell Renamed",
+                command: "/usr/bin/env bash",
+                workingDirectory: "/repo/app",
+                trust: .untrusted,
+                autoResume: false,
+                notes: "Still plain shell."
+            )
+        )
+
+        XCTAssertEqual(updated.id, shell.id)
+        XCTAssertEqual(updated.projectId, shell.projectId)
+        XCTAssertEqual(updated.kind, .shell)
+        XCTAssertEqual(updated.name, "User Shell Renamed")
+        XCTAssertEqual(updated.workingDirectory, "/repo/app")
+        XCTAssertEqual(updated.trust, .untrusted)
+        XCTAssertFalse(updated.autoResume)
+        XCTAssertTrue(updated.isArchived)
+        XCTAssertEqual(updated.attention, .waitingOnHuman)
+        XCTAssertTrue(updated.isPinned)
+        XCTAssertEqual(updated.friend, friend)
+        XCTAssertEqual(updated.owner, .agent(name: "slugger"))
+        XCTAssertEqual(updated.notes, "Still plain shell.")
+    }
+
     func testManagerUpdatesCustomSessionWhilePreservingIdentityAndArchiveState() throws {
         let original = try CustomTerminalSessionFactory().makeEntry(
             projectId: UUID(),
@@ -238,6 +305,23 @@ final class CustomTerminalSessionTests: XCTestCase {
         XCTAssertFalse(duplicate.isArchived)
     }
 
+    func testManagerDuplicatesPersistedShellAsShell() throws {
+        let original = makeShellEntry(
+            executable: "/usr/bin/env",
+            arguments: ["bash", "-l"],
+            notes: "Duplicate me too."
+        )
+
+        let duplicate = try CustomTerminalSessionManager().duplicateEntry(original, name: "Copy of User Shell")
+
+        XCTAssertNotEqual(duplicate.id, original.id)
+        XCTAssertEqual(duplicate.projectId, original.projectId)
+        XCTAssertEqual(duplicate.name, "Copy of User Shell")
+        XCTAssertEqual(duplicate.kind, .shell)
+        XCTAssertEqual(duplicate.notes, original.notes)
+        XCTAssertFalse(duplicate.isArchived)
+    }
+
     func testManagerArchivesAndRestoresCustomSession() throws {
         let original = try CustomTerminalSessionFactory().makeEntry(
             projectId: UUID(),
@@ -258,6 +342,45 @@ final class CustomTerminalSessionTests: XCTestCase {
         XCTAssertEqual(archived.lastSummary, "Archived custom terminal session")
         XCTAssertFalse(restored.isArchived)
         XCTAssertEqual(restored.lastSummary, "Restored custom terminal session")
+    }
+
+    func testManagerArchivesAndRestoresPersistedShellSession() throws {
+        let original = makeShellEntry(attention: .blocked)
+
+        let archived = try CustomTerminalSessionManager().archivedEntry(original)
+        let restored = try CustomTerminalSessionManager().restoredEntry(archived)
+
+        XCTAssertEqual(archived.kind, .shell)
+        XCTAssertTrue(archived.isArchived)
+        XCTAssertEqual(archived.attention, .idle)
+        XCTAssertEqual(archived.lastSummary, "Archived custom terminal session")
+        XCTAssertEqual(restored.kind, .shell)
+        XCTAssertFalse(restored.isArchived)
+        XCTAssertEqual(restored.lastSummary, "Restored custom terminal session")
+    }
+
+    func testManagerRejectsCommandEntriesForManagedSessionOperations() throws {
+        let command = ProcessEntry(
+            projectId: UUID(),
+            name: "One Shot",
+            kind: .command,
+            executable: "/bin/echo",
+            arguments: ["hi"],
+            workingDirectory: "/repo",
+            trust: .trusted
+        )
+        let manager = CustomTerminalSessionManager()
+
+        XCTAssertFalse(manager.isCustomSession(command))
+        XCTAssertThrowsError(try manager.draft(from: command)) { error in
+            XCTAssertEqual(error as? CustomTerminalSessionError, .notCustomSession)
+        }
+        XCTAssertThrowsError(try manager.archivedEntry(command)) { error in
+            XCTAssertEqual(error as? CustomTerminalSessionError, .notCustomSession)
+        }
+        XCTAssertThrowsError(try manager.restoredEntry(command)) { error in
+            XCTAssertEqual(error as? CustomTerminalSessionError, .notCustomSession)
+        }
     }
 
     func testManagerExtractsDraftFromDetectedAgentTerminal() throws {
@@ -297,7 +420,7 @@ final class CustomTerminalSessionTests: XCTestCase {
         XCTAssertEqual(CustomTerminalSessionError.emptyName.errorDescription, "Session name is required")
         XCTAssertEqual(CustomTerminalSessionError.emptyCommand.errorDescription, "Session command is required")
         XCTAssertEqual(CustomTerminalSessionError.emptyWorkingDirectory.errorDescription, "Working directory is required")
-        XCTAssertEqual(CustomTerminalSessionError.notCustomSession.errorDescription, "Only custom terminal sessions can be managed here")
+        XCTAssertEqual(CustomTerminalSessionError.notCustomSession.errorDescription, "Only managed terminal sessions can be managed here")
         XCTAssertEqual(CustomTerminalSessionError.unavailableCommand.errorDescription, "Custom terminal session command is unavailable")
     }
 
@@ -373,5 +496,35 @@ final class CustomTerminalSessionTests: XCTestCase {
         let draft = try CustomTerminalSessionManager().draft(from: entry)
 
         XCTAssertEqual(draft.command, "/usr/bin/env '' 'two words' 'it'\\''s' '$HOME'")
+    }
+
+    private func makeShellEntry(
+        executable: String = "/bin/zsh",
+        arguments: [String] = ["-l"],
+        trust: ProcessTrust = .trusted,
+        autoResume: Bool = true,
+        isArchived: Bool = false,
+        isPinned: Bool = false,
+        attention: AttentionState = .idle,
+        notes: String? = nil,
+        friend: SessionFriend? = nil,
+        owner: SessionOwner = .human
+    ) -> ProcessEntry {
+        ProcessEntry(
+            projectId: UUID(),
+            name: "User Shell",
+            kind: .shell,
+            executable: executable,
+            arguments: arguments,
+            workingDirectory: "/repo",
+            trust: trust,
+            autoResume: autoResume,
+            isArchived: isArchived,
+            isPinned: isPinned,
+            attention: attention,
+            notes: notes,
+            friend: friend,
+            owner: owner
+        )
     }
 }

@@ -1,0 +1,12 @@
+[0/1] Planning build
+Building for production...
+[0/2] Write swift-version--58304C5D6DBC2206.txt
+Build of product 'OuroWorkbench' complete! (0.35s)
+Building for production...
+[0/2] Write swift-version--58304C5D6DBC2206.txt
+Build of product 'OuroWorkbenchMCP' complete! (0.16s)
+/Users/arimendelow/Projects/ouro-workbench/dist/Ouro Workbench.app: replacing existing signature
+/Users/arimendelow/Projects/ouro-workbench/dist/Ouro Workbench.app
+/Users/arimendelow/Projects/ouro-workbench/dist/Ouro Workbench.app: replacing existing signature
+Installed /Users/arimendelow/Applications/Ouro Workbench.app
+Verified app bundle: /Users/arimendelow/Applications/Ouro Workbench.app

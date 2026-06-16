@@ -1,0 +1,160 @@
+import XCTest
+@testable import OuroWorkbenchCore
+
+final class WorkbenchSurfacePolicyTests: XCTestCase {
+    func testSidebarPrimaryLabelsUseWorkbenchStoryNouns() {
+        XCTAssertEqual(WorkbenchSurfacePolicy.workspaceSectionTitle, "Workspaces")
+        XCTAssertEqual(WorkbenchSurfacePolicy.newWorkspaceTitle, "New Workspace")
+        XCTAssertEqual(WorkbenchSurfacePolicy.newWorkspaceSheetTitle, "New Workspace")
+        XCTAssertEqual(WorkbenchSurfacePolicy.editWorkspaceSheetTitle, "Edit Workspace")
+        XCTAssertEqual(WorkbenchSurfacePolicy.bossSectionTitle, "Boss")
+    }
+
+    func testWorkspaceManagementCopyUsesWorkspaceNouns() {
+        XCTAssertEqual(WorkbenchSurfacePolicy.workspaceNameRequiredMessage, "Workspace name is required")
+        XCTAssertEqual(WorkbenchSurfacePolicy.workspaceRootPathRequiredMessage, "Workspace root path is required")
+        XCTAssertEqual(WorkbenchSurfacePolicy.noWorkspaceSelectedToSaveMessage, "No workspace is selected to save")
+        XCTAssertEqual(WorkbenchSurfacePolicy.workspaceNoLongerExistsMessage(name: "Fixture"), "Workspace no longer exists: Fixture")
+        XCTAssertEqual(WorkbenchSurfacePolicy.keepAtLeastOneWorkspaceMessage, "Keep at least one workspace")
+        XCTAssertEqual(
+            WorkbenchSurfacePolicy.moveOrDeleteTerminalsBeforeDeletingMessage(name: "Fixture"),
+            "Move or delete terminals before deleting Fixture"
+        )
+    }
+
+    func testAppWorkspaceCopyIsWiredThroughSurfacePolicy() throws {
+        let source = try appSource()
+
+        XCTAssertTrue(source.contains("Section(WorkbenchSurfacePolicy.bossSectionTitle)"))
+        XCTAssertTrue(source.contains("Section(WorkbenchSurfacePolicy.workspaceSectionTitle)"))
+        XCTAssertTrue(source.contains("SidebarActionRow(title: WorkbenchSurfacePolicy.newWorkspaceTitle"))
+        XCTAssertTrue(source.contains("WorkbenchSurfacePolicy.shouldShowRecovery(recoverableCount: model.recoverableEntries.count)"))
+        XCTAssertFalse(source.contains("New Terminal Group"))
+        XCTAssertFalse(source.contains("Edit Terminal Group"))
+        XCTAssertFalse(source.contains("Group name is required"))
+        XCTAssertFalse(source.contains("Group root path is required"))
+        XCTAssertFalse(source.contains("No group is selected to save"))
+        XCTAssertFalse(source.contains("Keep at least one terminal group"))
+    }
+
+    func testEmptyStateLeadsWithWorkbenchSetupInsteadOfTerminalFirst() throws {
+        let source = try appSource()
+        let emptyState = try sourceSlice(
+            in: source,
+            from: "struct AgentHomeEmptyState: View",
+            to: "                if !model.ouroAgents.isEmpty {"
+        )
+
+        XCTAssertTrue(emptyState.contains("Text(\"Set up Workbench\")"))
+        XCTAssertFalse(emptyState.contains("Pick a terminal"))
+        XCTAssertFalse(emptyState.contains("Ouro Workbench is a calm home for your terminal agents."))
+
+        let setupLabel = try XCTUnwrap(emptyState.range(of: "Label(\"Set Up Workbench\""))
+        let newTerminalLabel = try XCTUnwrap(emptyState.range(of: "Label(\"New Terminal\""))
+        XCTAssertLessThan(setupLabel.lowerBound, newTerminalLabel.lowerBound)
+    }
+
+    func testTitleStripUsesSessionControlPolicyWithoutPrimaryRestartLeak() throws {
+        let source = try appSource()
+        let titleStrip = try sourceSlice(
+            in: source,
+            from: "private struct SessionTitleStrip: View",
+            to: "    @ViewBuilder\n    private var statusDot: some View"
+        )
+
+        XCTAssertTrue(titleStrip.contains("RunningSessionHeaderControls(entry: entry, model: model)"))
+        XCTAssertFalse(titleStrip.contains("if model.activeSession(for: entry) != nil {\n                    RunningSessionHeaderControls"))
+        XCTAssertFalse(titleStrip.contains("model.activeSession(for: entry) == nil ? \"Launch\" : \"Restart\""))
+        XCTAssertFalse(source.contains("Move this session to another group"))
+    }
+
+    func testSetupWorkspaceNameIsUnsortedSessionsNotThisMac() {
+        XCTAssertEqual(WorkbenchSurfacePolicy.setupWorkspaceName, "Unsorted Sessions")
+        XCTAssertNotEqual(WorkbenchSurfacePolicy.setupWorkspaceName, "This Mac")
+    }
+
+    func testBossStatusLabelsStayCompact() {
+        XCTAssertEqual(WorkbenchSurfacePolicy.bossStatus(agentName: "", isReady: false), "Choose boss")
+        XCTAssertEqual(WorkbenchSurfacePolicy.bossStatus(agentName: "slugger", isReady: true), "slugger ready")
+        XCTAssertEqual(WorkbenchSurfacePolicy.bossStatus(agentName: "slugger", isReady: false), "slugger setup needed")
+    }
+
+    func testRecoverySectionIsHiddenWhenThereIsNothingActionable() {
+        XCTAssertFalse(WorkbenchSurfacePolicy.shouldShowRecovery(recoverableCount: 0))
+    }
+
+    func testRecoverySectionIsShownWhenActionable() {
+        XCTAssertTrue(WorkbenchSurfacePolicy.shouldShowRecovery(recoverableCount: 2))
+    }
+
+    func testParseSidebarSessionControlsFixtureAction() throws {
+        let diagnostics = try WorkbenchLaunchDiagnostics.parse([
+            "OuroWorkbench",
+            "--write-e2e-state",
+            "sidebar-session-controls",
+            "/tmp/workspace-state.json"
+        ])
+
+        XCTAssertEqual(
+            diagnostics.action,
+            .writeE2EState(.sidebarSessionControls, URL(fileURLWithPath: "/tmp/workspace-state.json"))
+        )
+    }
+
+    func testParseSidebarSessionControlsFixtureRequiresPath() {
+        XCTAssertThrowsError(try WorkbenchLaunchDiagnostics.parse([
+            "OuroWorkbench",
+            "--write-e2e-state",
+            "sidebar-session-controls"
+        ]))
+    }
+
+    func testRunningSessionShowsOnlyStopAsPrimaryAction() {
+        let policy = WorkbenchSurfacePolicy.sessionControls(isRunning: true, isArchived: false, isRecoverable: false)
+
+        XCTAssertEqual(policy.primaryActions, [.stop])
+        XCTAssertEqual(policy.advancedActions, [.focus, .redraw, .restart, .controlC, .escape, .eof])
+    }
+
+    func testStoppedSessionShowsLaunchAsPrimaryAction() {
+        let policy = WorkbenchSurfacePolicy.sessionControls(isRunning: false, isArchived: false, isRecoverable: false)
+
+        XCTAssertEqual(policy.primaryActions, [.launch])
+        XCTAssertTrue(policy.advancedActions.isEmpty)
+    }
+
+    func testRecoverableSessionShowsRecoverAsPrimaryAction() {
+        let policy = WorkbenchSurfacePolicy.sessionControls(isRunning: false, isArchived: false, isRecoverable: true)
+
+        XCTAssertEqual(policy.primaryActions, [.recover])
+        XCTAssertTrue(policy.advancedActions.isEmpty)
+    }
+
+    func testArchivedSessionShowsNoPrimaryOrAdvancedActions() {
+        let policy = WorkbenchSurfacePolicy.sessionControls(isRunning: false, isArchived: true, isRecoverable: false)
+
+        XCTAssertTrue(policy.primaryActions.isEmpty)
+        XCTAssertTrue(policy.advancedActions.isEmpty)
+    }
+
+    private func appSource() throws -> String {
+        let sourceURL = repoRoot()
+            .appendingPathComponent("Sources")
+            .appendingPathComponent("OuroWorkbenchApp")
+            .appendingPathComponent("OuroWorkbenchApp.swift")
+        return try String(contentsOf: sourceURL, encoding: .utf8)
+    }
+
+    private func repoRoot() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+    }
+
+    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
+        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound)
+        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound)
+        return String(source[start..<end])
+    }
+}

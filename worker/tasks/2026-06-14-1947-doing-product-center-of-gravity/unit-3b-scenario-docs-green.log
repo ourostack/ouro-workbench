@@ -1,0 +1,45 @@
+## swift test --filter WorkbenchScenarioMatrixTests
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/12] Write sources
+[4/12] Write swift-version--58304C5D6DBC2206.txt
+[6/14] Emitting module OuroWorkbenchCore
+[7/14] Compiling OuroWorkbenchCore WorkbenchScenarioMatrix.swift
+[7/17] Write Objects.LinkFileList
+[10/20] Linking OuroWorkbenchMCP
+[11/20] Applying OuroWorkbenchMCP
+[12/20] Linking OuroWorkbenchPackageTests
+[13/20] Linking OuroWorkbench
+[14/20] Applying OuroWorkbench
+[16/20] Compiling OuroWorkbenchScenarioVerifier main.swift
+[17/20] Emitting module OuroWorkbenchScenarioVerifier
+[17/20] Write Objects.LinkFileList
+[18/20] Linking OuroWorkbenchScenarioVerifier
+[19/20] Applying OuroWorkbenchScenarioVerifier
+Build complete! (5.06s)
+Test Suite 'Selected tests' started at 2026-06-14 20:31:13.379.
+Test Suite 'OuroWorkbenchPackageTests.xctest' started at 2026-06-14 20:31:13.380.
+Test Suite 'WorkbenchScenarioMatrixTests' started at 2026-06-14 20:31:13.380.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchScenarioMatrixTests testAllFiveThousandScenarioRowsMatchRecoveryReadinessAndCommandPlanning]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchScenarioMatrixTests testAllFiveThousandScenarioRowsMatchRecoveryReadinessAndCommandPlanning]' passed (0.489 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchScenarioMatrixTests testAllFiveThousandScenarioRowsSatisfySurfaceChromeContracts]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchScenarioMatrixTests testAllFiveThousandScenarioRowsSatisfySurfaceChromeContracts]' passed (0.137 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchScenarioMatrixTests testScenarioMatrixContainsExactlyFiveThousandCasesWithOptimalOutcomes]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchScenarioMatrixTests testScenarioMatrixContainsExactlyFiveThousandCasesWithOptimalOutcomes]' passed (0.140 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchScenarioMatrixTests testScenarioMatrixUsesUserShellIdentityWithoutLocalShellDefault]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchScenarioMatrixTests testScenarioMatrixUsesUserShellIdentityWithoutLocalShellDefault]' passed (0.137 seconds).
+Test Suite 'WorkbenchScenarioMatrixTests' passed at 2026-06-14 20:31:14.283.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.903 (0.903) seconds
+Test Suite 'OuroWorkbenchPackageTests.xctest' passed at 2026-06-14 20:31:14.283.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.903 (0.903) seconds
+Test Suite 'Selected tests' passed at 2026-06-14 20:31:14.283.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.903 (0.904) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
+
+## validate-product-center-docs.sh
+Product-center doc validation passed.

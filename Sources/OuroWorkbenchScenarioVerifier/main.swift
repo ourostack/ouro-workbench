@@ -322,7 +322,7 @@ struct DeepScenarioGenerator {
     private var random: SeededRandom
     private let matrix: WorkbenchScenarioMatrix
 
-    private let terminals = ["claude", "codex", "copilot", "generic_tui", "local_shell"]
+    private let terminals = ["claude", "codex", "copilot", "generic_tui", "user_shell"]
     private let lifecycles = ["configured", "running", "waiting_for_input", "needs_recovery", "manual_action_needed"]
     private let trustPostures = ["trusted_auto_session", "trusted_auto_no_session", "trusted_no_auto", "untrusted_auto", "untrusted_no_auto"]
     private let surfaces = ["sidebar_dashboard", "sidebar_hidden_dashboard", "boss_pane_collapsed", "terminal_focus", "archived_session"]
@@ -341,7 +341,7 @@ struct DeepScenarioGenerator {
         "Codex",
         "Copilot",
         "Generic TUI",
-        "Local Shell",
+        "User Shell",
         "Release Notes",
         "Restart Drill",
         "This Terminal Has A Long Human Name That Must Truncate"

@@ -1,0 +1,37 @@
+## Package-time HEAD
+c734e3051767ddcb511e73f9b60b03385530c9f3
+
+## Current HEAD
+c734e3051767ddcb511e73f9b60b03385530c9f3
+
+## Package-time status
+ M worker/tasks/2026-06-14-1947-doing-product-center-of-gravity/full-swift-test.log
+ M worker/tasks/2026-06-14-1947-doing-product-center-of-gravity/package-install.log
+ M worker/tasks/2026-06-14-1947-doing-product-center-of-gravity/swift-build.log
+
+
+## Dist Info.plist
+0.1.155
+337
+
+## Installed Info.plist
+0.1.155
+337
+
+## Dist executable hashes
+ac5dac09d027ccf67c4c810e54116197423f8351b5e301066910cf5f9969668b  dist/Ouro Workbench.app/Contents/MacOS/OuroWorkbench
+83d6e65f56c71313df8096f474ed4d6e885cfa8e5e0d4ba8f69132e7707562fd  dist/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP
+
+## Installed executable hashes
+ac5dac09d027ccf67c4c810e54116197423f8351b5e301066910cf5f9969668b  /Users/arimendelow/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbench
+83d6e65f56c71313df8096f474ed4d6e885cfa8e5e0d4ba8f69132e7707562fd  /Users/arimendelow/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP
+
+## Bundle verification
+/Users/arimendelow/Projects/ouro-workbench/dist/Ouro Workbench.app
+
+## scripts/install-app.sh --install-dir "$HOME/Applications"
+/Users/arimendelow/Projects/ouro-workbench/dist/Ouro Workbench.app: replacing existing signature
+Installed /Users/arimendelow/Applications/Ouro Workbench.app
+
+## scripts/verify-app-bundle.sh "$HOME/Applications/Ouro Workbench.app"
+Verified app bundle: /Users/arimendelow/Applications/Ouro Workbench.app

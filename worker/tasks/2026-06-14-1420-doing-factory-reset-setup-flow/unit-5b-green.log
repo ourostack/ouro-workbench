@@ -1,0 +1,167 @@
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/16] Write sources
+[4/16] Write swift-version--58304C5D6DBC2206.txt
+[6/18] Compiling OuroWorkbenchCore WorkbenchOnboardingNarrative.swift
+[7/18] Emitting module OuroWorkbenchCore
+[8/105] Compiling OuroWorkbenchApp main.swift
+[9/105] Compiling OuroWorkbenchMCP main.swift
+[10/105] Emitting module OuroWorkbenchMCP
+[10/105] Write Objects.LinkFileList
+[12/105] Compiling OuroWorkbenchCoreTests WorkbenchElapsedFormatterTests.swift
+[13/105] Compiling OuroWorkbenchCoreTests WorkbenchEntryReorderTests.swift
+[14/105] Compiling OuroWorkbenchCoreTests WorkbenchFactoryResetTests.swift
+[15/105] Compiling OuroWorkbenchCoreTests WorkbenchGroupColorTests.swift
+[16/105] Compiling OuroWorkbenchCoreTests WorkbenchGuideTests.swift
+[17/105] Compiling OuroWorkbenchCoreTests WorkbenchLaunchDiagnosticsTests.swift
+[18/105] Compiling OuroWorkbenchCoreTests WorkbenchMCPRegistrationActionTests.swift
+[19/105] Compiling OuroWorkbenchCoreTests WorkbenchReleaseTests.swift
+[20/113] Emitting module OuroWorkbenchCoreTests
+[21/113] Compiling OuroWorkbenchCoreTests FriendPreferenceTeachingTests.swift
+[22/113] Compiling OuroWorkbenchCoreTests GitHubIssueComposerTests.swift
+[23/113] Compiling OuroWorkbenchCoreTests GitSessionStatusTests.swift
+[24/113] Compiling OuroWorkbenchCoreTests HabitHistoryPanelTests.swift
+[25/113] Compiling OuroWorkbenchCoreTests HarnessStatusTests.swift
+[26/113] Compiling OuroWorkbenchCoreTests LaneSelectionTests.swift
+[27/113] Compiling OuroWorkbenchCoreTests LaunchAgentLoginItemTests.swift
+[28/113] Compiling OuroWorkbenchCoreTests MailboxClientTests.swift
+[29/113] Compiling OuroWorkbenchCoreTests MarkdownMessageTests.swift
+[30/113] Compiling OuroWorkbenchCoreTests ProcessRunRecencyTests.swift
+[31/113] Compiling OuroWorkbenchCoreTests ProcessTerminationPolicyTests.swift
+[32/113] Compiling OuroWorkbenchCoreTests PromptSafetyClassifierTests.swift
+[33/113] Compiling OuroWorkbenchCoreTests ProviderConfigFormTests.swift
+[34/113] Compiling OuroWorkbenchCoreTests ProviderRefreshTests.swift
+[35/113] Compiling OuroWorkbenchCoreTests ProviderVerifyTests.swift
+[36/113] Compiling OuroWorkbenchCoreTests RecoveryDrillTests.swift
+[37/113] Compiling OuroWorkbenchCoreTests RecoveryPlannerTests.swift
+[38/113] Compiling OuroWorkbenchCoreTests ReleaseUpdateTests.swift
+[39/113] Compiling OuroWorkbenchCoreTests TerminalEnvironmentTests.swift
+[40/113] Compiling OuroWorkbenchCoreTests TerminalIdentityTests.swift
+[41/113] Compiling OuroWorkbenchCoreTests TranscriptRecorderTests.swift
+[42/113] Compiling OuroWorkbenchCoreTests TranscriptSearchTests.swift
+[43/113] Compiling OuroWorkbenchCoreTests TranscriptTailReaderTests.swift
+[44/113] Compiling OuroWorkbenchCoreTests WorkbenchActionRequestQueueTests.swift
+[45/113] Compiling OuroWorkbenchCoreTests WorkbenchBootstrapperTests.swift
+[46/113] Compiling OuroWorkbenchCoreTests WorkbenchCommandPaletteTests.swift
+[47/113] Compiling OuroWorkbenchCoreTests CustomTerminalSessionTests.swift
+[48/113] Compiling OuroWorkbenchCoreTests CycleDirectionTests.swift
+[49/113] Compiling OuroWorkbenchCoreTests DaemonEnsureActionTests.swift
+[50/113] Compiling OuroWorkbenchCoreTests DaemonLivenessTests.swift
+[51/113] Compiling OuroWorkbenchCoreTests DaemonManagerTests.swift
+[52/113] Compiling OuroWorkbenchCoreTests ExecutableHealthTests.swift
+[53/113] Compiling OuroWorkbenchCoreTests ExitStatusTests.swift
+[54/113] Compiling OuroWorkbenchCoreTests FirstRunBootstrapDriveTests.swift
+[55/113] Compiling OuroWorkbenchCoreTests FirstRunBootstrapEffectsResolverTests.swift
+[56/113] Compiling OuroWorkbenchCoreTests RepairAgentKeystoneTests.swift
+[57/113] Compiling OuroWorkbenchCoreTests SessionActivityTests.swift
+[58/113] Compiling OuroWorkbenchCoreTests SessionFriendTests.swift
+[59/113] Compiling OuroWorkbenchCoreTests SessionOwnerTests.swift
+[60/113] Compiling OuroWorkbenchCoreTests SidebarSessionFilterTests.swift
+[61/113] Compiling OuroWorkbenchCoreTests Slice4OnboardingActionsKeystoneTests.swift
+[62/113] Compiling OuroWorkbenchCoreTests StartupRecoveryReconcilerTests.swift
+[63/113] Compiling OuroWorkbenchCoreTests SupportDiagnosticsRunnerTests.swift
+[64/113] Compiling OuroWorkbenchCoreTests AgentReadinessBootstrapTests.swift
+[65/113] Compiling OuroWorkbenchCoreTests AgentRepairTests.swift
+[66/113] Compiling OuroWorkbenchCoreTests AttentionSignalDetectorTests.swift
+[67/113] Compiling OuroWorkbenchCoreTests AttentionStateTests.swift
+[68/113] Compiling OuroWorkbenchCoreTests AutomaticBossDefaultsTests.swift
+[69/113] Compiling OuroWorkbenchCoreTests AutonomyReadinessTests.swift
+[70/113] Compiling OuroWorkbenchCoreTests BossAgentBridgeTests.swift
+[71/113] Compiling OuroWorkbenchCoreTests BossAgentMCPClientTests.swift
+[72/113] Compiling OuroWorkbenchCoreTests BossAgentPromptBuilderTests.swift
+[73/113] Compiling OuroWorkbenchCoreTests NativeOnboardingRepairCopyTests.swift
+[74/113] Compiling OuroWorkbenchCoreTests OnboardingNarrativeTests.swift
+[75/113] Compiling OuroWorkbenchCoreTests OnboardingStatusToolTests.swift
+[76/113] Compiling OuroWorkbenchCoreTests OnboardingTests.swift
+[77/113] Compiling OuroWorkbenchCoreTests OuroAgentInstallCommandTests.swift
+[78/113] Compiling OuroWorkbenchCoreTests OuroAgentInventoryTests.swift
+[79/113] Compiling OuroWorkbenchCoreTests PaneLayoutStateTests.swift
+[80/113] Compiling OuroWorkbenchCoreTests PresetTests.swift
+[81/113] Compiling OuroWorkbenchCoreTests ProcessEntryPinTests.swift
+[82/113] Emitting module OuroWorkbenchScenarioVerifier
+[83/113] Compiling OuroWorkbenchScenarioVerifier main.swift
+[83/113] Write Objects.LinkFileList
+[85/113] Compiling OuroWorkbenchCoreTests BossAutoResolutionTests.swift
+[86/113] Compiling OuroWorkbenchCoreTests BossDashboardTests.swift
+[87/113] Compiling OuroWorkbenchCoreTests BossInboxDecisionTests.swift
+[88/113] Compiling OuroWorkbenchCoreTests BossWatchEventPolicyTests.swift
+[89/113] Compiling OuroWorkbenchCoreTests BossWorkbenchActionAuthorizerTests.swift
+[90/113] Compiling OuroWorkbenchCoreTests BossWorkbenchActionTests.swift
+[91/113] Compiling OuroWorkbenchCoreTests BugReportComposerTests.swift
+[92/113] Compiling OuroWorkbenchCoreTests BugReportWriterTests.swift
+[93/113] Compiling OuroWorkbenchCoreTests CommandPlannerTests.swift
+[93/113] Linking OuroWorkbenchMCP
+[94/113] Applying OuroWorkbenchMCP
+[96/113] Compiling OuroWorkbenchCoreTests WorkbenchScenarioMatrixTests.swift
+[97/113] Compiling OuroWorkbenchCoreTests WorkbenchSessionsRendererTests.swift
+[98/113] Compiling OuroWorkbenchCoreTests WorkbenchStoreTests.swift
+[99/113] Compiling OuroWorkbenchCoreTests WorkbenchSurfacePolicyTests.swift
+[100/113] Compiling OuroWorkbenchCoreTests WorkbenchUpdateTests.swift
+[101/113] Compiling OuroWorkbenchCoreTests WorkbenchVisibilityTests.swift
+[102/113] Compiling OuroWorkbenchCoreTests WorkspaceConfigTests.swift
+[103/113] Compiling OuroWorkbenchCoreTests WorkspaceSummaryTests.swift
+[103/113] Write Objects.LinkFileList
+[104/113] Linking OuroWorkbenchScenarioVerifier
+[105/113] Applying OuroWorkbenchScenarioVerifier
+[106/113] Linking OuroWorkbenchPackageTests
+[108/113] Compiling OuroWorkbenchApp WorkbenchUpdateInstaller.swift
+[109/113] Emitting module OuroWorkbenchApp
+[110/113] Compiling OuroWorkbenchApp OuroWorkbenchApp.swift
+[110/113] Write Objects.LinkFileList
+[111/113] Linking OuroWorkbench
+[112/113] Applying OuroWorkbench
+Build complete! (21.50s)
+Test Suite 'Selected tests' started at 2026-06-14 15:58:54.211.
+Test Suite 'OuroWorkbenchPackageTests.xctest' started at 2026-06-14 15:58:54.212.
+Test Suite 'OnboardingNarrativeTests' started at 2026-06-14 15:58:54.212.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testAmbiguousCandidateCopyIncludesCount]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testAmbiguousCandidateCopyIncludesCount]' passed (0.002 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testBossReadyWelcomeCopy]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testBossReadyWelcomeCopy]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testDuplicateCleanupCopyGuidesExternalSessionShutdown]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testDuplicateCleanupCopyGuidesExternalSessionShutdown]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testProposalSummaryCopyUsesWorkspaces]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testProposalSummaryCopyUsesWorkspaces]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testScanIntroNamesLocalAgentStores]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testScanIntroNamesLocalAgentStores]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testUnclearImportCopyPromisesToAsk]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testUnclearImportCopyPromisesToAsk]' passed (0.000 seconds).
+Test Suite 'OnboardingNarrativeTests' passed at 2026-06-14 15:58:54.215.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
+Test Suite 'OuroWorkbenchPackageTests.xctest' passed at 2026-06-14 15:58:54.215.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
+Test Suite 'Selected tests' passed at 2026-06-14 15:58:54.215.
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/9] Write swift-version--58304C5D6DBC2206.txt
+Build complete! (0.34s)
+Sources/OuroWorkbenchCore/WorkbenchOnboardingNarrative.swift:3:public enum WorkbenchOnboardingNarrative {
+Sources/OuroWorkbenchCore/WorkbenchOnboardingNarrative.swift:4:    public static let bossReadyWelcome = "I can see this Mac now."
+Sources/OuroWorkbenchCore/WorkbenchOnboardingNarrative.swift:5:    public static let scanIntro = "I will look for local coding-agent sessions across Workbench, Claude, Codex, Copilot, cmux, and shell history."
+Sources/OuroWorkbenchCore/WorkbenchOnboardingNarrative.swift:6:    public static let unclearImport = "I will ask before importing anything unclear."
+Sources/OuroWorkbenchCore/WorkbenchOnboardingNarrative.swift:7:    public static let duplicateCleanup = "After I resume these in Workbench, I will help you close matching sessions still running outside Workbench so work does not fork."
+Sources/OuroWorkbenchCore/WorkbenchOnboardingNarrative.swift:13:    public static func proposalSummary(groupCount: Int, selectedCount: Int) -> String {
+Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:6:        XCTAssertEqual(WorkbenchOnboardingNarrative.bossReadyWelcome, "I can see this Mac now.")
+Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:11:            WorkbenchOnboardingNarrative.scanIntro,
+Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:17:        XCTAssertEqual(WorkbenchOnboardingNarrative.unclearImport, "I will ask before importing anything unclear.")
+Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:22:            WorkbenchOnboardingNarrative.ambiguousCandidates(count: 2),
+Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:29:            WorkbenchOnboardingNarrative.duplicateCleanup,
+Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:36:            WorkbenchOnboardingNarrative.proposalSummary(groupCount: 3, selectedCount: 5),
+Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:5703:                        Text(WorkbenchOnboardingNarrative.scanIntro)
+Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:5853:                Text(WorkbenchOnboardingNarrative.bossReadyWelcome)
+Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:5856:                Text(WorkbenchOnboardingNarrative.scanIntro)
+Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:5910:                        detail: WorkbenchOnboardingNarrative.proposalSummary(
+Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:5922:                Text(WorkbenchOnboardingNarrative.unclearImport)
+Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:6108:                        Text(WorkbenchOnboardingNarrative.unclearImport)
+Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:8734:            parts.append(WorkbenchOnboardingNarrative.duplicateCleanup)
+Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:9788:            return "\(state.boss.agentName) is selected as this Mac's boss. \(WorkbenchOnboardingNarrative.bossReadyWelcome) \(WorkbenchOnboardingNarrative.scanIntro)"
+Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:12634:            return WorkbenchOnboardingNarrative.duplicateCleanup

@@ -1,0 +1,81 @@
+## swift test --filter BossWorkbenchActionAuthorizerTests
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/10] Write swift-version--58304C5D6DBC2206.txt
+Build complete! (0.15s)
+Test Suite 'Selected tests' started at 2026-06-14 20:26:40.342.
+Test Suite 'OuroWorkbenchPackageTests.xctest' started at 2026-06-14 20:26:40.343.
+Test Suite 'BossWorkbenchActionAuthorizerTests' started at 2026-06-14 20:26:40.343.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testArchivedEntriesCannotReceiveBossActions]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testArchivedEntriesCannotReceiveBossActions]' passed (0.002 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEnqueueGateAllowsKnownEntrylessKinds]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEnqueueGateAllowsKnownEntrylessKinds]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEnqueueGateAllowsRepairAgentUnderTrustedOnboarding]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEnqueueGateAllowsRepairAgentUnderTrustedOnboarding]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEnqueueGateAllowsSlice4OnboardingActionsWithRawKindTarget]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEnqueueGateAllowsSlice4OnboardingActionsWithRawKindTarget]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEnqueueGatePreservesLivePromptFloorWhenEntryPresent]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEnqueueGatePreservesLivePromptFloorWhenEntryPresent]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEnqueueGateRejectsUnknownEntrylessActionWithRawTarget]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEnqueueGateRejectsUnknownEntrylessActionWithRawTarget]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessAgentTargetedOnboardingActionsAreAllowedUnderTrustedOnboarding]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessAgentTargetedOnboardingActionsAreAllowedUnderTrustedOnboarding]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessAgentTargetedOnboardingActionsWithoutAgentNameAreDenied]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessAgentTargetedOnboardingActionsWithoutAgentNameAreDenied]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessCreateGroupRemainsExplicitlyAuthorized]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessCreateGroupRemainsExplicitlyAuthorized]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessCreateSessionRemainsExplicitlyAuthorized]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessCreateSessionRemainsExplicitlyAuthorized]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessCreateTerminalRemainsExplicitlyAuthorized]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessCreateTerminalRemainsExplicitlyAuthorized]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessEnsureDaemonIsAllowedUnderTrustedOnboardingWithNoAgentName]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessEnsureDaemonIsAllowedUnderTrustedOnboardingWithNoAgentName]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessEntryScopedActionIsDenied]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessEntryScopedActionIsDenied]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessRepairAgentIsAllowedUnderTrustedOnboarding]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessRepairAgentIsAllowedUnderTrustedOnboarding]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessRepairAgentWithoutAgentNameIsDenied]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessRepairAgentWithoutAgentNameIsDenied]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessSendInputIsDenied]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testEntrylessSendInputIsDenied]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testSafeSendInputToSafePromptIsAllowedOnTrustedSession]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testSafeSendInputToSafePromptIsAllowedOnTrustedSession]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testSendInputToDestructiveLivePromptIsWithheld]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testSendInputToDestructiveLivePromptIsWithheld]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testSendInputToSecretBearingLivePromptIsWithheld]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testSendInputToSecretBearingLivePromptIsWithheld]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testTrustedArchivedEntriesCanBeRestoredByBossActions]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testTrustedArchivedEntriesCanBeRestoredByBossActions]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testTrustedEntriesCanReceiveBossActions]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testTrustedEntriesCanReceiveBossActions]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testTrustedShellEntriesCanBeArchivedAndRestoredByBossActions]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testTrustedShellEntriesCanBeArchivedAndRestoredByBossActions]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUnifiedAuthorizeAllowsKnownEntrylessCreateGroup]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUnifiedAuthorizeAllowsKnownEntrylessCreateGroup]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUnifiedAuthorizeDeniesUnknownEntrylessAction]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUnifiedAuthorizeDeniesUnknownEntrylessAction]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUnifiedAuthorizeDispatchesToEntrylessWhenNoEntry]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUnifiedAuthorizeDispatchesToEntrylessWhenNoEntry]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUnifiedAuthorizeDispatchesToEntryScopedWhenEntryPresent]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUnifiedAuthorizeDispatchesToEntryScopedWhenEntryPresent]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUnifiedFrontDoorPreservesLivePromptSafetyFloorForDangerousSendInput]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUnifiedFrontDoorPreservesLivePromptSafetyFloorForDangerousSendInput]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUnifiedFrontDoorPreservesLivePromptSafetyFloorForSecretBearingPrompt]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUnifiedFrontDoorPreservesLivePromptSafetyFloorForSecretBearingPrompt]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUnsafeSendInputIsWithheldEvenOnTrustedSession]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUnsafeSendInputIsWithheldEvenOnTrustedSession]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUntrustedEntriesCannotReceiveBossActions]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUntrustedEntriesCannotReceiveBossActions]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUntrustedShellEntriesCannotBeArchivedOrRestoredByBossActions]' started.
+Test Case '-[OuroWorkbenchCoreTests.BossWorkbenchActionAuthorizerTests testUntrustedShellEntriesCannotBeArchivedOrRestoredByBossActions]' passed (0.000 seconds).
+Test Suite 'BossWorkbenchActionAuthorizerTests' passed at 2026-06-14 20:26:40.351.
+	 Executed 31 tests, with 0 failures (0 unexpected) in 0.006 (0.008) seconds
+Test Suite 'OuroWorkbenchPackageTests.xctest' passed at 2026-06-14 20:26:40.351.
+	 Executed 31 tests, with 0 failures (0 unexpected) in 0.006 (0.008) seconds
+Test Suite 'Selected tests' passed at 2026-06-14 20:26:40.351.
+	 Executed 31 tests, with 0 failures (0 unexpected) in 0.006 (0.009) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

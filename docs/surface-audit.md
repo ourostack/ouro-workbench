@@ -31,7 +31,7 @@ and user-facing docs.
 - Fixed-tab product model: replaced hard-coded Claude/Copilot/Codex top-level
   tabs with group-scoped terminals whose CLI identity is detected from command
   shape.
-- Legacy scaffold cleanup: untouched generated Copilot/Codex/Demo terminals are
+- Generated scaffold cleanup: untouched generated Copilot/Codex/Demo terminals are
   removed on bootstrap, while terminals with real run history stay as ordinary
   user-owned tabs.
 - Claude restart smoke failure: Workbench-launched terminals now include
@@ -76,7 +76,7 @@ and user-facing docs.
   recovery drill, Workbench MCP setup, and launch-at-login status.
 - Terminal tabs: local shell, detected Claude Code, detected GitHub Copilot CLI,
   detected OpenAI Codex, and arbitrary shell-wrapped custom sessions inside
-  named groups.
+  named workspaces.
 - Recovery: startup reconciliation, native resume commands, checkpoint respawn,
   manual-recovery classification, and non-mutating recovery drill.
 - Boss control: status prompt, transcript tail/search, recovery drill, queued
@@ -102,10 +102,10 @@ Expected smoke result:
 
 ```text
 156 tests pass; 5000 scenario rows render through 25,000 native verifier passes
-with zero failures and coverage digest `567dc7ec0c45835b`; deep sweep renders
+with zero failures and coverage digest `89292786bde2e133`; deep sweep renders
 20,000 rows through 100,000 verifier passes with zero failures and coverage
-digest `0fd57795f807596d`; installed app shows group-scoped Local Shell + used
-terminals only; packaged MCP returns tool definitions and group-aware status;
+digest `0fd57795f807596d`; installed app shows only user-created/imported
+sessions; packaged MCP returns tool definitions and workspace-aware status;
 dashboard text is not clipped; focus mode terminal text stays below the macOS
 traffic lights; clear repaints the visible terminal to AFTER_CLEAR plus a fresh
 prompt and old output does not return after leaving focus mode.

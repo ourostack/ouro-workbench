@@ -15,13 +15,13 @@ and control layer around them.
 Workbench is built around these commitments:
 
 - Native macOS app first. The terminal surface is not a web app in disguise.
-- The primary organization model is cmux-like: named groups in the sidebar,
-  with any number of terminal tabs inside each group.
+- The primary organization model is cmux-like: named workspaces in the sidebar,
+  with any number of terminal sessions inside each workspace.
 - Arbitrary terminal/TUI agents are first-class terminal tabs.
 - Claude Code, GitHub Copilot CLI, and OpenAI Codex are detected from the
   launched command. They are not separate app modes or hard-coded top-level
   tabs.
-- The selected Ouro boss can inspect the group/tab map and control trusted
+- The selected Ouro boss can inspect the workspace/session map and control trusted
   Workbench sessions.
 - Local Ouro agents are discovered from `~/AgentBundles/*.ouro`; Workbench can
   switch the boss, register MCP, reveal bundles, and open install terminals for
@@ -61,13 +61,13 @@ history, recovery state, and transcript tail stay reachable.
 
 ### Group
 
-A group is a named project/workspace scope. It owns terminal tabs, a root path,
+A workspace is a named project/workstream scope. It owns terminal sessions, a root path,
 and the boss context needed to answer questions like "what is going on in this
 project?" without flattening every terminal on the machine into one list.
 
-Use groups the way you would use cmux project scopes: one group for a repo,
-campaign, client, or workstream; then open as many terminal tabs as that scope
-needs.
+Use workspaces the way you would use cmux project scopes: one workspace for a
+repo, campaign, client, or workstream; then open as many terminal sessions as
+that scope needs.
 
 ### Terminal Tab
 
@@ -215,13 +215,13 @@ Then run first-run setup in the app:
    Workbench, Claude Code, Codex, Copilot/shell, and persistent-terminal
    evidence from the last week. If cmux is installed, it also reads cmux's
    saved workspace file and matches live Claude Code panes by TTY/session id.
-5. Workbench proposes an arrangement: Desk tracks become Workbench groups, and
+5. Workbench proposes an arrangement: Desk tracks become Workbench workspaces, and
    resumable terminal-agent sessions become terminal tabs with Desk task refs.
    It shows the full evidence set, but only preselects a small, recent,
    high-confidence starter set so `Arrange` does not flood the Workbench with
    stale tabs.
 6. Tap any row to toggle whether that terminal participates in `Arrange`. Use
-   the per-group checkbox to select or clear an entire group at once. The
+   the per-workspace checkbox to select or clear an entire workspace at once. The
    live `selected / total` count and the `Arrange` button itself reflect your
    selection — `Arrange` stays disabled with an explanatory tooltip if you
    clear everything.
@@ -229,7 +229,7 @@ Then run first-run setup in the app:
    rationale, resume command, evidence paths, and a scrollable chat-style
    session excerpt when Workbench can resolve one from Claude, Codex, or
    Workbench history.
-8. Choose `Arrange` to create groups/tabs, mirror selected work into Desk, and
+8. Choose `Arrange` to create workspaces/sessions, mirror selected work into Desk, and
    resume the terminals you selected. Workbench reports what it did in a
    transient banner and dismisses the onboarding sheet so the new terminals
    are immediately reachable; an `Open` shortcut jumps to the first imported
@@ -255,7 +255,7 @@ safe migration is:
 
 1. Leave cmux running while Workbench scans.
 2. Let onboarding read `~/Library/Application Support/cmux/session-com.cmuxterm.app.json`.
-3. Review the proposed Workbench groups. cmux workspace titles become preferred
+3. Review the proposed Workbench workspaces. cmux workspace titles become preferred
    Workbench group names when available.
 4. Arrange only the sessions you want Workbench to own.
 5. Quit or idle the original cmux Claude pane before doing new work in the
@@ -293,11 +293,11 @@ selected boss agent bundle:
 
 The sidebar is the cmux-style organizer.
 
-Use the `Groups` section for project/workstream scopes. Selecting a group shows
-only that group's active terminal tabs and archived tabs. Group actions let you
-rename a group or delete it once it is empty. The terminal row status dot and
-subtitle give the quick read. `New Group` creates a scope; `New Terminal`
-creates an arbitrary terminal/TUI agent tab in the selected group. Recovery
+Use the `Workspaces` section for project/workstream scopes. Selecting a workspace shows
+only that workspace's active terminal sessions and archived sessions. Workspace actions let you
+rename a workspace or delete it once it is empty. The terminal row status dot and
+subtitle give the quick read. `New Workspace` creates a scope; `New Terminal`
+creates an arbitrary terminal/TUI agent session in the selected workspace. Recovery
 summary rows show whether anything needs restart handling.
 
 ### Boss Dashboard
@@ -708,7 +708,7 @@ inside can detect and describe its host:
 | `OURO_WORKBENCH_GROUP` | The group the session lives in. |
 | `OURO_WORKBENCH_SESSION` | The terminal's display name. |
 | `OURO_WORKBENCH_BOSS` | The selected boss agent. |
-| `TERM_PROGRAM=OuroWorkbench` | Legacy marker, still set. |
+| `TERM_PROGRAM=OuroWorkbench` | Compatibility marker, still set. |
 
 The context file (`…/Application Support/OuroWorkbench/agent-context.md`,
 refreshed on every launch) is the same `WorkbenchGuide` catalog rendered for the

@@ -1,0 +1,334 @@
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/11] Write sources
+[3/11] Write swift-version--58304C5D6DBC2206.txt
+[5/8] Compiling OuroWorkbenchCoreTests OnboardingTests.swift
+[6/8] Emitting module OuroWorkbenchCoreTests
+[7/8] Compiling OuroWorkbenchCoreTests WorkbenchLaunchDiagnosticsTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:53:45: error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+51 |         ])
+52 | 
+53 |         XCTAssertEqual(diagnostics.action, .dumpRecentSessions(scanHomeRoot: nil))
+   |                                             `- error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+54 |     }
+55 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:53:78: error: 'nil' requires a contextual type
+51 |         ])
+52 | 
+53 |         XCTAssertEqual(diagnostics.action, .dumpRecentSessions(scanHomeRoot: nil))
+   |                                                                              `- error: 'nil' requires a contextual type
+54 |     }
+55 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:66:14: error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+64 |         XCTAssertEqual(
+65 |             diagnostics.action,
+66 |             .dumpRecentSessions(scanHomeRoot: URL(fileURLWithPath: "/tmp/harness-home", isDirectory: true))
+   |              `- error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+67 |         )
+68 |     }
+error: fatalError
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/10] Write swift-version--58304C5D6DBC2206.txt
+[4/6] Emitting module OuroWorkbenchCoreTests
+[5/6] Compiling OuroWorkbenchCoreTests WorkbenchLaunchDiagnosticsTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:53:45: error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+51 |         ])
+52 | 
+53 |         XCTAssertEqual(diagnostics.action, .dumpRecentSessions(scanHomeRoot: nil))
+   |                                             `- error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+54 |     }
+55 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:53:78: error: 'nil' requires a contextual type
+51 |         ])
+52 | 
+53 |         XCTAssertEqual(diagnostics.action, .dumpRecentSessions(scanHomeRoot: nil))
+   |                                                                              `- error: 'nil' requires a contextual type
+54 |     }
+55 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:66:14: error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+64 |         XCTAssertEqual(
+65 |             diagnostics.action,
+66 |             .dumpRecentSessions(scanHomeRoot: URL(fileURLWithPath: "/tmp/harness-home", isDirectory: true))
+   |              `- error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+67 |         )
+68 |     }
+error: fatalError
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/10] Write swift-version--58304C5D6DBC2206.txt
+[4/6] Emitting module OuroWorkbenchCoreTests
+[5/6] Compiling OuroWorkbenchCoreTests WorkbenchLaunchDiagnosticsTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:53:45: error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+51 |         ])
+52 | 
+53 |         XCTAssertEqual(diagnostics.action, .dumpRecentSessions(scanHomeRoot: nil))
+   |                                             `- error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+54 |     }
+55 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:53:78: error: 'nil' requires a contextual type
+51 |         ])
+52 | 
+53 |         XCTAssertEqual(diagnostics.action, .dumpRecentSessions(scanHomeRoot: nil))
+   |                                                                              `- error: 'nil' requires a contextual type
+54 |     }
+55 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:66:14: error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+64 |         XCTAssertEqual(
+65 |             diagnostics.action,
+66 |             .dumpRecentSessions(scanHomeRoot: URL(fileURLWithPath: "/tmp/harness-home", isDirectory: true))
+   |              `- error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+67 |         )
+68 |     }
+error: fatalError
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/10] Write swift-version--58304C5D6DBC2206.txt
+[4/6] Emitting module OuroWorkbenchCoreTests
+[5/6] Compiling OuroWorkbenchCoreTests WorkbenchLaunchDiagnosticsTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:53:45: error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+51 |         ])
+52 | 
+53 |         XCTAssertEqual(diagnostics.action, .dumpRecentSessions(scanHomeRoot: nil))
+   |                                             `- error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+54 |     }
+55 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:53:78: error: 'nil' requires a contextual type
+51 |         ])
+52 | 
+53 |         XCTAssertEqual(diagnostics.action, .dumpRecentSessions(scanHomeRoot: nil))
+   |                                                                              `- error: 'nil' requires a contextual type
+54 |     }
+55 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:66:14: error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+64 |         XCTAssertEqual(
+65 |             diagnostics.action,
+66 |             .dumpRecentSessions(scanHomeRoot: URL(fileURLWithPath: "/tmp/harness-home", isDirectory: true))
+   |              `- error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+67 |         )
+68 |     }
+error: fatalError
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/10] Write swift-version--58304C5D6DBC2206.txt
+[4/6] Emitting module OuroWorkbenchCoreTests
+[5/6] Compiling OuroWorkbenchCoreTests WorkbenchLaunchDiagnosticsTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:53:45: error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+51 |         ])
+52 | 
+53 |         XCTAssertEqual(diagnostics.action, .dumpRecentSessions(scanHomeRoot: nil))
+   |                                             `- error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+54 |     }
+55 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:53:78: error: 'nil' requires a contextual type
+51 |         ])
+52 | 
+53 |         XCTAssertEqual(diagnostics.action, .dumpRecentSessions(scanHomeRoot: nil))
+   |                                                                              `- error: 'nil' requires a contextual type
+54 |     }
+55 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:66:14: error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+64 |         XCTAssertEqual(
+65 |             diagnostics.action,
+66 |             .dumpRecentSessions(scanHomeRoot: URL(fileURLWithPath: "/tmp/harness-home", isDirectory: true))
+   |              `- error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+67 |         )
+68 |     }
+error: fatalError
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/10] Write swift-version--58304C5D6DBC2206.txt
+[4/6] Emitting module OuroWorkbenchCoreTests
+[5/6] Compiling OuroWorkbenchCoreTests WorkbenchLaunchDiagnosticsTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:53:45: error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+51 |         ])
+52 | 
+53 |         XCTAssertEqual(diagnostics.action, .dumpRecentSessions(scanHomeRoot: nil))
+   |                                             `- error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+54 |     }
+55 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:53:78: error: 'nil' requires a contextual type
+51 |         ])
+52 | 
+53 |         XCTAssertEqual(diagnostics.action, .dumpRecentSessions(scanHomeRoot: nil))
+   |                                                                              `- error: 'nil' requires a contextual type
+54 |     }
+55 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:66:14: error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+64 |         XCTAssertEqual(
+65 |             diagnostics.action,
+66 |             .dumpRecentSessions(scanHomeRoot: URL(fileURLWithPath: "/tmp/harness-home", isDirectory: true))
+   |              `- error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+67 |         )
+68 |     }
+error: fatalError
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/10] Write swift-version--58304C5D6DBC2206.txt
+[4/6] Emitting module OuroWorkbenchCoreTests
+[5/6] Compiling OuroWorkbenchCoreTests WorkbenchLaunchDiagnosticsTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:53:45: error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+51 |         ])
+52 | 
+53 |         XCTAssertEqual(diagnostics.action, .dumpRecentSessions(scanHomeRoot: nil))
+   |                                             `- error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+54 |     }
+55 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:53:78: error: 'nil' requires a contextual type
+51 |         ])
+52 | 
+53 |         XCTAssertEqual(diagnostics.action, .dumpRecentSessions(scanHomeRoot: nil))
+   |                                                                              `- error: 'nil' requires a contextual type
+54 |     }
+55 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:66:14: error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+64 |         XCTAssertEqual(
+65 |             diagnostics.action,
+66 |             .dumpRecentSessions(scanHomeRoot: URL(fileURLWithPath: "/tmp/harness-home", isDirectory: true))
+   |              `- error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+67 |         )
+68 |     }
+error: fatalError
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/10] Write swift-version--58304C5D6DBC2206.txt
+[4/6] Emitting module OuroWorkbenchCoreTests
+[5/6] Compiling OuroWorkbenchCoreTests WorkbenchLaunchDiagnosticsTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:53:45: error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+51 |         ])
+52 | 
+53 |         XCTAssertEqual(diagnostics.action, .dumpRecentSessions(scanHomeRoot: nil))
+   |                                             `- error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+54 |     }
+55 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:53:78: error: 'nil' requires a contextual type
+51 |         ])
+52 | 
+53 |         XCTAssertEqual(diagnostics.action, .dumpRecentSessions(scanHomeRoot: nil))
+   |                                                                              `- error: 'nil' requires a contextual type
+54 |     }
+55 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:66:14: error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+64 |         XCTAssertEqual(
+65 |             diagnostics.action,
+66 |             .dumpRecentSessions(scanHomeRoot: URL(fileURLWithPath: "/tmp/harness-home", isDirectory: true))
+   |              `- error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+67 |         )
+68 |     }
+error: fatalError
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/10] Write swift-version--58304C5D6DBC2206.txt
+[4/6] Emitting module OuroWorkbenchCoreTests
+[5/6] Compiling OuroWorkbenchCoreTests WorkbenchLaunchDiagnosticsTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:53:45: error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+51 |         ])
+52 | 
+53 |         XCTAssertEqual(diagnostics.action, .dumpRecentSessions(scanHomeRoot: nil))
+   |                                             `- error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+54 |     }
+55 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:53:78: error: 'nil' requires a contextual type
+51 |         ])
+52 | 
+53 |         XCTAssertEqual(diagnostics.action, .dumpRecentSessions(scanHomeRoot: nil))
+   |                                                                              `- error: 'nil' requires a contextual type
+54 |     }
+55 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:66:14: error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+64 |         XCTAssertEqual(
+65 |             diagnostics.action,
+66 |             .dumpRecentSessions(scanHomeRoot: URL(fileURLWithPath: "/tmp/harness-home", isDirectory: true))
+   |              `- error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+67 |         )
+68 |     }
+error: fatalError
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/10] Write swift-version--58304C5D6DBC2206.txt
+[4/6] Emitting module OuroWorkbenchCoreTests
+[5/6] Compiling OuroWorkbenchCoreTests WorkbenchLaunchDiagnosticsTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:53:45: error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+51 |         ])
+52 | 
+53 |         XCTAssertEqual(diagnostics.action, .dumpRecentSessions(scanHomeRoot: nil))
+   |                                             `- error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+54 |     }
+55 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:53:78: error: 'nil' requires a contextual type
+51 |         ])
+52 | 
+53 |         XCTAssertEqual(diagnostics.action, .dumpRecentSessions(scanHomeRoot: nil))
+   |                                                                              `- error: 'nil' requires a contextual type
+54 |     }
+55 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:66:14: error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+64 |         XCTAssertEqual(
+65 |             diagnostics.action,
+66 |             .dumpRecentSessions(scanHomeRoot: URL(fileURLWithPath: "/tmp/harness-home", isDirectory: true))
+   |              `- error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+67 |         )
+68 |     }
+error: fatalError
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/10] Write swift-version--58304C5D6DBC2206.txt
+[4/6] Emitting module OuroWorkbenchCoreTests
+[5/6] Compiling OuroWorkbenchCoreTests WorkbenchLaunchDiagnosticsTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:53:45: error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+51 |         ])
+52 | 
+53 |         XCTAssertEqual(diagnostics.action, .dumpRecentSessions(scanHomeRoot: nil))
+   |                                             `- error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+54 |     }
+55 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:53:78: error: 'nil' requires a contextual type
+51 |         ])
+52 | 
+53 |         XCTAssertEqual(diagnostics.action, .dumpRecentSessions(scanHomeRoot: nil))
+   |                                                                              `- error: 'nil' requires a contextual type
+54 |     }
+55 | 
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchLaunchDiagnosticsTests.swift:66:14: error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+64 |         XCTAssertEqual(
+65 |             diagnostics.action,
+66 |             .dumpRecentSessions(scanHomeRoot: URL(fileURLWithPath: "/tmp/harness-home", isDirectory: true))
+   |              `- error: type 'WorkbenchLaunchDiagnostics.Action?' has no member 'dumpRecentSessions'
+67 |         )
+68 |     }
+error: fatalError

@@ -321,12 +321,12 @@ final class FinalCoverageTests: XCTestCase {
         XCTAssertEqual(SessionActivity.nonEmpty("  hi "), "hi")
     }
 
-    // A legacy agent scaffold whose agentKind is unset but whose command still
+    // A generated agent scaffold whose agentKind is unset but whose command still
     // detects to the preset is recognized (the detect side of the `||`).
-    func testBootstrapDetectsLegacyScaffoldByCommandWhenAgentKindUnset() {
+    func testBootstrapDetectsGeneratedScaffoldByCommandWhenAgentKindUnset() {
         let project = WorkbenchProject(name: "Project", rootPath: "/repo")
         let preset = TerminalAgentPresets.preset(for: .claudeCode)!
-        let legacy = ProcessEntry(
+        let generated = ProcessEntry(
             projectId: project.id,
             name: preset.displayName,
             kind: .terminalAgent,
@@ -336,10 +336,10 @@ final class FinalCoverageTests: XCTestCase {
             lastSummary: "Configured \(preset.displayName) lane"
         )
         let bootstrapped = WorkbenchBootstrapper().bootstrappedState(
-            from: WorkspaceState(projects: [project], processEntries: [legacy]),
-            defaults: WorkbenchDefaults(includeLocalShell: false))
-        // Untouched legacy scaffold (no action log) is pruned.
-        XCTAssertFalse(bootstrapped.processEntries.contains { $0.id == legacy.id })
+            from: WorkspaceState(projects: [project], processEntries: [generated])
+        )
+        // Untouched generated scaffold (no action log) is pruned.
+        XCTAssertFalse(bootstrapped.processEntries.contains { $0.id == generated.id })
     }
 
     private static func stubSession() -> URLSession {

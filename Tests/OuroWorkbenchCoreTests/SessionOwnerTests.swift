@@ -60,11 +60,11 @@ final class SessionOwnerTests: XCTestCase {
     func testDecodesWithoutOwnerForBackwardsCompatibility() throws {
         // Pre-owner persisted entries lack the key; decode must default to
         // `.human` rather than throwing.
-        let legacyJSON = """
+        let olderJSON = """
         {
             "id": "00000000-0000-0000-0000-000000000009",
             "projectId": "00000000-0000-0000-0000-0000000000aa",
-            "name": "legacy",
+            "name": "older",
             "kind": "terminalAgent",
             "executable": "/bin/zsh",
             "arguments": [],
@@ -73,9 +73,9 @@ final class SessionOwnerTests: XCTestCase {
             "autoResume": false
         }
         """.data(using: .utf8)!
-        let decoded = try JSONDecoder().decode(ProcessEntry.self, from: legacyJSON)
+        let decoded = try JSONDecoder().decode(ProcessEntry.self, from: olderJSON)
         XCTAssertEqual(decoded.owner, .human)
-        XCTAssertEqual(decoded.name, "legacy")
+        XCTAssertEqual(decoded.name, "older")
     }
 
     // MARK: - Forward schema drift

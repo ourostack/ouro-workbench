@@ -69,6 +69,87 @@ final class WorkbenchFactoryResetTests: XCTestCase {
         XCTAssertFalse(defaults.bool(forKey: "ouro.workbench.onboardingAutoPresented"), "prefs still cleared")
     }
 
+    func testRequestsAndConsumesFirstRunSetupMarker() throws {
+        let fm = FileManager.default
+        let dir = try makeTempDir()
+        defer { try? fm.removeItem(at: dir) }
+
+        let marker = try WorkbenchFactoryReset.requestFirstRunSetup(rootURL: dir)
+
+        XCTAssertEqual(marker.lastPathComponent, "force-first-run-setup")
+        XCTAssertTrue(fm.fileExists(atPath: marker.path))
+        XCTAssertTrue(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+        XCTAssertFalse(fm.fileExists(atPath: marker.path))
+        XCTAssertFalse(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: dir))
+    }
+
+    func testConsumeFirstRunSetupRequestReturnsFalseWhenRemovalFails() {
+        let rootURL = URL(fileURLWithPath: "/virtual/reset-root", isDirectory: true)
+        let markerURL = WorkbenchFactoryReset.firstRunSetupMarkerURL(rootURL: rootURL)
+        let fileManager = CoverageBatch2FileManager()
+        fileManager.existingPaths = [markerURL.path]
+        fileManager.removeError = CoverageBatch2Error.boom
+
+        XCTAssertFalse(WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: rootURL, fileManager: fileManager))
+        XCTAssertEqual(fileManager.removedPaths, [markerURL.path])
+    }
+
+    func testFactoryResetRequestsFirstRunSetupAfterWipe() throws {
+        let fm = FileManager.default
+        let dir = try makeTempDir()
+        defer { try? fm.removeItem(at: dir) }
+
+        let stateURL = dir.appendingPathComponent("workspace-state.json")
+        try Data(#"{"projects":[{"name":"This Mac"}]}"#.utf8).write(to: stateURL)
+        let staleMarker = dir.appendingPathComponent("force-first-run-setup")
+        try Data("stale-before-reset".utf8).write(to: staleMarker)
+
+        let domain = "com.ourostack.workbench.test.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: domain)!
+        defer { defaults.removePersistentDomain(forName: domain) }
+        defaults.set(true, forKey: "ouro.workbench.onboardingAutoPresented")
+
+        let result = WorkbenchFactoryReset.resetToFactoryDefaults(
+            stateURL: stateURL,
+            defaults: defaults,
+            defaultsDomain: domain,
+            timestamp: Date(timeIntervalSince1970: 1_700_000_001),
+            fileManager: fm
+        )
+
+        XCTAssertFalse(fm.fileExists(atPath: stateURL.path))
+        XCTAssertEqual(result.backupURL?.lastPathComponent, "workspace-state.1700000001.bak.json")
+        XCTAssertEqual(result.setupMarkerURL.lastPathComponent, "force-first-run-setup")
+        XCTAssertTrue(fm.fileExists(atPath: result.setupMarkerURL.path))
+        XCTAssertNotEqual(try String(contentsOf: result.setupMarkerURL), "stale-before-reset")
+        XCTAssertFalse(defaults.bool(forKey: "ouro.workbench.onboardingAutoPresented"))
+    }
+
+    func testFactoryResetFallsBackToMarkerURLWhenRequestCannotWriteMarker() throws {
+        let fm = FileManager.default
+        let dir = try makeTempDir()
+        defer { try? fm.removeItem(at: dir) }
+
+        let rootFile = dir.appendingPathComponent("not-a-directory")
+        try Data("file".utf8).write(to: rootFile)
+
+        let domain = "com.ourostack.workbench.test.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: domain)!
+        defer { defaults.removePersistentDomain(forName: domain) }
+
+        let stateURL = rootFile.appendingPathComponent("workspace-state.json")
+        let result = WorkbenchFactoryReset.resetToFactoryDefaults(
+            stateURL: stateURL,
+            defaults: defaults,
+            defaultsDomain: domain,
+            timestamp: Date(timeIntervalSince1970: 1),
+            fileManager: fm
+        )
+
+        XCTAssertEqual(result.setupMarkerURL, WorkbenchFactoryReset.firstRunSetupMarkerURL(rootURL: rootFile))
+        XCTAssertFalse(fm.fileExists(atPath: result.setupMarkerURL.path))
+    }
+
     func testSecondResetInSameSecondDoesNotThrowAndOverwritesBackup() throws {
         let fm = FileManager.default
         let dir = try makeTempDir()

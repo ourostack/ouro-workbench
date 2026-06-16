@@ -1,0 +1,112 @@
+{
+  "coverage" : {
+    "bossAgents" : {
+      "slugger" : 5000
+    },
+    "bossBridgeStates" : {
+      "agentMissing" : 1250,
+      "needsUpdate" : 1250,
+      "notRegistered" : 1250,
+      "registered" : 1250
+    },
+    "digest" : "89292786bde2e133",
+    "executableHealthStates" : {
+      "available" : 2500,
+      "missing" : 2500
+    },
+    "lifecycles" : {
+      "configured" : 1000,
+      "manual_action_needed" : 1000,
+      "needs_recovery" : 1000,
+      "running" : 1000,
+      "waiting_for_input" : 1000
+    },
+    "processCounts" : {
+      "1" : 5000
+    },
+    "projectCounts" : {
+      "1" : 5000
+    },
+    "readinessStates" : {
+      "attention" : 378,
+      "blocked" : 4550,
+      "ready" : 72
+    },
+    "recoveryActions" : {
+      "autoResume" : 128,
+      "manualActionNeeded" : 1120,
+      "noAction" : 3560,
+      "respawn" : 192
+    },
+    "renderPasses" : 25000,
+    "rowCount" : 5000,
+    "runCounts" : {
+      "0" : 1000,
+      "1" : 4000
+    },
+    "surfaces" : {
+      "archived_session" : 1000,
+      "boss_pane_collapsed" : 1000,
+      "sidebar_dashboard" : 1000,
+      "sidebar_hidden_dashboard" : 1000,
+      "terminal_focus" : 1000
+    },
+    "terminals" : {
+      "claude" : 1000,
+      "codex" : 1000,
+      "copilot" : 1000,
+      "generic_tui" : 1000,
+      "user_shell" : 1000
+    },
+    "trustResumePostures" : {
+      "trusted_auto_no_session" : 1000,
+      "trusted_auto_session" : 1000,
+      "trusted_no_auto" : 1000,
+      "untrusted_auto" : 1000,
+      "untrusted_no_auto" : 1000
+    },
+    "viewports" : {
+      "compact-terminal" : 5000,
+      "short-window" : 5000,
+      "standard" : 5000,
+      "tall-workspace" : 5000,
+      "wide-workspace" : 5000
+    }
+  },
+  "deepRowsVerified" : 0,
+  "failures" : [
+
+  ],
+  "matrixRowsVerified" : 5000,
+  "renderPasses" : 25000,
+  "rowsVerified" : 5000,
+  "sampleFiles" : [
+    "\/Users\/arimendelow\/Projects\/ouro-workbench\/worker\/tasks\/2026-06-14-1947-doing-product-center-of-gravity\/scenario-verifier\/samples\/WB-0001-standard-sidebar_dashboard-claude.png",
+    "\/Users\/arimendelow\/Projects\/ouro-workbench\/worker\/tasks\/2026-06-14-1947-doing-product-center-of-gravity\/scenario-verifier\/samples\/WB-0001-short-window-sidebar_dashboard-claude.png",
+    "\/Users\/arimendelow\/Projects\/ouro-workbench\/worker\/tasks\/2026-06-14-1947-doing-product-center-of-gravity\/scenario-verifier\/samples\/WB-0001-compact-terminal-sidebar_dashboard-claude.png",
+    "\/Users\/arimendelow\/Projects\/ouro-workbench\/worker\/tasks\/2026-06-14-1947-doing-product-center-of-gravity\/scenario-verifier\/samples\/WB-0001-tall-workspace-sidebar_dashboard-claude.png",
+    "\/Users\/arimendelow\/Projects\/ouro-workbench\/worker\/tasks\/2026-06-14-1947-doing-product-center-of-gravity\/scenario-verifier\/samples\/WB-0001-wide-workspace-sidebar_dashboard-claude.png",
+    "\/Users\/arimendelow\/Projects\/ouro-workbench\/worker\/tasks\/2026-06-14-1947-doing-product-center-of-gravity\/scenario-verifier\/samples\/WB-0009-standard-sidebar_hidden_dashboard-claude.png",
+    "\/Users\/arimendelow\/Projects\/ouro-workbench\/worker\/tasks\/2026-06-14-1947-doing-product-center-of-gravity\/scenario-verifier\/samples\/WB-0009-short-window-sidebar_hidden_dashboard-claude.png",
+    "\/Users\/arimendelow\/Projects\/ouro-workbench\/worker\/tasks\/2026-06-14-1947-doing-product-center-of-gravity\/scenario-verifier\/samples\/WB-0009-compact-terminal-sidebar_hidden_dashboard-claude.png",
+    "\/Users\/arimendelow\/Projects\/ouro-workbench\/worker\/tasks\/2026-06-14-1947-doing-product-center-of-gravity\/scenario-verifier\/samples\/WB-0009-tall-workspace-sidebar_hidden_dashboard-claude.png",
+    "\/Users\/arimendelow\/Projects\/ouro-workbench\/worker\/tasks\/2026-06-14-1947-doing-product-center-of-gravity\/scenario-verifier\/samples\/WB-0009-wide-workspace-sidebar_hidden_dashboard-claude.png",
+    "\/Users\/arimendelow\/Projects\/ouro-workbench\/worker\/tasks\/2026-06-14-1947-doing-product-center-of-gravity\/scenario-verifier\/samples\/WB-0017-standard-boss_pane_collapsed-claude.png",
+    "\/Users\/arimendelow\/Projects\/ouro-workbench\/worker\/tasks\/2026-06-14-1947-doing-product-center-of-gravity\/scenario-verifier\/samples\/WB-0017-short-window-boss_pane_collapsed-claude.png",
+    "\/Users\/arimendelow\/Projects\/ouro-workbench\/worker\/tasks\/2026-06-14-1947-doing-product-center-of-gravity\/scenario-verifier\/samples\/WB-0017-compact-terminal-boss_pane_collapsed-claude.png",
+    "\/Users\/arimendelow\/Projects\/ouro-workbench\/worker\/tasks\/2026-06-14-1947-doing-product-center-of-gravity\/scenario-verifier\/samples\/WB-0017-tall-workspace-boss_pane_collapsed-claude.png",
+    "\/Users\/arimendelow\/Projects\/ouro-workbench\/worker\/tasks\/2026-06-14-1947-doing-product-center-of-gravity\/scenario-verifier\/samples\/WB-0017-wide-workspace-boss_pane_collapsed-claude.png",
+    "\/Users\/arimendelow\/Projects\/ouro-workbench\/worker\/tasks\/2026-06-14-1947-doing-product-center-of-gravity\/scenario-verifier\/samples\/WB-0025-standard-terminal_focus-claude.png",
+    "\/Users\/arimendelow\/Projects\/ouro-workbench\/worker\/tasks\/2026-06-14-1947-doing-product-center-of-gravity\/scenario-verifier\/samples\/WB-0025-short-window-terminal_focus-claude.png",
+    "\/Users\/arimendelow\/Projects\/ouro-workbench\/worker\/tasks\/2026-06-14-1947-doing-product-center-of-gravity\/scenario-verifier\/samples\/WB-0025-compact-terminal-terminal_focus-claude.png",
+    "\/Users\/arimendelow\/Projects\/ouro-workbench\/worker\/tasks\/2026-06-14-1947-doing-product-center-of-gravity\/scenario-verifier\/samples\/WB-0025-tall-workspace-terminal_focus-claude.png",
+    "\/Users\/arimendelow\/Projects\/ouro-workbench\/worker\/tasks\/2026-06-14-1947-doing-product-center-of-gravity\/scenario-verifier\/samples\/WB-0025-wide-workspace-terminal_focus-claude.png"
+  ],
+  "viewportNames" : [
+    "standard",
+    "short-window",
+    "compact-terminal",
+    "tall-workspace",
+    "wide-workspace"
+  ]
+}

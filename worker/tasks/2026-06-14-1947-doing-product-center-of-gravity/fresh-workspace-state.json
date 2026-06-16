@@ -1,0 +1,59 @@
+{
+  "actionLog" : [
+    {
+      "action" : "ensureDaemon",
+      "id" : "DD084434-781B-4BA9-8251-DBFFDEBBE312",
+      "occurredAt" : "2026-06-15T04:50:37Z",
+      "result" : "Daemon already reachable; reused existing process (no spawn).",
+      "source" : "boss:slugger",
+      "succeeded" : true,
+      "targetName" : "slugger"
+    },
+    {
+      "action" : "ensureDaemon",
+      "id" : "71CE9BF2-FB8B-40B7-AD05-0410B52E331F",
+      "occurredAt" : "2026-06-15T04:50:36Z",
+      "result" : "Daemon already reachable; reused existing process (no spawn).",
+      "source" : "native",
+      "succeeded" : true,
+      "targetName" : "launch"
+    },
+    {
+      "action" : "checkReleaseUpdates",
+      "id" : "7D09D09B-F965-4C3F-86CF-BD86083EE442",
+      "occurredAt" : "2026-06-15T04:50:35Z",
+      "result" : "Version 0.1.155 is current.",
+      "source" : "native",
+      "succeeded" : true
+    }
+  ],
+  "boss" : {
+    "agentName" : "slugger",
+    "scope" : "machine"
+  },
+  "bossPaneCollapsed" : true,
+  "bossWatchEnabled" : true,
+  "decisionLog" : [
+
+  ],
+  "processEntries" : [
+
+  ],
+  "processRuns" : [
+
+  ],
+  "projects" : [
+    {
+      "boss" : {
+        "agentName" : "slugger",
+        "scope" : "machine"
+      },
+      "id" : "7298035D-BF52-4AFB-9876-4090A2F0F069",
+      "name" : "Unsorted Sessions",
+      "rootPath" : "\/Users\/arimendelow"
+    }
+  ],
+  "schemaVersion" : 1,
+  "selectedProjectId" : "7298035D-BF52-4AFB-9876-4090A2F0F069",
+  "updatedAt" : "2026-06-15T04:50:37Z"
+}

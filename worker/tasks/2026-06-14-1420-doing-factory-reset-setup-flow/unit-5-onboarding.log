@@ -1,0 +1,193 @@
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/10] Write swift-version--58304C5D6DBC2206.txt
+Build complete! (0.37s)
+Test Suite 'Selected tests' started at 2026-06-14 16:06:21.267.
+Test Suite 'OuroWorkbenchPackageTests.xctest' started at 2026-06-14 16:06:21.267.
+Test Suite 'OnboardingNarrativeTests' started at 2026-06-14 16:06:21.267.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testAmbiguousCandidateCopyIncludesCount]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testAmbiguousCandidateCopyIncludesCount]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testBossReadyWelcomeCopy]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testBossReadyWelcomeCopy]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testDuplicateCleanupCopyGuidesExternalSessionShutdown]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testDuplicateCleanupCopyGuidesExternalSessionShutdown]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testFlowArrangesApprovedImportsWhenSelectionExists]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testFlowArrangesApprovedImportsWhenSelectionExists]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testFlowAttachesAmbiguousCandidateNarrative]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testFlowAttachesAmbiguousCandidateNarrative]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testFlowGuidesDuplicateCleanupAfterImportSummary]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testFlowGuidesDuplicateCleanupAfterImportSummary]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testFlowKeepsScanProposalWhenProposalHasNoSelectedTerminals]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testFlowKeepsScanProposalWhenProposalHasNoSelectedTerminals]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testFlowStartsInBossSetupWizardBeforeBossReadiness]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testFlowStartsInBossSetupWizardBeforeBossReadiness]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testFlowSwitchesToBossReadyWelcomeWhenBossCanScan]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testFlowSwitchesToBossReadyWelcomeWhenBossCanScan]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testProposalSummaryCopyUsesWorkspaces]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testProposalSummaryCopyUsesWorkspaces]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testScanIntroNamesLocalAgentStores]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testScanIntroNamesLocalAgentStores]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testUnclearImportCopyPromisesToAsk]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingNarrativeTests testUnclearImportCopyPromisesToAsk]' passed (0.000 seconds).
+Test Suite 'OnboardingNarrativeTests' passed at 2026-06-14 16:06:21.270.
+	 Executed 12 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
+Test Suite 'OuroWorkbenchPackageTests.xctest' passed at 2026-06-14 16:06:21.271.
+	 Executed 12 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
+Test Suite 'Selected tests' passed at 2026-06-14 16:06:21.271.
+	 Executed 12 tests, with 0 failures (0 unexpected) in 0.002 (0.004) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/10] Write swift-version--58304C5D6DBC2206.txt
+Build complete! (0.14s)
+Test Suite 'Selected tests' started at 2026-06-14 16:06:21.986.
+Test Suite 'OuroWorkbenchPackageTests.xctest' started at 2026-06-14 16:06:21.987.
+Test Suite 'OnboardingTests' started at 2026-06-14 16:06:21.987.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testAdvisorBlocksOnFailedProviderCheck]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testAdvisorBlocksOnFailedProviderCheck]' passed (0.006 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testAdvisorKeepsBossReadinessSeparateFromDeskBridgeSetup]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testAdvisorKeepsBossReadinessSeparateFromDeskBridgeSetup]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testAdvisorRequiresLiveProviderChecksBeforeReady]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testAdvisorRequiresLiveProviderChecksBeforeReady]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testAdvisorSurfacesProviderAndMCPRepairs]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testAdvisorSurfacesProviderAndMCPRepairs]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testCodexSQLiteScannerUsesSingleValidOrderByQuery]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testCodexSQLiteScannerUsesSingleValidOrderByQuery]' passed (0.100 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testEmptyBossSurfacesChooseCopyWithoutBlankName]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testEmptyBossSurfacesChooseCopyWithoutBlankName]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testImportProposalCuratesDefaultSelectionsInsteadOfStampedingTabs]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testImportProposalCuratesDefaultSelectionsInsteadOfStampedingTabs]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testImportProposalGroupsClaudeWorktreesByOwningProject]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testImportProposalGroupsClaudeWorktreesByOwningProject]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testImportProposalGroupsSameRepoDifferentSubdirsIntoOneGroup]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testImportProposalGroupsSameRepoDifferentSubdirsIntoOneGroup]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testImportProposalKeepsGroupIDsUniqueAcrossGroups]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testImportProposalKeepsGroupIDsUniqueAcrossGroups]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testImportProposalPreferredGroupNameOverridesRepoGrouping]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testImportProposalPreferredGroupNameOverridesRepoGrouping]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testImportProposalSeparatesDistinctRepos]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testImportProposalSeparatesDistinctRepos]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testNeedsCredentialsIsComplementaryToProviderChecks]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testNeedsCredentialsIsComplementaryToProviderChecks]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testProviderSetupStepClassification]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testProviderSetupStepClassification]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testReadinessAllFourDaemonCredsCombos]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testReadinessAllFourDaemonCredsCombos]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testReadinessCredsAbsentIsADistinctState]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testReadinessCredsAbsentIsADistinctState]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testReadinessDaemonDownCopyHasNoCLIorDaemonSeams]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testReadinessDaemonDownCopyHasNoCLIorDaemonSeams]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testReadinessDaemonDownIsNotReadyEvenWhenAgentsAndMCPAreFine]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testReadinessDaemonDownIsNotReadyEvenWhenAgentsAndMCPAreFine]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testReadinessDefaultsToDaemonUpWhenLivenessOmitted]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testReadinessDefaultsToDaemonUpWhenLivenessOmitted]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testReadyDetailUsesRuntimeInjectionFraming]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testReadyDetailUsesRuntimeInjectionFraming]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerDropsCodexArchiveWithoutSessionId]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerDropsCodexArchiveWithoutSessionId]' passed (0.320 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerFallsBackToLiveClaudeProcessesWithoutCmuxState]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerFallsBackToLiveClaudeProcessesWithoutCmuxState]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerFallsBackToSessionIndexWhenSqliteMissingOrUnexecutable]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerFallsBackToSessionIndexWhenSqliteMissingOrUnexecutable]' passed (0.225 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerFindsClaudeCodexAndShellCandidates]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerFindsClaudeCodexAndShellCandidates]' passed (0.222 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerIgnoresStaleCodexArchive]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerIgnoresStaleCodexArchive]' passed (0.221 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerImportsLiveCmuxClaudePanelsWithGroupNames]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerImportsLiveCmuxClaudePanelsWithGroupNames]' passed (0.003 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerKeepsCodexArchiveWithoutWorkingDirectoryAsRecoverable]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerKeepsCodexArchiveWithoutWorkingDirectoryAsRecoverable]' passed (0.227 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerPrefersHigherConfidenceDuplicate]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerPrefersHigherConfidenceDuplicate]' passed (0.253 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerReadsClaudeTaskJson]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerReadsClaudeTaskJson]' passed (0.257 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerReadsCodexArchivedJsonl]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerReadsCodexArchivedJsonl]' passed (0.216 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerReadsCodexManualRecoveryJsonl]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerReadsCodexManualRecoveryJsonl]' passed (0.258 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerReadsCodexSessionMetaPayloadJsonl]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerReadsCodexSessionMetaPayloadJsonl]' passed (0.219 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerSkipsMalformedCodexArchiveLines]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerSkipsMalformedCodexArchiveLines]' passed (0.222 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerUnionsCodexSqliteAndSessionIndex]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRecentSessionScannerUnionsCodexSqliteAndSessionIndex]' passed (0.085 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRepositoryRootReturnsDirectoryItselfWhenItIsTheRoot]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRepositoryRootReturnsDirectoryItselfWhenItIsTheRoot]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRepositoryRootReturnsNilOutsideAnyRepo]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRepositoryRootReturnsNilOutsideAnyRepo]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRepositoryRootWalksUpToGitMarker]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testRepositoryRootWalksUpToGitMarker]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testSetSelectionBulkSelectsAndClearsAGroup]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testSetSelectionBulkSelectsAndClearsAGroup]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testToggleSelectionFlipsTerminalSelectionAndCount]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testToggleSelectionFlipsTerminalSelectionAndCount]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testToggleSelectionReturnsNilForUnknownIDs]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testToggleSelectionReturnsNilForUnknownIDs]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testWorkbenchMCPStepUsesRuntimeInjectionFramingNotBundleRegistration]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testWorkbenchMCPStepUsesRuntimeInjectionFramingNotBundleRegistration]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testWorkbenchSenseRendererExposesSenseContractAndTools]' started.
+Test Case '-[OuroWorkbenchCoreTests.OnboardingTests testWorkbenchSenseRendererExposesSenseContractAndTools]' passed (0.001 seconds).
+Test Suite 'OnboardingTests' passed at 2026-06-14 16:06:24.840.
+	 Executed 42 tests, with 0 failures (0 unexpected) in 2.850 (2.853) seconds
+Test Suite 'OuroWorkbenchPackageTests.xctest' passed at 2026-06-14 16:06:24.840.
+	 Executed 42 tests, with 0 failures (0 unexpected) in 2.850 (2.853) seconds
+Test Suite 'Selected tests' passed at 2026-06-14 16:06:24.840.
+	 Executed 42 tests, with 0 failures (0 unexpected) in 2.850 (2.854) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/9] Write swift-version--58304C5D6DBC2206.txt
+Build complete! (0.36s)
+Sources/OuroWorkbenchCore/WorkbenchOnboardingNarrative.swift:3:public enum WorkbenchOnboardingNarrative {
+Sources/OuroWorkbenchCore/WorkbenchOnboardingNarrative.swift:72:public enum WorkbenchOnboardingFlowPolicy {
+Sources/OuroWorkbenchCore/WorkbenchOnboardingNarrative.swift:85:                notice: WorkbenchOnboardingNarrative.duplicateCleanup
+Sources/OuroWorkbenchCore/WorkbenchOnboardingNarrative.swift:93:                notice: WorkbenchOnboardingNarrative.scanIntro
+Sources/OuroWorkbenchCore/WorkbenchOnboardingNarrative.swift:108:                ? WorkbenchOnboardingNarrative.ambiguousCandidates(count: input.ambiguousCandidateCount)
+Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:5094:            return model.onboardingFlowDecision.primaryActionTitle
+Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:5096:            return model.onboardingFlowDecision.primaryActionTitle
+Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:5105:            return model.onboardingFlowDecision.phase == .bossSetupWizard ? "link" : "magnifyingglass"
+Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:5107:            switch model.onboardingFlowDecision.phase {
+Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:5130:            if model.onboardingFlowDecision.phase == .scanProposal,
+Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:5146:            if model.onboardingFlowDecision.phase == .bossSetupWizard {
+Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:5154:            if model.onboardingFlowDecision.phase == .bossReadyWelcome {
+Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:5158:            switch model.onboardingFlowDecision.phase {
+Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:5171:                instructionStatus = model.onboardingFlowDecision.notice
+Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:5723:                        Text(WorkbenchOnboardingNarrative.scanIntro)
+Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:5873:                Text(WorkbenchOnboardingNarrative.bossReadyWelcome)
+Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:5876:                Text(WorkbenchOnboardingNarrative.scanIntro)
+Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:5924:            } else if let notice = model.onboardingFlowDecision.notice {
+Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:5937:                        detail: WorkbenchOnboardingNarrative.proposalSummary(
+Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:5949:                Text(WorkbenchOnboardingNarrative.unclearImport)
+Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:6135:                        Text(WorkbenchOnboardingNarrative.unclearImport)
+Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:8746:            parts.append(WorkbenchOnboardingNarrative.duplicateCleanup)
+Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:9798:    var onboardingFlowInput: WorkbenchOnboardingFlowInput {
+Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:9808:    var onboardingFlowDecision: WorkbenchOnboardingFlowDecision {
+Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:9809:        WorkbenchOnboardingFlowPolicy.decision(for: onboardingFlowInput)
+Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:9824:            return "\(state.boss.agentName) is selected as this Mac's boss. \(WorkbenchOnboardingNarrative.bossReadyWelcome) \(WorkbenchOnboardingNarrative.scanIntro)"
+Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:12670:            return WorkbenchOnboardingNarrative.duplicateCleanup
+Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:6:        XCTAssertEqual(WorkbenchOnboardingNarrative.bossReadyWelcome, "I can see this Mac now.")
+Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:11:            WorkbenchOnboardingNarrative.scanIntro,
+Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:17:        XCTAssertEqual(WorkbenchOnboardingNarrative.unclearImport, "I will ask before importing anything unclear.")
+Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:22:            WorkbenchOnboardingNarrative.ambiguousCandidates(count: 2),
+Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:29:            WorkbenchOnboardingNarrative.duplicateCleanup,
+Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:36:            WorkbenchOnboardingNarrative.proposalSummary(groupCount: 3, selectedCount: 5),
+Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:42:        let decision = WorkbenchOnboardingFlowPolicy.decision(for: WorkbenchOnboardingFlowInput(
+Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:56:        let decision = WorkbenchOnboardingFlowPolicy.decision(for: WorkbenchOnboardingFlowInput(
+Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:66:        XCTAssertEqual(decision.notice, WorkbenchOnboardingNarrative.scanIntro)
+Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:70:        let decision = WorkbenchOnboardingFlowPolicy.decision(for: WorkbenchOnboardingFlowInput(
+Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:84:        let decision = WorkbenchOnboardingFlowPolicy.decision(for: WorkbenchOnboardingFlowInput(
+Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:98:        let decision = WorkbenchOnboardingFlowPolicy.decision(for: WorkbenchOnboardingFlowInput(
+Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:108:        XCTAssertEqual(decision.notice, WorkbenchOnboardingNarrative.ambiguousCandidates(count: 2))
+Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:112:        let decision = WorkbenchOnboardingFlowPolicy.decision(for: WorkbenchOnboardingFlowInput(
+Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:122:        XCTAssertEqual(decision.notice, WorkbenchOnboardingNarrative.duplicateCleanup)

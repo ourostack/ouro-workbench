@@ -1,0 +1,152 @@
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/11] Write sources
+[3/11] Write swift-version--58304C5D6DBC2206.txt
+[5/7] Emitting module OuroWorkbenchCoreTests
+[6/7] Compiling OuroWorkbenchCoreTests OnboardingNarrativeTests.swift
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:42:24: error: cannot find 'WorkbenchOnboardingFlowPolicy' in scope
+ 40 | 
+ 41 |     func testFlowStartsInBossSetupWizardBeforeBossReadiness() {
+ 42 |         let decision = WorkbenchOnboardingFlowPolicy.decision(for: WorkbenchOnboardingFlowInput(
+    |                        `- error: cannot find 'WorkbenchOnboardingFlowPolicy' in scope
+ 43 |             bossIsReady: false,
+ 44 |             hasProposal: false,
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:42:68: error: cannot find 'WorkbenchOnboardingFlowInput' in scope
+ 40 | 
+ 41 |     func testFlowStartsInBossSetupWizardBeforeBossReadiness() {
+ 42 |         let decision = WorkbenchOnboardingFlowPolicy.decision(for: WorkbenchOnboardingFlowInput(
+    |                                                                    `- error: cannot find 'WorkbenchOnboardingFlowInput' in scope
+ 43 |             bossIsReady: false,
+ 44 |             hasProposal: false,
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:50:41: error: type 'Equatable' has no member 'bossSetupWizard'
+ 48 |         ))
+ 49 | 
+ 50 |         XCTAssertEqual(decision.phase, .bossSetupWizard)
+    |                                         `- error: type 'Equatable' has no member 'bossSetupWizard'
+ 51 |         XCTAssertEqual(decision.primaryActionTitle, "Connect Boss")
+ 52 |         XCTAssertNil(decision.notice)
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:56:24: error: cannot find 'WorkbenchOnboardingFlowPolicy' in scope
+ 54 | 
+ 55 |     func testFlowSwitchesToBossReadyWelcomeWhenBossCanScan() {
+ 56 |         let decision = WorkbenchOnboardingFlowPolicy.decision(for: WorkbenchOnboardingFlowInput(
+    |                        `- error: cannot find 'WorkbenchOnboardingFlowPolicy' in scope
+ 57 |             bossIsReady: true,
+ 58 |             hasProposal: false,
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:56:68: error: cannot find 'WorkbenchOnboardingFlowInput' in scope
+ 54 | 
+ 55 |     func testFlowSwitchesToBossReadyWelcomeWhenBossCanScan() {
+ 56 |         let decision = WorkbenchOnboardingFlowPolicy.decision(for: WorkbenchOnboardingFlowInput(
+    |                                                                    `- error: cannot find 'WorkbenchOnboardingFlowInput' in scope
+ 57 |             bossIsReady: true,
+ 58 |             hasProposal: false,
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:64:41: error: type 'Equatable' has no member 'bossReadyWelcome'
+ 62 |         ))
+ 63 | 
+ 64 |         XCTAssertEqual(decision.phase, .bossReadyWelcome)
+    |                                         `- error: type 'Equatable' has no member 'bossReadyWelcome'
+ 65 |         XCTAssertEqual(decision.primaryActionTitle, "Scan With Boss")
+ 66 |         XCTAssertEqual(decision.notice, WorkbenchOnboardingNarrative.scanIntro)
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:70:24: error: cannot find 'WorkbenchOnboardingFlowPolicy' in scope
+ 68 | 
+ 69 |     func testFlowKeepsScanProposalWhenProposalHasNoSelectedTerminals() {
+ 70 |         let decision = WorkbenchOnboardingFlowPolicy.decision(for: WorkbenchOnboardingFlowInput(
+    |                        `- error: cannot find 'WorkbenchOnboardingFlowPolicy' in scope
+ 71 |             bossIsReady: true,
+ 72 |             hasProposal: true,
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:70:68: error: cannot find 'WorkbenchOnboardingFlowInput' in scope
+ 68 | 
+ 69 |     func testFlowKeepsScanProposalWhenProposalHasNoSelectedTerminals() {
+ 70 |         let decision = WorkbenchOnboardingFlowPolicy.decision(for: WorkbenchOnboardingFlowInput(
+    |                                                                    `- error: cannot find 'WorkbenchOnboardingFlowInput' in scope
+ 71 |             bossIsReady: true,
+ 72 |             hasProposal: true,
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:78:41: error: type 'Equatable' has no member 'scanProposal'
+ 76 |         ))
+ 77 | 
+ 78 |         XCTAssertEqual(decision.phase, .scanProposal)
+    |                                         `- error: type 'Equatable' has no member 'scanProposal'
+ 79 |         XCTAssertEqual(decision.primaryActionTitle, "Scan With Boss")
+ 80 |         XCTAssertNil(decision.notice)
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:84:24: error: cannot find 'WorkbenchOnboardingFlowPolicy' in scope
+ 82 | 
+ 83 |     func testFlowArrangesApprovedImportsWhenSelectionExists() {
+ 84 |         let decision = WorkbenchOnboardingFlowPolicy.decision(for: WorkbenchOnboardingFlowInput(
+    |                        `- error: cannot find 'WorkbenchOnboardingFlowPolicy' in scope
+ 85 |             bossIsReady: true,
+ 86 |             hasProposal: true,
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:84:68: error: cannot find 'WorkbenchOnboardingFlowInput' in scope
+ 82 | 
+ 83 |     func testFlowArrangesApprovedImportsWhenSelectionExists() {
+ 84 |         let decision = WorkbenchOnboardingFlowPolicy.decision(for: WorkbenchOnboardingFlowInput(
+    |                                                                    `- error: cannot find 'WorkbenchOnboardingFlowInput' in scope
+ 85 |             bossIsReady: true,
+ 86 |             hasProposal: true,
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:92:41: error: type 'Equatable' has no member 'arrangeApprovedImports'
+ 90 |         ))
+ 91 | 
+ 92 |         XCTAssertEqual(decision.phase, .arrangeApprovedImports)
+    |                                         `- error: type 'Equatable' has no member 'arrangeApprovedImports'
+ 93 |         XCTAssertEqual(decision.primaryActionTitle, "Arrange Selected")
+ 94 |         XCTAssertNil(decision.notice)
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:98:24: error: cannot find 'WorkbenchOnboardingFlowPolicy' in scope
+ 96 | 
+ 97 |     func testFlowAttachesAmbiguousCandidateNarrative() {
+ 98 |         let decision = WorkbenchOnboardingFlowPolicy.decision(for: WorkbenchOnboardingFlowInput(
+    |                        `- error: cannot find 'WorkbenchOnboardingFlowPolicy' in scope
+ 99 |             bossIsReady: true,
+100 |             hasProposal: true,
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:98:68: error: cannot find 'WorkbenchOnboardingFlowInput' in scope
+ 96 | 
+ 97 |     func testFlowAttachesAmbiguousCandidateNarrative() {
+ 98 |         let decision = WorkbenchOnboardingFlowPolicy.decision(for: WorkbenchOnboardingFlowInput(
+    |                                                                    `- error: cannot find 'WorkbenchOnboardingFlowInput' in scope
+ 99 |             bossIsReady: true,
+100 |             hasProposal: true,
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:106:41: error: type 'Equatable' has no member 'scanProposal'
+104 |         ))
+105 | 
+106 |         XCTAssertEqual(decision.phase, .scanProposal)
+    |                                         `- error: type 'Equatable' has no member 'scanProposal'
+107 |         XCTAssertEqual(decision.primaryActionTitle, "Scan With Boss")
+108 |         XCTAssertEqual(decision.notice, WorkbenchOnboardingNarrative.ambiguousCandidates(count: 2))
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:112:24: error: cannot find 'WorkbenchOnboardingFlowPolicy' in scope
+110 | 
+111 |     func testFlowGuidesDuplicateCleanupAfterImportSummary() {
+112 |         let decision = WorkbenchOnboardingFlowPolicy.decision(for: WorkbenchOnboardingFlowInput(
+    |                        `- error: cannot find 'WorkbenchOnboardingFlowPolicy' in scope
+113 |             bossIsReady: true,
+114 |             hasProposal: true,
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:112:68: error: cannot find 'WorkbenchOnboardingFlowInput' in scope
+110 | 
+111 |     func testFlowGuidesDuplicateCleanupAfterImportSummary() {
+112 |         let decision = WorkbenchOnboardingFlowPolicy.decision(for: WorkbenchOnboardingFlowInput(
+    |                                                                    `- error: cannot find 'WorkbenchOnboardingFlowInput' in scope
+113 |             bossIsReady: true,
+114 |             hasProposal: true,
+
+/Users/arimendelow/Projects/ouro-workbench/Tests/OuroWorkbenchCoreTests/OnboardingNarrativeTests.swift:120:41: error: type 'Equatable' has no member 'duplicateCleanup'
+118 |         ))
+119 | 
+120 |         XCTAssertEqual(decision.phase, .duplicateCleanup)
+    |                                         `- error: type 'Equatable' has no member 'duplicateCleanup'
+121 |         XCTAssertEqual(decision.primaryActionTitle, "Review Duplicates")
+122 |         XCTAssertEqual(decision.notice, WorkbenchOnboardingNarrative.duplicateCleanup)
+error: fatalError

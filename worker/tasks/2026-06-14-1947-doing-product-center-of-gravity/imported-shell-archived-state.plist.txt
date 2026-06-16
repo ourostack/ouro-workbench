@@ -1,0 +1,101 @@
+{
+  "actionLog" => [
+    0 => {
+      "action" => "archive"
+      "id" => "AE755E94-DF80-4FAF-BCF7-F7851EFD0275"
+      "occurredAt" => "2026-06-15T04:50:54Z"
+      "result" => "Archived Imported User Shell Delete Target"
+      "source" => "external:product-center-e2e"
+      "succeeded" => true
+      "targetEntryId" => "33333333-3333-3333-3333-333333333333"
+      "targetName" => "Imported User Shell Delete Target"
+    }
+    1 => {
+      "action" => "ensureDaemon"
+      "id" => "C9A80218-3DE5-4A3A-B92C-CDF6B024E28B"
+      "occurredAt" => "2026-06-15T04:50:51Z"
+      "result" => "Daemon already reachable; reused existing process (no spawn)."
+      "source" => "boss:slugger"
+      "succeeded" => true
+      "targetName" => "slugger"
+    }
+    2 => {
+      "action" => "ensureDaemon"
+      "id" => "202CF159-3C47-4EF0-B761-5126CAF5C39C"
+      "occurredAt" => "2026-06-15T04:50:50Z"
+      "result" => "Daemon already reachable; reused existing process (no spawn)."
+      "source" => "native"
+      "succeeded" => true
+      "targetName" => "launch"
+    }
+  ]
+  "boss" => {
+    "agentName" => "slugger"
+    "scope" => "machine"
+  }
+  "bossPaneCollapsed" => true
+  "bossWatchEnabled" => true
+  "decisionLog" => [
+  ]
+  "processEntries" => [
+    0 => {
+      "arguments" => [
+        0 => "-lc"
+        1 => "echo original"
+      ]
+      "attention" => "idle"
+      "autoResume" => true
+      "executable" => "/bin/zsh"
+      "id" => "22222222-2222-2222-2222-222222222222"
+      "isArchived" => false
+      "isPinned" => false
+      "kind" => "shell"
+      "lastSummary" => "Imported shell fixture"
+      "name" => "Imported User Shell"
+      "owner" => {
+        "kind" => "human"
+      }
+      "projectId" => "11111111-1111-1111-1111-111111111111"
+      "trust" => "trusted"
+      "workingDirectory" => "/tmp"
+    }
+    1 => {
+      "arguments" => [
+        0 => "-lc"
+        1 => "echo delete"
+      ]
+      "attention" => "idle"
+      "autoResume" => false
+      "executable" => "/bin/zsh"
+      "id" => "33333333-3333-3333-3333-333333333333"
+      "isArchived" => true
+      "isPinned" => false
+      "kind" => "shell"
+      "lastSummary" => "Archived custom terminal session"
+      "name" => "Imported User Shell Delete Target"
+      "owner" => {
+        "kind" => "human"
+      }
+      "projectId" => "11111111-1111-1111-1111-111111111111"
+      "trust" => "trusted"
+      "workingDirectory" => "/tmp"
+    }
+  ]
+  "processRuns" => [
+  ]
+  "projects" => [
+    0 => {
+      "boss" => {
+        "agentName" => "slugger"
+        "scope" => "machine"
+      }
+      "id" => "11111111-1111-1111-1111-111111111111"
+      "name" => "Imported Shell Workspace"
+      "rootPath" => "/tmp"
+    }
+  ]
+  "schemaVersion" => 1
+  "selectedEntryId" => "33333333-3333-3333-3333-333333333333"
+  "selectedProjectId" => "11111111-1111-1111-1111-111111111111"
+  "updatedAt" => "2026-06-15T04:50:54Z"
+}

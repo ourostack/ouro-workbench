@@ -15,7 +15,7 @@ trap cleanup EXIT
 
 mkdir -p "$REPORTS_DIR" "$OUT_ROOT"
 printf '{"app_name":"OuroWorkbench"}\n' > "$REPORTS_DIR/OuroWorkbench-2099-01-01-000000.ips"
-printf 'legacy crash report\n' > "$REPORTS_DIR/Ouro Workbench-legacy.crash"
+printf 'old crash report\n' > "$REPORTS_DIR/Ouro Workbench-old-format.crash"
 printf 'unrelated\n' > "$REPORTS_DIR/OtherApp-2099-01-01-000000.ips"
 printf 'scenario verifier\n' > "$REPORTS_DIR/OuroWorkbenchScenarioVerifier-2099-01-01-000000.ips"
 
@@ -32,8 +32,8 @@ if ! grep -F 'OuroWorkbench-2099-01-01-000000.ips' "$runtime_file" >/dev/null; t
   exit 1
 fi
 
-if ! grep -F 'Ouro Workbench-legacy.crash' "$runtime_file" >/dev/null; then
-  printf 'Support diagnostics crash-report smoke failed: legacy .crash report was omitted\n' >&2
+if ! grep -F 'Ouro Workbench-old-format.crash' "$runtime_file" >/dev/null; then
+  printf 'Support diagnostics crash-report smoke failed: old-format .crash report was omitted\n' >&2
   exit 1
 fi
 
