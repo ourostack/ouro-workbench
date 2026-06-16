@@ -153,7 +153,9 @@ public struct OnboardingReadinessReportRenderer: Sendable {
             lines.append("- none")
         } else {
             for step in auditableSteps {
-                lines.append("- \(step.id): \(step.commandLine ?? "")")
+                if let commandLine = step.commandLine {
+                    lines.append("- \(step.id): \(commandLine)")
+                }
             }
         }
         return lines.joined(separator: "\n")
@@ -392,7 +394,7 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
                     id: "repair-\(lane)-provider",
                     actor: .humanRequired,
                     title: "Repair \(laneName) provider",
-                    detail: check?.detail ?? "The \(laneName) provider failed its live check.",
+                    detail: check!.detail,
                     command: ["ouro", "connect", "providers", "--agent", agent.name]
                 )
             ]
@@ -617,7 +619,14 @@ public struct RecentSessionScanner {
         }
 
         let processes = liveProcesses ?? liveProcessLister()
-        let processesByTTY = Dictionary(grouping: processes, by: { normalizedTTYName($0.ttyName) ?? "" })
+        var processesByTTY: [String: [LiveTerminalProcess]] = [:]
+        for process in processes {
+            if let tty = normalizedTTYName(process.ttyName) {
+                processesByTTY[tty, default: []].append(process)
+            } else {
+                processesByTTY["", default: []].append(process)
+            }
+        }
         let historyById = candidateById(claudeHistory)
 
         return cmuxWorkspaces(in: root).flatMap { workspace in
@@ -776,11 +785,17 @@ public struct RecentSessionScanner {
                 guard isRecent(date) else {
                     return nil
                 }
-                let fallbackTokens = tokens.map { [$0.executable] + $0.arguments } ?? command.split(whereSeparator: \.isWhitespace).map(String.init)
+                let fallbackTokens: [String]
+                if let tokens {
+                    fallbackTokens = [tokens.executable] + tokens.arguments
+                } else {
+                    fallbackTokens = command.split(whereSeparator: \.isWhitespace).map(String.init)
+                }
+                let isCopilot = command.contains("copilot")
                 return RecentSessionCandidate(
                     id: "shell:\(parsed.epoch):\(command.hashValue)",
-                    source: command.contains("copilot") ? .githubCopilotCLI : .shellHistory,
-                    agentKind: kind ?? (command.contains("copilot") ? .githubCopilotCLI : nil),
+                    source: isCopilot ? .githubCopilotCLI : .shellHistory,
+                    agentKind: kind ?? (isCopilot ? .githubCopilotCLI : nil),
                     title: command,
                     workingDirectory: homeURL.path,
                     lastActiveAt: date,
@@ -842,7 +857,12 @@ public struct RecentSessionScanner {
                 let id = fields[0]
                 let title = Self.titleFromPrompt(fields[1]) ?? id
                 let cwd = fields[2].isEmpty ? homeURL.path : fields[2]
-                let milliseconds = Double(fields[4]) ?? 0
+                let milliseconds: Double
+                if let parsedMilliseconds = Double(fields[4]) {
+                    milliseconds = parsedMilliseconds
+                } else {
+                    milliseconds = 0
+                }
                 let lastActive = milliseconds > 0 ? Date(timeIntervalSince1970: milliseconds / 1000) : nil
                 return RecentSessionCandidate(
                     id: "codex:\(id)",
@@ -1097,7 +1117,12 @@ public struct RecentSessionScanner {
     }
 
     private func cmuxWorkspaces(in root: [String: Any]) -> [CmuxWorkspace] {
-        let windows = root["windows"] as? [[String: Any]] ?? []
+        let windows: [[String: Any]]
+        if let parsedWindows = root["windows"] as? [[String: Any]] {
+            windows = parsedWindows
+        } else {
+            windows = []
+        }
         return windows.flatMap { window -> [CmuxWorkspace] in
             guard let tabManager = window["tabManager"] as? [String: Any],
                   let workspaces = tabManager["workspaces"] as? [[String: Any]]
@@ -1109,8 +1134,10 @@ public struct RecentSessionScanner {
     }
 
     private func cmuxWorkspace(_ object: [String: Any]) -> CmuxWorkspace {
-        let panels = (object["panels"] as? [[String: Any]] ?? []).map(cmuxPanel)
-        let statusEntries = (object["statusEntries"] as? [[String: Any]] ?? []).map(cmuxStatusEntry)
+        let panelObjects = object["panels"] as? [[String: Any]] ?? []
+        let statusObjects = object["statusEntries"] as? [[String: Any]] ?? []
+        let panels = panelObjects.map(cmuxPanel)
+        let statusEntries = statusObjects.map(cmuxStatusEntry)
         return CmuxWorkspace(
             customTitle: object["customTitle"] as? String,
             currentDirectory: object["currentDirectory"] as? String,
@@ -1471,6 +1498,9 @@ public struct WorkbenchImportProposalBuilder: Sendable {
     }
 
     public func displayName(for rootPath: String) -> String {
+        guard !rootPath.isEmpty else {
+            return "Home"
+        }
         let last = URL(fileURLWithPath: rootPath, isDirectory: true).lastPathComponent
         return last.isEmpty ? "Home" : last
     }

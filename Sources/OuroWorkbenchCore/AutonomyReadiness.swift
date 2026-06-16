@@ -289,8 +289,7 @@ public struct AutonomyReadinessBuilder: Sendable {
         }
         if !unavailable.isEmpty {
             let details = unavailable.map { entry -> String in
-                let health = executableHealth[entry.id]
-                return "\(entry.name): \(health?.detail ?? "not checked")"
+                "\(entry.name): \(executableHealth[entry.id]!.detail)"
             }
             return AutonomyReadinessCheck(
                 id: "executables",

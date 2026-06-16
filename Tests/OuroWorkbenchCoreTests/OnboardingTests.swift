@@ -1179,9 +1179,9 @@ final class OnboardingTests: XCTestCase {
         XCTAssertNotNil(alphaIndex)
         XCTAssertNotNil(zooIndex)
         XCTAssertLessThan(alphaIndex!, zooIndex!, "same-time groups should sort case-insensitively by name")
-        XCTAssertTrue(proposal.groups.contains { $0.name == "ouro-workbench-wt-1" && $0.rootPath == "" })
+        XCTAssertTrue(proposal.groups.contains { $0.name == "Home" && $0.rootPath == "" })
         XCTAssertTrue(proposal.groups.map(\.id).contains("dup-3"))
-        XCTAssertEqual(builder.displayName(for: ""), "ouro-workbench-wt-1")
+        XCTAssertEqual(builder.displayName(for: ""), "Home")
         XCTAssertEqual(builder.workspaceRoot(for: "/Users/ari/Projects/App/Subdir/File"), "/Users/ari/Projects/App")
     }
 
@@ -1263,6 +1263,37 @@ final class OnboardingTests: XCTestCase {
         let proposal = WorkbenchImportProposalBuilder().build(candidates: candidates)
         XCTAssertEqual(proposal.groups.map(\.name), ["a", "b"])
         XCTAssertEqual(proposal.groups.first?.terminals.map(\.id), ["a"])
+    }
+
+    func testOnboardingRefactorBranchesForSparseInputs() throws {
+        let now = ISO8601DateFormatter().date(from: "2026-05-26T12:00:00Z")!
+        let emptyCmux = temporaryDirectory.appendingPathComponent("empty-cmux.json")
+        try "{}".write(to: emptyCmux, atomically: true, encoding: .utf8)
+        let nilTTYScanner = RecentSessionScanner(
+            homeURL: temporaryDirectory,
+            now: now,
+            sqlite3URL: temporaryDirectory.appendingPathComponent("missing"),
+            cmuxSessionURL: emptyCmux,
+            liveProcessLister: {
+                [RecentSessionScanner.LiveTerminalProcess(pid: 22, ttyName: nil, command: "claude --session-id no-tty")]
+            }
+        )
+        XCTAssertTrue(nilTTYScanner.scanCmuxSessions().isEmpty)
+
+        let historyURL = temporaryDirectory.appendingPathComponent(".zsh_history")
+        try ": 1779796800:0;foo && gh copilot explain issue\n".write(to: historyURL, atomically: true, encoding: .utf8)
+        let shell = RecentSessionScanner(homeURL: temporaryDirectory, now: now, sqlite3URL: temporaryDirectory.appendingPathComponent("missing"), liveProcessLister: { [] }).scanShellHistory()
+        XCTAssertTrue(shell.contains { $0.source == .githubCopilotCLI && $0.resumeCommand.contains("&&") })
+
+        let codexURL = temporaryDirectory.appendingPathComponent(".codex/state_5.sqlite")
+        try FileManager.default.createDirectory(at: codexURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: codexURL.path, contents: Data())
+        let sqliteURL = temporaryDirectory.appendingPathComponent("sqlite-invalid-ms")
+        try "#!/bin/sh\nprintf 'codex-badms\\tBad milliseconds\\t/repo\\tmain\\toops\\n'\n"
+            .write(to: sqliteURL, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: sqliteURL.path)
+        let codex = RecentSessionScanner(homeURL: temporaryDirectory, now: now, sqlite3URL: sqliteURL, liveProcessLister: { [] }).scanCodex()
+        XCTAssertEqual(codex.first?.lastActiveAt, nil)
     }
 
     private func makeTwoTerminalProposal() -> WorkbenchImportProposal {
