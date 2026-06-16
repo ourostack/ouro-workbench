@@ -203,10 +203,7 @@ public final class BossAgentMCPClient: @unchecked Sendable {
                 processBox.terminate()
                 throw BossAgentMCPClientError.timeout
             }
-            guard let data = try await group.next() else {
-                throw BossAgentMCPClientError.closed
-            }
-            return data
+            return try await firstTaskResult(of: &group, orThrow: BossAgentMCPClientError.closed)
         }
     }
 

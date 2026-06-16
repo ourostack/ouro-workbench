@@ -117,12 +117,18 @@ public struct SessionActivityReader: Sendable {
             .max { modificationDate($0) < modificationDate($1) }
     }
 
-    private func recentFiles(under root: URL, pathExtension: String, limit: Int) -> [URL] {
-        guard let enumerator = fileManager.enumerator(
-            at: root,
-            includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
-            options: [.skipsHiddenFiles]
-        ) else { return [] }
+    func recentFiles(
+        under root: URL,
+        pathExtension: String,
+        limit: Int,
+        makeEnumerator: (URL) -> FileManager.DirectoryEnumerator? = {
+            FileManager.default.enumerator(
+                at: $0,
+                includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
+                options: [.skipsHiddenFiles])
+        }
+    ) -> [URL] {
+        guard let enumerator = makeEnumerator(root) else { return [] }
         var urls: [URL] = []
         for case let url as URL in enumerator where url.pathExtension == pathExtension {
             urls.append(url)
@@ -130,7 +136,7 @@ public struct SessionActivityReader: Sendable {
         return Array(urls.sorted { modificationDate($0) > modificationDate($1) }.prefix(limit))
     }
 
-    private func modificationDate(_ url: URL) -> Date {
+    func modificationDate(_ url: URL) -> Date {
         (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
     }
 
@@ -364,14 +370,14 @@ extension SessionActivity {
         return name
     }
 
-    private static func intValue(_ value: Any?) -> Int {
+    static func intValue(_ value: Any?) -> Int {
         if let i = value as? Int { return i }
         if let d = value as? Double { return Int(d) }
         if let n = value as? NSNumber { return n.intValue }
         return 0
     }
 
-    private static func nonEmpty(_ s: String) -> String? {
+    static func nonEmpty(_ s: String) -> String? {
         let trimmed = s.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }

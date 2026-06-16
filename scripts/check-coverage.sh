@@ -49,23 +49,47 @@ if not files:
     print(f'error: no {core_dir} files in coverage data', file=sys.stderr)
     sys.exit(1)
 
+# Allowlist of intentionally-uncovered code that no test can reach (structurally
+# unreachable). Format per line: <File.swift> <max_uncovered_lines> <max_uncovered_regions>
+allow = {}
+allow_path = 'scripts/coverage-allowlist.txt'
+if os.path.exists(allow_path):
+    with open(allow_path) as fh:
+        for raw in fh:
+            line = raw.split('#', 1)[0].strip()
+            if not line:
+                continue
+            parts = line.split()
+            allow[parts[0]] = (int(parts[1]), int(parts[2]))
+
 below = []
+exempt = []
 for f in files:
+    name = os.path.basename(f['filename'])
     L = f['summary']['lines']
     R = f['summary']['regions']
-    if L['covered'] != L['count'] or R['covered'] != R['count']:
-        below.append((L['count'] - L['covered'], os.path.basename(f['filename']),
-                      L['percent'], R['percent']))
+    ul = L['count'] - L['covered']
+    ur = R['count'] - R['covered']
+    if ul == 0 and ur == 0:
+        continue
+    al, ar = allow.get(name, (0, 0))
+    if ul <= al and ur <= ar:
+        exempt.append((name, ul, ur))
+    else:
+        below.append((ul, name, L['percent'], R['percent'], ur))
 
 total_files = len(files)
-ok_files = total_files - len(below)
-print(f'\nOuroWorkbenchCore: {ok_files}/{total_files} files at 100% line+region')
+fully = total_files - len(below) - len(exempt)
+print(f'\nOuroWorkbenchCore: {fully}/{total_files} files at 100% line+region'
+      + (f' ({len(exempt)} with allowlisted structural exclusions)' if exempt else ''))
+for name, ul, ur in sorted(exempt):
+    print(f'  allow {name:44} ({ul} line, {ur} region exempt — see coverage-allowlist.txt)')
 if below:
     below.sort(reverse=True)
-    print(f'{len(below)} below 100% ({sum(b[0] for b in below)} uncovered lines):')
-    for uncov, name, lp, rp in below:
-        print(f'  {name:44} {lp:5.1f}% line  {rp:5.1f}% region  ({uncov} uncovered lines)')
-    print('\nFAIL: OuroWorkbenchCore must be 100% line + region covered.')
+    print(f'\n{len(below)} below 100%:')
+    for ul, name, lp, rp, ur in below:
+        print(f'  {name:44} {lp:5.1f}% line  {rp:5.1f}% region  ({ul} lines / {ur} regions uncovered)')
+    print('\nFAIL: OuroWorkbenchCore must be 100% line + region covered (minus the documented allowlist).')
     sys.exit(1)
-print('\nPASS: OuroWorkbenchCore is 100% line + region covered.')
+print('\nPASS: OuroWorkbenchCore is 100% line + region covered (documented structural exclusions aside).')
 PY

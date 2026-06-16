@@ -209,6 +209,139 @@ final class FinalCoverageTests: XCTestCase {
         XCTAssertEqual(try MailboxClient().url(for: .events).path, "/api/events")
     }
 
+    // firstTaskResult throws when the group completes without yielding (the
+    // otherwise-unreachable arm behind MailboxClient/BossAgentMCPClient).
+    func testFirstTaskResultThrowsOnEmptyGroup() async {
+        struct Sentinel: Error {}
+        do {
+            _ = try await withThrowingTaskGroup(of: Int.self) { group in
+                try await firstTaskResult(of: &group, orThrow: Sentinel())
+            }
+            XCTFail("expected the sentinel error")
+        } catch {
+            XCTAssertTrue(error is Sentinel)
+        }
+    }
+
+    // A path the URL builder rejects surfaces as invalidURL.
+    func testMailboxResolveURLRejectsUnparseablePath() {
+        XCTAssertThrowsError(
+            try MailboxClient.resolveURL(path: "x", relativeTo: URL(string: "http://h")!, build: { _, _ in nil })
+        ) { XCTAssertEqual($0 as? MailboxClientError, .invalidURL) }
+    }
+
+    // The default loader path end-to-end: MailboxClient() with no injected loader
+    // goes through defaultDataLoader → URLSession.shared, intercepted by a globally
+    // registered stub.
+    func testMailboxClientDefaultLoaderFetchesViaSharedSession() async throws {
+        MailboxStubURLProtocol.respond = { url in
+            (Data("{\"value\":7}".utf8),
+             HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+        }
+        URLProtocol.registerClass(MailboxStubURLProtocol.self)
+        defer {
+            URLProtocol.unregisterClass(MailboxStubURLProtocol.self)
+            MailboxStubURLProtocol.respond = nil
+        }
+        struct Payload: Decodable, Sendable { let value: Int }
+        let payload: Payload = try await MailboxClient().fetch(.events)
+        XCTAssertEqual(payload.value, 7)
+    }
+
+    // The percent-encode fallback returns the raw value when the encoder can't represent it.
+    func testMailboxPercentEncodedFallsBackToRawValue() {
+        XCTAssertEqual(
+            MailboxEndpoint.percentEncoded("abc", allowed: .alphanumerics, encode: { _, _ in nil }),
+            "abc")
+        XCTAssertEqual(MailboxEndpoint.percentEncoded("a b", allowed: .alphanumerics), "a%20b")
+    }
+
+    // Claude JSONL parse edge arms: two distinct models (max comparator), a todo
+    // with no status (`?? ""`), and a non-numeric token value (NSNumber path).
+    func testSessionActivityClaudeParseEdgeArms() {
+        let tail = """
+        {"type":"assistant","message":{"model":"claude-opus","id":"m1","usage":{"input_tokens":true,"output_tokens":5},"content":[{"type":"tool_use","name":"TodoWrite","input":{"todos":[{"content":"A","status":"completed"},{"content":"B"}]}}]}}
+        {"type":"assistant","message":{"model":"claude-sonnet","id":"m2","usage":{"input_tokens":3}}}
+        """
+        let activity = SessionActivity.parse(claudeJSONLTail: tail)
+        XCTAssertEqual(activity.todoTotal, 2)
+        XCTAssertEqual(activity.todoDone, 1)        // "B" has no status → not completed
+        XCTAssertNotNil(activity.model)             // two models seen → max picked one
+        XCTAssertEqual(activity.inputTokens, 4)     // boolean true → NSNumber.intValue 1, plus 3
+    }
+
+    // Codex sessions root that is a FILE (not a directory) → the enumerator is
+    // nil → recentFiles returns [].
+    func testSessionActivityCodexSessionsRootIsFile() throws {
+        let codex = tmp.appendingPathComponent(".codex", isDirectory: true)
+        try FileManager.default.createDirectory(at: codex, withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: codex.appendingPathComponent("sessions").path, contents: Data())
+        let reader = SessionActivityReader(homeURL: tmp, maxBytes: 256_000)
+        XCTAssertNil(reader.activity(forDirectory: "/x", agentKind: .openAICodex))
+    }
+
+    // The default process killer actually signals a running process.
+    func testProcessIOBoxDefaultKillerSignalsRunningProcess() throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        process.arguments = ["30"]
+        let out = Pipe(), err = Pipe()
+        process.standardOutput = out
+        process.standardError = err
+        let box = ProcessIOBox( // default killer = kill(pid, SIGKILL)
+            process: process,
+            stdout: out.fileHandleForReading,
+            stderr: err.fileHandleForReading)
+        try process.run()
+        box.forceKill()
+        process.waitUntilExit()
+        XCTAssertFalse(process.isRunning)
+    }
+
+    // modificationDate falls back to .distantPast when the URL's metadata can't
+    // be read (e.g. the file no longer exists).
+    func testSessionActivityModificationDateFallsBackForUnreadableURL() {
+        let missing = tmp.appendingPathComponent("does-not-exist.jsonl")
+        XCTAssertEqual(SessionActivityReader(homeURL: tmp).modificationDate(missing), .distantPast)
+    }
+
+    // recentFiles over a non-enumerable root yields [] (nil enumerator).
+    func testSessionActivityRecentFilesEmptyForMissingRoot() {
+        let reader = SessionActivityReader(homeURL: tmp)
+        XCTAssertEqual(
+            reader.recentFiles(under: tmp, pathExtension: "jsonl", limit: 5, makeEnumerator: { _ in nil }),
+            [])
+    }
+
+    // intValue coerces a boolean NSNumber; nonEmpty trims to nil when blank.
+    func testSessionActivityNumberAndStringHelpers() {
+        XCTAssertEqual(SessionActivity.intValue(true), 1)   // Bool → NSNumber path
+        XCTAssertEqual(SessionActivity.intValue("nope"), 0)
+        XCTAssertNil(SessionActivity.nonEmpty("   \n"))
+        XCTAssertEqual(SessionActivity.nonEmpty("  hi "), "hi")
+    }
+
+    // A legacy agent scaffold whose agentKind is unset but whose command still
+    // detects to the preset is recognized (the detect side of the `||`).
+    func testBootstrapDetectsLegacyScaffoldByCommandWhenAgentKindUnset() {
+        let project = WorkbenchProject(name: "Project", rootPath: "/repo")
+        let preset = TerminalAgentPresets.preset(for: .claudeCode)!
+        let legacy = ProcessEntry(
+            projectId: project.id,
+            name: preset.displayName,
+            kind: .terminalAgent,
+            agentKind: nil,                 // first `||` operand false …
+            executable: "claude",           // … but the command detects to .claudeCode
+            workingDirectory: "/repo",
+            lastSummary: "Configured \(preset.displayName) lane"
+        )
+        let bootstrapped = WorkbenchBootstrapper().bootstrappedState(
+            from: WorkspaceState(projects: [project], processEntries: [legacy]),
+            defaults: WorkbenchDefaults(includeLocalShell: false))
+        // Untouched legacy scaffold (no action log) is pruned.
+        XCTAssertFalse(bootstrapped.processEntries.contains { $0.id == legacy.id })
+    }
+
     private static func stubSession() -> URLSession {
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [MailboxStubURLProtocol.self]
