@@ -444,6 +444,59 @@ final class BossAgentBridgeTests: XCTestCase {
         )
     }
 
+    func testRegistrationSnapshotActionabilityAndErrorDescriptions() {
+        XCTAssertTrue(BossWorkbenchMCPRegistrationSnapshot(agentName: "a", serverName: "s", commandPath: "c", agentConfigPath: "p", status: .notRegistered, detail: "").isActionable)
+        XCTAssertTrue(BossWorkbenchMCPRegistrationSnapshot(agentName: "a", serverName: "s", commandPath: "c", agentConfigPath: "p", status: .needsUpdate, detail: "").isActionable)
+        XCTAssertFalse(BossWorkbenchMCPRegistrationSnapshot(agentName: "a", serverName: "s", commandPath: "c", agentConfigPath: "p", status: .registered, detail: "").isActionable)
+
+        XCTAssertEqual(BossWorkbenchMCPRegistrationError.emptyAgentName.errorDescription, "Boss agent name is empty.")
+        XCTAssertEqual(BossWorkbenchMCPRegistrationError.invalidAgentName("bad/name").errorDescription, "Boss agent name cannot be used as a bundle name: bad/name")
+        XCTAssertEqual(BossWorkbenchMCPRegistrationError.agentConfigMissing("/missing").errorDescription, "Boss agent config is missing at /missing.")
+        XCTAssertEqual(BossWorkbenchMCPRegistrationError.executableMissing("/missing-bin").errorDescription, "Workbench MCP executable is missing at /missing-bin.")
+        XCTAssertEqual(BossWorkbenchMCPRegistrationError.invalidConfig("/bad").errorDescription, "Boss agent config is not a JSON object: /bad.")
+        XCTAssertEqual(BossWorkbenchMCPRegistrationError.writeFailed("nope").errorDescription, "nope")
+    }
+
+    func testSnapshotAndInstallSurfaceInvalidAndMissingConfigFailures() throws {
+        let arrayConfig = try writeAgentConfig(agentName: "slugger", json: "[]")
+        let registrar = BossWorkbenchMCPRegistrar(
+            agentBundlesURL: temporaryDirectory,
+            mcpExecutableURL: try writeExecutable()
+        )
+
+        let snapshot = registrar.snapshot(for: BossAgentSelection(agentName: "slugger"))
+        XCTAssertEqual(snapshot.status, .invalidConfig)
+        XCTAssertTrue(snapshot.detail.contains(arrayConfig.path))
+
+        XCTAssertThrowsError(try registrar.install(for: BossAgentSelection(agentName: ""))) { error in
+            XCTAssertEqual(error as? BossWorkbenchMCPRegistrationError, .emptyAgentName)
+        }
+        XCTAssertThrowsError(try registrar.install(for: BossAgentSelection(agentName: "missing"))) { error in
+            if case .agentConfigMissing(let path) = error as? BossWorkbenchMCPRegistrationError {
+                XCTAssertTrue(path.hasSuffix("missing.ouro/agent.json"))
+            } else {
+                XCTFail("expected agentConfigMissing, got \(error)")
+            }
+        }
+
+        XCTAssertThrowsError(try registrar.install(for: BossAgentSelection(agentName: "slugger"))) { error in
+            XCTAssertEqual(error as? BossWorkbenchMCPRegistrationError, .invalidConfig(arrayConfig.path))
+        }
+    }
+
+    func testInstallWrapsUnexpectedWriteFailure() throws {
+        try writeAgentConfig(agentName: "slugger", json: #"{"mcpServers":{"ouro_workbench":{"command":"old"}}}"#)
+        let registrar = BossWorkbenchMCPRegistrar(
+            agentBundlesURL: temporaryDirectory,
+            mcpExecutableURL: try writeExecutable(),
+            jsonWriter: { _, _ in throw CoverageBatch2Error.boom }
+        )
+
+        XCTAssertThrowsError(try registrar.install(for: BossAgentSelection(agentName: "slugger"))) { error in
+            XCTAssertEqual(error as? BossWorkbenchMCPRegistrationError, .writeFailed("boom"))
+        }
+    }
+
     func testWorkbenchMCPRegistrationRejectsUnsafeBossAgentNames() throws {
         let executableURL = try writeExecutable()
         let registrar = BossWorkbenchMCPRegistrar(

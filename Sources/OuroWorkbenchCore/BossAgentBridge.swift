@@ -141,17 +141,20 @@ public struct BossWorkbenchMCPRegistrar: @unchecked Sendable {
     public var mcpExecutableURL: URL
     public var serverName: String
     public var fileManager: FileManager
+    private let jsonWriter: @Sendable (Data, URL) throws -> Void
 
     public init(
         agentBundlesURL: URL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("AgentBundles", isDirectory: true),
         mcpExecutableURL: URL = BossWorkbenchMCPRegistrar.defaultMCPExecutableURL(),
         serverName: String = "ouro_workbench",
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
+        jsonWriter: @escaping @Sendable (Data, URL) throws -> Void = { data, url in try data.write(to: url, options: .atomic) }
     ) {
         self.agentBundlesURL = agentBundlesURL
         self.mcpExecutableURL = mcpExecutableURL
         self.serverName = serverName
         self.fileManager = fileManager
+        self.jsonWriter = jsonWriter
     }
 
     public static func defaultMCPExecutableURL(
@@ -352,7 +355,7 @@ public struct BossWorkbenchMCPRegistrar: @unchecked Sendable {
             )
             var output = data
             output.append(0x0A)
-            try output.write(to: configURL, options: .atomic)
+            try jsonWriter(output, configURL)
         }
         return changed
     }

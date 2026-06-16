@@ -164,13 +164,13 @@ public enum WorkbenchTriageInterval {
     /// compute a next day (it always can in practice).
     public static func untilEndOfDay(
         now: Date = Date(),
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        nextDate: ((Calendar, Date, DateComponents, Calendar.MatchingPolicy) -> Date?)? = nil
     ) -> TimeInterval {
-        guard let nextDay = calendar.nextDate(
-            after: now,
-            matching: DateComponents(hour: 0, minute: 0, second: 0),
-            matchingPolicy: .nextTime
-        ) else {
+        let resolver = nextDate ?? { calendar, date, components, policy in
+            calendar.nextDate(after: date, matching: components, matchingPolicy: policy)
+        }
+        guard let nextDay = resolver(calendar, now, DateComponents(hour: 0, minute: 0, second: 0), .nextTime) else {
             return 86_400
         }
         return max(60, nextDay.timeIntervalSince(now))

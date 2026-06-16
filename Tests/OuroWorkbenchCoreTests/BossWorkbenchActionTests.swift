@@ -87,6 +87,18 @@ final class BossWorkbenchActionTests: XCTestCase {
         }
     }
 
+    func testCreateGroupRequiresNameAndWorkingDirectoryBeforeQueueing() {
+        let missingName = BossWorkbenchAction(action: .createGroup, workingDirectory: "/repo")
+        let missingWorkingDirectory = BossWorkbenchAction(action: .createGroup, name: "Harness", workingDirectory: "  ")
+
+        XCTAssertThrowsError(try missingName.validateForQueueing()) { error in
+            XCTAssertEqual(error as? BossWorkbenchActionValidationError, .missingName(.createGroup))
+        }
+        XCTAssertThrowsError(try missingWorkingDirectory.validateForQueueing()) { error in
+            XCTAssertEqual(error as? BossWorkbenchActionValidationError, .missingWorkingDirectoryForCreateGroup)
+        }
+    }
+
     func testCreateSessionRequiresNameCommandAndOwnerBeforeQueueing() {
         // A well-formed createSession (name + command + owner) validates.
         let valid = BossWorkbenchAction(
@@ -179,6 +191,42 @@ final class BossWorkbenchActionTests: XCTestCase {
         XCTAssertNoThrow(try action.validateForQueueing())
     }
 
+    func testEntryScopedMutationsRequireTheirPayloads() {
+        XCTAssertThrowsError(try BossWorkbenchAction(action: .moveSession, entry: "Codex").validateForQueueing()) { error in
+            XCTAssertEqual(error as? BossWorkbenchActionValidationError, .missingGroupForMoveSession)
+        }
+        XCTAssertThrowsError(try BossWorkbenchAction(action: .setTrust, entry: "Codex").validateForQueueing()) { error in
+            XCTAssertEqual(error as? BossWorkbenchActionValidationError, .missingTrustForSetTrust)
+        }
+        XCTAssertThrowsError(try BossWorkbenchAction(action: .setAutoResume, entry: "Codex").validateForQueueing()) { error in
+            XCTAssertEqual(error as? BossWorkbenchActionValidationError, .missingAutoResumeForSetAutoResume)
+        }
+        XCTAssertNoThrow(try BossWorkbenchAction(action: .requestProviderConfig).validateForQueueing())
+        XCTAssertNoThrow(try BossWorkbenchAction(action: .ensureDaemon).validateForQueueing())
+    }
+
+    func testValidationErrorDescriptionsNameTheMissingContract() {
+        let cases: [(BossWorkbenchActionValidationError, String)] = [
+            (.missingEntry(.launch), "launch requires an entry"),
+            (.missingTextForSendInput, "sendInput requires non-empty text"),
+            (.missingName(.repairAgent), "repairAgent requires a non-empty name"),
+            (.missingCommandForCreateTerminal, "createTerminal requires a non-empty command"),
+            (.missingCommandForCreateSession, "createSession requires a non-empty command"),
+            (.missingOwnerForCreateSession, "createSession requires a non-empty owner (the agent name)"),
+            (.missingWorkingDirectoryForCreateGroup, "createGroup requires a non-empty workingDirectory"),
+            (.missingGroupForMoveSession, "moveSession requires a target group"),
+            (.missingTrustForSetTrust, "setTrust requires trust"),
+            (.missingAutoResumeForSetAutoResume, "setAutoResume requires autoResume"),
+            (.missingLane(.selectLane), "selectLane requires a lane"),
+            (.missingProviderForSelectLane, "selectLane requires a non-empty provider"),
+            (.missingModelForSelectLane, "selectLane requires a non-empty model"),
+        ]
+
+        for (error, description) in cases {
+            XCTAssertEqual(error.errorDescription, description)
+        }
+    }
+
     // MARK: - Marker fallback (no fenced block)
 
     func testParsesMarkerActionsWithTrailingProse() throws {
@@ -215,6 +263,22 @@ final class BossWorkbenchActionTests: XCTestCase {
         XCTAssertEqual(actions, [
             BossWorkbenchAction(action: .recover, entry: "OpenAI Codex"),
             BossWorkbenchAction(action: .sendInput, entry: "Claude Code", text: "done [ok]", appendNewline: true),
+        ])
+    }
+
+    func testMarkerFallbackIgnoresMissingOrUnclosedJSONValues() throws {
+        XCTAssertEqual(try BossWorkbenchActionParser().parse("OURO_WORKBENCH_ACTIONS: no-json-here"), [])
+        XCTAssertEqual(try BossWorkbenchActionParser().parse("OURO_WORKBENCH_ACTIONS: [ { \"action\": \"recover\" }"), [])
+    }
+
+    func testUnclosedFencedBlockIsIgnoredAndEscapedMarkerStringsStayBalanced() throws {
+        XCTAssertEqual(try BossWorkbenchActionParser().parse("```ouro-workbench-actions\n[]"), [])
+
+        let reply = #"OURO_WORKBENCH_ACTIONS: [{"action":"sendInput","entry":"Codex","text":"quote: \" and slash: \\ plus bracket ]","appendNewline":false}] trailing"#
+        let actions = try BossWorkbenchActionParser().parse(reply)
+
+        XCTAssertEqual(actions, [
+            BossWorkbenchAction(action: .sendInput, entry: "Codex", text: #"quote: " and slash: \ plus bracket ]"#, appendNewline: false)
         ])
     }
 

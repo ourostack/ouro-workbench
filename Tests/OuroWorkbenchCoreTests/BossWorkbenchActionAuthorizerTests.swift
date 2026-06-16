@@ -20,6 +20,22 @@ final class BossWorkbenchActionAuthorizerTests: XCTestCase {
         XCTAssertNil(authorization.reason)
     }
 
+    func testSendInputWithoutTextUsesEmptyStringForSafetyClassification() {
+        let entry = ProcessEntry(
+            projectId: UUID(),
+            name: "Trusted",
+            kind: .terminalAgent,
+            executable: "codex",
+            workingDirectory: "/repo",
+            trust: .trusted
+        )
+        let action = BossWorkbenchAction(action: .sendInput, entry: entry.id.uuidString)
+
+        let authorization = BossWorkbenchActionAuthorizer().authorize(action, for: entry, livePrompt: "Continue? (y/N)")
+
+        XCTAssertTrue(authorization.isAllowed)
+    }
+
     func testUntrustedEntriesCannotReceiveBossActions() throws {
         let entry = ProcessEntry(
             projectId: UUID(),
@@ -193,6 +209,17 @@ final class BossWorkbenchActionAuthorizerTests: XCTestCase {
         XCTAssertEqual(authorization.reason, "repairAgent requires an explicit agent name")
         XCTAssertEqual(authorization.posture, .denied)
         XCTAssertFalse(authorization.requiresAudit)
+    }
+
+    func testEntrylessRequestProviderConfigIsAllowedWithoutAgentNameAndRequiresAudit() {
+        let action = BossWorkbenchAction(action: .requestProviderConfig)
+
+        let authorization = BossWorkbenchActionAuthorizer().authorizeEntryless(action)
+
+        XCTAssertTrue(authorization.isAllowed)
+        XCTAssertEqual(authorization.posture, .trustedOnboarding)
+        XCTAssertTrue(authorization.requiresAudit)
+        XCTAssertNil(authorization.reason)
     }
 
     func testEntrylessCreateGroupRemainsExplicitlyAuthorized() throws {

@@ -130,8 +130,12 @@ public struct ProviderVerifyRunner: Sendable {
     private let runVerify: @Sendable (String, ProviderLane?) async throws -> Void
     private let verifyProbe: @Sendable (String, ProviderLane?) async -> AgentRepairProbe
 
+    public init(verifyProbe: @escaping @Sendable (String, ProviderLane?) async -> AgentRepairProbe) {
+        self.init(runVerify: Self.headlessVerify, verifyProbe: verifyProbe)
+    }
+
     public init(
-        runVerify: @escaping @Sendable (String, ProviderLane?) async throws -> Void = ProviderVerifyRunner.headlessVerify,
+        runVerify: @escaping @Sendable (String, ProviderLane?) async throws -> Void,
         verifyProbe: @escaping @Sendable (String, ProviderLane?) async -> AgentRepairProbe
     ) {
         self.runVerify = runVerify

@@ -229,6 +229,60 @@ final class HarnessStatusTests: XCTestCase {
         XCTAssertEqual(status.overallState, .blocked)
     }
 
+    func testDaemonUnknownTextForEmptyStatusModeAndVersion() {
+        let daemon = HarnessDaemonStatus(status: "", mode: "", version: "")
+
+        XCTAssertFalse(daemon.isReachable)
+        XCTAssertEqual(daemon.statusText, "unknown")
+        XCTAssertEqual(daemon.modeText, "unknown")
+        XCTAssertEqual(daemon.versionText, "unknown")
+        XCTAssertEqual(daemon.state, .attention)
+    }
+
+    func testAgentInventorySummaryAndEntryID() {
+        let entry = HarnessAgentEntry(name: "slugger", status: .ready, detail: "ready", isSelectedBoss: true)
+        let inventory = HarnessAgentInventory(entries: [entry, HarnessAgentEntry(name: "helper", status: .disabled, detail: "off", isSelectedBoss: false)])
+
+        XCTAssertEqual(entry.id, "slugger")
+        XCTAssertEqual(inventory.summaryLine, "2 local, 1 ready")
+        XCTAssertEqual(inventory.selectedBoss?.id, "slugger")
+    }
+
+    func testBossReachabilityUnknownAndNonActionableMCPStatuses() {
+        let unknown = HarnessBossReachability(agentName: "slugger", bundleIsReady: true, mcpStatus: nil)
+        XCTAssertEqual(unknown.state, .attention)
+        XCTAssertEqual(unknown.mcpStatusText, "unknown")
+
+        let cases: [(BossWorkbenchMCPRegistrationStatus, String)] = [
+            (.agentMissing, "agent bundle missing"),
+            (.executableMissing, "install app first"),
+            (.invalidConfig, "config issue"),
+        ]
+        for (status, text) in cases {
+            let boss = HarnessBossReachability(agentName: "slugger", bundleIsReady: true, mcpStatus: status)
+            XCTAssertEqual(boss.mcpStatusText, text)
+            XCTAssertEqual(boss.state, .blocked)
+        }
+
+        XCTAssertEqual(HarnessBossReachability(agentName: "slugger", bundleIsReady: true, mcpStatus: .needsUpdate).state, .attention)
+        XCTAssertEqual(HarnessBossReachability(agentName: "slugger", bundleIsReady: false, mcpStatus: .needsUpdate).state, .blocked)
+    }
+
+    func testMachineIssueFallbackWhenNoMachinePrefixedIssueExists() {
+        let status = HarnessStatusBuilder().build(
+            boss: BossAgentSelection(agentName: "slugger"),
+            dashboard: dashboard(
+                daemonStatus: "unknown",
+                machineAvailable: false,
+                issues: ["needs-me: timeout"]
+            ),
+            agents: [],
+            bossRegistration: nil
+        )
+
+        XCTAssertEqual(status.daemon.statusText, "unreachable (mailbox did not answer)")
+    }
+
     // MARK: - Empty inventory headline is grammatical
 
     func testSingleAgentHeadlineIsSingular() {

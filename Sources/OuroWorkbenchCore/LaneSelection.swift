@@ -109,8 +109,12 @@ public struct LaneSelectionRunner: Sendable {
     private let runSelect: @Sendable (LaneSelection) async throws -> Void
     private let verifyProbe: @Sendable (String) async -> AgentRepairProbe
 
+    public init(verifyProbe: @escaping @Sendable (String) async -> AgentRepairProbe) {
+        self.init(runSelect: Self.headlessSelect, verifyProbe: verifyProbe)
+    }
+
     public init(
-        runSelect: @escaping @Sendable (LaneSelection) async throws -> Void = LaneSelectionRunner.headlessSelect,
+        runSelect: @escaping @Sendable (LaneSelection) async throws -> Void,
         verifyProbe: @escaping @Sendable (String) async -> AgentRepairProbe
     ) {
         self.runSelect = runSelect

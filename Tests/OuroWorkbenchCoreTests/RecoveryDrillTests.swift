@@ -93,4 +93,61 @@ final class RecoveryDrillTests: XCTestCase {
         XCTAssertEqual(state.processRuns.first?.pid, 123)
         XCTAssertEqual(state.processEntries.first?.attention, .idle)
     }
+
+    func testDrillUsesMostRecentRunPerEntryForBeforeAndAfterStatus() {
+        let project = WorkbenchProject(name: "Project", rootPath: "/repo")
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "Shell",
+            kind: .shell,
+            executable: "/bin/zsh",
+            workingDirectory: "/repo",
+            trust: .trusted,
+            autoResume: false
+        )
+        let older = ProcessRun(
+            entryId: entry.id,
+            pid: 111,
+            status: .running,
+            startedAt: Date(timeIntervalSince1970: 100)
+        )
+        let newer = ProcessRun(
+            entryId: entry.id,
+            pid: 222,
+            status: .waitingForInput,
+            startedAt: Date(timeIntervalSince1970: 200)
+        )
+        let state = WorkspaceState(projects: [project], processEntries: [entry], processRuns: [older, newer])
+
+        let result = RecoveryDrill().run(state: state, now: Date(timeIntervalSince1970: 300))
+
+        XCTAssertEqual(result.items.first?.beforeStatus, .waitingForInput)
+        XCTAssertEqual(result.items.first?.afterStatus, .needsRecovery)
+        XCTAssertEqual(result.items.first?.action, .noAction)
+        XCTAssertEqual(result.items.first?.reason, "auto-resume is disabled")
+    }
+
+    func testDrillFallsBackWhenPlannerOmitsEntry() {
+        let project = WorkbenchProject(name: "Project", rootPath: "/repo")
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "Shell",
+            kind: .shell,
+            executable: "/bin/zsh",
+            workingDirectory: "/repo",
+            trust: .trusted,
+            autoResume: true
+        )
+        let run = ProcessRun(entryId: entry.id, status: .exited)
+        let state = WorkspaceState(projects: [project], processEntries: [entry], processRuns: [run])
+
+        let result = RecoveryDrill(planRecovery: { simulated in
+            XCTAssertEqual(simulated.processEntries.map(\.id), [entry.id])
+            return []
+        }).run(state: state)
+
+        XCTAssertEqual(result.items.first?.action, .noAction)
+        XCTAssertEqual(result.items.first?.reason, "no recovery plan")
+        XCTAssertEqual(result.items.first?.afterStatus, .exited)
+    }
 }

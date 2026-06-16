@@ -72,6 +72,12 @@ final class LaneSelectionTests: XCTestCase {
     // MARK: - Runner
 
     func testRunnerRejectsEmptyAgentNameWithoutRunningCommand() async {
+        let defaultSelectRunner = LaneSelectionRunner(verifyProbe: { _ in .healthy })
+        let defaultOutcome = await defaultSelectRunner.select(LaneSelection(agentName: "  ", lane: .inner, provider: "p", model: "m"))
+        XCTAssertFalse(defaultOutcome.commandAttempted)
+        let defaultCommandOutcome = await defaultSelectRunner.select(LaneSelection(agentName: "slugger", lane: .inner, provider: "p", model: "m"))
+        XCTAssertTrue(defaultCommandOutcome.commandAttempted)
+        XCTAssertEqual(defaultCommandOutcome.truth, .selected)
         let didRun = LaneBoolFlag()
         let runner = LaneSelectionRunner(
             runSelect: { _ in didRun.set() },
@@ -124,6 +130,29 @@ final class LaneSelectionTests: XCTestCase {
         let outcome = await runner.select(makeSelection())
         XCTAssertFalse(outcome.humanFacingLine.lowercased().contains("ouro"))
         XCTAssertTrue(outcome.auditDetail.contains("ouro use --agent slugger --lane outward"))
+    }
+
+    func testOutcomeNeedsManualRecoveryDelegatesToTruth() {
+        XCTAssertTrue(LaneSelectionOutcome(selection: makeSelection(), truth: .needsManual, commandAttempted: true).needsManualRecovery)
+        XCTAssertFalse(LaneSelectionOutcome(selection: makeSelection(), truth: .selected, commandAttempted: true).needsManualRecovery)
+    }
+
+    func testDefaultHeadlessSelectRunsExplicitUseCommand() async throws {
+        let root = try coverageBatch2TemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let argsFile = root.appendingPathComponent("args.txt")
+        let oldPath = try coverageBatch2InstallFakeOuro(
+            in: root,
+            body: "printf '%s\\n' \"$@\" > '\(argsFile.path)'\nexit 0\n"
+        )
+        defer { setenv("PATH", oldPath, 1) }
+
+        try await LaneSelectionRunner.headlessSelect(makeSelection())
+
+        XCTAssertEqual(
+            try String(contentsOf: argsFile, encoding: .utf8),
+            "use\n--agent\nslugger\n--lane\noutward\n--provider\nanthropic\n--model\nclaude\n"
+        )
     }
 }
 
