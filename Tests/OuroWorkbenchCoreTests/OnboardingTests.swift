@@ -1296,6 +1296,151 @@ final class OnboardingTests: XCTestCase {
         XCTAssertEqual(codex.first?.lastActiveAt, nil)
     }
 
+    func testOnboardingBigFileFinalCoverageBranches() throws {
+        let now = ISO8601DateFormatter().date(from: "2026-05-26T12:00:00Z")!
+        let scanner = RecentSessionScanner(
+            homeURL: temporaryDirectory,
+            now: now,
+            lookback: 7 * 24 * 60 * 60,
+            sqlite3URL: temporaryDirectory.appendingPathComponent("missing"),
+            liveProcessLister: { [] },
+            commandParser: TerminalCommandParser.parse
+        )
+
+        let emptyReadiness = OnboardingReadiness(
+            state: .ready,
+            headline: "Ready",
+            detail: "No action",
+            selectedBossName: "slugger",
+            repairSteps: []
+        )
+        XCTAssertTrue(OnboardingReadinessReportRenderer().render(emptyReadiness).contains("repair steps: none"))
+
+        let nilDate = RecentSessionCandidate(id: "nil", source: .shellHistory, agentKind: nil, title: "nil", workingDirectory: "/nil", lastActiveAt: nil, resumeCommand: [], summary: "", evidencePaths: [], confidence: 0.8)
+        let dated = RecentSessionCandidate(id: "dated", source: .shellHistory, agentKind: nil, title: "dated", workingDirectory: "/dated", lastActiveAt: now, resumeCommand: [], summary: "", evidencePaths: [], confidence: 0.7)
+        let newer = RecentSessionCandidate(id: "newer", source: .shellHistory, agentKind: nil, title: "newer", workingDirectory: "/newer", lastActiveAt: now.addingTimeInterval(1), resumeCommand: [], summary: "", evidencePaths: [], confidence: 0.6)
+        XCTAssertEqual(scanner.resolveRepositoryRoots([nilDate, dated, newer]).map(\.id), ["newer", "dated", "nil"])
+        for ordering in [[nilDate, dated], [dated, nilDate], [nilDate, newer, dated], [dated, newer, nilDate]] {
+            XCTAssertEqual(scanner.resolveRepositoryRoots(ordering).last?.id, "nil")
+        }
+
+        let historyURL = temporaryDirectory.appendingPathComponent(".zsh_history")
+        try ": 1779796800:0;gh copilot explain 'unterminated\n"
+            .write(to: historyURL, atomically: true, encoding: .utf8)
+        let nilParsingScanner = RecentSessionScanner(
+            homeURL: temporaryDirectory,
+            now: now,
+            lookback: 7 * 24 * 60 * 60,
+            sqlite3URL: temporaryDirectory.appendingPathComponent("missing"),
+            liveProcessLister: { [] },
+            commandParser: { _ in nil }
+        )
+        let fallback = try XCTUnwrap(nilParsingScanner.scanShellHistory().first)
+        XCTAssertEqual(fallback.resumeCommand, ["gh", "copilot", "explain", "'unterminated"])
+
+        let brokenSymlink = temporaryDirectory.appendingPathComponent("broken-symlink")
+        try FileManager.default.createSymbolicLink(
+            at: brokenSymlink,
+            withDestinationURL: temporaryDirectory.appendingPathComponent("missing-target")
+        )
+        XCTAssertTrue(scanner.recentFiles(under: brokenSymlink, pathExtension: "jsonl").isEmpty)
+        XCTAssertTrue(scanner.recentFiles(under: URL(string: "not-file://missing")!, pathExtension: "jsonl").isEmpty)
+        XCTAssertTrue(scanner.recentFiles(under: temporaryDirectory, pathExtension: "jsonl", makeEnumerator: { _ in nil }).isEmpty)
+
+        let homeClaudeURL = temporaryDirectory.appendingPathComponent(".claude/projects/plain/default-home.jsonl")
+        try FileManager.default.createDirectory(at: homeClaudeURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try #"{"sessionId":"default-home","timestamp":"2026-05-26T11:00:00Z"}"#
+            .write(to: homeClaudeURL, atomically: true, encoding: .utf8)
+        let homeClaude = try XCTUnwrap(scanner.scanClaudeCode().first { $0.id == "claude:default-home" })
+        XCTAssertEqual(homeClaude.workingDirectory, temporaryDirectory.path)
+        XCTAssertEqual(homeClaude.confidence, 0.72)
+
+        let historyCandidate = RecentSessionCandidate(
+            id: "claude:with-history",
+            source: .claudeCode,
+            agentKind: .claudeCode,
+            title: "History title",
+            workingDirectory: "/history",
+            lastActiveAt: now,
+            resumeCommand: ["claude"],
+            summary: "History summary",
+            evidencePaths: ["history.jsonl"],
+            confidence: 0.9
+        )
+        let liveWithHistory = scanner.scanLiveClaudeCode(
+            liveProcesses: [RecentSessionScanner.LiveTerminalProcess(pid: 42, ttyName: "ttys042", command: "claude --session-id with-history")],
+            claudeHistory: [historyCandidate]
+        ).first
+        XCTAssertEqual(liveWithHistory?.confidence, 0.95)
+        XCTAssertEqual(liveWithHistory?.evidencePaths, ["history.jsonl", "process:42"])
+
+        XCTAssertTrue(RecentSessionScanner.systemLiveTerminalProcesses(
+            executableURL: URL(fileURLWithPath: "/usr/bin/false"),
+            arguments: []
+        ).isEmpty)
+        XCTAssertTrue(RecentSessionScanner.systemLiveTerminalProcesses(
+            executableURL: temporaryDirectory.appendingPathComponent("missing-ps"),
+            arguments: []
+        ).isEmpty)
+
+        let cmuxURL = temporaryDirectory.appendingPathComponent("cmux-no-panels.json")
+        try #"{"windows":[{"tabManager":{"workspaces":[{"statusEntries":[]}]}}]}"#
+            .write(to: cmuxURL, atomically: true, encoding: .utf8)
+        XCTAssertTrue(RecentSessionScanner(
+            homeURL: temporaryDirectory,
+            cmuxSessionURL: cmuxURL,
+            liveProcessLister: { [] }
+        ).scanCmuxSessions().isEmpty)
+
+        let cmuxFallbackURL = temporaryDirectory.appendingPathComponent("cmux-summary-fallback.json")
+        try """
+        {"windows":[{"tabManager":{"workspaces":[{"panels":[{"ttyName":"ttys012"}]}]}}]}
+        """.write(to: cmuxFallbackURL, atomically: true, encoding: .utf8)
+        let cmuxFallback = try XCTUnwrap(RecentSessionScanner(
+            homeURL: temporaryDirectory,
+            cmuxSessionURL: cmuxFallbackURL,
+            liveProcessLister: {
+                [RecentSessionScanner.LiveTerminalProcess(pid: 12, ttyName: "ttys012", command: "claude --session-id cmux-summary")]
+            }
+        ).scanCmuxSessions().first)
+        XCTAssertEqual(cmuxFallback.summary, "Live cmux Claude Code panel in cmux.")
+        XCTAssertTrue(cmuxFallback.evidencePaths.contains("tty:ttys012"))
+
+        let longPath = "/" + (1...70).map { "d\($0)" }.joined(separator: "/")
+        XCTAssertNil(WorkspaceGrouping.repositoryRoot(for: longPath) { _ in false })
+
+        let sameRootNilDates = [
+            RecentSessionCandidate(id: "b", source: .shellHistory, agentKind: nil, title: "B", workingDirectory: "/repo/b", lastActiveAt: nil, resumeCommand: [], summary: "", evidencePaths: [], confidence: 0.9, repositoryRoot: "/repo"),
+            RecentSessionCandidate(id: "a", source: .shellHistory, agentKind: nil, title: "A", workingDirectory: "/repo/a", lastActiveAt: nil, resumeCommand: [], summary: "", evidencePaths: [], confidence: 0.9, repositoryRoot: "/repo")
+        ]
+        let proposal = WorkbenchImportProposalBuilder().build(candidates: sameRootNilDates, now: now)
+        XCTAssertEqual(proposal.groups.first?.terminals.map(\.id), ["b", "a"])
+
+        let namedNoRoot = RecentSessionCandidate(id: "named", source: .shellHistory, agentKind: nil, title: "Named", workingDirectory: "/named/work", lastActiveAt: now, resumeCommand: [], summary: "", evidencePaths: [], confidence: 0.9, preferredGroupName: "Named Group")
+        let namedProposal = WorkbenchImportProposalBuilder().build(candidates: [namedNoRoot], now: now)
+        XCTAssertEqual(namedProposal.groups.first?.rootPath, "/named/work")
+    }
+
+    func testCodexSQLiteScannerTerminatesHungSQLiteProcess() throws {
+        let codexURL = temporaryDirectory.appendingPathComponent(".codex/state_5.sqlite")
+        try FileManager.default.createDirectory(at: codexURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        FileManager.default.createFile(atPath: codexURL.path, contents: Data())
+
+        let sqliteURL = temporaryDirectory.appendingPathComponent("sqlite-hangs")
+        try "#!/bin/sh\nwhile true; do :; done\n"
+            .write(to: sqliteURL, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: sqliteURL.path)
+
+        let scanner = RecentSessionScanner(
+            homeURL: temporaryDirectory,
+            sqlite3URL: sqliteURL,
+            liveProcessLister: { [] },
+            codexSQLiteWatchdogDelay: 0.01
+        )
+
+        XCTAssertTrue(scanner.scanCodex().isEmpty)
+    }
+
     private func makeTwoTerminalProposal() -> WorkbenchImportProposal {
         let first = ProposedTerminalImport(
             id: "first",

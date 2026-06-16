@@ -509,6 +509,8 @@ public struct RecentSessionScanner {
     public var sqlite3URL: URL
     public var cmuxSessionURL: URL
     public var liveProcessLister: () -> [LiveTerminalProcess]
+    var codexSQLiteWatchdogDelay: TimeInterval
+    var commandParser: (String) -> TerminalCommandTokens?
 
     public init(
         homeURL: URL = FileManager.default.homeDirectoryForCurrentUser,
@@ -517,7 +519,9 @@ public struct RecentSessionScanner {
         lookback: TimeInterval = 7 * 24 * 60 * 60,
         sqlite3URL: URL = URL(fileURLWithPath: "/usr/bin/sqlite3"),
         cmuxSessionURL: URL? = nil,
-        liveProcessLister: (() -> [LiveTerminalProcess])? = nil
+        liveProcessLister: (() -> [LiveTerminalProcess])? = nil,
+        codexSQLiteWatchdogDelay: TimeInterval = 5,
+        commandParser: @escaping (String) -> TerminalCommandTokens? = TerminalCommandParser.parse
     ) {
         self.homeURL = homeURL
         self.fileManager = fileManager
@@ -526,7 +530,9 @@ public struct RecentSessionScanner {
         self.sqlite3URL = sqlite3URL
         self.cmuxSessionURL = cmuxSessionURL ?? homeURL
             .appendingPathComponent("Library/Application Support/cmux/session-com.cmuxterm.app.json")
-        self.liveProcessLister = liveProcessLister ?? Self.systemLiveTerminalProcesses
+        self.liveProcessLister = liveProcessLister ?? { Self.systemLiveTerminalProcesses() }
+        self.codexSQLiteWatchdogDelay = codexSQLiteWatchdogDelay
+        self.commandParser = commandParser
     }
 
     public func scan() -> [RecentSessionCandidate] {
@@ -603,7 +609,7 @@ public struct RecentSessionScanner {
                 resumeCommand: claudeResumeCommand(sessionId: sessionId, from: process.command),
                 summary: history?.summary ?? "Live Claude Code process detected from the local process table.",
                 evidencePaths: (history?.evidencePaths ?? []) + ["process:\(process.pid)"],
-                confidence: history == nil ? 0.86 : max(0.95, history?.confidence ?? 0)
+                confidence: history.map { max(0.95, $0.confidence) } ?? 0.86
             )
         }
     }
@@ -671,7 +677,7 @@ public struct RecentSessionScanner {
                     ),
                     resumeCommand: claudeResumeCommand(sessionId: sessionId, from: liveProcess.command),
                     summary: "Live cmux Claude Code panel in \(workspace.customTitle ?? workspace.processTitle ?? "cmux").\(statusSentence)",
-                    evidencePaths: (history?.evidencePaths ?? []) + [cmuxSessionURL.path, "tty:\(panel.ttyName ?? "unknown")"],
+                    evidencePaths: (history?.evidencePaths ?? []) + [cmuxSessionURL.path, "tty:\(panelTTY)"],
                     confidence: 0.99,
                     preferredGroupName: workspace.customTitle
                 )
@@ -776,7 +782,7 @@ public struct RecentSessionScanner {
                     return nil
                 }
                 let command = parsed.command.trimmingCharacters(in: .whitespacesAndNewlines)
-                let tokens = TerminalCommandParser.parse(command)
+                let tokens = commandParser(command)
                 let kind = tokens.flatMap { TerminalAgentDetector.detect(executable: $0.executable, arguments: $0.arguments) }
                 guard kind != nil || command.hasPrefix("gh copilot") || command.contains(" gh copilot") else {
                     return nil
@@ -795,7 +801,7 @@ public struct RecentSessionScanner {
                 return RecentSessionCandidate(
                     id: "shell:\(parsed.epoch):\(command.hashValue)",
                     source: isCopilot ? .githubCopilotCLI : .shellHistory,
-                    agentKind: kind ?? (isCopilot ? .githubCopilotCLI : nil),
+                    agentKind: kind ?? .githubCopilotCLI,
                     title: command,
                     workingDirectory: homeURL.path,
                     lastActiveAt: date,
@@ -841,7 +847,7 @@ public struct RecentSessionScanner {
             let watchdog = DispatchWorkItem {
                 if process.isRunning { process.terminate() }
             }
-            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 5, execute: watchdog)
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + codexSQLiteWatchdogDelay, execute: watchdog)
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             process.waitUntilExit()
             watchdog.cancel()
@@ -882,12 +888,22 @@ public struct RecentSessionScanner {
         }
     }
 
-    func recentFiles(under root: URL, pathExtension: String) -> [URL] {
-        guard let enumerator = fileManager.enumerator(
-            at: root,
-            includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
-            options: [.skipsHiddenFiles]
-        ) else {
+    func recentFiles(
+        under root: URL,
+        pathExtension: String,
+        makeEnumerator: ((URL) -> FileManager.DirectoryEnumerator?)? = nil
+    ) -> [URL] {
+        let enumerator: FileManager.DirectoryEnumerator?
+        if let makeEnumerator {
+            enumerator = makeEnumerator(root)
+        } else {
+            enumerator = fileManager.enumerator(
+                at: root,
+                includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
+                options: [.skipsHiddenFiles]
+            )
+        }
+        guard let enumerator else {
             return []
         }
         var urls: [URL] = []
@@ -985,7 +1001,7 @@ public struct RecentSessionScanner {
             return nil
         }
         let path = "/" + projectDirectory.dropFirst().replacingOccurrences(of: "-", with: "/")
-        return path.isEmpty ? nil : path
+        return path
     }
 
     func parseZshHistoryLine(_ line: String) -> (epoch: Int, command: String)? {
@@ -1002,11 +1018,14 @@ public struct RecentSessionScanner {
         return (epoch, String(pieces[1]))
     }
 
-    private static func systemLiveTerminalProcesses() -> [LiveTerminalProcess] {
+    static func systemLiveTerminalProcesses(
+        executableURL: URL = URL(fileURLWithPath: "/bin/ps"),
+        arguments: [String] = ["-axo", "pid=,tt=,command="]
+    ) -> [LiveTerminalProcess] {
         let process = Process()
         let pipe = Pipe()
-        process.executableURL = URL(fileURLWithPath: "/bin/ps")
-        process.arguments = ["-axo", "pid=,tt=,command="]
+        process.executableURL = executableURL
+        process.arguments = arguments
         process.standardOutput = pipe
         process.standardError = Pipe()
         do {
@@ -1377,7 +1396,7 @@ public enum WorkspaceGrouping {
             return nil
         }
         let parent = URL(fileURLWithPath: path).deletingLastPathComponent().path
-        return parent.isEmpty ? "/" : parent
+        return parent
     }
 }
 
@@ -1397,13 +1416,13 @@ public struct WorkbenchImportProposalBuilder: Sendable {
         var groups = grouped.map { key, groupCandidates in
             let newest = groupCandidates.max {
                 ($0.lastActiveAt ?? .distantPast) < ($1.lastActiveAt ?? .distantPast)
-            }
+            }!
             let groupName: String
             let groupRootPath: String
             switch key {
             case let .named(name):
                 groupName = name
-                groupRootPath = newest?.repositoryRoot ?? newest?.workingDirectory ?? ""
+                groupRootPath = newest.repositoryRoot ?? newest.workingDirectory
             case let .root(root):
                 groupName = displayName(for: root)
                 groupRootPath = root
@@ -1502,7 +1521,7 @@ public struct WorkbenchImportProposalBuilder: Sendable {
             return "Home"
         }
         let last = URL(fileURLWithPath: rootPath, isDirectory: true).lastPathComponent
-        return last.isEmpty ? "Home" : last
+        return last
     }
 
     public func terminalName(for candidate: RecentSessionCandidate) -> String {
