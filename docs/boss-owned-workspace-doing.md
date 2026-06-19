@@ -200,15 +200,17 @@ Per Core unit: write tests → confirm red → implement → `swift test` green 
 **Acceptance**: Tests GREEN; 100% coverage; commit.
 **Done**: `AgentProposal` + `AgentProposalItem` (with typed `Field` enum: label/detail/command/cwd) + `AgentProposalResult`. `edit(...)` only applies when the field is in the item's `editableFields` (operator can't change a field the boss didn't expose). `editableFields` decodes from raw strings and drops unknown fields (newer-producer tolerant); optional fields decode-if-present. `result()` projects only selected items under the same proposal id. 23 tests GREEN; coverage PASS (`AgentProposal.swift` 100% line+region; 83/85, allowlist unchanged); full suite 1331 green. Commit `cc54d5e`.
 
-### ⬜ Unit 5c: Proposal queue/transport (Core) — Tests
+### ✅ Unit 5c: Proposal queue/transport (Core) — Tests
 **Tag**: Core (coverage-gated)
 **What**: Failing tests for a Core encode/decode + a pending-proposal store path mirroring `WorkbenchActionRequestQueue` (write a proposal request the App picks up; write the operator's result back for the boss to read). New `Sources/OuroWorkbenchCore/AgentProposalQueue.swift` with injected `WorkbenchPaths` (temp dir in tests). Cover enqueue, list pending, write/read result, malformed file skipped, empty.
 **Acceptance**: Tests exist and FAIL.
+**Done**: 12 tests in `AgentProposalQueueTests.swift` — confirmed RED (`cannot find 'AgentProposalQueue'`). Commit `3b198fa`.
 
-### ⬜ Unit 5d: Proposal queue/transport (Core) — Impl + coverage
+### ✅ Unit 5d: Proposal queue/transport (Core) — Impl + coverage
 **Tag**: Core (coverage-gated)
 **What**: Implement the queue using `WorkbenchPaths` (add `proposalsURL` to `WorkbenchPaths.swift` — that file is Core and gated, so cover the new accessor).
 **Acceptance**: Tests GREEN; 100% coverage on `AgentProposalQueue.swift` + `WorkbenchPaths.swift`; commit.
+**Done**: `AgentProposalQueue` (own `proposals/` dir with `pending/` + `results/` subdirs; keyed one-file-per-id; atomic prettyPrinted+sortedKeys writes; malformed/non-json files skipped; missing-dir → empty/no-op; id→filesystem-safe basename so a path-unsafe id can't escape the dir). `enqueue`/`pendingProposals`/`removePending` (boss→operator); `writeResult`/`readResult` (operator→boss). Added `WorkbenchPaths.proposalsURL` + its accessor assertion in `WorkbenchPathsTests`. 12 queue tests GREEN; coverage PASS (both new files + accessor 100%; 84/86, allowlist unchanged). Commit `470461c`.
 
 ### ⬜ Unit 5e: `workbench_propose` MCP tool (MCP)
 **Tag**: MCP
