@@ -100,12 +100,12 @@ Per Core unit: write tests → confirm red → implement → `swift test` green 
 
 ### Slice 1 — Flat-YAML reader (Core), needed by Copilot scan
 
-### ⬜ Unit 1a: Flat-YAML reader (Core) — Tests
+### ✅ Unit 1a: Flat-YAML reader (Core) — Tests
 **Tag**: Core (coverage-gated)
 **What**: Failing tests for `FlatYAMLReader` (new file `Sources/OuroWorkbenchCore/FlatYAMLReader.swift`): pure `static func parse(_ text: String) -> [String: String]` for flat `key: value` lines. Cover: quoted (`"a"`, `'b'`) + unquoted values, `#` comments, blank lines, leading/trailing whitespace, `:` in value, duplicate key (last wins), missing colon (skipped), empty input, CRLF. Zero dependency, JSON-style tolerant parsing (mirror `SessionActivity.parse` posture).
 **Acceptance**: Tests exist and FAIL.
 
-### ⬜ Unit 1b: Flat-YAML reader (Core) — Impl + coverage
+### ✅ Unit 1b: Flat-YAML reader (Core) — Impl + coverage
 **Tag**: Core (coverage-gated)
 **What**: Implement `FlatYAMLReader.parse`. Line-based; no nesting (Copilot `workspace.yaml` is flat key:value). Strip surrounding quotes; trim; drop comment-only/blank/malformed lines.
 **Acceptance**: Tests GREEN; 100% coverage on the new file; commit.
@@ -314,3 +314,4 @@ Per Core unit: write tests → confirm red → implement → `swift test` green 
 - 2026-06-19 11:09 Pass 4 quality: 36 units, all emoji-tagged, all with Acceptance, no TBD, no attribution — no changes needed.
 - 2026-06-19 11:09 Pass 5 planning coverage check: full coverage confirmed (planning-coverage-checklist.md) — all 8 areas + every In/Out-of-Scope guardrail mapped to units, no gaps.
 - 2026-06-19 11:18 Unit 0a complete: control-action audit — all kinds (archive/restore/createGroup/createTerminal/createSession/moveSession) present at model+validation+apply layers; no gap, no new unit appended. Note in control-action-audit.md.
+- 2026-06-19 11:21 Unit 0b/0c complete: AgentSessionRecord + AgentHarness (clean sibling, AgentSessionScanner.swift). Codable/Equatable round-trip, unknown harness→.custom, stable id (harness:sessionId). 9 tests green; coverage gate PASS (81/83 100%, 2 pre-existing allowlisted).
