@@ -4268,6 +4268,11 @@ struct BossDashboardView: View {
                    !dashboard.availability.issues.isEmpty {
                     MailboxWarningView(issues: dashboard.availability.issues)
                 }
+                // Boss-forward: the session STATUS list fronts the boss surface
+                // so the operator reads "what's running / waiting on me / done"
+                // at a glance before the conversation. Self-hiding when there are
+                // no sessions; terminals stay reachable in the sidebar.
+                SessionStatusListView(model: model)
                 BossConversationView(model: model)
                 // The boss's propose-for-approval CAPABILITY surfaces here when —
                 // and only when — there are pending proposals. Self-hiding and
@@ -6459,6 +6464,170 @@ private struct BossProposalItemRow: View {
         .padding(.vertical, 4)
         .padding(.horizontal, 6)
         .background(item.selected ? Color.accentColor.opacity(0.06) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
+    }
+}
+
+/// Boss-forward session STATUS list: the at-a-glance "what's running / waiting
+/// on me / done" surface that fronts the boss dashboard. All classification +
+/// ordering lives in Core (`SessionStatusList`); this view is a thin renderer
+/// that derives the buckets from `model.state` and lets a row click select the
+/// session (so its terminal is one more click away in the detail pane).
+///
+/// ADDITIVE — the terminal sidebar (`WorkbenchSidebarView`) is untouched and
+/// still the canonical way to reach every terminal. This list is a glanceable
+/// overview layered on top, not a replacement: each bucket self-hides when
+/// empty, and the whole view renders nothing when there are no sessions.
+struct SessionStatusListView: View {
+    @ObservedObject var model: WorkbenchViewModel
+
+    private var statusList: SessionStatusList {
+        SessionStatusList.make(from: model.state)
+    }
+
+    var body: some View {
+        let list = statusList
+        if !list.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 6) {
+                    Image(systemName: "rectangle.3.group")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                    Text("Sessions")
+                        .font(.subheadline.weight(.semibold))
+                    Spacer()
+                    Text(summaryLine(list))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+                SessionStatusBucketSection(
+                    title: "Waiting on you",
+                    systemImage: "person.crop.circle.badge.exclamationmark",
+                    accent: SwiftUI.Color.orange,
+                    rows: list.waitingOnYou,
+                    model: model
+                )
+                SessionStatusBucketSection(
+                    title: "Running",
+                    systemImage: "play.circle",
+                    accent: SwiftUI.Color.green,
+                    rows: list.running,
+                    model: model
+                )
+                SessionStatusBucketSection(
+                    title: "Done",
+                    systemImage: "checkmark.circle",
+                    accent: SwiftUI.Color.secondary,
+                    rows: list.done,
+                    model: model
+                )
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.quaternary.opacity(0.2), in: RoundedRectangle(cornerRadius: 8))
+        }
+    }
+
+    private func summaryLine(_ list: SessionStatusList) -> String {
+        "\(list.waitingOnYouCount) waiting · \(list.runningCount) running · \(list.doneCount) done"
+    }
+}
+
+/// One bucket (Waiting on you / Running / Done) of the boss-forward status list.
+/// Self-hides when its bucket is empty so the operator only sees the states that
+/// actually have sessions.
+private struct SessionStatusBucketSection: View {
+    var title: String
+    var systemImage: String
+    var accent: SwiftUI.Color
+    var rows: [SessionStatusRow]
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        if !rows.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Image(systemName: systemImage)
+                        .font(.caption)
+                        .foregroundStyle(accent)
+                    Text("\(title) (\(rows.count))")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(rows) { row in
+                    SessionStatusRowView(row: row, model: model)
+                }
+            }
+        }
+    }
+}
+
+/// A single clickable status row. Clicking selects the session in the detail
+/// pane (reusing `selectEntryAcrossGroups`), from which the operator opens its
+/// terminal exactly as before. Pure presentation — no logic beyond formatting.
+private struct SessionStatusRowView: View {
+    var row: SessionStatusRow
+    @ObservedObject var model: WorkbenchViewModel
+
+    private var isSelected: Bool {
+        model.selectedEntryID == row.id
+    }
+
+    var body: some View {
+        Button {
+            model.selectEntryAcrossGroups(row.id)
+        } label: {
+            HStack(spacing: 8) {
+                StatusDot(attention: row.attention)
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 6) {
+                        Text(row.name)
+                            .font(.caption.weight(.medium))
+                            .lineLimit(1)
+                        if let group = row.group {
+                            Text(group)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                    HStack(spacing: 6) {
+                        Text(row.owner.displayName)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text(detailLine)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+                Spacer()
+            }
+            .padding(.vertical, 4)
+            .padding(.horizontal, 6)
+            .background(
+                isSelected ? Color.accentColor.opacity(0.12) : Color.clear,
+                in: RoundedRectangle(cornerRadius: 6)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Open \(row.name) in the detail pane")
+    }
+
+    /// Short trailing descriptor — the bucket-relevant fact (exit code for done,
+    /// pid for running) falling back to the working directory.
+    private var detailLine: String {
+        switch row.bucket {
+        case .done:
+            if let code = row.exitCode { return "exited \(code)" }
+            return row.workingDirectory
+        case .running:
+            if let pid = row.pid { return "pid \(pid)" }
+            return row.workingDirectory
+        case .waitingOnYou:
+            return row.workingDirectory
+        }
     }
 }
 
