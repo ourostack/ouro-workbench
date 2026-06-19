@@ -39,6 +39,12 @@ final class WorkbenchMCPServer {
     private let ouroAgentInventory = OuroAgentInventory()
     private let bossWorkbenchMCPRegistrar = BossWorkbenchMCPRegistrar()
     private let daemonLivenessProbe = DaemonLivenessProbe()
+    // Discovery of agent sessions the boss did NOT create. The scanner is pure
+    // Core (FS via its homeURL seam); the lister is the executable-target Process
+    // shell that feeds it the running-process table. The scanner builds no resume
+    // commands and carries no agency knowledge — it returns GENERAL records only.
+    private let agentSessionScanner = AgentSessionScanner()
+    private let runningProcessLister = RunningProcessLister()
     private let jsonEncoder: JSONEncoder = {
         let encoder = JSONEncoder()
         // Deterministic key order (stable tests / diffs) + readable timestamps.
@@ -134,6 +140,8 @@ final class WorkbenchMCPServer {
             return try requestAction(arguments: arguments)
         case "workbench_create_session":
             return try createSession(arguments: arguments)
+        case "workbench_discover_agent_sessions":
+            return try discoverAgentSessions()
         default:
             throw MCPToolFailure("Unknown tool: \(name)")
         }
@@ -461,6 +469,23 @@ final class WorkbenchMCPServer {
         return project
     }
 
+    /// Discover agent sessions the boss did NOT create — recent (on disk:
+    /// Claude `~/.claude/projects`, Copilot `~/.copilot/session-state`) and
+    /// running (the live process table, via the executable-side lister). Returns
+    /// `{"sessions": [AgentSessionRecord, ...]}` — GENERAL records (harness,
+    /// sessionId, cwd, repository, branch, title, lastActive, running) and nothing
+    /// more. Workbench builds NO resume command and carries zero agency knowledge:
+    /// the boss reads these facts and constructs any relaunch itself.
+    ///
+    /// Synchronous, matching the readLine-driven request loop. The lister degrades
+    /// to recent-only on any `ps` failure, and the scanner's FS reads are
+    /// best-effort (a missing dir is simply no records), so this never throws on a
+    /// merely-empty environment — it returns `{"sessions": []}`.
+    private func discoverAgentSessions() throws -> String {
+        let records = agentSessionScanner.scan(processLister: runningProcessLister.callAsFunction)
+        return try encodeJSON(["sessions": records])
+    }
+
     private func optionalString(_ arguments: [String: Any], key: String) throws -> String? {
         guard let value = arguments[key] else {
             return nil
@@ -709,6 +734,15 @@ final class WorkbenchMCPServer {
                         "format": ["type": "string", "enum": ["text", "json"], "description": "Response format. \"json\" returns {queued,name,group,owner,requestId,message} — poll workbench_sessions with `name` to resolve the new session id. Default \"text\" returns a human-readable confirmation."]
                     ],
                     "required": ["owner", "name", "command"],
+                    "additionalProperties": false
+                ]
+            ],
+            [
+                "name": "workbench_discover_agent_sessions",
+                "description": "Discover agent CLI sessions that were NOT created through Workbench — recent (on disk: Claude Code under ~/.claude/projects, GitHub Copilot CLI under ~/.copilot/session-state) and currently running (the live process table). Returns {\"sessions\":[{harness,sessionId,cwd,repository,branch,title,lastActive,running}]} sorted running-first then most-recent. harness is one of claudeCode|githubCopilotCLI|openAICodex|custom; repository/branch/title/lastActive are omitted when the source didn't carry them. These are GENERAL facts only — Workbench builds NO resume command and has zero knowledge of which agent owns what: YOU read these records and construct any relaunch (e.g. `claude --resume <sessionId>` in `cwd`) yourself. Returns {\"sessions\":[]} when nothing is found.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [:],
                     "additionalProperties": false
                 ]
             ]
