@@ -259,7 +259,7 @@ final class OnboardingTests: XCTestCase {
 
         XCTAssertEqual(readiness.state, .needsRepair)
         XCTAssertTrue(readiness.repairSteps.contains { $0.id == "repair-agent-config" && $0.command == ["ouro", "repair", "--agent", "slugger"] })
-        XCTAssertTrue(readiness.repairSteps.contains { $0.id == "check-outward" && $0.title == "Checking outward provider" })
+        XCTAssertTrue(readiness.repairSteps.contains { $0.id == "check-outward" && $0.title == "Checking your main connection" })
         XCTAssertTrue(readiness.repairSteps.contains { $0.id == "workbench-mcp" && $0.detail.contains("aren't available") })
     }
 

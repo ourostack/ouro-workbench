@@ -56,7 +56,7 @@ public enum ProviderVerifyTruth: String, Codable, Equatable, Sendable {
         case .stillUnverified:
             return "Workbench checked \(agentName)'s provider connection, but it isn't working yet. Workbench will keep working on it."
         case .needsManual:
-            return "Workbench couldn't check \(agentName)'s provider connection. Please reopen Workbench, and if it keeps happening, restart your Mac."
+            return "Workbench couldn't check \(agentName)'s provider connection. You can try again — and if it keeps happening, reconnecting your provider usually clears it up."
         }
     }
 
@@ -188,7 +188,8 @@ public struct ProviderVerifyRunner: Sendable {
         process.standardError = devNull
 
         try process.run()
-        process.waitUntilExit()
+        // Bound the wait so a wedged `ouro`/`node` child can't hang the verify forever.
+        ProcessWatchdog.waitUntilExit(process, timeoutSeconds: 30)
         // Deliberately ignore the exit status: recovery truth is the post-command probe's job.
     }
 }

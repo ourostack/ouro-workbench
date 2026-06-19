@@ -218,6 +218,10 @@ public struct ReleaseUpdateChecker: Sendable {
         var request = URLRequest(url: url)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("OuroWorkbench/\(WorkbenchRelease.version)", forHTTPHeaderField: "User-Agent")
+        // Bound the check so a slow / rate-limited GitHub can't hang the request
+        // forever — otherwise the "checking" flag never clears and the UI shows a
+        // perpetual spinner next to a stale "is current" line.
+        request.timeoutInterval = 10
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw ReleaseUpdateError.badResponse

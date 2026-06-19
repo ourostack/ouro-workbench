@@ -387,6 +387,10 @@ struct WorkbenchRootView: View {
             Text(model.errorMessage ?? "Unknown error")
         }
         .task {
+            // FIRST: capture the user's real login-shell PATH so every `ouro` shellout
+            // can find `node` (incl. nvm/asdf/brew installs) — must run before the
+            // daemon bringup + any provider check below.
+            await model.prepareLoginShellEnvironment()
             // Bring the managed daemon online on launch (idempotent, quiet) before
             // recovery + status refreshes, so a daemon that died between sessions is
             // back up without waiting for a check-in.
@@ -3794,13 +3798,9 @@ struct OnboardingBossChoice: Identifiable {
         case .ready?:
             return "ready"
         case .disabled?:
-            return "disabled"
-        case .missingConfig?:
-            return "missing config"
-        case .invalidConfig?:
-            return "invalid config"
-        case nil:
-            return "missing"
+            return "turned off"
+        case .missingConfig?, .invalidConfig?, nil:
+            return "needs setup"
         }
     }
 
@@ -4223,7 +4223,7 @@ struct BossDashboardView: View {
     private var scrollBody: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
-                if let error = model.bossWatchLastError, model.bossWatchConsecutiveFailures >= 2 {
+                if model.bossWatchLastError != nil, model.bossWatchConsecutiveFailures >= 2 {
                     // Surface the boss being down prominently (out of the
                     // buried watch-status line), with the backoff state so the
                     // user knows it'll keep retrying — not spamming.
@@ -4231,14 +4231,16 @@ struct BossDashboardView: View {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(.orange)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Boss is failing — backing off")
+                            Text("Your agent isn't answering yet")
                                 .font(.callout.weight(.semibold))
-                            Text("\(model.bossWatchConsecutiveFailures) failed check-ins. Latest: \(error)")
+                            // Never interpolate the raw error here — `bossWatchLastError` carries a
+                            // daemon-jargon audit line / raw transport error. Fixed, seam-free copy;
+                            // the raw detail stays in the audit log.
+                            Text("Your agent didn't answer the last \(model.bossWatchConsecutiveFailures) times. Workbench is still trying.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(2)
-                                .textSelection(.enabled)
-                            Text("Boss Watch will keep trying with exponential backoff; press Check In to try now.")
+                            Text("Workbench keeps trying, a little less often each time — press Check In to try now.")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
@@ -5085,7 +5087,11 @@ struct WorkbenchOnboardingSheet: View {
             .padding(22)
         }
         .frame(width: 860, height: 680)
-        .onAppear {
+        .task {
+            // Ensure the login-shell PATH is captured before any provider check
+            // shells out to `ouro` (which needs `node`) — guards against the wizard
+            // opening before the launch-time capture finished.
+            await model.prepareLoginShellEnvironment()
             model.refreshOuroAgents()
             model.refreshWorkbenchMCPRegistration()
             model.refreshOnboardingReadiness()
@@ -5143,9 +5149,20 @@ struct WorkbenchOnboardingSheet: View {
         case .boss:
             return model.onboardingBossChoices.contains { $0.isSelected && $0.isUsable } == false
         case .connect:
+            // Disable while the connection checks are still running so the prominent
+            // button isn't clickable-but-inert (a press would just re-kick the running
+            // checks). The check rows show their own progress; this advances once ready.
             return model.onboardingIsScanning
+                || model.onboardingProviderChecks.values.contains { $0.state == .running }
         case .importWork:
             if model.onboardingIsScanning || model.onboardingReadiness?.isReady != true {
+                return true
+            }
+            // In the arrange phase, gate the footer button on a selection exactly like the
+            // inline Arrange button — otherwise it dismisses the wizard with nothing imported
+            // (reads as a dead button, especially on a second run where everything already exists).
+            if model.onboardingFlowDecision.phase == .arrangeApprovedImports,
+               (model.onboardingProposal?.selectedTerminalCount ?? 0) == 0 {
                 return true
             }
             return false
@@ -5721,7 +5738,7 @@ private struct OnboardingReadinessView: View {
                 Text("Give the boss its tools")
                     .font(.largeTitle.weight(.semibold))
                     .multilineTextAlignment(.center)
-                Text("Workbench enables its local tool bridge and automatically verifies both provider lanes before import.")
+                Text("Workbench connects your tools and checks both of your agent's connections before bringing in your work.")
                     .font(.title3)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -8556,12 +8573,14 @@ struct ReleaseUpdateControls: View {
     var showTitle: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .center, spacing: 6) {
             if showTitle {
                 HStack(spacing: 12) {
                     DashboardRowLabel(title: "Release Updates", systemImage: "arrow.down.app")
                     updateStatus
                     updateProgress
+                }
+                HStack(spacing: 8) {
                     updateButtons
                 }
             } else {
@@ -8570,7 +8589,6 @@ struct ReleaseUpdateControls: View {
                     updateProgress
                 }
                 HStack(spacing: 8) {
-                    Spacer(minLength: 0)
                     updateButtons
                 }
             }
@@ -8589,8 +8607,13 @@ struct ReleaseUpdateControls: View {
                 Text(snapshot.hasInstallableAssets ? "Verified against the release's SHA-256 manifest + code signature before installing. Your running terminals keep running across the update." : "Release is published, but installable app assets were not found.")
                     .font(.caption)
                     .foregroundStyle(snapshot.hasInstallableAssets ? SwiftUI.Color.secondary : SwiftUI.Color.orange)
+                    .multilineTextAlignment(.center)
             }
         }
+        // Span the full row width so `alignment: .center` actually centers each line.
+        // Without this the VStack shrinks to its widest child and hugs the leading
+        // edge, leaving the "… is current" line visually left-aligned.
+        .frame(maxWidth: .infinity)
     }
 
     private var updateStatus: some View {
@@ -8637,11 +8660,14 @@ struct ReleaseUpdateControls: View {
             .fixedSize()
         }
 
-        if model.releaseUpdateURL != nil {
+        // Only offer the release page when there's actually a newer release to look
+        // at — surfacing "Open Release" while you're already current is noise.
+        if model.releaseUpdateURL != nil,
+           model.releaseUpdateSnapshot?.status == .updateAvailable {
             Button {
                 model.openReleaseUpdate()
             } label: {
-                Label("Open Release", systemImage: "safari")
+                Label("View Release Notes", systemImage: "safari")
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
@@ -9729,6 +9755,15 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     var releaseUpdateStatusLine: String {
+        // While a check / install is genuinely in flight, say so — never leave a
+        // stale "is current" line showing next to the spinner (which reads as a
+        // stuck, perpetual load).
+        if releaseUpdateIsChecking {
+            return "Checking for updates…"
+        }
+        if releaseUpdateIsInstalling {
+            return "Installing update…"
+        }
         guard let snapshot = releaseUpdateSnapshot else {
             return "not checked"
         }
@@ -9871,9 +9906,9 @@ final class WorkbenchViewModel: ObservableObject {
             return "\(state.boss.agentName) is selected as this Mac's boss. \(WorkbenchOnboardingNarrative.bossReadyWelcome) \(WorkbenchOnboardingNarrative.scanIntro)"
         }
         if ouroAgents.count > 1 {
-            return "This Mac has multiple Ouro agents. Choose the one that should be boss for Workbench before importing sessions."
+            return "You have a few agents on this Mac. Pick the one Workbench should check in with — that's your boss."
         }
-        return "First choose or repair this Mac's Ouro boss, then Workbench can scan recent sessions and arrange them as terminals and workspaces."
+        return "Pick your boss to get started, then Workbench can find your recent work and set it up as terminals and workspaces."
     }
 
     var onboardingBossChoices: [OnboardingBossChoice] {
@@ -9883,7 +9918,16 @@ final class WorkbenchViewModel: ObservableObject {
             let isSelected = state.boss.agentName.caseInsensitiveCompare(name) == .orderedSame
             return OnboardingBossChoice(
                 name: name,
-                detail: agent?.summaryLine ?? "Agent bundle not found on this machine.",
+                // First-grade-simple: a friendly readiness line, never the raw
+                // `provider/model · human …/agent …` summary (lane jargon + internal IDs).
+                // The live connection health surfaces after selection, via the checks.
+                detail: agent.map { agent in
+                    switch agent.status {
+                    case .ready: return "Ready to be your boss."
+                    case .disabled: return "Turned off right now."
+                    case .missingConfig, .invalidConfig: return "Needs a little setup first."
+                    }
+                } ?? "We couldn't find this agent on your Mac.",
                 status: agent?.status,
                 registrationStatus: registration?.status,
                 isSelected: isSelected
@@ -10839,9 +10883,11 @@ final class WorkbenchViewModel: ObservableObject {
                 bossWorkbenchMCPRegistration = snapshot
             }
             let succeeded = snapshot.status == .registered
+            // Never surface the raw registrar `snapshot.detail` — for an unparseable bundle it
+            // is a raw decoding error (BossAgentBridge `.invalidConfig`). Friendly copy instead.
             let result = succeeded
                 ? "\(agent.name) is connected to Workbench and ready."
-                : snapshot.detail
+                : "Workbench couldn't connect \(agent.name) just now. You can try again — reopening Workbench usually clears it up."
             bossAppliedActions = [result] + bossAppliedActions
             recordActionLog(
                 source: "native",
@@ -10851,7 +10897,7 @@ final class WorkbenchViewModel: ObservableObject {
                 succeeded: succeeded
             )
         } catch {
-            errorMessage = "Connecting \(agent.name) to Workbench failed: \(error.localizedDescription)"
+            errorMessage = "Workbench couldn't connect \(agent.name) just now. Please try again — reopening Workbench usually clears it up."
             refreshWorkbenchMCPRegistration()
         }
     }
@@ -10910,7 +10956,7 @@ final class WorkbenchViewModel: ObservableObject {
             )
             return true
         } catch {
-            errorMessage = "Ouro agent install failed: \(error.localizedDescription)"
+            errorMessage = "Workbench couldn't bring that agent in. Please check the link and try again."
             return false
         }
     }
@@ -10921,7 +10967,7 @@ final class WorkbenchViewModel: ObservableObject {
             return
         }
         guard BossWorkbenchMCPRegistrar.isValidAgentBundleName(normalizedAgentName) else {
-            errorMessage = "Boss agent name cannot be used as a bundle name: \(normalizedAgentName)"
+            errorMessage = "That agent can't be used as your boss. Please pick another."
             return
         }
         state.boss.agentName = normalizedAgentName
@@ -11727,6 +11773,56 @@ final class WorkbenchViewModel: ObservableObject {
     /// shows a startup banner (a real check-in surfaces "waking" when it matters).
     /// Skipped before a boss is resolved — a fresh machine has no agent yet and the
     /// first-run bootstrap (S0) owns its own bringup.
+    /// Capture the user's real login-shell PATH once at launch and hand it to
+    /// `TerminalEnvironment`, so every `ouro` shellout resolves `node` + `ouro` the
+    /// way the user's shell does (nvm/asdf/brew — wherever they live). Without this,
+    /// `ouro` (a `node` script) dies with "node: not found" and the whole onboarding
+    /// reads as broken. Off-main, idempotent.
+    func prepareLoginShellEnvironment() async {
+        guard TerminalEnvironment.loginShellPath == nil else { return }
+        let captured = await Task.detached(priority: .userInitiated) {
+            WorkbenchViewModel.readLoginShellPath()
+        }.value
+        if let captured, !captured.isEmpty {
+            TerminalEnvironment.loginShellPath = captured
+        }
+    }
+
+    /// Run `$SHELL -lc 'printf %s "$PATH"'` to read the PATH the user's interactive
+    /// shell actually exposes (profile-sourced: version managers, brew, ouro). Returns
+    /// nil on any failure so callers fall back to the synthesized PATH.
+    nonisolated static func readLoginShellPath() -> String? {
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: shell)
+        process.arguments = ["-lc", "printf %s \"$PATH\""]
+        let out = Pipe()
+        process.standardOutput = out
+        process.standardError = Pipe()
+        do {
+            try process.run()
+            // CRITICAL: this runs on the launch-blocking path (the launch task awaits
+            // this before showing onboarding). A login shell that hangs sourcing its
+            // profile (network-mounted rc, a blocking nvm/MDM hook, a profile that waits
+            // on input) would otherwise hang `waitUntilExit` forever and the wizard would
+            // never appear. Bound it: terminate past the deadline so the read unwinds and
+            // we fall back to the synthesized PATH.
+            let watchdog = DispatchWorkItem {
+                if process.isRunning { process.terminate() }
+            }
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 5, execute: watchdog)
+            let data = out.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            watchdog.cancel()
+            guard process.terminationStatus == 0 else { return nil }
+            let path = String(data: data, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return (path?.isEmpty == false) ? path : nil
+        } catch {
+            return nil
+        }
+    }
+
     func ensureDaemonRunningOnLaunch() async {
         guard !state.boss.agentName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return
@@ -11763,7 +11859,7 @@ final class WorkbenchViewModel: ObservableObject {
         case .respawned:
             message = "Brought your agent's runtime back online."
         case .needsManual:
-            message = "Workbench couldn't bring your agent back online automatically. Please reopen Workbench, and if it keeps happening, restart your Mac."
+            message = "Workbench couldn't bring your agent back online automatically. You can try again — and if it keeps happening, reconnecting your provider usually clears it up."
         }
         harnessActionResult = HarnessActionResult(
             kind: .repairDaemon,
@@ -12598,7 +12694,7 @@ final class WorkbenchViewModel: ObservableObject {
             onboardingProviderChecks[laneConfiguration.lane] = OnboardingProviderCheckResult(
                 lane: laneConfiguration.lane,
                 state: .running,
-                detail: "Checking \(laneConfiguration.lane) provider..."
+                detail: "Checking your \(Self.friendlyLaneLabel(laneConfiguration.lane)) connection…"
             )
             refreshOnboardingReadiness()
             // Track + generation-stamp so cancelling on dismiss is real, and a
@@ -12640,6 +12736,13 @@ final class WorkbenchViewModel: ObservableObject {
             let pipe = Pipe()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
             process.arguments = ["ouro", "check", "--agent", agentName, "--lane", lane]
+            // Resolve PATH from the user's real login shell (+ ~/.ouro-cli/bin + the
+            // system dirs) so `ouro` AND its `node` runtime are found from a
+            // Finder-launched app's bare launchd PATH. Every OTHER runner already does
+            // this; this check was the one that didn't — so it died with
+            // `env: ouro: No such file or directory`, which then surfaced verbatim in
+            // the wizard as a baffling "what env??" error to a brand-new user.
+            process.environment = TerminalEnvironment().valuesWithResolvedPath()
             process.standardOutput = pipe
             process.standardError = pipe
             do {
@@ -12654,38 +12757,55 @@ final class WorkbenchViewModel: ObservableObject {
                     if process.isRunning { process.terminate() }
                 }
                 DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 20, execute: watchdog)
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                // Drain the pipe even though we no longer surface the raw output — an
+                // undrained pipe past 64KB blocks the child and looks like a timeout.
+                _ = pipe.fileHandleForReading.readDataToEndOfFile()
                 process.waitUntilExit()
                 watchdog.cancel()
+                let label = Self.friendlyLaneLabel(lane)
                 if Date().timeIntervalSince(start) >= 20 {
                     return OnboardingProviderCheckResult(
                         lane: lane,
                         state: .failed,
-                        detail: "`ouro check --agent \(agentName) --lane \(lane)` did not finish. Open Ouro provider setup to repair auth or daemon state."
+                        detail: "Checking your \(label) connection took too long. Connect your provider to try again."
                     )
                 }
-                let output = String(decoding: data, as: UTF8.self)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
                 if process.terminationStatus == 0 {
                     return OnboardingProviderCheckResult(
                         lane: lane,
                         state: .passed,
-                        detail: output.isEmpty ? "\(lane) provider check passed." : output
+                        detail: "Your \(label) connection is working."
                     )
                 }
+                // NEVER surface raw `ouro check` output (lane jargon, provider IDs, a
+                // `node`/PATH shell error) — it reads as gibberish to a first-time user.
+                // The Connect step is the fix in every failure case, so the copy points there.
                 return OnboardingProviderCheckResult(
                     lane: lane,
                     state: .failed,
-                    detail: output.isEmpty ? "\(lane) provider check failed." : output
+                    detail: "Workbench couldn't confirm your \(label) connection yet. Connect your provider to fix this."
                 )
             } catch {
                 return OnboardingProviderCheckResult(
                     lane: lane,
                     state: .failed,
-                    detail: "Could not run `ouro check --agent \(agentName) --lane \(lane)`: \(error.localizedDescription)"
+                    detail: "Workbench is still setting up your \(Self.friendlyLaneLabel(lane)) connection. This clears once your provider is connected."
                 )
             }
         }.value
+    }
+
+    /// Friendly label for a provider lane — keeps the CLI's `outward`/`inner` jargon
+    /// out of the onboarding wizard. `outward` is the lane the agent uses to talk to
+    /// you (your "main" connection); `inner` is the lane it uses for its own
+    /// background reasoning (the "background" connection). Two rows render, one per
+    /// lane, so they need distinct human labels — but never the raw lane name.
+    nonisolated static func friendlyLaneLabel(_ lane: String) -> String {
+        switch lane {
+        case "outward": return "main"
+        case "inner": return "background"
+        default: return lane
+        }
     }
 
     @discardableResult
@@ -15317,6 +15437,14 @@ final class WorkbenchViewModel: ObservableObject {
                     )
                 }
             }
+        case "repair-outward-provider", "repair-inner-provider":
+            // A configured lane whose LIVE check failed. The form can't refresh an existing
+            // agent's creds (gap a), so the useful action is a RE-CHECK: it self-heals a
+            // transient failure (a lock-contended vault, a network blip — exactly the kind that
+            // previously left this as a dead no-op button) and honestly re-reports a real one.
+            // `runOnboardingProviderChecksIfNeeded` re-runs any non-passed lane (a `.failed` lane
+            // qualifies), flipping the row to a live "Checking…" spinner for immediate feedback.
+            runOnboardingProviderChecksIfNeeded()
         default:
             // No other step reaches here (provider-setup short-circuits in `openOnboardingRepair`;
             // workbench-mcp has its own button; check-* in `running` state render a spinner).

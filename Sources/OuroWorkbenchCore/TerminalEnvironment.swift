@@ -46,6 +46,14 @@ public struct TerminalEnvironment: Equatable, Sendable {
     public var values: [String: String]
     public var workbenchContext: WorkbenchSessionContext?
 
+    /// The user's real login-shell PATH (`$SHELL -lc 'echo $PATH'`), captured once at
+    /// app launch. A hardcoded dir list can NEVER locate a version-manager `node`
+    /// (nvm/asdf put it under a dynamic version path), and `ouro` is a `node` script —
+    /// so without the login PATH every `ouro` shellout dies with "node: not found".
+    /// Using the real shell env makes nvm/brew/asdf/etc. all just work. Set once at
+    /// launch on the main thread, read-only thereafter (hence `nonisolated(unsafe)`).
+    public nonisolated(unsafe) static var loginShellPath: String?
+
     public init(
         values: [String: String] = ProcessInfo.processInfo.environment,
         workbenchContext: WorkbenchSessionContext? = nil
@@ -83,6 +91,14 @@ public struct TerminalEnvironment: Equatable, Sendable {
             for (key, value) in workbenchContext.environmentVariables {
                 merged[key] = value
             }
+        }
+        // Base the PATH on the user's real login shell (captured at launch) so a
+        // version-manager `node` + `ouro` resolve. `resolvedPath` then layers the
+        // known fallback dirs on top (deduped), so behaviour is unchanged when no
+        // login PATH was captured.
+        if let loginPath = Self.loginShellPath, !loginPath.isEmpty {
+            let existing = merged["PATH"] ?? ""
+            merged["PATH"] = existing.isEmpty ? loginPath : "\(loginPath):\(existing)"
         }
         merged["PATH"] = Self.resolvedPath(from: merged)
         return merged

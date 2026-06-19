@@ -80,7 +80,7 @@ public struct BootstrapStepProgress: Equatable, Identifiable, Sendable {
         case .verified:
             return Self.doneLine(for: step)
         case .halted:
-            return "Workbench hit a snag while bringing your agent online. Please reopen Workbench, and if it keeps happening, restart your Mac."
+            return "Workbench couldn't finish bringing your agent online. You can try again — and if it keeps happening, reconnecting your provider usually clears it up."
         case .awaitingHuman:
             return step.humanFacingActiveLine
         case .skipped:

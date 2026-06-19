@@ -186,7 +186,7 @@ public struct BootstrapResult: Equatable, Sendable {
         case .failedInvalidAgent:
             return "Workbench couldn't identify your agent. Please reopen Workbench to try again."
         case .failedStep:
-            return "Workbench is still bringing your agent online and hit a snag. Please reopen Workbench, and if it keeps happening, restart your Mac."
+            return "Workbench couldn't finish bringing your agent online. You can try again — and if it keeps happening, reconnecting your provider usually clears it up."
         case .parkedAwaitingProviderConfig:
             return "Your agent needs you to connect a provider before it can come online."
         case .awaitingHandoff:

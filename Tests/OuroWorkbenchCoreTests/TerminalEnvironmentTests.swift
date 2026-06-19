@@ -29,6 +29,71 @@ final class TerminalEnvironmentTests: XCTestCase {
         XCTAssertLessThan(ouroIdx, usrBinIdx)
     }
 
+    func testLoginShellPathBecomesThePathBaseWhenCaptured() {
+        // The login-shell PATH (captured at launch) must seed the resolved PATH so a
+        // version-manager `node` (nvm/asdf) — which lives under a dynamic version dir
+        // that no hardcoded list can name — resolves for `ouro` shellouts.
+        let saved = TerminalEnvironment.loginShellPath
+        defer { TerminalEnvironment.loginShellPath = saved }
+        let nvmBin = "/Users/test/.nvm/versions/node/v20.19.5/bin"
+        TerminalEnvironment.loginShellPath = "\(nvmBin):/usr/bin"
+
+        let environment = TerminalEnvironment(values: ["HOME": "/Users/test", "PATH": "/seed/bin"]).valuesWithResolvedPath()
+        let comps = (environment["PATH"] ?? "").components(separatedBy: ":")
+
+        // The nvm node dir is present and wins over the prior PATH seed + fallbacks.
+        XCTAssertTrue(comps.contains(nvmBin))
+        let nvmIdx = comps.firstIndex(of: nvmBin)!
+        let seedIdx = comps.firstIndex(of: "/seed/bin")!
+        let usrBinIdx = comps.firstIndex(of: "/usr/bin")!
+        XCTAssertLessThan(nvmIdx, seedIdx)
+        XCTAssertLessThan(nvmIdx, usrBinIdx)
+    }
+
+    func testLoginShellPathSeedsPathWhenNoExistingPathPresent() {
+        // Covers the empty-existing-PATH branch: the login PATH becomes the base
+        // outright (no leading colon, no empty component).
+        let saved = TerminalEnvironment.loginShellPath
+        defer { TerminalEnvironment.loginShellPath = saved }
+        let nvmBin = "/Users/test/.nvm/versions/node/v20.19.5/bin"
+        TerminalEnvironment.loginShellPath = nvmBin
+
+        let environment = TerminalEnvironment(values: ["HOME": "/Users/test"]).valuesWithResolvedPath()
+        let comps = (environment["PATH"] ?? "").components(separatedBy: ":")
+
+        XCTAssertEqual(comps.first, nvmBin)
+        XCTAssertFalse(comps.contains(""))
+    }
+
+    func testEmptyLoginShellPathIsIgnored() {
+        // An empty capture (login shell returned nothing) must not prepend an empty
+        // component or otherwise disturb the synthesized fallback PATH.
+        let saved = TerminalEnvironment.loginShellPath
+        defer { TerminalEnvironment.loginShellPath = saved }
+        TerminalEnvironment.loginShellPath = ""
+
+        let environment = TerminalEnvironment(values: ["HOME": "/Users/test", "PATH": "/custom/bin"]).valuesWithResolvedPath()
+        let comps = (environment["PATH"] ?? "").components(separatedBy: ":")
+
+        XCTAssertEqual(comps.first, "/custom/bin")
+        XCTAssertFalse(comps.contains(""))
+        XCTAssertTrue(comps.contains("/Users/test/.ouro-cli/bin"))
+    }
+
+    func testNilLoginShellPathLeavesSynthesizedPathUnchanged() {
+        // The default (no capture): behaviour is identical to before the
+        // login-PATH seed existed.
+        let saved = TerminalEnvironment.loginShellPath
+        defer { TerminalEnvironment.loginShellPath = saved }
+        TerminalEnvironment.loginShellPath = nil
+
+        let environment = TerminalEnvironment(values: ["HOME": "/Users/test", "PATH": "/custom/bin"]).valuesWithResolvedPath()
+        let comps = (environment["PATH"] ?? "").components(separatedBy: ":")
+
+        XCTAssertEqual(comps.first, "/custom/bin")
+        XCTAssertTrue(comps.contains("/Users/test/.ouro-cli/bin"))
+    }
+
     func testMergedEnvironmentIncludesPathAndTerminalDefaults() {
         let environment = TerminalEnvironment(values: ["HOME": "/Users/test"]).mergedWithTerminalDefaults()
 

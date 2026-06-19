@@ -57,7 +57,7 @@ public enum AgentRepairTruth: String, Codable, Equatable, Sendable {
         case .stillDegraded:
             return "Workbench tried to get \(agentName) ready, but it still needs attention. Workbench will keep working on it."
         case .needsManual:
-            return "Workbench couldn't bring \(agentName) back online automatically. Please reopen Workbench, and if it keeps happening, restart your Mac."
+            return "Workbench couldn't bring \(agentName) back online automatically. You can try again — and if it keeps happening, reconnecting your provider usually clears it up."
         }
     }
 
@@ -170,7 +170,9 @@ public struct AgentRepairRunner: Sendable {
         process.standardError = devNull
 
         try process.run()
-        process.waitUntilExit()
+        // Bound the wait — a wedged `ouro`/`node` child (lock-contended vault, a stuck
+        // self-update, a daemon-socket wait) must not hang the remediation forever.
+        ProcessWatchdog.waitUntilExit(process, timeoutSeconds: 30)
         // Deliberately ignore the exit status: recovery truth is the post-command probe's job.
     }
 }

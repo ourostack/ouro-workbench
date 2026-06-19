@@ -44,6 +44,13 @@ public struct OnboardingRepairStep: Codable, Equatable, Identifiable, Sendable {
     /// the steps Slice 3 redirected away from pane-spawning: the cold-start credential gate
     /// (`request-provider-config`) and the existing-agent lane-completion steps
     /// (`outward-lane` / `inner-lane` — the documented existing-agent gap).
+    ///
+    /// NOTE: the failed-lane steps (`repair-outward-provider` / `repair-inner-provider`) are
+    /// deliberately NOT here. The form can only configure a lane's provider/model; it cannot
+    /// refresh an EXISTING agent's credentials (gap a), and a failed-lane step means the lane is
+    /// already configured but its live check failed. Those steps are handled as a RE-CHECK in
+    /// `runOnboardingRepairStepNatively` instead — which self-heals a transient failure (a
+    /// lock-contended vault, a network blip) and honestly re-reports a real one.
     public var isProviderSetup: Bool {
         id == "request-provider-config" || id == "outward-lane" || id == "inner-lane"
     }
@@ -207,22 +214,22 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
         guard !agents.isEmpty else {
             return OnboardingReadiness(
                 state: .needsAgent,
-                headline: "Set up an Ouro agent",
-                detail: "Workbench needs a local Ouro agent on this machine before it can act as the boss.",
+                headline: "Set up your agent",
+                detail: "Workbench needs an agent on this Mac before it can get started.",
                 selectedBossName: boss.agentName,
                 repairSteps: [
                     OnboardingRepairStep(
                         id: "hatch",
                         actor: .humanChoice,
-                        title: "Hatch a new agent",
-                        detail: "Create a new local Ouro agent through a guided setup conversation.",
+                        title: "Create a new agent",
+                        detail: "Set up a brand-new agent — Workbench walks you through it.",
                         command: ["ouro", "hatch"]
                     ),
                     OnboardingRepairStep(
                         id: "clone",
                         actor: .humanChoice,
-                        title: "Clone an existing agent",
-                        detail: "Bring an existing agent bundle and vault onto this machine.",
+                        title: "Bring in an existing agent",
+                        detail: "Move an agent you already have (and its saved settings) onto this Mac.",
                         command: ["ouro", "clone", "<remote>"]
                     )
                 ]
@@ -300,8 +307,7 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
             contentsOf: providerRepairSteps(
                 agent: selected,
                 lane: "outward",
-                laneName: "outward",
-                purpose: "human-facing turns",
+                laneName: "main",
                 configured: selected.humanFacing?.provider != nil && selected.humanFacing?.model != nil,
                 check: providerChecks["outward"]
             )
@@ -311,8 +317,7 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
             contentsOf: providerRepairSteps(
                 agent: selected,
                 lane: "inner",
-                laneName: "inner",
-                purpose: "agent-facing work",
+                laneName: "background",
                 configured: selected.agentFacing?.provider != nil && selected.agentFacing?.model != nil,
                 check: providerChecks["inner"]
             )
@@ -359,7 +364,7 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
         return OnboardingReadiness(
             state: .ready,
             headline: "\(selected.name) is ready",
-            detail: "The boss is installed, provider lanes passed live checks, and Workbench tools are available to it at runtime.",
+            detail: "Your boss is set up, both of its connections are working, and Workbench tools are ready for it.",
             selectedBossName: selected.name,
             repairSteps: repairSteps
         )
@@ -369,7 +374,6 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
         agent: OuroAgentRecord,
         lane: String,
         laneName: String,
-        purpose: String,
         configured: Bool,
         check: OnboardingProviderCheckResult?
     ) -> [OnboardingRepairStep] {
@@ -378,8 +382,8 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
                 OnboardingRepairStep(
                     id: "\(lane)-lane",
                     actor: .humanChoice,
-                    title: "Choose \(laneName) provider",
-                    detail: "The \(laneName) lane is incomplete. Workbench can open Ouro's provider setup flow.",
+                    title: "Set up your \(laneName) connection",
+                    detail: "Your \(laneName) connection isn't set up yet. Workbench can help you connect it.",
                     command: ["ouro", "connect", "providers", "--agent", agent.name]
                 )
             ]
@@ -393,9 +397,9 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
                 OnboardingRepairStep(
                     id: "repair-\(lane)-provider",
                     actor: .humanRequired,
-                    title: "Repair \(laneName) provider",
+                    title: "Reconnect your \(laneName) connection",
                     detail: check!.detail,
-                    command: ["ouro", "connect", "providers", "--agent", agent.name]
+                    command: ["ouro", "check", "--agent", agent.name, "--lane", lane]
                 )
             ]
         case .running?:
@@ -403,8 +407,8 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
                 OnboardingRepairStep(
                     id: "check-\(lane)",
                     actor: .agentRunnable,
-                    title: "Checking \(laneName) provider",
-                    detail: "Workbench is verifying the provider/model selected for \(purpose)."
+                    title: "Checking your \(laneName) connection",
+                    detail: "Workbench is making sure your \(laneName) connection works."
                 )
             ]
         case .pending?, nil:
@@ -412,8 +416,8 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
                 OnboardingRepairStep(
                     id: "check-\(lane)",
                     actor: .agentRunnable,
-                    title: "Check \(laneName) provider",
-                    detail: "Workbench must verify the provider/model selected for \(purpose).",
+                    title: "Check your \(laneName) connection",
+                    detail: "Workbench will make sure your \(laneName) connection works.",
                     command: ["ouro", "check", "--agent", agent.name, "--lane", lane]
                 )
             ]

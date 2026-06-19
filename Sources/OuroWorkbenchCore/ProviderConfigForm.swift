@@ -280,7 +280,9 @@ public enum ColdStartHatchRunner {
         process.standardError = devNull
 
         try process.run()
-        process.waitUntilExit()
+        // Bound the wait — a cold-start hatch can legitimately take longer (provisioning),
+        // but must still not hang forever on a wedged `ouro`/`node` child.
+        ProcessWatchdog.waitUntilExit(process, timeoutSeconds: 60)
         // Deliberately ignore the exit status: cold-start recovery truth is the handoff probe's
         // job (the bootstrap re-runs and verifies), never this command's exit code.
     }

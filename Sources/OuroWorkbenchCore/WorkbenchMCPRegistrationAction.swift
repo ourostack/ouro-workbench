@@ -51,7 +51,7 @@ public enum WorkbenchMCPRegistrationTruth: String, Codable, Equatable, Sendable 
         case .stillUnregistered:
             return "Workbench is connecting \(agentName), but it isn't ready yet. Workbench will keep working on it."
         case .needsManual:
-            return "Workbench couldn't connect \(agentName) automatically. Please reinstall Workbench, and if it keeps happening, restart your Mac."
+            return "Workbench couldn't connect \(agentName) automatically. You can try again — and if it keeps happening, reconnecting your provider usually clears it up."
         }
     }
 
