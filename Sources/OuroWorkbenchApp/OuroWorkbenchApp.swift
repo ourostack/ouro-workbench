@@ -4269,6 +4269,10 @@ struct BossDashboardView: View {
                     MailboxWarningView(issues: dashboard.availability.issues)
                 }
                 BossConversationView(model: model)
+                // The boss's propose-for-approval CAPABILITY surfaces here when —
+                // and only when — there are pending proposals. Self-hiding and
+                // additive: it never gates the conversation or any other flow.
+                BossProposalCardList(model: model)
                 if let answer = model.bossCheckInAnswer {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Boss Reply")
@@ -6201,6 +6205,161 @@ private struct OnboardingSessionPreviewSheet: View {
             // Defer the (bounded) preview load so the sheet renders immediately.
             previewText = model.onboardingPreviewText(for: terminal)
         }
+    }
+}
+
+/// Native editable card for the boss's `workbench_propose` CAPABILITY. Renders
+/// the pending `AgentProposal`s the boss enqueued, lets the operator tick / edit /
+/// approve each item, and writes the operator's decision back through the queue
+/// for the boss. This is purely OPT-IN — it surfaces only when there ARE pending
+/// proposals and NEVER gates any other flow; the boss can also just act without
+/// ever proposing.
+///
+/// All mutation/approval logic lives in Core (`AgentProposal`) and the view model
+/// (`toggleProposalItem`/`editProposalItem`/`approveProposal`/`dismissProposal`);
+/// this view is thin SwiftUI wiring so the un-clickable surface stays trivial.
+struct BossProposalCardList: View {
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        // Surfaces nothing when there are no pending proposals — never intrudes.
+        if !model.pendingProposals.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(model.pendingProposals, id: \.id) { proposal in
+                    BossProposalCard(proposal: proposal, model: model)
+                }
+            }
+            .task {
+                model.loadPendingProposals()
+            }
+        }
+    }
+}
+
+private struct BossProposalCard: View {
+    var proposal: AgentProposal
+    @ObservedObject var model: WorkbenchViewModel
+
+    private var selectedCount: Int {
+        proposal.items.filter(\.selected).count
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "checklist")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.accentColor)
+                Text(proposal.title)
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Text("\(selectedCount)/\(proposal.items.count)")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(proposal.items) { item in
+                BossProposalItemRow(proposalID: proposal.id, item: item, model: model)
+            }
+            HStack(spacing: 8) {
+                Spacer()
+                Button("Dismiss") {
+                    model.dismissProposal(proposalID: proposal.id)
+                }
+                .controlSize(.small)
+                .buttonStyle(.bordered)
+                .help("Decline this proposal — the boss is told you took none of it.")
+                Button("Approve") {
+                    model.approveProposal(proposalID: proposal.id)
+                }
+                .controlSize(.small)
+                .buttonStyle(.borderedProminent)
+                .help("Send the ticked (and edited) items back to the boss.")
+            }
+        }
+        .padding(12)
+        .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct BossProposalItemRow: View {
+    var proposalID: String
+    var item: AgentProposalItem
+    @ObservedObject var model: WorkbenchViewModel
+
+    private func isEditable(_ field: AgentProposalItem.Field) -> Bool {
+        item.editableFields.contains(field)
+    }
+
+    /// A binding for one editable field that routes edits through the view model
+    /// (and thus the Core model, which rejects non-editable fields). Reads the
+    /// current value; non-editable fields are rendered as static text instead, so
+    /// this binding is only built for editable ones.
+    private func fieldBinding(_ field: AgentProposalItem.Field, current: String) -> Binding<String> {
+        Binding(
+            get: { current },
+            set: { model.editProposalItem(proposalID: proposalID, itemID: item.id, field: field, value: $0) }
+        )
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Button {
+                model.toggleProposalItem(proposalID: proposalID, itemID: item.id)
+            } label: {
+                Image(systemName: item.selected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 16, weight: .regular))
+                    .foregroundStyle(item.selected ? Color.accentColor : Color.secondary)
+                    .accessibilityLabel(item.selected ? "Selected" : "Not selected")
+            }
+            .buttonStyle(.plain)
+            VStack(alignment: .leading, spacing: 4) {
+                if isEditable(.label) {
+                    TextField("Label", text: fieldBinding(.label, current: item.label))
+                        .font(.caption.weight(.semibold))
+                        .textFieldStyle(.roundedBorder)
+                } else {
+                    Text(item.label)
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                }
+                if let detail = item.detail, !isEditable(.detail) {
+                    Text(detail)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                } else if isEditable(.detail) {
+                    TextField("Detail", text: fieldBinding(.detail, current: item.detail ?? ""))
+                        .font(.caption2)
+                        .textFieldStyle(.roundedBorder)
+                }
+                if let command = item.command, !isEditable(.command) {
+                    Text(command)
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                } else if isEditable(.command) {
+                    TextField("Command", text: fieldBinding(.command, current: item.command ?? ""))
+                        .font(.caption2.monospaced())
+                        .textFieldStyle(.roundedBorder)
+                }
+                if let cwd = item.cwd, !isEditable(.cwd) {
+                    Text(cwd)
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                } else if isEditable(.cwd) {
+                    TextField("Working directory", text: fieldBinding(.cwd, current: item.cwd ?? ""))
+                        .font(.caption2.monospaced())
+                        .textFieldStyle(.roundedBorder)
+                }
+            }
+            Spacer()
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 6)
+        .background(item.selected ? Color.accentColor.opacity(0.06) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
     }
 }
 
@@ -9171,6 +9330,11 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var onboardingIsScanning = false
     @Published var onboardingImportSummaryHasImports = false
     @Published var lastImportSummary: WorkbenchImportApplyResult?
+    /// Pending boss proposals awaiting the operator's review in the native card.
+    /// Populated from `proposalQueue` by `loadPendingProposals()`; the card binds
+    /// to it and the mutation/approve methods write back through the queue. OPT-IN
+    /// surfacing only — never blocks any other flow.
+    @Published var pendingProposals: [AgentProposal] = []
     /// Whether the native provider-config form (the one human gate) is presented. Flipped true
     /// by `requestProviderConfig` (and the native onboarding provider-setup affordance).
     /// NON-SECRET-BEARING: this flag only opens the form; the credential is entered natively in
@@ -9226,6 +9390,12 @@ final class WorkbenchViewModel: ObservableObject {
     /// and publish its output.
     private let firstRunDrive = FirstRunBootstrapDrive()
     private let externalActionQueue: WorkbenchActionRequestQueue
+    /// Transport for the boss's `workbench_propose` CAPABILITY. The card reads
+    /// pending proposals from here and writes the operator's `result()` back. This
+    /// is purely OPT-IN surfacing — it never gates any other flow; an unanswered
+    /// proposal just sits pending until the operator (or the boss's own act-anyway
+    /// path) moves on.
+    private let proposalQueue: AgentProposalQueue
     private let releaseUpdateChecker: ReleaseUpdateChecker
     private var manuallyTerminatedRunIDs = Set<UUID>()
     private var bossWatchBaselineState: WorkspaceState?
@@ -9291,6 +9461,7 @@ final class WorkbenchViewModel: ObservableObject {
         self.releaseUpdateChecker = releaseUpdateChecker
         self.workCardReader = workCardReader
         self.externalActionQueue = WorkbenchActionRequestQueue(paths: paths)
+        self.proposalQueue = AgentProposalQueue(paths: paths)
         self.state = WorkspaceState()
         self.isFirstRunSetupForcedOnLaunch = WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: paths.rootURL)
         if autoLaunchResumableForE2E {
@@ -12903,6 +13074,47 @@ final class WorkbenchViewModel: ObservableObject {
         }
         proposal.setSelection(groupID: groupID, selected: selected)
         onboardingProposal = proposal
+    }
+
+    // MARK: - Boss proposals (workbench_propose CAPABILITY — never a gate)
+
+    /// Refresh the pending-proposal list from the queue. Pure read; safe to call
+    /// whenever the operator opens the proposal surface. Best-effort — a malformed
+    /// pending file is skipped by the queue, never surfaced as an error.
+    func loadPendingProposals() {
+        pendingProposals = proposalQueue.pendingProposals()
+    }
+
+    /// Flip an item's selection in the in-memory proposal (the card binds to
+    /// `pendingProposals`). Nothing is written back until the operator approves.
+    func toggleProposalItem(proposalID: String, itemID: String) {
+        guard let index = pendingProposals.firstIndex(where: { $0.id == proposalID }) else { return }
+        pendingProposals[index].toggle(itemID: itemID)
+    }
+
+    /// Edit one editable field of a proposal item in memory. The Core model
+    /// rejects fields the boss didn't expose, so the card can offer inputs freely.
+    func editProposalItem(proposalID: String, itemID: String, field: AgentProposalItem.Field, value: String) {
+        guard let index = pendingProposals.firstIndex(where: { $0.id == proposalID }) else { return }
+        pendingProposals[index].edit(itemID: itemID, field: field, value: value)
+    }
+
+    /// Approve a proposal: write the operator's `result()` (selected, edited items)
+    /// back through the queue for the boss, drop it from pending, and refresh.
+    func approveProposal(proposalID: String) {
+        guard let proposal = pendingProposals.first(where: { $0.id == proposalID }) else { return }
+        try? proposalQueue.writeResult(proposal.result())
+        proposalQueue.removePending(id: proposalID)
+        loadPendingProposals()
+    }
+
+    /// Dismiss a proposal without approving (the operator chose not to act on it).
+    /// Writes an EMPTY result so the polling boss learns the operator declined,
+    /// rather than waiting forever, then drops it from pending.
+    func dismissProposal(proposalID: String) {
+        try? proposalQueue.writeResult(AgentProposalResult(id: proposalID, items: []))
+        proposalQueue.removePending(id: proposalID)
+        loadPendingProposals()
     }
 
     @discardableResult

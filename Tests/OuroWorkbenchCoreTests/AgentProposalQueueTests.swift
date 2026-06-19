@@ -152,6 +152,59 @@ final class AgentProposalQueueTests: XCTestCase {
         XCTAssertEqual(queue.pendingProposals(), [])
     }
 
+    // MARK: - native card data flow (load → toggle → edit → approve / dismiss)
+
+    /// Mirrors exactly what the App's `BossProposalCard` drives through the view
+    /// model: load the pending proposal, untick one item, edit another, approve
+    /// (write result + remove pending), then the boss reads back ONLY the
+    /// still-selected, edited item — and pending is cleared.
+    func testCardApproveFlowProducesEditedSelectedResultAndClearsPending() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let queue = AgentProposalQueue(directoryURL: root)
+
+        try queue.enqueue(AgentProposal(
+            id: "card-1",
+            title: "Bring back your work",
+            items: [
+                AgentProposalItem(id: "a", label: "Resume A", command: "claude --resume a", selected: true),
+                AgentProposalItem(id: "b", label: "Resume B", command: "copilot --resume b", selected: true),
+            ]
+        ))
+
+        // Load (loadPendingProposals) → mutate in-memory copy.
+        var proposal = try XCTUnwrap(queue.pendingProposals().first)
+        proposal.toggle(itemID: "b")                                              // toggleProposalItem
+        proposal.edit(itemID: "a", field: .command, value: "claude --resume a --edited") // editProposalItem
+        // Approve → write result + remove pending.
+        try queue.writeResult(proposal.result())
+        queue.removePending(id: proposal.id)
+
+        XCTAssertTrue(queue.pendingProposals().isEmpty)
+        let result = try XCTUnwrap(queue.readResult(id: "card-1"))
+        XCTAssertEqual(result.items.map(\.id), ["a"])
+        XCTAssertEqual(result.items.first?.command, "claude --resume a --edited")
+    }
+
+    /// Mirrors `dismissProposal`: the operator declines, so the boss reads back an
+    /// EMPTY result (rather than waiting forever) and pending is cleared.
+    func testCardDismissFlowWritesEmptyResultAndClearsPending() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let queue = AgentProposalQueue(directoryURL: root)
+        try queue.enqueue(AgentProposal(
+            id: "card-2",
+            title: "T",
+            items: [AgentProposalItem(id: "x", label: "X", selected: true)]
+        ))
+
+        try queue.writeResult(AgentProposalResult(id: "card-2", items: []))
+        queue.removePending(id: "card-2")
+
+        XCTAssertTrue(queue.pendingProposals().isEmpty)
+        XCTAssertEqual(queue.readResult(id: "card-2")?.items, [])
+    }
+
     // MARK: - convenience init via WorkbenchPaths
 
     func testConvenienceInitUsesWorkbenchPathsProposalsDirectory() {
