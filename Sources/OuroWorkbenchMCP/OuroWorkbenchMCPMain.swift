@@ -45,6 +45,11 @@ final class WorkbenchMCPServer {
     // commands and carries no agency knowledge — it returns GENERAL records only.
     private let agentSessionScanner = AgentSessionScanner()
     private let runningProcessLister = RunningProcessLister()
+    // The boss's propose-for-approval CAPABILITY (NEVER a gate). `workbench_propose`
+    // enqueues an editable `AgentProposal`; the App's native card lets the operator
+    // tick/edit/approve; `workbench_proposal_result` reads the operator's decision
+    // back. The boss may also just act — nothing here forces this round-trip.
+    private let proposalQueue: AgentProposalQueue
     private let jsonEncoder: JSONEncoder = {
         let encoder = JSONEncoder()
         // Deterministic key order (stable tests / diffs) + readable timestamps.
@@ -57,6 +62,7 @@ final class WorkbenchMCPServer {
         self.paths = paths
         self.store = WorkbenchStore(paths: paths)
         self.queue = WorkbenchActionRequestQueue(paths: paths)
+        self.proposalQueue = AgentProposalQueue(paths: paths)
     }
 
     func run() {
@@ -142,6 +148,10 @@ final class WorkbenchMCPServer {
             return try createSession(arguments: arguments)
         case "workbench_discover_agent_sessions":
             return try discoverAgentSessions()
+        case "workbench_propose":
+            return try propose(arguments: arguments)
+        case "workbench_proposal_result":
+            return try proposalResult(arguments: arguments)
         default:
             throw MCPToolFailure("Unknown tool: \(name)")
         }
@@ -486,6 +496,94 @@ final class WorkbenchMCPServer {
         return try encodeJSON(["sessions": records])
     }
 
+    /// Show the operator an editable plan and get their ticks/edits/approvals
+    /// back. A CAPABILITY the boss reaches for when it judges a plan should be
+    /// confirmed — NEVER a gate: the boss may also just act (`workbench_create_session`,
+    /// `workbench_request_action`). Enqueues a GENERAL `AgentProposal` (a titled
+    /// list of items the operator toggles/edits in a native card) via
+    /// `AgentProposalQueue` and returns its `proposalId`. The boss later reads the
+    /// operator's decision with `workbench_proposal_result`. Workbench attaches no
+    /// meaning to the items — the boss decides what they mean.
+    private func propose(arguments: [String: Any]) throws -> String {
+        guard let title = try optionalString(arguments, key: "title"), !title.isEmpty else {
+            throw MCPToolFailure("Missing title")
+        }
+        guard let rawItems = arguments["items"] as? [Any] else {
+            throw MCPToolFailure("items must be an array")
+        }
+        let items = try rawItems.enumerated().map { index, raw in
+            try parseProposalItem(raw, fallbackIndex: index)
+        }
+        // The boss may supply a stable id to correlate; otherwise we assign one and
+        // return it so the boss can poll the result.
+        let proposalId = (try optionalString(arguments, key: "id")).flatMap { $0.isEmpty ? nil : $0 }
+            ?? UUID().uuidString
+        let proposal = AgentProposal(id: proposalId, title: title, items: items)
+        try proposalQueue.enqueue(proposal)
+        return try encodeJSON(ProposeAck(
+            ok: true,
+            proposalId: proposalId,
+            itemCount: items.count,
+            message: "Proposal \(proposalId) queued with \(items.count) item(s). The operator reviews it in Workbench; poll workbench_proposal_result with this proposalId for their decision."
+        ))
+    }
+
+    /// Read back the operator's decision for a proposal (the SELECTED, possibly
+    /// edited items). Returns `{"ready": false}` until the operator has acted, then
+    /// `{"ready": true, "result": {id, items:[...]}}`. The boss polls this after
+    /// `workbench_propose`. A proposal the operator hasn't answered yet is simply
+    /// not-ready (never an error), so the boss can poll without special-casing.
+    private func proposalResult(arguments: [String: Any]) throws -> String {
+        guard let proposalId = try optionalString(arguments, key: "proposalId"), !proposalId.isEmpty else {
+            throw MCPToolFailure("Missing proposalId")
+        }
+        guard let result = proposalQueue.readResult(id: proposalId) else {
+            return try encodeJSON(ProposalResultAck(ready: false, result: nil))
+        }
+        return try encodeJSON(ProposalResultAck(ready: true, result: result))
+    }
+
+    /// Parse one proposal item from the tool's `items` array. GENERAL: a label
+    /// (required) plus optional detail/command/cwd/harness/selected/editableFields.
+    /// `selected` defaults true (the boss proposes items expecting them ticked);
+    /// `editableFields` defaults to every field so the operator can edit freely
+    /// unless the boss narrows it.
+    private func parseProposalItem(_ raw: Any, fallbackIndex: Int) throws -> AgentProposalItem {
+        guard let dict = raw as? [String: Any] else {
+            throw MCPToolFailure("Each item must be an object")
+        }
+        guard let label = try optionalString(dict, key: "label"), !label.isEmpty else {
+            throw MCPToolFailure("Each item must have a non-empty label")
+        }
+        let id = (try optionalString(dict, key: "id")).flatMap { $0.isEmpty ? nil : $0 }
+            ?? "item-\(fallbackIndex)"
+        let harness: AgentHarness?
+        if let rawHarness = try optionalString(dict, key: "harness") {
+            // Unknown raw → .custom (mirrors AgentHarness's own decode); never throws.
+            harness = AgentHarness(rawValue: rawHarness) ?? .custom
+        } else {
+            harness = nil
+        }
+        let editableFields: [AgentProposalItem.Field]
+        if let rawFields = dict["editableFields"] as? [Any] {
+            // Drop unknown field names (newer-producer tolerant), like the model's
+            // own decode does.
+            editableFields = rawFields.compactMap { ($0 as? String).flatMap(AgentProposalItem.Field.init(rawValue:)) }
+        } else {
+            editableFields = AgentProposalItem.Field.allCases
+        }
+        return AgentProposalItem(
+            id: id,
+            label: label,
+            detail: try optionalString(dict, key: "detail"),
+            command: try optionalString(dict, key: "command"),
+            cwd: try optionalString(dict, key: "cwd"),
+            harness: harness,
+            selected: (try optionalBool(dict, key: "selected")) ?? true,
+            editableFields: editableFields
+        )
+    }
+
     private func optionalString(_ arguments: [String: Any], key: String) throws -> String? {
         guard let value = arguments[key] else {
             return nil
@@ -591,6 +689,22 @@ final class WorkbenchMCPServer {
         let owner: String?
         let requestId: String
         let message: String
+    }
+
+    /// Acknowledgement for `workbench_propose`: the assigned `proposalId` the boss
+    /// polls `workbench_proposal_result` with.
+    private struct ProposeAck: Encodable {
+        let ok: Bool
+        let proposalId: String
+        let itemCount: Int
+        let message: String
+    }
+
+    /// `workbench_proposal_result` reply. `ready` is false until the operator has
+    /// answered; once true, `result` carries the SELECTED, possibly-edited items.
+    private struct ProposalResultAck: Encodable {
+        let ready: Bool
+        let result: AgentProposalResult?
     }
 
     private func toolDefinitions() -> [[String: Any]] {
@@ -743,6 +857,50 @@ final class WorkbenchMCPServer {
                 "inputSchema": [
                     "type": "object",
                     "properties": [:],
+                    "additionalProperties": false
+                ]
+            ],
+            [
+                "name": "workbench_propose",
+                "description": "Show the operator an editable plan and get their ticks/edits/approvals back. This is a CAPABILITY, NOT a gate — reach for it when YOU judge a plan should be confirmed; you can also just act (workbench_create_session, workbench_request_action) without ever proposing. Workbench attaches NO meaning to the items: a proposal is a titled list of general items (label + optional detail/command/cwd/harness), and YOU decide what they mean. The operator reviews them in a native Workbench card, ticks/edits/approves per item, and their decision flows back to you. Returns {ok,proposalId,itemCount,message}; poll workbench_proposal_result with the proposalId to read the operator's approved (and possibly edited) items. selected defaults true; editableFields defaults to all of label/detail/command/cwd unless you narrow it.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "title": ["type": "string", "description": "Operator-facing heading for the card (e.g. \"Bring back your work\"). Required, non-empty."],
+                        "id": ["type": "string", "description": "Optional stable id to correlate the result. Omit to have one assigned and returned."],
+                        "items": [
+                            "type": "array",
+                            "description": "The proposed items, in presentation order. Each is a general object — Workbench attaches no meaning.",
+                            "items": [
+                                "type": "object",
+                                "properties": [
+                                    "id": ["type": "string", "description": "Optional stable item id. Defaults to item-<index>."],
+                                    "label": ["type": "string", "description": "Operator-facing item label. Required, non-empty."],
+                                    "detail": ["type": "string", "description": "Optional supporting detail shown under the label."],
+                                    "command": ["type": "string", "description": "Optional command you'd run if this item is approved (e.g. a resume command). Display/edit only — Workbench does not execute it."],
+                                    "cwd": ["type": "string", "description": "Optional working directory associated with the item."],
+                                    "harness": ["type": "string", "enum": ["claudeCode", "githubCopilotCLI", "openAICodex", "custom"], "description": "Optional harness tag. Unknown values map to custom."],
+                                    "selected": ["type": "boolean", "description": "Whether the item is ticked by default. Defaults to true."],
+                                    "editableFields": ["type": "array", "items": ["type": "string", "enum": ["label", "detail", "command", "cwd"]], "description": "Which fields the operator may edit in the card. Defaults to all four; unknown names are ignored."]
+                                ],
+                                "required": ["label"],
+                                "additionalProperties": false
+                            ]
+                        ]
+                    ],
+                    "required": ["title", "items"],
+                    "additionalProperties": false
+                ]
+            ],
+            [
+                "name": "workbench_proposal_result",
+                "description": "Read back the operator's decision for a proposal you created with workbench_propose. Returns {ready:false} until the operator has reviewed it, then {ready:true,result:{id,items:[...]}} carrying ONLY the items the operator kept selected, with any edits they made (label/detail/command/cwd). Poll this after proposing. A not-yet-answered proposal is simply not-ready, never an error.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "proposalId": ["type": "string", "description": "The proposalId returned by workbench_propose. Required."]
+                    ],
+                    "required": ["proposalId"],
                     "additionalProperties": false
                 ]
             ]
