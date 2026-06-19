@@ -431,6 +431,76 @@ final class AgentSessionScannerRunningTests: XCTestCase {
     }
 }
 
+// MARK: - ps output parsing (pure, fed by the App/MCP-side Process shell)
+
+final class RunningProcessLineParsePSTests: XCTestCase {
+    func testParsesPidAndFullCommandPerLine() {
+        let output = """
+          1234 /usr/local/bin/claude --resume abc
+          5678 node /path/server.js
+        """
+        let lines = RunningProcessLine.parsePS(output)
+        XCTAssertEqual(lines, [
+            RunningProcessLine(pid: 1234, command: "/usr/local/bin/claude --resume abc", cwd: nil),
+            RunningProcessLine(pid: 5678, command: "node /path/server.js", cwd: nil)
+        ])
+    }
+
+    func testLeadingWhitespaceBeforePidIsTolerated() {
+        // `ps -o pid=` right-aligns pids in a width-padded column, so most
+        // lines arrive with leading spaces — they must not break the split.
+        let output = "    42 claude\n999999 codex exec"
+        let lines = RunningProcessLine.parsePS(output)
+        XCTAssertEqual(lines, [
+            RunningProcessLine(pid: 42, command: "claude", cwd: nil),
+            RunningProcessLine(pid: 999999, command: "codex exec", cwd: nil)
+        ])
+    }
+
+    func testBlankAndWhitespaceOnlyLinesAreSkipped() {
+        let output = "\n  \n  100 claude\n\t\n"
+        let lines = RunningProcessLine.parsePS(output)
+        XCTAssertEqual(lines, [RunningProcessLine(pid: 100, command: "claude", cwd: nil)])
+    }
+
+    func testNonIntegerPidLinesAreSkipped() {
+        // A header row (`PID COMMAND`) or any malformed first token (no integer
+        // pid) is dropped rather than mis-parsed.
+        let output = "PID COMMAND\nabc claude\n200 copilot"
+        let lines = RunningProcessLine.parsePS(output)
+        XCTAssertEqual(lines, [RunningProcessLine(pid: 200, command: "copilot", cwd: nil)])
+    }
+
+    func testLineWithPidButNoCommandIsSkipped() {
+        // A bare pid with no command has nothing to classify — skip it.
+        let output = "100\n  200  \n300 claude"
+        let lines = RunningProcessLine.parsePS(output)
+        XCTAssertEqual(lines, [RunningProcessLine(pid: 300, command: "claude", cwd: nil)])
+    }
+
+    func testCommandWithInternalMultipleSpacesIsPreserved() {
+        // Only the FIRST whitespace run (pid/command boundary) is consumed;
+        // the command keeps its own spacing verbatim.
+        let output = "5 claude   --flag   value"
+        let lines = RunningProcessLine.parsePS(output)
+        XCTAssertEqual(lines, [RunningProcessLine(pid: 5, command: "claude   --flag   value", cwd: nil)])
+    }
+
+    func testEmptyOutputYieldsNoLines() {
+        XCTAssertEqual(RunningProcessLine.parsePS(""), [])
+    }
+
+    func testCarriageReturnsAreStrippedFromCommand() {
+        // Defensive: a stray CR (CRLF-ish output) must not leak into the command.
+        let output = "7 claude --resume\r\n8 codex\r"
+        let lines = RunningProcessLine.parsePS(output)
+        XCTAssertEqual(lines, [
+            RunningProcessLine(pid: 7, command: "claude --resume", cwd: nil),
+            RunningProcessLine(pid: 8, command: "codex", cwd: nil)
+        ])
+    }
+}
+
 // MARK: - Unified scan + dedup
 
 final class AgentSessionScannerScanTests: XCTestCase {

@@ -56,6 +56,38 @@ public struct RunningProcessLine: Equatable, Sendable {
         self.command = command
         self.cwd = cwd
     }
+
+    /// Parse `ps -axww -o pid=,command=` output (one process per line: a
+    /// right-aligned pid column, then the full command line) into general
+    /// `RunningProcessLine`s. PURE and GENERAL — it knows the `ps` line shape and
+    /// nothing about which commands are agents (the scanner's `AgentHarness.classify`
+    /// owns that). Lives in Core so the only un-testable part the executable target
+    /// carries is the thin `Process` shell that produces this text.
+    ///
+    /// `cwd` is always nil: `ps` doesn't report a process's working directory, and
+    /// the scanner already treats a nil cwd as "unresolved" (→ empty cwd record).
+    /// Lines without an integer pid (a header row, garbage) or with no command
+    /// after the pid are skipped — nothing to anchor or classify on. Because each
+    /// line is whitespace-trimmed first, a pid with no following command has no
+    /// internal whitespace boundary and is dropped by the boundary guard, so the
+    /// surviving command is always non-empty.
+    public static func parsePS(_ output: String) -> [RunningProcessLine] {
+        var lines: [RunningProcessLine] = []
+        for rawLine in output.split(whereSeparator: \.isNewline) {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            guard !line.isEmpty else { continue }
+            // Split off the leading pid token at the first whitespace run; the
+            // remainder (verbatim, internal spacing preserved) is the command.
+            guard let boundary = line.firstIndex(where: { $0 == " " || $0 == "\t" }) else {
+                continue
+            }
+            let pidToken = String(line[line.startIndex..<boundary])
+            guard let pid = Int(pidToken) else { continue }
+            let command = String(line[boundary...]).trimmingCharacters(in: .whitespaces)
+            lines.append(RunningProcessLine(pid: pid, command: command, cwd: nil))
+        }
+        return lines
+    }
 }
 
 /// A GENERAL record of a discovered agent session. Zero command-building, zero
