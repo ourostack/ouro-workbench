@@ -255,15 +255,17 @@ Per Core unit: write tests → confirm red → implement → `swift test` green 
 
 ### Slice 7 — Onboarding hand-off
 
-### ⬜ Unit 7a: Onboarding flow policy update (Core) — Tests
+### ✅ Unit 7a: Onboarding flow policy update (Core) — Tests
 **Tag**: Core (coverage-gated)
 **What**: Failing tests for adding a boss-driven phase to `WorkbenchOnboardingNarrative.swift` (`WorkbenchOnboardingFlowPolicy`/`...Phase`): a `.bossReconstruct` phase that replaces the hardcoded scan/arrange decision once the boss is ready. Keep existing phases working (the `fix/onboarding-audit` repairs must not regress). Cover the new precedence + that boss-not-ready still routes to `.bossSetupWizard`.
 **Acceptance**: Tests exist and FAIL.
+**Done**: New failing tests in `OnboardingNarrativeTests.swift` for the `.bossReconstruct` phase + `bossReconstructIntro` / `bossReconstructTask` (the see→propose→act hand-off string, asserting it names `workbench_discover_agent_sessions` + `workbench_propose` and carries NO `--resume`/`agency` knowledge) / `bossReconstructEmpty` ("nothing to bring back — you're all set"). Converted the obsolete scan-routing policy tests (`testFlowSwitchesToBossReadyWelcome…`/`…KeepsScanProposal…`/`…ArrangesApprovedImports…`/`…AttachesAmbiguousCandidate…` — they encoded the REJECTED hardcoded scan flow Slice 7 replaces) into `testFlowRoutesReadyBossToReconstructRegardlessOfLegacyProposalInputs`; PRESERVED `testFlowGuidesDuplicateCleanupAfterImportSummary` (post-import) + the not-ready→`bossSetupWizard` assertion. Confirmed RED (compile failure — type/case absent). Commit `8176b04`.
 
-### ⬜ Unit 7b: Onboarding flow policy update (Core) — Impl + coverage
+### ✅ Unit 7b: Onboarding flow policy update (Core) — Impl + coverage
 **Tag**: Core (coverage-gated)
 **What**: Implement the `.bossReconstruct` phase + decision. Pure.
 **Acceptance**: Tests GREEN; 100% coverage on the file; existing onboarding tests still green; commit.
+**Done**: Added `.bossReconstruct` to `WorkbenchOnboardingPhase`, the three narrative strings, and the `bossReconstructTask` hand-off (`{{owner}}`-templated, names the discover/propose primitives, explicit that proposing is a CAPABILITY not a gate, zero agency knowledge). `WorkbenchOnboardingFlowPolicy.decision` now: not-ready→`bossSetupWizard` (unchanged) → `importSummaryHasImports`→`duplicateCleanup` (preserved) → else→`bossReconstruct` ("Bring Back My Work" + `bossReconstructIntro` notice). The legacy `hasProposal`/`selectedTerminalCount`/`ambiguousCandidateCount` inputs no longer steer routing (kept on the struct for back-compat). 17 narrative tests GREEN; coverage gate PASS (`WorkbenchOnboardingNarrative.swift` 100% line+region; 84/86, allowlist UNCHANGED); full suite 1371 green (1 pre-existing skip). App handling of the new case lands in 7c (package compiles after 7c). Commit `119032a`.
 
 ### ⬜ Unit 7c: Onboarding import step replacement (App)
 **Tag**: App
