@@ -28,4 +28,94 @@ final class WorkspaceModelsTests: XCTestCase {
         XCTAssertNil(blank.trimmedNotes)
         XCTAssertEqual(content.trimmedNotes, "hello")
     }
+
+    // MARK: - Forward memory (Slice 6)
+
+    func testProcessEntryForwardMemoryDefaultsToNil() {
+        // A session Workbench created without provenance carries no forward
+        // memory — both discovery fields default to nil.
+        let entry = ProcessEntry(
+            projectId: UUID(),
+            name: "Plain",
+            kind: .terminalAgent,
+            executable: "claude",
+            workingDirectory: "/repo"
+        )
+
+        XCTAssertNil(entry.discoveredHarness)
+        XCTAssertNil(entry.discoveredSessionId)
+    }
+
+    func testProcessEntryForwardMemoryRoundTripsWithValues() throws {
+        // When Workbench owns the launch it stamps the originating harness +
+        // sessionId so the next scan() native path can find it again. These
+        // survive encode → decode unchanged.
+        let original = ProcessEntry(
+            projectId: UUID(),
+            name: "From discovery",
+            kind: .terminalAgent,
+            executable: "claude",
+            workingDirectory: "/repo",
+            discoveredHarness: .claudeCode,
+            discoveredSessionId: "abc-123"
+        )
+
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(ProcessEntry.self, from: data)
+
+        XCTAssertEqual(decoded.discoveredHarness, .claudeCode)
+        XCTAssertEqual(decoded.discoveredSessionId, "abc-123")
+        XCTAssertEqual(decoded, original)
+    }
+
+    func testProcessEntryDecodesLegacyJSONWithoutForwardMemoryFields() throws {
+        // Backward-compat: a persisted entry written before Slice 6 has neither
+        // `discoveredHarness` nor `discoveredSessionId`. It must still decode,
+        // leaving both nil (decode-if-present), so workspace-state.json loads.
+        let legacy = """
+        {
+            "id": "00000000-0000-0000-0000-000000000001",
+            "projectId": "00000000-0000-0000-0000-000000000002",
+            "name": "Legacy",
+            "kind": "terminalAgent",
+            "executable": "claude",
+            "arguments": [],
+            "workingDirectory": "/repo",
+            "trust": "trusted",
+            "autoResume": false
+        }
+        """
+
+        let decoded = try JSONDecoder().decode(ProcessEntry.self, from: Data(legacy.utf8))
+
+        XCTAssertNil(decoded.discoveredHarness)
+        XCTAssertNil(decoded.discoveredSessionId)
+        XCTAssertEqual(decoded.name, "Legacy")
+    }
+
+    func testProcessEntryDecodesUnknownDiscoveredHarnessToCustom() throws {
+        // A forward-memory record from a newer build whose harness raw value is
+        // unknown decodes to `.custom` (matching AgentHarness's lenient policy)
+        // rather than dropping the row.
+        let json = """
+        {
+            "id": "00000000-0000-0000-0000-000000000001",
+            "projectId": "00000000-0000-0000-0000-000000000002",
+            "name": "Future",
+            "kind": "terminalAgent",
+            "executable": "future",
+            "arguments": [],
+            "workingDirectory": "/repo",
+            "trust": "trusted",
+            "autoResume": false,
+            "discoveredHarness": "futureHarness",
+            "discoveredSessionId": "z-9"
+        }
+        """
+
+        let decoded = try JSONDecoder().decode(ProcessEntry.self, from: Data(json.utf8))
+
+        XCTAssertEqual(decoded.discoveredHarness, .custom)
+        XCTAssertEqual(decoded.discoveredSessionId, "z-9")
+    }
 }
