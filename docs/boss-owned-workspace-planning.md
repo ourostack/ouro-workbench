@@ -89,3 +89,4 @@ knowledge.
 
 ## Progress Log
 - 2026-06-19 11:09 Created (grounded against MCP surface, action model, scanner/FS-injection templates, coverage gate, onboarding wizard map).
+- 2026-06-19 11:09 Approved under autopilot mandate; converted to doing doc (boss-owned-workspace-doing.md) — Passes 1–5 complete, READY_FOR_EXECUTION.

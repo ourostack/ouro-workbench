@@ -309,3 +309,7 @@ Per Core unit: write tests → confirm red → implement → `swift test` green 
 
 ## Progress Log
 - 2026-06-19 11:09 Created from planning doc (Pass 1 draft).
+- 2026-06-19 11:09 Pass 2 granularity: split running-discovery matcher (3a/3b) from lister-driven discovery (3c/3d); renumbered unified scan to 3e/3f.
+- 2026-06-19 11:09 Pass 3 validation: grounded Claude JSONL top-level keys + Copilot workspace.yaml flat schema against real files on this box; confirmed onboarding phase names, WorkbenchPaths accessors, TerminalAgentKind cases; refined Units 2a/2c.
+- 2026-06-19 11:09 Pass 4 quality: 36 units, all emoji-tagged, all with Acceptance, no TBD, no attribution — no changes needed.
+- 2026-06-19 11:09 Pass 5 planning coverage check: full coverage confirmed (planning-coverage-checklist.md) — all 8 areas + every In/Out-of-Scope guardrail mapped to units, no gaps.
