@@ -99,7 +99,7 @@ public struct BossWorkbenchActionAuthorizer: Sendable {
     }
 
     /// The single authorization front door used by BOTH call sites — the MCP enqueue path
-    /// (`OuroWorkbenchMCP/main.swift requestAction`) and the app apply path
+    /// (`OuroWorkbenchMCP/OuroWorkbenchMCPMain.swift requestAction`) and the app apply path
     /// (`OuroWorkbenchApp applyBossAction`). It dispatches to the entry-scoped check (which
     /// runs live's `livePrompt` sendInput safety floor) when an entry was resolved, and to the
     /// explicit entry-less check otherwise.
