@@ -80,7 +80,7 @@ Per Core unit: write tests → confirm red → implement → `swift test` green 
 
 ### Slice 0 — Audit & foundations
 
-### ⬜ Unit 0a: Control-action audit (no code)
+### ✅ Unit 0a: Control-action audit (no code)
 **Tag**: Audit
 **What**: Confirm `BossWorkbenchActionKind` + `applyBossAction` already cover archive / restore / createGroup / createTerminal / moveSession. Read `BossWorkbenchAction.swift` and `applyBossAction` (~14695). Record findings in `boss-owned-workspace-doing/control-action-audit.md`.
 **Output**: Audit note: "all present, no new action kind needed" OR a precise gap list.
