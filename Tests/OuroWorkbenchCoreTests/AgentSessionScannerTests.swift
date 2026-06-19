@@ -323,6 +323,255 @@ final class AgentSessionScannerClaudeTests: XCTestCase {
     }
 }
 
+// MARK: - Command → harness matcher
+
+final class AgentHarnessClassifyTests: XCTestCase {
+    func testClassifiesBareBinaries() {
+        XCTAssertEqual(AgentHarness.classify(command: "claude"), .claudeCode)
+        XCTAssertEqual(AgentHarness.classify(command: "copilot"), .githubCopilotCLI)
+        XCTAssertEqual(AgentHarness.classify(command: "codex"), .openAICodex)
+    }
+
+    func testClassifiesPathPrefixedBinaries() {
+        XCTAssertEqual(AgentHarness.classify(command: "/usr/local/bin/claude"), .claudeCode)
+        XCTAssertEqual(AgentHarness.classify(command: "/opt/homebrew/bin/copilot"), .githubCopilotCLI)
+        XCTAssertEqual(AgentHarness.classify(command: "/Users/me/.local/bin/codex"), .openAICodex)
+    }
+
+    func testClassifiesBinariesWithArguments() {
+        XCTAssertEqual(AgentHarness.classify(command: "claude --resume abc"), .claudeCode)
+        XCTAssertEqual(AgentHarness.classify(command: "/usr/local/bin/codex exec --json"), .openAICodex)
+        XCTAssertEqual(AgentHarness.classify(command: "  copilot   --continue  "), .githubCopilotCLI)
+    }
+
+    func testNonAgentCommandsReturnNil() {
+        XCTAssertNil(AgentHarness.classify(command: "node server.js"))
+        XCTAssertNil(AgentHarness.classify(command: "/usr/bin/vim"))
+        XCTAssertNil(AgentHarness.classify(command: "git status"))
+    }
+
+    func testEmptyOrWhitespaceCommandReturnsNil() {
+        XCTAssertNil(AgentHarness.classify(command: ""))
+        XCTAssertNil(AgentHarness.classify(command: "   "))
+    }
+
+    func testMatchIsCaseSensitiveOnBinaryName() {
+        // The harness binaries are lowercase on disk; an upper/mixed-case token
+        // is a different program and must not classify.
+        XCTAssertNil(AgentHarness.classify(command: "Claude"))
+        XCTAssertNil(AgentHarness.classify(command: "CODEX"))
+    }
+
+    func testSubstringInLargerWordDoesNotMatch() {
+        // A binary whose name merely CONTAINS an agent name must not classify —
+        // only the exact basename of the leading token counts.
+        XCTAssertNil(AgentHarness.classify(command: "claude-helper"))
+        XCTAssertNil(AgentHarness.classify(command: "my-codex-wrapper"))
+        XCTAssertNil(AgentHarness.classify(command: "/usr/bin/copilotish"))
+    }
+
+    func testSlashOnlyTokenFallsBackToWholeTokenAndDoesNotMatch() {
+        // A leading token of only slashes splits to nothing, so the basename
+        // falls back to the whole token — which is not an agent binary.
+        XCTAssertNil(AgentHarness.classify(command: "/ arg"))
+        XCTAssertNil(AgentHarness.classify(command: "///"))
+    }
+}
+
+// MARK: - Running discovery
+
+final class AgentSessionScannerRunningTests: XCTestCase {
+    func testClassifiesEachHarnessFromProcessLines() {
+        let lister: @Sendable () -> [RunningProcessLine] = {
+            [
+                RunningProcessLine(pid: 100, command: "claude --resume", cwd: "/a"),
+                RunningProcessLine(pid: 200, command: "/usr/local/bin/copilot", cwd: "/b"),
+                RunningProcessLine(pid: 300, command: "codex exec", cwd: "/c")
+            ]
+        }
+        let records = AgentSessionScanner().discoverRunning(processLister: lister)
+            .sorted { $0.cwd < $1.cwd }
+        XCTAssertEqual(records.map(\.harness), [.claudeCode, .githubCopilotCLI, .openAICodex])
+        XCTAssertTrue(records.allSatisfy(\.running))
+        XCTAssertEqual(records.map(\.cwd), ["/a", "/b", "/c"])
+    }
+
+    func testNonAgentLinesAreSkipped() {
+        let lister: @Sendable () -> [RunningProcessLine] = {
+            [
+                RunningProcessLine(pid: 1, command: "node server.js", cwd: "/a"),
+                RunningProcessLine(pid: 2, command: "claude", cwd: "/b")
+            ]
+        }
+        let records = AgentSessionScanner().discoverRunning(processLister: lister)
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(records.first?.harness, .claudeCode)
+    }
+
+    func testEmptyProcessListYieldsNoRecords() {
+        let records = AgentSessionScanner().discoverRunning(processLister: { [] })
+        XCTAssertEqual(records, [])
+    }
+
+    func testSessionIdDerivesFromPidWhenNoBetterSource() {
+        let lister: @Sendable () -> [RunningProcessLine] = {
+            [RunningProcessLine(pid: 4242, command: "claude", cwd: "/a")]
+        }
+        let r = AgentSessionScanner().discoverRunning(processLister: lister).first
+        XCTAssertEqual(r?.sessionId, "pid-4242")
+    }
+
+    func testMissingCwdBecomesEmptyString() {
+        let lister: @Sendable () -> [RunningProcessLine] = {
+            [RunningProcessLine(pid: 5, command: "codex", cwd: nil)]
+        }
+        let r = AgentSessionScanner().discoverRunning(processLister: lister).first
+        XCTAssertEqual(r?.cwd, "")
+        XCTAssertFalse(r?.running == false)
+    }
+}
+
+// MARK: - Unified scan + dedup
+
+final class AgentSessionScannerScanTests: XCTestCase {
+    func testEmptyEverythingYieldsEmpty() throws {
+        let home = try tempDir()
+        defer { try? FileManager.default.removeItem(at: home) }
+        let records = AgentSessionScanner(homeURL: home).scan(processLister: { [] })
+        XCTAssertEqual(records, [])
+    }
+
+    func testMergesRecentAndRunning() throws {
+        let home = try tempDir()
+        defer { try? FileManager.default.removeItem(at: home) }
+        try writeClaudeTranscript(home: home, directory: "/proj", name: "s.jsonl", contents: """
+        {"type":"user","cwd":"/proj","sessionId":"recent-sid","timestamp":"2026-06-19T10:00:00.000Z"}
+        """)
+        let lister: @Sendable () -> [RunningProcessLine] = {
+            [RunningProcessLine(pid: 9, command: "codex", cwd: "/other")]
+        }
+        let records = AgentSessionScanner(homeURL: home).scan(processLister: lister)
+        XCTAssertEqual(records.count, 2)
+        XCTAssertTrue(records.contains { $0.sessionId == "recent-sid" })
+        XCTAssertTrue(records.contains { $0.harness == .openAICodex && $0.running })
+    }
+
+    func testRunningOverridesRecentOnSameSessionId() throws {
+        let home = try tempDir()
+        defer { try? FileManager.default.removeItem(at: home) }
+        // A recent Claude session whose sessionId equals the running record's id.
+        try writeClaudeTranscript(home: home, directory: "/proj", name: "pid-77.jsonl", contents: """
+        {"type":"user","cwd":"/proj","sessionId":"pid-77","timestamp":"2026-06-19T10:00:00.000Z"}
+        """)
+        let lister: @Sendable () -> [RunningProcessLine] = {
+            [RunningProcessLine(pid: 77, command: "claude", cwd: "/proj")]
+        }
+        let records = AgentSessionScanner(homeURL: home).scan(processLister: lister)
+        XCTAssertEqual(records.count, 1)
+        XCTAssertTrue(records.first?.running == true)
+    }
+
+    func testDedupCollapsesSameHarnessAndCwd() throws {
+        let home = try tempDir()
+        defer { try? FileManager.default.removeItem(at: home) }
+        // Two recent Claude sessions in the SAME cwd but different sessionIds.
+        // Same harness+cwd → collapse to one (the more-recent one wins).
+        try writeClaudeTranscript(home: home, directory: "/proj", name: "old.jsonl", contents: """
+        {"type":"user","cwd":"/proj","sessionId":"old","timestamp":"2026-06-19T09:00:00.000Z"}
+        """)
+        try writeClaudeTranscript(home: home, directory: "/proj", name: "new.jsonl", contents: """
+        {"type":"user","cwd":"/proj","sessionId":"new","timestamp":"2026-06-19T12:00:00.000Z"}
+        """)
+        let records = AgentSessionScanner(homeURL: home).scan(processLister: { [] })
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(records.first?.sessionId, "new")
+    }
+
+    // Direct, FS-order-independent tests of the pure dedup/sort core so the
+    // collision branch arms are deterministically exercised.
+    func testMergeKeepsExistingWhenCandidateNotNewer() {
+        let older = AgentSessionRecord(harness: .claudeCode, sessionId: "old", cwd: "/proj",
+                                       lastActive: Date(timeIntervalSince1970: 100), running: false)
+        let newer = AgentSessionRecord(harness: .claudeCode, sessionId: "new", cwd: "/proj",
+                                       lastActive: Date(timeIntervalSince1970: 200), running: false)
+        // existing = newer (first), candidate = older (second, NOT newer) → keep newer.
+        let merged = AgentSessionScanner.merge(running: [], recent: [newer, older])
+        XCTAssertEqual(merged.map(\.sessionId), ["new"])
+    }
+
+    func testMergeReplacesExistingWhenCandidateIsNewer() {
+        let older = AgentSessionRecord(harness: .claudeCode, sessionId: "old", cwd: "/proj",
+                                       lastActive: Date(timeIntervalSince1970: 100), running: false)
+        let newer = AgentSessionRecord(harness: .claudeCode, sessionId: "new", cwd: "/proj",
+                                       lastActive: Date(timeIntervalSince1970: 200), running: false)
+        // existing = older (first), candidate = newer (second) → replace with newer.
+        let merged = AgentSessionScanner.merge(running: [], recent: [older, newer])
+        XCTAssertEqual(merged.map(\.sessionId), ["new"])
+    }
+
+    func testMergeCollisionWithNilTimestampsKeepsFirst() {
+        let a = AgentSessionRecord(harness: .claudeCode, sessionId: "first", cwd: "/proj",
+                                   lastActive: nil, running: false)
+        let b = AgentSessionRecord(harness: .claudeCode, sessionId: "second", cwd: "/proj",
+                                   lastActive: nil, running: false)
+        // Both nil → neither strictly newer → first stays.
+        let merged = AgentSessionScanner.merge(running: [], recent: [a, b])
+        XCTAssertEqual(merged.map(\.sessionId), ["first"])
+    }
+
+    func testSortsByLastActiveDescThenRunningFirst() throws {
+        let home = try tempDir()
+        defer { try? FileManager.default.removeItem(at: home) }
+        try writeClaudeTranscript(home: home, directory: "/older", name: "a.jsonl", contents: """
+        {"type":"user","cwd":"/older","sessionId":"older","timestamp":"2026-06-19T08:00:00.000Z"}
+        """)
+        try writeClaudeTranscript(home: home, directory: "/newer", name: "b.jsonl", contents: """
+        {"type":"user","cwd":"/newer","sessionId":"newer","timestamp":"2026-06-19T20:00:00.000Z"}
+        """)
+        // A running record with NO lastActive must sort ahead of dated recents.
+        let lister: @Sendable () -> [RunningProcessLine] = {
+            [RunningProcessLine(pid: 1, command: "codex", cwd: "/live")]
+        }
+        let records = AgentSessionScanner(homeURL: home).scan(processLister: lister)
+        XCTAssertEqual(records.map(\.sessionId), ["pid-1", "newer", "older"])
+    }
+
+    func testSortIsStableForEqualKeys() throws {
+        let home = try tempDir()
+        defer { try? FileManager.default.removeItem(at: home) }
+        // Two running records, same (nil lastActive, running) ordering key:
+        // ordering falls back to id for determinism.
+        let lister: @Sendable () -> [RunningProcessLine] = {
+            [
+                RunningProcessLine(pid: 2, command: "codex", cwd: "/b"),
+                RunningProcessLine(pid: 1, command: "claude", cwd: "/a")
+            ]
+        }
+        let first = AgentSessionScanner(homeURL: home).scan(processLister: lister)
+        let second = AgentSessionScanner(homeURL: home).scan(processLister: lister)
+        XCTAssertEqual(first, second)
+    }
+
+    // MARK: helpers
+
+    @discardableResult
+    func writeClaudeTranscript(home: URL, directory: String, name: String, contents: String) throws -> URL {
+        let projectDir = home
+            .appendingPathComponent(".claude/projects", isDirectory: true)
+            .appendingPathComponent(SessionActivityReader.claudeProjectDirName(forDirectory: directory), isDirectory: true)
+        try FileManager.default.createDirectory(at: projectDir, withIntermediateDirectories: true)
+        let url = projectDir.appendingPathComponent(name)
+        try Data(contents.utf8).write(to: url)
+        return url
+    }
+
+    func tempDir() throws -> URL {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+}
+
 // MARK: - Copilot recent discovery
 
 final class AgentSessionScannerCopilotTests: XCTestCase {

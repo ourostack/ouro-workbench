@@ -19,15 +19,15 @@ hand the onboarding "bring back my work" step to the boss, and record forward me
 discovery is native — all on GENERAL Core primitives with zero agency/MS knowledge.
 
 ## Completion Criteria
-- [ ] General `AgentSessionScanner` (Core) discovers Claude recent + Copilot recent + running; emits general records; no command-building; no agency knowledge.
-- [ ] Flat-YAML reader (Core) parses Copilot `workspace.yaml` keys.
+- [x] General `AgentSessionScanner` (Core) discovers Claude recent + Copilot recent + running; emits general records; no command-building; no agency knowledge. (Slices 0–3)
+- [x] Flat-YAML reader (Core) parses Copilot `workspace.yaml` keys. (Slice 1)
 - [ ] `workbench_discover_agent_sessions` MCP tool returns records as JSON.
 - [ ] `workbench_propose` MCP tool + Core proposal model + native editable card; result returns to boss.
 - [ ] Onboarding import step is boss-driven (hardcoded import replaced); wizard still works.
 - [ ] Forward memory persisted on session create; surfaced by the scanner's native path.
 - [ ] Boss-forward UI: session status list (running / waiting-on-you / done); terminals reachable.
 - [ ] Health-probe path working (reuses transcript/status; Core helper only if a gap is found).
-- [ ] `request_action` control-action audit complete (archive/group-create confirmed or added).
+- [x] `request_action` control-action audit complete (archive/group-create confirmed or added). (Slice 0 — all present, no gap)
 - [ ] 100% line+region coverage on all new Core code (`scripts/check-coverage.sh`).
 - [ ] App + MCP compile under `-warnings-as-errors -strict-concurrency=complete`.
 - [ ] All tests pass. No warnings. No `Co-Authored-By` / AI attribution anywhere.
@@ -138,32 +138,32 @@ Per Core unit: write tests → confirm red → implement → `swift test` green 
 
 ### Slice 3 — Running-session discovery (Core)
 
-### ⬜ Unit 3a: Command→harness matcher (Core) — Tests
+### ✅ Unit 3a: Command→harness matcher (Core) — Tests
 **Tag**: Core (coverage-gated)
 **What**: Failing tests for a PURE, GENERAL matcher `AgentHarness.classify(command:) -> AgentHarness?` (or a free func in `AgentSessionScanner.swift`): `claude`→claudeCode, `copilot`→githubCopilotCLI, `codex`→openAICodex, non-agent commands → `nil`. Match on harness binary names only — ZERO agency/repo/agent-map knowledge. Cover each harness, path-prefixed binaries (`/usr/local/bin/claude`), args after the binary, non-agent commands, empty string, case sensitivity decision.
 **Acceptance**: Tests exist and FAIL.
 
-### ⬜ Unit 3b: Command→harness matcher (Core) — Impl + coverage
+### ✅ Unit 3b: Command→harness matcher (Core) — Impl + coverage
 **Tag**: Core (coverage-gated)
 **What**: Implement the pure matcher. Keep it deliberately dumb and general; the boss owns all context-specific intelligence.
 **Acceptance**: Tests GREEN; 100% coverage; commit.
 
-### ⬜ Unit 3c: Running discovery (Core) — Tests
+### ✅ Unit 3c: Running discovery (Core) — Tests
 **Tag**: Core (coverage-gated)
 **What**: Failing tests for `discoverRunning(processLister:) -> [AgentSessionRecord]` where `processLister: @Sendable () -> [RunningProcessLine]` is INJECTED (closure, per `ProviderVerifyRunner`/`DaemonManager`). `RunningProcessLine { pid, command, cwd? }`. Uses the Unit 3b matcher to classify each line; non-agent lines skipped. Emits records with `running = true`, `sessionId` from a stable derivation (pid-based fallback), `cwd` from the line. Tests inject fake lines; cover each harness, non-agent lines (skipped), empty list, missing cwd.
 **Acceptance**: Tests exist and FAIL.
 
-### ⬜ Unit 3d: Running discovery (Core) — Impl + coverage
+### ✅ Unit 3d: Running discovery (Core) — Impl + coverage
 **Tag**: Core (coverage-gated)
 **What**: Implement `discoverRunning` using the matcher. No FS, no `Process` in Core: the App supplies the real lister.
 **Acceptance**: Tests GREEN; 100% coverage; commit.
 
-### ⬜ Unit 3e: Unified scan + dedup (Core) — Tests
+### ✅ Unit 3e: Unified scan + dedup (Core) — Tests
 **Tag**: Core (coverage-gated)
 **What**: Failing tests for `scan(processLister:) -> [AgentSessionRecord]` that merges recent (Claude+Copilot) + running, dedups (running beats recent when same `sessionId`/`cwd+harness`), and sorts by `lastActive` desc then running-first. Cover dedup collisions, running-overrides-recent, stable ordering, empty.
 **Acceptance**: Tests exist and FAIL.
 
-### ⬜ Unit 3f: Unified scan + dedup (Core) — Impl + coverage
+### ✅ Unit 3f: Unified scan + dedup (Core) — Impl + coverage
 **Tag**: Core (coverage-gated)
 **What**: Implement `scan(...)`. Deterministic dedup + sort.
 **Acceptance**: Tests GREEN; 100% coverage; commit.
@@ -316,3 +316,5 @@ Per Core unit: write tests → confirm red → implement → `swift test` green 
 - 2026-06-19 11:18 Unit 0a complete: control-action audit — all kinds (archive/restore/createGroup/createTerminal/createSession/moveSession) present at model+validation+apply layers; no gap, no new unit appended. Note in control-action-audit.md.
 - 2026-06-19 11:21 Unit 0b/0c complete: AgentSessionRecord + AgentHarness (clean sibling, AgentSessionScanner.swift). Codable/Equatable round-trip, unknown harness→.custom, stable id (harness:sessionId). 9 tests green; coverage gate PASS (81/83 100%, 2 pre-existing allowlisted).
 - 2026-06-19 11:24 Unit 1a/1b complete: FlatYAMLReader (Core, no SPM YAML dep). Flat key:value parse — quote-strip, comments, CRLF, dup-key-last-wins, missing colon/empty key skipped, colon-in-value. 16 tests green; coverage PASS (FlatYAMLReader.swift 100%). Slice 1 done.
+- 2026-06-19 11:31 Unit 2a-2d complete: AgentSessionScanner gains homeURL seam + discoverClaudeRecent (top-level cwd/gitBranch/sessionId/timestamp/aiTitle|summary, filename fallback, bounded tail) + discoverCopilotRecent (FlatYAMLReader; updated_at→created_at fallback; in-file id→dir fallback) + parseISO8601 (fractional→plain). Re-grounded both schemas against live files. Pure parse split from FS enumeration. 33 scanner tests green; coverage PASS (100%). Slice 2 done.
+- 2026-06-19 11:37 Unit 3a-3f complete: AgentHarness.classify (exact leading-binary basename → harness; case-sensitive; general, zero agency) + RunningProcessLine + discoverRunning(processLister:) (injected closure, running=true, pid-derived sessionId, cwd-or-empty) + scan(processLister:) merging recent+running with pure merge() (running wins harness+cwd slot; recent collision keeps newer; sort running-first→lastActive desc→id). Direct merge() tests pin collision arms FS-order-independent. Full suite 1300 green; coverage PASS (100%); strict-concurrency Core build clean. Slice 3 done.

@@ -18,6 +18,44 @@ public enum AgentHarness: String, Codable, CaseIterable, Sendable {
         let raw = try decoder.singleValueContainer().decode(String.self)
         self = AgentHarness(rawValue: raw) ?? .custom
     }
+
+    /// Classify a process command line by its leading binary's basename ONLY.
+    /// Deliberately dumb and GENERAL: it knows the three harness binary names
+    /// (`claude`, `copilot`, `codex`) and nothing else — no agency, no repo, no
+    /// agent map. Returns nil for non-agent commands so the boss owns every bit
+    /// of context-specific intelligence. Case-sensitive (the binaries are
+    /// lowercase) and exact-basename (a name that merely contains an agent word,
+    /// like `claude-helper`, does not match).
+    public static func classify(command: String) -> AgentHarness? {
+        let trimmed = command.trimmingCharacters(in: .whitespaces)
+        guard let token = trimmed.split(whereSeparator: { $0 == " " || $0 == "\t" || $0 == "\n" }).first else {
+            return nil
+        }
+        let binary = String(token).split(separator: "/").last.map(String.init) ?? String(token)
+        switch binary {
+        case "claude": return .claudeCode
+        case "copilot": return .githubCopilotCLI
+        case "codex": return .openAICodex
+        default: return nil
+        }
+    }
+}
+
+/// One line from a process listing the App/MCP layer supplies. GENERAL: just a
+/// pid, the command line, and the working directory if the lister could resolve
+/// it. Core never runs `Process` or `ps` itself — the executable target injects
+/// the real lister (per the `ProviderVerifyRunner`/`DaemonManager` closure
+/// seam), keeping every Core path testable with fakes.
+public struct RunningProcessLine: Equatable, Sendable {
+    public var pid: Int
+    public var command: String
+    public var cwd: String?
+
+    public init(pid: Int, command: String, cwd: String? = nil) {
+        self.pid = pid
+        self.command = command
+        self.cwd = cwd
+    }
 }
 
 /// A GENERAL record of a discovered agent session. Zero command-building, zero
@@ -267,5 +305,76 @@ public struct AgentSessionScanner: Sendable {
             return nil
         }
         return trimmed
+    }
+
+    // MARK: - Running discovery
+
+    /// Discover currently-running agent sessions from an INJECTED process lister.
+    /// Each line is classified by `AgentHarness.classify`; non-agent lines are
+    /// dropped. Records are `running = true` with a stable pid-derived sessionId
+    /// (the process table gives no harness session id) and the line's cwd (empty
+    /// when the lister couldn't resolve it). No FS, no `Process` here — the App
+    /// supplies the real lister.
+    public func discoverRunning(processLister: @Sendable () -> [RunningProcessLine]) -> [AgentSessionRecord] {
+        processLister().compactMap { line in
+            guard let harness = AgentHarness.classify(command: line.command) else { return nil }
+            return AgentSessionRecord(
+                harness: harness,
+                sessionId: "pid-\(line.pid)",
+                cwd: line.cwd ?? "",
+                repository: nil,
+                branch: nil,
+                title: nil,
+                lastActive: nil,
+                running: true
+            )
+        }
+    }
+
+    // MARK: - Unified scan + dedup
+
+    /// Merge recent (Claude + Copilot) with running, dedup, and sort. A running
+    /// record beats a recent one for the same logical session (same `id`, OR
+    /// same `harness + cwd`). Sort: running-first, then `lastActive` descending
+    /// (nil sorts last), then `id` for a deterministic, stable order.
+    public func scan(processLister: @Sendable () -> [RunningProcessLine]) -> [AgentSessionRecord] {
+        let running = discoverRunning(processLister: processLister)
+        let recent = discoverClaudeRecent() + discoverCopilotRecent()
+        return Self.merge(running: running, recent: recent)
+    }
+
+    /// Pure dedup + sort. Running wins over recent; within a source, a later
+    /// `lastActive` wins a `harness + cwd` collision. Sorting is total and stable.
+    static func merge(running: [AgentSessionRecord], recent: [AgentSessionRecord]) -> [AgentSessionRecord] {
+        var byKey: [String: AgentSessionRecord] = [:]
+
+        func key(for record: AgentSessionRecord) -> String {
+            "\(record.harness.rawValue)|\(record.cwd)"
+        }
+
+        // Recent first so running can overwrite on collision.
+        for record in recent {
+            let k = key(for: record)
+            if let existing = byKey[k] {
+                // Same harness+cwd: keep the more-recent (nil counts as oldest).
+                let existingTime = existing.lastActive ?? .distantPast
+                let candidateTime = record.lastActive ?? .distantPast
+                if candidateTime > existingTime { byKey[k] = record }
+            } else {
+                byKey[k] = record
+            }
+        }
+        for record in running {
+            // Running always wins its harness+cwd slot.
+            byKey[key(for: record)] = record
+        }
+
+        return byKey.values.sorted { lhs, rhs in
+            if lhs.running != rhs.running { return lhs.running }
+            let lhsTime = lhs.lastActive ?? .distantPast
+            let rhsTime = rhs.lastActive ?? .distantPast
+            if lhsTime != rhsTime { return lhsTime > rhsTime }
+            return lhs.id < rhs.id
+        }
     }
 }
