@@ -228,15 +228,16 @@ Per Core unit: write tests → confirm red → implement → `swift test` green 
 
 ### Slice 6 — Forward memory
 
-### ⬜ Unit 6a: Forward-memory fields (Core) — Tests
+### ✅ Unit 6a: Forward-memory fields (Core) — Tests
 **Tag**: Core (coverage-gated)
 **What**: Failing tests for additive optional fields on `ProcessEntry` (`WorkspaceModels.swift`) and `CustomTerminalSessionDraft` (`CustomTerminalSession.swift`): `discoveredHarness: AgentHarness?`, `discoveredSessionId: String?`. Cover: decode-if-present (old JSON without the fields loads with nils), encode round-trip with values, `Factory.makeEntry` propagates draft→entry, defaults nil when absent. Add to `WorkspaceModelsTests` / `CustomTerminalSessionTests`.
 **Acceptance**: Tests exist and FAIL.
 
-### ⬜ Unit 6b: Forward-memory fields (Core) — Impl + coverage
+### ✅ Unit 6b: Forward-memory fields (Core) — Impl + coverage
 **Tag**: Core (coverage-gated)
 **What**: Add the fields with `decodeIfPresent` (match the `owner`/`isPinned`/`friend` pattern). Thread through `CustomTerminalSessionDraft` → `Factory.makeEntry`. Also carry over in `updatedEntry`/`duplicateEntry` (the same way `owner`/`isPinned`/`friend` are preserved) so edits don't wipe them.
 **Acceptance**: Tests GREEN; 100% coverage on `WorkspaceModels.swift` + `CustomTerminalSession.swift`; commit.
+**Done**: `discoveredHarness: AgentHarness?` + `discoveredSessionId: String?` added to `ProcessEntry` (CodingKeys + decode-if-present; `AgentHarness`'s own decoder maps unknown raw → `.custom`) and to `CustomTerminalSessionDraft`. Threaded through `Factory.makeEntry` (stamps draft→entry) and carried over in `updatedEntry` (editable draft has no provenance, so copied back like owner/isPinned/friend) + `duplicateEntry`. 9 new Core tests RED→GREEN (`8a7c2a8` red, `303af31` green): defaults-nil, encode/decode round-trip, LEGACY-json-without-fields decodes (backward-compat confirmed), unknown-harness→.custom, draft→entry propagation, edit/duplicate preservation. Coverage PASS — both files 100% line+region (84/86, allowlist UNCHANGED); full suite 1354 green (1 pre-existing skip).
 
 ### ⬜ Unit 6c: Record forward memory at create (App)
 **Tag**: App
