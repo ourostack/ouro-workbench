@@ -132,22 +132,32 @@ Per Core unit: write tests → confirm red → implement → `swift test` green 
 
 ### Slice 3 — Running-session discovery (Core)
 
-### ⬜ Unit 3a: Running discovery (Core) — Tests
+### ⬜ Unit 3a: Command→harness matcher (Core) — Tests
 **Tag**: Core (coverage-gated)
-**What**: Failing tests for `discoverRunning(processLister:) -> [AgentSessionRecord]` where `processLister: @Sendable () -> [RunningProcessLine]` is INJECTED (closure, per `ProviderVerifyRunner`/`DaemonManager`). `RunningProcessLine { pid, command, cwd? }`. The scanner classifies each line's `command` into an `AgentHarness` via a pure, GENERAL matcher (`claude`→claudeCode, `copilot`→githubCopilotCLI, `codex`→openAICodex, else skip/`.custom` only when clearly an agent). Emits records with `running = true`, `sessionId` from a stable derivation (pid-based fallback), `cwd` from the line. Tests inject fake lines; cover each harness, non-agent lines (skipped), empty list, missing cwd.
+**What**: Failing tests for a PURE, GENERAL matcher `AgentHarness.classify(command:) -> AgentHarness?` (or a free func in `AgentSessionScanner.swift`): `claude`→claudeCode, `copilot`→githubCopilotCLI, `codex`→openAICodex, non-agent commands → `nil`. Match on harness binary names only — ZERO agency/repo/agent-map knowledge. Cover each harness, path-prefixed binaries (`/usr/local/bin/claude`), args after the binary, non-agent commands, empty string, case sensitivity decision.
 **Acceptance**: Tests exist and FAIL.
 
-### ⬜ Unit 3b: Running discovery (Core) — Impl + coverage
+### ⬜ Unit 3b: Command→harness matcher (Core) — Impl + coverage
 **Tag**: Core (coverage-gated)
-**What**: Implement `discoverRunning` + the pure command→harness matcher. Zero agency knowledge — match on harness binary names only. No FS, no `Process` in Core: the App supplies the real lister.
+**What**: Implement the pure matcher. Keep it deliberately dumb and general; the boss owns all context-specific intelligence.
 **Acceptance**: Tests GREEN; 100% coverage; commit.
 
-### ⬜ Unit 3c: Unified scan + dedup (Core) — Tests
+### ⬜ Unit 3c: Running discovery (Core) — Tests
+**Tag**: Core (coverage-gated)
+**What**: Failing tests for `discoverRunning(processLister:) -> [AgentSessionRecord]` where `processLister: @Sendable () -> [RunningProcessLine]` is INJECTED (closure, per `ProviderVerifyRunner`/`DaemonManager`). `RunningProcessLine { pid, command, cwd? }`. Uses the Unit 3b matcher to classify each line; non-agent lines skipped. Emits records with `running = true`, `sessionId` from a stable derivation (pid-based fallback), `cwd` from the line. Tests inject fake lines; cover each harness, non-agent lines (skipped), empty list, missing cwd.
+**Acceptance**: Tests exist and FAIL.
+
+### ⬜ Unit 3d: Running discovery (Core) — Impl + coverage
+**Tag**: Core (coverage-gated)
+**What**: Implement `discoverRunning` using the matcher. No FS, no `Process` in Core: the App supplies the real lister.
+**Acceptance**: Tests GREEN; 100% coverage; commit.
+
+### ⬜ Unit 3e: Unified scan + dedup (Core) — Tests
 **Tag**: Core (coverage-gated)
 **What**: Failing tests for `scan(processLister:) -> [AgentSessionRecord]` that merges recent (Claude+Copilot) + running, dedups (running beats recent when same `sessionId`/`cwd+harness`), and sorts by `lastActive` desc then running-first. Cover dedup collisions, running-overrides-recent, stable ordering, empty.
 **Acceptance**: Tests exist and FAIL.
 
-### ⬜ Unit 3d: Unified scan + dedup (Core) — Impl + coverage
+### ⬜ Unit 3f: Unified scan + dedup (Core) — Impl + coverage
 **Tag**: Core (coverage-gated)
 **What**: Implement `scan(...)`. Deterministic dedup + sort.
 **Acceptance**: Tests GREEN; 100% coverage; commit.
