@@ -277,15 +277,17 @@ Per Core unit: write tests → confirm red → implement → `swift test` green 
 
 ### Slice 8 — Boss-forward UI + health-probe
 
-### ⬜ Unit 8a: Session status classification (Core) — Tests
+### ✅ Unit 8a: Session status classification (Core) — Tests
 **Tag**: Core (coverage-gated)
 **What**: Failing tests for a pure `SessionStatusList` projection in a new `Sources/OuroWorkbenchCore/SessionStatusList.swift`: from `WorkspaceState` (+ latest runs/attention) produce three buckets — `running`, `waitingOnYou` (`AttentionState.needsHuman`), `done` (exited). Reuse `SessionSnapshot`/`ProcessRun.isMoreRecent`. Cover each bucket, archived excluded, no-run entries, ordering.
 **Acceptance**: Tests exist and FAIL.
+**Done**: `SessionStatusListTests.swift` — confirmed RED (`cannot find 'SessionStatusList'`). Commit `65ad4c1`.
 
-### ⬜ Unit 8b: Session status classification (Core) — Impl + coverage
+### ✅ Unit 8b: Session status classification (Core) — Impl + coverage
 **Tag**: Core (coverage-gated)
 **What**: Implement the projection. Pure.
 **Acceptance**: Tests GREEN; 100% coverage; commit.
+**Done**: `SessionStatusList.make(from:includeArchived:)` projects a `WorkspaceState` into three buckets via a pure, total `classify(attention:runStatus:)`. **States + how they're classified** (precedence top-down, every non-archived session lands in EXACTLY one bucket): (1) `waitingOnYou` when `AttentionState.needsHuman` (`waitingOnHuman`/`needsBossReview`/`blocked`) OR the latest run is `.waitingForInput`/`.needsRecovery`/`.manualActionNeeded` — the operator's turn always wins over "running" so an asking session is never buried; (2) `running` when the latest run is `.running` and not waiting; (3) `done` otherwise — `.exited`, or `.configured`/never-run (settled/idle). Reuses `AttentionState.needsHuman` + `ProcessRun.isMoreRecent`; archived excluded by default (`includeArchived` opt-in mirrors the snapshot/sidebar default). `SessionStatusRow` is a flat render-ready value (id/name/group/owner/bucket/status/attention/needsHuman/cwd/pid/exitCode/startedAt/lastOutputAt). Within each bucket rows sort freshest-first by `lastOutputAt`→`startedAt`→case-insensitive name→id via a lexicographic `SortKey` (negated-since-1970 so newer floats up, missing date sorts last); `all` is attention-ordered (waiting→running→done). 27 tests RED→GREEN; coverage PASS (`SessionStatusList.swift` 100% line+region; 85/87, allowlist UNCHANGED); full suite 1398 green (1 pre-existing skip). Commits `65ad4c1` (red) / `1c6bdf4` (green). NOTE: the first `isFresher` form (nested `if {return}`) left one Swift region-mapping arm uncovered (`{ return l > r }` body counted 0 despite the branch being taken) — refactored to the lexicographic `SortKey` compare, which has unambiguous, fully-coverable regions.
 
 ### ⬜ Unit 8c: Boss-forward UI surface (App)
 **Tag**: App
