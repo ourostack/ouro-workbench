@@ -45,27 +45,40 @@ that isn't. No v1/v2 gating.
 
 So the boss can already *drive* terminals. The base is solid.
 
-## Gaps to build
+## Gaps — ALL SHIPPED (boss-owned-workspace feature, `fix/onboarding-audit`)
 
-1. **Discover sessions not yet in Workbench** — the foundation of reconstruct + adopt. A new
-   `workbench_discover_agent_sessions` tool backed by a **general** Core scanner:
-   - Claude: `~/.claude/projects/<encoded-cwd>/<id>.jsonl` → cwd, gitBranch, timestamp, title.
-   - Copilot: `~/.copilot/session-state/<id>/workspace.yaml` → cwd, repository, branch, name, timestamps.
-   - Plus *running* agent sessions (live processes) for adopt.
-   - Returns general records: `{harness, sessionId, cwd, repository, branch, title, lastActive, running}`.
-   - **No `agency` knowledge** — the boss builds the relaunch command itself.
-2. **Propose-for-approval** — a general "boss proposes a list of items, operator ticks/edits,
-   result returns to the boss" primitive. This *is* the editable map, and it's reused by
-   reconstruct/tidy/adopt. Conversational fallback if the card slips.
-3. **Archive / organize** — confirm `request_action` covers archive + group-create; add what's missing.
-4. **Onboarding hand-off** — replace the hardcoded terminal-session import step with: hand the
-   boss the `see → propose → act` task. (The old `RecentSessionScanner` terminal-scan is the
-   "messy" approach the operator rejected.)
-5. **Boss-primary UX** — operator interacts with the boss + a boss-managed session view;
-   terminals are drop-in-to-collaborate. (Assess scope against usefulness.)
-6. **Forward memory** — when Workbench launches a session it owns the command, so it records
-   `{agent, command, cwd, harness, sessionId}`. Future discovery is then native, never inferred.
-   Inference is a one-time bridge for sessions that already exist.
+Every gap below landed across Slices 0–9 of `boss-owned-workspace-doing.md`. The Slice 9
+integration smoke (`boss-owned-workspace-doing/integration-smoke.py`) proves the whole
+`see → propose → act` loop composes end-to-end against the real MCP binary.
+
+1. ✅ **Discover sessions not yet in Workbench** — `workbench_discover_agent_sessions` backed by
+   the **general** Core `AgentSessionScanner` (clean sibling of the rejected `RecentSessionScanner`):
+   - Claude: `~/.claude/projects/<encoded-cwd>/<id>.jsonl` → cwd, gitBranch, timestamp, title (TOP-LEVEL keys).
+   - Copilot: `~/.copilot/session-state/<id>/workspace.yaml` via the custom `FlatYAMLReader` (no SPM dep)
+     → cwd, repository, branch, name, timestamps.
+   - Plus *running* agent sessions via an injected process-lister closure (App supplies the `ps` shell).
+   - Plus *Workbench-native* sessions via forward memory (item 6), merged sessionId-aware.
+   - Returns general records `{harness, sessionId, cwd, repository, branch, title, lastActive, running}`.
+   - **No `agency` knowledge** — the boss builds the relaunch command itself. *(Slices 0–4)*
+2. ✅ **Propose-for-approval** — the general Core `AgentProposal`/`AgentProposalQueue` primitive +
+   `workbench_propose` / `workbench_proposal_result` MCP tools + the native `BossProposalCardList`
+   card. A CAPABILITY, never a gate — the boss may also just act; conversational fallback stands. *(Slice 5)*
+3. ✅ **Archive / organize** — audited: `BossWorkbenchActionKind` + `applyBossAction` already cover
+   archive / restore / createGroup / createTerminal / moveSession at model + validation + apply layers.
+   No gap, no new action kind. *(Slice 0)*
+4. ✅ **Onboarding hand-off** — the wizard's `importWork` page now renders the boss-driven
+   `OnboardingBossReconstructView` (`.bossReconstruct` phase) that hands the boss the
+   `see → propose → act` task. `RecentSessionScanner` is KEPT-BUT-UNWIRED from the primary path. *(Slice 7)*
+5. ✅ **Boss-primary UX** — `SessionStatusListView` (running / waiting-on-you / done, driven by the pure
+   Core `SessionStatusList`) fronts the boss dashboard. ADDITIVE — the terminal sidebar is untouched and
+   still mounted, so terminals stay drop-in-to-collaborate. *(Slice 8)*
+6. ✅ **Forward memory** — additive optional `discoveredHarness`/`discoveredSessionId` on `ProcessEntry`
+   (decode-if-present, backward-compatible), stamped at session-create, rediscovered NATIVELY by
+   `AgentSessionScanner.discoverFromWorkbench`. Future discovery is native, never inferred. *(Slice 6)*
+
+Bonus (gap found during Slice 8): ✅ **Health-probe** — the pure Core `SessionHealthProbe`
+(`healthy / starting / stalled / failed`, reusing `AttentionSignalDetector`) + `workbench_session_health`,
+so the boss verifies a resumed session deterministically instead of interpreting raw tails ad hoc.
 
 ## Status of the separate onboarding-fix batch (already done, green)
 

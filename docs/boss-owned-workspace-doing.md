@@ -1,6 +1,6 @@
 # Doing: Boss-Owned Workspace — discover / propose / hand-off / forward-memory
 
-**Status**: READY_FOR_EXECUTION
+**Status**: done
 **Execution Mode**: direct
 **Created**: 2026-06-19 11:09
 **Planning**: ./boss-owned-workspace-planning.md
@@ -29,8 +29,9 @@ discovery is native — all on GENERAL Core primitives with zero agency/MS knowl
 - [x] Health-probe path working (reuses transcript/status; Core helper only if a gap is found). (Slice 8: gap found → `SessionHealthProbe` Core + `workbench_session_health` MCP)
 - [x] `request_action` control-action audit complete (archive/group-create confirmed or added). (Slice 0 — all present, no gap)
 - [x] 100% line+region coverage on all new Core code (`scripts/check-coverage.sh`). (86/88 at 100%; the 2 exempt are pre-existing structural allowlist entries — allowlist UNCHANGED)
-- [x] App + MCP compile under `-warnings-as-errors -strict-concurrency=complete`. (App + MCP + ScenarioVerifier all build clean under strict flags)
-- [x] All tests pass. No warnings. No `Co-Authored-By` / AI attribution anywhere. (1427 tests, 1 pre-existing skip, 0 failures; no attribution in the diff)
+- [x] App + MCP compile under `-warnings-as-errors -strict-concurrency=complete`. (Slice-9 forced-clean release build: Core + App + MCP + ScenarioVerifier all build clean, zero warnings)
+- [x] All tests pass. No warnings. No `Co-Authored-By` / AI attribution anywhere. (Slice-9 gate: 1427 tests, 1 pre-existing skip, 0 failures; timing suites clean in isolation; zero attribution in code, docs, and 52 feature commits)
+- [x] **Slice 9 integration gate**: the slices COMPOSE end-to-end — `integration-smoke.py` drives the real MCP binary through `see → propose → act` (`workbench_discover_agent_sessions` → real sessions → `workbench_propose` → queued → `workbench_proposal_result` round-trips the operator's edit → `workbench_session_health` wired). All 8 spec areas map to landed, committed units with zero gaps (`planning-coverage-checklist.md`).
 
 ## Code Coverage Requirements
 **MANDATORY: 100% line+region coverage on all new OuroWorkbenchCore code.**
@@ -311,10 +312,11 @@ Per Core unit: write tests → confirm red → implement → `swift test` green 
 **Acceptance**: Coverage PASS; strict build clean; all tests green; no attribution strings; commit.
 **Done**: ALL GATES GREEN. **Coverage** `scripts/check-coverage.sh` PASS — `OuroWorkbenchCore: 86/88 files at 100% line+region`; the 2 exempt are the UNCHANGED pre-existing structural allowlist entries (`BossAgentMCPClient.swift` 1/3, `SessionActivityReader.swift` 0/1) — zero new entries. **Strict build** clean from a forced-clean release rebuild — `swift build -c release -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete` → "Build complete! (78.38s)", ZERO `warning:`/`error:` across every target (Core + App `OuroWorkbench` + MCP + ScenarioVerifier). **Full suite** `swift test --enable-code-coverage` → `Executed 1427 tests, with 1 test skipped and 0 failures`; the 1 skip is pre-existing. The dispatch-flagged timing-sensitive suites re-run IN ISOLATION to rule out a flake → `BossAgentMCPClientTests` 26/26 + `DaemonLivenessTests` 28/28, 0 failures. **Attribution** `git grep -nE "Co-Authored-By|Generated with|Built by Claude|AI-assisted"` over the code → ZERO; the only hits anywhere are this doc/the planning doc *describing the rule*, never an actual attribution line; all 52 feature commit messages clean; `Claude Code`/`GitHub Copilot CLI` appear only as product names in tool descriptions / UI copy / preset display names (the allowed category). **Integration smoke** (`boss-owned-workspace-doing/integration-smoke.py`, drives the REAL release MCP binary over stdio JSON-RPC against an isolated `--app-support-root`): the full `see → propose → act` loop COMPOSES end-to-end — `tools/list` advertises all 4 feature tools (14 total); `workbench_discover_agent_sessions` → 36 real sessions on this box, deterministic (two calls byte-identical), general fields present; a discovered session fed into `workbench_propose` → `{ok, proposalId, itemCount:1}` + a pending file written for the App card; `workbench_proposal_result` returns `ready:false` pre-answer, then after the operator-approval result file (written via the queue's exact on-disk contract) returns `ready:true` with the SELECTED item AND the operator's edit surviving the round-trip; `workbench_session_health` is wired and resolves its arg coherently (clean validation message, no crash).
 
-### ⬜ Unit 9b: Spec + planning checklist reconciliation
+### ✅ Unit 9b: Spec + planning checklist reconciliation
 **Tag**: Docs
 **What**: Tick this doc's Completion Criteria against reality; update `boss-owned-workspace.md` "Gaps to build" to reflect what shipped; ensure `planning-coverage-checklist.md` is all ✅.
 **Acceptance**: Docs reconciled; committed.
+**Done**: All Completion Criteria above ticked `[x]` against the Slice-9 gate evidence (+ a new integration-gate criterion). `boss-owned-workspace.md` "Gaps to build" → "Gaps — ALL SHIPPED": every one of the 6 spec gaps annotated ✅ with its landed artifact + slice, plus the bonus health-probe. `planning-coverage-checklist.md` confirmed all ✅ (final-verification note appended). **Implementation-coverage cross-check** (Gate 1): each of the 8 spec areas verified to have landed, COMMITTED code — `AgentSessionScanner.swift`+`FlatYAMLReader.swift` (1), MCP discover case + `RunningProcessLister.swift` (2), `AgentProposal.swift`+`AgentProposalQueue.swift`+`BossProposalCardList` (3), `OnboardingBossReconstructView`+`.bossReconstruct` (4), `discoveredHarness`/`discoveredSessionId` on `ProcessEntry` (5), `SessionStatusList.swift`+`SessionStatusListView` (6), `SessionHealthProbe.swift`+`workbench_session_health` (7), control-action audit (8) — all 4 feature MCP tools wired; ZERO gaps.
 
 ## Execution
 - **TDD strictly enforced**: tests → red → implement → green → refactor; coverage gate per Core unit.

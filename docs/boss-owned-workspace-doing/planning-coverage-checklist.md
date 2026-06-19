@@ -54,3 +54,10 @@ Maps every planning-doc / spec requirement to a doing-doc unit. ✅ = covered, �
 
 ## Result
 **Full coverage confirmed. No gaps (❌) found.** Every planning/spec requirement maps to at least one unit, and every Out-of-Scope guardrail is explicitly encoded in a unit description.
+
+## Slice 9 final verification (post-build)
+Re-checked at feature completion against landed, COMMITTED code (not just unit descriptions):
+- Each of the 8 areas above has a tracked source artifact + (where applicable) a wired MCP tool — all 4 feature tools present in `OuroWorkbenchMCPMain.swift`.
+- The `see → propose → act` loop COMPOSES end-to-end — proven by `integration-smoke.py` against the real release MCP binary (discover → propose → result round-trip with operator edit → session_health).
+- Gates green: coverage 86/88 100% line+region (allowlist UNCHANGED), clean release strict build, 1427 tests / 1 pre-existing skip / 0 failures, zero AI attribution.
+- **Every area remains ✅. Zero gaps.**
