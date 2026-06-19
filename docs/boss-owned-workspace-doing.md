@@ -52,7 +52,7 @@ discovery is native — all on GENERAL Core primitives with zero agency/MS knowl
 Per Core unit: write tests → confirm red → implement → `swift test` green → `scripts/check-coverage.sh` 100% on the new file → commit.
 
 ## Grounding (verified against HEAD)
-- MCP tools + apply queue: `Sources/OuroWorkbenchMCP/main.swift` (`callTool` ~111, `toolDefinitions` ~571).
+- MCP tools + apply queue: `Sources/OuroWorkbenchMCP/OuroWorkbenchMCPMain.swift` (`callTool` ~111, `toolDefinitions` ~571). (Renamed from `main.swift` in Unit 4a — see below.)
 - Action model: `Sources/OuroWorkbenchCore/BossWorkbenchAction.swift` — `BossWorkbenchActionKind` ALREADY has `createGroup`/`createTerminal`/`createSession`/`moveSession`/`archive`/`restore`; `validateForQueueing`.
 - App apply path: `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift` — `applyBossAction` ~14695, `createCustomSession(_:in:launchAfterCreate:owner:)` ~14481, `createGroup` ~11411, `archiveCustomSession` ~14587, `applyExternalActionRequests` ~14066.
 - FS-injection template: `Sources/OuroWorkbenchCore/SessionActivityReader.swift` (`homeURL`, pure parse fns, bounded tail, `claudeProjectDirName`) + `Tests/.../SessionActivityReaderTests.swift`.
@@ -172,14 +172,15 @@ Per Core unit: write tests → confirm red → implement → `swift test` green 
 
 ### Slice 4 — `workbench_discover_agent_sessions` MCP tool
 
-### ⬜ Unit 4a: Discover tool — App-side real process lister (App)
+### ✅ Unit 4a: Discover tool — App-side real process lister (App)
 **Tag**: App
 **What**: Provide a concrete `processLister` for the App/MCP side (a `ps`-style enumeration via `Process`) that returns `[RunningProcessLine]`. Lives in the executable target (NOT Core; uses `Process`). Keep narrow; no agency knowledge.
 **Acceptance**: Compiles under strict-concurrency; smoke-runs locally (manual). No Core coverage impact.
+**Done**: The `ps`-output PARSER is naturally Core-shaped, so per the dispatch's "Core-shaped logic goes to Core with 100% coverage" rule it landed in Core as the pure `RunningProcessLine.parsePS` (100% line+region covered). The un-testable `Process` shell lives in the MCP executable target: `Sources/OuroWorkbenchMCP/RunningProcessLister.swift` (runs `ps -axww -o pid=,command=`, drains pipe, `ProcessWatchdog`-bounded, feeds Core's parser). Side fix: renamed MCP `main.swift` → `OuroWorkbenchMCPMain.swift` (a second file in a `@main` target trips Swift's top-level-code rule). Strict-concurrency MCP build clean. Commit `ce917f2`.
 
 ### ⬜ Unit 4b: Discover tool wiring (MCP)
 **Tag**: MCP
-**What**: Add `workbench_discover_agent_sessions` to `callTool` + `toolDefinitions` in `Sources/OuroWorkbenchMCP/main.swift`. Construct `AgentSessionScanner` (default `homeURL`), call `scan(processLister:)` with the real lister, encode `{ "sessions": [AgentSessionRecord...] }` via the existing `jsonEncoder` (sortedKeys/iso8601). Synchronous (matches the readLine loop). Tool description: GENERAL records, no command-building, boss builds resume itself.
+**What**: Add `workbench_discover_agent_sessions` to `callTool` + `toolDefinitions` in `Sources/OuroWorkbenchMCP/OuroWorkbenchMCPMain.swift`. Construct `AgentSessionScanner` (default `homeURL`), call `scan(processLister:)` with the real lister, encode `{ "sessions": [AgentSessionRecord...] }` via the existing `jsonEncoder` (sortedKeys/iso8601). Synchronous (matches the readLine loop). Tool description: GENERAL records, no command-building, boss builds resume itself.
 **Acceptance**: `swift build` (MCP) under strict flags clean; `tools/list` includes the new tool; a manual `tools/call` returns the JSON shape. Encoding is deterministic.
 
 ---
@@ -318,4 +319,5 @@ Per Core unit: write tests → confirm red → implement → `swift test` green 
 - 2026-06-19 11:24 Unit 1a/1b complete: FlatYAMLReader (Core, no SPM YAML dep). Flat key:value parse — quote-strip, comments, CRLF, dup-key-last-wins, missing colon/empty key skipped, colon-in-value. 16 tests green; coverage PASS (FlatYAMLReader.swift 100%). Slice 1 done.
 - 2026-06-19 11:31 Unit 2a-2d complete: AgentSessionScanner gains homeURL seam + discoverClaudeRecent (top-level cwd/gitBranch/sessionId/timestamp/aiTitle|summary, filename fallback, bounded tail) + discoverCopilotRecent (FlatYAMLReader; updated_at→created_at fallback; in-file id→dir fallback) + parseISO8601 (fractional→plain). Re-grounded both schemas against live files. Pure parse split from FS enumeration. 33 scanner tests green; coverage PASS (100%). Slice 2 done.
 - 2026-06-19 11:37 Unit 3a-3f complete: AgentHarness.classify (exact leading-binary basename → harness; case-sensitive; general, zero agency) + RunningProcessLine + discoverRunning(processLister:) (injected closure, running=true, pid-derived sessionId, cwd-or-empty) + scan(processLister:) merging recent+running with pure merge() (running wins harness+cwd slot; recent collision keeps newer; sort running-first→lastActive desc→id). Direct merge() tests pin collision arms FS-order-independent. Full suite 1300 green; coverage PASS (100%); strict-concurrency Core build clean. Slice 3 done.
+- 2026-06-19 11:55 Unit 4a complete: pure `RunningProcessLine.parsePS` in Core (100% covered; parses `ps -o pid=,command=` → general lines, cwd nil) + MCP-side `RunningProcessLister.swift` Process shell (runs `ps -axww -o pid=,command=`, drains pipe, ProcessWatchdog-bounded, degrades to empty). Renamed MCP `main.swift`→`OuroWorkbenchMCPMain.swift` (a 2nd file in a `@main` target trips the magic-`main.swift` top-level-code rule). Strict-concurrency MCP build clean; coverage gate PASS (82/84, allowlist unchanged); full suite green (one pre-existing flaky timing test in BossAgentMCPClientTests passed on retry/in isolation). Commit ce917f2.
 - 2026-06-19 11:40 Slices 0–3 dispatch complete (scanner foundation). Gates: Core coverage 100% (82/84, only the 2 pre-existing allowlisted; allowlist unchanged); full suite 1300 green; App + MCP + Core build clean under -warnings-as-errors -strict-concurrency=complete. Hard constraints held — clean sibling AgentSessionScanner.swift (RecentSessionScanner/Onboarding.swift untouched), zero agency/MS knowledge + zero command-building (general records only), custom FlatYAMLReader (no SPM YAML dep), homeURL FS seam + injected process-lister closure, no AI attribution. STOP per dispatch; Slice 4 not started.
