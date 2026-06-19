@@ -94,6 +94,20 @@ final class TerminalEnvironmentTests: XCTestCase {
         XCTAssertTrue(comps.contains("/Users/test/.ouro-cli/bin"))
     }
 
+    func testLoginShellCaptureArgumentsAreInteractive() {
+        // REGRESSION GUARD for the multi-week "can't get past connect" onboarding bug: the PATH
+        // capture MUST run an INTERACTIVE shell. nvm/node/ouro-cli live in `.zshrc`, which a shell
+        // sources only when interactive — a non-interactive login shell (`-lc`) silently captures a
+        // PATH with no `node`, so every `ouro check` fails and the wizard never confirms the
+        // provider. If someone "simplifies" this back to `-lc`, this test fails loudly.
+        let args = TerminalEnvironment.loginShellCaptureArguments
+        let flags = args.first ?? ""
+        XCTAssertTrue(flags.contains("i"), "capture shell must be INTERACTIVE (-i): \(args)")
+        XCTAssertTrue(flags.contains("l"), "capture shell should be a login shell (-l): \(args)")
+        XCTAssertTrue(flags.contains("c"), "capture shell runs a command (-c): \(args)")
+        XCTAssertEqual(args.last, "printf %s \"$PATH\"")
+    }
+
     func testMergedEnvironmentIncludesPathAndTerminalDefaults() {
         let environment = TerminalEnvironment(values: ["HOME": "/Users/test"]).mergedWithTerminalDefaults()
 

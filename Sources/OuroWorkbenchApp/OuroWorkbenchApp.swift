@@ -12240,7 +12240,10 @@ final class WorkbenchViewModel: ObservableObject {
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
         let process = Process()
         process.executableURL = URL(fileURLWithPath: shell)
-        process.arguments = ["-lc", "printf %s \"$PATH\""]
+        // INTERACTIVE login shell (`-ilc`), not `-lc`. THE root-cause fix — see
+        // `TerminalEnvironment.loginShellCaptureArguments` for the full why (nvm/node/ouro live in
+        // `.zshrc`, which only an interactive shell sources; a `-lc` capture silently drops them).
+        process.arguments = TerminalEnvironment.loginShellCaptureArguments
         let out = Pipe()
         process.standardOutput = out
         process.standardError = Pipe()
@@ -12251,11 +12254,12 @@ final class WorkbenchViewModel: ObservableObject {
             // profile (network-mounted rc, a blocking nvm/MDM hook, a profile that waits
             // on input) would otherwise hang `waitUntilExit` forever and the wizard would
             // never appear. Bound it: terminate past the deadline so the read unwinds and
-            // we fall back to the synthesized PATH.
+            // we fall back to the synthesized PATH. 10s (not 5s) — an interactive shell sources
+            // a heavier `.zshrc` (plugin frameworks, completions) and must not be killed mid-source.
             let watchdog = DispatchWorkItem {
                 if process.isRunning { process.terminate() }
             }
-            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 5, execute: watchdog)
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 10, execute: watchdog)
             let data = out.fileHandleForReading.readDataToEndOfFile()
             process.waitUntilExit()
             watchdog.cancel()
