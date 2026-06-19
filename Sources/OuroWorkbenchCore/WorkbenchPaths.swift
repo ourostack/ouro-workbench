@@ -25,6 +25,14 @@ public struct WorkbenchPaths: Sendable {
         rootURL.appendingPathComponent("action-requests", isDirectory: true)
     }
 
+    /// Directory the boss's `workbench_propose` capability uses as its transport:
+    /// pending proposals the App's card picks up, plus the operator's written-back
+    /// results the boss reads. Sibling of `action-requests` so the two queues never
+    /// share files. Distinct from the rejected onboarding import path.
+    public var proposalsURL: URL {
+        rootURL.appendingPathComponent("proposals", isDirectory: true)
+    }
+
     public func transcriptURL(entryId: UUID, runId: UUID) -> URL {
         transcriptsURL
             .appendingPathComponent(entryId.uuidString, isDirectory: true)

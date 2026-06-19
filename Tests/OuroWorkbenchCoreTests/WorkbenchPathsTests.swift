@@ -10,6 +10,7 @@ final class WorkbenchPathsTests: XCTestCase {
         XCTAssertTrue(paths.rootURL.path.contains("Application Support"))
         XCTAssertEqual(paths.stateURL.lastPathComponent, "workspace-state.json")
         XCTAssertEqual(paths.actionRequestsURL.lastPathComponent, "action-requests")
+        XCTAssertEqual(paths.proposalsURL.lastPathComponent, "proposals")
     }
 
     func testDefaultPathsFallsBackToHomeLibraryWhenApplicationSupportIsUnavailable() {
