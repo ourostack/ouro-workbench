@@ -114,22 +114,22 @@ Per Core unit: write tests → confirm red → implement → `swift test` green 
 
 ### Slice 2 — Recent-session discovery (Core)
 
-### ⬜ Unit 2a: Claude recent discovery (Core) — Tests
+### ✅ Unit 2a: Claude recent discovery (Core) — Tests
 **Tag**: Core (coverage-gated)
 **What**: Failing tests for `AgentSessionScanner(homeURL:)` method `discoverClaudeRecent() -> [AgentSessionRecord]`. Enumerates `~/.claude/projects/<dir>/*.jsonl`; reads each session file (bounded/tail-safe, seek-to-end like `SessionActivityReader.tailText`) and extracts from the **TOP-LEVEL** per-line keys (grounded against real files — these are NOT under `message`): `cwd`, `gitBranch`→`branch`, `sessionId` (prefer the in-record value; fall back to file basename sans extension), latest `timestamp`→`lastActive` (ISO8601), and `aiTitle`/`summary`→`title`. `harness = .claudeCode`, `running = false`. Tests use temp `homeURL` + `writeClaudeTranscript`-style fixtures; cover missing dir, malformed lines, multiple files, missing optional fields, in-record sessionId vs filename fallback, bad/missing timestamp.
 **Acceptance**: Tests exist and FAIL.
 
-### ⬜ Unit 2b: Claude recent discovery (Core) — Impl + coverage
+### ✅ Unit 2b: Claude recent discovery (Core) — Impl + coverage
 **Tag**: Core (coverage-gated)
 **What**: Implement `discoverClaudeRecent`. Reuse `homeURL` seam; pure record-extraction split from FS-touching enumeration so both are testable. Do NOT build any resume command.
 **Acceptance**: Tests GREEN; 100% coverage; commit.
 
-### ⬜ Unit 2c: Copilot recent discovery (Core) — Tests
+### ✅ Unit 2c: Copilot recent discovery (Core) — Tests
 **Tag**: Core (coverage-gated)
 **What**: Failing tests for `discoverCopilotRecent() -> [AgentSessionRecord]`. Enumerates `~/.copilot/session-state/<id>/workspace.yaml`; parses with `FlatYAMLReader` (grounded against a real file: flat keys `id, cwd, git_root, repository, host_type, branch, client_name, name, created_at, updated_at, ...`) → `cwd`, `repository`, `branch`, `name`→`title`, `updated_at` (fallback `created_at`)→`lastActive` (ISO8601). `sessionId` = the in-file `id` (fallback `<id>` dir name). `harness = .githubCopilotCLI`, `running = false`. Cover missing dir, missing/empty yaml, partial keys, bad timestamps, dir name vs in-file id.
 **Acceptance**: Tests exist and FAIL.
 
-### ⬜ Unit 2d: Copilot recent discovery (Core) — Impl + coverage
+### ✅ Unit 2d: Copilot recent discovery (Core) — Impl + coverage
 **Tag**: Core (coverage-gated)
 **What**: Implement `discoverCopilotRecent` using `FlatYAMLReader` + an injected date parser (ISO8601) with safe fallback.
 **Acceptance**: Tests GREEN; 100% coverage; commit.
@@ -315,3 +315,4 @@ Per Core unit: write tests → confirm red → implement → `swift test` green 
 - 2026-06-19 11:09 Pass 5 planning coverage check: full coverage confirmed (planning-coverage-checklist.md) — all 8 areas + every In/Out-of-Scope guardrail mapped to units, no gaps.
 - 2026-06-19 11:18 Unit 0a complete: control-action audit — all kinds (archive/restore/createGroup/createTerminal/createSession/moveSession) present at model+validation+apply layers; no gap, no new unit appended. Note in control-action-audit.md.
 - 2026-06-19 11:21 Unit 0b/0c complete: AgentSessionRecord + AgentHarness (clean sibling, AgentSessionScanner.swift). Codable/Equatable round-trip, unknown harness→.custom, stable id (harness:sessionId). 9 tests green; coverage gate PASS (81/83 100%, 2 pre-existing allowlisted).
+- 2026-06-19 11:24 Unit 1a/1b complete: FlatYAMLReader (Core, no SPM YAML dep). Flat key:value parse — quote-strip, comments, CRLF, dup-key-last-wins, missing colon/empty key skipped, colon-in-value. 16 tests green; coverage PASS (FlatYAMLReader.swift 100%). Slice 1 done.
