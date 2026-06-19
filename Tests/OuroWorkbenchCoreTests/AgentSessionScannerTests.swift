@@ -622,6 +622,73 @@ final class AgentSessionScannerScanTests: XCTestCase {
         XCTAssertEqual(first, second)
     }
 
+    // MARK: - sessionId-aware dedup (Slice 6 — extends the Slice-3 harness|cwd dedup)
+
+    func testMergeCollapsesWorkbenchAndRecentOnSameSessionIdEvenAcrossDifferentCwd() {
+        // FORWARD MEMORY: a Workbench-launched session (native) whose sessionId
+        // matches a discovered recent session is ONE logical session — even when
+        // the cwd differs (the boss may relaunch into a copied/renamed dir). The
+        // Slice-3 harness|cwd key alone would NOT collapse these; the new
+        // sessionId-aware layer does, and Workbench-native wins.
+        let recent = AgentSessionRecord(harness: .claudeCode, sessionId: "sid-1", cwd: "/recent",
+                                        title: "from disk",
+                                        lastActive: Date(timeIntervalSince1970: 100), running: false)
+        let workbench = AgentSessionRecord(harness: .claudeCode, sessionId: "sid-1", cwd: "/workbench",
+                                           title: "native", lastActive: nil, running: false)
+        let merged = AgentSessionScanner.merge(running: [], recent: [recent], workbench: [workbench])
+        XCTAssertEqual(merged.count, 1)
+        XCTAssertEqual(merged.first?.cwd, "/workbench", "Workbench-native record wins the sessionId collision")
+        XCTAssertEqual(merged.first?.title, "native")
+    }
+
+    func testMergeWorkbenchWinsOverRunningOnSameSessionId() {
+        // Workbench-native is the most authoritative source: it beats even a
+        // running record sharing the same sessionId.
+        let running = AgentSessionRecord(harness: .claudeCode, sessionId: "sid-2", cwd: "/live",
+                                         lastActive: nil, running: true)
+        let workbench = AgentSessionRecord(harness: .claudeCode, sessionId: "sid-2", cwd: "/wb",
+                                           lastActive: nil, running: false)
+        let merged = AgentSessionScanner.merge(running: [running], recent: [], workbench: [workbench])
+        XCTAssertEqual(merged.count, 1)
+        XCTAssertEqual(merged.first?.cwd, "/wb")
+        XCTAssertFalse(merged.first?.running ?? true)
+    }
+
+    func testMergeStillCollapsesRunningOverRecentOnSameSessionIdWithoutWorkbench() {
+        // Regression guard for the Slice-3 hand-off: running still beats recent
+        // on a shared sessionId (here same harness+cwd too) even with the new
+        // sessionId layer and an empty workbench source.
+        let recent = AgentSessionRecord(harness: .claudeCode, sessionId: "pid-9", cwd: "/proj",
+                                        lastActive: Date(timeIntervalSince1970: 50), running: false)
+        let running = AgentSessionRecord(harness: .claudeCode, sessionId: "pid-9", cwd: "/proj",
+                                         lastActive: nil, running: true)
+        let merged = AgentSessionScanner.merge(running: [running], recent: [recent], workbench: [])
+        XCTAssertEqual(merged.count, 1)
+        XCTAssertTrue(merged.first?.running ?? false)
+    }
+
+    func testMergeDifferentSessionIdsAndCwdsAreNotCollapsed() {
+        // Distinct sessions (different sessionId AND cwd) survive as separate
+        // records — the dedup only collapses true collisions.
+        let a = AgentSessionRecord(harness: .claudeCode, sessionId: "a", cwd: "/a",
+                                   lastActive: Date(timeIntervalSince1970: 200), running: false)
+        let b = AgentSessionRecord(harness: .claudeCode, sessionId: "b", cwd: "/b",
+                                   lastActive: Date(timeIntervalSince1970: 100), running: false)
+        let merged = AgentSessionScanner.merge(running: [], recent: [a, b], workbench: [])
+        XCTAssertEqual(merged.map(\.sessionId), ["a", "b"])
+    }
+
+    func testMergeBackwardCompatibleTwoArgFormStillWorks() {
+        // The original Slice-3 two-arg merge (no workbench source) keeps its
+        // harness|cwd behavior — recent collision keeps the newer record.
+        let older = AgentSessionRecord(harness: .claudeCode, sessionId: "old", cwd: "/proj",
+                                       lastActive: Date(timeIntervalSince1970: 100), running: false)
+        let newer = AgentSessionRecord(harness: .claudeCode, sessionId: "new", cwd: "/proj",
+                                       lastActive: Date(timeIntervalSince1970: 200), running: false)
+        let merged = AgentSessionScanner.merge(running: [], recent: [newer, older])
+        XCTAssertEqual(merged.map(\.sessionId), ["new"])
+    }
+
     // MARK: helpers
 
     @discardableResult
@@ -639,6 +706,105 @@ final class AgentSessionScannerScanTests: XCTestCase {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
+    }
+}
+
+// MARK: - Native forward-memory discovery (Slice 6)
+
+final class AgentSessionScannerWorkbenchTests: XCTestCase {
+    private func entry(
+        name: String = "Session",
+        workingDirectory: String = "/repo",
+        isArchived: Bool = false,
+        discoveredHarness: AgentHarness? = nil,
+        discoveredSessionId: String? = nil
+    ) -> ProcessEntry {
+        ProcessEntry(
+            projectId: UUID(),
+            name: name,
+            kind: .terminalAgent,
+            executable: "claude",
+            workingDirectory: workingDirectory,
+            isArchived: isArchived,
+            discoveredHarness: discoveredHarness,
+            discoveredSessionId: discoveredSessionId
+        )
+    }
+
+    func testDiscoversEntriesCarryingForwardMemory() {
+        // An entry Workbench launched from a discovered session carries both
+        // forward-memory fields → a NATIVE record (running = false), keyed on the
+        // remembered harness + sessionId, anchored at the entry's workingDirectory,
+        // titled by the session name.
+        let state = WorkspaceState(processEntries: [
+            entry(name: "Resumed Claude", workingDirectory: "/repo/app",
+                  discoveredHarness: .claudeCode, discoveredSessionId: "abc-123"),
+        ])
+        let records = AgentSessionScanner().discoverFromWorkbench(state: state)
+        XCTAssertEqual(records.count, 1)
+        let r = records[0]
+        XCTAssertEqual(r.harness, .claudeCode)
+        XCTAssertEqual(r.sessionId, "abc-123")
+        XCTAssertEqual(r.cwd, "/repo/app")
+        XCTAssertEqual(r.title, "Resumed Claude")
+        XCTAssertFalse(r.running)
+        XCTAssertNil(r.lastActive)
+    }
+
+    func testSkipsEntriesWithoutForwardMemory() {
+        // Ordinary sessions (no provenance) are NOT inferred as discovered ones —
+        // forward memory is strictly opt-in to the native path. A half-populated
+        // entry (only one of the two fields) is also skipped: a record needs both
+        // the remembered harness and sessionId to be meaningful.
+        let state = WorkspaceState(processEntries: [
+            entry(name: "Plain"),
+            entry(name: "Harness only", discoveredHarness: .claudeCode),
+            entry(name: "Sid only", discoveredSessionId: "x"),
+        ])
+        XCTAssertEqual(AgentSessionScanner().discoverFromWorkbench(state: state), [])
+    }
+
+    func testSkipsArchivedEntriesEvenWithForwardMemory() {
+        // An archived session is not a live thing to rediscover.
+        let state = WorkspaceState(processEntries: [
+            entry(name: "Archived", isArchived: true,
+                  discoveredHarness: .claudeCode, discoveredSessionId: "abc"),
+        ])
+        XCTAssertEqual(AgentSessionScanner().discoverFromWorkbench(state: state), [])
+    }
+
+    func testEmptyStateYieldsNoRecords() {
+        XCTAssertEqual(AgentSessionScanner().discoverFromWorkbench(state: WorkspaceState()), [])
+    }
+
+    func testScanFoldsInWorkbenchNativeRecords() throws {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: home) }
+        // No recent transcripts, no running processes — only the workbench state
+        // carries a forward-memory session. scan(state:processLister:) surfaces it.
+        let state = WorkspaceState(processEntries: [
+            entry(name: "Native", workingDirectory: "/native",
+                  discoveredHarness: .openAICodex, discoveredSessionId: "codex-7"),
+        ])
+        let records = AgentSessionScanner(homeURL: home).scan(state: state, processLister: { [] })
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(records.first?.harness, .openAICodex)
+        XCTAssertEqual(records.first?.sessionId, "codex-7")
+    }
+
+    func testScanWithoutStateMatchesNilStateOverload() throws {
+        // The pre-Slice-6 scan(processLister:) overload still exists and behaves
+        // exactly like scan(state: nil, processLister:) — no workbench source.
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: home) }
+        let lister: @Sendable () -> [RunningProcessLine] = {
+            [RunningProcessLine(pid: 5, command: "claude", cwd: "/x")]
+        }
+        let viaLegacy = AgentSessionScanner(homeURL: home).scan(processLister: lister)
+        let viaNilState = AgentSessionScanner(homeURL: home).scan(state: nil, processLister: lister)
+        XCTAssertEqual(viaLegacy, viaNilState)
     }
 }
 
