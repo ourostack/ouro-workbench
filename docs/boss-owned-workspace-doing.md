@@ -62,6 +62,12 @@ Per Core unit: write tests → confirm red → implement → `swift test` green 
 - Existing REJECTED scanner: `Sources/OuroWorkbenchCore/Onboarding.swift` (`RecentSessionScanner` 496–1379) — do NOT reuse/extend.
 - Onboarding wizard: `OuroWorkbenchApp.swift` `OnboardingPage` ~5002, `scanForOnboardingSessions` ~12856, `applyOnboardingProposal` ~12909, `OnboardingBootstrapView` ~5900; flow `Sources/OuroWorkbenchCore/WorkbenchOnboardingNarrative.swift`.
 - Coverage gate: `scripts/check-coverage.sh`, `scripts/coverage-allowlist.txt`. Strict flags: `scripts/package-app.sh` line 18.
+- **Validated schemas (real files on this box):**
+  - Claude JSONL top-level per-line keys: `type, sessionId, cwd, gitBranch, timestamp, version, aiTitle`. Discovery reads TOP-LEVEL keys, not `message.*`.
+  - Copilot `workspace.yaml` (flat key:value): `id, cwd, git_root, repository, host_type, branch, client_name, name, user_named, summary_count, created_at, updated_at, ...`. ISO8601 timestamps; `repository` like `owner_org/repo`.
+  - Onboarding phases (`WorkbenchOnboardingNarrative.swift`): `bossSetupWizard, bossReadyWelcome, scanProposal, arrangeApprovedImports, duplicateCleanup` — extend, don't rename.
+  - `WorkbenchPaths` has `actionRequestsURL`/`transcriptsURL`; `proposalsURL` is NEW (Unit 5d adds + covers it).
+  - `WorkbenchActionRequestQueue` is the proven template for `AgentProposalQueue` (paths init, atomic writes, drain/confirm, quarantine, sortedKeys/iso8601 encoder).
 
 ## Work Units
 
@@ -110,7 +116,7 @@ Per Core unit: write tests → confirm red → implement → `swift test` green 
 
 ### ⬜ Unit 2a: Claude recent discovery (Core) — Tests
 **Tag**: Core (coverage-gated)
-**What**: Failing tests for `AgentSessionScanner(homeURL:)` method `discoverClaudeRecent() -> [AgentSessionRecord]`. Enumerates `~/.claude/projects/<dir>/*.jsonl`; for each session file reads the JSONL (bounded/tail-safe, reuse the seek-to-end approach) to extract `cwd`, `gitBranch`, latest `timestamp` → `lastActive`, and a `title` (first user message / summary). `sessionId` = file basename sans extension. `harness = .claudeCode`, `running = false`. Tests use temp `homeURL` + `writeClaudeTranscript`-style fixtures; cover missing dir, malformed lines, multiple files, missing optional fields.
+**What**: Failing tests for `AgentSessionScanner(homeURL:)` method `discoverClaudeRecent() -> [AgentSessionRecord]`. Enumerates `~/.claude/projects/<dir>/*.jsonl`; reads each session file (bounded/tail-safe, seek-to-end like `SessionActivityReader.tailText`) and extracts from the **TOP-LEVEL** per-line keys (grounded against real files — these are NOT under `message`): `cwd`, `gitBranch`→`branch`, `sessionId` (prefer the in-record value; fall back to file basename sans extension), latest `timestamp`→`lastActive` (ISO8601), and `aiTitle`/`summary`→`title`. `harness = .claudeCode`, `running = false`. Tests use temp `homeURL` + `writeClaudeTranscript`-style fixtures; cover missing dir, malformed lines, multiple files, missing optional fields, in-record sessionId vs filename fallback, bad/missing timestamp.
 **Acceptance**: Tests exist and FAIL.
 
 ### ⬜ Unit 2b: Claude recent discovery (Core) — Impl + coverage
@@ -120,7 +126,7 @@ Per Core unit: write tests → confirm red → implement → `swift test` green 
 
 ### ⬜ Unit 2c: Copilot recent discovery (Core) — Tests
 **Tag**: Core (coverage-gated)
-**What**: Failing tests for `discoverCopilotRecent() -> [AgentSessionRecord]`. Enumerates `~/.copilot/session-state/<id>/workspace.yaml`; parses with `FlatYAMLReader` → `cwd`, `repository`, `branch`, `name`→`title`, `created_at`/`updated_at`→`lastActive`. `sessionId` = `<id>` dir name. `harness = .githubCopilotCLI`, `running = false`. Cover missing dir, missing/empty yaml, partial keys, bad timestamps.
+**What**: Failing tests for `discoverCopilotRecent() -> [AgentSessionRecord]`. Enumerates `~/.copilot/session-state/<id>/workspace.yaml`; parses with `FlatYAMLReader` (grounded against a real file: flat keys `id, cwd, git_root, repository, host_type, branch, client_name, name, created_at, updated_at, ...`) → `cwd`, `repository`, `branch`, `name`→`title`, `updated_at` (fallback `created_at`)→`lastActive` (ISO8601). `sessionId` = the in-file `id` (fallback `<id>` dir name). `harness = .githubCopilotCLI`, `running = false`. Cover missing dir, missing/empty yaml, partial keys, bad timestamps, dir name vs in-file id.
 **Acceptance**: Tests exist and FAIL.
 
 ### ⬜ Unit 2d: Copilot recent discovery (Core) — Impl + coverage
