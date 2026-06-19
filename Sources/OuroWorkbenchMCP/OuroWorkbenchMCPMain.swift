@@ -492,7 +492,14 @@ final class WorkbenchMCPServer {
     /// best-effort (a missing dir is simply no records), so this never throws on a
     /// merely-empty environment — it returns `{"sessions": []}`.
     private func discoverAgentSessions() throws -> String {
-        let records = agentSessionScanner.scan(processLister: runningProcessLister.callAsFunction)
+        // Forward memory (Slice 6): pass the workspace state so sessions Workbench
+        // itself launched from a discovered one surface NATIVELY (via the
+        // scanner's `discoverFromWorkbench` source) instead of only being
+        // re-inferred from disk/process scraping. Best-effort: a transient state
+        // read failure degrades to recent+running only — discovery must never
+        // break because the state file momentarily couldn't be read.
+        let state = try? currentState()
+        let records = agentSessionScanner.scan(state: state, processLister: runningProcessLister.callAsFunction)
         return try encodeJSON(["sessions": records])
     }
 

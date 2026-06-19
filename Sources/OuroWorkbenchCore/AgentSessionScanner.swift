@@ -363,50 +363,140 @@ public struct AgentSessionScanner: Sendable {
         }
     }
 
-    // MARK: - Unified scan + dedup
+    // MARK: - Native forward-memory discovery (Slice 6)
 
-    /// Merge recent (Claude + Copilot) with running, dedup, and sort. A running
-    /// record beats a recent one for the same logical session (same `id`, OR
-    /// same `harness + cwd`). Sort: running-first, then `lastActive` descending
-    /// (nil sorts last), then `id` for a deterministic, stable order.
-    public func scan(processLister: @Sendable () -> [RunningProcessLine]) -> [AgentSessionRecord] {
-        let running = discoverRunning(processLister: processLister)
-        let recent = discoverClaudeRecent() + discoverCopilotRecent()
-        return Self.merge(running: running, recent: recent)
+    /// Discover sessions Workbench itself launched from a previously-discovered
+    /// session — read NATIVELY from forward memory, never re-inferred. For each
+    /// non-archived `ProcessEntry` that carries BOTH `discoveredHarness` and
+    /// `discoveredSessionId` (stamped at create, Units 6b/6c), emit a record at
+    /// the entry's `workingDirectory`, titled by the session name. `running =
+    /// false` and `lastActive = nil`: this source states provenance, not
+    /// liveness — the running scan and the live process table own "is it up".
+    /// An entry without forward memory is an ordinary session and is NOT inferred
+    /// into this path (forward memory is strictly opt-in); an archived one is not
+    /// a live thing to rediscover.
+    public func discoverFromWorkbench(state: WorkspaceState) -> [AgentSessionRecord] {
+        state.processEntries.compactMap { entry in
+            guard !entry.isArchived,
+                  let harness = entry.discoveredHarness,
+                  let sessionId = entry.discoveredSessionId else { return nil }
+            return AgentSessionRecord(
+                harness: harness,
+                sessionId: sessionId,
+                cwd: entry.workingDirectory,
+                repository: nil,
+                branch: nil,
+                title: entry.name,
+                lastActive: nil,
+                running: false
+            )
+        }
     }
 
-    /// Pure dedup + sort. Running wins over recent; within a source, a later
-    /// `lastActive` wins a `harness + cwd` collision. Sorting is total and stable.
-    static func merge(running: [AgentSessionRecord], recent: [AgentSessionRecord]) -> [AgentSessionRecord] {
-        var byKey: [String: AgentSessionRecord] = [:]
+    // MARK: - Unified scan + dedup
 
-        func key(for record: AgentSessionRecord) -> String {
-            "\(record.harness.rawValue)|\(record.cwd)"
+    /// Merge recent (Claude + Copilot) with running, dedup, and sort — the
+    /// pre-Slice-6 overload (no Workbench forward-memory source). Equivalent to
+    /// `scan(state: nil, processLister:)`.
+    public func scan(processLister: @Sendable () -> [RunningProcessLine]) -> [AgentSessionRecord] {
+        scan(state: nil, processLister: processLister)
+    }
+
+    /// Merge Workbench-native forward memory + recent (Claude + Copilot) +
+    /// running, dedup, and sort. `state` carries the forward-memory source (nil
+    /// = none). A Workbench-native record beats a running one beats a recent one
+    /// for the same logical session. Sort: running-first, then `lastActive`
+    /// descending (nil sorts last), then `id` for a deterministic, stable order.
+    public func scan(
+        state: WorkspaceState?,
+        processLister: @Sendable () -> [RunningProcessLine]
+    ) -> [AgentSessionRecord] {
+        let running = discoverRunning(processLister: processLister)
+        let recent = discoverClaudeRecent() + discoverCopilotRecent()
+        let workbench = state.map(discoverFromWorkbench(state:)) ?? []
+        return Self.merge(running: running, recent: recent, workbench: workbench)
+    }
+
+    /// Source authority, lowest → highest. A higher-authority record wins any
+    /// collision (same `harness|sessionId` OR same `harness|cwd`) regardless of
+    /// timestamp; `recent` collisions among themselves break on `lastActive`.
+    /// Workbench forward memory is the most authoritative: Workbench OWNED the
+    /// launch, so it states the session natively rather than by inference.
+    private enum MergeSource: Int { case recent = 0, running = 1, workbench = 2 }
+
+    /// Pure dedup + sort. Collapses on BOTH `harness|sessionId` (Slice 6 —
+    /// forward memory: a Workbench-launched session whose sessionId matches a
+    /// discovered recent/running one is ONE record even across different cwd) AND
+    /// `harness|cwd` (Slice 3 — two recents in the same dir collapse). Authority
+    /// order: workbench > running > recent; within `recent`, a later `lastActive`
+    /// wins. Sorting is total and stable. The `workbench` parameter defaults to
+    /// empty so the original Slice-3 two-arg call site keeps its exact behavior.
+    static func merge(
+        running: [AgentSessionRecord],
+        recent: [AgentSessionRecord],
+        workbench: [AgentSessionRecord] = []
+    ) -> [AgentSessionRecord] {
+        // Tag each record with its source authority, then process WEAKEST-first.
+        // Processing in ascending authority order means a colliding candidate is
+        // always at least as authoritative as the record already in the slot, so
+        // `resolve` only ever has to decide "candidate replaces existing or not"
+        // — never "existing outranks candidate" — which keeps the resolution
+        // total without an unreachable arm.
+        let tagged: [(record: AgentSessionRecord, source: MergeSource)] =
+            recent.map { ($0, .recent) }
+            + running.map { ($0, .running) }
+            + workbench.map { ($0, .workbench) }
+
+        // Phase 1 — collapse on harness|sessionId. This is the forward-memory
+        // layer: it folds together records for the SAME session even when their
+        // cwd differs (a relaunch into a copied/renamed dir).
+        var bySession: [String: (record: AgentSessionRecord, source: MergeSource)] = [:]
+        func sessionKey(_ r: AgentSessionRecord) -> String { "\(r.harness.rawValue)|\(r.sessionId)" }
+        for item in tagged {
+            let k = sessionKey(item.record)
+            bySession[k] = resolve(existing: bySession[k], candidate: item)
         }
 
-        // Recent first so running can overwrite on collision.
-        for record in recent {
-            let k = key(for: record)
-            if let existing = byKey[k] {
-                // Same harness+cwd: keep the more-recent (nil counts as oldest).
-                let existingTime = existing.lastActive ?? .distantPast
-                let candidateTime = record.lastActive ?? .distantPast
-                if candidateTime > existingTime { byKey[k] = record }
-            } else {
-                byKey[k] = record
-            }
+        // Phase 2 — collapse the phase-1 survivors on harness|cwd (the Slice-3
+        // layer: same harness, same dir, different sessionId → one record). Feed
+        // them weakest-authority-first (ties broken by id for determinism) so the
+        // same ascending-authority invariant holds here too.
+        var byCwd: [String: (record: AgentSessionRecord, source: MergeSource)] = [:]
+        func cwdKey(_ r: AgentSessionRecord) -> String { "\(r.harness.rawValue)|\(r.cwd)" }
+        let survivors = bySession.values.sorted { lhs, rhs in
+            if lhs.source.rawValue != rhs.source.rawValue { return lhs.source.rawValue < rhs.source.rawValue }
+            return lhs.record.id < rhs.record.id
         }
-        for record in running {
-            // Running always wins its harness+cwd slot.
-            byKey[key(for: record)] = record
+        for item in survivors {
+            let k = cwdKey(item.record)
+            byCwd[k] = resolve(existing: byCwd[k], candidate: item)
         }
 
-        return byKey.values.sorted { lhs, rhs in
+        return byCwd.values.map(\.record).sorted { lhs, rhs in
             if lhs.running != rhs.running { return lhs.running }
             let lhsTime = lhs.lastActive ?? .distantPast
             let rhsTime = rhs.lastActive ?? .distantPast
             if lhsTime != rhsTime { return lhsTime > rhsTime }
             return lhs.id < rhs.id
         }
+    }
+
+    /// Pick the winner of a collision, given the candidate is processed in
+    /// ascending authority order (so it never outranks-then-loses to a weaker
+    /// existing). A strictly higher-authority candidate replaces the existing; a
+    /// same-authority candidate wins only if its `lastActive` is strictly later
+    /// (nil = oldest), so the first-seen record stays on a tie. A nil `existing`
+    /// means the candidate is the first seen for the key.
+    private static func resolve(
+        existing: (record: AgentSessionRecord, source: MergeSource)?,
+        candidate: (record: AgentSessionRecord, source: MergeSource)
+    ) -> (record: AgentSessionRecord, source: MergeSource) {
+        guard let existing else { return candidate }
+        if candidate.source.rawValue > existing.source.rawValue { return candidate }
+        // Same authority (ascending order rules out a weaker candidate): newer
+        // lastActive wins; nil counts as oldest; ties keep the existing record.
+        let existingTime = existing.record.lastActive ?? .distantPast
+        let candidateTime = candidate.record.lastActive ?? .distantPast
+        return candidateTime > existingTime ? candidate : existing
     }
 }

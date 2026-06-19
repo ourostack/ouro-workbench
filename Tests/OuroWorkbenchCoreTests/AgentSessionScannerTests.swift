@@ -689,6 +689,20 @@ final class AgentSessionScannerScanTests: XCTestCase {
         XCTAssertEqual(merged.map(\.sessionId), ["new"])
     }
 
+    func testMergeSameCwdSameSourceLaterTimestampReplacesEarlier() {
+        // Two recents, same harness+cwd, DIFFERENT sessionId — the cwd-collapse
+        // keeps the later-`lastActive` record regardless of which is processed
+        // first. Here the smaller-id session ("a") is the EARLIER one, so it's
+        // seen first and the later "b" must replace it (the replace arm of the
+        // same-authority tie-break).
+        let earlier = AgentSessionRecord(harness: .claudeCode, sessionId: "a", cwd: "/proj",
+                                         lastActive: Date(timeIntervalSince1970: 100), running: false)
+        let later = AgentSessionRecord(harness: .claudeCode, sessionId: "b", cwd: "/proj",
+                                       lastActive: Date(timeIntervalSince1970: 200), running: false)
+        let merged = AgentSessionScanner.merge(running: [], recent: [earlier, later])
+        XCTAssertEqual(merged.map(\.sessionId), ["b"])
+    }
+
     // MARK: helpers
 
     @discardableResult
