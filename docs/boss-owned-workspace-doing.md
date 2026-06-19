@@ -188,15 +188,17 @@ Per Core unit: write tests → confirm red → implement → `swift test` green 
 
 ### Slice 5 — Propose-for-approval capability (CAPABILITY, never a gate)
 
-### ⬜ Unit 5a: Proposal model (Core) — Tests
+### ✅ Unit 5a: Proposal model (Core) — Tests
 **Tag**: Core (coverage-gated)
 **What**: Failing tests for a NEW general proposal model in `Sources/OuroWorkbenchCore/AgentProposal.swift` (distinct from the rejected `WorkbenchImportProposal`): `AgentProposal { id, title, items: [AgentProposalItem] }`; `AgentProposalItem { id, label, detail?, command?, cwd?, harness?, selected: Bool, editableFields }`; mutation helpers `toggle(itemID)`, `setSelected(itemID:_)`, `edit(itemID, field, value)`; a `result()` projection returning only selected/edited items for the boss. `Codable`/`Equatable`. Cover toggle, edit unknown field (no-op/typed), select-all/none, empty proposal, result projection.
 **Acceptance**: Tests exist and FAIL.
+**Done**: 23 tests in `AgentProposalTests.swift` — confirmed RED (`cannot find type 'AgentProposal'`). Commit `48d3b77`.
 
-### ⬜ Unit 5b: Proposal model (Core) — Impl + coverage
+### ✅ Unit 5b: Proposal model (Core) — Impl + coverage
 **Tag**: Core (coverage-gated)
 **What**: Implement the proposal model + mutations + `result()` projection. Pure value type.
 **Acceptance**: Tests GREEN; 100% coverage; commit.
+**Done**: `AgentProposal` + `AgentProposalItem` (with typed `Field` enum: label/detail/command/cwd) + `AgentProposalResult`. `edit(...)` only applies when the field is in the item's `editableFields` (operator can't change a field the boss didn't expose). `editableFields` decodes from raw strings and drops unknown fields (newer-producer tolerant); optional fields decode-if-present. `result()` projects only selected items under the same proposal id. 23 tests GREEN; coverage PASS (`AgentProposal.swift` 100% line+region; 83/85, allowlist unchanged); full suite 1331 green. Commit `cc54d5e`.
 
 ### ⬜ Unit 5c: Proposal queue/transport (Core) — Tests
 **Tag**: Core (coverage-gated)
