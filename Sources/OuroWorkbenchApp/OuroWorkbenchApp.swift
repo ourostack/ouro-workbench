@@ -5136,6 +5136,8 @@ struct WorkbenchOnboardingSheet: View {
             return model.onboardingFlowDecision.phase == .bossSetupWizard ? "link" : "magnifyingglass"
         case .importWork:
             switch model.onboardingFlowDecision.phase {
+            case .bossReconstruct:
+                return "arrow.uturn.backward.circle"
             case .arrangeApprovedImports:
                 return "checkmark.circle"
             case .duplicateCleanup:
@@ -5159,12 +5161,21 @@ struct WorkbenchOnboardingSheet: View {
             return model.onboardingIsScanning
                 || model.onboardingProviderChecks.values.contains { $0.state == .running }
         case .importWork:
-            if model.onboardingIsScanning || model.onboardingReadiness?.isReady != true {
+            if model.onboardingReadiness?.isReady != true {
                 return true
             }
-            // In the arrange phase, gate the footer button on a selection exactly like the
-            // inline Arrange button — otherwise it dismisses the wizard with nothing imported
-            // (reads as a dead button, especially on a second run where everything already exists).
+            // Slice 7: the hand-off button kicks the boss-driven reconstruction. Disable only
+            // while a boss check-in is already in flight so a double-press can't re-hand-off
+            // mid-run; otherwise it's a single, always-actionable "Bring Back My Work" — no
+            // selection gate (the boss, not a hardcoded scan, decides what to bring back).
+            if model.onboardingFlowDecision.phase == .bossReconstruct {
+                return model.bossCheckInIsRunning
+            }
+            if model.onboardingIsScanning {
+                return true
+            }
+            // Defensive: the legacy arrange phase (no longer produced by the policy) still
+            // gates on a selection so a stale proposal can't dismiss the wizard with nothing.
             if model.onboardingFlowDecision.phase == .arrangeApprovedImports,
                (model.onboardingProposal?.selectedTerminalCount ?? 0) == 0 {
                 return true
@@ -5188,22 +5199,21 @@ struct WorkbenchOnboardingSheet: View {
                 return
             }
             page = .importWork
-            if model.onboardingFlowDecision.phase == .bossReadyWelcome {
-                model.scanForOnboardingSessions()
+            // Slice 7: a ready boss hands off to boss-driven reconstruction the moment we
+            // land on the arrange page — no hardcoded scan. The boss does discover →
+            // optionally propose → relaunch.
+            if model.onboardingFlowDecision.phase == .bossReconstruct {
+                model.startBossReconstruction()
             }
         case .importWork:
             switch model.onboardingFlowDecision.phase {
-            case .bossReadyWelcome, .scanProposal:
-                model.scanForOnboardingSessions()
-            case .arrangeApprovedImports:
-                let result = model.applyOnboardingProposal()
-                // Whether anything new landed or every selection was already
-                // imported, hand the user back to the workbench with a banner
-                // explaining what just happened. The banner is set by the apply
-                // path itself.
-                if result != nil {
-                    dismiss()
-                }
+            case .bossReconstruct, .bossReadyWelcome, .scanProposal, .arrangeApprovedImports:
+                // Boss-driven hand-off. The legacy scan/arrange phases collapse here too so a
+                // stale in-memory proposal can never re-trigger the rejected hardcoded scan —
+                // the boss owns reconstruction. The wizard stays open so the operator can watch
+                // the boss work and review any proposal card; they close it with Done.
+                model.startBossReconstruction()
+                instructionStatus = WorkbenchOnboardingNarrative.bossReconstructIntro
             case .duplicateCleanup:
                 instructionStatus = model.onboardingFlowDecision.notice
                 Task { await model.runBossQuickQuestion(WorkbenchOnboardingNarrative.duplicateCleanup) }
@@ -5905,6 +5915,19 @@ private struct OnboardingBootstrapView: View {
     @ObservedObject var model: WorkbenchViewModel
 
     var body: some View {
+        // Slice 7: a ready boss drives reconstruction. Render the boss-driven hand-off
+        // surface instead of the rejected hardcoded scan/arrange UI. The legacy scan view
+        // remains only as a defensive fallback for the legacy phases the policy no longer
+        // produces.
+        if model.onboardingFlowDecision.phase == .bossReconstruct {
+            OnboardingBossReconstructView(model: model)
+        } else {
+            legacyScanBody
+        }
+    }
+
+    @ViewBuilder
+    private var legacyScanBody: some View {
         VStack(alignment: .center, spacing: 22) {
             VStack(alignment: .center, spacing: 10) {
                 Text(WorkbenchOnboardingNarrative.bossReadyWelcome)
@@ -5987,6 +6010,82 @@ private struct OnboardingBootstrapView: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 420)
+    }
+}
+
+/// Slice 7 — the boss-driven reconstruction hand-off surface. Workbench does NOT scan or
+/// arrange here: it hands the boss the "bring back my work" task and renders the boss's
+/// progress. The boss discovers sessions (`workbench_discover_agent_sessions`), optionally
+/// proposes them via the editable card (which renders in the boss dashboard), and relaunches
+/// the approved ones as terminals — all context-specific intelligence the boss owns. This
+/// surface is a clean explanation + a single hand-off affordance, never a hardcoded scan.
+private struct OnboardingBossReconstructView: View {
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        VStack(alignment: .center, spacing: 22) {
+            VStack(alignment: .center, spacing: 10) {
+                Text("Bring back your work")
+                    .font(.largeTitle.weight(.semibold))
+                    .multilineTextAlignment(.center)
+                Text(WorkbenchOnboardingNarrative.bossReconstructIntro)
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 640)
+            }
+
+            if model.onboardingReadiness?.isReady != true {
+                Text("Finish connecting the boss before bringing your work back.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if !model.onboardingReconstructionHandedOff {
+                Button {
+                    model.startBossReconstruction()
+                } label: {
+                    Label("Bring Back My Work", systemImage: "arrow.uturn.backward.circle")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(model.bossCheckInIsRunning)
+            } else {
+                // Handed off: the boss is doing discover → propose → relaunch. Its progress
+                // and reply render in the setup-assistant box below; any proposal card it
+                // raises renders in the boss dashboard. The empty case ("nothing to bring
+                // back") is whatever the boss reports — a clean message, never a dead step.
+                VStack(alignment: .center, spacing: 10) {
+                    HStack(spacing: 8) {
+                        if model.bossCheckInIsRunning {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(Color.green)
+                        }
+                        Text(model.bossCheckInIsRunning
+                             ? "\(model.state.boss.agentName) is looking for your recent work…"
+                             : "\(model.state.boss.agentName) has finished — see its reply below.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                    Text(WorkbenchOnboardingNarrative.bossReconstructEmpty)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: 600)
+                    Button {
+                        model.startBossReconstruction()
+                    } label: {
+                        Label("Ask Again", systemImage: "arrow.clockwise")
+                    }
+                    .controlSize(.small)
+                    .disabled(model.bossCheckInIsRunning)
+                }
             }
         }
         .frame(maxWidth: .infinity, minHeight: 420)
@@ -9335,6 +9434,11 @@ final class WorkbenchViewModel: ObservableObject {
     /// to it and the mutation/approve methods write back through the queue. OPT-IN
     /// surfacing only — never blocks any other flow.
     @Published var pendingProposals: [AgentProposal] = []
+    /// Slice 7: set once the onboarding wizard has handed the reconstruction task to the
+    /// boss (boss-driven `see → propose → act`). Drives the hand-off surface's copy from
+    /// "Bring back my work" to "your boss is working on it" without re-running the hardcoded
+    /// scan. Reset on first-run reset so a fresh wizard starts clean.
+    @Published var onboardingReconstructionHandedOff = false
     /// Whether the native provider-config form (the one human gate) is presented. Flipped true
     /// by `requestProviderConfig` (and the native onboarding provider-setup affordance).
     /// NON-SECRET-BEARING: this flag only opens the form; the credential is entered natively in
@@ -11158,6 +11262,7 @@ final class WorkbenchViewModel: ObservableObject {
         onboardingProposal = nil
         onboardingCandidates = []
         onboardingProviderChecks = [:]
+        onboardingReconstructionHandedOff = false
         save()
         refreshWorkbenchMCPRegistration()
         refreshOnboardingReadiness()
@@ -13052,6 +13157,39 @@ final class WorkbenchViewModel: ObservableObject {
                 result: "Found \(candidates.count) recent session candidates",
                 succeeded: true
             )
+        }
+    }
+
+    /// Slice 7 — onboarding hand-off. Instead of Workbench running the hardcoded
+    /// `RecentSessionScanner` scan + arrange, hand the boss the reconstruction task and let
+    /// it own the context-specific work: discover via `workbench_discover_agent_sessions`,
+    /// optionally propose via the card, relaunch the approved sessions as terminals. The boss
+    /// does which-agent / exact-resume-command intelligence; Workbench only provides the
+    /// hand-off + the surfaces (this conversation + the proposal card) where the boss's work
+    /// renders. This is the boss-driven replacement for `scanForOnboardingSessions()` /
+    /// `applyOnboardingProposal()` as the wizard's import path — those remain for any other
+    /// callers but the wizard no longer drives them.
+    func startBossReconstruction() {
+        guard onboardingReadiness?.isReady == true else {
+            refreshOnboardingReadiness()
+            runOnboardingProviderChecksIfNeeded()
+            return
+        }
+        guard !bossCheckInIsRunning else {
+            return
+        }
+        onboardingReconstructionHandedOff = true
+        // The boss reads any operator-approved edits back through `workbench_proposal_result`;
+        // refresh the pending list so a card the boss enqueues surfaces in the dashboard.
+        loadPendingProposals()
+        recordActionLog(
+            source: "native",
+            action: "startBossReconstruction",
+            result: "Handed reconstruction to \(state.boss.agentName)",
+            succeeded: true
+        )
+        Task {
+            await runBossQuickQuestion(WorkbenchOnboardingNarrative.bossReconstructTask)
         }
     }
 
