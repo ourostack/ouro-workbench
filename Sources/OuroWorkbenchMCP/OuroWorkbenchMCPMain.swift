@@ -138,6 +138,8 @@ final class WorkbenchMCPServer {
             return try workbenchSense()
         case "workbench_transcript_tail":
             return try transcriptTail(arguments: arguments)
+        case "workbench_session_health":
+            return try sessionHealth(arguments: arguments)
         case "workbench_search_transcripts":
             return try searchTranscripts(arguments: arguments)
         case "workbench_recovery_drill":
@@ -287,6 +289,43 @@ final class WorkbenchMCPServer {
         }
         let marker = tail.truncated ? "latest \(maxBytes) bytes" : "complete transcript"
         return "\(entry.name) transcript (\(marker)):\n\(tail.text)"
+    }
+
+    /// Health verdict for a (re)started session — the boss's one-call way to
+    /// confirm a resumed session came up healthy. Composes the session's run
+    /// status + recency (from its `SessionSnapshot`) with its transcript tail
+    /// through the pure Core `SessionHealthProbe`, so the boss gets a
+    /// deterministic `healthy | starting | stalled | failed` instead of
+    /// re-interpreting raw output. Returns
+    /// `{"name", "health", "status", "needsHuman"}`.
+    private func sessionHealth(arguments: [String: Any]) throws -> String {
+        let state = try currentState()
+        let entry = try targetEntry(arguments: arguments, state: state)
+        // The snapshot carries the latest run's status + startedAt/lastOutputAt
+        // and exitCode exactly as the boss reads them from workbench_sessions.
+        guard let snapshot = sessionsRenderer
+            .snapshots(state: state, name: entry.name, includeArchived: true)
+            .first(where: { $0.id == entry.id.uuidString }) else {
+            throw MCPToolFailure("No session snapshot for \(entry.name)")
+        }
+        let maxBytes = TranscriptTailLimit.clamped(uintArgument(arguments["maxBytes"]))
+        let tail = TranscriptTailReader(maxBytes: maxBytes)
+            .read(path: latestRun(for: entry.id, state: state)?.transcriptPath)?.text
+        let verdict = SessionHealthProbe.classify(snapshot: snapshot, tail: tail)
+        return try encodeJSON(SessionHealthResult(
+            name: snapshot.name,
+            health: verdict.rawValue,
+            status: snapshot.status,
+            needsHuman: snapshot.needsHuman
+        ))
+    }
+
+    /// `workbench_session_health` JSON payload.
+    private struct SessionHealthResult: Encodable {
+        let name: String
+        let health: String
+        let status: String
+        let needsHuman: Bool
     }
 
     private func searchTranscripts(arguments: [String: Any]) throws -> String {
@@ -779,6 +818,23 @@ final class WorkbenchMCPServer {
                             "type": "number",
                             "maximum": Double(TranscriptTailLimit.maximumBytes),
                             "description": "Maximum bytes to read from the end of the transcript. Values above the server cap are clamped."
+                        ]
+                    ],
+                    "required": ["entry"],
+                    "additionalProperties": false
+                ]
+            ],
+            [
+                "name": "workbench_session_health",
+                "description": "Confirm a (re)started session came up healthy. Composes the session's run status + recency with its transcript tail into a verdict: returns {\"name\",\"health\",\"status\",\"needsHuman\"} where health is healthy|starting|stalled|failed. healthy = producing fresh output, sitting at a prompt waiting on the human, or exited code 0; starting = no output yet within the startup grace; stalled = running but output went quiet (or nothing emitted past the grace); failed = exited non-zero, needs recovery/manual action, or the tail ended on a terminal error. General — no harness-specific knowledge.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "entry": ["type": "string", "description": "Process UUID or unique process name."],
+                        "maxBytes": [
+                            "type": "number",
+                            "maximum": Double(TranscriptTailLimit.maximumBytes),
+                            "description": "Maximum bytes to read from the end of the transcript for the tail signal. Values above the server cap are clamped."
                         ]
                     ],
                     "required": ["entry"],
