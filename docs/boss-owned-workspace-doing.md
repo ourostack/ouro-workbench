@@ -86,12 +86,12 @@ Per Core unit: write tests → confirm red → implement → `swift test` green 
 **Output**: Audit note: "all present, no new action kind needed" OR a precise gap list.
 **Acceptance**: Audit file written; if a real gap exists it becomes a new TDD unit appended to Slice 7. (Expectation from grounding: no gap.)
 
-### ⬜ Unit 0b: General agent-session record type (Core) — Tests
+### ✅ Unit 0b: General agent-session record type (Core) — Tests
 **Tag**: Core (coverage-gated)
 **What**: Write failing tests for a new `AgentSessionRecord` value type in a new file `Sources/OuroWorkbenchCore/AgentSessionScanner.swift`. Fields exactly: `harness: AgentHarness`, `sessionId: String`, `cwd: String`, `repository: String?`, `branch: String?`, `title: String?`, `lastActive: Date?`, `running: Bool`. Add `enum AgentHarness: String, Codable, Sendable { case claudeCode, githubCopilotCLI, openAICodex, custom }` (mirror `TerminalAgentKind`, with unknown→`.custom` decode). `Codable` + `Equatable` round-trip; stable `id`.
 **Acceptance**: Tests exist and FAIL (type absent).
 
-### ⬜ Unit 0c: General agent-session record type (Core) — Impl + coverage
+### ✅ Unit 0c: General agent-session record type (Core) — Impl + coverage
 **Tag**: Core (coverage-gated)
 **What**: Implement `AgentSessionRecord` + `AgentHarness`. Decode-if-present for optional fields; unknown harness raw → `.custom`.
 **Acceptance**: Tests GREEN; `scripts/check-coverage.sh` 100% on the new file; commit.
@@ -313,3 +313,4 @@ Per Core unit: write tests → confirm red → implement → `swift test` green 
 - 2026-06-19 11:09 Pass 3 validation: grounded Claude JSONL top-level keys + Copilot workspace.yaml flat schema against real files on this box; confirmed onboarding phase names, WorkbenchPaths accessors, TerminalAgentKind cases; refined Units 2a/2c.
 - 2026-06-19 11:09 Pass 4 quality: 36 units, all emoji-tagged, all with Acceptance, no TBD, no attribution — no changes needed.
 - 2026-06-19 11:09 Pass 5 planning coverage check: full coverage confirmed (planning-coverage-checklist.md) — all 8 areas + every In/Out-of-Scope guardrail mapped to units, no gaps.
+- 2026-06-19 11:18 Unit 0a complete: control-action audit — all kinds (archive/restore/createGroup/createTerminal/createSession/moveSession) present at model+validation+apply layers; no gap, no new unit appended. Note in control-action-audit.md.
