@@ -13131,36 +13131,59 @@ final class WorkbenchViewModel: ObservableObject {
             ("outward", selectedAgent.humanFacing?.provider != nil && selectedAgent.humanFacing?.model != nil),
             ("inner", selectedAgent.agentFacing?.provider != nil && selectedAgent.agentFacing?.model != nil)
         ]
+        let agentName = selectedAgent.name
+        // Collect the lanes that actually need a (re)check.
+        var lanesToCheck: [String] = []
         for laneConfiguration in laneConfigurations where laneConfiguration.configured {
             let existingState = onboardingProviderChecks[laneConfiguration.lane]?.state
-            guard existingState != .running, existingState != .passed else {
-                continue
-            }
-            onboardingProviderChecks[laneConfiguration.lane] = OnboardingProviderCheckResult(
-                lane: laneConfiguration.lane,
+            guard existingState != .running, existingState != .passed else { continue }
+            lanesToCheck.append(laneConfiguration.lane)
+        }
+        guard !lanesToCheck.isEmpty else { return }
+
+        // Mark every pending lane running up front + stamp a per-lane generation so a
+        // dismiss/cancel or a superseding run can't let a stale completion overwrite
+        // freshly-cleaned state.
+        var generations: [String: Int] = [:]
+        for lane in lanesToCheck {
+            onboardingProviderChecks[lane] = OnboardingProviderCheckResult(
+                lane: lane,
                 state: .running,
-                detail: "Checking your \(Self.friendlyLaneLabel(laneConfiguration.lane)) connection…"
+                detail: "Checking your \(Self.friendlyLaneLabel(lane)) connection…"
             )
-            refreshOnboardingReadiness()
-            // Track + generation-stamp so cancelling on dismiss is real, and a
-            // late completion from a previous run can't overwrite freshly-
-            // cleaned state (flipping a repaired lane back to a stale failure).
-            let lane = laneConfiguration.lane
-            let agentName = selectedAgent.name
             let generation = (onboardingProviderCheckGeneration[lane] ?? 0) + 1
             onboardingProviderCheckGeneration[lane] = generation
+            generations[lane] = generation
             onboardingProviderCheckTasks[lane]?.cancel()
-            onboardingProviderCheckTasks[lane] = Task {
+        }
+        refreshOnboardingReadiness()
+
+        // Run the lane checks SEQUENTIALLY, not concurrently. `ouro check`'s credential
+        // read contends on the single bitwarden vault lock (held by the ouro daemon), so
+        // two concurrent checks starve each other past the watchdog and BOTH spuriously
+        // fail — even when the providers are perfectly ready (observed: a lone check ~11s,
+        // two at once time out). One at a time, each check acquires the lock cleanly. A
+        // single shared task drives them in order; it's registered under each lane key so
+        // a dismiss-cancel still cancels it.
+        let serialTask = Task {
+            for lane in lanesToCheck {
+                guard !Task.isCancelled,
+                      onboardingProviderCheckGeneration[lane] == generations[lane] else {
+                    continue
+                }
                 let result = await runOnboardingProviderCheck(agentName: agentName, lane: lane)
                 guard !Task.isCancelled,
-                      onboardingProviderCheckGeneration[lane] == generation else {
-                    return
+                      onboardingProviderCheckGeneration[lane] == generations[lane] else {
+                    continue
                 }
                 onboardingProviderChecks[lane] = result
                 refreshOuroAgents()
                 refreshWorkbenchMCPRegistration()
                 refreshOnboardingReadiness()
             }
+        }
+        for lane in lanesToCheck {
+            onboardingProviderCheckTasks[lane] = serialTask
         }
     }
 
@@ -13201,14 +13224,19 @@ final class WorkbenchViewModel: ObservableObject {
                 let watchdog = DispatchWorkItem {
                     if process.isRunning { process.terminate() }
                 }
-                DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 20, execute: watchdog)
+                // 40s, not 20s: a healthy `ouro check` can legitimately run ~11s while it
+                // waits on the bitwarden vault lock the daemon holds; under load that climbs.
+                // The lane checks are serialized (see runOnboardingProviderChecksIfNeeded) so
+                // they don't contend with each other, but a single slow-but-working check must
+                // not get killed and read as a failure.
+                DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 40, execute: watchdog)
                 // Drain the pipe even though we no longer surface the raw output — an
                 // undrained pipe past 64KB blocks the child and looks like a timeout.
                 _ = pipe.fileHandleForReading.readDataToEndOfFile()
                 process.waitUntilExit()
                 watchdog.cancel()
                 let label = Self.friendlyLaneLabel(lane)
-                if Date().timeIntervalSince(start) >= 20 {
+                if Date().timeIntervalSince(start) >= 40 {
                     return OnboardingProviderCheckResult(
                         lane: lane,
                         state: .failed,
@@ -15711,6 +15739,19 @@ final class WorkbenchViewModel: ObservableObject {
     func startFirstRunBootstrapIfNeeded() {
         let bossName = (onboardingReadiness?.selectedBossName ?? state.boss.agentName)
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        // Skip the cold-start bootstrap for an agent that's ALREADY configured (it exists with
+        // both provider lanes set). The bootstrap exists to bring a COLD-START agent online; for
+        // a configured agent it only re-runs verify/refresh, piling more concurrent `ouro`
+        // credential reads onto the daemon's bitwarden vault lock — which starves the wizard's
+        // own lane checks and surfaces a confusing "setting up your agent" list for an agent that
+        // is already set up. The serialized lane checks are the authority on its readiness.
+        if let selectedAgent = ouroAgents.first(where: { $0.name.caseInsensitiveCompare(bossName) == .orderedSame }) {
+            let outwardConfigured = selectedAgent.humanFacing?.provider != nil && selectedAgent.humanFacing?.model != nil
+            let innerConfigured = selectedAgent.agentFacing?.provider != nil && selectedAgent.agentFacing?.model != nil
+            if outwardConfigured && innerConfigured {
+                return
+            }
+        }
         let decision = FirstRunBootstrapDrive.shouldStart(
             isReady: onboardingReadiness?.isReady ?? false,
             hasResolvedBoss: !bossName.isEmpty,
