@@ -287,7 +287,7 @@ final class SessionStatusListTests: XCTestCase {
 
     func testRowCarriesOwnerAndWorkingDirectory() {
         let e = entry(name: "Owned", projectId: project.id, attention: .active, owner: .agent(name: "slugger"))
-        let run = ProcessRun(entryId: e.id, status: .running, startedAt: Date(timeIntervalSince1970: 10), pid: 4242)
+        let run = ProcessRun(entryId: e.id, pid: 4242, status: .running, startedAt: Date(timeIntervalSince1970: 10))
         let state = WorkspaceState(projects: [project], processEntries: [e], processRuns: [run])
 
         let list = SessionStatusList.make(from: state)
@@ -297,6 +297,221 @@ final class SessionStatusListTests: XCTestCase {
         XCTAssertEqual(row?.workingDirectory, "/work/recipes")
         XCTAssertEqual(row?.id, e.id)
         XCTAssertEqual(row?.bucket, .running)
+    }
+
+    // MARK: - Tiebreaker coverage (every arm of `isFresher`)
+
+    func testRowWithLastOutputSortsAheadOfRowWithout() {
+        // One row has lastOutputAt, the other doesn't → the one with a timestamp
+        // is fresher regardless of name. Exercises both nil-asymmetry arms.
+        let withOut = entry(name: "Aaa", projectId: project.id, attention: .active)
+        let withRun = ProcessRun(
+            entryId: withOut.id,
+            status: .running,
+            startedAt: Date(timeIntervalSince1970: 1),
+            lastOutputAt: Date(timeIntervalSince1970: 500)
+        )
+        let none = entry(name: "Bbb", projectId: project.id, attention: .active)
+        // `none` is running but has only a startedAt, no lastOutputAt.
+        let noneRun = ProcessRun(entryId: none.id, status: .running, startedAt: Date(timeIntervalSince1970: 2))
+        let state = WorkspaceState(
+            projects: [project],
+            processEntries: [none, withOut],
+            processRuns: [withRun, noneRun]
+        )
+
+        let list = SessionStatusList.make(from: state)
+
+        // The row WITH lastOutputAt sorts first even though its name ("Aaa")
+        // would also win alphabetically — assert the timestamp arm by also
+        // checking the reverse ordering below.
+        XCTAssertEqual(list.running.map(\.name), ["Aaa", "Bbb"])
+    }
+
+    func testRowWithoutLastOutputSortsAfterRowWithIt() {
+        // Reverse of the above so the OTHER nil-asymmetry arm is hit: the
+        // timestamped row's NAME would lose alphabetically, proving the sort is
+        // driven by the timestamp, not the name.
+        let timestamped = entry(name: "Zzz", projectId: project.id, attention: .active)
+        let timestampedRun = ProcessRun(
+            entryId: timestamped.id,
+            status: .running,
+            startedAt: Date(timeIntervalSince1970: 1),
+            lastOutputAt: Date(timeIntervalSince1970: 500)
+        )
+        let plain = entry(name: "Aaa", projectId: project.id, attention: .active)
+        let plainRun = ProcessRun(entryId: plain.id, status: .running, startedAt: Date(timeIntervalSince1970: 2))
+        let state = WorkspaceState(
+            projects: [project],
+            processEntries: [plain, timestamped],
+            processRuns: [timestampedRun, plainRun]
+        )
+
+        let list = SessionStatusList.make(from: state)
+
+        XCTAssertEqual(list.running.map(\.name), ["Zzz", "Aaa"])
+    }
+
+    func testEqualLastOutputFallsBackToStartedAt() {
+        // Same lastOutputAt → newer startedAt wins (the `l != r` startedAt arm).
+        let a = entry(name: "A", projectId: project.id, attention: .active)
+        let b = entry(name: "B", projectId: project.id, attention: .active)
+        let shared = Date(timeIntervalSince1970: 500)
+        let runA = ProcessRun(
+            entryId: a.id,
+            status: .running,
+            startedAt: Date(timeIntervalSince1970: 10),
+            lastOutputAt: shared
+        )
+        let runB = ProcessRun(
+            entryId: b.id,
+            status: .running,
+            startedAt: Date(timeIntervalSince1970: 20),
+            lastOutputAt: shared
+        )
+        let state = WorkspaceState(projects: [project], processEntries: [a, b], processRuns: [runA, runB])
+
+        let list = SessionStatusList.make(from: state)
+
+        XCTAssertEqual(list.running.map(\.name), ["B", "A"])
+    }
+
+    func testRowWithStartedAtSortsAheadOfRowWithout() {
+        // Neither has lastOutputAt; one has startedAt (running), one has neither
+        // (configured/never-run). Both land in `done`; the started one is fresher.
+        let started = entry(name: "Zzz", projectId: project.id, attention: .idle)
+        let startedRun = ProcessRun(
+            entryId: started.id,
+            status: .configured,
+            startedAt: Date(timeIntervalSince1970: 99)
+        )
+        let neverRun = entry(name: "Aaa", projectId: project.id, attention: .idle)
+        let state = WorkspaceState(
+            projects: [project],
+            processEntries: [neverRun, started],
+            processRuns: [startedRun]
+        )
+
+        let list = SessionStatusList.make(from: state)
+
+        // `started` has a startedAt and sorts ahead of `neverRun` despite the
+        // name disadvantage (Zzz vs Aaa).
+        XCTAssertEqual(list.done.map(\.name), ["Zzz", "Aaa"])
+    }
+
+    func testEqualEverythingFallsBackToId() {
+        // Two sessions with identical name, no runs → deterministic by id.
+        let lowId = ProcessEntry(
+            id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
+            projectId: project.id,
+            name: "Same",
+            kind: .terminalAgent,
+            executable: "claude",
+            workingDirectory: "/work/recipes"
+        )
+        let highId = ProcessEntry(
+            id: UUID(uuidString: "FFFFFFFF-0000-0000-0000-000000000001")!,
+            projectId: project.id,
+            name: "Same",
+            kind: .terminalAgent,
+            executable: "claude",
+            workingDirectory: "/work/recipes"
+        )
+        let state = WorkspaceState(projects: [project], processEntries: [highId, lowId])
+
+        let list = SessionStatusList.make(from: state)
+
+        XCTAssertEqual(list.done.map(\.id), [lowId.id, highId.id])
+    }
+
+    func testDuplicateProjectIdsCollapseToFirstGroupName() {
+        // Two projects sharing the same id (degenerate but possible post-merge):
+        // the group-name map keeps the FIRST — exercises the uniquingKeysWith
+        // resolver.
+        let sharedId = UUID()
+        let first = WorkbenchProject(id: sharedId, name: "First", rootPath: "/a")
+        let second = WorkbenchProject(id: sharedId, name: "Second", rootPath: "/b")
+        let e = entry(name: "S", projectId: sharedId, attention: .active)
+        let run = ProcessRun(entryId: e.id, status: .running, startedAt: Date(timeIntervalSince1970: 1))
+        let state = WorkspaceState(
+            projects: [first, second],
+            processEntries: [e],
+            processRuns: [run]
+        )
+
+        let list = SessionStatusList.make(from: state)
+
+        XCTAssertEqual(list.running.first?.group, "First")
+    }
+
+    // MARK: - Direct comparator (both directions of each nil-asymmetry arm)
+
+    private func row(name: String, started: Date? = nil, output: Date? = nil, id: UUID = UUID()) -> SessionStatusRow {
+        SessionStatusRow(
+            id: id,
+            name: name,
+            group: nil,
+            owner: .human,
+            bucket: .running,
+            status: .running,
+            attention: .active,
+            needsHuman: false,
+            workingDirectory: "/x",
+            startedAt: started,
+            lastOutputAt: output
+        )
+    }
+
+    func testRowInitDefaultsAreNilWhenOmitted() {
+        // Construct a row relying on every trailing default (pid/exitCode/
+        // startedAt/lastOutputAt) so the default-argument thunks are exercised.
+        let r = SessionStatusRow(
+            id: UUID(),
+            name: "Defaulted",
+            group: nil,
+            owner: .human,
+            bucket: .done,
+            status: .configured,
+            attention: .idle,
+            needsHuman: false,
+            workingDirectory: "/x"
+        )
+
+        XCTAssertNil(r.pid)
+        XCTAssertNil(r.exitCode)
+        XCTAssertNil(r.startedAt)
+        XCTAssertNil(r.lastOutputAt)
+    }
+
+    func testIsFresherLastOutputNilAsymmetryBothDirections() {
+        let withOutput = row(name: "A", output: Date(timeIntervalSince1970: 10))
+        let withoutOutput = row(name: "B")
+
+        // lhs has output, rhs doesn't → fresher (true).
+        XCTAssertTrue(SessionStatusList.isFresher(withOutput, withoutOutput))
+        // lhs lacks output, rhs has it → not fresher (false) — the `return false` arm.
+        XCTAssertFalse(SessionStatusList.isFresher(withoutOutput, withOutput))
+    }
+
+    func testIsFresherStartedAtDifferingNewerWins() {
+        // No lastOutputAt on either → the comparator reaches the startedAt arm
+        // with differing startedAt; the newer startedAt is fresher. This fires
+        // the `{ return l > r }` body of the startedAt branch directly.
+        let newer = row(name: "A", started: Date(timeIntervalSince1970: 20))
+        let older = row(name: "B", started: Date(timeIntervalSince1970: 10))
+
+        XCTAssertTrue(SessionStatusList.isFresher(newer, older))
+        XCTAssertFalse(SessionStatusList.isFresher(older, newer))
+    }
+
+    func testIsFresherStartedAtNilAsymmetryBothDirections() {
+        // Neither has lastOutputAt so the startedAt arm is reached.
+        let withStart = row(name: "A", started: Date(timeIntervalSince1970: 10))
+        let withoutStart = row(name: "B")
+
+        XCTAssertTrue(SessionStatusList.isFresher(withStart, withoutStart))
+        // The `return false` arm: lhs lacks startedAt, rhs has it.
+        XCTAssertFalse(SessionStatusList.isFresher(withoutStart, withStart))
     }
 
     func testRowGroupNilWhenProjectMissing() {
