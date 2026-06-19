@@ -14956,7 +14956,12 @@ final class WorkbenchViewModel: ObservableObject {
                 workingDirectory: nonEmpty(action.workingDirectory) ?? project.rootPath,
                 trust: action.trust ?? .untrusted,
                 autoResume: action.autoResume ?? false,
-                notes: action.text ?? "Created by \(source)"
+                notes: action.text ?? "Created by \(source)",
+                // Forward memory (Slice 6): carry the boss's discovery provenance
+                // (nil for an ordinary create) so a relaunched discovered session
+                // is stamped + natively rediscoverable by the next scan().
+                discoveredHarness: action.discoveredHarness,
+                discoveredSessionId: nonEmpty(action.discoveredSessionId)
             )
             guard let entry = createCustomSession(draft, in: project.id, launchAfterCreate: false) else {
                 return finishBossAction(source: source, action: action, entry: nil, result: "Failed createTerminal: \(errorMessage ?? "invalid terminal")")
@@ -14982,7 +14987,12 @@ final class WorkbenchViewModel: ObservableObject {
                 workingDirectory: nonEmpty(action.workingDirectory) ?? project.rootPath,
                 trust: action.trust ?? .untrusted,
                 autoResume: action.autoResume ?? false,
-                notes: nonEmpty(action.text) ?? "Created by \(source)"
+                notes: nonEmpty(action.text) ?? "Created by \(source)",
+                // Forward memory (Slice 6): carry the boss's discovery provenance
+                // (nil for an ordinary create) so a relaunched discovered session
+                // is stamped + natively rediscoverable by the next scan().
+                discoveredHarness: action.discoveredHarness,
+                discoveredSessionId: nonEmpty(action.discoveredSessionId)
             )
             guard let entry = createCustomSession(draft, in: project.id, launchAfterCreate: true, owner: .agent(name: ownerName)) else {
                 return finishBossAction(source: source, action: action, entry: nil, result: "Failed createSession: \(errorMessage ?? "invalid session")")
