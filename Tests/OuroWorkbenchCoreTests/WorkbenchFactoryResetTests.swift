@@ -26,7 +26,7 @@ final class WorkbenchFactoryResetTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: domain) }
         defaults.set(15.0, forKey: "ouro.workbench.terminalFontSize")
         defaults.set("dark", forKey: "ouro.workbench.theme")
-        defaults.set(true, forKey: "ouro.workbench.onboardingAutoPresented")
+        defaults.set(true, forKey: "ouro.workbench.onboardingCompleted")
         XCTAssertEqual(defaults.double(forKey: "ouro.workbench.terminalFontSize"), 15.0)
 
         let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
@@ -47,14 +47,14 @@ final class WorkbenchFactoryResetTests: XCTestCase {
         // EVERY preference cleared — a true factory state, not just onboarding.
         XCTAssertEqual(defaults.double(forKey: "ouro.workbench.terminalFontSize"), 0.0)
         XCTAssertNil(defaults.string(forKey: "ouro.workbench.theme"))
-        XCTAssertFalse(defaults.bool(forKey: "ouro.workbench.onboardingAutoPresented"))
+        XCTAssertFalse(defaults.bool(forKey: "ouro.workbench.onboardingCompleted"))
     }
 
     func testNoStateFileStillClearsPreferencesAndReturnsNil() {
         let domain = "com.ourostack.workbench.test.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: domain)!
         defer { defaults.removePersistentDomain(forName: domain) }
-        defaults.set(true, forKey: "ouro.workbench.onboardingAutoPresented")
+        defaults.set(true, forKey: "ouro.workbench.onboardingCompleted")
 
         let missing = FileManager.default.temporaryDirectory
             .appendingPathComponent("nope-\(UUID().uuidString).json")
@@ -66,7 +66,7 @@ final class WorkbenchFactoryResetTests: XCTestCase {
         )
 
         XCTAssertNil(backup, "no state file → nothing to back up")
-        XCTAssertFalse(defaults.bool(forKey: "ouro.workbench.onboardingAutoPresented"), "prefs still cleared")
+        XCTAssertFalse(defaults.bool(forKey: "ouro.workbench.onboardingCompleted"), "prefs still cleared")
     }
 
     func testRequestsAndConsumesFirstRunSetupMarker() throws {
@@ -107,7 +107,7 @@ final class WorkbenchFactoryResetTests: XCTestCase {
         let domain = "com.ourostack.workbench.test.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: domain)!
         defer { defaults.removePersistentDomain(forName: domain) }
-        defaults.set(true, forKey: "ouro.workbench.onboardingAutoPresented")
+        defaults.set(true, forKey: "ouro.workbench.onboardingCompleted")
 
         let result = WorkbenchFactoryReset.resetToFactoryDefaults(
             stateURL: stateURL,
@@ -122,7 +122,7 @@ final class WorkbenchFactoryResetTests: XCTestCase {
         XCTAssertEqual(result.setupMarkerURL.lastPathComponent, "force-first-run-setup")
         XCTAssertTrue(fm.fileExists(atPath: result.setupMarkerURL.path))
         XCTAssertNotEqual(try String(contentsOf: result.setupMarkerURL), "stale-before-reset")
-        XCTAssertFalse(defaults.bool(forKey: "ouro.workbench.onboardingAutoPresented"))
+        XCTAssertFalse(defaults.bool(forKey: "ouro.workbench.onboardingCompleted"))
     }
 
     func testFactoryResetFallsBackToMarkerURLWhenRequestCannotWriteMarker() throws {
@@ -183,7 +183,7 @@ final class WorkbenchFactoryResetTests: XCTestCase {
         let domain = "com.ourostack.workbench.test.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: domain)!
         defer { defaults.removePersistentDomain(forName: domain) }
-        defaults.set(true, forKey: "ouro.workbench.onboardingAutoPresented")
+        defaults.set(true, forKey: "ouro.workbench.onboardingCompleted")
 
         let stateURL = URL(fileURLWithPath: "/virtual/workspace-state.json")
         let fileManager = CoverageBatch2FileManager()
@@ -200,6 +200,6 @@ final class WorkbenchFactoryResetTests: XCTestCase {
 
         XCTAssertNil(backup, "a failed backup move must not report a backup URL")
         XCTAssertTrue(fileManager.removedPaths.contains(stateURL.path), "state slot is removed so next launch starts fresh")
-        XCTAssertFalse(defaults.bool(forKey: "ouro.workbench.onboardingAutoPresented"))
+        XCTAssertFalse(defaults.bool(forKey: "ouro.workbench.onboardingCompleted"))
     }
 }

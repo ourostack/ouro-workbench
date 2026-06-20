@@ -57,7 +57,7 @@ EMU (`arimendelow_microsoft`) after.
   actor-split headline); "Fix"→"Try again" honest label (#233); lane-agnostic check copy + deleted
   `friendlyLaneLabel` (#234, #228). Strict TDD on the Core headline; App is copy/orchestration,
   verified via `swift build`.
-- [ ] **U3 — Transactional wizard (#227).** Add persisted `onboardingHasBeenCompleted`. Present
+- [x] **U3 — Transactional wizard (#227).** Add persisted `onboardingHasBeenCompleted`. Present
   until completed (not "boss set"). Snapshot boss on wizard open; rollback (restore snapshot) on
   dismiss-without-completion; set completed when the user reaches the end. Header button = "Cancel"
   (rollback) until complete, then "Done" (commit). Kills the stale-boss lockout at the root.
@@ -126,3 +126,29 @@ real failure/unconfigured step exists).
   `friendlyLaneLabel`. App changes are copy/orchestration — verified via `swift build`.
   Results: `swift test --filter OnboardingTests` = 73 pass; full Core suite 1438 pass / 1 skip /
   0 fail; Core 100% line+region coverage gate PASS; `swift build` clean (App included), no warnings.
+- 2026-06-20: U3 complete (#227) — transactional onboarding wizard, root-cause fix for the
+  26-day stale-boss lockout. All in OuroWorkbenchApp.swift. (1) New persisted
+  `@Published onboardingHasBeenCompleted` (default false, key `ouro.workbench.onboardingCompleted`)
+  + `onboardingBossSnapshot: String?`; REPLACED the old `onboardingHasAutoPresented` property +
+  `onboardingAutoPresentedDefaultsKey` — grep proved its ONLY callers were the launch-present block
+  (line ~409 setter) + the stored prop + the `canAutoPresentOnboardingOnLaunch` gate (all rewritten
+  here), so it was removed cleanly, no mid-session-suppression caller left behind. (2)
+  `shouldPresentOnboardingOnLaunch` now `isFirstRunSetupForcedOnLaunch || !onboardingHasBeenCompleted`
+  (present until GENUINELY done, not "boss set + presented once"); `canAutoPresentOnboardingOnLaunch`
+  = `shouldPresentOnboardingOnLaunch` (auto-presented gate dropped — that gate WAS the suppression
+  bug). (3) Snapshot `state.boss.agentName` on wizard open in BOTH `presentOnboarding()` and the
+  launch auto-present path (the launch path bypasses `presentOnboarding()`). (4) Set
+  `onboardingHasBeenCompleted = true` at the `advance()` `.connect`→`.importWork` finish (ready boss
+  reaching Arrange Work = genuinely done). (5) New `rollbackOnboardingIfIncomplete()` (guard
+  `!completed && snapshot != nil && boss changed`; restore `state.boss` + every
+  `state.projects[].boss`, `save()`, `refreshOnboardingReadiness()`, clear snapshot), called from the
+  sheet `.onDisappear` after `cancelOnboardingProviderChecks()`. (6) Header button label
+  `onboardingHasBeenCompleted ? "Done" : "Cancel"` (passed `model` into `OnboardingFlowHeader`);
+  behavior unchanged (both dismiss), rollback fires in `.onDisappear`.
+  Testability: `WorkbenchViewModel` lives in the `OuroWorkbenchApp` EXECUTABLE target with NO test
+  target (only `OuroWorkbenchCoreTests`, Core-only) and is AppKit/SwiftUI-coupled, so it can't be
+  `@testable import`ed — per design fallback, U3 logic is verified by `swift build`. Updated
+  `WorkbenchFactoryResetTests` to track the renamed defaults key (it probes "some workbench pref" is
+  wiped on factory reset; `resetToFactoryDefaults` clears the whole domain so the assertion holds).
+  Results: `swift build` clean, no warnings/diagnostics (App included); full Core suite 1438 pass /
+  1 skip / 0 fail; Core 100% line+region coverage gate PASS.

@@ -406,8 +406,10 @@ struct WorkbenchRootView: View {
             model.refreshOnboardingReadiness()
             await model.refreshBossDashboard()
             if model.canAutoPresentOnboardingOnLaunch {
+                // Snapshot the boss before the wizard can mutate it so an
+                // abandoned mid-wizard pick rolls back on dismiss (#227).
+                model.onboardingBossSnapshot = model.state.boss.agentName
                 model.isOnboardingPresented = true
-                model.onboardingHasAutoPresented = true
             } else {
                 // Configured machine: run the provider liveness checks in the
                 // background so readiness resolves to ready without ever
@@ -5057,7 +5059,7 @@ struct WorkbenchOnboardingSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            OnboardingFlowHeader(page: page, dismiss: dismiss)
+            OnboardingFlowHeader(page: page, model: model, dismiss: dismiss)
 
             Divider()
 
@@ -5116,6 +5118,10 @@ struct WorkbenchOnboardingSheet: View {
             // Cancel in-flight provider checks so a late completion can't
             // overwrite cleaned state after the sheet closes.
             model.cancelOnboardingProviderChecks()
+            // Roll back a boss pick the user made but abandoned without
+            // completing onboarding, so a half-finished pick never persists
+            // (#227). No-op if onboarding completed or the boss is unchanged.
+            model.rollbackOnboardingIfIncomplete()
         }
     }
 
@@ -5209,6 +5215,11 @@ struct WorkbenchOnboardingSheet: View {
                 instructionStatus = "Connecting the boss. Workbench is checking provider and tool readiness now."
                 return
             }
+            // Reaching Arrange Work with a ready boss means setup is genuinely
+            // done — reconstruction is the payoff, not a gate. Mark onboarding
+            // completed so the wizard stops re-presenting on launch and the boss
+            // pick is now committed (the rollback on dismiss no longer fires).
+            model.onboardingHasBeenCompleted = true
             page = .importWork
             // Slice 7: a ready boss hands off to boss-driven reconstruction the moment we
             // land on the arrange page — no hardcoded scan. The boss does discover →
@@ -5246,6 +5257,7 @@ struct WorkbenchOnboardingSheet: View {
 
 private struct OnboardingFlowHeader: View {
     var page: WorkbenchOnboardingSheet.OnboardingPage
+    @ObservedObject var model: WorkbenchViewModel
     var dismiss: DismissAction
 
     var body: some View {
@@ -5262,7 +5274,11 @@ private struct OnboardingFlowHeader: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Button("Done") {
+            // Honest label: until onboarding is genuinely completed, dismissing
+            // rolls back any mid-wizard boss pick — that's a Cancel, not a Done.
+            // Once completed (boss committed), it's a plain Done. Behavior is the
+            // same dismiss in both cases; the rollback fires in `.onDisappear`.
+            Button(model.onboardingHasBeenCompleted ? "Done" : "Cancel") {
                 dismiss()
             }
             .keyboardShortcut(.cancelAction)
@@ -9587,18 +9603,25 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var bugReportIssueURL: String?
     @Published var bugReportIssueError: String?
     @Published var isOnboardingPresented = false
-    /// Whether the onboarding sheet has already been auto-presented once on this
-    /// machine. Persisted so a configured machine with a lingering config gap
-    /// isn't forced into the modal on *every* launch — the gap stays visible in
-    /// the TTFA pill, and the user can reopen setup from the More menu. Reset
-    /// only by clearing app defaults.
-    @Published var onboardingHasAutoPresented: Bool = {
-        UserDefaults.standard.bool(forKey: WorkbenchViewModel.onboardingAutoPresentedDefaultsKey)
+    /// Whether onboarding has been GENUINELY completed (the user reached Arrange
+    /// Work with a ready boss). Persisted so the wizard keeps presenting on every
+    /// launch until setup is actually finished — picking a boss and then
+    /// dismissing the wizard does NOT count as completed, so a half-finished pick
+    /// can never lock the user out of onboarding. Reset only by clearing app
+    /// defaults (or `resetToFirstRun()`).
+    @Published var onboardingHasBeenCompleted: Bool = {
+        UserDefaults.standard.bool(forKey: WorkbenchViewModel.onboardingCompletedDefaultsKey)
     }() {
         didSet {
-            UserDefaults.standard.set(onboardingHasAutoPresented, forKey: Self.onboardingAutoPresentedDefaultsKey)
+            UserDefaults.standard.set(onboardingHasBeenCompleted, forKey: Self.onboardingCompletedDefaultsKey)
         }
     }
+    /// The boss agent name captured when the onboarding wizard opens, BEFORE the
+    /// user can change it. If the user picks a different boss mid-wizard and then
+    /// dismisses without completing, `rollbackOnboardingIfIncomplete()` restores
+    /// this snapshot so the abandoned pick never persists. `nil` when no wizard
+    /// session is in flight.
+    var onboardingBossSnapshot: String?
     @Published var onboardingReadiness: OnboardingReadiness?
     @Published var onboardingProviderChecks: [String: OnboardingProviderCheckResult] = [:]
     /// Per-lane generation so a late completion from a previous run doesn't
@@ -10295,24 +10318,22 @@ final class WorkbenchViewModel: ObservableObject {
         return readiness.repairSteps.contains { Self.onboardingConfigGapBlockerIDs.contains($0.id) }
     }
 
-    /// Present onboarding at launch for a first-run machine (no usable boss
-    /// agent yet — `.needsAgent`, whose steps are hatch/clone/use-<agent>) or
-    /// a genuine configuration gap. A configured machine merely *pending* a
-    /// provider liveness check is NOT forced into the sheet — the startup
-    /// task runs those checks in the background so readiness flips to ready
-    /// on its own.
+    /// Present onboarding at launch until setup is GENUINELY completed. A forced
+    /// first run always presents; otherwise the wizard keeps appearing while
+    /// `onboardingHasBeenCompleted` is false — which covers `.needsAgent`,
+    /// mid-setup config gaps, AND the stale-boss-but-never-finished case where a
+    /// prior session picked a boss and dismissed before reaching Arrange Work.
+    /// Keying on completion (not "boss set + auto-presented once") is the root-
+    /// cause fix for the stale-boss lockout (#227).
     var shouldPresentOnboardingOnLaunch: Bool {
         if isFirstRunSetupForcedOnLaunch {
             return true
         }
-        guard let readiness = onboardingReadiness, !readiness.isReady else {
-            return false
-        }
-        return readiness.state == .needsAgent || onboardingHasConfigGap
+        return !onboardingHasBeenCompleted
     }
 
     var canAutoPresentOnboardingOnLaunch: Bool {
-        shouldPresentOnboardingOnLaunch && (!onboardingHasAutoPresented || isFirstRunSetupForcedOnLaunch)
+        shouldPresentOnboardingOnLaunch
     }
 
     var onboardingPhaseLabel: String {
@@ -13124,6 +13145,9 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     func presentOnboarding() {
+        // Snapshot the boss before the wizard can mutate it so an abandoned
+        // mid-wizard pick rolls back on dismiss (#227).
+        onboardingBossSnapshot = state.boss.agentName
         refreshOuroAgents()
         refreshWorkbenchMCPRegistration()
         // Discard any stale provider-check entries that aren't a confirmed
@@ -13228,6 +13252,27 @@ final class WorkbenchViewModel: ObservableObject {
             onboardingProviderCheckGeneration[lane, default: 0] += 1
         }
         onboardingProviderCheckTasks.removeAll()
+    }
+
+    /// Roll back a boss pick that the user made mid-wizard but abandoned by
+    /// dismissing before genuinely completing onboarding (#227). Without this, a
+    /// half-finished pick stays persisted on disk and, combined with the present-
+    /// until-completed logic, would lock the user into re-opening the wizard with
+    /// a boss they never confirmed. No-op once onboarding is completed, when no
+    /// snapshot is in flight, or when the boss is unchanged from the snapshot.
+    func rollbackOnboardingIfIncomplete() {
+        guard !onboardingHasBeenCompleted,
+              let snapshot = onboardingBossSnapshot,
+              state.boss.agentName != snapshot else {
+            return
+        }
+        state.boss.agentName = snapshot
+        for index in state.projects.indices {
+            state.projects[index].boss.agentName = snapshot
+        }
+        save()
+        refreshOnboardingReadiness()
+        onboardingBossSnapshot = nil
     }
 
     private func runOnboardingProviderCheck(agentName: String, lane: String) async -> OnboardingProviderCheckResult {
@@ -16816,7 +16861,7 @@ final class WorkbenchViewModel: ObservableObject {
     static let autoLaunchResumableOnStartupDefaultsKey = "ouro.workbench.autoLaunchResumableOnStartup"
     static let autoUpdateEnabledDefaultsKey = "ouro.workbench.autoUpdateEnabled"
     static let lastUpdateCheckAtDefaultsKey = "ouro.workbench.lastUpdateCheckAt"
-    static let onboardingAutoPresentedDefaultsKey = "ouro.workbench.onboardingAutoPresented"
+    static let onboardingCompletedDefaultsKey = "ouro.workbench.onboardingCompleted"
     static let maxRecentWorkspaces = 8
     /// Default terminal font size. Matches macOS Terminal's default.
     static let defaultTerminalFontSize: CGFloat = 13
