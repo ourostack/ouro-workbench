@@ -13148,10 +13148,21 @@ final class WorkbenchViewModel: ObservableObject {
         guard let selectedAgent, selectedAgent.status == .ready else {
             return
         }
-        let laneConfigurations: [(lane: String, configured: Bool)] = [
-            ("outward", selectedAgent.humanFacing?.provider != nil && selectedAgent.humanFacing?.model != nil),
-            ("inner", selectedAgent.agentFacing?.provider != nil && selectedAgent.agentFacing?.model != nil)
-        ]
+        // When both lanes resolve to the SAME provider+model (U1's lane collapse), the inner check
+        // is redundant — readiness only surfaces the ONE outward connection step in that case, so
+        // checking inner would spin a lane the user never sees. Run just outward; this also halves
+        // the wait. When the lanes diverge, check both.
+        let laneConfigurations: [(lane: String, configured: Bool)]
+        if selectedAgent.lanesShareOneConnection {
+            laneConfigurations = [
+                ("outward", true)
+            ]
+        } else {
+            laneConfigurations = [
+                ("outward", selectedAgent.humanFacing?.provider != nil && selectedAgent.humanFacing?.model != nil),
+                ("inner", selectedAgent.agentFacing?.provider != nil && selectedAgent.agentFacing?.model != nil)
+            ]
+        }
         let agentName = selectedAgent.name
         // Collect the lanes that actually need a (re)check.
         var lanesToCheck: [String] = []
@@ -13170,7 +13181,7 @@ final class WorkbenchViewModel: ObservableObject {
             onboardingProviderChecks[lane] = OnboardingProviderCheckResult(
                 lane: lane,
                 state: .running,
-                detail: "Checking your \(Self.friendlyLaneLabel(lane)) connection…"
+                detail: "Checking your agent's connection…"
             )
             let generation = (onboardingProviderCheckGeneration[lane] ?? 0) + 1
             onboardingProviderCheckGeneration[lane] = generation
@@ -13256,19 +13267,21 @@ final class WorkbenchViewModel: ObservableObject {
                 _ = pipe.fileHandleForReading.readDataToEndOfFile()
                 process.waitUntilExit()
                 watchdog.cancel()
-                let label = Self.friendlyLaneLabel(lane)
+                // Lane-agnostic copy: U1's repair-step TITLE now carries the connection identity
+                // (provider · model + plain-English role), so these details no longer need the
+                // opaque "main"/"background" lane label (#234).
                 if Date().timeIntervalSince(start) >= 40 {
                     return OnboardingProviderCheckResult(
                         lane: lane,
                         state: .failed,
-                        detail: "Checking your \(label) connection took too long. Connect your provider to try again."
+                        detail: "This is taking longer than usual. Try again, or reconnect your provider."
                     )
                 }
                 if process.terminationStatus == 0 {
                     return OnboardingProviderCheckResult(
                         lane: lane,
                         state: .passed,
-                        detail: "Your \(label) connection is working."
+                        detail: "This connection is working."
                     )
                 }
                 // NEVER surface raw `ouro check` output (lane jargon, provider IDs, a
@@ -13277,29 +13290,16 @@ final class WorkbenchViewModel: ObservableObject {
                 return OnboardingProviderCheckResult(
                     lane: lane,
                     state: .failed,
-                    detail: "Workbench couldn't confirm your \(label) connection yet. Connect your provider to fix this."
+                    detail: "Workbench couldn't confirm this connection yet. Try again, or reconnect your provider."
                 )
             } catch {
                 return OnboardingProviderCheckResult(
                     lane: lane,
                     state: .failed,
-                    detail: "Workbench is still setting up your \(Self.friendlyLaneLabel(lane)) connection. This clears once your provider is connected."
+                    detail: "Workbench is still setting this up. It clears once your provider is connected."
                 )
             }
         }.value
-    }
-
-    /// Friendly label for a provider lane — keeps the CLI's `outward`/`inner` jargon
-    /// out of the onboarding wizard. `outward` is the lane the agent uses to talk to
-    /// you (your "main" connection); `inner` is the lane it uses for its own
-    /// background reasoning (the "background" connection). Two rows render, one per
-    /// lane, so they need distinct human labels — but never the raw lane name.
-    nonisolated static func friendlyLaneLabel(_ lane: String) -> String {
-        switch lane {
-        case "outward": return "main"
-        case "inner": return "background"
-        default: return lane
-        }
     }
 
     @discardableResult
