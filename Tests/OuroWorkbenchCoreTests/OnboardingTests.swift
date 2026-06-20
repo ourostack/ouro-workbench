@@ -54,6 +54,59 @@ final class OnboardingTests: XCTestCase {
         XCTAssertFalse(bridge.detail.contains("boss"))
     }
 
+    // MARK: - OnboardingPresentationPolicy.shouldMarkCompletedAtLaunch truth table
+    //
+    // Seeds the completion flag at launch for machines that were already onboarded under an
+    // older build (ready boss + real sessions, no completion key yet) so they aren't dragged
+    // through the wizard — WITHOUT marking a machine whose boss is merely "ready" but never
+    // actually onboarded (ready, no sessions), which must still present or the stale-boss
+    // lockout returns. Distinguished by prior use (sessions exist).
+
+    func testPolicySeedsCompletionForAlreadyOnboardedMachine() {
+        // Ready boss + has used Workbench (real sessions) + not yet completed → seed it.
+        XCTAssertTrue(
+            OnboardingPresentationPolicy.shouldMarkCompletedAtLaunch(
+                isReady: true,
+                hasUsedWorkbench: true,
+                alreadyCompleted: false
+            )
+        )
+    }
+
+    func testPolicyDoesNotSeedReadyButNeverUsedMachine() {
+        // Ready boss but no sessions: the U3 case (stale-ready boss, onboarding never finished).
+        // Must NOT seed — it has to present, or the lockout U3 fixed comes back.
+        XCTAssertFalse(
+            OnboardingPresentationPolicy.shouldMarkCompletedAtLaunch(
+                isReady: true,
+                hasUsedWorkbench: false,
+                alreadyCompleted: false
+            )
+        )
+    }
+
+    func testPolicyDoesNotSeedUsedButNotReadyMachine() {
+        // Has sessions but the boss isn't ready: don't seed — readiness still has to be earned.
+        XCTAssertFalse(
+            OnboardingPresentationPolicy.shouldMarkCompletedAtLaunch(
+                isReady: false,
+                hasUsedWorkbench: true,
+                alreadyCompleted: false
+            )
+        )
+    }
+
+    func testPolicyDoesNotReseedAlreadyCompletedMachine() {
+        // Already completed (the flag is set): nothing to seed, idempotent no-op.
+        XCTAssertFalse(
+            OnboardingPresentationPolicy.shouldMarkCompletedAtLaunch(
+                isReady: true,
+                hasUsedWorkbench: true,
+                alreadyCompleted: true
+            )
+        )
+    }
+
     func testEmptyBossSurfacesChooseCopyWithoutBlankName() {
         // Unresolved boss + more than one usable agent: the readiness must offer a
         // human choice with honest copy — never "The selected boss  is not

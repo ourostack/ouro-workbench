@@ -231,3 +231,42 @@ real failure/unconfigured step exists).
   red→green). End-to-end spot check confirmed zero leaks of username / agent name / home path in a
   realistic report.md. Results: `swift build` clean, no warnings (App included); full Core suite
   1467 pass / 1 skip / 0 fail; Core 100% line+region coverage gate PASS.
+- 2026-06-20: Independent review of the onboarding overhaul (1 FIX-NEEDED + several NITs).
+  FIX-NEEDED (U3 regression): `shouldPresentOnboardingOnLaunch` returns
+  `isFirstRunSetupForcedOnLaunch || !onboardingHasBeenCompleted`, completion is set in ONE place
+  (`advance()` connect→importWork), and there's NO migration. So an EXISTING already-onboarded user
+  (boss set, ready, has been using Workbench) gets the wizard force-presented on the first launch
+  after the update — and if they Cancel (likely, since they're set up), completion is never set and
+  the wizard re-pops every launch. The naive "ready ⇒ completed" fix is WRONG: it re-locks-out the
+  very case U3 fixed (a machine whose boss is "ready" but where onboarding was NEVER finished — no
+  sessions). Distinguish by PRIOR USE: a genuinely-onboarded machine has real sessions; a
+  never-finished one has none.
+  FIX (this commit):
+  (1) Pure policy in Core — `OnboardingPresentationPolicy.shouldMarkCompletedAtLaunch(isReady:
+  hasUsedWorkbench: alreadyCompleted:)` = `!alreadyCompleted && isReady && hasUsedWorkbench`
+  (Onboarding.swift). Full truth-table coverage in OnboardingTests: (ready, used, !completed)→true;
+  (ready, !used, !completed)→false; (!ready, used, !completed)→false; (ready, used, completed)→false.
+  Core 100% line+region gate stays green.
+  (2) Wired at launch in OuroWorkbenchApp.swift — in the launch `.task`, after readiness refresh and
+  before the `canAutoPresentOnboardingOnLaunch` auto-present decision: if the policy returns true
+  (`isReady: onboardingReadiness?.isReady == true`, `hasUsedWorkbench: !state.processEntries.isEmpty`,
+  `alreadyCompleted: onboardingHasBeenCompleted`), set `onboardingHasBeenCompleted = true`. Result:
+  already-onboarded users skip the wizard; ready-but-never-finished machines (the operator's
+  pre-reset case) still present; a wiped/first-run machine is neither ready nor has sessions, so
+  forced first-run after a reset is unaffected.
+  (3) NIT — clear the snapshot on success: where `advance()` sets `onboardingHasBeenCompleted = true`
+  before `page = .importWork`, also `onboardingBossSnapshot = nil` (it was only cleared inside
+  `rollbackOnboardingIfIncomplete`, which short-circuits once completed, so a committed pick left a
+  stale snapshot behind).
+  (4) NIT — drop a stale inner check when collapsed: in `runOnboardingProviderChecksIfNeeded()`, when
+  `selectedAgent.lanesShareOneConnection` (only outward is checked), also `onboardingProviderChecks
+  ["inner"] = nil`, so a stale `inner == .running` left from a divergent→collapsed mid-session
+  reconfigure can't pin the importWork/Connect advance button disabled (it's disabled while ANY
+  check is `.running`, and the collapsed UI never surfaces the inner lane to clear it).
+  DEFERRED NITs (acknowledged, not fixed): (a) the WorkbenchBugReport redactor doesn't normalize
+  absolute paths OUTSIDE `$HOME` — low-stakes for a local-only repo (the local folder is the
+  backstop and isn't pushed); (b) cosmetic ~89.99s timeout copy (the U4 90s ceiling) — purely
+  aesthetic wording, no behavior impact.
+  Verify: strict release build `swift build -Xswiftc -warnings-as-errors
+  -Xswiftc -strict-concurrency=complete` CLEAN (no warnings); `swift test` full Core 1471 pass /
+  1 skip / 0 fail; `Scripts/check-coverage.sh` PASS (Core 100% line+region).

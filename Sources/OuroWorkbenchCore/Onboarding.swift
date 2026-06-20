@@ -470,6 +470,16 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
     }
 }
 
+public enum OnboardingPresentationPolicy {
+    /// Seed the completion flag for machines that were already onboarded under an older build
+    /// (no `onboardingHasBeenCompleted` key yet) so they aren't dragged through the wizard —
+    /// WITHOUT marking a machine whose boss is merely "ready" but never actually onboarded
+    /// (no sessions): those must still present, or the stale-boss lockout returns.
+    public static func shouldMarkCompletedAtLaunch(isReady: Bool, hasUsedWorkbench: Bool, alreadyCompleted: Bool) -> Bool {
+        !alreadyCompleted && isReady && hasUsedWorkbench
+    }
+}
+
 public enum RecentSessionSource: String, Codable, Equatable, Sendable {
     case claudeCode
     case cmux

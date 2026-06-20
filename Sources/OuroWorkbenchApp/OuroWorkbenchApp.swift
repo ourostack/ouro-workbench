@@ -405,6 +405,20 @@ struct WorkbenchRootView: View {
             model.refreshSessionActivity()
             model.refreshOnboardingReadiness()
             await model.refreshBossDashboard()
+            // Migration: an existing already-onboarded user (ready boss + real sessions) updating
+            // to the first build that carries `onboardingHasBeenCompleted` (default false) would
+            // otherwise be force-presented the wizard — and, if they Cancel, never get the flag
+            // set, so it re-pops every launch. Seed the flag for them. The policy is careful NOT to
+            // seed a machine whose boss is merely "ready" but never actually onboarded (ready, no
+            // sessions): those still present, or the stale-boss lockout U3 fixed returns. A wiped /
+            // first-run machine is neither ready nor has sessions, so forced first-run is unaffected.
+            if OnboardingPresentationPolicy.shouldMarkCompletedAtLaunch(
+                isReady: model.onboardingReadiness?.isReady == true,
+                hasUsedWorkbench: !model.state.processEntries.isEmpty,
+                alreadyCompleted: model.onboardingHasBeenCompleted
+            ) {
+                model.onboardingHasBeenCompleted = true
+            }
             if model.canAutoPresentOnboardingOnLaunch {
                 // Snapshot the boss before the wizard can mutate it so an
                 // abandoned mid-wizard pick rolls back on dismiss (#227).
@@ -5219,7 +5233,11 @@ struct WorkbenchOnboardingSheet: View {
             // done — reconstruction is the payoff, not a gate. Mark onboarding
             // completed so the wizard stops re-presenting on launch and the boss
             // pick is now committed (the rollback on dismiss no longer fires).
+            // Clear the open snapshot too: once completed, `rollbackOnboardingIfIncomplete`
+            // short-circuits on the completed guard and never clears it, so drop it here
+            // so a committed pick can't leave a stale snapshot behind.
             model.onboardingHasBeenCompleted = true
+            model.onboardingBossSnapshot = nil
             page = .importWork
             // Slice 7: a ready boss hands off to boss-driven reconstruction the moment we
             // land on the arrange page — no hardcoded scan. The boss does discover →
@@ -13350,6 +13368,11 @@ final class WorkbenchViewModel: ObservableObject {
             laneConfigurations = [
                 ("outward", true)
             ]
+            // Only the outward lane is checked in the collapsed case. Drop any stale `inner`
+            // entry — a divergent→collapsed mid-session reconfigure can leave `inner == .running`
+            // behind, and the Connect-page advance button is disabled while ANY check is
+            // `.running` (it never sees the inner lane), so it would stay pinned disabled forever.
+            onboardingProviderChecks["inner"] = nil
         } else {
             laneConfigurations = [
                 ("outward", selectedAgent.humanFacing?.provider != nil && selectedAgent.humanFacing?.model != nil),
