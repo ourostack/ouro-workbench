@@ -42,6 +42,27 @@ final class GitHubIssueComposerTests: XCTestCase {
         XCTAssertTrue(draft.body.contains("/tmp/x"))
     }
 
+    /// The issue title (from the raw note) and the bundle-path footer bypass the
+    /// already-redacted `report.md`, so the draft must anonymize them itself when
+    /// a redactor is supplied (#236) — username, home path, and agent names must
+    /// not survive into either.
+    func testDraftRedactsTitleAndBundlePathWhenRedactorSupplied() {
+        let draft = GitHubIssueComposer.draft(
+            note: "agent-zeta broke for jdoe",
+            reportMarkdown: "# Report (already redacted)\n",
+            bundlePath: "/Users/jdoe/Library/Application Support/Ouro Workbench/bug-reports/x",
+            redactor: WorkbenchBugReportRedactor(),
+            agentNames: ["agent-zeta"],
+            homePath: "/Users/jdoe",
+            username: "jdoe"
+        )
+        XCTAssertFalse(draft.title.contains("agent-zeta"))
+        XCTAssertFalse(draft.title.contains("jdoe"))
+        XCTAssertTrue(draft.title.contains("<agent>"))
+        XCTAssertFalse(draft.body.contains("/Users/jdoe"), "home path leaked in footer")
+        XCTAssertTrue(draft.body.contains("~/Library/Application Support"))
+    }
+
     // MARK: - GitHubIssueFiler pure helpers
 
     func testParseIssueURLTakesLastHTTPSLine() {

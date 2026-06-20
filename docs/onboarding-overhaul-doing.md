@@ -68,10 +68,20 @@ EMU (`arimendelow_microsoft`) after.
   SHOWS the agent's provider · model (read agent.json/readiness.json) and lets the user confirm or
   CHANGE it (`ouro use`). "Newer model available" nudge DEFERRED (no ouro catalog — see findings);
   file/keep an issue documenting the external-catalog dependency.
-- [ ] **U6 — In-app "Report a Bug" (#236).** Simple "what went wrong" form + auto screenshot +
+- [x] **U6 — In-app "Report a Bug" (#236).** Simple "what went wrong" form + auto screenshot +
   anonymized context (version, step, readiness snapshot, recent action-log; strip usernames/paths/
   tokens/agent names) → files a GitHub issue (label needs-triage). Built for boss-triage later;
-  human/agent backstop now.
+  human/agent backstop now. **Implemented by INTEGRATION, not duplication:** a complete in-app bug
+  reporter already shipped (PR #165 — menu item, sheet, screenshot, local `bug-reports/<ts-slug>/`
+  bundle under the app-support root, optional `gh issue create`). The stale spec assumed greenfield;
+  the real gap was anonymization. Wired PR #236's `WorkbenchBugReportRedactor` into the existing
+  write/file path so the WHOLE `report.md` (and the mirrored GitHub issue title + footer) is scrubbed
+  of home path / username / agent names / tokens BEFORE it hits disk, and added the U6 "Current
+  screen" + "Readiness" context sections on top of the existing report. Local-folder filing IS the
+  backstop (agent pulls the folder); direct GitHub auth/filing from the app is DEFERRED (the existing
+  `gh`-CLI path is best-effort and needs the operator's standalone auth decision). Residual: the
+  local-only `diagnostics.zip` is not text-redacted — it never reaches GitHub (only its local path is
+  referenced), so it stays a local backstop artifact only.
 - [ ] **U7 — Version alignment (#235).** DashboardStatusLine alignment param — already staged in
   working tree; verify + keep.
 - [ ] **U8 — Verify + merge.** Build, full tests (Core 100% gate), onboarding doctor; independent

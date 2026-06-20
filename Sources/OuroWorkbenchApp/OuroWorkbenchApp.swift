@@ -2161,7 +2161,7 @@ struct ReportBugSheet: View {
                 )
 
                 Label(
-                    "Includes a window screenshot, a support diagnostics zip, and recent boss decisions + actions. No transcript contents.",
+                    "Includes a window screenshot, a support diagnostics zip, and recent boss decisions + actions. The report text is anonymized — usernames, home paths, agent names, and tokens are stripped before it's saved or filed. No transcript contents.",
                     systemImage: "info.circle"
                 )
                 .font(.caption)
@@ -13006,8 +13006,20 @@ final class WorkbenchViewModel: ObservableObject {
         let autoAdvanceEnabled = bossAutoAdvanceEnabled
         let osVersion = Self.osVersionString()
         let buildHash = Self.buildHashString()
+        // Anonymization inputs (#236): the real agent names, username, and home
+        // path so the redactor can strip every identifying token from the report
+        // BEFORE it touches disk. Agent names = all local agents + the selected
+        // boss, deduped and non-empty.
+        let redactor = WorkbenchBugReportRedactor()
+        let agentNames = bugReportAgentNames()
+        let homePath = FileManager.default.homeDirectoryForCurrentUser.path
+        let username = NSUserName()
+        let extraSections = bugReportExtraSections()
+        // The folder name is derived from the note, which can itself carry a path
+        // or username — redact the note first so the directory name can't leak.
+        let directoryNote = redactor.redact(note, agentNames: agentNames, homePath: homePath, username: username)
         let directory = paths.bugReportsURL.appendingPathComponent(
-            BugReportComposer.directoryName(date: Date(), note: note),
+            BugReportComposer.directoryName(date: Date(), note: directoryNote),
             isDirectory: true
         )
         let runner = SupportDiagnosticsRunner(resourceDirectory: Bundle.main.resourceURL)
@@ -13041,7 +13053,12 @@ final class WorkbenchViewModel: ObservableObject {
                         recentActions: actions,
                         screenshotPNG: screenshotPNG,
                         diagnosticsArchiveURL: diagnosticsArchive,
-                        diagnosticsError: diagnosticsError
+                        diagnosticsError: diagnosticsError,
+                        extraSections: extraSections,
+                        redactor: redactor,
+                        agentNames: agentNames,
+                        homePath: homePath,
+                        username: username
                     )
                     return .success(bundle)
                 } catch {
@@ -13113,10 +13130,26 @@ final class WorkbenchViewModel: ObservableObject {
         let bundlePath = directory.path
         let note = lastBugReportNote
         let repo = WorkbenchRelease.issueRepo
+        // report.md is already anonymized at write time; the title (from the note)
+        // and the bundle-path footer are redacted here so the whole issue stays
+        // clean from one source of truth (#236).
+        let redactor = WorkbenchBugReportRedactor()
+        let agentNames = bugReportAgentNames()
+        let homePath = FileManager.default.homeDirectoryForCurrentUser.path
+        let username = NSUserName()
 
         Task {
             let outcome = await Task.detached(priority: .userInitiated) { () -> Result<String, GitHubIssueFilingError> in
-                GitHubIssueFiler.file(reportURL: reportURL, bundlePath: bundlePath, note: note, repo: repo)
+                GitHubIssueFiler.file(
+                    reportURL: reportURL,
+                    bundlePath: bundlePath,
+                    note: note,
+                    repo: repo,
+                    redactor: redactor,
+                    agentNames: agentNames,
+                    homePath: homePath,
+                    username: username
+                )
             }.value
 
             bugReportIssueIsFiling = false
@@ -13175,6 +13208,49 @@ final class WorkbenchViewModel: ObservableObject {
                     gitBranch: gitStatus(for: entry)?.branchLabel
                 )
             }
+    }
+
+    /// Every agent name the redactor must scrub from the report (#236): all local
+    /// agents plus the selected boss, deduped (case-insensitively) and stripped of
+    /// blanks. Longer names are handled first inside the redactor, so order here is
+    /// only about completeness, not precedence.
+    func bugReportAgentNames() -> [String] {
+        var seen = Set<String>()
+        var names: [String] = []
+        for raw in ouroAgents.map(\.name) + [state.boss.agentName] {
+            let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else { continue }
+            let key = name.lowercased()
+            guard !seen.contains(key) else { continue }
+            seen.insert(key)
+            names.append(name)
+        }
+        return names
+    }
+
+    /// The U6 auto-attached context blocks layered on top of the existing report
+    /// (#236): which screen the user was on and the live onboarding-readiness
+    /// snapshot. Version + recent activity already live in the structured report
+    /// fields, so they aren't duplicated here. Blank-bodied sections are dropped by
+    /// the composer, so an absent readiness snapshot simply leaves no heading.
+    func bugReportExtraSections() -> [WorkbenchBugReportSection] {
+        var sections: [WorkbenchBugReportSection] = []
+
+        let currentScreen: String
+        if isOnboardingPresented {
+            let readinessState = onboardingReadiness?.state.rawValue ?? "unknown"
+            currentScreen = "Onboarding wizard (readiness: \(readinessState))"
+        } else {
+            currentScreen = "Main workspace"
+        }
+        sections.append(WorkbenchBugReportSection(title: "Current screen", body: currentScreen))
+
+        if let readiness = onboardingReadiness {
+            let rendered = OnboardingReadinessReportRenderer().render(readiness)
+            sections.append(WorkbenchBugReportSection(title: "Readiness", body: rendered))
+        }
+
+        return sections
     }
 
     /// Snapshot the main app window into PNG data using the view's own backing
