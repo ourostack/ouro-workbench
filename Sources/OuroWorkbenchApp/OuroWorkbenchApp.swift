@@ -5760,10 +5760,10 @@ private struct OnboardingReadinessView: View {
     var body: some View {
         VStack(alignment: .center, spacing: 22) {
             VStack(alignment: .center, spacing: 10) {
-                Text("Give the boss its tools")
+                Text("Connect your agent")
                     .font(.largeTitle.weight(.semibold))
                     .multilineTextAlignment(.center)
-                Text("Workbench connects your tools and checks both of your agent's connections before bringing in your work.")
+                Text("Workbench makes sure your agent's connection and tools are working, then brings your recent work back.")
                     .font(.title3)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -5892,22 +5892,30 @@ private struct OnboardingRepairStepRow: View {
     }
 
     private var actorLabel: String {
+        // Legible status words, not internal jargon (#232): a check-* step is mid-verify; an
+        // agent-runnable step is something Workbench handles itself; human-required needs the user;
+        // human-choice asks the user to pick.
         if step.id.hasPrefix("check-") {
-            return "checking"
+            return "Checking…"
         }
         switch step.actor {
         case .agentRunnable:
-            return "agent"
+            return "Workbench"
         case .humanRequired:
-            return "you"
+            return "Needs you"
         case .humanChoice:
-            return "choose"
+            return "Choose"
         }
     }
 
     private var commandButtonTitle: String {
         // App-executed verbs (cohesive-product): a fix action, never "Open a terminal".
-        step.actor == .humanChoice ? "Choose" : "Fix"
+        // A failed-check provider step (`repair-<lane>-provider`) only RE-RUNS the live check —
+        // labeling it "Fix" overpromises (#233). Say "Try again" to match what it actually does.
+        if step.id.hasPrefix("repair-") && step.id.hasSuffix("-provider") {
+            return "Try again"
+        }
+        return step.actor == .humanChoice ? "Choose" : "Fix"
     }
 
     private var color: SwiftUI.Color {
