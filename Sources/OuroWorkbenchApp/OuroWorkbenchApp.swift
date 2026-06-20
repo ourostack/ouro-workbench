@@ -4026,6 +4026,12 @@ private struct DashboardStatusLine: View {
     var color: SwiftUI.Color = .secondary
     var help: String?
     var truncationMode: Text.TruncationMode = .middle
+    // Defaults to leading so the dashboard rows (label + status side-by-side) are
+    // unchanged. The standalone update panel passes `.center` so the status line
+    // actually centers under its button instead of hugging the leading edge —
+    // the full-width `.infinity` frame here is what previously defeated the
+    // enclosing VStack's `.center`.
+    var alignment: Alignment = .leading
 
     var body: some View {
         Text(text)
@@ -4033,7 +4039,7 @@ private struct DashboardStatusLine: View {
             .foregroundStyle(color)
             .lineLimit(1)
             .truncationMode(truncationMode)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: alignment)
             .layoutPriority(1)
             .help(help ?? text)
     }
@@ -9046,7 +9052,10 @@ struct ReleaseUpdateControls: View {
     private var updateStatus: some View {
         DashboardStatusLine(
             text: model.releaseUpdateStatusLine,
-            color: model.releaseUpdateStatusColor
+            color: model.releaseUpdateStatusColor,
+            // Dashboard row (with title) keeps the status beside its label (leading);
+            // the standalone About/update panel centers it under the centered button.
+            alignment: showTitle ? .leading : .center
         )
     }
 
