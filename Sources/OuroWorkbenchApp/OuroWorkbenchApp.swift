@@ -5828,6 +5828,15 @@ private struct OnboardingReadinessView: View {
                         ForEach(readiness.repairSteps) { step in
                             OnboardingRepairStepRow(step: step, model: model)
                         }
+                        // Set expectations on the connect step (#228): the FIRST connection check
+                        // after a factory reset can run cold (~a minute) before it settles, far
+                        // past a warm ~12s. Showing this only while a check is in progress keeps a
+                        // long spinner from reading as "broken" so the user waits instead of quitting.
+                        if readiness.repairSteps.contains(where: { $0.id.hasPrefix("check-") }) {
+                            Text("The first connection check after setup can take up to a minute — that's normal.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                     .frame(maxWidth: 660)
                 }
@@ -13301,12 +13310,15 @@ final class WorkbenchViewModel: ObservableObject {
                 let watchdog = DispatchWorkItem {
                     if process.isRunning { process.terminate() }
                 }
-                // 40s, not 20s: a healthy `ouro check` can legitimately run ~11s while it
-                // waits on the bitwarden vault lock the daemon holds; under load that climbs.
-                // The lane checks are serialized (see runOnboardingProviderChecksIfNeeded) so
-                // they don't contend with each other, but a single slow-but-working check must
-                // not get killed and read as a failure.
-                DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 40, execute: watchdog)
+                // 90s, not 40s: a warm `ouro check` runs ~12s (it waits on the bitwarden vault
+                // lock the daemon holds), but the FIRST check right after a factory reset — cold
+                // daemon + cold vault, likely warm-up contention — can run well past that. 40s
+                // was hard-killing that cold first-check and surfacing a scary "took too long",
+                // so a brand-new user watched a silent spinner and quit. 90s gives the cold path
+                // room; the "Try again" button (U2) makes a warm retry cheap if it ever does hit
+                // the ceiling. (Root cause of the cold slowness is unconfirmed — couldn't
+                // reproduce live — so this tolerates-and-informs rather than fixing the source.)
+                DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 90, execute: watchdog)
                 // Drain the pipe even though we no longer surface the raw output — an
                 // undrained pipe past 64KB blocks the child and looks like a timeout.
                 _ = pipe.fileHandleForReading.readDataToEndOfFile()
@@ -13315,7 +13327,7 @@ final class WorkbenchViewModel: ObservableObject {
                 // Lane-agnostic copy: U1's repair-step TITLE now carries the connection identity
                 // (provider · model + plain-English role), so these details no longer need the
                 // opaque "main"/"background" lane label (#234).
-                if Date().timeIntervalSince(start) >= 40 {
+                if Date().timeIntervalSince(start) >= 90 {
                     return OnboardingProviderCheckResult(
                         lane: lane,
                         state: .failed,

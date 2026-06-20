@@ -61,7 +61,7 @@ EMU (`arimendelow_microsoft`) after.
   until completed (not "boss set"). Snapshot boss on wizard open; rollback (restore snapshot) on
   dismiss-without-completion; set completed when the user reaches the end. Header button = "Cancel"
   (rollback) until complete, then "Done" (commit). Kills the stale-boss lockout at the root.
-- [ ] **U4 — Check robustness (#228).** A slow first/cold check must not hard-fail at 40s with a
+- [x] **U4 — Check robustness (#228).** A slow first/cold check must not hard-fail at 40s with a
   scary "took too long"; show a patient "still connecting…" past ~20s, keep a higher ceiling, and a
   real retry. (Combined with U1 collapse, one check not two ⇒ half the wait.)
 - [ ] **U5 — Provider/model confirm step (#230 + model-switch).** Before the check, a step that
@@ -152,3 +152,18 @@ real failure/unconfigured step exists).
   wiped on factory reset; `resetToFactoryDefaults` clears the whole domain so the assertion holds).
   Results: `swift build` clean, no warnings/diagnostics (App included); full Core suite 1438 pass /
   1 skip / 0 fail; Core 100% line+region coverage gate PASS.
+- 2026-06-20: U4 complete (#228) — cold first-check robustness. ROOT CAUSE UNCONFIRMED (couldn't
+  reproduce the slow cold check live; likely post-reset daemon/vault warm-up contention) ⇒
+  tolerate-and-inform, not a source fix. Two changes in OuroWorkbenchApp.swift,
+  `runOnboardingProviderCheck`: (1) raised the watchdog ceiling 40s→90s in BOTH places — the
+  `asyncAfter` watchdog deadline AND the `>= 40` timeout classification — and rewrote the comment
+  to explain the cold path (warm ~12s, cold first-check after a factory reset runs well past it;
+  90s avoids the false "took too long" failure; the U2 "Try again" button makes a warm retry cheap
+  if it ever does hit the ceiling). (2) Connect-page expectation-setter in `OnboardingReadinessView`
+  (not-ready branch, below the repair-step ForEach): when any repair step id starts with `check-`,
+  a `.font(.caption).foregroundStyle(.secondary)` caption "The first connection check after setup
+  can take up to a minute — that's normal." so a long spinner reads as expected, not broken.
+  App-only (copy/orchestration); verified via `swift build` clean (no warnings, all targets incl.
+  the U1/U2/U3 changes + the new WorkbenchBugReport Core files). Full Core suite 1463 pass / 1 skip
+  / 0 fail; Core 100% line+region coverage gate PASS. No pre-existing breaks found integrating the
+  branch.
