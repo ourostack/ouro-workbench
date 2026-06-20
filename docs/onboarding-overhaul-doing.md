@@ -198,3 +198,36 @@ real failure/unconfigured step exists).
   available" nudge stays deferred (#237 — no ouro model catalog). Results: `swift build` clean (no
   warnings, App included); full Core suite 1463 pass / 1 skip / 0 fail; Core 100% line+region
   coverage gate PASS (App-target change; Core unaffected).
+- 2026-06-20 12:08: U6 complete (#236) — in-app Report a Bug, anonymized (commit 2ef7b38).
+  DESIGN PIVOT: a complete in-app bug reporter already shipped (PR #165) — ⋯ More → "Report a
+  Bug…", a sheet with a free-text note + in-process `cacheDisplay` window screenshot (no
+  screen-recording permission), a local `<app-support-root>/bug-reports/<timestamp-slug>/` bundle
+  (report.md + screenshot.png + diagnostics.zip), and an optional `gh issue create`. The stale U6
+  spec assumed greenfield and asked for a parallel second reporter; the operator's agent confirmed
+  the real intent is privacy, not duplication, so U6 = fold #236's anonymization INTO the existing
+  reporter. Core (BugReport.swift): `BugReportWriter.write` redacts the WHOLE composed `report.md`
+  via `WorkbenchBugReportRedactor` BEFORE it touches disk (home path → `~`, username → `<user>`,
+  agent names → `<agent>`, token/secret shapes + emails redacted) — applied to the entire document
+  so the boss/session names in the STRUCTURED fields are scrubbed too, not just the free text;
+  `BugReportContent.extraSections` + a composer block render the new U6 "## Current screen" /
+  "## Readiness" sections (blank bodies skipped); `GitHubIssueComposer.draft` /
+  `GitHubIssueFiler.file` redact the issue title (from the raw note) + the bundle-path footer (the
+  body is the already-redacted report.md) — one anonymization source of truth. A nil redactor is a
+  no-op so legacy callers/tests are byte-identical. App (OuroWorkbenchApp.swift): `submitBugReport`
+  + `fileLastBugReportAsGitHubIssue` pass a real redactor with `bugReportAgentNames()` (all local
+  agents + boss, deduped, non-empty) + `homeDirectoryForCurrentUser.path` + `NSUserName()`; the
+  directory-name slug is redacted first so the folder name can't leak; new `bugReportExtraSections()`
+  builds Current screen (onboarding wizard + readiness state, else main workspace) + Readiness
+  (`OnboardingReadinessReportRenderer().render`); sheet helper text now states the report is
+  anonymized. FILING MODEL: the local folder IS the backstop (agent pulls + files); direct
+  GitHub auth/filing from the app is DEFERRED — the `gh`-CLI path stays best-effort and a real
+  in-app filing needs the operator's standalone auth decision. RESIDUAL: `diagnostics.zip` is not
+  text-redacted, but it never reaches GitHub (only its local path is referenced) — it stays a
+  local-only backstop artifact. ICON: kept the existing reporter's `ladybug` motif (used across its
+  own sheet) rather than the spec's `exclamationmark.bubble`, to avoid an inconsistent menu.
+  Testability: `WorkbenchViewModel` is in the App executable target with no test target (same
+  constraint as U3/U5) ⇒ App glue verified via `swift build`; the redaction + extra-section logic is
+  pushed into Core and unit-tested (new tests in BugReportWriterTests + GitHubIssueComposerTests,
+  red→green). End-to-end spot check confirmed zero leaks of username / agent name / home path in a
+  realistic report.md. Results: `swift build` clean, no warnings (App included); full Core suite
+  1467 pass / 1 skip / 0 fail; Core 100% line+region coverage gate PASS.
