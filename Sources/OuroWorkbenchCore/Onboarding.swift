@@ -303,25 +303,45 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
             )
         }
 
-        repairSteps.append(
-            contentsOf: providerRepairSteps(
-                agent: selected,
-                lane: "outward",
-                laneName: "main",
-                configured: selected.humanFacing?.provider != nil && selected.humanFacing?.model != nil,
-                check: providerChecks["outward"]
+        // Lane collapse: when outward & inner resolve to the SAME provider+model (the common case,
+        // e.g. ouroboros on github-copilot/gpt-5.4 in both lanes), the double-check is redundant —
+        // surface ONE connection keyed on the outward lane. When they differ, surface two, each
+        // labeled with its real provider·model and a plain-English role.
+        if selected.lanesShareOneConnection {
+            repairSteps.append(
+                contentsOf: providerRepairSteps(
+                    agent: selected,
+                    lane: "outward",
+                    connectionTitle: "your agent's connection",
+                    providerLabel: selected.humanFacing?.displayLabel,
+                    configured: true,
+                    check: providerChecks["outward"]
+                )
             )
-        )
-
-        repairSteps.append(
-            contentsOf: providerRepairSteps(
-                agent: selected,
-                lane: "inner",
-                laneName: "background",
-                configured: selected.agentFacing?.provider != nil && selected.agentFacing?.model != nil,
-                check: providerChecks["inner"]
+        } else {
+            let outwardConfigured = selected.humanFacing?.provider != nil && selected.humanFacing?.model != nil
+            let innerConfigured = selected.agentFacing?.provider != nil && selected.agentFacing?.model != nil
+            repairSteps.append(
+                contentsOf: providerRepairSteps(
+                    agent: selected,
+                    lane: "outward",
+                    connectionTitle: "the model it talks with",
+                    providerLabel: selected.humanFacing?.displayLabel,
+                    configured: outwardConfigured,
+                    check: providerChecks["outward"]
+                )
             )
-        )
+            repairSteps.append(
+                contentsOf: providerRepairSteps(
+                    agent: selected,
+                    lane: "inner",
+                    connectionTitle: "the model it thinks with",
+                    providerLabel: selected.agentFacing?.displayLabel,
+                    configured: innerConfigured,
+                    check: providerChecks["inner"]
+                )
+            )
+        }
 
         // RUNTIME-INJECTION model: the Workbench tools are injected into the boss's turn at
         // runtime (Workbench passes `--workbench-mcp` when it launches the boss) — nothing is
@@ -370,20 +390,28 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
         )
     }
 
-    private func providerRepairSteps(
+    /// Internal (not `private`) so the `providerLabel == nil` defensive fallbacks — unreachable
+    /// through `readiness(...)`, where a `configured` lane always has a `displayLabel` — stay
+    /// exercised by `@testable` unit tests and the 100% region gate holds without weakening copy.
+    func providerRepairSteps(
         agent: OuroAgentRecord,
         lane: String,
-        laneName: String,
+        connectionTitle: String,
+        providerLabel: String?,
         configured: Bool,
         check: OnboardingProviderCheckResult?
     ) -> [OnboardingRepairStep] {
+        // Keep the SAME step ids regardless of `connectionTitle` — the blockers list and the App
+        // key on these ids (`<lane>-lane`, `check-<lane>`, `repair-<lane>-provider`), so the copy
+        // is the only thing the role/label change is allowed to move.
+        let capitalizedTitle = connectionTitle.prefix(1).uppercased() + connectionTitle.dropFirst()
         guard configured else {
             return [
                 OnboardingRepairStep(
                     id: "\(lane)-lane",
                     actor: .humanChoice,
-                    title: "Set up your \(laneName) connection",
-                    detail: "Your \(laneName) connection isn't set up yet. Workbench can help you connect it.",
+                    title: "Set up \(connectionTitle)",
+                    detail: "\(capitalizedTitle) isn't set up yet. Workbench can help you connect it.",
                     command: ["ouro", "connect", "providers", "--agent", agent.name]
                 )
             ]
@@ -397,7 +425,7 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
                 OnboardingRepairStep(
                     id: "repair-\(lane)-provider",
                     actor: .humanRequired,
-                    title: "Reconnect your \(laneName) connection",
+                    title: "Reconnect \(connectionTitle)",
                     detail: check!.detail,
                     command: ["ouro", "check", "--agent", agent.name, "--lane", lane]
                 )
@@ -407,8 +435,9 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
                 OnboardingRepairStep(
                     id: "check-\(lane)",
                     actor: .agentRunnable,
-                    title: "Checking your \(laneName) connection",
-                    detail: "Workbench is making sure your \(laneName) connection works."
+                    title: "Checking \(connectionTitle)",
+                    detail: providerLabel.map { "Making sure \($0) is connected." }
+                        ?? "Workbench is making sure \(connectionTitle) works."
                 )
             ]
         case .pending?, nil:
@@ -416,8 +445,9 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
                 OnboardingRepairStep(
                     id: "check-\(lane)",
                     actor: .agentRunnable,
-                    title: "Check your \(laneName) connection",
-                    detail: "Workbench will make sure your \(laneName) connection works.",
+                    title: "Check \(connectionTitle)",
+                    detail: providerLabel.map { "Workbench will make sure \($0) is connected." }
+                        ?? "Workbench will make sure \(connectionTitle) works.",
                     command: ["ouro", "check", "--agent", agent.name, "--lane", lane]
                 )
             ]

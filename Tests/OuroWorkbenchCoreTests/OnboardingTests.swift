@@ -456,6 +456,40 @@ final class OnboardingTests: XCTestCase {
         XCTAssertNil(OuroAgentLane().displayLabel)
     }
 
+    /// The `providerLabel == nil` arms of the check copy are unreachable through `readiness(...)`
+    /// (a `configured` lane always has a `displayLabel`), but the design keeps them as a defensive
+    /// fallback. Exercise them directly so the copy is honest and the region gate stays green.
+    func testProviderCheckCopyFallsBackWhenProviderLabelIsAbsent() throws {
+        let advisor = WorkbenchOnboardingAdvisor()
+        let agent = readyAgentWithBothLanes()
+
+        let running = try XCTUnwrap(
+            advisor.providerRepairSteps(
+                agent: agent,
+                lane: "outward",
+                connectionTitle: "the model it talks with",
+                providerLabel: nil,
+                configured: true,
+                check: OnboardingProviderCheckResult(lane: "outward", state: .running, detail: "checking")
+            ).first
+        )
+        XCTAssertEqual(running.id, "check-outward")
+        XCTAssertEqual(running.detail, "Workbench is making sure the model it talks with works.")
+
+        let pending = try XCTUnwrap(
+            advisor.providerRepairSteps(
+                agent: agent,
+                lane: "inner",
+                connectionTitle: "the model it thinks with",
+                providerLabel: nil,
+                configured: true,
+                check: nil
+            ).first
+        )
+        XCTAssertEqual(pending.id, "check-inner")
+        XCTAssertEqual(pending.detail, "Workbench will make sure the model it thinks with works.")
+    }
+
     // MARK: - R1.1: daemon- and creds-aware readiness (re-applied onto the 4-arg signature)
 
     private func readyAgentWithBothLanes(name: String = "slugger") -> OuroAgentRecord {

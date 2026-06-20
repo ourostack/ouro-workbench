@@ -28,6 +28,16 @@ public struct OuroAgentLane: Codable, Equatable, Sendable {
             return nil
         }
     }
+
+    /// A human-facing `provider · model` label (middle-dot U+00B7), or `nil` when the lane is
+    /// not fully configured (either provider or model is absent). Distinct from `summary`, which
+    /// renders a slash-joined identifier and degrades to a partial value.
+    public var displayLabel: String? {
+        guard let provider, let model else {
+            return nil
+        }
+        return "\(provider) · \(model)"
+    }
 }
 
 public struct OuroAgentRecord: Equatable, Identifiable, Sendable {
@@ -60,6 +70,22 @@ public struct OuroAgentRecord: Equatable, Identifiable, Sendable {
 
     public var isUsableAsBoss: Bool {
         status == .ready && BossWorkbenchMCPRegistrar.isValidAgentBundleName(name)
+    }
+
+    /// True iff BOTH lanes (`humanFacing` = outward, `agentFacing` = inner) are fully configured
+    /// (provider and model present on each) AND resolve to the SAME provider+model. When this
+    /// holds, checking and surfacing both lanes is redundant — the onboarding readiness collapses
+    /// to ONE connection. False when either lane is unconfigured, even if the configured halves
+    /// would otherwise compare equal.
+    public var lanesShareOneConnection: Bool {
+        guard let outward = humanFacing,
+              let inner = agentFacing,
+              outward.provider != nil, outward.model != nil,
+              inner.provider != nil, inner.model != nil
+        else {
+            return false
+        }
+        return outward == inner
     }
 
     public var summaryLine: String {
