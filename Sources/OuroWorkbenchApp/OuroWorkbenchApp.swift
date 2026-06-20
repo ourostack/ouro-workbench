@@ -5787,6 +5787,13 @@ private struct OnboardingReadinessView: View {
                     .frame(maxWidth: 640)
             }
             if let readiness = model.onboardingReadiness {
+                // U5 (#230) — confirm WHAT you're connecting before the check results land. Show the
+                // selected boss's provider · model prominently above the check rows so the operator
+                // can see (and confirm) which provider/model the agent uses, not just watch a
+                // connection check run against an unnamed target.
+                OnboardingAgentProviderSummary(
+                    agent: model.ouroAgent(named: readiness.selectedBossName)
+                )
                 if readiness.isReady {
                     VStack(spacing: 10) {
                         Image(systemName: "checkmark.seal.fill")
@@ -5844,6 +5851,83 @@ private struct OnboardingReadinessView: View {
         }
         .frame(maxWidth: .infinity, minHeight: 420)
         .onAppear { model.startFirstRunBootstrapIfNeeded() }
+    }
+}
+
+/// U5 (#230) — the "confirm what you're connecting" surface at the top of the Connect page.
+///
+/// Renders the selected boss agent's provider · model prominently, BEFORE the auto-running
+/// connection checks report their results, so the operator sees which provider/model the agent
+/// uses rather than watching a check run against an unnamed target. Collapses to ONE line when
+/// both lanes share one connection (the common case), and splits into the outward ("talks with
+/// you") and inner ("thinks with") roles when they differ. An unconfigured lane reads "not
+/// connected yet".
+///
+/// Changing the provider/model is OUT OF SCOPE here: the native provider-config form is a
+/// cold-start (new-agent hatch) flow with NO model field, and updating an EXISTING agent's
+/// provider has no headless `ouro` sink today (the documented gap a — see
+/// `ProviderConfigForm.existingAgentRefreshUnavailableMessage`). So rather than build a new
+/// model picker (deferred), this surface points the operator at their agent's provider settings.
+/// The proactive "a newer model is available" nudge is also deferred (#237 — no ouro model catalog).
+private struct OnboardingAgentProviderSummary: View {
+    var agent: OuroAgentRecord?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let agent {
+                if agent.lanesShareOneConnection {
+                    // Both lanes resolve to the same provider+model — one calm line.
+                    HStack(spacing: 6) {
+                        Text("Your agent uses")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                        ProviderModelPill(label: agent.humanFacing?.displayLabel)
+                    }
+                } else {
+                    // Lanes diverge — show the outward ("talks with you") and inner ("thinks with")
+                    // roles separately, each with its own provider · model.
+                    laneRow(role: "Talks with you using", label: agent.humanFacing?.displayLabel)
+                    laneRow(role: "Thinks with", label: agent.agentFacing?.displayLabel)
+                }
+                Text("To change your model, use your agent's provider settings.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: 660, alignment: .leading)
+    }
+
+    private func laneRow(role: String, label: String?) -> some View {
+        HStack(spacing: 6) {
+            Text(role)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            ProviderModelPill(label: label)
+        }
+    }
+}
+
+/// A subtle pill rendering a lane's `provider · model` display label, or a muted "not connected
+/// yet" when the lane has no fully-configured provider/model.
+private struct ProviderModelPill: View {
+    var label: String?
+
+    var body: some View {
+        if let label {
+            Text(label)
+                .font(.callout.weight(.semibold))
+                .padding(.horizontal, 9)
+                .padding(.vertical, 3)
+                .background(Color.accentColor.opacity(0.12), in: Capsule())
+                .foregroundStyle(.primary)
+        } else {
+            Text("not connected yet")
+                .font(.callout.weight(.medium))
+                .padding(.horizontal, 9)
+                .padding(.vertical, 3)
+                .background(Color.secondary.opacity(0.12), in: Capsule())
+                .foregroundStyle(.secondary)
+        }
     }
 }
 

@@ -64,7 +64,7 @@ EMU (`arimendelow_microsoft`) after.
 - [x] **U4 — Check robustness (#228).** A slow first/cold check must not hard-fail at 40s with a
   scary "took too long"; show a patient "still connecting…" past ~20s, keep a higher ceiling, and a
   real retry. (Combined with U1 collapse, one check not two ⇒ half the wait.)
-- [ ] **U5 — Provider/model confirm step (#230 + model-switch).** Before the check, a step that
+- [x] **U5 — Provider/model confirm step (#230 + model-switch).** Before the check, a step that
   SHOWS the agent's provider · model (read agent.json/readiness.json) and lets the user confirm or
   CHANGE it (`ouro use`). "Newer model available" nudge DEFERRED (no ouro catalog — see findings);
   file/keep an issue documenting the external-catalog dependency.
@@ -167,3 +167,24 @@ real failure/unconfigured step exists).
   the U1/U2/U3 changes + the new WorkbenchBugReport Core files). Full Core suite 1463 pass / 1 skip
   / 0 fail; Core 100% line+region coverage gate PASS. No pre-existing breaks found integrating the
   branch.
+- 2026-06-20: U5 complete (#230) — Connect-page provider·model transparency. App-only, all in
+  `OnboardingReadinessView` (OuroWorkbenchApp.swift). New `OnboardingAgentProviderSummary` subview
+  rendered at the TOP of the readiness content (inside `if let readiness`, ABOVE both the isReady
+  and not-ready branches, so the provider shows before any check result lands), fed
+  `model.ouroAgent(named: readiness.selectedBossName)`. When `lanesShareOneConnection` → one calm
+  line `Your agent uses <provider · model>` (the U1 `displayLabel`); when lanes differ → two rows
+  `Talks with you using <outward displayLabel>` + `Thinks with <inner displayLabel>`; an
+  unconfigured lane renders a muted `not connected yet` pill (new `ProviderModelPill` subview —
+  accent-tinted capsule for a configured label, secondary capsule for the empty case). `.callout`
+  with secondary role captions, per the compact/calm spec. The auto-running checks are NOT gated
+  or delayed — this is purely additive above them.
+  CHANGE BUTTON DEFERRED (took the "not cleanly reusable" branch): the native `ProviderConfigForm`
+  collects provider + credentials only — it has NO model field, so it structurally cannot change a
+  model. And submitting it for an EXISTING agent (the boss always exists at Connect) short-circuits
+  to `existingAgentRefreshUnavailableMessage` — there is no headless `ouro` credential-set / `ouro
+  use` sink for an existing agent today (Core's documented "gap a"). Building a real provider/model
+  picker is explicitly out of scope. So per the task's branch logic, no Change button; instead one
+  secondary caption `To change your model, use your agent's provider settings.` The "newer model
+  available" nudge stays deferred (#237 — no ouro model catalog). Results: `swift build` clean (no
+  warnings, App included); full Core suite 1463 pass / 1 skip / 0 fail; Core 100% line+region
+  coverage gate PASS (App-target change; Core unaffected).
