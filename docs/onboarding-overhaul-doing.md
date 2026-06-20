@@ -50,10 +50,13 @@ EMU (`arimendelow_microsoft`) after.
   provider+model, `readiness` emits ONE connection step (not main+background); when they DIFFER,
   two, each labeled with the actual `provider · model` + a plain role. Drop the opaque bare
   "main/background". TDD in OnboardingTests. (#234, partial #232/#233 copy)
-- [ ] **U2 — Lane clarity (App).** Check orchestration runs ONE check (outward) when lanes are
-  equivalent; Connect rows show `provider · model` + legible status ("Checking…/Connected/Needs
-  you/Timed out"); fix the step title (not "Give the boss its tools" when it's checking — #229);
-  no "Repair <agent>" while still checking (#231); "Fix"→"Try again" honest label (#233).
+- [x] **U2 — Lane clarity (App) + Connect-page transparency.** Check orchestration runs ONE check
+  (outward) when lanes are equivalent; Connect rows show `provider · model` + legible status
+  ("Checking…"/"Workbench"/"Needs you"/"Choose"); fixed the step title (not "Give the boss its
+  tools" when it's checking — #229); no "Repair <agent>" while still checking (#231, Core
+  actor-split headline); "Fix"→"Try again" honest label (#233); lane-agnostic check copy + deleted
+  `friendlyLaneLabel` (#234, #228). Strict TDD on the Core headline; App is copy/orchestration,
+  verified via `swift build`.
 - [ ] **U3 — Transactional wizard (#227).** Add persisted `onboardingHasBeenCompleted`. Present
   until completed (not "boss set"). Snapshot boss on wizard open; rollback (restore snapshot) on
   dismiss-without-completion; set completed when the user reaches the end. Header button = "Cancel"
@@ -110,3 +113,16 @@ real failure/unconfigured step exists).
   providerLabel) keeping the same step ids/actors/commands. OnboardingTests green
   (`swift test --filter OnboardingTests` = 69 pass), full Core suite 1435 pass / 1 skip / 0 fail,
   Core 100% line+region coverage gate PASS, `swift build` clean (App included).
+- 2026-06-20 11:27: U2 complete — Connect-page transparency, six changes across three commits.
+  (A, #231) Core actor-split headline (c77c84d): "Setting up <agent>…" while every blocker is a
+  check/agent-runnable step, "Finish setting up <agent>" once a `.humanRequired`/`.humanChoice`
+  blocker appears — replaces premature "Repair <agent>". Strict TDD: 3 new OnboardingTests (running
+  check → neutral; failed check → finish; unconfigured lane → finish), red→green.
+  (C/D/E, #229 #232 #233) Connect-view UI (3867389): header "Connect your agent" + honest subtitle;
+  legible badges ("Checking…"/"Workbench"/"Needs you"/"Choose"); failed-check button "Fix"→"Try
+  again".
+  (B/F, #234 #228) check orchestration (bb939bb): one outward check when `lanesShareOneConnection`;
+  lane-agnostic check copy (in-progress/timeout/passed/failed/catch); deleted now-unused
+  `friendlyLaneLabel`. App changes are copy/orchestration — verified via `swift build`.
+  Results: `swift test --filter OnboardingTests` = 73 pass; full Core suite 1438 pass / 1 skip /
+  0 fail; Core 100% line+region coverage gate PASS; `swift build` clean (App included), no warnings.
