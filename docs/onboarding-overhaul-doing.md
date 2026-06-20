@@ -46,7 +46,7 @@ EMU (`arimendelow_microsoft`) after.
 
 ## Units (ordered)
 
-- [ ] **U1 — Lane clarity (Core).** `Onboarding.swift`: when outward & inner resolve to the SAME
+- [x] **U1 — Lane clarity (Core).** `Onboarding.swift`: when outward & inner resolve to the SAME
   provider+model, `readiness` emits ONE connection step (not main+background); when they DIFFER,
   two, each labeled with the actual `provider · model` + a plain role. Drop the opaque bare
   "main/background". TDD in OnboardingTests. (#234, partial #232/#233 copy)
@@ -74,5 +74,39 @@ EMU (`arimendelow_microsoft`) after.
 - [ ] **U8 — Verify + merge.** Build, full tests (Core 100% gate), onboarding doctor; independent
   review subagent per concern; merge fix/onboarding-audit → main closing #227-236.
 
+## Precise design notes (for resume after compaction)
+
+**U3 transactional (surface located):**
+- Boss persists IMMEDIATELY: `selectBoss(agentName:)` (App.swift ~11417) sets `state.boss.agentName`
+  + every `projects[].boss` + calls `save()` (writes to disk). This is the non-transactional leak.
+- Add persisted `onboardingHasBeenCompleted` (UserDefault, default false; key like
+  `ouro.workbench.onboardingCompleted`).
+- Snapshot `state.boss` (+ `projects[].boss`) when the wizard opens (a model prop set in
+  `presentOnboarding()`/the sheet `.task`). On dismiss WITHOUT completion, restore the snapshot +
+  `save()` (rollback) so a half-finished pick never persists.
+- Set `onboardingHasBeenCompleted = true` when `advance()` goes connect→importWork with a ready
+  boss (App.swift ~5198-5206, the `else` branch that sets `page = .importWork`).
+- Present logic: `shouldPresentOnboardingOnLaunch` (App.swift ~10287) currently returns false when
+  boss-ready. Change to present until `!onboardingHasBeenCompleted` (keep the forced-first-run +
+  needsAgent paths). `canAutoPresentOnboardingOnLaunch` (~10298) should gate on
+  `!onboardingHasBeenCompleted` instead of `!onboardingHasAutoPresented`.
+- Header button (App.swift ~5259, currently "Done"): label "Cancel" (→ rollback) until completed,
+  "Done" (→ just dismiss; commit already happened) once completed.
+
+**U2 view surface:** OnboardingRepairStepRow (~5825), actorLabel (~5894: "checking"/"agent"/"you"/
+"choose" → "Checking…"/"Needs you"), Fix button (~5862 → "Try again"), step header "Give the boss
+its tools" (~5763 → accurate), "Repair <agent>" headline while checking (Core Onboarding.swift
+354-358 → neutral "Checking <agent>…" when only check-* steps are present, "Repair" only when a
+real failure/unconfigured step exists).
+
 ## Progress log
-- 2026-06-20: doc created; SA1+SA2 investigations complete; starting U1.
+- 2026-06-20: doc created; SA1+SA2 investigations complete; #235 alignment committed (8d16be3);
+  U1 (Core lane-collapse) dispatched to a work-doer; U3 surface located + design recorded.
+- 2026-06-20: U1 complete (92692b8). Core-only, strict TDD. `OuroAgentLane.displayLabel`
+  ("provider · model", U+00B7) + `OuroAgentRecord.lanesShareOneConnection` (both lanes fully
+  configured AND equal); `readiness` collapses equivalent lanes to ONE outward check ("your
+  agent's connection") and labels divergent lanes "the model it talks with" / "…thinks with",
+  each carrying its real provider·model; `providerRepairSteps` reworked to (connectionTitle,
+  providerLabel) keeping the same step ids/actors/commands. OnboardingTests green
+  (`swift test --filter OnboardingTests` = 69 pass), full Core suite 1435 pass / 1 skip / 0 fail,
+  Core 100% line+region coverage gate PASS, `swift build` clean (App included).
