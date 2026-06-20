@@ -261,7 +261,7 @@ public struct DaemonStartOutcome: Equatable, Sendable {
         case .respawned:
             return "Waking your agent…"
         case .needsManual:
-            return "Your agent isn't responding yet. Workbench couldn't bring it back online automatically — please reopen Workbench, and if it keeps happening, restart your Mac."
+            return "Your agent isn't responding yet. You can try again — and if it keeps happening, reconnecting your provider usually clears it up."
         }
     }
 }

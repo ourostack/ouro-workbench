@@ -54,6 +54,59 @@ final class OnboardingTests: XCTestCase {
         XCTAssertFalse(bridge.detail.contains("boss"))
     }
 
+    // MARK: - OnboardingPresentationPolicy.shouldMarkCompletedAtLaunch truth table
+    //
+    // Seeds the completion flag at launch for machines that were already onboarded under an
+    // older build (ready boss + real sessions, no completion key yet) so they aren't dragged
+    // through the wizard — WITHOUT marking a machine whose boss is merely "ready" but never
+    // actually onboarded (ready, no sessions), which must still present or the stale-boss
+    // lockout returns. Distinguished by prior use (sessions exist).
+
+    func testPolicySeedsCompletionForAlreadyOnboardedMachine() {
+        // Ready boss + has used Workbench (real sessions) + not yet completed → seed it.
+        XCTAssertTrue(
+            OnboardingPresentationPolicy.shouldMarkCompletedAtLaunch(
+                isReady: true,
+                hasUsedWorkbench: true,
+                alreadyCompleted: false
+            )
+        )
+    }
+
+    func testPolicyDoesNotSeedReadyButNeverUsedMachine() {
+        // Ready boss but no sessions: the U3 case (stale-ready boss, onboarding never finished).
+        // Must NOT seed — it has to present, or the lockout U3 fixed comes back.
+        XCTAssertFalse(
+            OnboardingPresentationPolicy.shouldMarkCompletedAtLaunch(
+                isReady: true,
+                hasUsedWorkbench: false,
+                alreadyCompleted: false
+            )
+        )
+    }
+
+    func testPolicyDoesNotSeedUsedButNotReadyMachine() {
+        // Has sessions but the boss isn't ready: don't seed — readiness still has to be earned.
+        XCTAssertFalse(
+            OnboardingPresentationPolicy.shouldMarkCompletedAtLaunch(
+                isReady: false,
+                hasUsedWorkbench: true,
+                alreadyCompleted: false
+            )
+        )
+    }
+
+    func testPolicyDoesNotReseedAlreadyCompletedMachine() {
+        // Already completed (the flag is set): nothing to seed, idempotent no-op.
+        XCTAssertFalse(
+            OnboardingPresentationPolicy.shouldMarkCompletedAtLaunch(
+                isReady: true,
+                hasUsedWorkbench: true,
+                alreadyCompleted: true
+            )
+        )
+    }
+
     func testEmptyBossSurfacesChooseCopyWithoutBlankName() {
         // Unresolved boss + more than one usable agent: the readiness must offer a
         // human choice with honest copy — never "The selected boss  is not
@@ -259,7 +312,8 @@ final class OnboardingTests: XCTestCase {
 
         XCTAssertEqual(readiness.state, .needsRepair)
         XCTAssertTrue(readiness.repairSteps.contains { $0.id == "repair-agent-config" && $0.command == ["ouro", "repair", "--agent", "slugger"] })
-        XCTAssertTrue(readiness.repairSteps.contains { $0.id == "check-outward" && $0.title == "Checking outward provider" })
+        // Lanes differ (minimax vs openai-codex) → outward is "the model it talks with".
+        XCTAssertTrue(readiness.repairSteps.contains { $0.id == "check-outward" && $0.title == "Checking the model it talks with" })
         XCTAssertTrue(readiness.repairSteps.contains { $0.id == "workbench-mcp" && $0.detail.contains("aren't available") })
     }
 
@@ -297,6 +351,285 @@ final class OnboardingTests: XCTestCase {
                 $0.actor == .humanRequired &&
                 $0.detail == "vault locked"
         })
+    }
+
+    // MARK: - U1: same-provider lane collapse + plain-English roles
+
+    /// Both lanes resolve to the SAME provider+model (the ouroboros common case): the redundant
+    /// double-check collapses to ONE connection step keyed on the outward lane. No `check-inner`.
+    func testEquivalentLanesCollapseToOneConnectionCheck() {
+        let lane = OuroAgentLane(provider: "github-copilot", model: "gpt-5.4")
+        let readiness = WorkbenchOnboardingAdvisor().readiness(
+            boss: BossAgentSelection(agentName: "ouroboros"),
+            agents: [
+                OuroAgentRecord(
+                    name: "ouroboros",
+                    bundlePath: "/tmp/ouroboros.ouro",
+                    configPath: "/tmp/ouroboros.ouro/agent.json",
+                    status: .ready,
+                    detail: "ready",
+                    humanFacing: lane,
+                    agentFacing: lane
+                )
+            ],
+            mcpRegistration: registeredSnapshot(name: "ouroboros")
+        )
+
+        let providerSteps = readiness.repairSteps.filter { $0.id.hasPrefix("check-") }
+        XCTAssertEqual(providerSteps.map(\.id), ["check-outward"])
+        XCTAssertFalse(readiness.repairSteps.contains { $0.id == "check-inner" })
+
+        let step = providerSteps[0]
+        XCTAssertTrue(step.title.contains("your agent's connection"), "title was: \(step.title)")
+        XCTAssertTrue(step.detail.contains("github-copilot · gpt-5.4"), "detail was: \(step.detail)")
+    }
+
+    /// Lanes DIFFER (minimax inner-style vs openai-codex): keep two steps, each labeled with its
+    /// real provider·model and a plain-English role — outward "talks with", inner "thinks with".
+    func testDifferentLanesKeepTwoLabeledConnectionChecks() {
+        let readiness = WorkbenchOnboardingAdvisor().readiness(
+            boss: BossAgentSelection(agentName: "slugger"),
+            agents: [
+                OuroAgentRecord(
+                    name: "slugger",
+                    bundlePath: "/tmp/slugger.ouro",
+                    configPath: "/tmp/slugger.ouro/agent.json",
+                    status: .ready,
+                    detail: "ready",
+                    humanFacing: OuroAgentLane(provider: "minimax", model: "MiniMax-M2.7"),
+                    agentFacing: OuroAgentLane(provider: "openai-codex", model: "gpt-5.5")
+                )
+            ],
+            mcpRegistration: registeredSnapshot()
+        )
+
+        let providerSteps = readiness.repairSteps.filter { $0.id.hasPrefix("check-") }
+        XCTAssertEqual(Set(providerSteps.map(\.id)), ["check-outward", "check-inner"])
+
+        let outward = try! XCTUnwrap(providerSteps.first { $0.id == "check-outward" })
+        let inner = try! XCTUnwrap(providerSteps.first { $0.id == "check-inner" })
+        XCTAssertTrue(outward.title.contains("the model it talks with"), "outward title: \(outward.title)")
+        XCTAssertTrue(inner.title.contains("the model it thinks with"), "inner title: \(inner.title)")
+        XCTAssertTrue(outward.detail.contains("minimax · MiniMax-M2.7"), "outward detail: \(outward.detail)")
+        XCTAssertTrue(inner.detail.contains("openai-codex · gpt-5.5"), "inner detail: \(inner.detail)")
+    }
+
+    /// Equivalent lanes whose single collapsed check has PASSED → fully ready, no provider steps.
+    func testEquivalentLanesBothPassedAreReady() {
+        let lane = OuroAgentLane(provider: "github-copilot", model: "gpt-5.4")
+        let readiness = WorkbenchOnboardingAdvisor().readiness(
+            boss: BossAgentSelection(agentName: "ouroboros"),
+            agents: [
+                OuroAgentRecord(
+                    name: "ouroboros",
+                    bundlePath: "/tmp/ouroboros.ouro",
+                    configPath: "/tmp/ouroboros.ouro/agent.json",
+                    status: .ready,
+                    detail: "ready",
+                    humanFacing: lane,
+                    agentFacing: lane
+                )
+            ],
+            mcpRegistration: registeredSnapshot(name: "ouroboros"),
+            providerChecks: [
+                "outward": OnboardingProviderCheckResult(lane: "outward", state: .passed, detail: "ok"),
+                "inner": OnboardingProviderCheckResult(lane: "inner", state: .passed, detail: "ok")
+            ]
+        )
+
+        XCTAssertEqual(readiness.state, .ready)
+        XCTAssertFalse(readiness.repairSteps.contains { $0.id.hasPrefix("check-") })
+    }
+
+    /// One lane configured, the other unconfigured (provider nil) → NOT collapsed: an outward
+    /// check step plus an `inner-lane` "Set up the model it thinks with" step.
+    func testPartiallyConfiguredLanesAreNotCollapsed() throws {
+        let readiness = WorkbenchOnboardingAdvisor().readiness(
+            boss: BossAgentSelection(agentName: "slugger"),
+            agents: [
+                OuroAgentRecord(
+                    name: "slugger",
+                    bundlePath: "/tmp/slugger.ouro",
+                    configPath: "/tmp/slugger.ouro/agent.json",
+                    status: .ready,
+                    detail: "ready",
+                    humanFacing: OuroAgentLane(provider: "minimax", model: "MiniMax-M2.7"),
+                    agentFacing: OuroAgentLane(provider: nil, model: nil)
+                )
+            ],
+            mcpRegistration: registeredSnapshot()
+        )
+
+        XCTAssertTrue(readiness.repairSteps.contains { $0.id == "check-outward" })
+        let innerLane = try XCTUnwrap(readiness.repairSteps.first { $0.id == "inner-lane" })
+        XCTAssertEqual(innerLane.title, "Set up the model it thinks with")
+        XCTAssertFalse(readiness.repairSteps.contains { $0.id == "check-inner" })
+    }
+
+    // MARK: - U2: neutral "Setting up" headline while only checking (#231)
+
+    /// When the ONLY blocker is an in-flight check (agent-runnable, no human-required failure),
+    /// the headline must NOT prematurely say "Repair <agent>" — it's still just checking. It reads
+    /// "Setting up <agent>…" and the detail frames it as Workbench getting the agent ready.
+    func testHeadlineIsNeutralWhileOnlyCheckingConnection() {
+        let lane = OuroAgentLane(provider: "github-copilot", model: "gpt-5.4")
+        let readiness = WorkbenchOnboardingAdvisor().readiness(
+            boss: BossAgentSelection(agentName: "ouroboros"),
+            agents: [
+                OuroAgentRecord(
+                    name: "ouroboros",
+                    bundlePath: "/tmp/ouroboros.ouro",
+                    configPath: "/tmp/ouroboros.ouro/agent.json",
+                    status: .ready,
+                    detail: "ready",
+                    humanFacing: lane,
+                    agentFacing: lane
+                )
+            ],
+            mcpRegistration: registeredSnapshot(name: "ouroboros"),
+            providerChecks: [
+                "outward": OnboardingProviderCheckResult(lane: "outward", state: .running, detail: "checking")
+            ]
+        )
+
+        XCTAssertEqual(readiness.state, .needsRepair)
+        XCTAssertEqual(readiness.headline, "Setting up ouroboros…")
+        XCTAssertFalse(readiness.headline.contains("Repair"), "headline was: \(readiness.headline)")
+        XCTAssertTrue(readiness.detail.contains("getting ouroboros ready"), "detail was: \(readiness.detail)")
+    }
+
+    /// Once a human-required failure appears (a failed live check → `repair-outward-provider`,
+    /// actor `.humanRequired`), the headline switches to "Finish setting up <agent>" — there's now
+    /// something that genuinely needs the user.
+    func testHeadlineAsksToFinishWhenAHumanRequiredFailureAppears() {
+        let readiness = WorkbenchOnboardingAdvisor().readiness(
+            boss: BossAgentSelection(agentName: "slugger"),
+            agents: [
+                OuroAgentRecord(
+                    name: "slugger",
+                    bundlePath: "/tmp/slugger.ouro",
+                    configPath: "/tmp/slugger.ouro/agent.json",
+                    status: .ready,
+                    detail: "ready",
+                    humanFacing: OuroAgentLane(provider: "minimax", model: "MiniMax-M2.7"),
+                    agentFacing: OuroAgentLane(provider: "openai-codex", model: "gpt-5.5")
+                )
+            ],
+            mcpRegistration: registeredSnapshot(),
+            providerChecks: [
+                "outward": OnboardingProviderCheckResult(lane: "outward", state: .failed, detail: "vault locked"),
+                "inner": OnboardingProviderCheckResult(lane: "inner", state: .passed, detail: "ok")
+            ]
+        )
+
+        XCTAssertEqual(readiness.state, .needsRepair)
+        XCTAssertTrue(readiness.repairSteps.contains { $0.id == "repair-outward-provider" && $0.actor == .humanRequired })
+        XCTAssertEqual(readiness.headline, "Finish setting up slugger")
+        XCTAssertTrue(readiness.detail.contains("need you"), "detail was: \(readiness.detail)")
+    }
+
+    /// A `humanChoice` blocker (an unconfigured lane → `inner-lane`) also counts as needing the
+    /// user, so the headline reads "Finish setting up" even with no failed check.
+    func testHeadlineAsksToFinishWhenAHumanChoiceLaneIsUnconfigured() {
+        let readiness = WorkbenchOnboardingAdvisor().readiness(
+            boss: BossAgentSelection(agentName: "slugger"),
+            agents: [
+                OuroAgentRecord(
+                    name: "slugger",
+                    bundlePath: "/tmp/slugger.ouro",
+                    configPath: "/tmp/slugger.ouro/agent.json",
+                    status: .ready,
+                    detail: "ready",
+                    humanFacing: OuroAgentLane(provider: "minimax", model: "MiniMax-M2.7"),
+                    agentFacing: OuroAgentLane(provider: nil, model: nil)
+                )
+            ],
+            mcpRegistration: registeredSnapshot(),
+            providerChecks: [
+                "outward": OnboardingProviderCheckResult(lane: "outward", state: .passed, detail: "ok")
+            ]
+        )
+
+        XCTAssertEqual(readiness.state, .needsRepair)
+        XCTAssertTrue(readiness.repairSteps.contains { $0.id == "inner-lane" && $0.actor == .humanChoice })
+        XCTAssertEqual(readiness.headline, "Finish setting up slugger")
+    }
+
+    func testLanesShareOneConnection() {
+        let copilot = OuroAgentLane(provider: "github-copilot", model: "gpt-5.4")
+        // Both lanes equal + fully configured → shared.
+        XCTAssertTrue(
+            OuroAgentRecord(
+                name: "ouroboros", bundlePath: "/b", configPath: "/c", status: .ready, detail: "ready",
+                humanFacing: copilot, agentFacing: copilot
+            ).lanesShareOneConnection
+        )
+        // Different provider/model → not shared.
+        XCTAssertFalse(
+            OuroAgentRecord(
+                name: "slugger", bundlePath: "/b", configPath: "/c", status: .ready, detail: "ready",
+                humanFacing: OuroAgentLane(provider: "minimax", model: "MiniMax-M2.7"),
+                agentFacing: OuroAgentLane(provider: "openai-codex", model: "gpt-5.5")
+            ).lanesShareOneConnection
+        )
+        // One lane unconfigured (provider nil) → not shared even though models would compare.
+        XCTAssertFalse(
+            OuroAgentRecord(
+                name: "half", bundlePath: "/b", configPath: "/c", status: .ready, detail: "ready",
+                humanFacing: copilot,
+                agentFacing: OuroAgentLane(provider: nil, model: "gpt-5.4")
+            ).lanesShareOneConnection
+        )
+        // Both lanes nil → not shared (an unconfigured agent has nothing to collapse).
+        XCTAssertFalse(
+            OuroAgentRecord(
+                name: "empty", bundlePath: "/b", configPath: "/c", status: .ready, detail: "ready"
+            ).lanesShareOneConnection
+        )
+    }
+
+    func testLaneDisplayLabel() {
+        XCTAssertEqual(
+            OuroAgentLane(provider: "github-copilot", model: "gpt-5.4").displayLabel,
+            "github-copilot · gpt-5.4"
+        )
+        XCTAssertNil(OuroAgentLane(provider: "github-copilot", model: nil).displayLabel)
+        XCTAssertNil(OuroAgentLane(provider: nil, model: "gpt-5.4").displayLabel)
+        XCTAssertNil(OuroAgentLane().displayLabel)
+    }
+
+    /// The `providerLabel == nil` arms of the check copy are unreachable through `readiness(...)`
+    /// (a `configured` lane always has a `displayLabel`), but the design keeps them as a defensive
+    /// fallback. Exercise them directly so the copy is honest and the region gate stays green.
+    func testProviderCheckCopyFallsBackWhenProviderLabelIsAbsent() throws {
+        let advisor = WorkbenchOnboardingAdvisor()
+        let agent = readyAgentWithBothLanes()
+
+        let running = try XCTUnwrap(
+            advisor.providerRepairSteps(
+                agent: agent,
+                lane: "outward",
+                connectionTitle: "the model it talks with",
+                providerLabel: nil,
+                configured: true,
+                check: OnboardingProviderCheckResult(lane: "outward", state: .running, detail: "checking")
+            ).first
+        )
+        XCTAssertEqual(running.id, "check-outward")
+        XCTAssertEqual(running.detail, "Workbench is making sure the model it talks with works.")
+
+        let pending = try XCTUnwrap(
+            advisor.providerRepairSteps(
+                agent: agent,
+                lane: "inner",
+                connectionTitle: "the model it thinks with",
+                providerLabel: nil,
+                configured: true,
+                check: nil
+            ).first
+        )
+        XCTAssertEqual(pending.id, "check-inner")
+        XCTAssertEqual(pending.detail, "Workbench will make sure the model it thinks with works.")
     }
 
     // MARK: - R1.1: daemon- and creds-aware readiness (re-applied onto the 4-arg signature)

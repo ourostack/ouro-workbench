@@ -30,6 +30,14 @@ public struct CustomTerminalSessionDraft: Equatable, Sendable {
     public var trust: ProcessTrust
     public var autoResume: Bool
     public var notes: String
+    /// FORWARD MEMORY (Slice 6). When a create stems from a DISCOVERED session
+    /// (the boss is relaunching something the scanner found), the draft carries
+    /// the originating `{harness, sessionId}` so `makeEntry` can stamp them onto
+    /// the entry — making the relaunched session natively rediscoverable. Both
+    /// default to nil (the ordinary operator-typed-a-command case carries no
+    /// provenance), and they're general opaque values Workbench just stores.
+    public var discoveredHarness: AgentHarness?
+    public var discoveredSessionId: String?
 
     public init(
         name: String,
@@ -37,7 +45,9 @@ public struct CustomTerminalSessionDraft: Equatable, Sendable {
         workingDirectory: String,
         trust: ProcessTrust,
         autoResume: Bool,
-        notes: String = ""
+        notes: String = "",
+        discoveredHarness: AgentHarness? = nil,
+        discoveredSessionId: String? = nil
     ) {
         self.name = name
         self.command = command
@@ -45,6 +55,8 @@ public struct CustomTerminalSessionDraft: Equatable, Sendable {
         self.trust = trust
         self.autoResume = autoResume
         self.notes = notes
+        self.discoveredHarness = discoveredHarness
+        self.discoveredSessionId = discoveredSessionId
     }
 }
 
@@ -100,7 +112,12 @@ public struct CustomTerminalSessionFactory: Sendable {
             autoResume: draft.autoResume,
             attention: .idle,
             lastSummary: detectedAgentKind.flatMap(TerminalAgentDetector.displayName).map { "Detected \($0): \(command)" } ?? "Terminal session: \(command)",
-            notes: notes.isEmpty ? nil : notes
+            notes: notes.isEmpty ? nil : notes,
+            // Forward memory (Slice 6): stamp the discovery provenance the draft
+            // carried (nil for the ordinary operator-typed case) so a session
+            // Workbench launched from a discovered one is rediscovered natively.
+            discoveredHarness: draft.discoveredHarness,
+            discoveredSessionId: draft.discoveredSessionId
         )
     }
 }
@@ -157,6 +174,12 @@ public struct CustomTerminalSessionManager: Sendable {
         next.owner = entry.owner
         next.isPinned = entry.isPinned
         next.friend = entry.friend
+        // Forward memory (Slice 6): the editable draft carries no provenance, so
+        // copy it back the same way as owner/isPinned/friend — otherwise editing
+        // a discovered-then-launched session would silently drop its native
+        // rediscoverability.
+        next.discoveredHarness = entry.discoveredHarness
+        next.discoveredSessionId = entry.discoveredSessionId
         if entry.kind == .shell {
             next.kind = .shell
             next.agentKind = entry.agentKind
@@ -168,6 +191,11 @@ public struct CustomTerminalSessionManager: Sendable {
         var draft = try draft(from: entry)
         draft.name = name
         var duplicate = try factory.makeEntry(projectId: entry.projectId, draft: draft)
+        // Forward memory (Slice 6): `draft(from:)` doesn't carry provenance, so
+        // copy it onto the duplicate — a copy of a discovered-then-launched
+        // session stays natively rediscoverable.
+        duplicate.discoveredHarness = entry.discoveredHarness
+        duplicate.discoveredSessionId = entry.discoveredSessionId
         if entry.kind == .shell {
             duplicate.kind = .shell
             duplicate.agentKind = entry.agentKind

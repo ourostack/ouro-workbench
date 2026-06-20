@@ -46,6 +46,26 @@ public struct TerminalEnvironment: Equatable, Sendable {
     public var values: [String: String]
     public var workbenchContext: WorkbenchSessionContext?
 
+    /// The user's real interactive-login-shell PATH (captured via `loginShellCaptureArguments`),
+    /// captured once at app launch. A hardcoded dir list can NEVER locate a version-manager `node`
+    /// (nvm/asdf put it under a dynamic version path), and `ouro` is a `node` script — so without
+    /// the login PATH every `ouro` shellout dies with "node: not found". Using the real shell env
+    /// makes nvm/brew/asdf/etc. all just work. Set once at launch on the main thread, read-only
+    /// thereafter (hence `nonisolated(unsafe)`).
+    public nonisolated(unsafe) static var loginShellPath: String?
+
+    /// The shell argv that captures the user's real PATH. MUST be INTERACTIVE (`-i`), not just
+    /// login (`-l`): version managers (nvm/asdf) and tool PATHs — including the `node` that `ouro`
+    /// is a script for, and `~/.ouro-cli/bin` — are almost always added in `.zshrc`/`.bashrc`,
+    /// which a shell sources ONLY for interactive shells. A non-interactive login shell (`-lc`)
+    /// sources `.zprofile`/`.zlogin` but NOT `.zshrc`, so it silently captures a PATH with no node
+    /// and no ouro → every `ouro check` fails "env: ouro: No such file or directory" and the
+    /// wizard can never confirm the provider. Regressing the `-i` here reintroduces the multi-week
+    /// "can't get past connect" onboarding bug. (It hides under test from an already-interactive
+    /// shell, which inherits that shell's PATH and masks the miss — only a clean/Finder launch
+    /// exposes it.)
+    public static let loginShellCaptureArguments = ["-ilc", "printf %s \"$PATH\""]
+
     public init(
         values: [String: String] = ProcessInfo.processInfo.environment,
         workbenchContext: WorkbenchSessionContext? = nil
@@ -83,6 +103,14 @@ public struct TerminalEnvironment: Equatable, Sendable {
             for (key, value) in workbenchContext.environmentVariables {
                 merged[key] = value
             }
+        }
+        // Base the PATH on the user's real login shell (captured at launch) so a
+        // version-manager `node` + `ouro` resolve. `resolvedPath` then layers the
+        // known fallback dirs on top (deduped), so behaviour is unchanged when no
+        // login PATH was captured.
+        if let loginPath = Self.loginShellPath, !loginPath.isEmpty {
+            let existing = merged["PATH"] ?? ""
+            merged["PATH"] = existing.isEmpty ? loginPath : "\(loginPath):\(existing)"
         }
         merged["PATH"] = Self.resolvedPath(from: merged)
         return merged

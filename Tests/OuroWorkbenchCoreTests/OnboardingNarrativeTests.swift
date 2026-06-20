@@ -60,60 +60,23 @@ final class OnboardingNarrativeTests: XCTestCase {
         XCTAssertNil(decision.notice)
     }
 
-    func testFlowSwitchesToBossReadyWelcomeWhenBossCanScan() {
-        let decision = WorkbenchOnboardingFlowPolicy.decision(for: WorkbenchOnboardingFlowInput(
-            bossIsReady: true,
-            hasProposal: false,
-            selectedTerminalCount: 0,
-            ambiguousCandidateCount: 0,
-            importSummaryHasImports: false
-        ))
-
-        XCTAssertEqual(decision.phase, .bossReadyWelcome)
-        XCTAssertEqual(decision.primaryActionTitle, "Scan With Boss")
-        XCTAssertEqual(decision.notice, WorkbenchOnboardingNarrative.scanIntro)
-    }
-
-    func testFlowKeepsScanProposalWhenProposalHasNoSelectedTerminals() {
-        let decision = WorkbenchOnboardingFlowPolicy.decision(for: WorkbenchOnboardingFlowInput(
-            bossIsReady: true,
-            hasProposal: true,
-            selectedTerminalCount: 0,
-            ambiguousCandidateCount: 0,
-            importSummaryHasImports: false
-        ))
-
-        XCTAssertEqual(decision.phase, .scanProposal)
-        XCTAssertEqual(decision.primaryActionTitle, "Scan With Boss")
-        XCTAssertNil(decision.notice)
-    }
-
-    func testFlowArrangesApprovedImportsWhenSelectionExists() {
-        let decision = WorkbenchOnboardingFlowPolicy.decision(for: WorkbenchOnboardingFlowInput(
-            bossIsReady: true,
-            hasProposal: true,
-            selectedTerminalCount: 4,
-            ambiguousCandidateCount: 0,
-            importSummaryHasImports: false
-        ))
-
-        XCTAssertEqual(decision.phase, .arrangeApprovedImports)
-        XCTAssertEqual(decision.primaryActionTitle, "Arrange Selected")
-        XCTAssertNil(decision.notice)
-    }
-
-    func testFlowAttachesAmbiguousCandidateNarrative() {
-        let decision = WorkbenchOnboardingFlowPolicy.decision(for: WorkbenchOnboardingFlowInput(
-            bossIsReady: true,
-            hasProposal: true,
-            selectedTerminalCount: 0,
-            ambiguousCandidateCount: 2,
-            importSummaryHasImports: false
-        ))
-
-        XCTAssertEqual(decision.phase, .scanProposal)
-        XCTAssertEqual(decision.primaryActionTitle, "Scan With Boss")
-        XCTAssertEqual(decision.notice, WorkbenchOnboardingNarrative.ambiguousCandidates(count: 2))
+    // Slice 7 replaced the hardcoded scan routing (`.bossReadyWelcome` / `.scanProposal` /
+    // `.arrangeApprovedImports`) with the boss-driven `.bossReconstruct` hand-off. A ready
+    // boss now stays in the hand-off regardless of any stale legacy proposal/selection
+    // inputs — those fields no longer steer the policy.
+    func testFlowRoutesReadyBossToReconstructRegardlessOfLegacyProposalInputs() {
+        let inputs: [WorkbenchOnboardingFlowInput] = [
+            WorkbenchOnboardingFlowInput(bossIsReady: true, hasProposal: false, selectedTerminalCount: 0, ambiguousCandidateCount: 0, importSummaryHasImports: false),
+            WorkbenchOnboardingFlowInput(bossIsReady: true, hasProposal: true, selectedTerminalCount: 0, ambiguousCandidateCount: 0, importSummaryHasImports: false),
+            WorkbenchOnboardingFlowInput(bossIsReady: true, hasProposal: true, selectedTerminalCount: 4, ambiguousCandidateCount: 0, importSummaryHasImports: false),
+            WorkbenchOnboardingFlowInput(bossIsReady: true, hasProposal: true, selectedTerminalCount: 0, ambiguousCandidateCount: 2, importSummaryHasImports: false)
+        ]
+        for input in inputs {
+            let decision = WorkbenchOnboardingFlowPolicy.decision(for: input)
+            XCTAssertEqual(decision.phase, .bossReconstruct)
+            XCTAssertEqual(decision.primaryActionTitle, "Bring Back My Work")
+            XCTAssertEqual(decision.notice, WorkbenchOnboardingNarrative.bossReconstructIntro)
+        }
     }
 
     func testFlowGuidesDuplicateCleanupAfterImportSummary() {
@@ -128,6 +91,73 @@ final class OnboardingNarrativeTests: XCTestCase {
         XCTAssertEqual(decision.phase, .duplicateCleanup)
         XCTAssertEqual(decision.primaryActionTitle, "Review Duplicates")
         XCTAssertEqual(decision.notice, WorkbenchOnboardingNarrative.duplicateCleanup)
+    }
+
+    // MARK: - Slice 7: boss-driven reconstruction hand-off
+
+    func testBossReconstructIntroDescribesHandingTheReconstructionToTheBoss() {
+        // The reconstruction is BOSS-DRIVEN: once the boss is ready, Workbench hands it
+        // the "bring back my work" task rather than running a hardcoded scan/arrange.
+        XCTAssertEqual(
+            WorkbenchOnboardingNarrative.bossReconstructIntro,
+            "Your boss will look for the work you had open and bring it back as terminals here."
+        )
+    }
+
+    func testBossReconstructTaskIsAGeneralSeeProposeActHandOffWithNoAgencyKnowledge() {
+        // The hand-off task names the primitives the boss uses (discover → optionally
+        // propose → relaunch) WITHOUT encoding any agency / repo / resume-command knowledge —
+        // the boss owns all context-specific intelligence.
+        let task = WorkbenchOnboardingNarrative.bossReconstructTask
+        XCTAssertTrue(task.contains("workbench_discover_agent_sessions"))
+        XCTAssertTrue(task.contains("workbench_propose"))
+        XCTAssertTrue(task.lowercased().contains("relaunch") || task.lowercased().contains("bring"))
+        // Zero agency knowledge: no resume command shape, no harness CLI verbs baked in.
+        XCTAssertFalse(task.contains("--resume"))
+        XCTAssertFalse(task.lowercased().contains("agency"))
+        // It is a CAPABILITY, never a forced gate — the boss MAY just act.
+        XCTAssertTrue(task.lowercased().contains("propose"))
+    }
+
+    func testBossReconstructEmptyStateCopyIsACleanDeadEndNotADeadEnd() {
+        // The empty case the operator will sometimes hit: nothing to bring in. The copy
+        // must read as "you're set", never as a stuck/dead step.
+        XCTAssertEqual(
+            WorkbenchOnboardingNarrative.bossReconstructEmpty,
+            "Nothing to bring back — you're all set. You can close this whenever you're ready."
+        )
+    }
+
+    func testFlowHandsReconstructionToBossOnceBossIsReady() {
+        // REPLACES the hardcoded scan: a ready boss with no proposal/import state routes to
+        // the boss-driven reconstruction hand-off, NOT the old `.bossReadyWelcome` scan page.
+        let decision = WorkbenchOnboardingFlowPolicy.decision(for: WorkbenchOnboardingFlowInput(
+            bossIsReady: true,
+            hasProposal: false,
+            selectedTerminalCount: 0,
+            ambiguousCandidateCount: 0,
+            importSummaryHasImports: false
+        ))
+
+        XCTAssertEqual(decision.phase, .bossReconstruct)
+        XCTAssertEqual(decision.primaryActionTitle, "Bring Back My Work")
+        XCTAssertEqual(decision.notice, WorkbenchOnboardingNarrative.bossReconstructIntro)
+    }
+
+    func testFlowStillStartsInBossSetupWizardWhenBossNotReady() {
+        // The `fix/onboarding-audit` repair must not regress: an un-ready boss still routes
+        // to the setup wizard, unchanged.
+        let decision = WorkbenchOnboardingFlowPolicy.decision(for: WorkbenchOnboardingFlowInput(
+            bossIsReady: false,
+            hasProposal: false,
+            selectedTerminalCount: 0,
+            ambiguousCandidateCount: 0,
+            importSummaryHasImports: false
+        ))
+
+        XCTAssertEqual(decision.phase, .bossSetupWizard)
+        XCTAssertEqual(decision.primaryActionTitle, "Connect Boss")
+        XCTAssertNil(decision.notice)
     }
 
     func testAppFlowWiringKeepsScanAndDuplicateCleanupActionsUseful() throws {

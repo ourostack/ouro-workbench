@@ -214,6 +214,16 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
     /// Defaults to `.human`; decoded if-present so pre-owner state loads
     /// unchanged.
     public var owner: SessionOwner
+    /// FORWARD MEMORY (Slice 6). When Workbench owns a session's launch it
+    /// records the originating discovery `{harness, sessionId}` here so the next
+    /// `AgentSessionScanner.scan` finds the session NATIVELY (via
+    /// `discoverFromWorkbench`) instead of re-inferring it from disk/process
+    /// scraping. Both are additive + OPTIONAL and decoded if-present, so a
+    /// `workspace-state.json` written before Slice 6 (which lacks these keys)
+    /// still loads with them nil — never a hardcoded harness. Nil means "not
+    /// launched from a discovered session" (the common operator-typed case).
+    public var discoveredHarness: AgentHarness?
+    public var discoveredSessionId: String?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -233,6 +243,8 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         case notes
         case friend
         case owner
+        case discoveredHarness
+        case discoveredSessionId
     }
 
     public init(
@@ -252,7 +264,9 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         lastSummary: String? = nil,
         notes: String? = nil,
         friend: SessionFriend? = nil,
-        owner: SessionOwner = .human
+        owner: SessionOwner = .human,
+        discoveredHarness: AgentHarness? = nil,
+        discoveredSessionId: String? = nil
     ) {
         self.id = id
         self.projectId = projectId
@@ -271,6 +285,8 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         self.notes = notes
         self.friend = friend
         self.owner = owner
+        self.discoveredHarness = discoveredHarness
+        self.discoveredSessionId = discoveredSessionId
     }
 
     public var trimmedNotes: String? {
@@ -300,6 +316,11 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         self.notes = try container.decodeIfPresent(String.self, forKey: .notes)
         self.friend = try container.decodeIfPresent(SessionFriend.self, forKey: .friend)
         self.owner = try container.decodeIfPresent(SessionOwner.self, forKey: .owner) ?? .human
+        // Forward memory (Slice 6): absent in every pre-Slice-6 state file →
+        // nil, no schema bump. AgentHarness's own decoder maps an unknown raw
+        // value to `.custom`, so a record from a newer build still loads.
+        self.discoveredHarness = try container.decodeIfPresent(AgentHarness.self, forKey: .discoveredHarness)
+        self.discoveredSessionId = try container.decodeIfPresent(String.self, forKey: .discoveredSessionId)
     }
 }
 

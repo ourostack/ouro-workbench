@@ -65,7 +65,7 @@ public enum LaneSelectionTruth: String, Codable, Equatable, Sendable {
         case .stillDegraded:
             return "Workbench set up \(selection.agentName) with \(selection.provider), but it still needs attention. Workbench will keep working on it."
         case .needsManual:
-            return "Workbench couldn't finish setting up \(selection.agentName) with \(selection.provider). Please reopen Workbench, and if it keeps happening, restart your Mac."
+            return "Workbench couldn't finish setting up \(selection.agentName) with \(selection.provider). You can try again — and if it keeps happening, reconnecting your provider usually clears it up."
         }
     }
 
@@ -153,6 +153,7 @@ public struct LaneSelectionRunner: Sendable {
         process.standardError = devNull
 
         try process.run()
-        process.waitUntilExit()
+        // Bound the wait so a wedged `ouro`/`node` child can't hang lane selection forever.
+        ProcessWatchdog.waitUntilExit(process, timeoutSeconds: 30)
     }
 }

@@ -54,6 +54,12 @@ public struct BugReportContent: Equatable, Sendable {
     /// Any non-fatal problems gathering the report (e.g. screenshot or
     /// diagnostics failed) — surfaced so a partial bundle is still honest.
     public var collectionWarnings: [String]
+    /// Extra titled context blocks (U6 #236): "Current screen", "Readiness", etc.
+    /// Each is rendered as its own `## <title>` section after the structured
+    /// fields; blank-bodied sections are skipped so they add no noise. Like every
+    /// other field, these flow through the same anonymizing redaction pass before
+    /// the document hits disk.
+    public var extraSections: [WorkbenchBugReportSection]
 
     public init(
         note: String,
@@ -69,7 +75,8 @@ public struct BugReportContent: Equatable, Sendable {
         recentDecisions: [BossInboxDecision],
         recentActions: [WorkbenchActionLogEntry],
         attachmentNames: [String],
-        collectionWarnings: [String] = []
+        collectionWarnings: [String] = [],
+        extraSections: [WorkbenchBugReportSection] = []
     ) {
         self.note = note
         self.appName = appName
@@ -85,6 +92,7 @@ public struct BugReportContent: Equatable, Sendable {
         self.recentActions = recentActions
         self.attachmentNames = attachmentNames
         self.collectionWarnings = collectionWarnings
+        self.extraSections = extraSections
     }
 }
 
@@ -137,6 +145,8 @@ public enum BugReportComposer {
         }
         lines.append("")
 
+        appendExtraSections(content.extraSections, to: &lines)
+
         lines.append("## Sessions (\(content.sessions.count))")
         lines.append("")
         if content.sessions.isEmpty {
@@ -163,6 +173,21 @@ public enum BugReportComposer {
         appendActions(content.recentActions, to: &lines)
 
         return lines.joined(separator: "\n") + "\n"
+    }
+
+    /// Render each non-blank extra context block as its own `## <title>` section.
+    /// Blank-bodied sections are skipped entirely so absent context (e.g. no
+    /// readiness snapshot yet) leaves no empty heading behind.
+    private static func appendExtraSections(_ sections: [WorkbenchBugReportSection], to lines: inout [String]) {
+        for section in sections {
+            guard !section.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                continue
+            }
+            lines.append("## \(section.title)")
+            lines.append("")
+            lines.append(section.body)
+            lines.append("")
+        }
     }
 
     private static func appendDecisions(_ decisions: [BossInboxDecision], to lines: inout [String]) {
@@ -353,6 +378,11 @@ public enum BugReportWriter {
         screenshotPNG: Data?,
         diagnosticsArchiveURL: URL?,
         diagnosticsError: String?,
+        extraSections: [WorkbenchBugReportSection] = [],
+        redactor: WorkbenchBugReportRedactor? = nil,
+        agentNames: [String] = [],
+        homePath: String = "",
+        username: String = "",
         fileManager: FileManager = .default
     ) throws -> BugReportBundle {
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -393,10 +423,26 @@ public enum BugReportWriter {
             recentDecisions: recentDecisions,
             recentActions: recentActions,
             attachmentNames: attachments,
-            collectionWarnings: warnings
+            collectionWarnings: warnings,
+            extraSections: extraSections
         )
         let reportURL = directory.appendingPathComponent("report.md")
-        try BugReportComposer.markdown(content).write(to: reportURL, atomically: true, encoding: .utf8)
+        // Anonymize the WHOLE composed document before it touches disk (#236):
+        // the redactor strips the home path, username, agent names, token shapes,
+        // and emails wherever they appear — note, boss/session names, action log,
+        // and extra context alike — so nothing identifying leaks from the local
+        // bundle OR the GitHub issue that mirrors `report.md`. A nil redactor is a
+        // no-op (legacy callers/tests), but the app always passes a real one.
+        var markdown = BugReportComposer.markdown(content)
+        if let redactor {
+            markdown = redactor.redact(
+                markdown,
+                agentNames: agentNames,
+                homePath: homePath,
+                username: username
+            )
+        }
+        try markdown.write(to: reportURL, atomically: true, encoding: .utf8)
 
         return BugReportBundle(
             directoryURL: directory,
@@ -427,11 +473,23 @@ public enum GitHubIssueComposer {
         note: String,
         reportMarkdown: String,
         bundlePath: String?,
-        titlePrefix: String = "Bug:"
+        titlePrefix: String = "Bug:",
+        redactor: WorkbenchBugReportRedactor? = nil,
+        agentNames: [String] = [],
+        homePath: String = "",
+        username: String = ""
     ) -> GitHubIssueDraft {
-        GitHubIssueDraft(
-            title: title(note: note, prefix: titlePrefix),
-            body: body(reportMarkdown: reportMarkdown, bundlePath: bundlePath)
+        // The issue body comes from `report.md`, which is already anonymized at
+        // write time. The TITLE (derived from the raw note) and the bundle-path
+        // footer are NOT — they bypass `report.md` — so redact them here from the
+        // same redactor, keeping a single anonymization source of truth (#236).
+        func redact(_ text: String) -> String {
+            guard let redactor else { return text }
+            return redactor.redact(text, agentNames: agentNames, homePath: homePath, username: username)
+        }
+        return GitHubIssueDraft(
+            title: redact(title(note: note, prefix: titlePrefix)),
+            body: body(reportMarkdown: reportMarkdown, bundlePath: bundlePath.map(redact))
         )
     }
 
@@ -547,6 +605,10 @@ public enum GitHubIssueFiler {
         repo: String,
         cliURL: URL? = nil,
         bodyDirectory: URL? = nil,
+        redactor: WorkbenchBugReportRedactor? = nil,
+        agentNames: [String] = [],
+        homePath: String = "",
+        username: String = "",
         fileManager: FileManager = .default
     ) -> Result<String, GitHubIssueFilingError> {
         guard let gh = cliURL ?? resolveCLI(fileManager: fileManager) else {
@@ -560,7 +622,17 @@ public enum GitHubIssueFiler {
             return .failure(.readReportFailed(error.localizedDescription))
         }
 
-        let draft = GitHubIssueComposer.draft(note: note, reportMarkdown: markdown, bundlePath: bundlePath)
+        // `report.md` is already redacted; the title + footer path are redacted
+        // here so the whole issue is anonymized from one source of truth (#236).
+        let draft = GitHubIssueComposer.draft(
+            note: note,
+            reportMarkdown: markdown,
+            bundlePath: bundlePath,
+            redactor: redactor,
+            agentNames: agentNames,
+            homePath: homePath,
+            username: username
+        )
         return run(gh: gh, draft: draft, repo: repo, withBugLabel: true, bodyDirectory: bodyDirectory, fileManager: fileManager)
     }
 

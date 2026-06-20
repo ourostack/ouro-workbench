@@ -498,6 +498,121 @@ final class CustomTerminalSessionTests: XCTestCase {
         XCTAssertEqual(draft.command, "/usr/bin/env '' 'two words' 'it'\\''s' '$HOME'")
     }
 
+    // MARK: - Forward memory (Slice 6)
+
+    func testDraftDefaultsForwardMemoryToNil() {
+        // A hand-typed draft (operator creating a session) carries no discovery
+        // provenance — both forward-memory fields default to nil.
+        let draft = CustomTerminalSessionDraft(
+            name: "Hand typed",
+            command: "claude",
+            workingDirectory: "/repo",
+            trust: .trusted,
+            autoResume: false
+        )
+
+        XCTAssertNil(draft.discoveredHarness)
+        XCTAssertNil(draft.discoveredSessionId)
+    }
+
+    func testFactoryPropagatesForwardMemoryFromDraftToEntry() throws {
+        // When the create stems from a discovered session, the draft carries the
+        // originating harness + sessionId; makeEntry must stamp them onto the
+        // entry so the next scan()'s native path rediscovers it.
+        let entry = try CustomTerminalSessionFactory().makeEntry(
+            projectId: UUID(),
+            draft: CustomTerminalSessionDraft(
+                name: "Resumed Claude",
+                command: "claude --resume abc-123",
+                workingDirectory: "/repo",
+                trust: .trusted,
+                autoResume: false,
+                discoveredHarness: .claudeCode,
+                discoveredSessionId: "abc-123"
+            )
+        )
+
+        XCTAssertEqual(entry.discoveredHarness, .claudeCode)
+        XCTAssertEqual(entry.discoveredSessionId, "abc-123")
+    }
+
+    func testFactoryLeavesForwardMemoryNilForOrdinaryDraft() throws {
+        // No provenance on the draft → no forward memory stamped (the common
+        // operator-typed-a-command path).
+        let entry = try CustomTerminalSessionFactory().makeEntry(
+            projectId: UUID(),
+            draft: CustomTerminalSessionDraft(
+                name: "Plain",
+                command: "claude",
+                workingDirectory: "/repo",
+                trust: .trusted,
+                autoResume: false
+            )
+        )
+
+        XCTAssertNil(entry.discoveredHarness)
+        XCTAssertNil(entry.discoveredSessionId)
+    }
+
+    func testManagerUpdatePreservesForwardMemory() throws {
+        // Editing a discovered-then-launched session must not wipe its forward
+        // memory — the same don't-lose-identity policy as owner/isPinned/friend.
+        var original = try CustomTerminalSessionFactory().makeEntry(
+            projectId: UUID(),
+            draft: CustomTerminalSessionDraft(
+                name: "Resumed",
+                command: "claude",
+                workingDirectory: "/repo",
+                trust: .trusted,
+                autoResume: false,
+                discoveredHarness: .claudeCode,
+                discoveredSessionId: "abc-123"
+            )
+        )
+        // makeEntry stamps from the draft; assert the precondition, then confirm
+        // an edit (whose draft has NO forward memory) leaves them intact.
+        XCTAssertEqual(original.discoveredHarness, .claudeCode)
+        original.discoveredSessionId = "abc-123"
+
+        let updated = try CustomTerminalSessionManager().updatedEntry(
+            original,
+            draft: CustomTerminalSessionDraft(
+                name: "Resumed (renamed)",
+                command: "claude",
+                workingDirectory: "/repo",
+                trust: .trusted,
+                autoResume: false
+            )
+        )
+
+        XCTAssertEqual(updated.name, "Resumed (renamed)")
+        XCTAssertEqual(updated.discoveredHarness, .claudeCode)
+        XCTAssertEqual(updated.discoveredSessionId, "abc-123")
+    }
+
+    func testManagerDuplicatePreservesForwardMemory() throws {
+        // Duplicating a discovered-then-launched session keeps the provenance so
+        // the copy is still rediscoverable natively.
+        let original = try CustomTerminalSessionFactory().makeEntry(
+            projectId: UUID(),
+            draft: CustomTerminalSessionDraft(
+                name: "Resumed",
+                command: "copilot",
+                workingDirectory: "/repo",
+                trust: .trusted,
+                autoResume: false,
+                discoveredHarness: .githubCopilotCLI,
+                discoveredSessionId: "cop-9"
+            )
+        )
+
+        let duplicate = try CustomTerminalSessionManager().duplicateEntry(original, name: "Copy")
+
+        XCTAssertNotEqual(duplicate.id, original.id)
+        XCTAssertEqual(duplicate.discoveredHarness, .githubCopilotCLI)
+        XCTAssertEqual(duplicate.discoveredSessionId, "cop-9")
+    }
+
     private func makeShellEntry(
         executable: String = "/bin/zsh",
         arguments: [String] = ["-l"],

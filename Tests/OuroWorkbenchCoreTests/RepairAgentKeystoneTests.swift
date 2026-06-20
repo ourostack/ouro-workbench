@@ -97,7 +97,7 @@ final class RepairAgentKeystoneTests: XCTestCase {
         XCTAssertTrue(outcome.needsManualRecovery)
         XCTAssertEqual(
             outcome.humanFacingLine,
-            "Workbench couldn't bring slugger back online automatically. Please reopen Workbench, and if it keeps happening, restart your Mac."
+            "Workbench couldn't bring slugger back online automatically. You can try again — and if it keeps happening, reconnecting your provider usually clears it up."
         )
     }
 

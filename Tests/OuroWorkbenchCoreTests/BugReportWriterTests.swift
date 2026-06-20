@@ -95,4 +95,102 @@ final class BugReportWriterTests: XCTestCase {
         XCTAssertFalse(bundle.attachmentNames.contains("diagnostics.zip"))
         XCTAssertTrue(bundle.warnings.contains { $0.contains("script missing") })
     }
+
+    // MARK: - Anonymization (#236)
+
+    /// The whole composed document — note, boss name, AND extra context — must be
+    /// run through the redactor before it touches disk: the home path, username,
+    /// and agent names may never reach `report.md` (or the GitHub issue mirroring
+    /// it). This is the load-bearing privacy guarantee for U6.
+    func testRedactsHomePathUsernameAndAgentNamesBeforeWriting() throws {
+        let bundle = try BugReportWriter.write(
+            into: tempRoot.appendingPathComponent("report-dir", isDirectory: true),
+            note: "crashed at /Users/jdoe/work while jdoe ran agent-zeta",
+            appName: "Ouro Workbench",
+            appVersion: "0.1.105",
+            buildHash: "abc1234",
+            osVersion: "macOS 15.2",
+            generatedAt: Date(),
+            bossName: "agent-zeta",
+            bossWatchEnabled: true,
+            autoAdvanceEnabled: true,
+            sessions: [],
+            recentDecisions: [],
+            recentActions: [],
+            screenshotPNG: nil,
+            diagnosticsArchiveURL: nil,
+            diagnosticsError: nil,
+            extraSections: [
+                WorkbenchBugReportSection(title: "Current screen", body: "Main workspace (boss agent-zeta)")
+            ],
+            redactor: WorkbenchBugReportRedactor(),
+            agentNames: ["agent-zeta"],
+            homePath: "/Users/jdoe",
+            username: "jdoe"
+        )
+
+        let md = try String(contentsOf: bundle.reportURL, encoding: .utf8)
+        XCTAssertFalse(md.contains("/Users/jdoe"), "home path leaked")
+        XCTAssertFalse(md.contains("jdoe"), "username leaked")
+        XCTAssertFalse(md.contains("agent-zeta"), "agent name leaked")
+        XCTAssertTrue(md.contains("<agent>"), "agent name should be redacted to a placeholder")
+        XCTAssertTrue(md.contains("~"), "home path should be redacted to ~")
+        // The extra section itself must be present (and redacted).
+        XCTAssertTrue(md.contains("## Current screen"))
+    }
+
+    /// A nil redactor leaves the document verbatim — legacy callers and the
+    /// existing structured-field tests keep their exact output.
+    func testNilRedactorLeavesDocumentVerbatim() throws {
+        let bundle = try BugReportWriter.write(
+            into: tempRoot.appendingPathComponent("report-dir", isDirectory: true),
+            note: "ran as jdoe",
+            appName: "Ouro Workbench",
+            appVersion: "0.1.105",
+            buildHash: "abc1234",
+            osVersion: "macOS 15.2",
+            generatedAt: Date(),
+            bossName: "agent-zeta",
+            bossWatchEnabled: false,
+            autoAdvanceEnabled: false,
+            sessions: [],
+            recentDecisions: [],
+            recentActions: [],
+            screenshotPNG: nil,
+            diagnosticsArchiveURL: nil,
+            diagnosticsError: nil
+        )
+        let md = try String(contentsOf: bundle.reportURL, encoding: .utf8)
+        XCTAssertTrue(md.contains("ran as jdoe"))
+        XCTAssertTrue(md.contains("agent-zeta"))
+    }
+
+    func testExtraSectionsAppearAndSkipBlankBodies() throws {
+        let bundle = try BugReportWriter.write(
+            into: tempRoot.appendingPathComponent("report-dir", isDirectory: true),
+            note: "n",
+            appName: "Ouro Workbench",
+            appVersion: "0.1.105",
+            buildHash: "abc1234",
+            osVersion: "macOS 15.2",
+            generatedAt: Date(),
+            bossName: "boss",
+            bossWatchEnabled: false,
+            autoAdvanceEnabled: false,
+            sessions: [],
+            recentDecisions: [],
+            recentActions: [],
+            screenshotPNG: nil,
+            diagnosticsArchiveURL: nil,
+            diagnosticsError: nil,
+            extraSections: [
+                WorkbenchBugReportSection(title: "Readiness", body: "state: ready"),
+                WorkbenchBugReportSection(title: "Empty", body: "   ")
+            ]
+        )
+        let md = try String(contentsOf: bundle.reportURL, encoding: .utf8)
+        XCTAssertTrue(md.contains("## Readiness"))
+        XCTAssertTrue(md.contains("state: ready"))
+        XCTAssertFalse(md.contains("## Empty"), "blank-bodied section should be skipped")
+    }
 }

@@ -158,6 +158,10 @@ final class WorkbenchStoreTests: XCTestCase {
         XCTAssertEqual(loaded.processEntries.first?.isArchived, false)
         XCTAssertNil(loaded.processEntries.first?.lastSummary)
         XCTAssertNil(loaded.processEntries.first?.notes)
+        // Slice 6 forward-memory fields are absent from this pre-Slice-6 file →
+        // decode-if-present leaves them nil; the whole state file still loads.
+        XCTAssertNil(loaded.processEntries.first?.discoveredHarness)
+        XCTAssertNil(loaded.processEntries.first?.discoveredSessionId)
         XCTAssertEqual(loaded.actionLog, [])
         // Absent bossWatchEnabled defaults on (automate-first posture); the
         // one-time migration also turns it on for existing state.

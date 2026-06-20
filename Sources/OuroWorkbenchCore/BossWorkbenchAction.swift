@@ -94,6 +94,16 @@ public struct BossWorkbenchAction: Codable, Equatable, Sendable {
     public var provider: String?
     /// The explicit model id for `selectLane` (config-only, never a secret).
     public var model: String?
+    /// FORWARD MEMORY (Slice 6). When the boss relaunches a DISCOVERED session
+    /// (`createTerminal` / `createSession`), it passes the originating discovery
+    /// provenance here so the App can stamp it onto the new `ProcessEntry`
+    /// (`discoveredHarness` / `discoveredSessionId`) — making the relaunched
+    /// session natively rediscoverable by the next `AgentSessionScanner.scan`
+    /// instead of re-inferred. Both are additive + OPTIONAL (an ordinary create
+    /// that isn't a relaunch omits them) and are GENERAL opaque values Workbench
+    /// stores verbatim — never interpreted. Non-secret structural keys.
+    public var discoveredHarness: AgentHarness?
+    public var discoveredSessionId: String?
 
     private enum CodingKeys: String, CodingKey {
         case action
@@ -110,6 +120,8 @@ public struct BossWorkbenchAction: Codable, Equatable, Sendable {
         case lane
         case provider
         case model
+        case discoveredHarness
+        case discoveredSessionId
     }
 
     public init(
@@ -126,7 +138,9 @@ public struct BossWorkbenchAction: Codable, Equatable, Sendable {
         owner: String? = nil,
         lane: ProviderLane? = nil,
         provider: String? = nil,
-        model: String? = nil
+        model: String? = nil,
+        discoveredHarness: AgentHarness? = nil,
+        discoveredSessionId: String? = nil
     ) {
         self.action = action
         self.entry = entry
@@ -142,6 +156,8 @@ public struct BossWorkbenchAction: Codable, Equatable, Sendable {
         self.lane = lane
         self.provider = provider
         self.model = model
+        self.discoveredHarness = discoveredHarness
+        self.discoveredSessionId = discoveredSessionId
     }
 
     public init(from decoder: Decoder) throws {
@@ -160,6 +176,11 @@ public struct BossWorkbenchAction: Codable, Equatable, Sendable {
         self.lane = try container.decodeIfPresent(ProviderLane.self, forKey: .lane)
         self.provider = try container.decodeIfPresent(String.self, forKey: .provider)
         self.model = try container.decodeIfPresent(String.self, forKey: .model)
+        // Forward memory (Slice 6): additive + optional. AgentHarness's own
+        // decoder maps an unknown raw value to `.custom`, so a relaunch action
+        // from a newer build still parses.
+        self.discoveredHarness = try container.decodeIfPresent(AgentHarness.self, forKey: .discoveredHarness)
+        self.discoveredSessionId = try container.decodeIfPresent(String.self, forKey: .discoveredSessionId)
     }
 }
 

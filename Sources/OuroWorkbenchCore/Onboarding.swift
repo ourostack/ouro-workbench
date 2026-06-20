@@ -44,6 +44,13 @@ public struct OnboardingRepairStep: Codable, Equatable, Identifiable, Sendable {
     /// the steps Slice 3 redirected away from pane-spawning: the cold-start credential gate
     /// (`request-provider-config`) and the existing-agent lane-completion steps
     /// (`outward-lane` / `inner-lane` — the documented existing-agent gap).
+    ///
+    /// NOTE: the failed-lane steps (`repair-outward-provider` / `repair-inner-provider`) are
+    /// deliberately NOT here. The form can only configure a lane's provider/model; it cannot
+    /// refresh an EXISTING agent's credentials (gap a), and a failed-lane step means the lane is
+    /// already configured but its live check failed. Those steps are handled as a RE-CHECK in
+    /// `runOnboardingRepairStepNatively` instead — which self-heals a transient failure (a
+    /// lock-contended vault, a network blip) and honestly re-reports a real one.
     public var isProviderSetup: Bool {
         id == "request-provider-config" || id == "outward-lane" || id == "inner-lane"
     }
@@ -207,22 +214,22 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
         guard !agents.isEmpty else {
             return OnboardingReadiness(
                 state: .needsAgent,
-                headline: "Set up an Ouro agent",
-                detail: "Workbench needs a local Ouro agent on this machine before it can act as the boss.",
+                headline: "Set up your agent",
+                detail: "Workbench needs an agent on this Mac before it can get started.",
                 selectedBossName: boss.agentName,
                 repairSteps: [
                     OnboardingRepairStep(
                         id: "hatch",
                         actor: .humanChoice,
-                        title: "Hatch a new agent",
-                        detail: "Create a new local Ouro agent through a guided setup conversation.",
+                        title: "Create a new agent",
+                        detail: "Set up a brand-new agent — Workbench walks you through it.",
                         command: ["ouro", "hatch"]
                     ),
                     OnboardingRepairStep(
                         id: "clone",
                         actor: .humanChoice,
-                        title: "Clone an existing agent",
-                        detail: "Bring an existing agent bundle and vault onto this machine.",
+                        title: "Bring in an existing agent",
+                        detail: "Move an agent you already have (and its saved settings) onto this Mac.",
                         command: ["ouro", "clone", "<remote>"]
                     )
                 ]
@@ -296,27 +303,45 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
             )
         }
 
-        repairSteps.append(
-            contentsOf: providerRepairSteps(
-                agent: selected,
-                lane: "outward",
-                laneName: "outward",
-                purpose: "human-facing turns",
-                configured: selected.humanFacing?.provider != nil && selected.humanFacing?.model != nil,
-                check: providerChecks["outward"]
+        // Lane collapse: when outward & inner resolve to the SAME provider+model (the common case,
+        // e.g. ouroboros on github-copilot/gpt-5.4 in both lanes), the double-check is redundant —
+        // surface ONE connection keyed on the outward lane. When they differ, surface two, each
+        // labeled with its real provider·model and a plain-English role.
+        if selected.lanesShareOneConnection {
+            repairSteps.append(
+                contentsOf: providerRepairSteps(
+                    agent: selected,
+                    lane: "outward",
+                    connectionTitle: "your agent's connection",
+                    providerLabel: selected.humanFacing?.displayLabel,
+                    configured: true,
+                    check: providerChecks["outward"]
+                )
             )
-        )
-
-        repairSteps.append(
-            contentsOf: providerRepairSteps(
-                agent: selected,
-                lane: "inner",
-                laneName: "inner",
-                purpose: "agent-facing work",
-                configured: selected.agentFacing?.provider != nil && selected.agentFacing?.model != nil,
-                check: providerChecks["inner"]
+        } else {
+            let outwardConfigured = selected.humanFacing?.provider != nil && selected.humanFacing?.model != nil
+            let innerConfigured = selected.agentFacing?.provider != nil && selected.agentFacing?.model != nil
+            repairSteps.append(
+                contentsOf: providerRepairSteps(
+                    agent: selected,
+                    lane: "outward",
+                    connectionTitle: "the model it talks with",
+                    providerLabel: selected.humanFacing?.displayLabel,
+                    configured: outwardConfigured,
+                    check: providerChecks["outward"]
+                )
             )
-        )
+            repairSteps.append(
+                contentsOf: providerRepairSteps(
+                    agent: selected,
+                    lane: "inner",
+                    connectionTitle: "the model it thinks with",
+                    providerLabel: selected.agentFacing?.displayLabel,
+                    configured: innerConfigured,
+                    check: providerChecks["inner"]
+                )
+            )
+        }
 
         // RUNTIME-INJECTION model: the Workbench tools are injected into the boss's turn at
         // runtime (Workbench passes `--workbench-mcp` when it launches the boss) — nothing is
@@ -347,10 +372,18 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
                 step.id == "workbench-mcp"
         }
         guard blockers.isEmpty else {
+            // ACTOR-based headline split: while every blocker is still an in-flight check or an
+            // agent-runnable auto-remediation, nothing needs the user yet — saying "Repair" or
+            // "needs setup" is premature alarm (#231). Only once a `.humanRequired` / `.humanChoice`
+            // blocker appears (a failed live check, an unconfigured lane) does the headline ask the
+            // user to finish.
+            let needsHuman = blockers.contains { $0.actor == .humanRequired || $0.actor == .humanChoice }
             return OnboardingReadiness(
                 state: .needsRepair,
-                headline: "Repair \(selected.name)",
-                detail: "Workbench found \(selected.name), but it needs setup before it can be a reliable boss.",
+                headline: needsHuman ? "Finish setting up \(selected.name)" : "Setting up \(selected.name)…",
+                detail: needsHuman
+                    ? "Workbench found \(selected.name), but a couple of things need you before it can be a reliable boss."
+                    : "Workbench is getting \(selected.name) ready — checking its connection and tools.",
                 selectedBossName: selected.name,
                 repairSteps: repairSteps
             )
@@ -359,27 +392,34 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
         return OnboardingReadiness(
             state: .ready,
             headline: "\(selected.name) is ready",
-            detail: "The boss is installed, provider lanes passed live checks, and Workbench tools are available to it at runtime.",
+            detail: "Your boss is set up, both of its connections are working, and Workbench tools are ready for it.",
             selectedBossName: selected.name,
             repairSteps: repairSteps
         )
     }
 
-    private func providerRepairSteps(
+    /// Internal (not `private`) so the `providerLabel == nil` defensive fallbacks — unreachable
+    /// through `readiness(...)`, where a `configured` lane always has a `displayLabel` — stay
+    /// exercised by `@testable` unit tests and the 100% region gate holds without weakening copy.
+    func providerRepairSteps(
         agent: OuroAgentRecord,
         lane: String,
-        laneName: String,
-        purpose: String,
+        connectionTitle: String,
+        providerLabel: String?,
         configured: Bool,
         check: OnboardingProviderCheckResult?
     ) -> [OnboardingRepairStep] {
+        // Keep the SAME step ids regardless of `connectionTitle` — the blockers list and the App
+        // key on these ids (`<lane>-lane`, `check-<lane>`, `repair-<lane>-provider`), so the copy
+        // is the only thing the role/label change is allowed to move.
+        let capitalizedTitle = connectionTitle.prefix(1).uppercased() + connectionTitle.dropFirst()
         guard configured else {
             return [
                 OnboardingRepairStep(
                     id: "\(lane)-lane",
                     actor: .humanChoice,
-                    title: "Choose \(laneName) provider",
-                    detail: "The \(laneName) lane is incomplete. Workbench can open Ouro's provider setup flow.",
+                    title: "Set up \(connectionTitle)",
+                    detail: "\(capitalizedTitle) isn't set up yet. Workbench can help you connect it.",
                     command: ["ouro", "connect", "providers", "--agent", agent.name]
                 )
             ]
@@ -393,9 +433,9 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
                 OnboardingRepairStep(
                     id: "repair-\(lane)-provider",
                     actor: .humanRequired,
-                    title: "Repair \(laneName) provider",
+                    title: "Reconnect \(connectionTitle)",
                     detail: check!.detail,
-                    command: ["ouro", "connect", "providers", "--agent", agent.name]
+                    command: ["ouro", "check", "--agent", agent.name, "--lane", lane]
                 )
             ]
         case .running?:
@@ -403,8 +443,9 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
                 OnboardingRepairStep(
                     id: "check-\(lane)",
                     actor: .agentRunnable,
-                    title: "Checking \(laneName) provider",
-                    detail: "Workbench is verifying the provider/model selected for \(purpose)."
+                    title: "Checking \(connectionTitle)",
+                    detail: providerLabel.map { "Making sure \($0) is connected." }
+                        ?? "Workbench is making sure \(connectionTitle) works."
                 )
             ]
         case .pending?, nil:
@@ -412,8 +453,9 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
                 OnboardingRepairStep(
                     id: "check-\(lane)",
                     actor: .agentRunnable,
-                    title: "Check \(laneName) provider",
-                    detail: "Workbench must verify the provider/model selected for \(purpose).",
+                    title: "Check \(connectionTitle)",
+                    detail: providerLabel.map { "Workbench will make sure \($0) is connected." }
+                        ?? "Workbench will make sure \(connectionTitle) works.",
                     command: ["ouro", "check", "--agent", agent.name, "--lane", lane]
                 )
             ]
@@ -425,6 +467,16 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
     /// provider. A lane with no provider carries no usable credential regardless of model.
     private func hasAnyUsableLane(_ agent: OuroAgentRecord) -> Bool {
         agent.humanFacing?.provider != nil || agent.agentFacing?.provider != nil
+    }
+}
+
+public enum OnboardingPresentationPolicy {
+    /// Seed the completion flag for machines that were already onboarded under an older build
+    /// (no `onboardingHasBeenCompleted` key yet) so they aren't dragged through the wizard —
+    /// WITHOUT marking a machine whose boss is merely "ready" but never actually onboarded
+    /// (no sessions): those must still present, or the stale-boss lockout returns.
+    public static func shouldMarkCompletedAtLaunch(isReady: Bool, hasUsedWorkbench: Bool, alreadyCompleted: Bool) -> Bool {
+        !alreadyCompleted && isReady && hasUsedWorkbench
     }
 }
 

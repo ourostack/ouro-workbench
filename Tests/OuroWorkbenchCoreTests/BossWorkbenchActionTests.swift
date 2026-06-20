@@ -159,6 +159,60 @@ final class BossWorkbenchActionTests: XCTestCase {
         XCTAssertEqual(actions.first?.owner, "slugger")
     }
 
+    func testCreateActionsCarryForwardMemoryProvenance() throws {
+        // FORWARD MEMORY (Slice 6): when the boss relaunches a DISCOVERED session
+        // it passes the originating `{discoveredHarness, discoveredSessionId}`
+        // opaquely on the action. These are additive + optional (the ordinary
+        // create that isn't a relaunch omits them), and Workbench stores them
+        // verbatim — zero interpretation. The App stamps them onto the draft so
+        // the next scan() rediscovers the relaunched session natively.
+        let reply = """
+        ```ouro-workbench-actions
+        [
+          { "action": "createTerminal", "group": "Harness", "name": "Resumed Claude", "command": "claude --resume abc-123", "workingDirectory": "/repo", "discoveredHarness": "claudeCode", "discoveredSessionId": "abc-123" }
+        ]
+        ```
+        """
+
+        let actions = try BossWorkbenchActionParser().parse(reply)
+
+        XCTAssertEqual(actions.first?.discoveredHarness, .claudeCode)
+        XCTAssertEqual(actions.first?.discoveredSessionId, "abc-123")
+    }
+
+    func testCreateActionsDefaultForwardMemoryToNil() throws {
+        // An ordinary create (not a relaunch) carries no provenance.
+        let reply = """
+        ```ouro-workbench-actions
+        [
+          { "action": "createTerminal", "group": "Harness", "name": "Fresh", "command": "claude", "workingDirectory": "/repo" }
+        ]
+        ```
+        """
+
+        let actions = try BossWorkbenchActionParser().parse(reply)
+
+        XCTAssertNil(actions.first?.discoveredHarness)
+        XCTAssertNil(actions.first?.discoveredSessionId)
+    }
+
+    func testForwardMemoryActionFieldsRoundTripOnTheWire() throws {
+        let action = BossWorkbenchAction(
+            action: .createSession,
+            name: "Resumed",
+            command: "copilot",
+            owner: "slugger",
+            discoveredHarness: .githubCopilotCLI,
+            discoveredSessionId: "cop-9"
+        )
+        let data = try JSONEncoder().encode(action)
+        let decoded = try JSONDecoder().decode(BossWorkbenchAction.self, from: data)
+
+        XCTAssertEqual(decoded.discoveredHarness, .githubCopilotCLI)
+        XCTAssertEqual(decoded.discoveredSessionId, "cop-9")
+        XCTAssertEqual(decoded, action)
+    }
+
     func testParsesWorkspaceManagementActions() throws {
         let reply = """
         ```ouro-workbench-actions
@@ -350,11 +404,13 @@ final class BossWorkbenchActionTests: XCTestCase {
         let keys = Set(object.keys)
 
         // Exactly the live, non-secret structural keys of BossWorkbenchAction — no credential
-        // sink exists. (`owner` is the createSession agent-name label; not a secret.)
+        // sink exists. (`owner` is the createSession agent-name label; not a secret.
+        // `discoveredHarness`/`discoveredSessionId` are Slice-6 forward-memory provenance —
+        // an opaque harness name + session id, neither credential-bearing.)
         let allowedKeys: Set<String> = [
             "action", "entry", "text", "appendNewline", "group",
             "name", "command", "workingDirectory", "trust", "autoResume",
-            "owner",
+            "owner", "discoveredHarness", "discoveredSessionId",
         ]
         XCTAssertTrue(keys.isSubset(of: allowedKeys), "unexpected keys on the wire: \(keys.subtracting(allowedKeys))")
 

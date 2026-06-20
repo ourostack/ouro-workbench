@@ -387,6 +387,10 @@ struct WorkbenchRootView: View {
             Text(model.errorMessage ?? "Unknown error")
         }
         .task {
+            // FIRST: capture the user's real login-shell PATH so every `ouro` shellout
+            // can find `node` (incl. nvm/asdf/brew installs) — must run before the
+            // daemon bringup + any provider check below.
+            await model.prepareLoginShellEnvironment()
             // Bring the managed daemon online on launch (idempotent, quiet) before
             // recovery + status refreshes, so a daemon that died between sessions is
             // back up without waiting for a check-in.
@@ -401,9 +405,25 @@ struct WorkbenchRootView: View {
             model.refreshSessionActivity()
             model.refreshOnboardingReadiness()
             await model.refreshBossDashboard()
+            // Migration: an existing already-onboarded user (ready boss + real sessions) updating
+            // to the first build that carries `onboardingHasBeenCompleted` (default false) would
+            // otherwise be force-presented the wizard — and, if they Cancel, never get the flag
+            // set, so it re-pops every launch. Seed the flag for them. The policy is careful NOT to
+            // seed a machine whose boss is merely "ready" but never actually onboarded (ready, no
+            // sessions): those still present, or the stale-boss lockout U3 fixed returns. A wiped /
+            // first-run machine is neither ready nor has sessions, so forced first-run is unaffected.
+            if OnboardingPresentationPolicy.shouldMarkCompletedAtLaunch(
+                isReady: model.onboardingReadiness?.isReady == true,
+                hasUsedWorkbench: !model.state.processEntries.isEmpty,
+                alreadyCompleted: model.onboardingHasBeenCompleted
+            ) {
+                model.onboardingHasBeenCompleted = true
+            }
             if model.canAutoPresentOnboardingOnLaunch {
+                // Snapshot the boss before the wizard can mutate it so an
+                // abandoned mid-wizard pick rolls back on dismiss (#227).
+                model.onboardingBossSnapshot = model.state.boss.agentName
                 model.isOnboardingPresented = true
-                model.onboardingHasAutoPresented = true
             } else {
                 // Configured machine: run the provider liveness checks in the
                 // background so readiness resolves to ready without ever
@@ -2155,7 +2175,7 @@ struct ReportBugSheet: View {
                 )
 
                 Label(
-                    "Includes a window screenshot, a support diagnostics zip, and recent boss decisions + actions. No transcript contents.",
+                    "Includes a window screenshot, a support diagnostics zip, and recent boss decisions + actions. The report text is anonymized — usernames, home paths, agent names, and tokens are stripped before it's saved or filed. No transcript contents.",
                     systemImage: "info.circle"
                 )
                 .font(.caption)
@@ -3794,13 +3814,9 @@ struct OnboardingBossChoice: Identifiable {
         case .ready?:
             return "ready"
         case .disabled?:
-            return "disabled"
-        case .missingConfig?:
-            return "missing config"
-        case .invalidConfig?:
-            return "invalid config"
-        case nil:
-            return "missing"
+            return "turned off"
+        case .missingConfig?, .invalidConfig?, nil:
+            return "needs setup"
         }
     }
 
@@ -4026,6 +4042,12 @@ private struct DashboardStatusLine: View {
     var color: SwiftUI.Color = .secondary
     var help: String?
     var truncationMode: Text.TruncationMode = .middle
+    // Defaults to leading so the dashboard rows (label + status side-by-side) are
+    // unchanged. The standalone update panel passes `.center` so the status line
+    // actually centers under its button instead of hugging the leading edge —
+    // the full-width `.infinity` frame here is what previously defeated the
+    // enclosing VStack's `.center`.
+    var alignment: Alignment = .leading
 
     var body: some View {
         Text(text)
@@ -4033,7 +4055,7 @@ private struct DashboardStatusLine: View {
             .foregroundStyle(color)
             .lineLimit(1)
             .truncationMode(truncationMode)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: alignment)
             .layoutPriority(1)
             .help(help ?? text)
     }
@@ -4223,7 +4245,7 @@ struct BossDashboardView: View {
     private var scrollBody: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
-                if let error = model.bossWatchLastError, model.bossWatchConsecutiveFailures >= 2 {
+                if model.bossWatchLastError != nil, model.bossWatchConsecutiveFailures >= 2 {
                     // Surface the boss being down prominently (out of the
                     // buried watch-status line), with the backoff state so the
                     // user knows it'll keep retrying — not spamming.
@@ -4231,14 +4253,16 @@ struct BossDashboardView: View {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(.orange)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Boss is failing — backing off")
+                            Text("Your agent isn't answering yet")
                                 .font(.callout.weight(.semibold))
-                            Text("\(model.bossWatchConsecutiveFailures) failed check-ins. Latest: \(error)")
+                            // Never interpolate the raw error here — `bossWatchLastError` carries a
+                            // daemon-jargon audit line / raw transport error. Fixed, seam-free copy;
+                            // the raw detail stays in the audit log.
+                            Text("Your agent didn't answer the last \(model.bossWatchConsecutiveFailures) times. Workbench is still trying.")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(2)
-                                .textSelection(.enabled)
-                            Text("Boss Watch will keep trying with exponential backoff; press Check In to try now.")
+                            Text("Workbench keeps trying, a little less often each time — press Check In to try now.")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
@@ -4266,7 +4290,16 @@ struct BossDashboardView: View {
                    !dashboard.availability.issues.isEmpty {
                     MailboxWarningView(issues: dashboard.availability.issues)
                 }
+                // Boss-forward: the session STATUS list fronts the boss surface
+                // so the operator reads "what's running / waiting on me / done"
+                // at a glance before the conversation. Self-hiding when there are
+                // no sessions; terminals stay reachable in the sidebar.
+                SessionStatusListView(model: model)
                 BossConversationView(model: model)
+                // The boss's propose-for-approval CAPABILITY surfaces here when —
+                // and only when — there are pending proposals. Self-hiding and
+                // additive: it never gates the conversation or any other flow.
+                BossProposalCardList(model: model)
                 if let answer = model.bossCheckInAnswer {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Boss Reply")
@@ -5040,7 +5073,7 @@ struct WorkbenchOnboardingSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            OnboardingFlowHeader(page: page, dismiss: dismiss)
+            OnboardingFlowHeader(page: page, model: model, dismiss: dismiss)
 
             Divider()
 
@@ -5085,7 +5118,11 @@ struct WorkbenchOnboardingSheet: View {
             .padding(22)
         }
         .frame(width: 860, height: 680)
-        .onAppear {
+        .task {
+            // Ensure the login-shell PATH is captured before any provider check
+            // shells out to `ouro` (which needs `node`) — guards against the wizard
+            // opening before the launch-time capture finished.
+            await model.prepareLoginShellEnvironment()
             model.refreshOuroAgents()
             model.refreshWorkbenchMCPRegistration()
             model.refreshOnboardingReadiness()
@@ -5095,6 +5132,10 @@ struct WorkbenchOnboardingSheet: View {
             // Cancel in-flight provider checks so a late completion can't
             // overwrite cleaned state after the sheet closes.
             model.cancelOnboardingProviderChecks()
+            // Roll back a boss pick the user made but abandoned without
+            // completing onboarding, so a half-finished pick never persists
+            // (#227). No-op if onboarding completed or the boss is unchanged.
+            model.rollbackOnboardingIfIncomplete()
         }
     }
 
@@ -5126,6 +5167,8 @@ struct WorkbenchOnboardingSheet: View {
             return model.onboardingFlowDecision.phase == .bossSetupWizard ? "link" : "magnifyingglass"
         case .importWork:
             switch model.onboardingFlowDecision.phase {
+            case .bossReconstruct:
+                return "arrow.uturn.backward.circle"
             case .arrangeApprovedImports:
                 return "checkmark.circle"
             case .duplicateCleanup:
@@ -5143,9 +5186,29 @@ struct WorkbenchOnboardingSheet: View {
         case .boss:
             return model.onboardingBossChoices.contains { $0.isSelected && $0.isUsable } == false
         case .connect:
+            // Disable while the connection checks are still running so the prominent
+            // button isn't clickable-but-inert (a press would just re-kick the running
+            // checks). The check rows show their own progress; this advances once ready.
             return model.onboardingIsScanning
+                || model.onboardingProviderChecks.values.contains { $0.state == .running }
         case .importWork:
-            if model.onboardingIsScanning || model.onboardingReadiness?.isReady != true {
+            if model.onboardingReadiness?.isReady != true {
+                return true
+            }
+            // Slice 7: the hand-off button kicks the boss-driven reconstruction. Disable only
+            // while a boss check-in is already in flight so a double-press can't re-hand-off
+            // mid-run; otherwise it's a single, always-actionable "Bring Back My Work" — no
+            // selection gate (the boss, not a hardcoded scan, decides what to bring back).
+            if model.onboardingFlowDecision.phase == .bossReconstruct {
+                return model.bossCheckInIsRunning
+            }
+            if model.onboardingIsScanning {
+                return true
+            }
+            // Defensive: the legacy arrange phase (no longer produced by the policy) still
+            // gates on a selection so a stale proposal can't dismiss the wizard with nothing.
+            if model.onboardingFlowDecision.phase == .arrangeApprovedImports,
+               (model.onboardingProposal?.selectedTerminalCount ?? 0) == 0 {
                 return true
             }
             return false
@@ -5166,23 +5229,31 @@ struct WorkbenchOnboardingSheet: View {
                 instructionStatus = "Connecting the boss. Workbench is checking provider and tool readiness now."
                 return
             }
+            // Reaching Arrange Work with a ready boss means setup is genuinely
+            // done — reconstruction is the payoff, not a gate. Mark onboarding
+            // completed so the wizard stops re-presenting on launch and the boss
+            // pick is now committed (the rollback on dismiss no longer fires).
+            // Clear the open snapshot too: once completed, `rollbackOnboardingIfIncomplete`
+            // short-circuits on the completed guard and never clears it, so drop it here
+            // so a committed pick can't leave a stale snapshot behind.
+            model.onboardingHasBeenCompleted = true
+            model.onboardingBossSnapshot = nil
             page = .importWork
-            if model.onboardingFlowDecision.phase == .bossReadyWelcome {
-                model.scanForOnboardingSessions()
+            // Slice 7: a ready boss hands off to boss-driven reconstruction the moment we
+            // land on the arrange page — no hardcoded scan. The boss does discover →
+            // optionally propose → relaunch.
+            if model.onboardingFlowDecision.phase == .bossReconstruct {
+                model.startBossReconstruction()
             }
         case .importWork:
             switch model.onboardingFlowDecision.phase {
-            case .bossReadyWelcome, .scanProposal:
-                model.scanForOnboardingSessions()
-            case .arrangeApprovedImports:
-                let result = model.applyOnboardingProposal()
-                // Whether anything new landed or every selection was already
-                // imported, hand the user back to the workbench with a banner
-                // explaining what just happened. The banner is set by the apply
-                // path itself.
-                if result != nil {
-                    dismiss()
-                }
+            case .bossReconstruct, .bossReadyWelcome, .scanProposal, .arrangeApprovedImports:
+                // Boss-driven hand-off. The legacy scan/arrange phases collapse here too so a
+                // stale in-memory proposal can never re-trigger the rejected hardcoded scan —
+                // the boss owns reconstruction. The wizard stays open so the operator can watch
+                // the boss work and review any proposal card; they close it with Done.
+                model.startBossReconstruction()
+                instructionStatus = WorkbenchOnboardingNarrative.bossReconstructIntro
             case .duplicateCleanup:
                 instructionStatus = model.onboardingFlowDecision.notice
                 Task { await model.runBossQuickQuestion(WorkbenchOnboardingNarrative.duplicateCleanup) }
@@ -5204,6 +5275,7 @@ struct WorkbenchOnboardingSheet: View {
 
 private struct OnboardingFlowHeader: View {
     var page: WorkbenchOnboardingSheet.OnboardingPage
+    @ObservedObject var model: WorkbenchViewModel
     var dismiss: DismissAction
 
     var body: some View {
@@ -5220,7 +5292,11 @@ private struct OnboardingFlowHeader: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Button("Done") {
+            // Honest label: until onboarding is genuinely completed, dismissing
+            // rolls back any mid-wizard boss pick — that's a Cancel, not a Done.
+            // Once completed (boss committed), it's a plain Done. Behavior is the
+            // same dismiss in both cases; the rollback fires in `.onDisappear`.
+            Button(model.onboardingHasBeenCompleted ? "Done" : "Cancel") {
                 dismiss()
             }
             .keyboardShortcut(.cancelAction)
@@ -5718,10 +5794,10 @@ private struct OnboardingReadinessView: View {
     var body: some View {
         VStack(alignment: .center, spacing: 22) {
             VStack(alignment: .center, spacing: 10) {
-                Text("Give the boss its tools")
+                Text("Connect your agent")
                     .font(.largeTitle.weight(.semibold))
                     .multilineTextAlignment(.center)
-                Text("Workbench enables its local tool bridge and automatically verifies both provider lanes before import.")
+                Text("Workbench makes sure your agent's connection and tools are working, then brings your recent work back.")
                     .font(.title3)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -5729,6 +5805,13 @@ private struct OnboardingReadinessView: View {
                     .frame(maxWidth: 640)
             }
             if let readiness = model.onboardingReadiness {
+                // U5 (#230) — confirm WHAT you're connecting before the check results land. Show the
+                // selected boss's provider · model prominently above the check rows so the operator
+                // can see (and confirm) which provider/model the agent uses, not just watch a
+                // connection check run against an unnamed target.
+                OnboardingAgentProviderSummary(
+                    agent: model.ouroAgent(named: readiness.selectedBossName)
+                )
                 if readiness.isReady {
                     VStack(spacing: 10) {
                         Image(systemName: "checkmark.seal.fill")
@@ -5770,6 +5853,15 @@ private struct OnboardingReadinessView: View {
                         ForEach(readiness.repairSteps) { step in
                             OnboardingRepairStepRow(step: step, model: model)
                         }
+                        // Set expectations on the connect step (#228): the FIRST connection check
+                        // after a factory reset can run cold (~a minute) before it settles, far
+                        // past a warm ~12s. Showing this only while a check is in progress keeps a
+                        // long spinner from reading as "broken" so the user waits instead of quitting.
+                        if readiness.repairSteps.contains(where: { $0.id.hasPrefix("check-") }) {
+                            Text("The first connection check after setup can take up to a minute — that's normal.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                     .frame(maxWidth: 660)
                 }
@@ -5777,6 +5869,83 @@ private struct OnboardingReadinessView: View {
         }
         .frame(maxWidth: .infinity, minHeight: 420)
         .onAppear { model.startFirstRunBootstrapIfNeeded() }
+    }
+}
+
+/// U5 (#230) — the "confirm what you're connecting" surface at the top of the Connect page.
+///
+/// Renders the selected boss agent's provider · model prominently, BEFORE the auto-running
+/// connection checks report their results, so the operator sees which provider/model the agent
+/// uses rather than watching a check run against an unnamed target. Collapses to ONE line when
+/// both lanes share one connection (the common case), and splits into the outward ("talks with
+/// you") and inner ("thinks with") roles when they differ. An unconfigured lane reads "not
+/// connected yet".
+///
+/// Changing the provider/model is OUT OF SCOPE here: the native provider-config form is a
+/// cold-start (new-agent hatch) flow with NO model field, and updating an EXISTING agent's
+/// provider has no headless `ouro` sink today (the documented gap a — see
+/// `ProviderConfigForm.existingAgentRefreshUnavailableMessage`). So rather than build a new
+/// model picker (deferred), this surface points the operator at their agent's provider settings.
+/// The proactive "a newer model is available" nudge is also deferred (#237 — no ouro model catalog).
+private struct OnboardingAgentProviderSummary: View {
+    var agent: OuroAgentRecord?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let agent {
+                if agent.lanesShareOneConnection {
+                    // Both lanes resolve to the same provider+model — one calm line.
+                    HStack(spacing: 6) {
+                        Text("Your agent uses")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                        ProviderModelPill(label: agent.humanFacing?.displayLabel)
+                    }
+                } else {
+                    // Lanes diverge — show the outward ("talks with you") and inner ("thinks with")
+                    // roles separately, each with its own provider · model.
+                    laneRow(role: "Talks with you using", label: agent.humanFacing?.displayLabel)
+                    laneRow(role: "Thinks with", label: agent.agentFacing?.displayLabel)
+                }
+                Text("To change your model, use your agent's provider settings.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: 660, alignment: .leading)
+    }
+
+    private func laneRow(role: String, label: String?) -> some View {
+        HStack(spacing: 6) {
+            Text(role)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            ProviderModelPill(label: label)
+        }
+    }
+}
+
+/// A subtle pill rendering a lane's `provider · model` display label, or a muted "not connected
+/// yet" when the lane has no fully-configured provider/model.
+private struct ProviderModelPill: View {
+    var label: String?
+
+    var body: some View {
+        if let label {
+            Text(label)
+                .font(.callout.weight(.semibold))
+                .padding(.horizontal, 9)
+                .padding(.vertical, 3)
+                .background(Color.accentColor.opacity(0.12), in: Capsule())
+                .foregroundStyle(.primary)
+        } else {
+            Text("not connected yet")
+                .font(.callout.weight(.medium))
+                .padding(.horizontal, 9)
+                .padding(.vertical, 3)
+                .background(Color.secondary.opacity(0.12), in: Capsule())
+                .foregroundStyle(.secondary)
+        }
     }
 }
 
@@ -5850,22 +6019,30 @@ private struct OnboardingRepairStepRow: View {
     }
 
     private var actorLabel: String {
+        // Legible status words, not internal jargon (#232): a check-* step is mid-verify; an
+        // agent-runnable step is something Workbench handles itself; human-required needs the user;
+        // human-choice asks the user to pick.
         if step.id.hasPrefix("check-") {
-            return "checking"
+            return "Checking…"
         }
         switch step.actor {
         case .agentRunnable:
-            return "agent"
+            return "Workbench"
         case .humanRequired:
-            return "you"
+            return "Needs you"
         case .humanChoice:
-            return "choose"
+            return "Choose"
         }
     }
 
     private var commandButtonTitle: String {
         // App-executed verbs (cohesive-product): a fix action, never "Open a terminal".
-        step.actor == .humanChoice ? "Choose" : "Fix"
+        // A failed-check provider step (`repair-<lane>-provider`) only RE-RUNS the live check —
+        // labeling it "Fix" overpromises (#233). Say "Try again" to match what it actually does.
+        if step.id.hasPrefix("repair-") && step.id.hasSuffix("-provider") {
+            return "Try again"
+        }
+        return step.actor == .humanChoice ? "Choose" : "Fix"
     }
 
     private var color: SwiftUI.Color {
@@ -5884,6 +6061,19 @@ private struct OnboardingBootstrapView: View {
     @ObservedObject var model: WorkbenchViewModel
 
     var body: some View {
+        // Slice 7: a ready boss drives reconstruction. Render the boss-driven hand-off
+        // surface instead of the rejected hardcoded scan/arrange UI. The legacy scan view
+        // remains only as a defensive fallback for the legacy phases the policy no longer
+        // produces.
+        if model.onboardingFlowDecision.phase == .bossReconstruct {
+            OnboardingBossReconstructView(model: model)
+        } else {
+            legacyScanBody
+        }
+    }
+
+    @ViewBuilder
+    private var legacyScanBody: some View {
         VStack(alignment: .center, spacing: 22) {
             VStack(alignment: .center, spacing: 10) {
                 Text(WorkbenchOnboardingNarrative.bossReadyWelcome)
@@ -5966,6 +6156,82 @@ private struct OnboardingBootstrapView: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 420)
+    }
+}
+
+/// Slice 7 — the boss-driven reconstruction hand-off surface. Workbench does NOT scan or
+/// arrange here: it hands the boss the "bring back my work" task and renders the boss's
+/// progress. The boss discovers sessions (`workbench_discover_agent_sessions`), optionally
+/// proposes them via the editable card (which renders in the boss dashboard), and relaunches
+/// the approved ones as terminals — all context-specific intelligence the boss owns. This
+/// surface is a clean explanation + a single hand-off affordance, never a hardcoded scan.
+private struct OnboardingBossReconstructView: View {
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        VStack(alignment: .center, spacing: 22) {
+            VStack(alignment: .center, spacing: 10) {
+                Text("Bring back your work")
+                    .font(.largeTitle.weight(.semibold))
+                    .multilineTextAlignment(.center)
+                Text(WorkbenchOnboardingNarrative.bossReconstructIntro)
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: 640)
+            }
+
+            if model.onboardingReadiness?.isReady != true {
+                Text("Finish connecting the boss before bringing your work back.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if !model.onboardingReconstructionHandedOff {
+                Button {
+                    model.startBossReconstruction()
+                } label: {
+                    Label("Bring Back My Work", systemImage: "arrow.uturn.backward.circle")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(model.bossCheckInIsRunning)
+            } else {
+                // Handed off: the boss is doing discover → propose → relaunch. Its progress
+                // and reply render in the setup-assistant box below; any proposal card it
+                // raises renders in the boss dashboard. The empty case ("nothing to bring
+                // back") is whatever the boss reports — a clean message, never a dead step.
+                VStack(alignment: .center, spacing: 10) {
+                    HStack(spacing: 8) {
+                        if model.bossCheckInIsRunning {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(Color.green)
+                        }
+                        Text(model.bossCheckInIsRunning
+                             ? "\(model.state.boss.agentName) is looking for your recent work…"
+                             : "\(model.state.boss.agentName) has finished — see its reply below.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                    Text(WorkbenchOnboardingNarrative.bossReconstructEmpty)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: 600)
+                    Button {
+                        model.startBossReconstruction()
+                    } label: {
+                        Label("Ask Again", systemImage: "arrow.clockwise")
+                    }
+                    .controlSize(.small)
+                    .disabled(model.bossCheckInIsRunning)
+                }
             }
         }
         .frame(maxWidth: .infinity, minHeight: 420)
@@ -6183,6 +6449,325 @@ private struct OnboardingSessionPreviewSheet: View {
         .task(id: terminal.id) {
             // Defer the (bounded) preview load so the sheet renders immediately.
             previewText = model.onboardingPreviewText(for: terminal)
+        }
+    }
+}
+
+/// Native editable card for the boss's `workbench_propose` CAPABILITY. Renders
+/// the pending `AgentProposal`s the boss enqueued, lets the operator tick / edit /
+/// approve each item, and writes the operator's decision back through the queue
+/// for the boss. This is purely OPT-IN — it surfaces only when there ARE pending
+/// proposals and NEVER gates any other flow; the boss can also just act without
+/// ever proposing.
+///
+/// All mutation/approval logic lives in Core (`AgentProposal`) and the view model
+/// (`toggleProposalItem`/`editProposalItem`/`approveProposal`/`dismissProposal`);
+/// this view is thin SwiftUI wiring so the un-clickable surface stays trivial.
+struct BossProposalCardList: View {
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        // Surfaces nothing when there are no pending proposals — never intrudes.
+        if !model.pendingProposals.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(model.pendingProposals, id: \.id) { proposal in
+                    BossProposalCard(proposal: proposal, model: model)
+                }
+            }
+            .task {
+                model.loadPendingProposals()
+            }
+        }
+    }
+}
+
+private struct BossProposalCard: View {
+    var proposal: AgentProposal
+    @ObservedObject var model: WorkbenchViewModel
+
+    private var selectedCount: Int {
+        proposal.items.filter(\.selected).count
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "checklist")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.accentColor)
+                Text(proposal.title)
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Text("\(selectedCount)/\(proposal.items.count)")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(proposal.items) { item in
+                BossProposalItemRow(proposalID: proposal.id, item: item, model: model)
+            }
+            HStack(spacing: 8) {
+                Spacer()
+                Button("Dismiss") {
+                    model.dismissProposal(proposalID: proposal.id)
+                }
+                .controlSize(.small)
+                .buttonStyle(.bordered)
+                .help("Decline this proposal — the boss is told you took none of it.")
+                Button("Approve") {
+                    model.approveProposal(proposalID: proposal.id)
+                }
+                .controlSize(.small)
+                .buttonStyle(.borderedProminent)
+                .help("Send the ticked (and edited) items back to the boss.")
+            }
+        }
+        .padding(12)
+        .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct BossProposalItemRow: View {
+    var proposalID: String
+    var item: AgentProposalItem
+    @ObservedObject var model: WorkbenchViewModel
+
+    private func isEditable(_ field: AgentProposalItem.Field) -> Bool {
+        item.editableFields.contains(field)
+    }
+
+    /// A binding for one editable field that routes edits through the view model
+    /// (and thus the Core model, which rejects non-editable fields). Reads the
+    /// current value; non-editable fields are rendered as static text instead, so
+    /// this binding is only built for editable ones.
+    private func fieldBinding(_ field: AgentProposalItem.Field, current: String) -> Binding<String> {
+        Binding(
+            get: { current },
+            set: { model.editProposalItem(proposalID: proposalID, itemID: item.id, field: field, value: $0) }
+        )
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Button {
+                model.toggleProposalItem(proposalID: proposalID, itemID: item.id)
+            } label: {
+                Image(systemName: item.selected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 16, weight: .regular))
+                    .foregroundStyle(item.selected ? Color.accentColor : Color.secondary)
+                    .accessibilityLabel(item.selected ? "Selected" : "Not selected")
+            }
+            .buttonStyle(.plain)
+            VStack(alignment: .leading, spacing: 4) {
+                if isEditable(.label) {
+                    TextField("Label", text: fieldBinding(.label, current: item.label))
+                        .font(.caption.weight(.semibold))
+                        .textFieldStyle(.roundedBorder)
+                } else {
+                    Text(item.label)
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                }
+                if let detail = item.detail, !isEditable(.detail) {
+                    Text(detail)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                } else if isEditable(.detail) {
+                    TextField("Detail", text: fieldBinding(.detail, current: item.detail ?? ""))
+                        .font(.caption2)
+                        .textFieldStyle(.roundedBorder)
+                }
+                if let command = item.command, !isEditable(.command) {
+                    Text(command)
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                } else if isEditable(.command) {
+                    TextField("Command", text: fieldBinding(.command, current: item.command ?? ""))
+                        .font(.caption2.monospaced())
+                        .textFieldStyle(.roundedBorder)
+                }
+                if let cwd = item.cwd, !isEditable(.cwd) {
+                    Text(cwd)
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                } else if isEditable(.cwd) {
+                    TextField("Working directory", text: fieldBinding(.cwd, current: item.cwd ?? ""))
+                        .font(.caption2.monospaced())
+                        .textFieldStyle(.roundedBorder)
+                }
+            }
+            Spacer()
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 6)
+        .background(item.selected ? Color.accentColor.opacity(0.06) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
+    }
+}
+
+/// Boss-forward session STATUS list: the at-a-glance "what's running / waiting
+/// on me / done" surface that fronts the boss dashboard. All classification +
+/// ordering lives in Core (`SessionStatusList`); this view is a thin renderer
+/// that derives the buckets from `model.state` and lets a row click select the
+/// session (so its terminal is one more click away in the detail pane).
+///
+/// ADDITIVE — the terminal sidebar (`WorkbenchSidebarView`) is untouched and
+/// still the canonical way to reach every terminal. This list is a glanceable
+/// overview layered on top, not a replacement: each bucket self-hides when
+/// empty, and the whole view renders nothing when there are no sessions.
+struct SessionStatusListView: View {
+    @ObservedObject var model: WorkbenchViewModel
+
+    private var statusList: SessionStatusList {
+        SessionStatusList.make(from: model.state)
+    }
+
+    var body: some View {
+        let list = statusList
+        if !list.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 6) {
+                    Image(systemName: "rectangle.3.group")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                    Text("Sessions")
+                        .font(.subheadline.weight(.semibold))
+                    Spacer()
+                    Text(summaryLine(list))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+                SessionStatusBucketSection(
+                    title: "Waiting on you",
+                    systemImage: "person.crop.circle.badge.exclamationmark",
+                    accent: SwiftUI.Color.orange,
+                    rows: list.waitingOnYou,
+                    model: model
+                )
+                SessionStatusBucketSection(
+                    title: "Running",
+                    systemImage: "play.circle",
+                    accent: SwiftUI.Color.green,
+                    rows: list.running,
+                    model: model
+                )
+                SessionStatusBucketSection(
+                    title: "Done",
+                    systemImage: "checkmark.circle",
+                    accent: SwiftUI.Color.secondary,
+                    rows: list.done,
+                    model: model
+                )
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.quaternary.opacity(0.2), in: RoundedRectangle(cornerRadius: 8))
+        }
+    }
+
+    private func summaryLine(_ list: SessionStatusList) -> String {
+        "\(list.waitingOnYouCount) waiting · \(list.runningCount) running · \(list.doneCount) done"
+    }
+}
+
+/// One bucket (Waiting on you / Running / Done) of the boss-forward status list.
+/// Self-hides when its bucket is empty so the operator only sees the states that
+/// actually have sessions.
+private struct SessionStatusBucketSection: View {
+    var title: String
+    var systemImage: String
+    var accent: SwiftUI.Color
+    var rows: [SessionStatusRow]
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        if !rows.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Image(systemName: systemImage)
+                        .font(.caption)
+                        .foregroundStyle(accent)
+                    Text("\(title) (\(rows.count))")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(rows) { row in
+                    SessionStatusRowView(row: row, model: model)
+                }
+            }
+        }
+    }
+}
+
+/// A single clickable status row. Clicking selects the session in the detail
+/// pane (reusing `selectEntryAcrossGroups`), from which the operator opens its
+/// terminal exactly as before. Pure presentation — no logic beyond formatting.
+private struct SessionStatusRowView: View {
+    var row: SessionStatusRow
+    @ObservedObject var model: WorkbenchViewModel
+
+    private var isSelected: Bool {
+        model.selectedEntryID == row.id
+    }
+
+    var body: some View {
+        Button {
+            model.selectEntryAcrossGroups(row.id)
+        } label: {
+            HStack(spacing: 8) {
+                StatusDot(attention: row.attention)
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 6) {
+                        Text(row.name)
+                            .font(.caption.weight(.medium))
+                            .lineLimit(1)
+                        if let group = row.group {
+                            Text(group)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                    HStack(spacing: 6) {
+                        Text(row.owner.displayName)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text(detailLine)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+                Spacer()
+            }
+            .padding(.vertical, 4)
+            .padding(.horizontal, 6)
+            .background(
+                isSelected ? Color.accentColor.opacity(0.12) : Color.clear,
+                in: RoundedRectangle(cornerRadius: 6)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Open \(row.name) in the detail pane")
+    }
+
+    /// Short trailing descriptor — the bucket-relevant fact (exit code for done,
+    /// pid for running) falling back to the working directory.
+    private var detailLine: String {
+        switch row.bucket {
+        case .done:
+            if let code = row.exitCode { return "exited \(code)" }
+            return row.workingDirectory
+        case .running:
+            if let pid = row.pid { return "pid \(pid)" }
+            return row.workingDirectory
+        case .waitingOnYou:
+            return row.workingDirectory
         }
     }
 }
@@ -8556,12 +9141,14 @@ struct ReleaseUpdateControls: View {
     var showTitle: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .center, spacing: 6) {
             if showTitle {
                 HStack(spacing: 12) {
                     DashboardRowLabel(title: "Release Updates", systemImage: "arrow.down.app")
                     updateStatus
                     updateProgress
+                }
+                HStack(spacing: 8) {
                     updateButtons
                 }
             } else {
@@ -8570,7 +9157,6 @@ struct ReleaseUpdateControls: View {
                     updateProgress
                 }
                 HStack(spacing: 8) {
-                    Spacer(minLength: 0)
                     updateButtons
                 }
             }
@@ -8589,14 +9175,22 @@ struct ReleaseUpdateControls: View {
                 Text(snapshot.hasInstallableAssets ? "Verified against the release's SHA-256 manifest + code signature before installing. Your running terminals keep running across the update." : "Release is published, but installable app assets were not found.")
                     .font(.caption)
                     .foregroundStyle(snapshot.hasInstallableAssets ? SwiftUI.Color.secondary : SwiftUI.Color.orange)
+                    .multilineTextAlignment(.center)
             }
         }
+        // Span the full row width so `alignment: .center` actually centers each line.
+        // Without this the VStack shrinks to its widest child and hugs the leading
+        // edge, leaving the "… is current" line visually left-aligned.
+        .frame(maxWidth: .infinity)
     }
 
     private var updateStatus: some View {
         DashboardStatusLine(
             text: model.releaseUpdateStatusLine,
-            color: model.releaseUpdateStatusColor
+            color: model.releaseUpdateStatusColor,
+            // Dashboard row (with title) keeps the status beside its label (leading);
+            // the standalone About/update panel centers it under the centered button.
+            alignment: showTitle ? .leading : .center
         )
     }
 
@@ -8637,11 +9231,14 @@ struct ReleaseUpdateControls: View {
             .fixedSize()
         }
 
-        if model.releaseUpdateURL != nil {
+        // Only offer the release page when there's actually a newer release to look
+        // at — surfacing "Open Release" while you're already current is noise.
+        if model.releaseUpdateURL != nil,
+           model.releaseUpdateSnapshot?.status == .updateAvailable {
             Button {
                 model.openReleaseUpdate()
             } label: {
-                Label("Open Release", systemImage: "safari")
+                Label("View Release Notes", systemImage: "safari")
             }
             .buttonStyle(.bordered)
             .controlSize(.small)
@@ -9117,18 +9714,25 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var bugReportIssueURL: String?
     @Published var bugReportIssueError: String?
     @Published var isOnboardingPresented = false
-    /// Whether the onboarding sheet has already been auto-presented once on this
-    /// machine. Persisted so a configured machine with a lingering config gap
-    /// isn't forced into the modal on *every* launch — the gap stays visible in
-    /// the TTFA pill, and the user can reopen setup from the More menu. Reset
-    /// only by clearing app defaults.
-    @Published var onboardingHasAutoPresented: Bool = {
-        UserDefaults.standard.bool(forKey: WorkbenchViewModel.onboardingAutoPresentedDefaultsKey)
+    /// Whether onboarding has been GENUINELY completed (the user reached Arrange
+    /// Work with a ready boss). Persisted so the wizard keeps presenting on every
+    /// launch until setup is actually finished — picking a boss and then
+    /// dismissing the wizard does NOT count as completed, so a half-finished pick
+    /// can never lock the user out of onboarding. Reset only by clearing app
+    /// defaults (or `resetToFirstRun()`).
+    @Published var onboardingHasBeenCompleted: Bool = {
+        UserDefaults.standard.bool(forKey: WorkbenchViewModel.onboardingCompletedDefaultsKey)
     }() {
         didSet {
-            UserDefaults.standard.set(onboardingHasAutoPresented, forKey: Self.onboardingAutoPresentedDefaultsKey)
+            UserDefaults.standard.set(onboardingHasBeenCompleted, forKey: Self.onboardingCompletedDefaultsKey)
         }
     }
+    /// The boss agent name captured when the onboarding wizard opens, BEFORE the
+    /// user can change it. If the user picks a different boss mid-wizard and then
+    /// dismisses without completing, `rollbackOnboardingIfIncomplete()` restores
+    /// this snapshot so the abandoned pick never persists. `nil` when no wizard
+    /// session is in flight.
+    var onboardingBossSnapshot: String?
     @Published var onboardingReadiness: OnboardingReadiness?
     @Published var onboardingProviderChecks: [String: OnboardingProviderCheckResult] = [:]
     /// Per-lane generation so a late completion from a previous run doesn't
@@ -9145,6 +9749,16 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var onboardingIsScanning = false
     @Published var onboardingImportSummaryHasImports = false
     @Published var lastImportSummary: WorkbenchImportApplyResult?
+    /// Pending boss proposals awaiting the operator's review in the native card.
+    /// Populated from `proposalQueue` by `loadPendingProposals()`; the card binds
+    /// to it and the mutation/approve methods write back through the queue. OPT-IN
+    /// surfacing only — never blocks any other flow.
+    @Published var pendingProposals: [AgentProposal] = []
+    /// Slice 7: set once the onboarding wizard has handed the reconstruction task to the
+    /// boss (boss-driven `see → propose → act`). Drives the hand-off surface's copy from
+    /// "Bring back my work" to "your boss is working on it" without re-running the hardcoded
+    /// scan. Reset on first-run reset so a fresh wizard starts clean.
+    @Published var onboardingReconstructionHandedOff = false
     /// Whether the native provider-config form (the one human gate) is presented. Flipped true
     /// by `requestProviderConfig` (and the native onboarding provider-setup affordance).
     /// NON-SECRET-BEARING: this flag only opens the form; the credential is entered natively in
@@ -9200,6 +9814,12 @@ final class WorkbenchViewModel: ObservableObject {
     /// and publish its output.
     private let firstRunDrive = FirstRunBootstrapDrive()
     private let externalActionQueue: WorkbenchActionRequestQueue
+    /// Transport for the boss's `workbench_propose` CAPABILITY. The card reads
+    /// pending proposals from here and writes the operator's `result()` back. This
+    /// is purely OPT-IN surfacing — it never gates any other flow; an unanswered
+    /// proposal just sits pending until the operator (or the boss's own act-anyway
+    /// path) moves on.
+    private let proposalQueue: AgentProposalQueue
     private let releaseUpdateChecker: ReleaseUpdateChecker
     private var manuallyTerminatedRunIDs = Set<UUID>()
     private var bossWatchBaselineState: WorkspaceState?
@@ -9265,6 +9885,7 @@ final class WorkbenchViewModel: ObservableObject {
         self.releaseUpdateChecker = releaseUpdateChecker
         self.workCardReader = workCardReader
         self.externalActionQueue = WorkbenchActionRequestQueue(paths: paths)
+        self.proposalQueue = AgentProposalQueue(paths: paths)
         self.state = WorkspaceState()
         self.isFirstRunSetupForcedOnLaunch = WorkbenchFactoryReset.consumeFirstRunSetupRequest(rootURL: paths.rootURL)
         if autoLaunchResumableForE2E {
@@ -9729,6 +10350,15 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     var releaseUpdateStatusLine: String {
+        // While a check / install is genuinely in flight, say so — never leave a
+        // stale "is current" line showing next to the spinner (which reads as a
+        // stuck, perpetual load).
+        if releaseUpdateIsChecking {
+            return "Checking for updates…"
+        }
+        if releaseUpdateIsInstalling {
+            return "Installing update…"
+        }
         guard let snapshot = releaseUpdateSnapshot else {
             return "not checked"
         }
@@ -9799,24 +10429,22 @@ final class WorkbenchViewModel: ObservableObject {
         return readiness.repairSteps.contains { Self.onboardingConfigGapBlockerIDs.contains($0.id) }
     }
 
-    /// Present onboarding at launch for a first-run machine (no usable boss
-    /// agent yet — `.needsAgent`, whose steps are hatch/clone/use-<agent>) or
-    /// a genuine configuration gap. A configured machine merely *pending* a
-    /// provider liveness check is NOT forced into the sheet — the startup
-    /// task runs those checks in the background so readiness flips to ready
-    /// on its own.
+    /// Present onboarding at launch until setup is GENUINELY completed. A forced
+    /// first run always presents; otherwise the wizard keeps appearing while
+    /// `onboardingHasBeenCompleted` is false — which covers `.needsAgent`,
+    /// mid-setup config gaps, AND the stale-boss-but-never-finished case where a
+    /// prior session picked a boss and dismissed before reaching Arrange Work.
+    /// Keying on completion (not "boss set + auto-presented once") is the root-
+    /// cause fix for the stale-boss lockout (#227).
     var shouldPresentOnboardingOnLaunch: Bool {
         if isFirstRunSetupForcedOnLaunch {
             return true
         }
-        guard let readiness = onboardingReadiness, !readiness.isReady else {
-            return false
-        }
-        return readiness.state == .needsAgent || onboardingHasConfigGap
+        return !onboardingHasBeenCompleted
     }
 
     var canAutoPresentOnboardingOnLaunch: Bool {
-        shouldPresentOnboardingOnLaunch && (!onboardingHasAutoPresented || isFirstRunSetupForcedOnLaunch)
+        shouldPresentOnboardingOnLaunch
     }
 
     var onboardingPhaseLabel: String {
@@ -9871,9 +10499,9 @@ final class WorkbenchViewModel: ObservableObject {
             return "\(state.boss.agentName) is selected as this Mac's boss. \(WorkbenchOnboardingNarrative.bossReadyWelcome) \(WorkbenchOnboardingNarrative.scanIntro)"
         }
         if ouroAgents.count > 1 {
-            return "This Mac has multiple Ouro agents. Choose the one that should be boss for Workbench before importing sessions."
+            return "You have a few agents on this Mac. Pick the one Workbench should check in with — that's your boss."
         }
-        return "First choose or repair this Mac's Ouro boss, then Workbench can scan recent sessions and arrange them as terminals and workspaces."
+        return "Pick your boss to get started, then Workbench can find your recent work and set it up as terminals and workspaces."
     }
 
     var onboardingBossChoices: [OnboardingBossChoice] {
@@ -9883,7 +10511,16 @@ final class WorkbenchViewModel: ObservableObject {
             let isSelected = state.boss.agentName.caseInsensitiveCompare(name) == .orderedSame
             return OnboardingBossChoice(
                 name: name,
-                detail: agent?.summaryLine ?? "Agent bundle not found on this machine.",
+                // First-grade-simple: a friendly readiness line, never the raw
+                // `provider/model · human …/agent …` summary (lane jargon + internal IDs).
+                // The live connection health surfaces after selection, via the checks.
+                detail: agent.map { agent in
+                    switch agent.status {
+                    case .ready: return "Ready to be your boss."
+                    case .disabled: return "Turned off right now."
+                    case .missingConfig, .invalidConfig: return "Needs a little setup first."
+                    }
+                } ?? "We couldn't find this agent on your Mac.",
                 status: agent?.status,
                 registrationStatus: registration?.status,
                 isSelected: isSelected
@@ -10839,9 +11476,11 @@ final class WorkbenchViewModel: ObservableObject {
                 bossWorkbenchMCPRegistration = snapshot
             }
             let succeeded = snapshot.status == .registered
+            // Never surface the raw registrar `snapshot.detail` — for an unparseable bundle it
+            // is a raw decoding error (BossAgentBridge `.invalidConfig`). Friendly copy instead.
             let result = succeeded
                 ? "\(agent.name) is connected to Workbench and ready."
-                : snapshot.detail
+                : "Workbench couldn't connect \(agent.name) just now. You can try again — reopening Workbench usually clears it up."
             bossAppliedActions = [result] + bossAppliedActions
             recordActionLog(
                 source: "native",
@@ -10851,7 +11490,7 @@ final class WorkbenchViewModel: ObservableObject {
                 succeeded: succeeded
             )
         } catch {
-            errorMessage = "Connecting \(agent.name) to Workbench failed: \(error.localizedDescription)"
+            errorMessage = "Workbench couldn't connect \(agent.name) just now. Please try again — reopening Workbench usually clears it up."
             refreshWorkbenchMCPRegistration()
         }
     }
@@ -10910,7 +11549,7 @@ final class WorkbenchViewModel: ObservableObject {
             )
             return true
         } catch {
-            errorMessage = "Ouro agent install failed: \(error.localizedDescription)"
+            errorMessage = "Workbench couldn't bring that agent in. Please check the link and try again."
             return false
         }
     }
@@ -10921,7 +11560,7 @@ final class WorkbenchViewModel: ObservableObject {
             return
         }
         guard BossWorkbenchMCPRegistrar.isValidAgentBundleName(normalizedAgentName) else {
-            errorMessage = "Boss agent name cannot be used as a bundle name: \(normalizedAgentName)"
+            errorMessage = "That agent can't be used as your boss. Please pick another."
             return
         }
         state.boss.agentName = normalizedAgentName
@@ -10941,6 +11580,7 @@ final class WorkbenchViewModel: ObservableObject {
         onboardingProposal = nil
         onboardingCandidates = []
         onboardingProviderChecks = [:]
+        onboardingReconstructionHandedOff = false
         save()
         refreshWorkbenchMCPRegistration()
         refreshOnboardingReadiness()
@@ -11727,6 +12367,60 @@ final class WorkbenchViewModel: ObservableObject {
     /// shows a startup banner (a real check-in surfaces "waking" when it matters).
     /// Skipped before a boss is resolved — a fresh machine has no agent yet and the
     /// first-run bootstrap (S0) owns its own bringup.
+    /// Capture the user's real login-shell PATH once at launch and hand it to
+    /// `TerminalEnvironment`, so every `ouro` shellout resolves `node` + `ouro` the
+    /// way the user's shell does (nvm/asdf/brew — wherever they live). Without this,
+    /// `ouro` (a `node` script) dies with "node: not found" and the whole onboarding
+    /// reads as broken. Off-main, idempotent.
+    func prepareLoginShellEnvironment() async {
+        guard TerminalEnvironment.loginShellPath == nil else { return }
+        let captured = await Task.detached(priority: .userInitiated) {
+            WorkbenchViewModel.readLoginShellPath()
+        }.value
+        if let captured, !captured.isEmpty {
+            TerminalEnvironment.loginShellPath = captured
+        }
+    }
+
+    /// Run `$SHELL -lc 'printf %s "$PATH"'` to read the PATH the user's interactive
+    /// shell actually exposes (profile-sourced: version managers, brew, ouro). Returns
+    /// nil on any failure so callers fall back to the synthesized PATH.
+    nonisolated static func readLoginShellPath() -> String? {
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: shell)
+        // INTERACTIVE login shell (`-ilc`), not `-lc`. THE root-cause fix — see
+        // `TerminalEnvironment.loginShellCaptureArguments` for the full why (nvm/node/ouro live in
+        // `.zshrc`, which only an interactive shell sources; a `-lc` capture silently drops them).
+        process.arguments = TerminalEnvironment.loginShellCaptureArguments
+        let out = Pipe()
+        process.standardOutput = out
+        process.standardError = Pipe()
+        do {
+            try process.run()
+            // CRITICAL: this runs on the launch-blocking path (the launch task awaits
+            // this before showing onboarding). A login shell that hangs sourcing its
+            // profile (network-mounted rc, a blocking nvm/MDM hook, a profile that waits
+            // on input) would otherwise hang `waitUntilExit` forever and the wizard would
+            // never appear. Bound it: terminate past the deadline so the read unwinds and
+            // we fall back to the synthesized PATH. 10s (not 5s) — an interactive shell sources
+            // a heavier `.zshrc` (plugin frameworks, completions) and must not be killed mid-source.
+            let watchdog = DispatchWorkItem {
+                if process.isRunning { process.terminate() }
+            }
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 10, execute: watchdog)
+            let data = out.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            watchdog.cancel()
+            guard process.terminationStatus == 0 else { return nil }
+            let path = String(data: data, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return (path?.isEmpty == false) ? path : nil
+        } catch {
+            return nil
+        }
+    }
+
     func ensureDaemonRunningOnLaunch() async {
         guard !state.boss.agentName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return
@@ -11763,7 +12457,7 @@ final class WorkbenchViewModel: ObservableObject {
         case .respawned:
             message = "Brought your agent's runtime back online."
         case .needsManual:
-            message = "Workbench couldn't bring your agent back online automatically. Please reopen Workbench, and if it keeps happening, restart your Mac."
+            message = "Workbench couldn't bring your agent back online automatically. You can try again — and if it keeps happening, reconnecting your provider usually clears it up."
         }
         harnessActionResult = HarnessActionResult(
             kind: .repairDaemon,
@@ -12330,8 +13024,20 @@ final class WorkbenchViewModel: ObservableObject {
         let autoAdvanceEnabled = bossAutoAdvanceEnabled
         let osVersion = Self.osVersionString()
         let buildHash = Self.buildHashString()
+        // Anonymization inputs (#236): the real agent names, username, and home
+        // path so the redactor can strip every identifying token from the report
+        // BEFORE it touches disk. Agent names = all local agents + the selected
+        // boss, deduped and non-empty.
+        let redactor = WorkbenchBugReportRedactor()
+        let agentNames = bugReportAgentNames()
+        let homePath = FileManager.default.homeDirectoryForCurrentUser.path
+        let username = NSUserName()
+        let extraSections = bugReportExtraSections()
+        // The folder name is derived from the note, which can itself carry a path
+        // or username — redact the note first so the directory name can't leak.
+        let directoryNote = redactor.redact(note, agentNames: agentNames, homePath: homePath, username: username)
         let directory = paths.bugReportsURL.appendingPathComponent(
-            BugReportComposer.directoryName(date: Date(), note: note),
+            BugReportComposer.directoryName(date: Date(), note: directoryNote),
             isDirectory: true
         )
         let runner = SupportDiagnosticsRunner(resourceDirectory: Bundle.main.resourceURL)
@@ -12365,7 +13071,12 @@ final class WorkbenchViewModel: ObservableObject {
                         recentActions: actions,
                         screenshotPNG: screenshotPNG,
                         diagnosticsArchiveURL: diagnosticsArchive,
-                        diagnosticsError: diagnosticsError
+                        diagnosticsError: diagnosticsError,
+                        extraSections: extraSections,
+                        redactor: redactor,
+                        agentNames: agentNames,
+                        homePath: homePath,
+                        username: username
                     )
                     return .success(bundle)
                 } catch {
@@ -12437,10 +13148,26 @@ final class WorkbenchViewModel: ObservableObject {
         let bundlePath = directory.path
         let note = lastBugReportNote
         let repo = WorkbenchRelease.issueRepo
+        // report.md is already anonymized at write time; the title (from the note)
+        // and the bundle-path footer are redacted here so the whole issue stays
+        // clean from one source of truth (#236).
+        let redactor = WorkbenchBugReportRedactor()
+        let agentNames = bugReportAgentNames()
+        let homePath = FileManager.default.homeDirectoryForCurrentUser.path
+        let username = NSUserName()
 
         Task {
             let outcome = await Task.detached(priority: .userInitiated) { () -> Result<String, GitHubIssueFilingError> in
-                GitHubIssueFiler.file(reportURL: reportURL, bundlePath: bundlePath, note: note, repo: repo)
+                GitHubIssueFiler.file(
+                    reportURL: reportURL,
+                    bundlePath: bundlePath,
+                    note: note,
+                    repo: repo,
+                    redactor: redactor,
+                    agentNames: agentNames,
+                    homePath: homePath,
+                    username: username
+                )
             }.value
 
             bugReportIssueIsFiling = false
@@ -12499,6 +13226,49 @@ final class WorkbenchViewModel: ObservableObject {
                     gitBranch: gitStatus(for: entry)?.branchLabel
                 )
             }
+    }
+
+    /// Every agent name the redactor must scrub from the report (#236): all local
+    /// agents plus the selected boss, deduped (case-insensitively) and stripped of
+    /// blanks. Longer names are handled first inside the redactor, so order here is
+    /// only about completeness, not precedence.
+    func bugReportAgentNames() -> [String] {
+        var seen = Set<String>()
+        var names: [String] = []
+        for raw in ouroAgents.map(\.name) + [state.boss.agentName] {
+            let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else { continue }
+            let key = name.lowercased()
+            guard !seen.contains(key) else { continue }
+            seen.insert(key)
+            names.append(name)
+        }
+        return names
+    }
+
+    /// The U6 auto-attached context blocks layered on top of the existing report
+    /// (#236): which screen the user was on and the live onboarding-readiness
+    /// snapshot. Version + recent activity already live in the structured report
+    /// fields, so they aren't duplicated here. Blank-bodied sections are dropped by
+    /// the composer, so an absent readiness snapshot simply leaves no heading.
+    func bugReportExtraSections() -> [WorkbenchBugReportSection] {
+        var sections: [WorkbenchBugReportSection] = []
+
+        let currentScreen: String
+        if isOnboardingPresented {
+            let readinessState = onboardingReadiness?.state.rawValue ?? "unknown"
+            currentScreen = "Onboarding wizard (readiness: \(readinessState))"
+        } else {
+            currentScreen = "Main workspace"
+        }
+        sections.append(WorkbenchBugReportSection(title: "Current screen", body: currentScreen))
+
+        if let readiness = onboardingReadiness {
+            let rendered = OnboardingReadinessReportRenderer().render(readiness)
+            sections.append(WorkbenchBugReportSection(title: "Readiness", body: rendered))
+        }
+
+        return sections
     }
 
     /// Snapshot the main app window into PNG data using the view's own backing
@@ -12562,6 +13332,9 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     func presentOnboarding() {
+        // Snapshot the boss before the wizard can mutate it so an abandoned
+        // mid-wizard pick rolls back on dismiss (#227).
+        onboardingBossSnapshot = state.boss.agentName
         refreshOuroAgents()
         refreshWorkbenchMCPRegistration()
         // Discard any stale provider-check entries that aren't a confirmed
@@ -12586,40 +13359,79 @@ final class WorkbenchViewModel: ObservableObject {
         guard let selectedAgent, selectedAgent.status == .ready else {
             return
         }
-        let laneConfigurations: [(lane: String, configured: Bool)] = [
-            ("outward", selectedAgent.humanFacing?.provider != nil && selectedAgent.humanFacing?.model != nil),
-            ("inner", selectedAgent.agentFacing?.provider != nil && selectedAgent.agentFacing?.model != nil)
-        ]
+        // When both lanes resolve to the SAME provider+model (U1's lane collapse), the inner check
+        // is redundant — readiness only surfaces the ONE outward connection step in that case, so
+        // checking inner would spin a lane the user never sees. Run just outward; this also halves
+        // the wait. When the lanes diverge, check both.
+        let laneConfigurations: [(lane: String, configured: Bool)]
+        if selectedAgent.lanesShareOneConnection {
+            laneConfigurations = [
+                ("outward", true)
+            ]
+            // Only the outward lane is checked in the collapsed case. Drop any stale `inner`
+            // entry — a divergent→collapsed mid-session reconfigure can leave `inner == .running`
+            // behind, and the Connect-page advance button is disabled while ANY check is
+            // `.running` (it never sees the inner lane), so it would stay pinned disabled forever.
+            onboardingProviderChecks["inner"] = nil
+        } else {
+            laneConfigurations = [
+                ("outward", selectedAgent.humanFacing?.provider != nil && selectedAgent.humanFacing?.model != nil),
+                ("inner", selectedAgent.agentFacing?.provider != nil && selectedAgent.agentFacing?.model != nil)
+            ]
+        }
+        let agentName = selectedAgent.name
+        // Collect the lanes that actually need a (re)check.
+        var lanesToCheck: [String] = []
         for laneConfiguration in laneConfigurations where laneConfiguration.configured {
             let existingState = onboardingProviderChecks[laneConfiguration.lane]?.state
-            guard existingState != .running, existingState != .passed else {
-                continue
-            }
-            onboardingProviderChecks[laneConfiguration.lane] = OnboardingProviderCheckResult(
-                lane: laneConfiguration.lane,
+            guard existingState != .running, existingState != .passed else { continue }
+            lanesToCheck.append(laneConfiguration.lane)
+        }
+        guard !lanesToCheck.isEmpty else { return }
+
+        // Mark every pending lane running up front + stamp a per-lane generation so a
+        // dismiss/cancel or a superseding run can't let a stale completion overwrite
+        // freshly-cleaned state.
+        var generations: [String: Int] = [:]
+        for lane in lanesToCheck {
+            onboardingProviderChecks[lane] = OnboardingProviderCheckResult(
+                lane: lane,
                 state: .running,
-                detail: "Checking \(laneConfiguration.lane) provider..."
+                detail: "Checking your agent's connection…"
             )
-            refreshOnboardingReadiness()
-            // Track + generation-stamp so cancelling on dismiss is real, and a
-            // late completion from a previous run can't overwrite freshly-
-            // cleaned state (flipping a repaired lane back to a stale failure).
-            let lane = laneConfiguration.lane
-            let agentName = selectedAgent.name
             let generation = (onboardingProviderCheckGeneration[lane] ?? 0) + 1
             onboardingProviderCheckGeneration[lane] = generation
+            generations[lane] = generation
             onboardingProviderCheckTasks[lane]?.cancel()
-            onboardingProviderCheckTasks[lane] = Task {
+        }
+        refreshOnboardingReadiness()
+
+        // Run the lane checks SEQUENTIALLY, not concurrently. `ouro check`'s credential
+        // read contends on the single bitwarden vault lock (held by the ouro daemon), so
+        // two concurrent checks starve each other past the watchdog and BOTH spuriously
+        // fail — even when the providers are perfectly ready (observed: a lone check ~11s,
+        // two at once time out). One at a time, each check acquires the lock cleanly. A
+        // single shared task drives them in order; it's registered under each lane key so
+        // a dismiss-cancel still cancels it.
+        let serialTask = Task {
+            for lane in lanesToCheck {
+                guard !Task.isCancelled,
+                      onboardingProviderCheckGeneration[lane] == generations[lane] else {
+                    continue
+                }
                 let result = await runOnboardingProviderCheck(agentName: agentName, lane: lane)
                 guard !Task.isCancelled,
-                      onboardingProviderCheckGeneration[lane] == generation else {
-                    return
+                      onboardingProviderCheckGeneration[lane] == generations[lane] else {
+                    continue
                 }
                 onboardingProviderChecks[lane] = result
                 refreshOuroAgents()
                 refreshWorkbenchMCPRegistration()
                 refreshOnboardingReadiness()
             }
+        }
+        for lane in lanesToCheck {
+            onboardingProviderCheckTasks[lane] = serialTask
         }
     }
 
@@ -12634,12 +13446,40 @@ final class WorkbenchViewModel: ObservableObject {
         onboardingProviderCheckTasks.removeAll()
     }
 
+    /// Roll back a boss pick that the user made mid-wizard but abandoned by
+    /// dismissing before genuinely completing onboarding (#227). Without this, a
+    /// half-finished pick stays persisted on disk and, combined with the present-
+    /// until-completed logic, would lock the user into re-opening the wizard with
+    /// a boss they never confirmed. No-op once onboarding is completed, when no
+    /// snapshot is in flight, or when the boss is unchanged from the snapshot.
+    func rollbackOnboardingIfIncomplete() {
+        guard !onboardingHasBeenCompleted,
+              let snapshot = onboardingBossSnapshot,
+              state.boss.agentName != snapshot else {
+            return
+        }
+        state.boss.agentName = snapshot
+        for index in state.projects.indices {
+            state.projects[index].boss.agentName = snapshot
+        }
+        save()
+        refreshOnboardingReadiness()
+        onboardingBossSnapshot = nil
+    }
+
     private func runOnboardingProviderCheck(agentName: String, lane: String) async -> OnboardingProviderCheckResult {
         await Task.detached(priority: .userInitiated) {
             let process = Process()
             let pipe = Pipe()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
             process.arguments = ["ouro", "check", "--agent", agentName, "--lane", lane]
+            // Resolve PATH from the user's real login shell (+ ~/.ouro-cli/bin + the
+            // system dirs) so `ouro` AND its `node` runtime are found from a
+            // Finder-launched app's bare launchd PATH. Every OTHER runner already does
+            // this; this check was the one that didn't — so it died with
+            // `env: ouro: No such file or directory`, which then surfaced verbatim in
+            // the wizard as a baffling "what env??" error to a brand-new user.
+            process.environment = TerminalEnvironment().valuesWithResolvedPath()
             process.standardOutput = pipe
             process.standardError = pipe
             do {
@@ -12653,36 +13493,50 @@ final class WorkbenchViewModel: ObservableObject {
                 let watchdog = DispatchWorkItem {
                     if process.isRunning { process.terminate() }
                 }
-                DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 20, execute: watchdog)
-                let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                // 90s, not 40s: a warm `ouro check` runs ~12s (it waits on the bitwarden vault
+                // lock the daemon holds), but the FIRST check right after a factory reset — cold
+                // daemon + cold vault, likely warm-up contention — can run well past that. 40s
+                // was hard-killing that cold first-check and surfacing a scary "took too long",
+                // so a brand-new user watched a silent spinner and quit. 90s gives the cold path
+                // room; the "Try again" button (U2) makes a warm retry cheap if it ever does hit
+                // the ceiling. (Root cause of the cold slowness is unconfirmed — couldn't
+                // reproduce live — so this tolerates-and-informs rather than fixing the source.)
+                DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 90, execute: watchdog)
+                // Drain the pipe even though we no longer surface the raw output — an
+                // undrained pipe past 64KB blocks the child and looks like a timeout.
+                _ = pipe.fileHandleForReading.readDataToEndOfFile()
                 process.waitUntilExit()
                 watchdog.cancel()
-                if Date().timeIntervalSince(start) >= 20 {
+                // Lane-agnostic copy: U1's repair-step TITLE now carries the connection identity
+                // (provider · model + plain-English role), so these details no longer need the
+                // opaque "main"/"background" lane label (#234).
+                if Date().timeIntervalSince(start) >= 90 {
                     return OnboardingProviderCheckResult(
                         lane: lane,
                         state: .failed,
-                        detail: "`ouro check --agent \(agentName) --lane \(lane)` did not finish. Open Ouro provider setup to repair auth or daemon state."
+                        detail: "This is taking longer than usual. Try again, or reconnect your provider."
                     )
                 }
-                let output = String(decoding: data, as: UTF8.self)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
                 if process.terminationStatus == 0 {
                     return OnboardingProviderCheckResult(
                         lane: lane,
                         state: .passed,
-                        detail: output.isEmpty ? "\(lane) provider check passed." : output
+                        detail: "This connection is working."
                     )
                 }
+                // NEVER surface raw `ouro check` output (lane jargon, provider IDs, a
+                // `node`/PATH shell error) — it reads as gibberish to a first-time user.
+                // The Connect step is the fix in every failure case, so the copy points there.
                 return OnboardingProviderCheckResult(
                     lane: lane,
                     state: .failed,
-                    detail: output.isEmpty ? "\(lane) provider check failed." : output
+                    detail: "Workbench couldn't confirm this connection yet. Try again, or reconnect your provider."
                 )
             } catch {
                 return OnboardingProviderCheckResult(
                     lane: lane,
                     state: .failed,
-                    detail: "Could not run `ouro check --agent \(agentName) --lane \(lane)`: \(error.localizedDescription)"
+                    detail: "Workbench is still setting this up. It clears once your provider is connected."
                 )
             }
         }.value
@@ -12764,6 +13618,39 @@ final class WorkbenchViewModel: ObservableObject {
         }
     }
 
+    /// Slice 7 — onboarding hand-off. Instead of Workbench running the hardcoded
+    /// `RecentSessionScanner` scan + arrange, hand the boss the reconstruction task and let
+    /// it own the context-specific work: discover via `workbench_discover_agent_sessions`,
+    /// optionally propose via the card, relaunch the approved sessions as terminals. The boss
+    /// does which-agent / exact-resume-command intelligence; Workbench only provides the
+    /// hand-off + the surfaces (this conversation + the proposal card) where the boss's work
+    /// renders. This is the boss-driven replacement for `scanForOnboardingSessions()` /
+    /// `applyOnboardingProposal()` as the wizard's import path — those remain for any other
+    /// callers but the wizard no longer drives them.
+    func startBossReconstruction() {
+        guard onboardingReadiness?.isReady == true else {
+            refreshOnboardingReadiness()
+            runOnboardingProviderChecksIfNeeded()
+            return
+        }
+        guard !bossCheckInIsRunning else {
+            return
+        }
+        onboardingReconstructionHandedOff = true
+        // The boss reads any operator-approved edits back through `workbench_proposal_result`;
+        // refresh the pending list so a card the boss enqueues surfaces in the dashboard.
+        loadPendingProposals()
+        recordActionLog(
+            source: "native",
+            action: "startBossReconstruction",
+            result: "Handed reconstruction to \(state.boss.agentName)",
+            succeeded: true
+        )
+        Task {
+            await runBossQuickQuestion(WorkbenchOnboardingNarrative.bossReconstructTask)
+        }
+    }
+
     /// Toggle whether a terminal in the current import proposal is selected.
     /// Returns `true` after the toggle if the terminal is now selected.
     @discardableResult
@@ -12783,6 +13670,47 @@ final class WorkbenchViewModel: ObservableObject {
         }
         proposal.setSelection(groupID: groupID, selected: selected)
         onboardingProposal = proposal
+    }
+
+    // MARK: - Boss proposals (workbench_propose CAPABILITY — never a gate)
+
+    /// Refresh the pending-proposal list from the queue. Pure read; safe to call
+    /// whenever the operator opens the proposal surface. Best-effort — a malformed
+    /// pending file is skipped by the queue, never surfaced as an error.
+    func loadPendingProposals() {
+        pendingProposals = proposalQueue.pendingProposals()
+    }
+
+    /// Flip an item's selection in the in-memory proposal (the card binds to
+    /// `pendingProposals`). Nothing is written back until the operator approves.
+    func toggleProposalItem(proposalID: String, itemID: String) {
+        guard let index = pendingProposals.firstIndex(where: { $0.id == proposalID }) else { return }
+        pendingProposals[index].toggle(itemID: itemID)
+    }
+
+    /// Edit one editable field of a proposal item in memory. The Core model
+    /// rejects fields the boss didn't expose, so the card can offer inputs freely.
+    func editProposalItem(proposalID: String, itemID: String, field: AgentProposalItem.Field, value: String) {
+        guard let index = pendingProposals.firstIndex(where: { $0.id == proposalID }) else { return }
+        pendingProposals[index].edit(itemID: itemID, field: field, value: value)
+    }
+
+    /// Approve a proposal: write the operator's `result()` (selected, edited items)
+    /// back through the queue for the boss, drop it from pending, and refresh.
+    func approveProposal(proposalID: String) {
+        guard let proposal = pendingProposals.first(where: { $0.id == proposalID }) else { return }
+        try? proposalQueue.writeResult(proposal.result())
+        proposalQueue.removePending(id: proposalID)
+        loadPendingProposals()
+    }
+
+    /// Dismiss a proposal without approving (the operator chose not to act on it).
+    /// Writes an EMPTY result so the polling boss learns the operator declined,
+    /// rather than waiting forever, then drops it from pending.
+    func dismissProposal(proposalID: String) {
+        try? proposalQueue.writeResult(AgentProposalResult(id: proposalID, items: []))
+        proposalQueue.removePending(id: proposalID)
+        loadPendingProposals()
     }
 
     @discardableResult
@@ -14624,7 +15552,12 @@ final class WorkbenchViewModel: ObservableObject {
                 workingDirectory: nonEmpty(action.workingDirectory) ?? project.rootPath,
                 trust: action.trust ?? .untrusted,
                 autoResume: action.autoResume ?? false,
-                notes: action.text ?? "Created by \(source)"
+                notes: action.text ?? "Created by \(source)",
+                // Forward memory (Slice 6): carry the boss's discovery provenance
+                // (nil for an ordinary create) so a relaunched discovered session
+                // is stamped + natively rediscoverable by the next scan().
+                discoveredHarness: action.discoveredHarness,
+                discoveredSessionId: nonEmpty(action.discoveredSessionId)
             )
             guard let entry = createCustomSession(draft, in: project.id, launchAfterCreate: false) else {
                 return finishBossAction(source: source, action: action, entry: nil, result: "Failed createTerminal: \(errorMessage ?? "invalid terminal")")
@@ -14650,7 +15583,12 @@ final class WorkbenchViewModel: ObservableObject {
                 workingDirectory: nonEmpty(action.workingDirectory) ?? project.rootPath,
                 trust: action.trust ?? .untrusted,
                 autoResume: action.autoResume ?? false,
-                notes: nonEmpty(action.text) ?? "Created by \(source)"
+                notes: nonEmpty(action.text) ?? "Created by \(source)",
+                // Forward memory (Slice 6): carry the boss's discovery provenance
+                // (nil for an ordinary create) so a relaunched discovered session
+                // is stamped + natively rediscoverable by the next scan().
+                discoveredHarness: action.discoveredHarness,
+                discoveredSessionId: nonEmpty(action.discoveredSessionId)
             )
             guard let entry = createCustomSession(draft, in: project.id, launchAfterCreate: true, owner: .agent(name: ownerName)) else {
                 return finishBossAction(source: source, action: action, entry: nil, result: "Failed createSession: \(errorMessage ?? "invalid session")")
@@ -15062,6 +16000,19 @@ final class WorkbenchViewModel: ObservableObject {
     func startFirstRunBootstrapIfNeeded() {
         let bossName = (onboardingReadiness?.selectedBossName ?? state.boss.agentName)
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        // Skip the cold-start bootstrap for an agent that's ALREADY configured (it exists with
+        // both provider lanes set). The bootstrap exists to bring a COLD-START agent online; for
+        // a configured agent it only re-runs verify/refresh, piling more concurrent `ouro`
+        // credential reads onto the daemon's bitwarden vault lock — which starves the wizard's
+        // own lane checks and surfaces a confusing "setting up your agent" list for an agent that
+        // is already set up. The serialized lane checks are the authority on its readiness.
+        if let selectedAgent = ouroAgents.first(where: { $0.name.caseInsensitiveCompare(bossName) == .orderedSame }) {
+            let outwardConfigured = selectedAgent.humanFacing?.provider != nil && selectedAgent.humanFacing?.model != nil
+            let innerConfigured = selectedAgent.agentFacing?.provider != nil && selectedAgent.agentFacing?.model != nil
+            if outwardConfigured && innerConfigured {
+                return
+            }
+        }
         let decision = FirstRunBootstrapDrive.shouldStart(
             isReady: onboardingReadiness?.isReady ?? false,
             hasResolvedBoss: !bossName.isEmpty,
@@ -15317,6 +16268,14 @@ final class WorkbenchViewModel: ObservableObject {
                     )
                 }
             }
+        case "repair-outward-provider", "repair-inner-provider":
+            // A configured lane whose LIVE check failed. The form can't refresh an existing
+            // agent's creds (gap a), so the useful action is a RE-CHECK: it self-heals a
+            // transient failure (a lock-contended vault, a network blip — exactly the kind that
+            // previously left this as a dead no-op button) and honestly re-reports a real one.
+            // `runOnboardingProviderChecksIfNeeded` re-runs any non-passed lane (a `.failed` lane
+            // qualifies), flipping the row to a live "Checking…" spinner for immediate feedback.
+            runOnboardingProviderChecksIfNeeded()
         default:
             // No other step reaches here (provider-setup short-circuits in `openOnboardingRepair`;
             // workbench-mcp has its own button; check-* in `running` state render a spinner).
@@ -16097,7 +17056,7 @@ final class WorkbenchViewModel: ObservableObject {
     static let autoLaunchResumableOnStartupDefaultsKey = "ouro.workbench.autoLaunchResumableOnStartup"
     static let autoUpdateEnabledDefaultsKey = "ouro.workbench.autoUpdateEnabled"
     static let lastUpdateCheckAtDefaultsKey = "ouro.workbench.lastUpdateCheckAt"
-    static let onboardingAutoPresentedDefaultsKey = "ouro.workbench.onboardingAutoPresented"
+    static let onboardingCompletedDefaultsKey = "ouro.workbench.onboardingCompleted"
     static let maxRecentWorkspaces = 8
     /// Default terminal font size. Matches macOS Terminal's default.
     static let defaultTerminalFontSize: CGFloat = 13

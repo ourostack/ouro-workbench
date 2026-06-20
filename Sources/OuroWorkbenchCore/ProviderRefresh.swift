@@ -40,7 +40,7 @@ public enum ProviderRefreshTruth: String, Codable, Equatable, Sendable {
         case .stillDegraded:
             return "Workbench refreshed \(agentName)'s connection, but it still needs attention. Workbench will keep working on it."
         case .needsManual:
-            return "Workbench couldn't refresh \(agentName)'s connection automatically. Please reopen Workbench, and if it keeps happening, restart your Mac."
+            return "Workbench couldn't refresh \(agentName)'s connection automatically. You can try again — and if it keeps happening, reconnecting your provider usually clears it up."
         }
     }
 
@@ -124,6 +124,7 @@ public struct ProviderRefreshRunner: Sendable {
         process.standardError = devNull
 
         try process.run()
-        process.waitUntilExit()
+        // Bound the wait so a wedged `ouro`/`node` child can't hang the refresh forever.
+        ProcessWatchdog.waitUntilExit(process, timeoutSeconds: 30)
     }
 }
