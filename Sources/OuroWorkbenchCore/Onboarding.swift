@@ -372,10 +372,18 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
                 step.id == "workbench-mcp"
         }
         guard blockers.isEmpty else {
+            // ACTOR-based headline split: while every blocker is still an in-flight check or an
+            // agent-runnable auto-remediation, nothing needs the user yet — saying "Repair" or
+            // "needs setup" is premature alarm (#231). Only once a `.humanRequired` / `.humanChoice`
+            // blocker appears (a failed live check, an unconfigured lane) does the headline ask the
+            // user to finish.
+            let needsHuman = blockers.contains { $0.actor == .humanRequired || $0.actor == .humanChoice }
             return OnboardingReadiness(
                 state: .needsRepair,
-                headline: "Repair \(selected.name)",
-                detail: "Workbench found \(selected.name), but it needs setup before it can be a reliable boss.",
+                headline: needsHuman ? "Finish setting up \(selected.name)" : "Setting up \(selected.name)…",
+                detail: needsHuman
+                    ? "Workbench found \(selected.name), but a couple of things need you before it can be a reliable boss."
+                    : "Workbench is getting \(selected.name) ready — checking its connection and tools.",
                 selectedBossName: selected.name,
                 repairSteps: repairSteps
             )
