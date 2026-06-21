@@ -312,4 +312,58 @@ final class SessionIdBackfillTests: XCTestCase {
         let result = SessionIdBackfill.sessionIdBackfills(runs: [], entries: [], records: [])
         XCTAssertTrue(result.isEmpty)
     }
+
+    func testDuplicateEntryIdKeepsFirstAndStillBackfills() {
+        // Two entries sharing an id (degenerate, but must not trap): the lookup
+        // keeps the first and the lone run still back-fills normally.
+        let sharedId = UUID()
+        let first = claudeEntry(id: sharedId, cwd: "/repo")
+        let dup = claudeEntry(id: sharedId, cwd: "/repo")
+        let run = runningRun(entry: first, pid: 4242)
+        let records = [
+            runningRecord(harness: .claudeCode, pid: 4242),
+            recentRecord(harness: .claudeCode, sessionId: "sess-abc", cwd: "/repo"),
+        ]
+
+        let result = SessionIdBackfill.sessionIdBackfills(
+            runs: [run], entries: [first, dup], records: records
+        )
+
+        XCTAssertEqual(result, [run.id: "sess-abc"])
+    }
+
+    func testRunningRecordWithMalformedPidIsIgnored() {
+        // A running record whose sessionId is "pid-<garbage>" (has the prefix but
+        // no integer) can't pin any run; nothing back-fills.
+        let entry = claudeEntry(cwd: "/repo")
+        let run = runningRun(entry: entry, pid: 4242)
+        let records = [
+            AgentSessionRecord(harness: .claudeCode, sessionId: "pid-notanint", cwd: "", running: true),
+            recentRecord(harness: .claudeCode, sessionId: "sess-abc", cwd: "/repo"),
+        ]
+
+        let result = SessionIdBackfill.sessionIdBackfills(
+            runs: [run], entries: [entry], records: records
+        )
+
+        XCTAssertTrue(result.isEmpty)
+    }
+
+    func testRunningRecordWithoutPidPrefixIsIgnored() {
+        // A running record whose sessionId lacks the "pid-" prefix entirely (e.g.
+        // a forward-memory-tagged running record carrying a native id) is not a
+        // pin source → the run can't be pinned → nothing back-fills.
+        let entry = claudeEntry(cwd: "/repo")
+        let run = runningRun(entry: entry, pid: 4242)
+        let records = [
+            AgentSessionRecord(harness: .claudeCode, sessionId: "native-running-id", cwd: "/repo", running: true),
+            recentRecord(harness: .claudeCode, sessionId: "sess-abc", cwd: "/repo"),
+        ]
+
+        let result = SessionIdBackfill.sessionIdBackfills(
+            runs: [run], entries: [entry], records: records
+        )
+
+        XCTAssertTrue(result.isEmpty)
+    }
 }
