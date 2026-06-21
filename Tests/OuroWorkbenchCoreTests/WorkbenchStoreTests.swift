@@ -31,32 +31,127 @@ final class WorkbenchStoreTests: XCTestCase {
 
         XCTAssertThrowsError(try WorkbenchStore(stateURL: stateURL).load(quarantineCorruptFile: false))
         XCTAssertThrowsError(try WorkbenchStore(stateURL: stateURL).load()) { error in
-            guard case let WorkbenchStoreError.unreadableState(quarantineURL, reason) = error else {
+            guard case let WorkbenchStoreError.unreadableState(preserved, reason) = error else {
                 return XCTFail("Unexpected error \(error)")
+            }
+            guard case let .moved(quarantineURL) = preserved else {
+                return XCTFail("Expected .moved outcome, got \(preserved)")
             }
             XCTAssertTrue(reason.contains("read failed"))
             XCTAssertTrue(quarantineURL.lastPathComponent.hasPrefix("workspace.json.corrupt-"))
         }
     }
 
-    func testStoreErrorEqualityIgnoresUnreadableReasonButKeepsCaseAndVersion() {
+    func testStoreErrorEqualityIgnoresUnreadableReasonButKeepsPreservedAndVersion() {
         let a = URL(fileURLWithPath: "/state-a")
         let b = URL(fileURLWithPath: "/state-b")
 
         XCTAssertEqual(WorkbenchStoreError.unsupportedStateVersion(2), .unsupportedStateVersion(2))
         XCTAssertNotEqual(WorkbenchStoreError.unsupportedStateVersion(2), .unsupportedStateVersion(3))
+        // Reason is ignored in equality; the carried outcome is not.
         XCTAssertEqual(
-            WorkbenchStoreError.unreadableState(quarantineURL: a, reason: "decode failed"),
-            .unreadableState(quarantineURL: a, reason: "read failed")
+            WorkbenchStoreError.unreadableState(preserved: .moved(quarantineURL: a), reason: "decode failed"),
+            .unreadableState(preserved: .moved(quarantineURL: a), reason: "read failed")
         )
         XCTAssertNotEqual(
-            WorkbenchStoreError.unreadableState(quarantineURL: a, reason: "decode failed"),
-            .unreadableState(quarantineURL: b, reason: "decode failed")
+            WorkbenchStoreError.unreadableState(preserved: .moved(quarantineURL: a), reason: "decode failed"),
+            .unreadableState(preserved: .moved(quarantineURL: b), reason: "decode failed")
+        )
+        // A move that succeeded and one that failed are never equal even at the
+        // same path — the operator-facing message must differ.
+        XCTAssertNotEqual(
+            WorkbenchStoreError.unreadableState(preserved: .moved(quarantineURL: a), reason: "decode failed"),
+            .unreadableState(preserved: .moveFailed(attemptedURL: a, reason: "boom"), reason: "decode failed")
         )
         XCTAssertNotEqual(
-            WorkbenchStoreError.unreadableState(quarantineURL: a, reason: "decode failed"),
+            WorkbenchStoreError.unreadableState(preserved: .moved(quarantineURL: a), reason: "decode failed"),
             .unsupportedStateVersion(1)
         )
+    }
+
+    // MARK: - F5 Seam 1: quarantine outcome is a checked value
+
+    func testQuarantineMoveSucceedsReturnsMovedAndRelocatesBytes() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let stateURL = root.appendingPathComponent("workspace.json")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try Data("original bytes".utf8).write(to: stateURL)
+        let quarantineURL = root.appendingPathComponent("workspace.json.corrupt-stamp")
+
+        let outcome = WorkbenchStore.quarantineMove(
+            stateURL: stateURL,
+            quarantineURL: quarantineURL,
+            fileManager: .default
+        )
+
+        guard case let .moved(movedURL) = outcome else {
+            return XCTFail("Expected .moved, got \(outcome)")
+        }
+        XCTAssertEqual(movedURL, quarantineURL)
+        // Original is gone from the live path; bytes live at the quarantine URL.
+        XCTAssertFalse(FileManager.default.fileExists(atPath: stateURL.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: quarantineURL.path))
+        XCTAssertEqual(try String(contentsOf: quarantineURL, encoding: .utf8), "original bytes")
+    }
+
+    func testQuarantineMoveFailsReturnsMoveFailedAndLeavesOriginalInPlace() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let stateURL = root.appendingPathComponent("workspace.json")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try Data("original bytes".utf8).write(to: stateURL)
+        // Pre-create a NON-EMPTY DIRECTORY at the target so moveItem throws
+        // deterministically (no timestamp racing). A non-empty dir cannot be
+        // overwritten by a move.
+        let quarantineURL = root.appendingPathComponent("workspace.json.corrupt-stamp", isDirectory: true)
+        try FileManager.default.createDirectory(at: quarantineURL, withIntermediateDirectories: true)
+        try Data("occupant".utf8).write(to: quarantineURL.appendingPathComponent("occupant.txt"))
+
+        let outcome = WorkbenchStore.quarantineMove(
+            stateURL: stateURL,
+            quarantineURL: quarantineURL,
+            fileManager: .default
+        )
+
+        guard case let .moveFailed(attemptedURL, reason) = outcome else {
+            return XCTFail("Expected .moveFailed, got \(outcome)")
+        }
+        XCTAssertEqual(attemptedURL, quarantineURL)
+        XCTAssertFalse(reason.isEmpty)
+        // CRITICAL: the original is STILL at stateURL with its original bytes —
+        // a subsequent atomic save must not be told it's safe to overwrite.
+        XCTAssertTrue(FileManager.default.fileExists(atPath: stateURL.path))
+        XCTAssertEqual(try String(contentsOf: stateURL, encoding: .utf8), "original bytes")
+    }
+
+    func testCorruptStateMoveSucceedsCarriesMovedOutcomeInError() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let stateURL = root.appendingPathComponent("workspace.json")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try Data("{ not valid json".utf8).write(to: stateURL)
+
+        XCTAssertThrowsError(try WorkbenchStore(stateURL: stateURL).load()) { error in
+            guard case let WorkbenchStoreError.unreadableState(preserved, reason) = error else {
+                return XCTFail("Unexpected error \(error)")
+            }
+            guard case let .moved(quarantineURL) = preserved else {
+                return XCTFail("Expected .moved outcome, got \(preserved)")
+            }
+            XCTAssertTrue(reason.contains("decode failed"))
+            XCTAssertTrue(quarantineURL.lastPathComponent.hasPrefix("workspace.json.corrupt-"))
+            // Original relocated; the quarantine file holds the exact bytes.
+            XCTAssertFalse(FileManager.default.fileExists(atPath: stateURL.path))
+            XCTAssertTrue(FileManager.default.fileExists(atPath: quarantineURL.path))
+            XCTAssertEqual(
+                try? String(contentsOf: quarantineURL, encoding: .utf8),
+                "{ not valid json"
+            )
+        }
     }
 
     func testStoreRoundTripsWorkspaceState() throws {
@@ -183,7 +278,10 @@ final class WorkbenchStoreTests: XCTestCase {
         do {
             _ = try store.load()
             XCTFail("Expected load to throw on corrupt JSON")
-        } catch let WorkbenchStoreError.unreadableState(quarantineURL, _) {
+        } catch let WorkbenchStoreError.unreadableState(outcome, _) {
+            guard case let .moved(quarantineURL) = outcome else {
+                return XCTFail("Expected .moved outcome, got \(outcome)")
+            }
             // Original moved aside; nothing left at the live path to overwrite.
             XCTAssertFalse(FileManager.default.fileExists(atPath: stateURL.path))
             XCTAssertTrue(FileManager.default.fileExists(atPath: quarantineURL.path))
@@ -264,8 +362,11 @@ final class WorkbenchStoreTests: XCTestCase {
         try Data(json.utf8).write(to: stateURL)
 
         XCTAssertThrowsError(try WorkbenchStore(stateURL: stateURL).load()) { error in
-            guard case let WorkbenchStoreError.unreadableState(quarantineURL, reason) = error else {
+            guard case let WorkbenchStoreError.unreadableState(preserved, reason) = error else {
                 return XCTFail("Unexpected error \(error)")
+            }
+            guard case let .moved(quarantineURL) = preserved else {
+                return XCTFail("Expected .moved outcome, got \(preserved)")
             }
             XCTAssertTrue(quarantineURL.lastPathComponent.hasPrefix("workspace.json.corrupt-"))
             XCTAssertTrue(reason.contains("unsupported schema version 99"))
