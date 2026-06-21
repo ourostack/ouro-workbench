@@ -91,7 +91,7 @@ entry. Add edge tests if any region uncovered.
 Output: coverage gate passes naming VaultOnboarding.swift at 100%.
 Acceptance: check-coverage.sh PASS; no allowlist line for VaultOnboarding.swift.
 
-### Unit 2a — App stash-the-provider TESTS (red) ⬜
+### Unit 2a — App stash-the-provider TESTS (red) ✅
 What: Extend the App source-pin suite (new `VaultOnboardingWiringTests.swift`, mirror
 `ColdStartHonestWiringTests`). Pin: the `.coldStartHatch` outcome switch has a DEDICATED
 `.needsVaultSetup` arm (NOT shared with `.failed`) that sets `providerConfigNeedsVaultSetup
