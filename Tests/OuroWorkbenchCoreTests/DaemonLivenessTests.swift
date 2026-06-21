@@ -316,6 +316,16 @@ final class DaemonLivenessTests: XCTestCase {
         }
     }
 
+    /// Covers `cancelTaskDefault(_:)` deterministically — no network, no timeout, no race. The
+    /// default `cancelTask` of `defaultSyncReachability` is exercised only on a timing-dependent
+    /// timeout path, so we invoke the named default directly with an unstarted task and assert it
+    /// leaves the running state, guaranteeing the cancel line runs on every test run.
+    func testCancelTaskDefaultCancelsTheTask() {
+        let task = URLSession.shared.dataTask(with: URL(string: "http://127.0.0.1:1/probe")!)
+        DaemonLivenessProbe.cancelTaskDefault(task)
+        XCTAssertTrue(task.state == .canceling || task.state == .completed)
+    }
+
     func testDaemonManagerDefaultInitializerAndDetachedStartUsesOuroFromPath() async throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("DaemonLivenessTests-\(UUID().uuidString)", isDirectory: true)
