@@ -85,7 +85,7 @@ What: New `Sources/OuroWorkbenchCore/VaultOnboarding.swift` with `VaultOnboardin
 Output: tests pass; `swift build` clean; no warnings.
 Acceptance: `swift test` green; build clean.
 
-### Unit 1c — Core coverage VERIFY ⬜
+### Unit 1c — Core coverage VERIFY ✅
 What: `scripts/check-coverage.sh` → `VaultOnboarding.swift` 100% line+region, NO allowlist
 entry. Add edge tests if any region uncovered.
 Output: coverage gate passes naming VaultOnboarding.swift at 100%.

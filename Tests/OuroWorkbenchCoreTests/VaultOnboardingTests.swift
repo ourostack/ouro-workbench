@@ -9,6 +9,13 @@ import XCTest
 /// command chain, and the seam-free human copy.
 final class VaultOnboardingTests: XCTestCase {
 
+    // MARK: - Public surface
+
+    func testMachineIsConstructible() {
+        // The documented public initializer is part of the seam's API surface.
+        _ = VaultOnboardingMachine()
+    }
+
     // MARK: - shouldOffer: only the honest needs-vault case
 
     func testShouldOfferOnlyForNeedsVaultSetup() {
