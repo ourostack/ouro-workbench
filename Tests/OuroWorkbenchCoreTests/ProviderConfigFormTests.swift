@@ -301,8 +301,40 @@ final class ProviderConfigFormTests: XCTestCase {
         XCTAssertEqual(fallback.tokens, ["ouro", "hatch", "--api-key", "az-key"])
     }
 
-    func testColdStartRunnerCanExecuteFiniteHeadlessCommand() async throws {
-        try await ColdStartHatchRunner.runHeadless(plan: BootstrapAgentProvisionPlan(tokens: ["true"]))
+    func testColdStartRunnerReturnsExitedZeroForSuccessfulCommand() async {
+        // F1 seam 1: runHeadless now REPORTS the hatch exit instead of swallowing it. A finite
+        // command that exits 0 (`true`) returns `.exited(code: 0)` — mirrors CloneAgentRunner's
+        // `true`/`false` finite-command coverage.
+        let result = await ColdStartHatchRunner.runHeadless(plan: BootstrapAgentProvisionPlan(tokens: ["true"]))
+        XCTAssertEqual(result, .exited(code: 0))
+    }
+
+    func testColdStartRunnerReturnsExitedNonZeroForFailingCommand() async {
+        // A finite command that exits non-zero (`false` exits 1) surfaces `.exited(code: 1)` —
+        // this is the truth the old "deliberately ignore the exit status" code threw away, which
+        // is exactly what let a dead, credential-less hatch report success.
+        let result = await ColdStartHatchRunner.runHeadless(plan: BootstrapAgentProvisionPlan(tokens: ["false"]))
+        XCTAssertEqual(result, .exited(code: 1))
+    }
+
+    func testColdStartRunnerReturnsLaunchFailedWhenProcessCannotStart() async {
+        // When the process can't be launched at all, `run()` throws and runHeadless catches it →
+        // `.launchFailed` (distinct from a non-zero exit, so the classifier can tell "never ran"
+        // from "ran + failed"). Production hardcodes `/usr/bin/env` (which always launches), so we
+        // inject a non-existent executable to exercise this path deterministically.
+        let result = await ColdStartHatchRunner.runHeadless(
+            plan: BootstrapAgentProvisionPlan(tokens: ["whatever"]),
+            executableURL: URL(fileURLWithPath: "/no/such/binary/ouro-coldstart-does-not-exist")
+        )
+        XCTAssertEqual(result, .launchFailed)
+    }
+
+    func testColdStartRunResultExposesExitCodeForExitedAndNilForLaunchFailed() {
+        // The App wiring reads `run.exitCode` to fold `.launchFailed` → nil and `.exited` → its code
+        // before handing to classifyColdStart. Pin that accessor.
+        XCTAssertEqual(ColdStartRunResult.exited(code: 0).exitCode, 0)
+        XCTAssertEqual(ColdStartRunResult.exited(code: 7).exitCode, 7)
+        XCTAssertNil(ColdStartRunResult.launchFailed.exitCode)
     }
 
     // MARK: - Helpers
