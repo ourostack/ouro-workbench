@@ -136,10 +136,19 @@ public struct BossWorkbenchActionAuthorizer: Sendable {
     /// input (`y`/`1`), so the safety floor must see it. Callers that have no
     /// live prompt may omit it; the classifier then sees only the input (the old
     /// input-only behavior), which still catches a dangerous input verbatim.
+    ///
+    /// `autoAdvanceContext` (F3) carries the operator's auto-advance kill-switch
+    /// and the target session's effective friend. It is OPTIONAL with a `nil`
+    /// default so every pre-F3 caller/test compiles unchanged — but `nil` FAILS
+    /// CLOSED for a `sendInput` (an injecting verb with no known auto-advance
+    /// state must refuse, not guess permissive). The app apply path builds a real
+    /// context; the MCP enqueue path passes none (so an enqueued `sendInput` is
+    /// denied at enqueue, and the app apply path is the authoritative gate).
     public func authorize(
         _ action: BossWorkbenchAction,
         for entry: ProcessEntry,
-        livePrompt: String = ""
+        livePrompt: String = "",
+        autoAdvanceContext: BossAutoAdvanceContext? = nil
     ) -> BossWorkbenchActionAuthorization {
         guard !entry.isArchived || action.action == .restore else {
             return .denied("entry is archived")
@@ -160,6 +169,18 @@ public struct BossWorkbenchActionAuthorizer: Sendable {
                 return .denied("withheld unsafe input (\(reason)) — escalated to a human")
             }
         }
+        // F3 — the auto-advance kill-switch + per-friend trust gate, folded in
+        // AFTER the safety floor so the gate is purely ADDITIVE: a dangerous
+        // `sendInput` is still withheld with its safety-floor reason, and only a
+        // SAFE injecting input is then subject to the kill-switch / friend-trust
+        // floor. Non-injecting verbs (launch/recover/…) clear the gate unchanged.
+        // This is THE chokepoint — every channel that calls `authorize` (app
+        // apply, MCP enqueue via `gate`/`resolvedEntry`) inherits it, closing the
+        // bypass where the actions/MCP `sendInput` channel never consulted the
+        // operator's kill-switch.
+        if case let .deny(reason) = evaluateBossInjectionGate(action: action.action, context: autoAdvanceContext) {
+            return .denied(reason)
+        }
         return .allowed()
     }
 
@@ -178,13 +199,20 @@ public struct BossWorkbenchActionAuthorizer: Sendable {
     /// `authorize(_:for:livePrompt:)` (forwarding `livePrompt`), so live's destructive-input
     /// safety floor still fires on the entry-scoped `sendInput` channel. The entry-less branch
     /// is a NEW, separate path that never touches the floor.
+    ///
+    /// `autoAdvanceContext` (F3) forwards to the entry-scoped check (the entry-less
+    /// branch never injects live input — `sendInput` arriving entry-less is denied
+    /// outright — so it has no auto-advance gate to consult). Optional + nil-default
+    /// so existing callers are unchanged; the MCP enqueue path leaves it nil, which
+    /// fails closed for an entry-scoped `sendInput`.
     public func authorize(
         _ action: BossWorkbenchAction,
         resolvedEntry entry: ProcessEntry?,
-        livePrompt: String = ""
+        livePrompt: String = "",
+        autoAdvanceContext: BossAutoAdvanceContext? = nil
     ) -> BossWorkbenchActionAuthorization {
         if let entry {
-            return authorize(action, for: entry, livePrompt: livePrompt)
+            return authorize(action, for: entry, livePrompt: livePrompt, autoAdvanceContext: autoAdvanceContext)
         }
         return authorizeEntryless(action)
     }
@@ -206,9 +234,15 @@ public struct BossWorkbenchActionAuthorizer: Sendable {
     public func gate(
         _ action: BossWorkbenchAction,
         resolvedEntry entry: ProcessEntry?,
-        livePrompt: String = ""
+        livePrompt: String = "",
+        autoAdvanceContext: BossAutoAdvanceContext? = nil
     ) -> GateDecision {
-        let authorization = authorize(action, resolvedEntry: entry, livePrompt: livePrompt)
+        let authorization = authorize(
+            action,
+            resolvedEntry: entry,
+            livePrompt: livePrompt,
+            autoAdvanceContext: autoAdvanceContext
+        )
         return GateDecision(
             authorization: authorization,
             deniedTarget: entry?.name ?? action.action.rawValue

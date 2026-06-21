@@ -3,6 +3,20 @@ import XCTest
 @testable import OuroWorkbenchCore
 
 final class BossWorkbenchActionAuthorizerTests: XCTestCase {
+    /// F3: a `sendInput` now needs a clearing auto-advance context to be allowed
+    /// (the kill-switch ON + a trusted friend). These ALLOW-path tests assert the
+    /// SAFETY FLOOR / trusted-entry behavior, not the kill-switch — so they supply
+    /// the clearing context the real app-apply path supplies, exactly as
+    /// `recordBossDecisions` builds it. The dedicated kill-switch deny canaries are
+    /// T1 (`testSendInputDeniedWhenKillSwitchOff`) and T5
+    /// (`testSendInputDeniedWhenContextNilFailsClosed`), which own that contract.
+    private func clearingAdvanceContext() -> BossAutoAdvanceContext {
+        BossAutoAdvanceContext(
+            autoAdvanceEnabled: true,
+            friend: SessionFriend(id: "owner", name: "Owner", kind: .human, trust: .family)
+        )
+    }
+
     func testTrustedEntriesCanReceiveBossActions() throws {
         let entry = ProcessEntry(
             projectId: UUID(),
@@ -14,7 +28,11 @@ final class BossWorkbenchActionAuthorizerTests: XCTestCase {
         )
         let action = BossWorkbenchAction(action: .sendInput, entry: entry.id.uuidString, text: "status")
 
-        let authorization = BossWorkbenchActionAuthorizer().authorize(action, for: entry)
+        let authorization = BossWorkbenchActionAuthorizer().authorize(
+            action,
+            for: entry,
+            autoAdvanceContext: clearingAdvanceContext()
+        )
 
         XCTAssertTrue(authorization.isAllowed)
         XCTAssertNil(authorization.reason)
@@ -31,7 +49,12 @@ final class BossWorkbenchActionAuthorizerTests: XCTestCase {
         )
         let action = BossWorkbenchAction(action: .sendInput, entry: entry.id.uuidString)
 
-        let authorization = BossWorkbenchActionAuthorizer().authorize(action, for: entry, livePrompt: "Continue? (y/N)")
+        let authorization = BossWorkbenchActionAuthorizer().authorize(
+            action,
+            for: entry,
+            livePrompt: "Continue? (y/N)",
+            autoAdvanceContext: clearingAdvanceContext()
+        )
 
         XCTAssertTrue(authorization.isAllowed)
     }
@@ -218,10 +241,14 @@ final class BossWorkbenchActionAuthorizerTests: XCTestCase {
         ]
         for testCase in cases {
             let action = BossWorkbenchAction(action: .sendInput, entry: entry.id.uuidString, text: testCase.input)
+            // Supply the clearing auto-advance context (kill-switch ON + trusted
+            // friend) so this test isolates the SAFETY-FLOOR allow path; the F3
+            // kill-switch deny path is owned by T1/T5.
             let authorization = BossWorkbenchActionAuthorizer().authorize(
                 action,
                 for: entry,
-                livePrompt: testCase.prompt
+                livePrompt: testCase.prompt,
+                autoAdvanceContext: clearingAdvanceContext()
             )
             XCTAssertTrue(
                 authorization.isAllowed,
