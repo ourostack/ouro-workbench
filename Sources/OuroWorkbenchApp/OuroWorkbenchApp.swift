@@ -14647,9 +14647,13 @@ final class WorkbenchViewModel: ObservableObject {
                 // the ceiling. (Root cause of the cold slowness is unconfirmed — couldn't
                 // reproduce live — so this tolerates-and-informs rather than fixing the source.)
                 DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 90, execute: watchdog)
-                // Drain the pipe even though we no longer surface the raw output — an
-                // undrained pipe past 64KB blocks the child and looks like a timeout.
-                _ = pipe.fileHandleForReading.readDataToEndOfFile()
+                // Capture the pipe output (don't discard it) — readiness is classified FROM the
+                // output, never from the exit code. Draining is still required: an undrained pipe
+                // past 64KB blocks the child and looks like a timeout. ANSI-strip exactly as the
+                // onboarding-doctor diagnostic does so the classifier's verdict line survives.
+                let rawOutput = pipe.fileHandleForReading.readDataToEndOfFile()
+                let output = String(decoding: rawOutput, as: UTF8.self)
+                    .replacingOccurrences(of: "\u{1B}[", with: "")
                 process.waitUntilExit()
                 watchdog.cancel()
                 // Lane-agnostic copy: U1's repair-step TITLE now carries the connection identity
@@ -14662,21 +14666,52 @@ final class WorkbenchViewModel: ObservableObject {
                         detail: "This is taking longer than usual. Try again, or reconnect your provider."
                     )
                 }
-                if process.terminationStatus == 0 {
+                // F2 FIX: `ouro check` exits 0 in EVERY state (working, vault-locked, 401,
+                // network-down), so deriving readiness from `terminationStatus == 0` handed off
+                // UNAUTHENTICATED bosses as green. Classify from the OUTPUT instead. ONLY a
+                // `.working` verdict is `.passed`; every other verdict is `.failed` with a
+                // distinct, seam-free detail (NEVER raw `ouro check` output — lane jargon,
+                // provider IDs, or a `node`/PATH shell error read as gibberish to a new user; the
+                // Connect step is the fix in every failure case, so the copy points there).
+                let verdict = ProviderCheckClassifier().classify(
+                    exitCode: process.terminationStatus,
+                    stdout: output,
+                    stderr: ""
+                )
+                switch verdict {
+                case .working:
                     return OnboardingProviderCheckResult(
                         lane: lane,
                         state: .passed,
                         detail: "This connection is working."
                     )
+                case .vaultLocked:
+                    return OnboardingProviderCheckResult(
+                        lane: lane,
+                        state: .failed,
+                        detail: "Workbench couldn't unlock your saved credentials for this connection. "
+                            + "Reconnect your provider to continue."
+                    )
+                case .unauthorized:
+                    return OnboardingProviderCheckResult(
+                        lane: lane,
+                        state: .failed,
+                        detail: "This connection's credentials were rejected. Reconnect your provider to continue."
+                    )
+                case .unreachable:
+                    return OnboardingProviderCheckResult(
+                        lane: lane,
+                        state: .failed,
+                        detail: "Workbench couldn't reach this connection's provider. "
+                            + "Check your network, then try again."
+                    )
+                case .indeterminate:
+                    return OnboardingProviderCheckResult(
+                        lane: lane,
+                        state: .failed,
+                        detail: "Workbench couldn't confirm this connection yet. Try again, or reconnect your provider."
+                    )
                 }
-                // NEVER surface raw `ouro check` output (lane jargon, provider IDs, a
-                // `node`/PATH shell error) — it reads as gibberish to a first-time user.
-                // The Connect step is the fix in every failure case, so the copy points there.
-                return OnboardingProviderCheckResult(
-                    lane: lane,
-                    state: .failed,
-                    detail: "Workbench couldn't confirm this connection yet. Try again, or reconnect your provider."
-                )
             } catch {
                 return OnboardingProviderCheckResult(
                     lane: lane,

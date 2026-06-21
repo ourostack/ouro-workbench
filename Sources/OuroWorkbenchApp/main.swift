@@ -155,19 +155,24 @@ if CommandLine.arguments.contains("--onboarding-doctor") {
         let start = Date()
         var exit: Int32 = -1
         var tail = ""
+        var out = ""
         do {
             try process.run()
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             process.waitUntilExit()
             exit = process.terminationStatus
-            let out = String(decoding: data, as: UTF8.self)
+            out = String(decoding: data, as: UTF8.self)
                 .replacingOccurrences(of: "\u{1B}[", with: "")
             tail = out.split(separator: "\n").last.map(String.init) ?? ""
         } catch {
             tail = "spawn error: \(error.localizedDescription)"
         }
         let secs = Int(Date().timeIntervalSince(start).rounded())
-        let ok = exit == 0
+        // F2 FIX: `ouro check` exits 0 in every state, so `exit == 0` false-greened vault-locked
+        // / 401 lanes. Classify from the (already ANSI-stripped) OUTPUT instead; only `.working`
+        // is ok. Reuses `out` captured at the top of this loop.
+        let verdict = ProviderCheckClassifier().classify(exitCode: exit, stdout: out, stderr: "")
+        let ok = verdict == .working
         providerChecks[lane] = OnboardingProviderCheckResult(lane: lane, state: ok ? .passed : .failed, detail: tail)
         emit("[3] check \(lane): exit=\(exit) [\(secs)s] \(ok ? "✓" : "✗") \(tail.prefix(80))")
     }
