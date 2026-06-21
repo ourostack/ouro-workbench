@@ -145,12 +145,21 @@ final class VaultOnboardingTests: XCTestCase {
 
     // MARK: - humanLine: present + seam-free for every state
 
-    /// No state's human copy may leak a CLI/vault seam.
-    private func assertSeamFree(_ line: String, file: StaticString = #filePath, line ln: UInt = #line) {
-        for token in ["ouro", "vault", "hatch", "--", "ouro.bot"] {
+    /// No state's human copy may leak a CLI/vault seam BEYOND the agent name itself. The agent
+    /// name is human-chosen and may legitimately contain a substring like "ouro" (e.g. the
+    /// canonical agent "ouroboros"); seam-leak detection therefore strips the agent name first,
+    /// then scans the remaining copy for CLI/vault vocabulary.
+    private func assertSeamFreeBeyondName(
+        _ line: String,
+        agentName: String,
+        file: StaticString = #filePath,
+        line ln: UInt = #line
+    ) {
+        let withoutName = line.replacingOccurrences(of: agentName, with: "").lowercased()
+        for token in ["ouro", "vault", "hatch", "--", ".bot"] {
             XCTAssertFalse(
-                line.lowercased().contains(token),
-                "human copy leaked the seam token \"\(token)\": \(line)",
+                withoutName.contains(token),
+                "human copy leaked the seam token \"\(token)\" (agent name aside): \(line)",
                 file: file, line: ln
             )
         }
@@ -167,12 +176,15 @@ final class VaultOnboardingTests: XCTestCase {
             .failed(reason: .stillNotConnected),
             .failed(reason: .couldNotConfirm),
         ]
+        // Use a seam-COLLIDING agent name ("ouroboros" contains "ouro") to prove the check
+        // strips the name correctly rather than false-passing on a name with no seam substring.
+        let agentName = "ouroboros"
         for state in states {
-            let line = VaultOnboardingMachine.humanLine(for: state, agentName: "ouroboros")
+            let line = VaultOnboardingMachine.humanLine(for: state, agentName: agentName)
             let copy = try? XCTUnwrap(line, "every state must have human copy: \(state)")
             guard let copy else { continue }
             XCTAssertFalse(copy.isEmpty, "human copy must be non-empty for \(state)")
-            assertSeamFree(copy)
+            assertSeamFreeBeyondName(copy, agentName: agentName)
         }
     }
 

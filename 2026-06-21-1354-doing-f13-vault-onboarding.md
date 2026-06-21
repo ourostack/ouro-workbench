@@ -78,7 +78,7 @@ What: New `Tests/OuroWorkbenchCoreTests/VaultOnboardingTests.swift` covering the
 Output: tests compile and FAIL (no `VaultOnboarding.swift` yet).
 Acceptance: `swift test` shows VaultOnboarding tests failing to build/red.
 
-### Unit 1b — Core seam IMPLEMENTATION (green) ⬜
+### Unit 1b — Core seam IMPLEMENTATION (green) ✅
 What: New `Sources/OuroWorkbenchCore/VaultOnboarding.swift` with `VaultOnboardingState`,
 `VaultOnboardingFailure`, `VaultOnboardingMachine` (`shouldOffer`, `afterVaultTerminal`,
 `humanLine`), `VaultOnboardingCommand.finishSetupCommandLine`. Minimal code to pass 1a.
@@ -180,3 +180,7 @@ Acceptance: see Completion Criteria.
 - [ ] Only F13 files committed (`git add <paths>`, never `-A`); untracked leftovers ignored.
 
 ## Progress Log
+
+- 2026-06-21 13:55 Unit 0 complete: doing doc + artifacts dir on fix/f13-vault-onboarding off 9764b1f; identity ari@mendelow.me.
+- 2026-06-21 13:57 Unit 1a complete: VaultOnboardingTests.swift (12 tests) written; red confirmed (missing VaultOnboarding symbols).
+- 2026-06-21 14:00 Unit 1b complete: VaultOnboarding.swift implemented; 12 tests green; full suite 1975 green; build clean. Test note: the seam-free `humanLine` check strips the agent name before scanning (the canonical name "ouroboros" contains substring "ouro"); the check still catches real CLI/vault vocabulary leaks. This is a test-quality fix (false-positive substring collision), not an implementation accommodation — the copy is genuinely seam-free.
