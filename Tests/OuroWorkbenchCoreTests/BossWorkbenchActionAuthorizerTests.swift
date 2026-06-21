@@ -576,4 +576,172 @@ final class BossWorkbenchActionAuthorizerTests: XCTestCase {
             XCTAssertEqual(decision.deniedTarget, rawTarget)
         }
     }
+
+    // MARK: - F3: auto-advance kill-switch + per-friend trust gate (folded into the authorizer)
+    //
+    // The bypass: the actions/MCP `sendInput` channel reached `authorize` but never the
+    // auto-advance gate, so the boss could inject keystrokes even with the kill-switch OFF or
+    // an untrusted friend. These prove the gate now lives INSIDE the authorizer, so every
+    // channel inherits it. T6/T7/T9 prove the gate is ADDITIVE — it doesn't disturb the
+    // existing safety floor, the control verbs, or legacy callers.
+
+    private func trustedAgentEntry(name: String = "Trusted") -> ProcessEntry {
+        ProcessEntry(
+            projectId: UUID(),
+            name: name,
+            kind: .terminalAgent,
+            executable: "codex",
+            workingDirectory: "/repo",
+            trust: .trusted
+        )
+    }
+
+    private func friend(_ trust: SessionFriendTrust) -> SessionFriend {
+        SessionFriend(id: "f", name: "Friend", kind: .human, trust: trust)
+    }
+
+    /// T1 — THE CANARY. `sendInput` to a trusted session, family friend, but the operator
+    /// turned the kill-switch OFF. Before F3 this was ALLOWED (the bypass). It MUST now be
+    /// DENIED with "auto-advance disabled". If this ever goes back to allowed, the operator's
+    /// "turn this off to make the boss escalate everything instead" toggle is a false promise
+    /// again.
+    func testSendInputDeniedWhenKillSwitchOff() throws {
+        let entry = trustedAgentEntry()
+        let action = BossWorkbenchAction(action: .sendInput, entry: entry.id.uuidString, text: "y")
+        let context = BossAutoAdvanceContext(autoAdvanceEnabled: false, friend: friend(.family))
+
+        let authorization = BossWorkbenchActionAuthorizer().authorize(
+            action,
+            for: entry,
+            livePrompt: "Continue? (y/N)",
+            autoAdvanceContext: context
+        )
+
+        XCTAssertFalse(authorization.isAllowed, "F3 bypass: a kill-switch-off sendInput must be DENIED")
+        XCTAssertEqual(authorization.reason, "auto-advance disabled")
+    }
+
+    /// T2 — kill-switch ON but the session's friend is untrusted (`acquaintance`). Denied,
+    /// naming the friend trust.
+    func testSendInputDeniedWhenFriendUntrusted() throws {
+        let entry = trustedAgentEntry()
+        let action = BossWorkbenchAction(action: .sendInput, entry: entry.id.uuidString, text: "y")
+        let context = BossAutoAdvanceContext(autoAdvanceEnabled: true, friend: friend(.acquaintance))
+
+        let authorization = BossWorkbenchActionAuthorizer().authorize(
+            action,
+            for: entry,
+            livePrompt: "Continue? (y/N)",
+            autoAdvanceContext: context
+        )
+
+        XCTAssertFalse(authorization.isAllowed)
+        XCTAssertEqual(authorization.reason, "friend trust is acquaintance")
+    }
+
+    /// T3 — kill-switch ON but the session has NO friend (unassigned). Denied.
+    func testSendInputDeniedWhenNoFriend() throws {
+        let entry = trustedAgentEntry()
+        let action = BossWorkbenchAction(action: .sendInput, entry: entry.id.uuidString, text: "y")
+        let context = BossAutoAdvanceContext(autoAdvanceEnabled: true, friend: nil)
+
+        let authorization = BossWorkbenchActionAuthorizer().authorize(
+            action,
+            for: entry,
+            livePrompt: "Continue? (y/N)",
+            autoAdvanceContext: context
+        )
+
+        XCTAssertFalse(authorization.isAllowed)
+        XCTAssertEqual(authorization.reason, "session has no friend")
+    }
+
+    /// T4 — the happy path is preserved: kill-switch ON, family friend, a SAFE prompt → ALLOWED.
+    func testSendInputAllowedWhenKillSwitchOnAndFriendTrustedAndPromptSafe() throws {
+        let entry = trustedAgentEntry()
+        let action = BossWorkbenchAction(action: .sendInput, entry: entry.id.uuidString, text: "y")
+        let context = BossAutoAdvanceContext(autoAdvanceEnabled: true, friend: friend(.family))
+
+        let authorization = BossWorkbenchActionAuthorizer().authorize(
+            action,
+            for: entry,
+            livePrompt: "Continue? (y/N)",
+            autoAdvanceContext: context
+        )
+
+        XCTAssertTrue(authorization.isAllowed, "the happy path (on + trusted friend + safe prompt) must still pass")
+        XCTAssertNil(authorization.reason)
+    }
+
+    /// T5 — fail-closed: a trusted `sendInput` with a NIL context (the MCP-enqueue shape, which
+    /// carries no app auto-advance state) is denied. So the enqueue path can't slip a sendInput
+    /// past the kill-switch by simply omitting the context.
+    func testSendInputDeniedWhenContextNilFailsClosed() throws {
+        let entry = trustedAgentEntry()
+        let action = BossWorkbenchAction(action: .sendInput, entry: entry.id.uuidString, text: "y")
+
+        let authorization = BossWorkbenchActionAuthorizer().authorize(
+            action,
+            for: entry,
+            livePrompt: "Continue? (y/N)",
+            autoAdvanceContext: nil
+        )
+
+        XCTAssertFalse(authorization.isAllowed, "a nil context must fail closed for sendInput")
+        XCTAssertEqual(authorization.reason, "auto-advance state unavailable")
+    }
+
+    /// T6 — ADDITIVE proof: even with the kill-switch ON + family friend, a `rm -rf` prompt is
+    /// still withheld by the EXISTING safety floor, which runs BEFORE the F3 gate. The reason is
+    /// the safety-floor reason, not an F3 reason — F3 is layered on top, not in place of.
+    func testDangerousSendInputStillWithheldBySafetyFloorEvenWhenF3GateWouldAllow() throws {
+        let entry = trustedAgentEntry()
+        let action = BossWorkbenchAction(action: .sendInput, entry: entry.id.uuidString, text: "y")
+        let context = BossAutoAdvanceContext(autoAdvanceEnabled: true, friend: friend(.family))
+
+        let authorization = BossWorkbenchActionAuthorizer().authorize(
+            action,
+            for: entry,
+            livePrompt: "Run 'rm -rf /'? [y/N]",
+            autoAdvanceContext: context
+        )
+
+        XCTAssertFalse(authorization.isAllowed)
+        XCTAssertEqual(
+            authorization.reason,
+            "withheld unsafe input (destructive command) — escalated to a human",
+            "the existing safety floor must fire first; F3 is additive"
+        )
+    }
+
+    /// T7 — the kill-switch governs INJECTION ONLY. A non-injecting control verb (`.launch`) on
+    /// a trusted session is ALLOWED even with the kill-switch OFF and no friend — the operator
+    /// disabling auto-advance must not freeze the boss's ability to recover/launch/terminate.
+    func testNonInjectingVerbAllowedWhenKillSwitchOff() throws {
+        let entry = trustedAgentEntry()
+        let action = BossWorkbenchAction(action: .launch, entry: entry.id.uuidString)
+        let context = BossAutoAdvanceContext(autoAdvanceEnabled: false, friend: nil)
+
+        let authorization = BossWorkbenchActionAuthorizer().authorize(
+            action,
+            for: entry,
+            autoAdvanceContext: context
+        )
+
+        XCTAssertTrue(authorization.isAllowed, "the kill-switch must not block control/read verbs")
+        XCTAssertNil(authorization.reason)
+    }
+
+    /// T9 — legacy compatibility: the no-context overload (existing callers/tests) for a
+    /// non-`sendInput` verb is unchanged. The default-nil `autoAdvanceContext` keeps every
+    /// pre-F3 call site green.
+    func testLegacyAuthorizeWithoutContextUnchangedForNonSendInput() throws {
+        let entry = trustedAgentEntry()
+        let action = BossWorkbenchAction(action: .recover, entry: entry.id.uuidString)
+
+        let authorization = BossWorkbenchActionAuthorizer().authorize(action, for: entry)
+
+        XCTAssertTrue(authorization.isAllowed, "a legacy non-sendInput authorize must be unaffected")
+        XCTAssertNil(authorization.reason)
+    }
 }
