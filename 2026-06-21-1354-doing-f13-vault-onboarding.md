@@ -108,7 +108,7 @@ provider. Keep F1's existing `.needsVaultSetup` human-line + readiness refresh b
 Output: tests green; `swift build` clean.
 Acceptance: build clean; 2a green; existing F1 ColdStart wiring tests still green.
 
-### Unit 3a — beginVaultOnboarding TESTS (red) ⬜
+### Unit 3a — beginVaultOnboarding TESTS (red) ✅
 What: Pin `beginVaultOnboarding()` exists; builds the chained command via
 `VaultOnboardingCommand.finishSetupCommandLine`; opens a native terminal via
 `createCustomSession(` with `launchAfterCreate: true`; uses a `.trusted` trust draft;
@@ -125,7 +125,7 @@ call `createCustomSession(_:launchAfterCreate:true)`, stash the onboarding entry
 Output: tests green; build clean.
 Acceptance: 3a green; build clean.
 
-### Unit 4a — completeVaultOnboarding TESTS (red) ⬜
+### Unit 4a — completeVaultOnboarding TESTS (red) ✅
 What: Pin `markTerminated(entryId:runId:rawStatus:)` calls `completeVaultOnboarding(`
 when the terminated entry/runId match the onboarding session, decoding via
 `ProcessExitStatus(rawWaitStatus:).exitCode`. Pin `completeVaultOnboarding(vaultExitCode:)`

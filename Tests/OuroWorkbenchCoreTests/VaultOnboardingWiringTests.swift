@@ -67,7 +67,160 @@ final class VaultOnboardingWiringTests: XCTestCase {
         )
     }
 
+    // MARK: - Unit 3 — beginVaultOnboarding + the "Finish setup" affordance
+
+    func testBeginVaultOnboardingMethodExists() throws {
+        let source = try appSource()
+        XCTAssertTrue(
+            source.contains("func beginVaultOnboarding("),
+            "must add a `beginVaultOnboarding` method that runs the recovery chain"
+        )
+    }
+
+    func testBeginVaultOnboardingBuildsTheChainViaTheCoreCommand() throws {
+        let method = try beginVaultOnboardingMethod()
+        XCTAssertTrue(
+            method.contains("VaultOnboardingCommand.finishSetupCommandLine("),
+            "the recovery command must be built by the pure Core seam, not hand-assembled in the App"
+        )
+    }
+
+    func testBeginVaultOnboardingOpensATrustedNativeTerminal() throws {
+        let method = try beginVaultOnboardingMethod()
+        XCTAssertTrue(
+            method.contains("createCustomSession("),
+            "the recovery chain must run in a native terminal via createCustomSession"
+        )
+        XCTAssertTrue(
+            method.contains("launchAfterCreate: true"),
+            "the recovery terminal must launch immediately"
+        )
+        XCTAssertTrue(
+            method.contains("trust: .trusted"),
+            "the recovery terminal must be .trusted so F3's gate doesn't block the human prompts"
+        )
+    }
+
+    func testBeginVaultOnboardingCapturesTheOnboardingRunForExitMatching() throws {
+        let method = try beginVaultOnboardingMethod()
+        // The new entry id + runId must be stashed so markTerminated can match the exit.
+        XCTAssertTrue(
+            method.contains("vaultOnboardingEntryID") && method.contains("vaultOnboardingRunID"),
+            "must capture the onboarding entry id + runId so markTerminated can detect its exit"
+        )
+    }
+
+    func testFinishSetupAffordanceIsGatedOnTheVaultFlag() throws {
+        let source = try appSource()
+        // The sheet shows "Finish setup" ONLY when providerConfigNeedsVaultSetup, and it calls
+        // beginVaultOnboarding. Pin both in the ProviderConfigSheet view.
+        let sheet = try sourceSlice(
+            in: source,
+            from: "struct ProviderConfigSheet: View {",
+            to: "private func binding(for key: String)"
+        )
+        XCTAssertTrue(
+            sheet.contains("providerConfigNeedsVaultSetup"),
+            "the sheet must gate the Finish setup affordance on providerConfigNeedsVaultSetup"
+        )
+        XCTAssertTrue(
+            sheet.contains("beginVaultOnboarding()"),
+            "the Finish setup affordance must call model.beginVaultOnboarding()"
+        )
+    }
+
+    // MARK: - Unit 4 — completeVaultOnboarding + exit detection
+
+    func testMarkTerminatedDetectsTheOnboardingSessionExit() throws {
+        let method = try markTerminatedMethod()
+        // markTerminated must match the onboarding entry/runId and route to completion, decoding
+        // the exit via ProcessExitStatus. Both the normal and detached-persistent branches must
+        // be hooked (a one-shot screen session can route through either).
+        XCTAssertTrue(
+            method.contains("vaultOnboardingEntryID") && method.contains("vaultOnboardingRunID"),
+            "markTerminated must recognize the onboarding session by its entry id + runId"
+        )
+        XCTAssertTrue(
+            method.contains("completeVaultOnboarding("),
+            "markTerminated must hand the onboarding exit to completeVaultOnboarding"
+        )
+    }
+
+    func testCompleteVaultOnboardingReprobesAndFoldsViaTheMachine() throws {
+        let method = try completeVaultOnboardingMethod()
+        XCTAssertTrue(
+            method.contains("runColdStartProviderCheck("),
+            "completion must RE-PROBE via F1's runColdStartProviderCheck (the authoritative signal)"
+        )
+        XCTAssertTrue(
+            method.contains("VaultOnboardingMachine.afterVaultTerminal("),
+            "completion must fold exit + re-probe via the pure machine"
+        )
+    }
+
+    func testCompleteVaultOnboardingGatesReadyOnTheMachine() throws {
+        let method = try completeVaultOnboardingMethod()
+        // The .ready side-effects (F1's exact ones) must sit behind a `.ready` arm of the machine
+        // result — never reachable on a bare clean exit.
+        guard let readyRange = method.range(of: "case .ready:") else {
+            return XCTFail("completion must switch on the machine result with an explicit .ready arm")
+        }
+        let afterReady = String(method[readyRange.lowerBound...])
+        XCTAssertTrue(
+            afterReady.contains("runFirstRunBootstrap()"),
+            "the .ready arm must reuse F1's runFirstRunBootstrap side-effect"
+        )
+        XCTAssertTrue(
+            afterReady.contains("isProviderConfigPresented = false"),
+            "the .ready arm must dismiss the form like F1's ready path"
+        )
+        XCTAssertTrue(
+            afterReady.contains("succeeded: true"),
+            "the .ready arm must log success like F1's ready path"
+        )
+        // Success clears the retry flag.
+        XCTAssertTrue(
+            afterReady.contains("providerConfigNeedsVaultSetup = false"),
+            "a verified-ready recovery must clear the needs-vault flag"
+        )
+    }
+
+    func testCompleteVaultOnboardingKeepsRetryOnFailure() throws {
+        let method = try completeVaultOnboardingMethod()
+        // On a `.failed` machine result, surface the seam-free humanLine and KEEP the finish-setup
+        // affordance available for retry (do NOT clear providerConfigNeedsVaultSetup, do NOT log
+        // success). Pin the seam-free human copy comes from the Core machine.
+        XCTAssertTrue(
+            method.contains("VaultOnboardingMachine.humanLine("),
+            "a failed recovery must surface the seam-free Core humanLine"
+        )
+        guard let failedRange = method.range(of: "case let .failed(") ?? method.range(of: "case .failed(") else {
+            return XCTFail("completion must have an explicit .failed arm")
+        }
+        let afterFailed = String(method[failedRange.lowerBound...])
+        XCTAssertFalse(
+            afterFailed.contains("isProviderConfigPresented = false"),
+            "a failed recovery must NOT dismiss the form (the user retries)"
+        )
+    }
+
     // MARK: - Helpers (mirror ColdStartHonestWiringTests)
+
+    private func beginVaultOnboardingMethod() throws -> String {
+        let source = try appSource()
+        return try sourceSlice(in: source, from: "func beginVaultOnboarding(", to: "\n    func ")
+    }
+
+    private func completeVaultOnboardingMethod() throws -> String {
+        let source = try appSource()
+        return try sourceSlice(in: source, from: "func completeVaultOnboarding(", to: "\n    func ")
+    }
+
+    private func markTerminatedMethod() throws -> String {
+        let source = try appSource()
+        return try sourceSlice(in: source, from: "func markTerminated(entryId:", to: "\n    func markStarted(")
+    }
+
 
     /// The `.coldStartHatch` branch text (start marker → the next method's doc-comment).
     private func coldStartBranch() throws -> String {
