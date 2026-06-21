@@ -55,12 +55,12 @@ credential-refresh (separate follow-ups). Do NOT change `ouro` itself.
 
 ## Units
 
-### Unit 0 — Doc + artifacts scaffold ✅
+### Unit 0 — Doc + artifacts scaffold ✅ (done)
 What: Write this doing doc, create artifacts dir, confirm branch + base + identity.
 Output: doing doc committed; `f13-vault-onboarding/` exists.
 Acceptance: on `fix/f13-vault-onboarding` off `9764b1f`; identity `ari@mendelow.me`.
 
-### Unit 1a — Core seam TESTS (red) ⬜
+### Unit 1a — Core seam TESTS (red) ✅
 What: New `Tests/OuroWorkbenchCoreTests/VaultOnboardingTests.swift` covering the FULL table:
 - `shouldOffer`: `.needsVaultSetup`→true; `.ready`/`.failed(.hatchNonZeroExit)`/
   `.failed(.couldNotConfirm)`→false.
