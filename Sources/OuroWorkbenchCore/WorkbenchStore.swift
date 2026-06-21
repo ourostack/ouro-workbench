@@ -150,6 +150,10 @@ public final class WorkbenchStore {
     /// imminent re-save writes over it; moving it would defeat the re-save and
     /// strand the workspace. Throws if the live file is missing or the copy
     /// fails (the caller treats salvage as best-effort via `try?`).
+    ///
+    /// Follow-up (out of scope for F5, whose bug is data LOSS): `.salvage-*` and
+    /// `.corrupt-*` siblings accumulate and are never pruned. A retention/cleanup
+    /// pass should bound them, but that's an accumulation nuisance, not a loss.
     public func writeSalvageCopy() throws -> URL {
         let stamp = ISO8601DateFormatter().string(from: Date())
             .replacingOccurrences(of: ":", with: "-")
