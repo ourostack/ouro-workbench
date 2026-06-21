@@ -16955,6 +16955,13 @@ final class WorkbenchViewModel: ObservableObject {
     func presentProviderConfigForm(agentName: String) {
         let trimmed = agentName.trimmingCharacters(in: .whitespacesAndNewlines)
         providerConfigIsNewAgent = false
+        // Start each form session clean: the cold-start vault-onboarding flags are otherwise
+        // cleared ONLY on a verified-ready completion, so without this reset opening the form
+        // for a DIFFERENT agent would carry a prior agent's stale `.needsVaultSetup` + stashed
+        // provider — wrongly offering "Finish setup" for the new target.
+        providerConfigNeedsVaultSetup = false
+        providerConfigColdStartProvider = nil
+        providerConfigColdStartMessage = nil
         providerConfigAgentName = trimmed.isEmpty ? state.boss.agentName : trimmed
         isProviderConfigPresented = true
     }
@@ -16965,6 +16972,11 @@ final class WorkbenchViewModel: ObservableObject {
     /// visible `ouro hatch` CLI pane the old install sheet spawned.
     func presentNewAgentProviderConfigForm() {
         providerConfigIsNewAgent = true
+        // Start each form session clean (see presentProviderConfigForm): never let a prior agent's
+        // stale `.needsVaultSetup` + stashed provider leak into this fresh form session.
+        providerConfigNeedsVaultSetup = false
+        providerConfigColdStartProvider = nil
+        providerConfigColdStartMessage = nil
         providerConfigAgentName = ""
         isProviderConfigPresented = true
     }
