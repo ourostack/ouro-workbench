@@ -1,6 +1,6 @@
 # F13 — In-app vault onboarding (cold-start credential persistence recovery)
 
-Status: in-progress
+Status: done
 Execution Mode: direct
 Branch: fix/f13-vault-onboarding
 Base: main @ 9764b1f (F1 + F2 + F3)
@@ -147,7 +147,7 @@ Output: tests green; full `swift test` green; `swift build` clean; no warnings.
 Acceptance: 4a green; whole suite green; build clean; termination decision recorded in
 artifacts.
 
-### Unit 5 — Full verify + gates ⬜
+### Unit 5 — Full verify + gates ✅
 What: Full `swift test` (strict), `scripts/check-coverage.sh` (VaultOnboarding 100%, no
 allowlist), strict build clean. Implementation-coverage gate (every unit's code committed),
 PR-review gate vs locked decisions. Sync Completion Criteria.
@@ -156,28 +156,28 @@ Acceptance: see Completion Criteria.
 
 ## Completion Criteria
 
-- [ ] `Sources/OuroWorkbenchCore/VaultOnboarding.swift` exists with the four public seams.
-- [ ] `VaultOnboarding.swift` is 100% line+region via `scripts/check-coverage.sh`, NO
+- [x] `Sources/OuroWorkbenchCore/VaultOnboarding.swift` exists with the four public seams.
+- [x] `VaultOnboarding.swift` is 100% line+region via `scripts/check-coverage.sh`, NO
       allowlist entry.
-- [ ] `afterVaultTerminal` never returns `.ready` except for `0`+`.working` (safety invariant).
-- [ ] `finishSetupCommandLine` emits the exact documented chain; email defaults to
+- [x] `afterVaultTerminal` never returns `.ready` except for `0`+`.working` (safety invariant).
+- [x] `finishSetupCommandLine` emits the exact documented chain; email defaults to
       `<name>@ouro.bot`; explicit email used verbatim; args shell-quoted via
       `ShellArgumentEscaper`.
-- [ ] `humanLine` is seam-free (no `ouro`/`vault`/`hatch`/`--` leak) for every state.
-- [ ] App: `.needsVaultSetup` arm split from `.failed`; sets `providerConfigNeedsVaultSetup`
+- [x] `humanLine` is seam-free (no `ouro`/`vault`/`hatch`/`--` leak) for every state.
+- [x] App: `.needsVaultSetup` arm split from `.failed`; sets `providerConfigNeedsVaultSetup`
       + stashes `providerConfigColdStartProvider`.
-- [ ] App: "Finish setup" affordance shown only when `providerConfigNeedsVaultSetup`; calls
+- [x] App: "Finish setup" affordance shown only when `providerConfigNeedsVaultSetup`; calls
       `beginVaultOnboarding()`.
-- [ ] App: `beginVaultOnboarding()` builds the chain via `VaultOnboardingCommand` and opens
+- [x] App: `beginVaultOnboarding()` builds the chain via `VaultOnboardingCommand` and opens
       a native `.trusted` terminal via `createCustomSession(_:launchAfterCreate:true)`.
-- [ ] App: `markTerminated` detects the onboarding session's exit and calls
+- [x] App: `markTerminated` detects the onboarding session's exit and calls
       `completeVaultOnboarding(vaultExitCode:)`; one-shot-terminal termination model decided
       + documented.
-- [ ] App: `completeVaultOnboarding` re-probes via `runColdStartProviderCheck`, folds via
+- [x] App: `completeVaultOnboarding` re-probes via `runColdStartProviderCheck`, folds via
       `afterVaultTerminal`, gates `.ready` on the machine, reuses F1's `.ready` side-effects,
       keeps "Finish setup" for retry on `.failed`.
-- [ ] Full `swift test` green (strict); strict `swift build` clean; no warnings.
-- [ ] Only F13 files committed (`git add <paths>`, never `-A`); untracked leftovers ignored.
+- [x] Full `swift test` green (strict); strict `swift build` clean; no warnings.
+- [x] Only F13 files committed (`git add <paths>`, never `-A`); untracked leftovers ignored.
 
 ## Progress Log
 
@@ -187,3 +187,4 @@ Acceptance: see Completion Criteria.
 - 2026-06-21 14:03 Unit 1c complete: coverage gate PASS — VaultOnboarding.swift 100% line+region, no allowlist entry (added testMachineIsConstructible to cover the documented public init). Cold reviewer CONVERGED on Units 1a-1c (safety invariant airtight, command chain exact, copy seam-free, table complete).
 - 2026-06-21 14:06 Unit 2a+2b complete: split the shared `.needsVaultSetup, .failed` arm; added @Published providerConfigNeedsVaultSetup + providerConfigColdStartProvider; the needs-vault arm sets the flag + stashes the provider. F1 ColdStartHonestWiringTests still green. Build clean.
 - 2026-06-21 14:13 Units 3a-4b complete: beginVaultOnboarding() builds the chain via VaultOnboardingCommand and opens a .trusted native terminal via createCustomSession(launchAfterCreate:true), capturing entry id + runId. "Finish setup" affordance gated on providerConfigNeedsVaultSetup. markTerminated detects the onboarding session in BOTH branches (normal + detachedPersistentSession) and calls completeVaultOnboarding, which re-probes via runColdStartProviderCheck (exit 0 only), folds via afterVaultTerminal, gates F1's exact .ready side-effects on the machine, and keeps retry on .failed. Termination-model decision recorded in f13-vault-onboarding/termination-model-decision.md. Full suite 1989 green; build clean.
+- 2026-06-21 14:14 Unit 5 complete (all gates pass): (1) implementation-coverage gate — 8 commits map 1:1 to units, only F13 files touched (no f9-/SerpentGuide/scheduled_tasks leftovers, never `git add -A`); (2) build + full suite — `swift build` clean (no warnings), 1989 tests pass (1 pre-existing skip); (3) coverage gate — VaultOnboarding.swift 100% line+region, no allowlist; (4) PR-review gate — cold App reviewer CONVERGED (safety invariant, both-branch exit detection, double-fire guard, synchronous runId capture, affordance-replaces all verified); no literal CLI seam in human-facing copy (all routed through Core seams). All 12 Completion Criteria checked; Status=done. NOT drive-verifiable here: the live UX (click Finish setup → terminal → secret entry → working agent) needs a real TTY + ouro daemon + human secret entry — queued for operator drive-through.

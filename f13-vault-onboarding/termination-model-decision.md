@@ -64,12 +64,14 @@ by `entryId == vaultOnboardingEntryID && runId == vaultOnboardingRunID` and call
 
 ## Residual risk (queued for operator drive-through)
 
-- **Manual cancel mid-recovery:** if the user manually terminates the session (via Workbench's
-  own stop, which calls `markTerminated(…, rawStatus: nil)` with `manuallyTerminated = true`),
-  `status.exitCode` is `nil` → `completeVaultOnboarding(vaultExitCode: nil)` →
-  `.vaultCommandLaunchError`. The human copy ("couldn't open the setup window… try again") is
-  slightly off for a deliberate cancel, but the outcome is correct: a retryable failure with the
-  finish-setup affordance still available. Acceptable for v1.
+- **Manual cancel OR signal-kill mid-recovery:** `status.exitCode` is `nil` in two cases — a
+  manual stop (`markTerminated(…, rawStatus: nil)`, `manuallyTerminated = true`) AND a
+  signal-killed process (`ProcessExitStatus.decodeExitCode` returns `nil` when the low 7 bits of
+  the raw wait status are non-zero, i.e. terminated by signal). Either yields
+  `completeVaultOnboarding(vaultExitCode: nil)` → `.vaultCommandLaunchError`. The human copy
+  ("couldn't open the setup window… try again") is slightly off for a deliberate cancel /
+  crash-after-launch, but the outcome is correct: a retryable failure with the finish-setup
+  affordance still available. Acceptable for v1.
 - The live end-to-end UX (click Finish setup → terminal opens → enter secret + credential →
   agent goes working) is **not drive-verifiable in this harness** — it needs a real TTY, a real
   `ouro` daemon, and human secret entry. Queue an operator drive-through.
