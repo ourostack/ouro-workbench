@@ -5841,18 +5841,30 @@ struct ProviderConfigSheet: View {
                 }
             }
 
-            if let message {
-                Text(message)
+            // F1 — surface the local validation message OR the async cold-start outcome line
+            // (created-but-not-connected / honest failure). The cold-start message comes from the
+            // model once the post-hatch probe classifies; until then the form spins in place
+            // instead of dismissing-and-claiming-success.
+            if let surfaced = message ?? model.providerConfigColdStartMessage {
+                Text(surfaced)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
             HStack {
+                if model.providerConfigColdStartInFlight {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Creating your agent…")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Spacer()
                 Button("Cancel") {
                     dismiss()
                 }
+                .disabled(model.providerConfigColdStartInFlight)
                 Button {
                     submit()
                 } label: {
@@ -5860,6 +5872,7 @@ struct ProviderConfigSheet: View {
                           systemImage: model.providerConfigIsNewAgent ? "plus.circle" : "link")
                 }
                 .buttonStyle(.borderedProminent)
+                .disabled(model.providerConfigColdStartInFlight)
             }
         }
         .padding()
@@ -5869,6 +5882,7 @@ struct ProviderConfigSheet: View {
             // out of the form state.
             values = [:]
             message = nil
+            model.providerConfigColdStartMessage = nil
         }
     }
 
@@ -5880,6 +5894,9 @@ struct ProviderConfigSheet: View {
     }
 
     private func submit() {
+        // Clear any prior async outcome line before a fresh attempt.
+        message = nil
+        model.providerConfigColdStartMessage = nil
         if model.providerConfigIsNewAgent {
             // Validate + commit the new agent's name before the cold-start hatch. A name
             // that collides with an installed agent is rejected here (that would be the
@@ -5894,9 +5911,12 @@ struct ProviderConfigSheet: View {
             message = failure
             return
         }
-        // Success: the secret is on its way to hatch via argv; clear local state and dismiss.
+        // F1 — a nil return means the cold-start hatch + probe is now IN FLIGHT (the model set
+        // `providerConfigColdStartInFlight`). Do NOT dismiss here: the old synchronous dismiss is
+        // exactly the lie F1 removes. The model dismisses (`isProviderConfigPresented = false`)
+        // only on a verified-ready outcome, and otherwise surfaces `providerConfigColdStartMessage`
+        // with the form still open. We only clear the entered secrets from the local form state.
         values = [:]
-        dismiss()
     }
 }
 
@@ -10581,6 +10601,15 @@ final class WorkbenchViewModel: ObservableObject {
     /// cold-start-hatches headlessly — no visible `ouro hatch` CLI pane.
     @Published var providerConfigIsNewAgent = false
 
+    /// F1 — true while a cold-start hatch + post-hatch probe is in flight. The form spins on this
+    /// instead of dismissing-and-reporting-success synchronously; it clears once the probe
+    /// classifies the real outcome.
+    @Published var providerConfigColdStartInFlight = false
+
+    /// F1 — the seam-free outcome line surfaced in the form when a cold-start did NOT verify as
+    /// ready (created-but-not-connected, or an honest failure). nil while in flight / on success.
+    @Published var providerConfigColdStartMessage: String?
+
     private let paths: WorkbenchPaths
     private let store: WorkbenchStore
     private let bootstrapper = WorkbenchBootstrapper()
@@ -14612,6 +14641,60 @@ final class WorkbenchViewModel: ObservableObject {
         onboardingBossSnapshot = nil
     }
 
+    /// F1 — the post-hatch credential probe for a freshly cold-started agent. Runs `ouro check`
+    /// for the configured lane and returns the F2-classified verdict, or `nil` when the probe
+    /// times out / couldn't run.
+    ///
+    /// SHORT BUDGET (15s, vs. the onboarding check's 90s): this runs DURING agent creation, so a
+    /// flaky-daemon hang must degrade to "couldn't confirm" fast rather than freeze the form. We
+    /// deliberately do NOT use `ouro vault status` here — it HANGS under a flaky daemon (observed:
+    /// never returned). `ouro check` is responsive and we already own its classifier. A nil verdict
+    /// folds into `.failed(.couldNotConfirm)` (never a false green).
+    private func runColdStartProviderCheck(agentName: String, lane: String) async -> ProviderConnectionVerdict? {
+        await Task.detached(priority: .userInitiated) {
+            let process = Process()
+            let pipe = Pipe()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            process.arguments = ["ouro", "check", "--agent", agentName, "--lane", lane]
+            // Resolve PATH from the user's real login shell so `ouro` + its `node` runtime are
+            // found from a Finder-launched app's bare launchd PATH (every other runner does this).
+            process.environment = TerminalEnvironment().valuesWithResolvedPath()
+            process.standardOutput = pipe
+            process.standardError = pipe
+            do {
+                let start = Date()
+                try process.run()
+                // 15s short watchdog: a wedged/flaky daemon must NOT freeze creation. Drain the
+                // pipe continuously so a chatty check (>64KB) can't fill the buffer and block.
+                let timeoutSeconds: TimeInterval = 15
+                let watchdog = DispatchWorkItem {
+                    if process.isRunning { process.terminate() }
+                }
+                DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + timeoutSeconds, execute: watchdog)
+                let rawOutput = pipe.fileHandleForReading.readDataToEndOfFile()
+                let output = String(decoding: rawOutput, as: UTF8.self)
+                    .replacingOccurrences(of: "\u{1B}[", with: "")
+                process.waitUntilExit()
+                watchdog.cancel()
+                // Past the budget the watchdog terminated the process — treat as "couldn't confirm"
+                // (nil), NOT as a classified verdict from truncated output.
+                if Date().timeIntervalSince(start) >= timeoutSeconds {
+                    return nil
+                }
+                // Classify from the OUTPUT (never the exit code — `ouro check` exits 0 in every
+                // state; that was the F2 bug). The classifier never false-greens.
+                return ProviderCheckClassifier().classify(
+                    exitCode: process.terminationStatus,
+                    stdout: output,
+                    stderr: ""
+                )
+            } catch {
+                // Couldn't even launch the probe → couldn't confirm.
+                return nil
+            }
+        }.value
+    }
+
     private func runOnboardingProviderCheck(agentName: String, lane: String) async -> OnboardingProviderCheckResult {
         await Task.detached(priority: .userInitiated) {
             let process = Process()
@@ -16871,11 +16954,15 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     /// Submit the native provider-config form. Returns the seam-free message to surface in the
-    /// form (nil = success + dismiss). The SECRET reaches `ouro hatch` only here, native-form →
-    /// hatch argv — it NEVER passes through the agent's context/MCP.
+    /// form, or nil when there is nothing to surface SYNCHRONOUSLY. The SECRET reaches `ouro hatch`
+    /// only here, native-form → hatch argv — it NEVER passes through the agent's context/MCP.
     ///
     /// COLD-START path (the deliverable): no usable agent yet → build + run a headless
-    /// `ouro hatch …` with the matching credential flags, then re-probe readiness.
+    /// `ouro hatch …` with the matching credential flags, then probe + classify the outcome.
+    /// F1: a nil return on the cold-start path means the hatch + probe is now IN FLIGHT — the form
+    /// does NOT dismiss synchronously. The async outcome dismisses on `.ready`, or surfaces
+    /// `providerConfigColdStartMessage` (and keeps the form open) on a created-but-not-connected /
+    /// failed outcome. The old code lied here: it dismissed + logged success before the hatch ran.
     @discardableResult
     func submitProviderConfig(
         provider: WorkbenchProvider,
@@ -16904,33 +16991,70 @@ final class WorkbenchViewModel: ObservableObject {
             // fabricated command, no CLI pane. The Core form built this seam-free message.
             return message
         case let .coldStartHatch(plan):
-            // Run the cold-start hatch headlessly (no pane). The secret lives only in the plan's
-            // argv tokens, built natively from the form — never through the agent.
+            // F1 — STOP THE LIE. This used to dismiss the form + log success SYNCHRONOUSLY (before
+            // the detached hatch even ran), then ignore the hatch's `try?` error. But `ouro hatch`
+            // FAILS on a fresh agent — it writes agent.json's provider lanes BEFORE the credential
+            // step, then the headless credential step throws (a brand-new agent has no vault, and
+            // creating one needs an interactive TTY secret). So agent.json existed (read "ready")
+            // while no credential was persisted — a dead bundle reporting success.
+            //
+            // Now: set an in-flight flag, run the hatch FOR ITS EXIT, probe the configured lane
+            // with a SHORT-budget `ouro check` (classified via F2's ProviderCheckClassifier), and
+            // classify honestly. Only a positively-`.working` probe reports success; everything
+            // else keeps the form open with the seam-free outcome line and surfaces the bundle as
+            // needs-credentials, NOT ready.
+            providerConfigColdStartInFlight = true
             Task { [weak self] in
-                try? await ColdStartHatchRunner.runHeadless(plan: plan)
+                let run = await ColdStartHatchRunner.runHeadless(plan: plan)
+                // `.launchFailed` → nil (never ran); `.exited` → its real code.
+                let exit = run.exitCode
+                // The cold-start configures the OUTWARD lane (the one onboarding surfaces; for a
+                // fresh agent both lanes collapse to the same provider). Probe it on a short budget
+                // so a flaky-daemon hang degrades to "couldn't confirm" fast — not a 90s freeze.
+                let verdict = await self?.runColdStartProviderCheck(agentName: resolvedAgent, lane: "outward")
+                let outcome = ProviderConfigForm.classifyColdStart(hatchExitCode: exit, checkVerdict: verdict)
                 await MainActor.run {
-                    // Re-probe readiness: the agent was just created WITH creds, so the provider
-                    // gate is now satisfied.
-                    self?.refreshOuroAgents()
-                    self?.refreshOnboardingReadiness()
-                    self?.runOnboardingProviderChecksIfNeeded()
-                    // R4b — re-run the parked first-run bootstrap. S2's gate now reads
-                    // `credentialsPresent` (the agent was hatched WITH the credential), so the
-                    // re-run crosses S2 → S3→S5 → the handoff probe, flipping to agent-driven mode.
-                    // `runFirstRunBootstrap` no-ops if a run is already in flight or already
-                    // handed off, so this is safe even outside the parked first-run path.
-                    self?.runFirstRunBootstrap()
+                    guard let self else { return }
+                    self.providerConfigColdStartInFlight = false
+                    // Always refresh inventory/readiness so the just-created bundle surfaces with
+                    // its TRUE state (a credential-less hatch shows as needs-credentials, not ready).
+                    self.refreshOuroAgents()
+                    self.refreshOnboardingReadiness()
+                    self.runOnboardingProviderChecksIfNeeded()
+                    switch outcome {
+                    case .ready:
+                        // Verified working — the existing success side-effects + dismiss + success log.
+                        // R4b — re-run the parked first-run bootstrap. S2's gate now reads
+                        // `credentialsPresent` (the agent was hatched WITH a usable credential), so
+                        // the re-run crosses S2 → S3→S5 → the handoff probe, flipping to agent-driven
+                        // mode. `runFirstRunBootstrap` no-ops if a run is already in flight or already
+                        // handed off, so this is safe even outside the parked first-run path.
+                        self.runFirstRunBootstrap()
+                        self.recordActionLog(
+                            source: "native",
+                            action: "providerConfigColdStart",
+                            targetName: resolvedAgent,
+                            // Audit lane only — carries the raw `ouro hatch` verb (NOT the credential).
+                            result: "ran `ouro hatch --agent \(resolvedAgent) --provider \(provider.providerFlagValue)` (cold-start; verified ready)",
+                            succeeded: true
+                        )
+                        self.isProviderConfigPresented = false
+                    case .needsVaultSetup, .failed:
+                        // Honest failure: keep the form open, surface the seam-free outcome line,
+                        // and route to the onboarding readiness surface (which owns the
+                        // .needsCredentials repair step). Do NOT dismiss and do NOT log success.
+                        self.providerConfigColdStartMessage = outcome.humanFacingLine(agentName: resolvedAgent)
+                        self.recordActionLog(
+                            source: "native",
+                            action: "providerConfigColdStart",
+                            targetName: resolvedAgent,
+                            result: "ran `ouro hatch --agent \(resolvedAgent) --provider \(provider.providerFlagValue)` (cold-start; outcome: \(outcome.auditReason))",
+                            succeeded: false
+                        )
+                    }
                 }
             }
-            recordActionLog(
-                source: "native",
-                action: "providerConfigColdStart",
-                targetName: resolvedAgent,
-                // Audit lane only — carries the raw `ouro hatch` verb (NOT the credential value).
-                result: "ran `ouro hatch --agent \(resolvedAgent) --provider \(provider.providerFlagValue)` (cold-start; credential via native form → argv)",
-                succeeded: true
-            )
-            isProviderConfigPresented = false
+            // No synchronous dismiss / success-log: the truth is only known after the probe above.
             return nil
         }
     }
