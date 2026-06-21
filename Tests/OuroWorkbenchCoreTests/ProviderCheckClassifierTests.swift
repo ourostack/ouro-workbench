@@ -135,6 +135,24 @@ final class ProviderCheckClassifierTests: XCTestCase {
         )
     }
 
+    func testFailedAuthCodeAtVeryEndOfParentheticalYieldsUnauthorized() {
+        // The code is the final token with no trailing char (a truncated/odd line). The boundary
+        // is end-of-string, which must still classify as unauthorized.
+        XCTAssertEqual(
+            classifier.classify(exitCode: 0, stdout: "a b c / d: failed (401", stderr: ""),
+            .unauthorized
+        )
+    }
+
+    func testFailedAuthCodeImmediatelyFollowedByDigitsIsNotUnauthorized() {
+        // `4011` is not a 401 word-boundary match; with no other auth/network signal it is
+        // indeterminate (never false-green, never mis-bucketed).
+        XCTAssertEqual(
+            classifier.classify(exitCode: 0, stdout: "a b c / d: failed (4011 weird)", stderr: ""),
+            .indeterminate
+        )
+    }
+
     func testFailedNotAuthorizedYieldsUnauthorized() {
         XCTAssertEqual(
             classifier.classify(exitCode: 0, stdout: "a b c / d: failed (caller is not authorized)", stderr: ""),
