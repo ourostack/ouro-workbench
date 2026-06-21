@@ -36,13 +36,12 @@ fail-closed deny for sendInput at enqueue (app-apply is authoritative).
 - Acceptance: 49/49 green (42 authorizer + 7 gate); Core builds clean
 
 ### Unit 2a (test): app source-pin wiring
-- ⬜ Source-pin test asserting `applyBossAction` builds `BossAutoAdvanceContext` from
-  `bossAutoAdvanceEnabled` + `effectiveFriend` and passes it to `authorize`
-- Acceptance: RED before wiring
+- ✅ BossInjectionGateWiringTests source-pins applyBossAction builds context + passes it (red before wiring)
+- Acceptance: RED before wiring — confirmed
 
-### Unit 2b (impl): wire context at app apply call site (:16628)
-- ⬜ Build machineOwner/effectiveFriend/context, pass to authorize
-- Acceptance: 2a green; build clean
+### Unit 2b (impl): wire context at app apply call site
+- ✅ Built machineOwner/effectiveFriend/context, passed to authorize as autoAdvanceContext
+- Acceptance: 2a green; full package build clean (App recompiled, no warnings)
 
 ### Unit 3 (verify): R4 + coverage + strict build
 - ⬜ Confirm no operator manual sendInput routes through applyBossAction (R4)
@@ -61,3 +60,4 @@ fail-closed deny for sendInput at enqueue (app-apply is authoritative).
 
 - 2026-06-21 12:54 Unit 0a/0b complete: BossInjectionGate core seam (types + pure gate), 7 gate tests green, Core builds clean. Commits f4e6fc9 (test), 5104f96 (impl).
 - 2026-06-21 13:01 Unit 1a/1b complete: F3 gate folded into authorize() after safety floor; threaded autoAdvanceContext (default nil, fail-closed) through authorize/resolvedEntry/gate. T1 canary proven: gate removed → T1 RED ("bypass: kill-switch-off sendInput must be DENIED") → restored → GREEN. 49/49 tests green. 3 legacy ALLOW-path tests updated to clearing context (reviewer-confirmed (a)). Commits de180e2 (test), ee04f59 (impl).
+- 2026-06-21 13:04 Unit 2a/2b complete: source-pin wiring test (red→green); applyBossAction now builds BossAutoAdvanceContext(bossAutoAdvanceEnabled, effectiveFriend) and passes it to authorize. Full package build clean (App recompiled, 0 warnings). Commits 25079fe (test), 5b05090 (impl).
