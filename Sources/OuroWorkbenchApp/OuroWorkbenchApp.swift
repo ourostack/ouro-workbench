@@ -16625,7 +16625,27 @@ final class WorkbenchViewModel: ObservableObject {
         let livePrompt = action.action == .sendInput
             ? bossActionLivePrompt(for: entry)
             : ""
-        let authorization = bossActionAuthorizer.authorize(action, for: entry, livePrompt: livePrompt)
+        // F3 — feed the authorizer the operator's auto-advance kill-switch + the
+        // session's effective friend, built the SAME way the decisions channel
+        // (`recordBossDecisions`) builds it. This is what makes the folded-in
+        // injection gate fire on the authoritative actions channel: a `sendInput`
+        // is now refused when the kill-switch is OFF or the friend is untrusted,
+        // so the operator's "turn this off to make the boss escalate everything
+        // instead" toggle is honored here, not just on the decisions path. The
+        // existing denial handling below escalates a withheld sendInput to the
+        // inbox + logs "Skipped" — a kill-switch denial flows through it for free.
+        let machineOwner = SessionFriend.machineOwner()
+        let effectiveFriend = state.effectiveFriend(for: entry, fallback: machineOwner)
+        let autoAdvanceContext = BossAutoAdvanceContext(
+            autoAdvanceEnabled: bossAutoAdvanceEnabled,
+            friend: effectiveFriend
+        )
+        let authorization = bossActionAuthorizer.authorize(
+            action,
+            for: entry,
+            livePrompt: livePrompt,
+            autoAdvanceContext: autoAdvanceContext
+        )
         guard authorization.isAllowed else {
             // An unsafe sendInput is withheld AND escalated to a human, mirroring
             // the decisions channel: record an `escalate` decision so the held
