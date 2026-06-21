@@ -27,12 +27,13 @@ fail-closed deny for sendInput at enqueue (app-apply is authoritative).
 - Acceptance: 0a tests green (7/7); Core builds clean
 
 ### Unit 1a (test): authorizer integration — T1..T9
-- ⬜ Add T1 (CANARY, red on HEAD), T2, T3, T4, T5, T6, T7, T9 to BossWorkbenchActionAuthorizerTests
-- Acceptance: T1 RED before impl; all green after
+- ✅ Added T1 (CANARY), T2..T7, T9 to BossWorkbenchActionAuthorizerTests (red — missing param)
+- Acceptance: T1 RED before impl; all green after — CONFIRMED via surgical canary (gate removed → T1 red → restored → green)
 
 ### Unit 1b (impl): thread `autoAdvanceContext` through `authorize`/`gate`/`resolvedEntry`; apply gate
-- ⬜ Add optional param (default nil) to the three front doors; invoke gate after safety floor
-- Acceptance: 1a tests green; legacy tests unchanged; build clean
+- ✅ Optional param (default nil) on all 3 front doors; gate invoked after safety floor
+- ✅ 3 legacy ALLOW-path tests updated to supply clearing context (reviewer-confirmed verdict (a); intents preserved)
+- Acceptance: 49/49 green (42 authorizer + 7 gate); Core builds clean
 
 ### Unit 2a (test): app source-pin wiring
 - ⬜ Source-pin test asserting `applyBossAction` builds `BossAutoAdvanceContext` from
@@ -59,3 +60,4 @@ fail-closed deny for sendInput at enqueue (app-apply is authoritative).
 ## Progress Log
 
 - 2026-06-21 12:54 Unit 0a/0b complete: BossInjectionGate core seam (types + pure gate), 7 gate tests green, Core builds clean. Commits f4e6fc9 (test), 5104f96 (impl).
+- 2026-06-21 13:01 Unit 1a/1b complete: F3 gate folded into authorize() after safety floor; threaded autoAdvanceContext (default nil, fail-closed) through authorize/resolvedEntry/gate. T1 canary proven: gate removed → T1 RED ("bypass: kill-switch-off sendInput must be DENIED") → restored → GREEN. 49/49 tests green. 3 legacy ALLOW-path tests updated to clearing context (reviewer-confirmed (a)). Commits de180e2 (test), ee04f59 (impl).
