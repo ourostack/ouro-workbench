@@ -100,7 +100,7 @@ What: Extend the App source-pin suite (new `VaultOnboardingWiringTests.swift`, m
 Output: tests FAIL (wiring not present yet).
 Acceptance: new wiring tests red.
 
-### Unit 2b — App stash-the-provider IMPL (green) ⬜
+### Unit 2b — App stash-the-provider IMPL (green) ✅
 What: Add `@Published var providerConfigColdStartProvider: WorkbenchProvider?` and
 `@Published var providerConfigNeedsVaultSetup = false`. SPLIT the shared
 `case .needsVaultSetup, .failed:` so only `.needsVaultSetup` sets the flag + stashes the

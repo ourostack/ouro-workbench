@@ -10610,6 +10610,21 @@ final class WorkbenchViewModel: ObservableObject {
     /// ready (created-but-not-connected, or an honest failure). nil while in flight / on success.
     @Published var providerConfigColdStartMessage: String?
 
+    /// F13 — true ONLY for the honest needs-vault cold-start outcome (the agent was created but
+    /// its provider isn't connected yet because the headless hatch couldn't persist the credential
+    /// into a vault that needs an interactive TTY secret). It gates the "Finish setup" affordance
+    /// in the provider-config form, which runs the documented `ouro vault create && auth && refresh`
+    /// recovery chain in a native terminal. Stays true across a failed recovery attempt so the user
+    /// can retry; cleared only when the re-probe confirms `.working`. NEVER set for a plain
+    /// `.failed` cold-start (that path never produced a recoverable bundle).
+    @Published var providerConfigNeedsVaultSetup = false
+
+    /// F13 — the provider the user typed in the cold-start form, stashed so the vault-onboarding
+    /// recovery chain (`ouro auth --provider <p>`) can name it. The credential itself is NOT stored
+    /// here — it's gone after the ephemeral hatch argv, which is exactly why F13 must re-collect it
+    /// interactively in the native recovery terminal. Set alongside `providerConfigNeedsVaultSetup`.
+    @Published var providerConfigColdStartProvider: WorkbenchProvider?
+
     private let paths: WorkbenchPaths
     private let store: WorkbenchStore
     private let bootstrapper = WorkbenchBootstrapper()
@@ -17039,10 +17054,31 @@ final class WorkbenchViewModel: ObservableObject {
                             succeeded: true
                         )
                         self.isProviderConfigPresented = false
-                    case .needsVaultSetup, .failed:
+                    case .needsVaultSetup:
+                        // F13 — the agent EXISTS but the headless hatch couldn't persist the
+                        // credential (a fresh agent has no vault, and creating one needs an
+                        // interactive TTY secret). This is the recoverable case: keep the form open,
+                        // surface the seam-free outcome line, AND offer "Finish setup" — which runs
+                        // the documented `ouro vault create && auth && refresh` recovery chain in a
+                        // native terminal. Stash the provider so the chain can name it; the
+                        // credential itself is gone (ephemeral hatch argv) and is re-collected
+                        // interactively in that terminal.
+                        self.providerConfigColdStartMessage = outcome.humanFacingLine(agentName: resolvedAgent)
+                        self.providerConfigNeedsVaultSetup = true
+                        self.providerConfigColdStartProvider = provider
+                        self.recordActionLog(
+                            source: "native",
+                            action: "providerConfigColdStart",
+                            targetName: resolvedAgent,
+                            result: "ran `ouro hatch --agent \(resolvedAgent) --provider \(provider.providerFlagValue)` (cold-start; outcome: \(outcome.auditReason))",
+                            succeeded: false
+                        )
+                    case .failed:
                         // Honest failure: keep the form open, surface the seam-free outcome line,
                         // and route to the onboarding readiness surface (which owns the
                         // .needsCredentials repair step). Do NOT dismiss and do NOT log success.
+                        // NOT recoverable via finish-setup: a `.failed` cold-start never produced a
+                        // usable bundle, so the vault flag stays false.
                         self.providerConfigColdStartMessage = outcome.humanFacingLine(agentName: resolvedAgent)
                         self.recordActionLog(
                             source: "native",
