@@ -158,6 +158,151 @@ final class CommandPlannerTests: XCTestCase {
         XCTAssertEqual(plan.arguments, ["--label", "resume", "--resume", "fresh-session"])
     }
 
+    // MARK: - F4 end-to-end: back-filled session id drives explicit-id resume
+
+    /// (a) The F4 fix end-to-end: a `.needsRecovery` run whose `terminalSessionId`
+    /// is back-filled by `SessionIdBackfill` from a scanned record renders an
+    /// explicit-id resume (`claude --resume <id>`) — the previously-dead id branch.
+    func testBackfilledSessionIdDrivesExplicitClaudeResume() throws {
+        let project = WorkbenchProject(name: "Project", rootPath: "/repo")
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "Claude Code",
+            kind: .terminalAgent,
+            agentKind: .claudeCode,
+            executable: "claude",
+            arguments: ["--dangerously-skip-permissions"],
+            workingDirectory: "/repo",
+            trust: .trusted,
+            autoResume: true
+        )
+        // The run as `markStarted` builds it: live, pid known, NO native id yet.
+        var run = ProcessRun(entryId: entry.id, pid: 4242, status: .running)
+        let records: [AgentSessionRecord] = [
+            AgentSessionRecord(harness: .claudeCode, sessionId: "pid-4242", cwd: "", running: true),
+            AgentSessionRecord(harness: .claudeCode, sessionId: "sess-abc", cwd: "/repo", running: false),
+        ]
+
+        // The scanner-observed id is back-filled onto the run...
+        let backfills = SessionIdBackfill.sessionIdBackfills(
+            runs: [run], entries: [entry], records: records
+        )
+        XCTAssertEqual(backfills[run.id], "sess-abc")
+        run.terminalSessionId = backfills[run.id]
+        run.status = .needsRecovery
+
+        // ...and the planner now renders the explicit-id resume, not --continue.
+        let plan = try WorkbenchCommandPlanner().recoveryPlan(for: entry, latestRun: run, action: .autoResume)
+        XCTAssertEqual(plan.executable, "claude")
+        XCTAssertEqual(plan.arguments, ["--dangerously-skip-permissions", "--resume", "sess-abc"])
+    }
+
+    /// (b) No record matches the run → `SessionIdBackfill` leaves the id nil → the
+    /// planner falls back to `claude --continue` (today's honest behavior).
+    func testNoBackfillFallsBackToClaudeContinue() throws {
+        let project = WorkbenchProject(name: "Project", rootPath: "/repo")
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "Claude Code",
+            kind: .terminalAgent,
+            agentKind: .claudeCode,
+            executable: "claude",
+            arguments: ["--dangerously-skip-permissions"],
+            workingDirectory: "/repo",
+            trust: .trusted,
+            autoResume: true
+        )
+        var run = ProcessRun(entryId: entry.id, pid: 4242, status: .running)
+        // Live process observed but no recent record carries a native id.
+        let records: [AgentSessionRecord] = [
+            AgentSessionRecord(harness: .claudeCode, sessionId: "pid-4242", cwd: "", running: true),
+        ]
+
+        let backfills = SessionIdBackfill.sessionIdBackfills(
+            runs: [run], entries: [entry], records: records
+        )
+        XCTAssertNil(backfills[run.id])
+        run.terminalSessionId = backfills[run.id]
+        run.status = .needsRecovery
+
+        let plan = try WorkbenchCommandPlanner().recoveryPlan(for: entry, latestRun: run, action: .autoResume)
+        XCTAssertEqual(plan.arguments, ["--dangerously-skip-permissions", "--continue"])
+    }
+
+    /// (b, codex) The codex no-id fallback renders `codex resume --last`.
+    func testNoBackfillFallsBackToCodexResumeLast() throws {
+        let project = WorkbenchProject(name: "Project", rootPath: "/repo")
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "Codex",
+            kind: .terminalAgent,
+            agentKind: .openAICodex,
+            executable: "codex",
+            arguments: ["--yolo"],
+            workingDirectory: "/repo",
+            trust: .trusted,
+            autoResume: true
+        )
+        var run = ProcessRun(entryId: entry.id, pid: 7000, status: .running)
+        let records: [AgentSessionRecord] = [
+            AgentSessionRecord(harness: .openAICodex, sessionId: "pid-7000", cwd: "", running: true),
+        ]
+
+        let backfills = SessionIdBackfill.sessionIdBackfills(
+            runs: [run], entries: [entry], records: records
+        )
+        XCTAssertNil(backfills[run.id])
+        run.terminalSessionId = backfills[run.id]
+        run.status = .needsRecovery
+
+        let plan = try WorkbenchCommandPlanner().recoveryPlan(for: entry, latestRun: run, action: .autoResume)
+        XCTAssertEqual(plan.arguments, ["--yolo", "resume", "--last"])
+    }
+
+    /// (c) Two same-cwd live sessions → `SessionIdBackfill` leaves BOTH nil → each
+    /// planner plan is the honest `--continue` fallback and the two distinct runs
+    /// never collapse onto one native id.
+    func testTwoSameCwdRunsBothFallBackWithoutSharingAnId() throws {
+        let project = WorkbenchProject(name: "Project", rootPath: "/repo")
+        func entry() -> ProcessEntry {
+            ProcessEntry(
+                projectId: project.id,
+                name: "Claude Code",
+                kind: .terminalAgent,
+                agentKind: .claudeCode,
+                executable: "claude",
+                arguments: ["--dangerously-skip-permissions"],
+                workingDirectory: "/repo",
+                trust: .trusted,
+                autoResume: true
+            )
+        }
+        let entryA = entry()
+        let entryB = entry()
+        let runA = ProcessRun(entryId: entryA.id, pid: 100, status: .running)
+        let runB = ProcessRun(entryId: entryB.id, pid: 200, status: .running)
+        let records: [AgentSessionRecord] = [
+            AgentSessionRecord(harness: .claudeCode, sessionId: "pid-100", cwd: "", running: true),
+            AgentSessionRecord(harness: .claudeCode, sessionId: "pid-200", cwd: "", running: true),
+            AgentSessionRecord(harness: .claudeCode, sessionId: "sess-A", cwd: "/repo", running: false),
+            AgentSessionRecord(harness: .claudeCode, sessionId: "sess-B", cwd: "/repo", running: false),
+        ]
+
+        let backfills = SessionIdBackfill.sessionIdBackfills(
+            runs: [runA, runB], entries: [entryA, entryB], records: records
+        )
+        XCTAssertTrue(backfills.isEmpty, "ambiguous same-cwd pair must not share or guess an id")
+
+        for (entry, run) in [(entryA, runA), (entryB, runB)] {
+            var recovering = run
+            recovering.terminalSessionId = backfills[run.id]
+            recovering.status = .needsRecovery
+            let plan = try WorkbenchCommandPlanner()
+                .recoveryPlan(for: entry, latestRun: recovering, action: .autoResume)
+            XCTAssertEqual(plan.arguments, ["--dangerously-skip-permissions", "--continue"])
+        }
+    }
+
     func testAbsoluteExecutablesLaunchDirectly() {
         let plan = TerminalCommandPlan(
             entryId: UUID(),
