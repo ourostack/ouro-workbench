@@ -1,6 +1,6 @@
 # Doing: F4 — native session-id resume is dead code (recovery collapses multi-session repos)
 
-- **Status:** in-progress
+- **Status:** done
 - **Branch:** `fix/f4-recovery-sessionid` (off `main` @ `04d199b`)
 - **Execution Mode:** direct
 - **Identity:** ari@mendelow.me
@@ -15,27 +15,32 @@ The id is NOT available at `markStarted` (the PTY child pid lands before the age
 
 ## Units
 
-### Unit 0 — Pure back-fill seam (test-first) ✅ planned
-- **0a (test, red):** Write `SessionIdBackfillTests` covering match (a end-to-end-ready), fallback (b), same-cwd disambiguation (c), no-clobber (d). Tests fail because `SessionIdBackfill` doesn't exist.
-- **0b (impl, green):** Add `Sources/OuroWorkbenchCore/SessionIdBackfill.swift` — pure `sessionIdBackfills(runs:entries:records:) -> [UUID: String]`. 100% line+region.
-- **0c (verify):** Coverage gate green on the new file; full `swift test` green; strict build clean.
+### Unit 0 — Pure back-fill seam (test-first) ✅
+- **0a (test, red):** ✅ `SessionIdBackfillTests` (19 cases) — match (a), fallback (b), same-cwd disambiguation (c), no-clobber + skip guards (d). Red = `cannot find 'SessionIdBackfill' in scope`.
+- **0b (impl, green):** ✅ `Sources/OuroWorkbenchCore/SessionIdBackfill.swift` — pure `sessionIdBackfills(runs:entries:records:) -> [UUID: String]`. Green.
+- **0c (verify):** ✅ `SessionIdBackfill.swift` 100% line+region (no allowlist); full `swift test` green; strict build clean.
 
-### Unit 1 — Planner end-to-end pin (test-first) ✅ planned
-- **1a (test, red):** Extend `CommandPlannerTests`: a `.needsRecovery` run with a back-filled id → `--resume <id>` (claude) / `resume <id>` (codex); id nil + no record → `--continue` / `resume --last`. (Mostly proves the seam output flows through the existing reader; confirms wiring contract.)
-- These assertions confirm the planner consumes a back-filled id; the reader already exists.
+### Unit 1 — Planner end-to-end pin (test-first) ✅
+- **1a (test):** ✅ Extended `CommandPlannerTests` with 4 F4 cases: back-filled id → `claude --resume sess-abc`; no record → `claude --continue` / `codex resume --last`; two same-cwd runs both fall back WITHOUT sharing an id. 35 CommandPlannerTests green.
 
-### Unit 2 — App wiring (source-pin test) ✅ planned
-- **2a (test, red):** Source-pin test asserting the App's back-fill pass references `sessionIdBackfills`, assigns `.terminalSessionId` guarded by `== nil`, and calls `save()`.
-- **2b (impl, green):** Add a sibling detached pass at `reclassifyAttentionForFlushedRuns` that scans, computes back-fills, applies on the main actor guarded by `== nil`, saves. `markStarted` stays as-is. Add an App-target `ps`-backed lister.
-- **2c (verify):** strict build clean; full `swift test` green.
+### Unit 2 — App wiring (source-pin test) ✅
+- **2a (test, red):** ✅ `SessionIdBackfillWiringTests` (5 cases) — pins the back-fill method calls `sessionIdBackfills`, runs `AgentSessionScanner().scan(state:processLister:)`, assigns `.terminalSessionId` guarded by `== nil`, calls `save()`, is wired at the output-settle point, and that `markStarted` stays as-is. Red before impl.
+- **2b (impl, green):** ✅ Added `backfillSessionIdsForFlushedRuns` + `applySessionIdBackfills` + off-main `scanAgentSessions` + App-target `psBackedProcessLines` lister; triggered from `reclassifyAttentionForFlushedRuns`. `markStarted` unchanged.
+- **2c (verify):** ✅ strict clean build (0 warnings/errors); full `swift test` green (2018 tests, 0 failures).
 
 ## Completion Criteria
-- [ ] `SessionIdBackfill.swift` exists, pure, 100% line+region (no allowlist).
-- [ ] Two distinct runs NEVER receive the same id (same-cwd pid disambiguation).
-- [ ] No-clobber: non-empty id absent from map; non-`.running` run skipped; cwd with no record skipped; `.custom` harness skipped.
-- [ ] Planner renders `--resume <id>` when the id is back-filled; honest fallback otherwise.
-- [ ] App back-fills at the output-settle point, guarded by `== nil`, then `save()`; `markStarted` unchanged.
-- [ ] `swift test` strict green; strict build clean.
+- [x] `SessionIdBackfill.swift` exists, pure, 100% line+region (no allowlist).
+- [x] Two distinct runs NEVER receive the same id (same-cwd pid disambiguation).
+- [x] No-clobber: non-empty id absent from map; non-`.running` run skipped; cwd with no record skipped; `.custom` harness skipped.
+- [x] Planner renders `--resume <id>` when the id is back-filled; honest fallback otherwise.
+- [x] App back-fills at the output-settle point, guarded by `== nil`, then `save()`; `markStarted` unchanged.
+- [x] `swift test` strict green; strict build clean.
+
+## Outcome
+- **Production writer now exists:** `grep '\.terminalSessionId =' Sources/` → `OuroWorkbenchApp.swift:18252` (the back-fill, guarded by `== nil`) in addition to the struct initializer. The planner's id branch + `RecoveryPlanner.autoResume` reason are no longer dead.
+- **Same-cwd pid disambiguation:** the running record's cwd is `""` with the `ps` lister, so the seam never reads it for running records — it pins each run to its own live process by `pid-<pid>`, counts candidate RUNS per `(harness, entry.workingDirectory)`, and back-fills only when exactly one candidate competes for a `(harness, cwd)`. Two same-cwd live runs → both nil (honest fallback). Two distinct runs can never share an id.
+- **Lister cwd:** the App's `psBackedProcessLines` (mirroring the MCP `RunningProcessLister`) leaves cwd nil on every line — by design and harmless, because the seam disambiguates by pid, not by the running record's cwd.
 
 ## Progress log
 - 2026-06-21 14:36 Branch created off main @ 04d199b; baseline build clean; doing doc + artifacts dir created.
+- 2026-06-21 14:56 All units complete. SessionIdBackfill seam 100% covered; planner + app wiring green; full suite 2018 tests 0 failures; strict clean build 0 warnings. Production writer for terminalSessionId confirmed. All gates passed.
