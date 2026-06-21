@@ -178,7 +178,8 @@ public struct DaemonLivenessProbe: Sendable {
     public static func defaultSyncReachability(timeoutSeconds: TimeInterval?) -> Bool {
         defaultSyncReachability(
             url: URL(string: "http://127.0.0.1:6876/api/machine")!,
-            timeoutSeconds: timeoutSeconds
+            timeoutSeconds: timeoutSeconds,
+            cancelTask: cancelTaskDefault
         )
     }
 
@@ -193,7 +194,7 @@ public struct DaemonLivenessProbe: Sendable {
     static func defaultSyncReachability(
         url: URL,
         timeoutSeconds: TimeInterval?,
-        cancelTask: (URLSessionDataTask) -> Void = DaemonLivenessProbe.cancelTaskDefault,
+        cancelTask: (URLSessionDataTask) -> Void,
         waitTimeoutPadding: TimeInterval = 0.25
     ) -> Bool {
         var request = URLRequest(url: url)

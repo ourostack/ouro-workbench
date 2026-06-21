@@ -263,27 +263,37 @@ final class DaemonLivenessTests: XCTestCase {
         try Data(#"{"ok":true}"#.utf8).write(to: fileURL)
         defer { try? FileManager.default.removeItem(at: root) }
 
-        XCTAssertFalse(DaemonLivenessProbe.defaultSyncReachability(url: fileURL, timeoutSeconds: 0.1))
+        XCTAssertFalse(DaemonLivenessProbe.defaultSyncReachability(
+            url: fileURL,
+            timeoutSeconds: 0.1,
+            cancelTask: DaemonLivenessProbe.cancelTaskDefault
+        ))
         try StubURLProtocol.withHandler(start: { loader in
             loader.client?.urlProtocol(loader, didFailWithError: URLError(.cannotConnectToHost))
         }) {
             XCTAssertFalse(DaemonLivenessProbe.defaultSyncReachability(timeoutSeconds: 2))
         }
-        XCTAssertFalse(DaemonLivenessProbe.defaultSyncReachability(url: fileURL, timeoutSeconds: -1))
+        XCTAssertFalse(DaemonLivenessProbe.defaultSyncReachability(
+            url: fileURL,
+            timeoutSeconds: -1,
+            cancelTask: DaemonLivenessProbe.cancelTaskDefault
+        ))
     }
 
     func testDefaultSyncReachabilityTreatsHTTPStatusesBelow500AsReachable() throws {
         try StubURLProtocol.withHTTPStatus(200) {
             XCTAssertTrue(DaemonLivenessProbe.defaultSyncReachability(
                 url: URL(string: "http://daemon.test/machine")!,
-                timeoutSeconds: nil
+                timeoutSeconds: nil,
+                cancelTask: DaemonLivenessProbe.cancelTaskDefault
             ))
         }
 
         try StubURLProtocol.withHTTPStatus(500) {
             XCTAssertFalse(DaemonLivenessProbe.defaultSyncReachability(
                 url: URL(string: "http://daemon.test/machine")!,
-                timeoutSeconds: 0.1
+                timeoutSeconds: 0.1,
+                cancelTask: DaemonLivenessProbe.cancelTaskDefault
             ))
         }
     }
@@ -311,6 +321,7 @@ final class DaemonLivenessTests: XCTestCase {
             XCTAssertFalse(DaemonLivenessProbe.defaultSyncReachability(
                 url: URL(string: "http://daemon.test/default-cancel")!,
                 timeoutSeconds: 0.1,
+                cancelTask: DaemonLivenessProbe.cancelTaskDefault,
                 waitTimeoutPadding: -0.05
             ))
         }
