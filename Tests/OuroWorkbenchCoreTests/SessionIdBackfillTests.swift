@@ -367,3 +367,164 @@ final class SessionIdBackfillTests: XCTestCase {
         XCTAssertTrue(result.isEmpty)
     }
 }
+
+/// END-TO-END pipeline tests for the F4 back-fill — the regression guard for the
+/// HIGH cold-review finding. The pure-seam tests above hand-build the record array
+/// and deliberately BYPASS `AgentSessionScanner.merge`. That bypass is exactly what
+/// masked the production defect: the App fed `SessionIdBackfill` the MERGE-COLLAPSED
+/// records (Phase 2 folds all same-`harness|cwd` running records into one), and
+/// because the App's `ps`-backed lister reports `cwd: nil` → every running record
+/// lands at `cwd:""` → ALL same-harness live pids collapsed to ONE survivor →
+/// multi-agent recovery silently failed while the bypassing unit test stayed green.
+///
+/// These tests drive the REAL production pipeline — `discoverRunning` (a lister
+/// that reports `cwd: nil`, exactly like the App's `ps` lister) + `discoverClaudeRecent`
+/// (real on-disk transcripts in DISTINCT cwds) — through the actual records the App
+/// now feeds the seam (`backfillRecords`), and assert two same-harness runs in
+/// distinct cwds BOTH back-fill. They also pin the negative: the OLD `scan` (merged)
+/// source would have dropped a run, so the fix is load-bearing, not cosmetic.
+final class SessionIdBackfillPipelineTests: XCTestCase {
+    // MARK: - Fixtures
+
+    private func claudeEntry(cwd: String) -> ProcessEntry {
+        ProcessEntry(
+            projectId: UUID(),
+            name: "Claude",
+            kind: .terminalAgent,
+            agentKind: .claudeCode,
+            executable: "claude",
+            arguments: ["--dangerously-skip-permissions"],
+            workingDirectory: cwd
+        )
+    }
+
+    private func runningRun(entry: ProcessEntry, pid: Int32) -> ProcessRun {
+        ProcessRun(entryId: entry.id, pid: pid, status: .running)
+    }
+
+    /// Write a Claude transcript on disk under `~/.claude/projects/<dir>/<name>`
+    /// so `discoverClaudeRecent` actually parses it (the REAL recent source). The
+    /// project dir is derived the same way the scanner expects.
+    private func writeClaudeTranscript(home: URL, directory: String, name: String, contents: String) throws {
+        let projectDir = home
+            .appendingPathComponent(".claude/projects", isDirectory: true)
+            .appendingPathComponent(SessionActivityReader.claudeProjectDirName(forDirectory: directory), isDirectory: true)
+        try FileManager.default.createDirectory(at: projectDir, withIntermediateDirectories: true)
+        try Data(contents.utf8).write(to: projectDir.appendingPathComponent(name))
+    }
+
+    private func tempDir() throws -> URL {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    // MARK: - The real-pipeline multi-agent proof
+
+    func testTwoSameHarnessRunsInDistinctCwdsBothBackfillThroughRealPipeline() throws {
+        let home = try tempDir()
+        defer { try? FileManager.default.removeItem(at: home) }
+
+        let cwdA = "/Users/me/repoA"
+        let cwdB = "/Users/me/repoB"
+
+        // Two REAL on-disk Claude transcripts, one per cwd, each carrying its own
+        // native sessionId — the recent source `discoverClaudeRecent` will parse.
+        try writeClaudeTranscript(home: home, directory: cwdA, name: "sess-A.jsonl", contents: """
+        {"type":"user","cwd":"\(cwdA)","gitBranch":"main","sessionId":"sess-A","timestamp":"2026-06-19T11:00:00.000Z"}
+        """)
+        try writeClaudeTranscript(home: home, directory: cwdB, name: "sess-B.jsonl", contents: """
+        {"type":"user","cwd":"\(cwdB)","gitBranch":"main","sessionId":"sess-B","timestamp":"2026-06-19T11:00:00.000Z"}
+        """)
+
+        // Two live claude processes — DISTINCT pids — and a lister that reports
+        // `cwd: nil` for both, exactly like the App's `ps`-backed lister. This is
+        // the precise input that, under the display `scan`'s merge, collapses both
+        // running records to ONE survivor (same `harness|cwd:""`).
+        let lister: @Sendable () -> [RunningProcessLine] = {
+            [
+                RunningProcessLine(pid: 100, command: "claude --dangerously-skip-permissions", cwd: nil),
+                RunningProcessLine(pid: 200, command: "claude --dangerously-skip-permissions", cwd: nil),
+            ]
+        }
+
+        let entryA = claudeEntry(cwd: cwdA)
+        let entryB = claudeEntry(cwd: cwdB)
+        let runA = runningRun(entry: entryA, pid: 100)
+        let runB = runningRun(entry: entryB, pid: 200)
+
+        // Drive the REAL pipeline the App now uses: the UN-MERGED backfillRecords.
+        let scanner = AgentSessionScanner(homeURL: home)
+        let records = scanner.backfillRecords(state: nil, processLister: lister)
+
+        let result = SessionIdBackfill.sessionIdBackfills(
+            runs: [runA, runB],
+            entries: [entryA, entryB],
+            records: records
+        )
+
+        // The whole point of F4 for the multi-agent case: BOTH back-fill, each to
+        // its own native id, through the real scan pipeline — not just the seam in
+        // isolation.
+        XCTAssertEqual(result[runA.id], "sess-A", "run A must back-fill to its own native id through the real pipeline")
+        XCTAssertEqual(result[runB.id], "sess-B", "run B must back-fill to its own native id through the real pipeline")
+        XCTAssertEqual(Set(result.values).count, 2, "the two runs must receive distinct ids")
+    }
+
+    func testDisplayScanWouldDropARunProvingTheFixIsLoadBearing() throws {
+        // The NEGATIVE pin: feed the seam the OLD source (`scan`, merged) with the
+        // exact same real on-disk + nil-cwd-lister input. Phase-2 merge collapses
+        // both running records to ONE survivor, so the seam's `liveHarnessByPid`
+        // holds at most one pid → at most one run can pin → multi-agent recovery is
+        // gutted. This documents the defect the fix repairs, and fails LOUDLY if a
+        // future change reroutes the back-fill back through `scan`.
+        let home = try tempDir()
+        defer { try? FileManager.default.removeItem(at: home) }
+
+        let cwdA = "/Users/me/repoA"
+        let cwdB = "/Users/me/repoB"
+        try writeClaudeTranscript(home: home, directory: cwdA, name: "sess-A.jsonl", contents: """
+        {"type":"user","cwd":"\(cwdA)","gitBranch":"main","sessionId":"sess-A","timestamp":"2026-06-19T11:00:00.000Z"}
+        """)
+        try writeClaudeTranscript(home: home, directory: cwdB, name: "sess-B.jsonl", contents: """
+        {"type":"user","cwd":"\(cwdB)","gitBranch":"main","sessionId":"sess-B","timestamp":"2026-06-19T11:00:00.000Z"}
+        """)
+
+        let lister: @Sendable () -> [RunningProcessLine] = {
+            [
+                RunningProcessLine(pid: 100, command: "claude --dangerously-skip-permissions", cwd: nil),
+                RunningProcessLine(pid: 200, command: "claude --dangerously-skip-permissions", cwd: nil),
+            ]
+        }
+
+        let entryA = claudeEntry(cwd: cwdA)
+        let entryB = claudeEntry(cwd: cwdB)
+        let runA = runningRun(entry: entryA, pid: 100)
+        let runB = runningRun(entry: entryB, pid: 200)
+
+        let scanner = AgentSessionScanner(homeURL: home)
+        let mergedRecords = scanner.scan(state: nil, processLister: lister)
+
+        // Prove the premise: the merge really did collapse the two running records
+        // (cwd:"") to a single survivor — at most one live pid reaches the seam.
+        let liveRunningPids = mergedRecords
+            .filter(\.running)
+            .compactMap { Int32($0.sessionId.dropFirst("pid-".count)) }
+        XCTAssertEqual(liveRunningPids.count, 1, "merge collapses both nil-cwd running records to ONE survivor")
+
+        let result = SessionIdBackfill.sessionIdBackfills(
+            runs: [runA, runB],
+            entries: [entryA, entryB],
+            records: mergedRecords
+        )
+
+        // The defect, made concrete: feeding the merged source, at MOST one run
+        // back-fills — the other is silently dropped to `--continue`. (Which one
+        // survives is merge-order dependent; the load-bearing fact is that the two
+        // are NOT both filled, the exact failure the un-merged source repairs.)
+        XCTAssertLessThan(
+            result.count, 2,
+            "the merged display source drops at least one run — this is the gutted multi-agent case the fix repairs"
+        )
+    }
+}

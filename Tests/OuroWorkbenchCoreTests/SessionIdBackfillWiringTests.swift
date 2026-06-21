@@ -8,8 +8,11 @@ import XCTest
 ///
 ///   - a dedicated back-fill method exists and calls `SessionIdBackfill.sessionIdBackfills`;
 ///   - it applies each write GUARDED by `== nil` (no-clobber), then `save()`s;
-///   - it runs a real `AgentSessionScanner().scan(state:processLister:)` against
-///     the App's `ps`-backed lister;
+///   - it runs a real `AgentSessionScanner().backfillRecords(state:processLister:)`
+///     against the App's `ps`-backed lister — the UN-MERGED source, NOT the
+///     display `scan` whose `harness|cwd` merge collapses all same-harness live
+///     pids (the App's `ps` lister reports no cwd) and silently breaks multi-agent
+///     recovery;
 ///   - it is wired into the post-output-settle point (alongside the attention
 ///     reclassify) — the moment the agent has had time to write its session file;
 ///   - `markStarted` STAYS AS-IS (it provably can't know the id yet) — it must NOT
@@ -35,8 +38,12 @@ final class SessionIdBackfillWiringTests: XCTestCase {
             "the back-fill pass must run a real AgentSessionScanner"
         )
         XCTAssertTrue(
-            body.contains(".scan(") && body.contains("state:") && body.contains("processLister:"),
-            "the scan must pass the workspace state and the ps-backed processLister"
+            body.contains(".backfillRecords(") && body.contains("state:") && body.contains("processLister:"),
+            "the scan must use the UN-MERGED backfillRecords source (NOT the display scan, whose harness|cwd merge collapses all same-harness live pids) and pass the workspace state + the ps-backed processLister"
+        )
+        XCTAssertFalse(
+            body.contains(".scan("),
+            "the back-fill pass must NOT use the display `scan` — its merge collapses same-harness running records to one survivor, dropping live pids from the seam's pin set and breaking multi-agent recovery"
         )
     }
 

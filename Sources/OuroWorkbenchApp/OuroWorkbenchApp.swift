@@ -18258,14 +18258,20 @@ final class WorkbenchViewModel: ObservableObject {
         }
     }
 
-    /// Run the agent-session scan off the main actor: the same `ps`-backed
-    /// `processLister` + `AgentSessionScanner` the MCP discovery path uses, so the
-    /// running-process records (keyed `pid-<pid>`) and the on-disk recent records
-    /// are exactly what `SessionIdBackfill` matches against. nonisolated + capturing
-    /// only the Sendable state snapshot so it satisfies strict concurrency.
+    /// Run the agent-session scan off the main actor for the back-fill seam, using
+    /// the same `ps`-backed `processLister` + `AgentSessionScanner` the MCP
+    /// discovery path uses — but via `backfillRecords`, NOT `scan`. The display
+    /// `scan` `merge`-collapses same-`harness|cwd` records; the App's `ps` lister
+    /// reports no cwd, so EVERY running record lands at `cwd:""` and a merge would
+    /// fold ALL same-harness live pids into ONE survivor — handing the seam at most
+    /// one pid per harness and silently breaking multi-agent (and even single-run)
+    /// recovery. `backfillRecords` returns the UN-MERGED union (all live pids + the
+    /// un-collapsed recent native ids) so `SessionIdBackfill` sees every pid it must
+    /// pin. nonisolated + capturing only the Sendable state snapshot so it satisfies
+    /// strict concurrency.
     nonisolated private static func scanAgentSessions(state: WorkspaceState) async -> [AgentSessionRecord] {
         await Task.detached(priority: .utility) {
-            AgentSessionScanner().scan(
+            AgentSessionScanner().backfillRecords(
                 state: state,
                 processLister: Self.psBackedProcessLines
             )

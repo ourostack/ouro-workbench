@@ -417,6 +417,30 @@ public struct AgentSessionScanner: Sendable {
         return Self.merge(running: running, recent: recent, workbench: workbench)
     }
 
+    /// The UN-MERGED record union the F4 back-fill seam needs — deliberately NOT
+    /// `merge`d. `scan` collapses records for DISPLAY (one tile per logical
+    /// session), and its Phase-2 `harness|cwd` fold is correct there. But the
+    /// back-fill seam needs the OPPOSITE: it pins each still-id-less RUNNING run to
+    /// its OWN live pid (`liveHarnessByPid`), and the App's `ps`-backed lister
+    /// reports `cwd: nil` → every running record lands at `cwd:""`, so feeding the
+    /// seam `merge` output would collapse ALL same-harness running records to ONE
+    /// survivor — dropping every other live pid from the pin set and silently
+    /// killing multi-agent recovery (and even single-run recovery when an unrelated
+    /// `claude` process is the survivor). So this returns running (ALL pids) +
+    /// recent (un-collapsed native ids) + workbench forward-memory (native ids),
+    /// with NO dedup: the pure seam already keys running-by-pid and recent-by-cwd
+    /// and owns its own same-cwd ambiguity rule. The display path keeps using
+    /// `scan`; only the back-fill path uses this.
+    public func backfillRecords(
+        state: WorkspaceState?,
+        processLister: @Sendable () -> [RunningProcessLine]
+    ) -> [AgentSessionRecord] {
+        let running = discoverRunning(processLister: processLister)
+        let recent = discoverClaudeRecent() + discoverCopilotRecent()
+        let workbench = state.map(discoverFromWorkbench(state:)) ?? []
+        return running + recent + workbench
+    }
+
     /// Source authority, lowest → highest. A higher-authority record wins any
     /// collision (same `harness|sessionId` OR same `harness|cwd`) regardless of
     /// timestamp; `recent` collisions among themselves break on `lastActive`.
