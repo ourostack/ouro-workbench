@@ -156,8 +156,13 @@ final class TailCoverageTests: XCTestCase {
 
         let reconciled = StartupRecoveryReconciler().reconcile(state)
 
-        // The most-recent run was in-flight, so it reclassifies to needsRecovery and flags the entry.
-        XCTAssertEqual(reconciled.processEntries.first?.attention, .needsBossReview)
+        // The most-recent run was in-flight, so it reclassifies to needsRecovery
+        // and drives the entry's attention. A trusted auto-resume agent with no
+        // live screen session is auto-resuming → calm `.idle` (U8a), not an
+        // orange "needs boss review".
+        XCTAssertEqual(reconciled.processRuns.sorted(by: ProcessRun.isMoreRecent).first?.status, .needsRecovery)
+        XCTAssertEqual(reconciled.processEntries.first?.attention, .idle)
+        XCTAssertEqual(reconciled.processEntries.first?.lastSummary, "Codex will auto-resume on recovery")
     }
 
     // WorkbenchSessionsRenderer: duplicate project ids dedupe (first wins) and

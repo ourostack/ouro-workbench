@@ -12,6 +12,21 @@ public enum AttentionSignal: Equatable, Sendable {
     case unknown
 }
 
+/// The classification of a session's tail: the `signal` plus a short, bounded
+/// human-readable `reason` line describing *what* the agent is asking or *what*
+/// failed (nil when `.unknown`, or when there's no informative line). U10 surfaces
+/// this reason in the live detail banner and the boss-facing `SessionSnapshot`
+/// so the operator and the boss agree on *why* a session is waiting.
+public struct AttentionClassification: Equatable, Sendable {
+    public var signal: AttentionSignal
+    public var reason: String?
+
+    public init(signal: AttentionSignal, reason: String? = nil) {
+        self.signal = signal
+        self.reason = reason
+    }
+}
+
 /// Classifies a session's recent terminal output to decide whether it's
 /// *waiting on the human*. This is the signal that turns the workbench from "a
 /// launcher with panes" into an attention router: when a coding agent stops to
@@ -23,10 +38,23 @@ public enum AttentionSignal: Equatable, Sendable {
 /// pure function of the tail text so it can be exhaustively unit-tested and run
 /// off the main actor against the already-written transcript.
 public enum AttentionSignalDetector {
+    /// Upper bound on the length of a derived `reason` line. A pathological
+    /// prompt line is clipped (with a trailing ellipsis) so the banner and the
+    /// boss snapshot never carry an unbounded blob.
+    public static let maxReasonLength = 140
+
     /// Inspect the tail of a session's output. `tail` should be the last few KB
     /// of decoded terminal output (e.g. from the transcript). Returns
     /// `.waitingOnHuman` only on a confident interactive-prompt match.
     public static func classify(tail: String) -> AttentionSignal {
+        classifyWithReason(tail: tail).signal
+    }
+
+    /// Like `classify`, but also returns a short "why" line: the question/prompt
+    /// the agent is waiting on, or the terminal-error line it's stuck on. The
+    /// `reason` is stripped of ANSI, trimmed, and bounded to `maxReasonLength`.
+    /// `.unknown` carries a nil reason.
+    public static func classifyWithReason(tail: String) -> AttentionClassification {
         // Strip ANSI escape sequences and carriage returns so prompt text is
         // matched on the rendered characters, not the control bytes.
         let cleaned = stripControlSequences(tail)
@@ -34,29 +62,29 @@ public enum AttentionSignalDetector {
             .split(whereSeparator: \.isNewline)
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
-        guard !lines.isEmpty else { return .unknown }
+        guard !lines.isEmpty else { return AttentionClassification(signal: .unknown) }
 
         // Only the last handful of lines matter for an interactive prompt; a
         // match buried far up the scrollback is stale.
-        let recent = lines.suffix(12)
+        let recent = Array(lines.suffix(12))
         let recentLower = recent.map { $0.lowercased() }
 
         // 1. A numbered selection menu with an arrow cursor, e.g. Claude Code /
         //    Codex approval menus: "❯ 1. Yes" / "> 2. No, suggest changes".
-        for line in recent where isArrowSelectedOption(line) {
-            return .waitingOnHuman
+        if let menuIndex = recent.firstIndex(where: { isArrowSelectedOption($0) }) {
+            return waiting(reason: promptReason(in: recent, matchedAt: menuIndex))
         }
 
         // 2. Explicit confirmation / yes-no prompts anywhere in the tail end.
-        for line in recentLower where containsConfirmationPrompt(line) {
-            return .waitingOnHuman
+        if let promptIndex = recentLower.firstIndex(where: { containsConfirmationPrompt($0) }) {
+            return waiting(reason: promptReason(in: recent, matchedAt: promptIndex))
         }
 
         // 3. The very last line looks like an interactive read prompt that the
         //    process is blocked on (a question or "press enter"), as opposed to
         //    a plain shell prompt (which is merely idle, not waiting-on-human).
         if let last = recentLower.last, isTrailingReadPrompt(last) {
-            return .waitingOnHuman
+            return waiting(reason: promptReason(in: recent, matchedAt: recent.count - 1))
         }
 
         // 4. The session ended on a terminal error and isn't at a prompt — it's
@@ -65,10 +93,46 @@ public enum AttentionSignalDetector {
         //    inspected, so an error mid-progress that the agent kept working
         //    past never trips it.
         if let last = recentLower.last, isTerminalError(last) {
-            return .blocked
+            return AttentionClassification(signal: .blocked, reason: boundedReason(recent[recent.count - 1]))
         }
 
-        return .unknown
+        return AttentionClassification(signal: .unknown)
+    }
+
+    // MARK: - Reason derivation
+
+    private static func waiting(reason: String?) -> AttentionClassification {
+        AttentionClassification(signal: .waitingOnHuman, reason: reason)
+    }
+
+    /// The best "why" line for a waiting prompt matched at `matchedAt`. An arrow
+    /// menu's own line ("❯ 1. Yes") is uninformative, so prefer the nearest
+    /// question line at or above the match; otherwise fall back to the matched
+    /// line itself.
+    static func promptReason(in lines: [String], matchedAt index: Int) -> String? {
+        for i in stride(from: index, through: 0, by: -1) where looksLikeQuestion(lines[i]) {
+            return boundedReason(lines[i])
+        }
+        return boundedReason(lines[index])
+    }
+
+    /// A line that reads like a direct question / prompt to the operator: ends
+    /// with "?" or a recognized confirmation needle. Used to pick the human-
+    /// meaningful line out of a multi-line prompt block.
+    static func looksLikeQuestion(_ line: String) -> Bool {
+        let lower = line.lowercased()
+        if line.hasSuffix("?") { return true }
+        return containsConfirmationPrompt(lower)
+    }
+
+    /// Trim a candidate reason line and clip it to `maxReasonLength` with a
+    /// trailing ellipsis. Returns nil for an empty line.
+    static func boundedReason(_ line: String) -> String? {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        if trimmed.count <= maxReasonLength { return trimmed }
+        let clipped = trimmed.prefix(maxReasonLength - 1)
+        return String(clipped) + "…"
     }
 
     // MARK: - Patterns

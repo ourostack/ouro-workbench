@@ -150,4 +150,40 @@ final class RecoveryDrillTests: XCTestCase {
         XCTAssertEqual(result.items.first?.reason, "no recovery plan")
         XCTAssertEqual(result.items.first?.afterStatus, .exited)
     }
+
+    /// U39: the drill's one-line count routes through the SAME `RecoveryDigest`
+    /// needs-action derivation every other surface uses — it must not recompute
+    /// its own number. A mix of a lossless reattach, two auto-recoverables and a
+    /// needs-you reads "3" (the reattach is a reconnect, not an action), exactly
+    /// what `RecoveryDigest.needsActionCount` yields for the same plans.
+    func testDrillCountRoutesThroughRecoveryDigestNeedsAction() {
+        let project = WorkbenchProject(name: "Project", rootPath: "/repo")
+        let entries = (0..<4).map { i in
+            ProcessEntry(
+                projectId: project.id,
+                name: "E\(i)",
+                kind: .shell,
+                executable: "/bin/zsh",
+                workingDirectory: "/repo",
+                trust: .trusted,
+                autoResume: true
+            )
+        }
+        let runs = entries.map { ProcessRun(entryId: $0.id, status: .running) }
+        let state = WorkspaceState(projects: [project], processEntries: entries, processRuns: runs)
+
+        let actions: [RecoveryAction] = [.reattach, .autoResume, .respawn, .manualActionNeeded]
+        let injected = zip(entries, actions).map { entry, action in
+            RecoveryPlan(entryId: entry.id, runId: nil, action: action, reason: "r")
+        }
+
+        let result = RecoveryDrill(planRecovery: { _ in injected }).run(state: state)
+
+        let digest = RecoveryDigest(plans: injected)
+        XCTAssertEqual(digest.needsActionCount, 3)
+        XCTAssertEqual(
+            result.oneLineStatus,
+            "\(digest.needsActionCount) recovery actions after simulated restart"
+        )
+    }
 }

@@ -46,7 +46,7 @@ final class BossForwardStatusWiringTests: XCTestCase {
         let row = try sourceSlice(
             in: source,
             from: "private struct SessionStatusRowView: View",
-            to: "private struct OnboardingPreviewInfoGrid: View"
+            to: "struct ActionLogView: View"
         )
 
         // Clicking a status row reuses the existing cross-group selection path —

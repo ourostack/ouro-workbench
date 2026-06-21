@@ -178,14 +178,23 @@ public struct DaemonLivenessProbe: Sendable {
     public static func defaultSyncReachability(timeoutSeconds: TimeInterval?) -> Bool {
         defaultSyncReachability(
             url: URL(string: "http://127.0.0.1:6876/api/machine")!,
-            timeoutSeconds: timeoutSeconds
+            timeoutSeconds: timeoutSeconds,
+            cancelTask: cancelTaskDefault
         )
+    }
+
+    /// Default cancellation behavior for a timed-out sync-reachability data task: cancel it.
+    /// Extracted from an inline closure literal so it is a single coverable line a unit test can
+    /// invoke directly — the inline form was only reachable via a timing-dependent timeout race,
+    /// which made coverage of that region flaky. Behavior is identical.
+    static func cancelTaskDefault(_ task: URLSessionDataTask) {
+        task.cancel()
     }
 
     static func defaultSyncReachability(
         url: URL,
         timeoutSeconds: TimeInterval?,
-        cancelTask: (URLSessionDataTask) -> Void = { $0.cancel() },
+        cancelTask: (URLSessionDataTask) -> Void,
         waitTimeoutPadding: TimeInterval = 0.25
     ) -> Bool {
         var request = URLRequest(url: url)

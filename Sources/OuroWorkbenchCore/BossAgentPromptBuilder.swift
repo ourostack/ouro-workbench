@@ -20,7 +20,8 @@ public struct BossAgentPromptBuilder: Sendable {
         machineFriend: SessionFriend? = nil,
         waitingPrompts: [UUID: String] = [:],
         ouroAgents: [OuroAgentRecord] = [],
-        recentChanges: [WorkspaceChangeSummary] = []
+        recentChanges: [WorkspaceChangeSummary] = [],
+        autonomyVerdict: String? = nil
     ) -> String {
         var lines: [String] = []
         lines.append("You are the selected Ouro boss agent for Ouro Workbench.")
@@ -43,6 +44,11 @@ public struct BossAgentPromptBuilder: Sendable {
         lines.append("")
         lines.append("Workspace status: \(summary.oneLineStatus)")
         lines.append("Boss Watch: \(state.bossWatchEnabled ? "enabled" : "paused")")
+        // One-line TTFA autonomy verdict (#U20) so the boss sees hands-off readiness without a
+        // second workbench_autonomy_readiness call, and is pointed at that tool to act on blockers.
+        if let autonomyVerdict, !autonomyVerdict.isEmpty {
+            lines.append("Autonomy readiness: \(autonomyVerdict) (call workbench_autonomy_readiness for the per-check breakdown and the fixes you can queue.)")
+        }
         lines.append("Boss Pane: \(state.bossPaneCollapsed ? "collapsed" : "expanded")")
         lines.append("Selected group: \(selectedProjectName(in: state))")
         if !ouroAgents.isEmpty {
@@ -149,9 +155,16 @@ public struct BossAgentPromptBuilder: Sendable {
         if summary.recoveryPlans.isEmpty {
             lines.append("- no configured recovery plans")
         } else {
+            let phrasebook = RecoveryReasonPhrasebook()
             for plan in summary.recoveryPlans {
                 let entryName = state.processEntries.first { $0.id == plan.entryId }?.name ?? plan.entryId.uuidString
-                lines.append("- \(entryName): action=\(plan.action.rawValue), reason=\(plan.reason)")
+                // Raw `action`/`reason` are machine-facing and KEPT verbatim (the
+                // boss joins on `action` rawValue and uses `reason` as the
+                // auditable detail). `plain` is additive: the same one plain
+                // operator sentence every UI surface shows, so the boss can relay
+                // a human sentence without decoding the rawValue (flag b).
+                let plain = phrasebook.operatorSentence(for: plan.action, rawReason: plan.reason)
+                lines.append("- \(entryName): action=\(plan.action.rawValue), reason=\(plan.reason), plain=\(plain)")
             }
         }
         if !state.actionLog.isEmpty {

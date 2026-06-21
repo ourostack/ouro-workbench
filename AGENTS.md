@@ -24,7 +24,10 @@ going on?", "is anything waiting on me?", and "keep things moving."
 
 ## Autonomy
 
-TTFA applies. Prefer reversible, auditable action over permission-seeking.
+TTFA (Trust the Fucking Agent) applies. Prefer reversible, auditable action
+over permission-seeking. It is NOT "time to first action" — TTFA is the
+autonomy-readiness posture: the agent has the agency and capability; we bring
+judgement and nothing else. See https://ouroboros.bot/blog/trust-the-fucking-agent/
 
 Use fresh sub-agent review gates for unbiased validation. Human escalation is
 reserved for genuinely uncovered human-only issues: credentials/private account

@@ -177,6 +177,21 @@ public final class WorkbenchActionRequestQueue {
         (try? pendingRequestFileURLs())?.count ?? 0
     }
 
+    /// Whether a request with this id is still in flight — sitting in the queue
+    /// dir (drained-not-yet) OR in `processing/` (handed to the app, not yet
+    /// confirmed) (#U24). The boss's `workbench_action_result` reads this to tell
+    /// a not-yet-applied request (poll again, `queued`) from one the app has
+    /// finished and logged. Best-effort: an unreadable dir reads as not-in-flight,
+    /// so the action log (the resolved truth) decides instead.
+    public func isPendingOrProcessing(requestId: UUID) -> Bool {
+        let pending = (try? pendingRequestFileURLs()) ?? []
+        let needle = requestId.uuidString
+        if pending.contains(where: { $0.lastPathComponent.contains(needle) }) {
+            return true
+        }
+        return FileManager.default.fileExists(atPath: processingFileURL(for: requestId).path)
+    }
+
     /// Top-level pending request files (not the `processing/`, `rejected/`
     /// subdirectories — those have no `.json` extension and the listing is
     /// non-recursive), sorted by filename for a stable order.

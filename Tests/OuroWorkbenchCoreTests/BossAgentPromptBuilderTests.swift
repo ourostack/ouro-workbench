@@ -109,20 +109,63 @@ final class BossAgentPromptBuilderTests: XCTestCase {
         XCTAssertTrue(prompt.contains("Sessions owned by an agent (owner=agent:<name>) are driven by that agent's own loop"))
     }
 
-    func testCheckInTriggerIsSubstantiallyShorterThanFullPrompt() {
+    func testCheckInPromptFoldsInTheOneLineAutonomyVerdictAndPointsAtTheTool() {
+        // #U20: the boss sees hands-off readiness in the check-in without a second call,
+        // and is pointed at workbench_autonomy_readiness to act on blockers.
         let (state, summary) = makeFixture()
+        let prompt = BossAgentPromptBuilder().checkInPrompt(
+            question: "q",
+            state: state,
+            summary: summary,
+            autonomyVerdict: "To get to green, the operator needs to: Trust the agent terminals so the boss may drive them."
+        )
+
+        XCTAssertTrue(prompt.contains("Autonomy readiness: To get to green, the operator needs to: Trust the agent terminals"))
+        XCTAssertTrue(prompt.contains("call workbench_autonomy_readiness"))
+    }
+
+    func testCheckInPromptOmitsTheAutonomyLineWhenNoVerdictIsSupplied() {
+        // Existing callers that don't pass a verdict get the unchanged prompt — no empty line.
+        let (state, summary) = makeFixture()
+        let prompt = BossAgentPromptBuilder().checkInPrompt(question: "q", state: state, summary: summary)
+        XCTAssertFalse(prompt.contains("Autonomy readiness:"))
+    }
+
+    func testCheckInTriggerIsSubstantiallyShorterThanFullPrompt() {
+        // A non-trivial machine: the trigger carries a FIXED tool list while the
+        // full prompt grows a per-session dump per session, so on a populated
+        // machine the full prompt must out-weigh the thin trigger. (On a near-empty
+        // machine the fixed tool list can exceed the dump — which is why this asserts
+        // on a many-session state, robust to the tool catalog growing.)
+        let project = WorkbenchProject(name: "Project", rootPath: "/tmp/project")
+        var entries: [ProcessEntry] = []
+        var runs: [ProcessRun] = []
+        for index in 0..<12 {
+            let entry = ProcessEntry(
+                projectId: project.id,
+                name: "Session-\(index)",
+                kind: .terminalAgent,
+                agentKind: .openAICodex,
+                executable: "codex",
+                workingDirectory: "/tmp/project/sub-\(index)",
+                trust: .trusted,
+                autoResume: true,
+                attention: index.isMultiple(of: 2) ? .waitingOnHuman : .active,
+                lastSummary: "Session \(index) is doing some substantial work right now"
+            )
+            entries.append(entry)
+            runs.append(ProcessRun(entryId: entry.id, status: .waitingForInput))
+        }
+        let state = WorkspaceState(projects: [project], processEntries: entries, processRuns: runs)
+        let summary = WorkspaceSummarizer().summarize(state)
         let question = "is anything waiting on me?"
         let builder = BossAgentPromptBuilder()
 
         let trigger = builder.checkInTrigger(question: question, summary: summary)
-        let fullPrompt = builder.checkInPrompt(
-            question: question,
-            state: state,
-            summary: summary
-        )
+        let fullPrompt = builder.checkInPrompt(question: question, state: state, summary: summary)
 
         // The thin trigger drops the per-session state dump, so it must be
-        // materially shorter than the full embed for the same inputs.
+        // materially shorter than the full embed for a populated machine.
         XCTAssertLessThan(trigger.count, fullPrompt.count)
     }
 
@@ -316,8 +359,13 @@ final class BossAgentPromptBuilderTests: XCTestCase {
         XCTAssertTrue(prompt.contains("notes=multi line notes"))
         XCTAssertTrue(prompt.contains("Waiting prompts"))
         XCTAssertTrue(prompt.contains("Proceed? 1) yes"))
-        XCTAssertTrue(prompt.contains("Primary: action=autoResume, reason=trusted auto-resume"))
+        // flag (b): the raw machine-facing fields are KEPT (the boss uses
+        // `action` as a stable join key, `reason` as the auditable detail) AND
+        // an additive `plain=` field carries the human sentence so the boss can
+        // relay it without decoding the rawValue.
+        XCTAssertTrue(prompt.contains("Primary: action=autoResume, reason=trusted auto-resume, plain=Resumes its last conversation automatically."))
         XCTAssertTrue(prompt.contains("66666666-6666-6666-6666-666666666666: action=manualActionNeeded"))
+        XCTAssertTrue(prompt.contains("plain=No resumable session — needs you to start it fresh."))
         XCTAssertTrue(prompt.contains("ok, source=boss, action=sendInput, target=Primary, result=sent continue"))
         XCTAssertTrue(prompt.contains("skipped, source=operator, action=recover, target=none, result=not trusted"))
     }

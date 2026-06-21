@@ -30,6 +30,18 @@ final class WorkbenchMCPServer {
     private let recoveryDrill = RecoveryDrill()
     private let senseRenderer = WorkbenchSenseRenderer()
     private let sessionsRenderer = WorkbenchSessionsRenderer()
+    // The boss's one-call attention queue (#U24): the needs-human sessions, each
+    // with the inline waiting-prompt the operator path computes, in triage order.
+    private let attentionQueueRenderer = WorkbenchAttentionQueueRenderer()
+    // The boss's requestId readback (#U24): classifies a queued request's outcome
+    // (queued|applied|failed|unknown) from the live queue + the action log.
+    private let actionResultClassifier = WorkbenchActionResultClassifier()
+    // The boss's read-only TTFA sensor (#U20): builds the same AutonomyReadinessSnapshot the
+    // operator's popover shows, then shapes it into the boss-relayable readout (per-check fix:
+    // boss-queueable verb vs operator one-tap vs degraded). Read-only — names fixes, queues none.
+    private let autonomyReadinessBuilder = AutonomyReadinessBuilder()
+    private let autonomyAvailabilityBuilder = AutonomyRemediationAvailabilityBuilder()
+    private let autonomyReadinessRenderer = WorkbenchAutonomyReadinessRenderer()
     private let visibilityBuilder = WorkbenchVisibilityBuilder()
     private let visibilityRenderer = WorkbenchVisibilityTextRenderer()
     private let workCardReader = OuroWorkCardReader()
@@ -130,8 +142,14 @@ final class WorkbenchMCPServer {
             return try workbenchStatus()
         case OnboardingReadinessReportRenderer.toolName:
             return try onboardingStatus()
+        case WorkbenchAutonomyReadinessRenderer.toolName:
+            return try autonomyReadiness()
         case "workbench_sessions":
             return try sessionsList(arguments: arguments)
+        case WorkbenchAttentionQueueRenderer.toolName:
+            return try attentionQueue()
+        case "workbench_action_result":
+            return try actionResult(arguments: arguments)
         case "workbench_visibility":
             return try workbenchVisibility(arguments: arguments)
         case "workbench_sense":
@@ -148,6 +166,8 @@ final class WorkbenchMCPServer {
             return try requestAction(arguments: arguments)
         case "workbench_create_session":
             return try createSession(arguments: arguments)
+        case WorkbenchReportBugRenderer.toolName:
+            return try reportBug(arguments: arguments)
         case "workbench_discover_agent_sessions":
             return try discoverAgentSessions()
         case "workbench_propose":
@@ -165,13 +185,7 @@ final class WorkbenchMCPServer {
         // Collision-safe builders (keep first): `bootstrappedState` already
         // de-dups entries by id, but guard here too so a duplicate id can never
         // trap and crash the long-lived read-only server.
-        let executableHealth = Dictionary(
-            state.processEntries.map { entry in
-                let executable = ExecutableHealthTarget.executable(for: entry)
-                return (entry.id, executableHealthChecker.health(for: executable))
-            },
-            uniquingKeysWith: { first, _ in first }
-        )
+        let executableHealth = executableHealthByEntry(state)
         // Probe git per session (read-only, watchdog-bounded) so the boss's
         // primary read tool reports each session's branch / dirty / ahead-behind.
         let gitStatus = Dictionary(
@@ -197,6 +211,14 @@ final class WorkbenchMCPServer {
                 },
             uniquingKeysWith: { first, _ in first }
         )
+        // One-line TTFA autonomy verdict (#U20): the same boss-relayable "get to green" summary the
+        // workbench_autonomy_readiness sensor returns, folded in so the boss sees hands-off
+        // readiness without a second call and is pointed at that tool to queue the fixes.
+        let autonomyVerdict = autonomyReadinessReadout(
+            state: state,
+            summary: summary,
+            executableHealth: executableHealth
+        ).summary
         return promptBuilder.checkInPrompt(
             question: "What is currently going on in Ouro Workbench?",
             state: state,
@@ -205,7 +227,8 @@ final class WorkbenchMCPServer {
             executableHealth: executableHealth,
             gitStatus: gitStatus,
             machineFriend: SessionFriend.machineOwner(),
-            waitingPrompts: waitingPrompts
+            waitingPrompts: waitingPrompts,
+            autonomyVerdict: autonomyVerdict
         )
     }
 
@@ -234,6 +257,58 @@ final class WorkbenchMCPServer {
         return onboardingReportRenderer.render(readiness)
     }
 
+    /// The boss's read-only TTFA autonomy-readiness snapshot (#U20). Builds the SAME
+    /// `AutonomyReadinessSnapshot` the operator's in-app popover shows (boss/bridge/trust/resume/
+    /// executables/recovery/watch checks) plus the matching live fix-availability gate, then shapes
+    /// both into the boss-relayable `AutonomyReadinessReadout` JSON: overall state, per-check fix
+    /// (boss-queueable `request_action` verb vs operator one-tap vs degraded), and one human-
+    /// relayable "get to green" summary. A SENSOR — it reads state and queues nothing; the boss
+    /// acts on the named verbs via `workbench_request_action`, or relays the operator one-taps.
+    private func autonomyReadiness() throws -> String {
+        let state = try currentState()
+        let readout = autonomyReadinessReadout(
+            state: state,
+            summary: summarizer.summarize(state),
+            executableHealth: executableHealthByEntry(state)
+        )
+        return try encodeJSON(readout)
+    }
+
+    /// Build the boss-relayable TTFA readout from a state + summary (#U20). Shared by the
+    /// `workbench_autonomy_readiness` sensor and `workbench_status`'s one-line autonomy verdict, so
+    /// both surfaces read the SAME snapshot + fix-availability gate and can never disagree.
+    private func autonomyReadinessReadout(
+        state: WorkspaceState,
+        summary: WorkspaceSummary,
+        executableHealth: [UUID: ExecutableHealth]
+    ) -> AutonomyReadinessReadout {
+        let registration = bossWorkbenchMCPRegistrar.snapshot(for: state.boss)
+        let snapshot = autonomyReadinessBuilder.build(
+            state: state,
+            summary: summary,
+            mcpRegistration: registration,
+            executableHealth: executableHealth,
+            bossWatchIsEnabled: state.bossWatchEnabled
+        )
+        let availability = autonomyAvailabilityBuilder.availability(
+            state: state,
+            summary: summary,
+            mcpRegistration: registration
+        )
+        return autonomyReadinessRenderer.readout(snapshot: snapshot, availability: availability)
+    }
+
+    /// Collision-safe per-entry executable health (keep first), shared by every read tool that
+    /// reports executable availability.
+    private func executableHealthByEntry(_ state: WorkspaceState) -> [UUID: ExecutableHealth] {
+        Dictionary(
+            state.processEntries.map { entry in
+                (entry.id, executableHealthChecker.health(for: ExecutableHealthTarget.executable(for: entry)))
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
+
     /// Machine-readable list of sessions for an outbound MCP client (the
     /// harness driving coding sessions through Workbench terminals). Returns
     /// `{"sessions": [SessionSnapshot, ...]}`. Unlike `workbench_status` (the
@@ -242,13 +317,80 @@ final class WorkbenchMCPServer {
     /// its `status` / `attention` / `needsHuman`.
     private func sessionsList(arguments: [String: Any]) throws -> String {
         let state = try currentState()
+        let attention = try optionalStringArray(arguments, key: "attention").map(Set.init)
+        // Attach the inline waiting-prompt the operator path computes, so a boss
+        // querying the attention queue via this filter gets the same per-row
+        // context the workbench_attention_queue alias provides (#U24).
         let snapshots = sessionsRenderer.snapshots(
             state: state,
             owner: try optionalString(arguments, key: "owner"),
             name: try optionalString(arguments, key: "name"),
-            includeArchived: (try optionalBool(arguments, key: "includeArchived")) ?? false
+            attention: attention,
+            includeArchived: (try optionalBool(arguments, key: "includeArchived")) ?? false,
+            promptSnippets: attention == nil ? [:] : waitingPromptSnippets(state: state)
         )
         return try encodeJSON(["sessions": snapshots])
+    }
+
+    /// The boss's one-call attention queue (#U24): only the sessions that need a
+    /// human, each with the same inline waiting-prompt the operator path computes,
+    /// in triage order — so the boss reports "what's waiting on me" in a single
+    /// cheap round-trip instead of fetching the whole machine.
+    private func attentionQueue() throws -> String {
+        let state = try currentState()
+        let queue = attentionQueueRenderer.queue(
+            state: state,
+            promptSnippets: waitingPromptSnippets(state: state)
+        )
+        return try encodeJSON(["sessions": queue])
+    }
+
+    /// Read back the outcome of a queued `workbench_request_action` by its
+    /// requestId (#U24). Mirrors `workbench_proposal_result`'s not-ready/ready
+    /// shape: a request the app hasn't drained yet polls cleanly as `queued`
+    /// (never an error); once drained + applied, the action-log entry stamped
+    /// with that requestId resolves it to `applied`/`failed` with the result text.
+    private func actionResult(arguments: [String: Any]) throws -> String {
+        guard let requestId = try optionalString(arguments, key: "requestId"), !requestId.isEmpty else {
+            throw MCPToolFailure("Missing requestId")
+        }
+        let stillQueued: Bool
+        if let uuid = UUID(uuidString: requestId) {
+            stillQueued = queue.isPendingOrProcessing(requestId: uuid)
+        } else {
+            // A malformed id is never in the queue (whose filenames carry UUIDs);
+            // it resolves to unknown via the log lookup below.
+            stillQueued = false
+        }
+        let state = try currentState()
+        let logEntry = state.actionLog.first { $0.requestId?.uuidString == requestId }
+        let readback = actionResultClassifier.readback(
+            requestId: requestId,
+            stillQueued: stillQueued,
+            logEntry: logEntry
+        )
+        return try encodeJSON(readback)
+    }
+
+    /// The inline waiting-prompt snippet per human-owned session parked at a
+    /// prompt — the SAME transcript-tail computation `workbench_status` uses, so
+    /// the attention-queue row's prompt matches the operator-facing path exactly.
+    /// Agent-owned sessions are excluded: they're driven by their owning agent's
+    /// loop, not the human, so the boss isn't fed their prompts to act on (#U25).
+    private func waitingPromptSnippets(state: WorkspaceState) -> [UUID: String] {
+        Dictionary(
+            state.processEntries
+                .filter { !$0.isArchived && $0.attention.needsHuman && $0.owner.agentName == nil }
+                .compactMap { entry -> (UUID, String)? in
+                    guard let path = latestRun(for: entry.id, state: state)?.transcriptPath,
+                          let tail = TranscriptTailReader(maxBytes: 1200).read(path: path) else {
+                        return nil
+                    }
+                    let snippet = String(tail.text.suffix(600)).trimmingCharacters(in: .whitespacesAndNewlines)
+                    return snippet.isEmpty ? nil : (entry.id, snippet)
+                },
+            uniquingKeysWith: { first, _ in first }
+        )
     }
 
     private func workbenchSense() throws -> String {
@@ -455,13 +597,16 @@ final class WorkbenchMCPServer {
         } else {
             trust = nil
         }
+        let groupValue = try optionalString(arguments, key: "group")
+        let workingDirectory = try optionalString(arguments, key: "workingDirectory")
+        let createGroupIfMissing = try optionalBool(arguments, key: "createGroupIfMissing") ?? false
         let action = BossWorkbenchAction(
             action: .createSession,
             text: try optionalString(arguments, key: "notes"),
-            group: try optionalString(arguments, key: "group"),
+            group: groupValue,
             name: try optionalString(arguments, key: "name"),
             command: try optionalString(arguments, key: "command"),
-            workingDirectory: try optionalString(arguments, key: "workingDirectory"),
+            workingDirectory: workingDirectory,
             trust: trust,
             autoResume: try optionalBool(arguments, key: "autoResume"),
             owner: try optionalString(arguments, key: "owner")
@@ -470,11 +615,50 @@ final class WorkbenchMCPServer {
         // anything is queued (the app re-validates on drain).
         try action.validateForQueueing()
 
-        // Resolve the target group now so the caller gets immediate feedback
-        // instead of a silent app-side skip. The group must already exist —
-        // create one first via `workbench_request_action` (action createGroup)
-        // if needed. A nil/empty group defers to the app's selected group.
-        let resolvedGroup = try resolveGroup(action.group, state: state)
+        // U29 get-or-create: resolve the target group now so the caller gets
+        // immediate feedback instead of a silent app-side skip. The pure resolver
+        // decides existing / create-new (validated per U14) / defer / strict-must-exist.
+        // For the create-new path, the rootPath is the session's workingDirectory
+        // (the group's root and the session's cwd are the same in the one-call flow).
+        let resolution = WorkbenchSessionGroupResolver.resolve(
+            group: groupValue,
+            createGroupIfMissing: createGroupIfMissing,
+            rootPath: workingDirectory,
+            workspaceState: state,
+            homeDirectory: FileManager.default.homeDirectoryForCurrentUser.path,
+            directoryProbe: { WorkspaceRootValidation.fileSystemProbe($0) }
+        )
+
+        let resolvedGroupName: String?
+        var createGroupRequestId: String?
+        switch resolution {
+        case .deferred:
+            resolvedGroupName = nil
+        case let .existing(project):
+            resolvedGroupName = project.name
+        case let .create(name, rootPath):
+            // One call provisions the workspace: enqueue a validated `createGroup`
+            // FIRST (its earlier createdAt drains ahead of the session), then the
+            // session referencing the group by name — the app's `project(matching:)`
+            // finds the just-created group before it builds the session.
+            let createGroupAction = BossWorkbenchAction(
+                action: .createGroup,
+                group: name,
+                name: name,
+                workingDirectory: rootPath
+            )
+            let createGroupRequest = WorkbenchActionRequest(
+                source: (arguments["source"] as? String) ?? "ouro-workbench-mcp",
+                action: createGroupAction
+            )
+            try queue.enqueue(createGroupRequest)
+            createGroupRequestId = createGroupRequest.id.uuidString
+            resolvedGroupName = name
+        case let .invalid(message):
+            throw MCPToolFailure(message)
+        case let .mustExist(message):
+            throw MCPToolFailure(message)
+        }
 
         let request = WorkbenchActionRequest(
             source: (arguments["source"] as? String) ?? "ouro-workbench-mcp",
@@ -482,8 +666,9 @@ final class WorkbenchMCPServer {
         )
         try queue.enqueue(request)
         let ownerName = action.owner ?? ""
-        let groupSuffix = resolvedGroup.map { " in \($0.name)" } ?? ""
-        let message = "Queued createSession \(action.name ?? "session")\(groupSuffix) owned by \(ownerName) as \(request.id.uuidString)."
+        let groupSuffix = resolvedGroupName.map { " in \($0)" } ?? ""
+        let provisioned = createGroupRequestId != nil ? " (provisioned the workspace)" : ""
+        let message = "Queued createSession \(action.name ?? "session")\(groupSuffix)\(provisioned) owned by \(ownerName) as \(request.id.uuidString)."
         if try wantsJSON(arguments) {
             // The create is queued — the running app builds the session and
             // assigns its id. Poll `workbench_sessions` with this `name` to
@@ -491,31 +676,48 @@ final class WorkbenchMCPServer {
             return try encodeJSON(CreateAck(
                 queued: true,
                 name: action.name,
-                group: resolvedGroup?.name,
+                group: resolvedGroupName,
                 owner: action.owner,
                 requestId: request.id.uuidString,
+                createGroupRequestId: createGroupRequestId,
                 message: message
             ))
         }
         return message
     }
 
-    /// Resolve a target group (project) by UUID or unique name for createSession.
-    /// A nil/empty value defers to the app (it uses the selected/first group),
-    /// so this returns nil in that case. A non-empty value that doesn't match a
-    /// unique existing group throws so the caller learns the group is missing.
-    private func resolveGroup(_ value: String?, state: WorkspaceState) throws -> WorkbenchProject? {
-        guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return nil
+    /// U30(b) — the boss's `workbench_report_bug` tool. Captures a Workbench/session
+    /// defect into the SAME anonymized bug-report bundle a human would create. The bundle
+    /// needs live app state (sessions, decisions, action log, screenshot), so this ENQUEUES
+    /// a `.reportBug` action the running app drains through `BugReportWriter` +
+    /// `WorkbenchBugReportRedactor` — the exact redaction path the in-app reporter uses,
+    /// never a bypass. Returns an enqueue ack; the boss reads the bundle back from the
+    /// operator's Report a Bug card. Filing to GitHub stays human-gated.
+    private func reportBug(arguments: [String: Any]) throws -> String {
+        guard let note = try optionalString(arguments, key: "note"),
+              !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw MCPToolFailure("Missing note (the defect description)")
         }
-        if let id = UUID(uuidString: value), let project = state.projects.first(where: { $0.id == id }) {
-            return project
+        let source = (arguments["source"] as? String) ?? "ouro-workbench-mcp"
+        // The note rides in the action's `text`. Authorize through the same single gate as
+        // every other entry-less action before queueing.
+        let action = BossWorkbenchAction(action: .reportBug, text: note)
+        try action.validateForQueueing()
+        let decision = authorizer.gate(action, resolvedEntry: nil)
+        guard decision.authorization.isAllowed else {
+            throw MCPToolFailure("Action denied for \(decision.deniedTarget): \(decision.authorization.reason ?? "not authorized")")
         }
-        let matches = state.projects.filter { $0.name.caseInsensitiveCompare(value) == .orderedSame }
-        guard matches.count == 1, let project = matches.first else {
-            throw MCPToolFailure("No unique group matches \(value). Create it first via workbench_request_action (createGroup).")
+        let request = WorkbenchActionRequest(source: source, action: action)
+        try queue.enqueue(request)
+        let ack = WorkbenchReportBugRenderer.ack(
+            requestId: request.id.uuidString,
+            note: note,
+            source: source
+        )
+        if try wantsJSON(arguments) {
+            return try encodeJSON(ack)
         }
-        return project
+        return ack.message
     }
 
     /// Discover agent sessions the boss did NOT create — recent (on disk:
@@ -640,6 +842,27 @@ final class WorkbenchMCPServer {
         return string
     }
 
+    /// Parse an optional array-of-strings argument (e.g. the `attention` filter).
+    /// A scalar string is accepted as a one-element array (lenient for a boss that
+    /// passes a single value). A non-string element is rejected.
+    private func optionalStringArray(_ arguments: [String: Any], key: String) throws -> [String]? {
+        guard let value = arguments[key] else {
+            return nil
+        }
+        if let single = value as? String {
+            return [single]
+        }
+        guard let array = value as? [Any] else {
+            throw MCPToolFailure("\(key) must be a string or an array of strings")
+        }
+        return try array.map { element in
+            guard let string = element as? String else {
+                throw MCPToolFailure("\(key) must contain only strings")
+            }
+            return string
+        }
+    }
+
     private func optionalBool(_ arguments: [String: Any], key: String) throws -> Bool? {
         guard let value = arguments[key] else {
             return nil
@@ -734,6 +957,10 @@ final class WorkbenchMCPServer {
         let group: String?
         let owner: String?
         let requestId: String
+        /// U29: present only when this one call also provisioned the workspace —
+        /// the requestId of the `createGroup` queued ahead of the session, so the
+        /// boss can poll `workbench_action_result` for it too if it wants.
+        let createGroupRequestId: String?
         let message: String
     }
 
@@ -774,15 +1001,46 @@ final class WorkbenchMCPServer {
                 ]
             ],
             [
+                "name": WorkbenchAutonomyReadinessRenderer.toolName,
+                "description": WorkbenchAutonomyReadinessRenderer.toolDescription,
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [:],
+                    "additionalProperties": false
+                ]
+            ],
+            [
                 "name": "workbench_sessions",
-                "description": "Machine-readable JSON list of Workbench sessions for programmatic clients (use workbench_status for the human-readable check-in prompt). Returns {\"sessions\":[{id,name,group,owner:{kind,name},kind,status,attention,needsHuman,trust,autoResume,isArchived,isPinned,pid,exitCode,workingDirectory,transcriptPath,startedAt,lastOutputAt}]}. status is the latest run's state (configured|running|exited|waitingForInput|needsRecovery|manualActionNeeded); attention is idle|active|waitingOnHuman|blocked|needsBossReview. Optional fields are omitted when not applicable. After workbench_create_session, poll this with `name` set to your unique session name to resolve the new session's id and watch its status.",
+                "description": "Machine-readable JSON list of Workbench sessions for programmatic clients (use workbench_status for the human-readable check-in prompt). Returns {\"sessions\":[{id,name,group,owner:{kind,name},kind,status,attention,attentionReason,attentionPrompt,needsHuman,trust,autoResume,isArchived,isPinned,pid,exitCode,workingDirectory,transcriptPath,startedAt,lastOutputAt}]}. status is the latest run's state (configured|running|exited|waitingForInput|needsRecovery|manualActionNeeded); attention is idle|active|waitingOnHuman|blocked|needsBossReview. Pass `attention` to fetch only the attention queue in one round-trip (each human-owned waiting/blocked row then carries `attentionPrompt`, the inline transcript snippet the operator sees) — or call workbench_attention_queue for the same queue pre-ordered. Optional fields are omitted when not applicable. After workbench_create_session, poll this with `name` set to your unique session name to resolve the new session's id and watch its status.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
                         "owner": ["type": "string", "description": "Return only sessions owned by this agent name (owner:agent:<name>). Omit for all owners."],
                         "name": ["type": "string", "description": "Return only sessions whose name matches case-insensitively. Use to resolve the id of a session you just created."],
+                        "attention": ["type": "array", "items": ["type": "string", "enum": ["idle", "active", "waitingOnHuman", "blocked", "needsBossReview"]], "description": "Return only sessions whose attention is in this set. Pass [\"waitingOnHuman\",\"blocked\",\"needsBossReview\"] to receive only the sessions needing a human (never idle/active), each waiting/blocked human-owned row carrying its inline attentionPrompt. Omit for all attention states."],
                         "includeArchived": ["type": "boolean", "description": "Include archived sessions. Defaults to false."]
                     ],
+                    "additionalProperties": false
+                ]
+            ],
+            [
+                "name": WorkbenchAttentionQueueRenderer.toolName,
+                "description": WorkbenchAttentionQueueRenderer.toolDescription,
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [:],
+                    "additionalProperties": false
+                ]
+            ],
+            [
+                "name": "workbench_action_result",
+                "description": "Read back the outcome of a workbench_request_action by the requestId it returned (#U24). Returns {requestId,state,result?,succeeded?} where state is one of: queued (the app hasn't drained it yet — poll again, never an error), applied (drained and succeeded — `result` carries the confirmation text and `succeeded` is true), failed (drained but skipped/errored — `result` carries the reason and `succeeded` is false), or unknown (no such queued request and no log entry — wrong id, or the entry rolled off the bounded action log). Use this to confirm 'did my recover/sendInput land' instead of re-pulling workbench_status and guessing which log line was yours.",
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "requestId": ["type": "string", "description": "The requestId returned by workbench_request_action (request format \"json\"). Required."]
+                    ],
+                    "required": ["requestId"],
                     "additionalProperties": false
                 ]
             ],
@@ -895,22 +1153,37 @@ final class WorkbenchMCPServer {
             ],
             [
                 "name": "workbench_create_session",
-                "description": "Create and launch a coding session through Workbench, owned by the calling agent. The session appears as a first-class Workbench session tagged owner:agent:<owner>, with the same trust gating and launch validation as a human-created terminal. The Workbench MCP is registered without an agent identity, so you must pass your own agent name as `owner`. The target `group` must already exist (create one first via workbench_request_action with action createGroup if needed); omit it to use the currently-selected group.",
+                "description": "Create and launch a coding session through Workbench, owned by the calling agent. The session appears as a first-class Workbench session tagged owner:agent:<owner>, with the same trust gating and launch validation as a human-created terminal. The Workbench MCP is registered without an agent identity, so you must pass your own agent name as `owner`. By default the target `group` must already exist (omit it to use the currently-selected group). GET-OR-CREATE (#U29): pass `createGroupIfMissing: true` together with a `workingDirectory` and a `group` name to provision the workspace and land the session in it in ONE call when the group doesn't exist yet — Workbench validates the working directory exists (a non-existent path is rejected here, not at launch), creates the group at it, then launches the session. An existing group is reused, never duplicated; the strict must-already-exist behaviour stays the default when you omit the flag.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [
                         "owner": ["type": "string", "description": "Your agent name. Stamped as the session owner (owner:agent:<owner>). Required, non-empty."],
                         "name": ["type": "string", "description": "Session name shown in the Workbench sidebar. Required."],
                         "command": ["type": "string", "description": "The shell command / coding agent to run (e.g. \"codex --yolo\" or \"claude\"). Required."],
-                        "group": ["type": "string", "description": "Target group UUID or unique group name. Must already exist. Omit to use the selected group."],
-                        "workingDirectory": ["type": "string", "description": "Working directory for the session. Defaults to the group's root path."],
+                        "group": ["type": "string", "description": "Target group UUID or unique group name. Must already exist unless createGroupIfMissing is set. Omit to use the selected group."],
+                        "createGroupIfMissing": ["type": "boolean", "description": "Get-or-create (#U29): when true and the named `group` doesn't exist, provision it (validated against `workingDirectory`) and land the session in it in one call. Defaults to false (strict must-already-exist). Requires `group` and a `workingDirectory` that exists."],
+                        "workingDirectory": ["type": "string", "description": "Working directory for the session. Defaults to the group's root path. When createGroupIfMissing provisions a new group, this is also the new group's root path and must be an existing directory."],
                         "trust": ["type": "string", "enum": ["trusted", "untrusted"], "description": "Session trust. Defaults to untrusted; an untrusted session is created but not auto-driven by the boss."],
                         "autoResume": ["type": "boolean", "description": "Whether the session auto-resumes after a crash / restart. Defaults to false."],
                         "notes": ["type": "string", "description": "Optional notes attached to the session."],
                         "source": ["type": "string", "description": "Agent or tool requesting the action (for the audit log)."],
-                        "format": ["type": "string", "enum": ["text", "json"], "description": "Response format. \"json\" returns {queued,name,group,owner,requestId,message} — poll workbench_sessions with `name` to resolve the new session id. Default \"text\" returns a human-readable confirmation."]
+                        "format": ["type": "string", "enum": ["text", "json"], "description": "Response format. \"json\" returns {queued,name,group,owner,requestId,createGroupRequestId?,message} — createGroupRequestId is present only when this call also provisioned the workspace. Poll workbench_sessions with `name` to resolve the new session id. Default \"text\" returns a human-readable confirmation."]
                     ],
                     "required": ["owner", "name", "command"],
+                    "additionalProperties": false
+                ]
+            ],
+            [
+                "name": WorkbenchReportBugRenderer.toolName,
+                "description": WorkbenchReportBugRenderer.toolDescription,
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [
+                        "note": ["type": "string", "description": "The defect description — what's wrong (e.g. \"recovery drill failed to reattach session 3\"). Required, non-empty. This text is anonymized before the bundle is written; the screenshot and diagnostics zip are NOT."],
+                        "source": ["type": "string", "description": "Agent or tool requesting the report (for the audit log)."],
+                        "format": ["type": "string", "enum": ["text", "json"], "description": "Response format. \"json\" returns {queued,requestId,message}. Default \"text\" returns a human-readable confirmation. Either way the bundle is built on the app's drain — read it back from the operator's Report a Bug card."]
+                    ],
+                    "required": ["note"],
                     "additionalProperties": false
                 ]
             ],

@@ -1,9 +1,10 @@
 import Foundation
 
 public enum WorkbenchOnboardingNarrative {
-    public static let bossReadyWelcome = "I can see this Mac now."
+    /// Shown on the Connect "boss is ready" panel — names what the boss will do next (find your
+    /// recent local coding-agent work). NOT the legacy hardcoded-scan framing: #U26 removed the
+    /// dead scan/arrange UI; this line stays because the ready panel still uses it.
     public static let scanIntro = "I will look for local coding-agent sessions across Workbench, Claude, Codex, Copilot, cmux, and shell history."
-    public static let unclearImport = "I will ask before importing anything unclear."
     public static let duplicateCleanup = "After I resume these in Workbench, I will help you close matching sessions still running outside Workbench so work does not fork."
 
     /// Operator-facing line for the boss-driven reconstruction hand-off: Workbench no
@@ -29,34 +30,19 @@ public enum WorkbenchOnboardingNarrative {
     /// Shown when the boss reports there was nothing to reconstruct. A clean "you're set",
     /// never a stuck / dead-end step — the empty case the operator will sometimes hit.
     public static let bossReconstructEmpty = "Nothing to bring back — you're all set. You can close this whenever you're ready."
-
-    public static func ambiguousCandidates(count: Int) -> String {
-        "I found \(count) unclear \(sessionNoun(count)). I will ask before importing them."
-    }
-
-    public static func proposalSummary(groupCount: Int, selectedCount: Int) -> String {
-        "I found \(selectedCount) likely \(sessionNoun(selectedCount)) across \(groupCount) \(workspaceNoun(groupCount))."
-    }
-
-    private static func sessionNoun(_ count: Int) -> String {
-        count == 1 ? "session" : "sessions"
-    }
-
-    private static func workspaceNoun(_ count: Int) -> String {
-        count == 1 ? "workspace" : "workspaces"
-    }
 }
 
+/// #U26(c): the only phases the flow policy can produce. The dead `bossReadyWelcome` /
+/// `scanProposal` / `arrangeApprovedImports` phases — leftovers from the removed hardcoded
+/// scan-and-arrange flow the policy could no longer reach — are gone, along with the legacy
+/// scan/arrange UI that was their only renderer. `duplicateCleanup` stays (the post-import
+/// close-the-duplicates step).
 public enum WorkbenchOnboardingPhase: Equatable, Sendable {
     case bossSetupWizard
-    /// Boss-driven reconstruction hand-off (Slice 7): replaces the hardcoded
-    /// `bossReadyWelcome` / `scanProposal` / `arrangeApprovedImports` scan-and-arrange
-    /// flow. Workbench hands the boss the "bring back my work" task and surfaces the boss's
-    /// conversation + proposal card; the boss does discover → optionally propose → relaunch.
+    /// Boss-driven reconstruction hand-off: Workbench hands the boss the "bring back my work"
+    /// task and surfaces the boss's conversation + proposal card; the boss does discover →
+    /// optionally propose → relaunch.
     case bossReconstruct
-    case bossReadyWelcome
-    case scanProposal
-    case arrangeApprovedImports
     case duplicateCleanup
 }
 

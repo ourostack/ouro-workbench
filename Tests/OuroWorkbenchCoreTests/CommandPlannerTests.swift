@@ -546,6 +546,76 @@ final class CommandPlannerTests: XCTestCase {
             let plan = try WorkbenchCommandPlanner().recoveryPlan(for: entry, latestRun: nil, action: action)
             XCTAssertEqual(plan.recoveryAction, action)
             XCTAssertEqual(plan.reason, "prepare Shell command for manual review")
+            XCTAssertEqual(plan.kind, .manualReview)
         }
+    }
+
+    // U40: every plan the planner produces carries a typed `kind` so the
+    // post-launch status line can read a plain operator sentence instead of the
+    // technical `reason`. The raw `reason` stays untouched (asserted above) for
+    // logs / disclosure.
+
+    func testLaunchPlanIsKindLaunch() throws {
+        let entry = ProcessEntry(
+            projectId: UUID(),
+            name: "Codex",
+            kind: .terminalAgent,
+            agentKind: .openAICodex,
+            executable: "codex",
+            arguments: ["--yolo"],
+            workingDirectory: "/repo",
+            trust: .trusted,
+            autoResume: true
+        )
+        let plan = try WorkbenchCommandPlanner().launchPlan(for: entry)
+        XCTAssertEqual(plan.kind, .launch)
+        XCTAssertEqual(plan.reason, "launch configured Codex session")
+    }
+
+    func testReattachRecoveryPlanIsKindReattach() throws {
+        let entry = ProcessEntry(
+            projectId: UUID(),
+            name: "Claude",
+            kind: .terminalAgent,
+            agentKind: .claudeCode,
+            executable: "claude",
+            workingDirectory: "/repo",
+            trust: .trusted
+        )
+        let run = ProcessRun(entryId: entry.id, status: .needsRecovery)
+        let plan = try WorkbenchCommandPlanner().recoveryPlan(for: entry, latestRun: run, action: .reattach)
+        XCTAssertEqual(plan.kind, .reattach)
+    }
+
+    func testRespawnRecoveryPlanIsKindRespawn() throws {
+        let entry = ProcessEntry(
+            projectId: UUID(),
+            name: "Generic TUI",
+            kind: .terminalAgent,
+            executable: "/bin/zsh",
+            arguments: ["-lc", "aider --yes"],
+            workingDirectory: "/repo",
+            trust: .trusted,
+            autoResume: true
+        )
+        let run = ProcessRun(entryId: entry.id, status: .needsRecovery)
+        let plan = try WorkbenchCommandPlanner().recoveryPlan(for: entry, latestRun: run, action: .respawn)
+        XCTAssertEqual(plan.kind, .respawn)
+    }
+
+    func testAutoResumeRecoveryPlanIsKindResume() throws {
+        let entry = ProcessEntry(
+            projectId: UUID(),
+            name: "Claude",
+            kind: .terminalAgent,
+            agentKind: .claudeCode,
+            executable: "claude",
+            workingDirectory: "/repo",
+            trust: .trusted,
+            autoResume: true
+        )
+        let run = ProcessRun(entryId: entry.id, status: .needsRecovery, terminalSessionId: "sess-1")
+        let plan = try WorkbenchCommandPlanner().recoveryPlan(for: entry, latestRun: run, action: .autoResume)
+        XCTAssertEqual(plan.kind, .resume)
     }
 }

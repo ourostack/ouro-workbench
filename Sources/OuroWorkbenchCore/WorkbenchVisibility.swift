@@ -21,13 +21,51 @@ public struct WorkbenchVisibilityIssue: Codable, Equatable, Sendable {
     }
 }
 
+/// The boss-actionable recovery breakdown carried on the visibility snapshot
+/// (#U28): the four classes the boss may act on differently, sourced from the
+/// recovery PLANS (not raw `.needsRecovery` status), so the boss knows what it
+/// may self-trigger via `request_action` vs what it must surface to the operator.
+/// The four sum to `recoverableSessions` (the digest's actionable total).
+public struct RecoveryBreakdownVisibility: Codable, Equatable, Sendable {
+    public var reattach: Int
+    public var autoResume: Int
+    public var respawn: Int
+    public var needsHuman: Int
+    /// Everything the boss may self-execute (reattach + auto_resume + respawn).
+    public var bossActionable: Int
+
+    public init(reattach: Int, autoResume: Int, respawn: Int, needsHuman: Int, bossActionable: Int) {
+        self.reattach = reattach
+        self.autoResume = autoResume
+        self.respawn = respawn
+        self.needsHuman = needsHuman
+        self.bossActionable = bossActionable
+    }
+
+    public init(_ breakdown: RecoveryBreakdown) {
+        self.init(
+            reattach: breakdown.reattach,
+            autoResume: breakdown.resume,
+            respawn: breakdown.respawn,
+            needsHuman: breakdown.needsHuman,
+            bossActionable: breakdown.bossActionable
+        )
+    }
+}
+
 public struct WorkbenchWorkspaceVisibility: Codable, Equatable, Sendable {
     public var activeSessions: Int
     public var runningSessions: Int
     public var waitingOnHumanSessions: Int
     public var blockedSessions: Int
     public var needsBossReviewSessions: Int
+    /// Boss-actionable recovery TOTAL — sourced from the recovery plans (not raw
+    /// `.needsRecovery` status), so human-only manual recoveries no longer inflate
+    /// it (#U28). Equals `recovery.reattach + autoResume + respawn + needsHuman`.
     public var recoverableSessions: Int
+    /// The per-class split of `recoverableSessions` so the boss knows which it may
+    /// self-trigger vs escalate (#U28).
+    public var recovery: RecoveryBreakdownVisibility
 
     public init(
         activeSessions: Int,
@@ -35,7 +73,8 @@ public struct WorkbenchWorkspaceVisibility: Codable, Equatable, Sendable {
         waitingOnHumanSessions: Int,
         blockedSessions: Int,
         needsBossReviewSessions: Int,
-        recoverableSessions: Int
+        recoverableSessions: Int,
+        recovery: RecoveryBreakdownVisibility
     ) {
         self.activeSessions = activeSessions
         self.runningSessions = runningSessions
@@ -43,6 +82,7 @@ public struct WorkbenchWorkspaceVisibility: Codable, Equatable, Sendable {
         self.blockedSessions = blockedSessions
         self.needsBossReviewSessions = needsBossReviewSessions
         self.recoverableSessions = recoverableSessions
+        self.recovery = recovery
     }
 }
 
@@ -671,14 +711,17 @@ final class ProcessOutputBuffer: @unchecked Sendable {
 }
 
 public struct WorkbenchVisibilityBuilder: Sendable {
+    private let recoveryPlanner = RecoveryPlanner()
+
     public init() {}
 
     public func build(
         state: WorkspaceState,
         workCard: WorkCardReadResult,
-        now: Date = Date()
+        now: Date = Date(),
+        liveSessionNames: Set<String> = []
     ) -> WorkbenchVisibilitySnapshot {
-        let workspace = workspaceVisibility(state: state)
+        let workspace = workspaceVisibility(state: state, liveSessionNames: liveSessionNames)
         let agentWork = agentWorkVisibility(workCard: workCard, fallbackAgent: state.boss.agentName)
         var issues = agentWork.issues
         if !agentWork.claims.available && !issues.contains(where: { $0.code == "claims_unavailable" }) {
@@ -704,16 +747,26 @@ public struct WorkbenchVisibilityBuilder: Sendable {
         )
     }
 
-    private func workspaceVisibility(state: WorkspaceState) -> WorkbenchWorkspaceVisibility {
+    private func workspaceVisibility(
+        state: WorkspaceState,
+        liveSessionNames: Set<String>
+    ) -> WorkbenchWorkspaceVisibility {
         let activeEntries = state.processEntries.filter { !$0.isArchived }
         let latestRuns = latestRunsByEntryID(state: state)
+        // #U28: source the boss-facing recovery scalar from the recovery PLANS,
+        // not raw `.needsRecovery` status — so a human-only manual recovery no
+        // longer inflates what the boss is told it can act on, and the count
+        // splits by class (reattach / auto_resume / respawn / needs_human).
+        let plans = recoveryPlanner.planRecovery(for: state, liveSessionNames: liveSessionNames)
+        let breakdown = RecoveryBreakdown(plans: plans)
         return WorkbenchWorkspaceVisibility(
             activeSessions: activeEntries.count,
             runningSessions: activeEntries.filter { latestRuns[$0.id]?.status == .running }.count,
             waitingOnHumanSessions: activeEntries.filter { $0.attention == .waitingOnHuman }.count,
             blockedSessions: activeEntries.filter { $0.attention == .blocked }.count,
             needsBossReviewSessions: activeEntries.filter { $0.attention == .needsBossReview }.count,
-            recoverableSessions: activeEntries.filter { latestRuns[$0.id]?.status == .needsRecovery }.count
+            recoverableSessions: breakdown.total,
+            recovery: RecoveryBreakdownVisibility(breakdown)
         )
     }
 
@@ -823,6 +876,10 @@ public struct WorkbenchVisibilityTextRenderer: Sendable {
             "Workbench Visibility — \(snapshot.bossAgent)",
             "Readiness: \(snapshot.readiness.status.rawValue)",
             "Workspace: active=\(snapshot.workspace.activeSessions) running=\(snapshot.workspace.runningSessions) waiting_on_human=\(snapshot.workspace.waitingOnHumanSessions) blocked=\(snapshot.workspace.blockedSessions) needs_boss_review=\(snapshot.workspace.needsBossReviewSessions) recoverable=\(snapshot.workspace.recoverableSessions)",
+            // #U28: break the boss-actionable recovery scalar out by class so the
+            // boss knows which it may self-trigger (reattach/auto_resume/respawn)
+            // vs which it must escalate (needs_human) — never a bare 'recoverable=N'.
+            "Recovery: reattach=\(snapshot.workspace.recovery.reattach) auto_resume=\(snapshot.workspace.recovery.autoResume) respawn=\(snapshot.workspace.recovery.respawn) needs_human=\(snapshot.workspace.recovery.needsHuman) boss_actionable=\(snapshot.workspace.recovery.bossActionable)",
             "Decisions: open_inbox=\(snapshot.decisions.openInbox) recent_actions=\(snapshot.decisions.recentActions) failed_recent_actions=\(snapshot.decisions.failedRecentActions)",
             "Agent work: \(work.status.rawValue) owed=\(render(work.counts.owed)) return_obligations=\(render(work.counts.returnObligations)) active_packets=\(render(work.counts.activePackets)) evolution_cases=\(render(work.counts.evolutionCases)) waiting_on_human=\(render(work.counts.waitingOnHuman)) unverified_claims=\(render(work.counts.unverifiedClaims)) stale_risky_claims=\(render(work.counts.staleRiskyClaims))",
             "Claims: \(work.claims.available ? "available" : "unavailable")\(work.claims.unavailableReason.map { " — \($0)" } ?? "")",

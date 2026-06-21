@@ -74,12 +74,17 @@ public struct SessionStatusRow: Identifiable, Equatable, Sendable {
 /// in exactly one bucket):
 /// 1. **waitingOnYou** when the entry's `AttentionState.needsHuman` is true
 ///    (`waitingOnHuman` / `needsBossReview` / `blocked`), OR the most-recent run
-///    is parked at a prompt (`.waitingForInput`) or died needing a human call
-///    (`.needsRecovery` / `.manualActionNeeded`). The operator's turn always
-///    wins over "running" so an asking session is never buried.
+///    is parked at a prompt (`.waitingForInput`). The operator's turn always
+///    wins over "running" so an asking session is never buried. A recovery run
+///    (`.needsRecovery` / `.manualActionNeeded`) only surfaces here via its
+///    attention flag — the startup reconciler (U8a) raises `.needsBossReview`
+///    for a genuine manual recovery, but leaves a survivor / auto-resumer calm
+///    `.idle`, so a lossless reconnect in the async reattach window is NOT
+///    bucketed waiting-on-you (it would re-create the false-alarm U8a killed).
 /// 2. **running** when the most-recent run is `.running` (and it's not waiting).
-/// 3. **done** otherwise — the run `.exited`, or the session is `.configured` /
-///    has never run. Settled; nothing for the operator to do right now.
+/// 3. **done** otherwise — the run `.exited`, the session is `.configured` /
+///    has never run, or it's a calm recovery run reconnecting. Settled; nothing
+///    for the operator to do right now.
 ///
 /// Within each bucket, rows are sorted freshest-first by `lastOutputAt` then
 /// `startedAt`, falling back to a case-insensitive name compare (id-tiebroken)
@@ -140,7 +145,7 @@ public struct SessionStatusList: Equatable, Sendable {
 
             let latest = runsByEntry[entry.id]?.sorted(by: ProcessRun.isMoreRecent).first
             let status = latest?.status ?? .configured
-            let bucket = classify(attention: entry.attention, runStatus: status)
+            let bucket = classify(attention: entry.attention, owner: entry.owner, runStatus: status)
 
             let row = SessionStatusRow(
                 id: entry.id,
@@ -150,7 +155,11 @@ public struct SessionStatusList: Equatable, Sendable {
                 bucket: bucket,
                 status: status,
                 attention: entry.attention,
-                needsHuman: entry.attention.needsHuman,
+                // #U25b: an agent-owned session driven by its OWN loop is not a
+                // human-attention item, so the row's needsHuman is owner-aware —
+                // it agrees with the bucket, never claiming the human is owed when
+                // it's the agent's turn.
+                needsHuman: entry.attention.isHumanAttention(owner: entry.owner),
                 workingDirectory: entry.workingDirectory,
                 pid: latest?.pid.map { Int($0) },
                 exitCode: latest?.exitCode.map { Int($0) },
@@ -176,11 +185,38 @@ public struct SessionStatusList: Equatable, Sendable {
     }
 
     /// Pure classification of one session from its attention + latest run status.
-    static func classify(attention: AttentionState, runStatus: ProcessStatus) -> SessionStatusBucket {
-        if attention.needsHuman { return .waitingOnYou }
+    ///
+    /// `.needsRecovery` / `.manualActionNeeded` runs do NOT surface as
+    /// waiting-on-you on the run status alone — the startup reconciler (U8a) is
+    /// the single source of "does this need the operator". A survivor that kept
+    /// running while Workbench was closed lives in `.needsRecovery` with calm
+    /// `.idle` attention during the async reattach window; bucketing it
+    /// waiting-on-you off the raw run status would re-create the exact
+    /// false-alarm U8a killed, on the operator side. So recovery runs consult
+    /// attention: only the genuinely-needs-you ones (which the reconciler flags
+    /// `.needsBossReview`, caught by `needsHuman` below) surface; a calm
+    /// recovery run is settled, not the operator's turn.
+    ///
+    /// `.waitingForInput` is different — a run parked at a prompt is genuinely
+    /// the operator's turn for a HUMAN-owned session, so it surfaces. But an
+    /// AGENT-owned run parked at its own loop's prompt is the agent's turn (#U25b):
+    /// it is not the human's, so it is treated as the agent's active work
+    /// (`.running`) rather than buried in the operator's waiting bucket — exactly
+    /// as a `waitingOnHuman` agent-owned attention is.
+    static func classify(attention: AttentionState, owner: SessionOwner, runStatus: ProcessStatus) -> SessionStatusBucket {
+        // Owner-aware: an agent-driven prompt/block is the agent's turn, never the
+        // human's; a genuine boss-raised needsBossReview still surfaces.
+        if attention.isHumanAttention(owner: owner) { return .waitingOnYou }
+        let agentOwned = owner.agentName != nil
         switch runStatus {
-        case .waitingForInput, .needsRecovery, .manualActionNeeded:
-            return .waitingOnYou
+        case .waitingForInput:
+            // A human-owned prompt is the operator's turn; an agent-owned one is
+            // the agent's own loop working — active, not waiting-on-you.
+            return agentOwned ? .running : .waitingOnYou
+        case .needsRecovery, .manualActionNeeded:
+            // Calm attention here means the reconciler classified this as a
+            // lossless reconnect / auto-resume, not a manual recovery — settled.
+            return .done
         case .running:
             return .running
         case .exited, .configured:

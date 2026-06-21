@@ -78,6 +78,35 @@ public struct SidebarSessionFilter: Sendable {
         )
     }
 
+    /// U19(a): whether `query` contains at least one *structured* `owner:`/`status:`
+    /// token — i.e. a token whose prefix is recognized AND which carries a non-empty
+    /// value. A structured query searches GLOBALLY (across all workspaces) rather than
+    /// only the current list scope, so the question the filter exists to answer
+    /// ("what's waiting on me?") can't read as empty just because a blocked session
+    /// lives in an unselected workspace.
+    ///
+    /// A bare `owner:` / `status:` (no value yet, still being typed) is *not* structured
+    /// — it matches everything (see `matchesToken`), so flipping to a global scan on it
+    /// would be surprising. A plain free-text query is not structured either; it stays
+    /// scoped to the current workspace as before.
+    public func isStructuredQuery(_ query: String) -> Bool {
+        query
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(whereSeparator: \.isWhitespace)
+            .map(String.init)
+            .contains(where: Self.isStructuredToken)
+    }
+
+    /// A single token is structured when it has a recognized prefix AND a value after
+    /// the colon. Mirrors the bare-prefix-is-neutral rule in `matchesToken`.
+    private static func isStructuredToken(_ token: String) -> Bool {
+        let lower = token.lowercased()
+        for prefix in [ownerPrefix, statusPrefix] where lower.hasPrefix(prefix) {
+            return !lower.dropFirst(prefix.count).isEmpty
+        }
+        return false
+    }
+
     private func matchesToken(
         _ token: String,
         name: String,
@@ -152,5 +181,41 @@ public struct SidebarSessionFilter: Sendable {
         fields.contains { field in
             field.range(of: token, options: [.caseInsensitive, .diacriticInsensitive]) != nil
         }
+    }
+}
+
+/// U19(b)/(c): seam-free copy for the sidebar filter's scope indicator and its zero-match
+/// empty state. The view renders these verbatim; pinning them here keeps the wording
+/// tested rather than buried as view literals.
+public enum SidebarFilterPresentation {
+    /// One-line scope indicator shown under the filter field so scoping is never silent:
+    /// a structured query reads "Searching all workspaces"; a plain query reads
+    /// "Searching <workspace>" (or a generic fallback when the workspace is unnamed).
+    public static func scopeIndicator(isGlobal: Bool, workspaceName: String?) -> String {
+        if isGlobal {
+            return "Searching all workspaces"
+        }
+        let name = (workspaceName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else {
+            return "Searching this workspace"
+        }
+        return "Searching \(name)"
+    }
+
+    /// Title for the zero-match state — quotes the (trimmed) query so the operator sees
+    /// exactly what was searched, distinct from a "no terminals yet" hint.
+    public static func emptyStateTitle(query: String) -> String {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        return "No sessions match \"\(trimmed)\""
+    }
+
+    /// Description for the zero-match state. A global search that finds nothing is
+    /// trustworthy ("searched every workspace"); a scoped one points at the rest of the
+    /// workspace. Both name the one-click way out.
+    public static func emptyStateDescription(isGlobal: Bool) -> String {
+        if isGlobal {
+            return "Searched every workspace and found nothing. Clear the filter to see all sessions."
+        }
+        return "Clear the filter to see all sessions in this workspace."
     }
 }

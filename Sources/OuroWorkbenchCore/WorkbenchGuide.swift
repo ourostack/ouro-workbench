@@ -117,19 +117,65 @@ public enum WorkbenchGuide {
         )
     ]
 
-    /// The Workbench MCP tools the boss gains once `Enable Tools` registers the
-    /// server with the selected Ouro agent. Kept in lockstep with the tool list
-    /// the MCP server advertises and the boss check-in prompt references.
+    /// The Workbench MCP tools the boss gains once the Workbench server is registered with the
+    /// selected Ouro agent (#U27: this happens automatically when you pick the boss on Choose Boss,
+    /// or via the Connect page's tool-status step). The single source feeding the boss
+    /// check-in prompt, `workbench_sense`, and the inner-agent context file, so it
+    /// must name EVERY tool the MCP server's `tools/list` advertises and none it
+    /// doesn't (#U25). `WorkbenchGuideTests.testBossToolsAreExactlyTheAdvertisedToolSet`
+    /// pins set-equality against `advertisedToolNames`, and
+    /// `smoke-mcp-tool-catalog.sh` drives the real binary so the server and this
+    /// catalog can't drift — adding or removing a tool fails the build/test until
+    /// they agree.
     public static let bossTools: [Capability] = [
         Capability(tool: "workbench_status", summary: "read the whole machine workbench state"),
-        Capability(tool: "workbench_sessions", summary: "machine-readable JSON list of sessions (filters: owner / name / includeArchived)"),
+        Capability(tool: OnboardingReadinessReportRenderer.toolName, summary: "read the selected boss's daemon/credential onboarding readiness — ordered steps, each with its remediation"),
+        Capability(tool: WorkbenchAutonomyReadinessRenderer.toolName, summary: "read the TTFA autonomy-readiness snapshot — state, per-check fix (boss-queueable verb vs operator one-tap vs degraded), and a 'get to green' ask"),
+        Capability(tool: "workbench_sessions", summary: "machine-readable JSON list of sessions (filters: owner / name / attention / includeArchived)"),
+        Capability(tool: WorkbenchAttentionQueueRenderer.toolName, summary: "one-call attention queue — only the sessions needing a human, each with its inline waiting-prompt, in triage order"),
+        Capability(tool: "workbench_action_result", summary: "poll a request_action's requestId for its outcome (queued / applied / failed)"),
         Capability(tool: "workbench_visibility", summary: "read Workbench + Ouro Work Card visibility with typed unknown/unavailable fields"),
         Capability(tool: "workbench_sense", summary: "reread this sense contract, tools, shortcuts, and action protocol"),
         Capability(tool: "workbench_transcript_tail", summary: "inspect one terminal's recent output"),
+        Capability(tool: "workbench_session_health", summary: "read one session's structured health (process, transcript, git, recovery)"),
         Capability(tool: "workbench_search_transcripts", summary: "search remembered terminal output"),
         Capability(tool: "workbench_recovery_drill", summary: "simulate restart recovery"),
         Capability(tool: "workbench_request_action", summary: "queue auditable native actions"),
-        Capability(tool: "workbench_create_session", summary: "create and launch an agent-owned coding session")
+        Capability(tool: "workbench_create_session", summary: "create and launch an agent-owned coding session"),
+        Capability(tool: "workbench_discover_agent_sessions", summary: "discover agent coding sessions running outside Workbench that it could adopt/recover"),
+        Capability(tool: "workbench_propose", summary: "show the operator an editable plan and get their ticks/edits/approvals back"),
+        Capability(tool: "workbench_proposal_result", summary: "read back the operator's decision for a workbench_propose proposal"),
+        Capability(tool: WorkbenchReportBugRenderer.toolName, summary: "report a Workbench defect you hit — anonymized note → the operator's Report a Bug card (text scrubbed; screenshot/diagnostics verbatim, nothing uploaded)")
+    ]
+
+    /// The canonical set of tool names the MCP server's `tools/list` advertises —
+    /// the contract `bossTools` must cover exactly (#U25). Declared INDEPENDENTLY
+    /// of `bossTools` (not derived from it) so the set-equality test is a real
+    /// check, not a tautology: a tool added to one catalog but not the other fails
+    /// `testBossToolsAreExactlyTheAdvertisedToolSet`. `tools/list` is built in the
+    /// MCP executable (which the Core test target can't import), so this constant
+    /// is the shared pin — `smoke-mcp-tool-catalog.sh` drives the real binary's
+    /// `tools/list` and asserts the live names equal it, closing the loop end to
+    /// end so the server and the boss's self-description can never disagree.
+    public static let advertisedToolNames: Set<String> = [
+        "workbench_status",
+        "workbench_onboarding_status",
+        "workbench_autonomy_readiness",
+        "workbench_sessions",
+        "workbench_attention_queue",
+        "workbench_action_result",
+        "workbench_visibility",
+        "workbench_sense",
+        "workbench_transcript_tail",
+        "workbench_session_health",
+        "workbench_search_transcripts",
+        "workbench_recovery_drill",
+        "workbench_request_action",
+        "workbench_create_session",
+        "workbench_discover_agent_sessions",
+        "workbench_propose",
+        "workbench_proposal_result",
+        "workbench_report_bug"
     ]
 
     /// Every action verb the boss may put in an `ouro-workbench-actions` block.

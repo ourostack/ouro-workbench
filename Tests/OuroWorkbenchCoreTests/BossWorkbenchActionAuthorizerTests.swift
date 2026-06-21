@@ -311,6 +311,17 @@ final class BossWorkbenchActionAuthorizerTests: XCTestCase {
         XCTAssertEqual(authorization.posture, .knownEntryless)
     }
 
+    func testEntrylessReportBugIsAuthorized() throws {
+        // U30(b): the boss-file bug-report path is a known-legit entry-less write (a local
+        // bundle), authorized under `knownEntryless` like the other create kinds.
+        let action = BossWorkbenchAction(action: .reportBug, text: "Recovery drill failed")
+
+        let authorization = BossWorkbenchActionAuthorizer().authorizeEntryless(action)
+
+        XCTAssertTrue(authorization.isAllowed)
+        XCTAssertEqual(authorization.posture, .knownEntryless)
+    }
+
     func testEntrylessEntryScopedActionIsDenied() throws {
         // An action that is supposed to be entry-scoped must NEVER be allowed entry-less:
         // routing it through the entry-less path means it slipped the entry check.

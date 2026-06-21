@@ -88,7 +88,7 @@ struct OuroWorkbenchApp: App {
                 menuCommand("Close Pane", .closePane, "w", [.command, .option])
             }
             CommandMenu("Boss") {
-                menuCommand("Check In", .bossCheckIn, "i")
+                menuCommand(WorkbenchViewModel.checkInActionLabel, .bossCheckIn, "i")
                 menuCommand("Command Palette", .commandPalette, "k")
                 menuCommand("Jump to Next Needing Me", .jumpToAttention, "j")
             }
@@ -248,8 +248,10 @@ struct WorkbenchRootView: View {
         case .commandPalette:
             model.isCommandPalettePresented = true
         case .bossCheckIn:
-            guard !model.bossCheckInIsRunning else { return }
-            Task { await model.runBossCheckIn() }
+            // U12: ⌘I / the menubar item route through the same affordance as the
+            // header button — with no usable boss this opens set-up instead of
+            // silently no-opping.
+            model.attemptCheckIn()
         case .jumpToAttention:
             _ = model.jumpToNextAttentionSession()
         case .newTerminal:
@@ -283,7 +285,9 @@ struct WorkbenchRootView: View {
             // selection, so ⌘L hits whichever terminal you're focused on.
             if let entry = model.activeEntry { model.redrawTerminal(entry) }
         case .stopSelected:
-            if let entry = model.activeEntry { model.terminate(entry) }
+            // U11: ⌘. is the reflexive cancel chord — route through the
+            // consequence gate so it can't nuke a live/holding agent unconfirmed.
+            if let entry = model.activeEntry { model.requestStop(entry) }
         case .splitRight:
             model.splitDetail(axis: .vertical)
         case .splitDown:
@@ -398,6 +402,10 @@ struct WorkbenchRootView: View {
             // Detect still-alive `screen` sessions first so startup recovery can
             // reattach to running agents losslessly instead of respawning them.
             await model.refreshLiveScreenSessions()
+            // Now that survival is known, re-derive startup attention so
+            // sessions whose terminal kept running read as calmly reconnected
+            // (not an orange "needs boss review") BEFORE the reattach runs.
+            model.reconcileStartupAttentionWithLiveSessions()
             model.recoverEligibleSessionsOnStartup()
             model.launchAutoResumeSessionsOnStartup()
             model.refreshExecutableHealth()
@@ -425,9 +433,13 @@ struct WorkbenchRootView: View {
                 model.onboardingBossSnapshot = model.state.boss.agentName
                 model.isOnboardingPresented = true
             } else {
-                // Configured machine: run the provider liveness checks in the
-                // background so readiness resolves to ready without ever
-                // popping the onboarding sheet. (No-op if already passed.)
+                // The subtractive FRE redesign makes this the only path: the wizard
+                // never auto-presents, so launch always lands on the working
+                // terminals-first app. Run the provider liveness checks in the
+                // background so a configured boss's readiness resolves to ready
+                // without popping the onboarding sheet (no-op if already passed, or
+                // if no ready boss is configured yet). The opt-in wizard is reached
+                // only via `presentOnboarding()` (the empty-state "Set up a boss").
                 model.runOnboardingProviderChecksIfNeeded()
             }
             if model.bossWatchIsEnabled {
@@ -508,6 +520,32 @@ struct WorkbenchRootView: View {
         } message: {
             if let entry = model.pendingDeleteSession {
                 Text("This removes \(entry.name) from the workbench and clears its run records. Transcript files remain on disk.")
+            }
+        }
+        .confirmationDialog(
+            model.stopConfirmationTitle,
+            isPresented: model.stopConfirmationIsPresented,
+            titleVisibility: .visible
+        ) {
+            if let entry = model.pendingStopSession {
+                Button(WorkbenchSurfacePolicy.stopConfirmationButton(name: entry.name), role: .destructive) {
+                    model.confirmStop()
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(WorkbenchSurfacePolicy.stopConfirmationMessage)
+        }
+        .confirmationDialog("Start fresh?", isPresented: model.startFreshConfirmationIsPresented, titleVisibility: .visible) {
+            if let entry = model.pendingStartFresh {
+                Button("Start \(entry.name) fresh") {
+                    model.confirmStartFresh()
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            if let entry = model.pendingStartFresh {
+                Text(model.startFreshConfirmationMessage(for: entry))
             }
         }
         .confirmationDialog("Delete Workspace?", isPresented: model.deleteGroupConfirmationIsPresented) {
@@ -600,7 +638,7 @@ final class WorkbenchMenuBarController: NSObject, NSMenuDelegate {
             applyIcon(needsAttention: false)
             return
         }
-        let recoverable = model.recoverableEntries.count
+        let recoverable = model.recoveryDigest.actionableCount
         applyIcon(needsAttention: recoverable > 0)
         // Surface the running session count directly on the menu-bar item
         // for an at-a-glance signal that matches the Dock badge.
@@ -639,14 +677,20 @@ final class WorkbenchMenuBarController: NSObject, NSMenuDelegate {
             return
         }
 
-        // Header: boss + autonomy
-        let bossLabel = "Boss: \(model.state.boss.agentName)"
-        let header = NSMenuItem(title: bossLabel, action: nil, keyEquivalent: "")
+        // Header: boss + autonomy. #U31c: route through the SAME calm/loud Core
+        // seam the in-window header uses, so a fresh no-boss machine reads calm
+        // here too ("No boss yet" + "TTFA · off") instead of the alarming
+        // "Boss: " + "TTFA · blocked — …" that survived on this second surface.
+        let calm = HeaderCalmPresentation.resolve(
+            bossAgentName: model.state.boss.agentName,
+            bossAgentStatus: model.ouroAgent(named: model.state.boss.agentName)?.status,
+            autonomyState: model.autonomyReadiness.state
+        )
+        let header = NSMenuItem(title: calm.bossLabelText, action: nil, keyEquivalent: "")
         header.isEnabled = false
         menu.addItem(header)
-        let autonomy = model.autonomyReadiness
         let autonomyItem = NSMenuItem(
-            title: "TTFA · \(autonomy.state.displayName) — \(autonomy.headline)",
+            title: calm.ttfaText,
             action: nil,
             keyEquivalent: ""
         )
@@ -689,8 +733,8 @@ final class WorkbenchMenuBarController: NSObject, NSMenuDelegate {
         }
         menu.addItem(NSMenuItem.separator())
 
-        // Recovery — show count and shortcut into the sheet
-        let recoverable = model.recoverableEntries.count
+        // Recovery — show count and shortcut into the sheet (one shared digest)
+        let recoverable = model.recoveryDigest.actionableCount
         if recoverable > 0 {
             let recoverItem = NSMenuItem(
                 title: "Recovery: \(recoverable) waiting…",
@@ -708,13 +752,16 @@ final class WorkbenchMenuBarController: NSObject, NSMenuDelegate {
         watch.target = self
         menu.addItem(watch)
 
-        // Quick Ask Boss
+        // Manual Check In (U12: one name — was "Ask <name>…", which diverged
+        // from the header/menu "Check In" and collided with the typed-question
+        // submit and the Boss Watch loop).
         let ask = NSMenuItem(
-            title: "Ask \(model.state.boss.agentName)…",
+            title: WorkbenchViewModel.checkInActionLabel,
             action: #selector(quickAskBoss),
             keyEquivalent: ""
         )
         ask.target = self
+        ask.toolTip = model.checkInHelpText
         ask.isEnabled = !model.bossCheckInIsRunning
         menu.addItem(ask)
 
@@ -763,9 +810,9 @@ final class WorkbenchMenuBarController: NSObject, NSMenuDelegate {
     @objc private func quickAskBoss() {
         guard let model, !model.bossCheckInIsRunning else { return }
         showWorkbench()
-        Task { @MainActor in
-            await model.runBossCheckIn()
-        }
+        // U12: route through the shared affordance so a no-boss menubar tap opens
+        // set-up instead of silently no-opping.
+        model.attemptCheckIn()
     }
 
     @objc private func quitApp() {
@@ -822,14 +869,16 @@ struct RecoverySheet: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Recovery")
                         .font(.title3.weight(.semibold))
-                    Text(model.summary.oneLineStatus)
+                    // U8b: one shared derivation — this header, the sidebar row,
+                    // its help, and the row count below can never disagree.
+                    Text(model.recoveryDigest.sheetHeader)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                         .truncationMode(.tail)
                 }
                 Spacer()
-                if model.recoverableEntries.count > 1 {
+                if model.autoRecoverableEntries.count > 1 {
                     Button {
                         model.recoverAllRecoverableSessions()
                         dismiss()
@@ -845,7 +894,7 @@ struct RecoverySheet: View {
             .padding(.top, 18)
             .padding(.bottom, 14)
             Divider()
-            if model.recoverableEntries.isEmpty {
+            if !model.recoveryDigest.shouldShow {
                 ContentUnavailableView(
                     "Nothing to recover",
                     systemImage: "checkmark.seal.fill",
@@ -854,21 +903,156 @@ struct RecoverySheet: View {
                 .frame(minHeight: 240)
             } else {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 10) {
-                        ForEach(model.recoverableEntries) { entry in
-                            RecoverableEntryRow(entry: entry, model: model, onJump: {
-                                model.selectEntryAcrossGroups(entry.id)
-                                dismiss()
-                            }, onRecover: {
-                                model.recover(entry)
-                            })
+                    VStack(alignment: .leading, spacing: 16) {
+                        // U7: sessions that can't be auto-resumed get their own
+                        // labelled group with a plain reason and a one-click fix
+                        // where one exists — never silently dropped or handed a
+                        // calm "Launch".
+                        if !model.needsYouEntries.isEmpty {
+                            RecoverySheetSection(
+                                title: "Needs you",
+                                systemImage: "person.crop.circle.badge.exclamationmark",
+                                tint: .orange,
+                                subtitle: "These can't be auto-resumed. Fix the blocker, or start fresh."
+                            ) {
+                                ForEach(model.needsYouEntries) { entry in
+                                    NeedsYouEntryRow(entry: entry, model: model, onJump: {
+                                        model.selectEntryAcrossGroups(entry.id)
+                                        dismiss()
+                                    })
+                                }
+                            }
+                        }
+                        if !model.autoRecoverableEntries.isEmpty {
+                            RecoverySheetSection(
+                                title: "Ready to recover",
+                                systemImage: "arrow.clockwise.circle",
+                                tint: .accentColor,
+                                subtitle: "Reconnects to still-running agents losslessly; resumes or reopens the rest."
+                            ) {
+                                ForEach(model.autoRecoverableEntries) { entry in
+                                    RecoverableEntryRow(entry: entry, model: model, onJump: {
+                                        model.selectEntryAcrossGroups(entry.id)
+                                        dismiss()
+                                    }, onRecover: {
+                                        model.recover(entry)
+                                    })
+                                }
+                            }
                         }
                     }
                     .padding(20)
                 }
             }
         }
-        .frame(width: 620, height: 480)
+        .frame(width: 620, height: 520)
+    }
+}
+
+/// A labelled section within the Recovery sheet (U7) — a header glyph + title +
+/// one-line subtitle over its rows.
+private struct RecoverySheetSection<Content: View>: View {
+    var title: String
+    var systemImage: String
+    var tint: SwiftUI.Color
+    var subtitle: String
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: systemImage)
+                    .foregroundStyle(tint)
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+            }
+            Text(subtitle)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 10) {
+                content
+            }
+        }
+    }
+}
+
+/// A "Needs you" row in the Recovery sheet (U7): a manual-recovery session with
+/// its plain-language reason, an inline one-click fix when the blocker is
+/// fixable (e.g. Trust), and a "Start fresh" fallback (confirmation-gated).
+private struct NeedsYouEntryRow: View {
+    var entry: ProcessEntry
+    @ObservedObject var model: WorkbenchViewModel
+    var onJump: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Image(systemName: "exclamationmark.arrow.circlepath")
+                    .foregroundStyle(.orange)
+                    .font(.system(size: 14, weight: .semibold))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(entry.name)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Text(model.recoveryReasonSentence(for: entry))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+                        .help("Recovery detail: \(model.recoveryReason(for: entry))")
+                }
+                Spacer()
+                Button {
+                    onJump()
+                } label: {
+                    Label("Open", systemImage: "arrow.up.right.square")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Jump to this session in the workbench")
+                if model.recoveryTrustFixAvailable(for: entry) {
+                    // One-click fix: trusting clears the blocker so recovery
+                    // auto-resumes instead of forcing a fresh start.
+                    Button {
+                        model.trustAndRecover(entry)
+                    } label: {
+                        Label("Trust & resume", systemImage: "checkmark.shield")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .help("Trust this session to enable auto-resume, then recover it without losing history.")
+                } else {
+                    Button {
+                        model.requestStartFresh(entry)
+                    } label: {
+                        Label("Start fresh", systemImage: "arrow.counterclockwise")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .help("No resumable session — this begins a new conversation. The previous transcript stays viewable.")
+                }
+            }
+            HStack(spacing: 6) {
+                Text(model.launchCommand(for: entry))
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.orange.opacity(0.06))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(Color.orange.opacity(0.18), lineWidth: 1)
+        )
     }
 }
 
@@ -878,17 +1062,31 @@ private struct RecoverableEntryRow: View {
     var onJump: () -> Void
     var onRecover: () -> Void
 
+    /// U8b: a lossless live reattach is calm (a reconnect, no loss), so it reads
+    /// in a settled green link rather than the orange "recovery action" tone.
+    private var isReattach: Bool { model.isLosslessReattach(for: entry) }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Image(systemName: "arrow.clockwise")
-                    .foregroundStyle(.orange)
+                Image(systemName: isReattach ? "link.circle.fill" : "arrow.clockwise")
+                    .foregroundStyle(isReattach ? Color.green : Color.orange)
                     .font(.system(size: 14, weight: .semibold))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(entry.name)
-                        .font(.subheadline.weight(.semibold))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                    HStack(spacing: 6) {
+                        Text(entry.name)
+                            .font(.subheadline.weight(.semibold))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        if isReattach {
+                            Text("Reconnect — no loss")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.green)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.green.opacity(0.12), in: Capsule())
+                        }
+                    }
                     if let summary = entry.lastSummary, !summary.isEmpty {
                         Text(summary)
                             .font(.caption)
@@ -896,11 +1094,12 @@ private struct RecoverableEntryRow: View {
                             .lineLimit(1)
                             .truncationMode(.tail)
                     }
-                    Text("Recovery: \(model.recoveryReason(for: entry))")
+                    Text(model.recoveryReasonSentence(for: entry))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                         .truncationMode(.tail)
+                        .help("Recovery detail: \(model.recoveryReason(for: entry))")
                 }
                 Spacer()
                 Button {
@@ -2175,7 +2374,7 @@ struct ReportBugSheet: View {
                 )
 
                 Label(
-                    "Includes a window screenshot, a support diagnostics zip, and recent boss decisions + actions. The report text is anonymized — usernames, home paths, agent names, and tokens are stripped before it's saved or filed. No transcript contents.",
+                    ReportBugDisclosureCopy.disclosure,
                     systemImage: "info.circle"
                 )
                 .font(.caption)
@@ -2311,6 +2510,11 @@ private struct DecisionLogRow: View {
     var onResolve: (() -> Void)?
     @State private var taught = false
 
+    /// Plain-language vocabulary for the status/source footer and the teach
+    /// control (#U23a) — the single source so the row never prints raw enum
+    /// rawValues or inverts the teach polarity per kind.
+    private let phrasebook = DecisionLogPhrasebook()
+
     /// The severity tier of this decision, for the inbox accent + label.
     private var severity: DecisionSeverity { DecisionSeverity.of(decision) }
 
@@ -2359,11 +2563,16 @@ private struct DecisionLogRow: View {
                 if let confidence = decision.confidence {
                     Text("confidence \(Int((confidence * 100).rounded()))%")
                 }
-                Text("status: \(decision.status.rawValue)")
-                Text("source: \(decision.source)")
+                // #U23a: plain language, not raw telemetry — "Sent" not
+                // "status: applied", "decided by: Boss Watch" not
+                // "source: boss:slugger". The raw values stay in the tooltip for
+                // power users / the raw-log disclosure.
+                Text(phrasebook.statusPhrase(decision.status))
+                Text("· decided by: \(phrasebook.decidedBy(source: decision.source))")
             }
             .font(.caption2)
             .foregroundStyle(.secondary)
+            .help("Raw: status \(decision.status.rawValue) · source \(decision.source)")
             HStack(spacing: 8) {
                 // Inbox mode adds triage controls next to Teach: clear an item
                 // without leaving the queue (Ack), defer it (Snooze), or close
@@ -2409,14 +2618,31 @@ private struct DecisionLogRow: View {
                         .foregroundStyle(.green)
                         .help("Request sent. The boss's acknowledgement is in the action log.")
                 } else {
-                    Button(teachLabel) {
-                        // autoAdvance reinforces an escalate/hold; corrects an auto-advance.
-                        onTeach(decision.kind != .autoAdvance)
-                        taught = true
+                    // #U23a: present BOTH teach intents explicitly so the
+                    // operator never has to decode an inverting button label.
+                    // "Teach the boss ▾" → "Do this automatically next time" /
+                    // "Always ask me", with the current default marked. The
+                    // polarity is the pure `reinforces` flag, kind-independent.
+                    Menu {
+                        ForEach(phrasebook.teachOptions(for: decision.kind)) { option in
+                            Button {
+                                onTeach(option.reinforces)
+                                taught = true
+                            } label: {
+                                if option.isCurrent {
+                                    Label("\(option.title) (current)", systemImage: "checkmark")
+                                } else {
+                                    Text(option.title)
+                                }
+                            }
+                        }
+                    } label: {
+                        Label("Teach the boss", systemImage: "graduationcap")
                     }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
                     .font(.caption2)
-                    .buttonStyle(.borderless)
-                    .help("Tell the boss to remember this preference for \(decision.friendName ?? "this friend"), so future decisions improve")
+                    .help("Tell the boss what to do next time for \(decision.friendName ?? "this friend") — automatically advance, or always ask you.")
                 }
             }
             .font(.caption2)
@@ -2479,12 +2705,6 @@ private struct DecisionLogRow: View {
         }
     }
 
-    private var teachLabel: String {
-        decision.kind == .autoAdvance
-            ? "Teach: always ask me instead"
-            : "Teach: auto-advance these next time"
-    }
-
     private var kindColor: SwiftUI.Color {
         switch decision.kind {
         case .autoAdvance: return .green
@@ -2512,10 +2732,14 @@ struct AgentHomeEmptyState: View {
                     Image(systemName: "infinity")
                         .font(.system(size: 38, weight: .semibold))
                         .foregroundStyle(Color.accentColor)
-                    Text("Set up Workbench")
+                    // Terminals-first: lead with purpose, not a setup demand. The
+                    // six-word story is the cut-test — "Your terminals. An agent
+                    // runs them." Copy lives in Core (AgentHomeEmptyStateCopy) so
+                    // it's pinned by tests, not buried as a view literal.
+                    Text(AgentHomeEmptyStateCopy.headline)
                         .font(.title2.weight(.semibold))
                         .multilineTextAlignment(.center)
-                    Text("Choose a boss agent, scan this Mac for coding-agent sessions, and let Workbench propose what to import. You can still open a blank terminal whenever you need one.")
+                    Text(AgentHomeEmptyStateCopy.subtext)
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -2523,37 +2747,56 @@ struct AgentHomeEmptyState: View {
                         .frame(maxWidth: 540)
                 }
                 HStack(spacing: 12) {
+                    // Primary, gate-free action. ⌘N has no gate; this is the whole
+                    // point of the product, so it's the prominent button. Unit 4:
+                    // open a blank login-shell terminal INSTANTLY — zero typing,
+                    // no sheet — matching the help text "Open a blank terminal
+                    // session." (The sidebar New Terminal / ⌘N still open the
+                    // sheet for the typed-command path.)
                     Button {
-                        model.presentOnboarding()
+                        model.createBlankTerminal()
                     } label: {
-                        Label("Set Up Workbench", systemImage: "wand.and.stars")
+                        Label(AgentHomeEmptyStateCopy.newTerminalButton, systemImage: "plus")
                             .frame(minWidth: 160)
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
-                    .help("Choose a boss, connect MCP tools, and import recent terminals.")
+                    .help("Open a blank terminal session.")
 
+                    // Secondary opt-in: the (now opt-in) boss wizard — same call
+                    // the old prominent "Set Up Workbench" button used.
                     Button {
-                        model.isOuroAgentInstallSheetPresented = true
+                        model.presentOnboarding()
                     } label: {
-                        Label("Hatch an Agent", systemImage: "sparkles")
+                        Label(AgentHomeEmptyStateCopy.setUpBossButton, systemImage: "wand.and.stars")
                             .frame(minWidth: 160)
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.large)
-                    .help("Install or refresh an Ouro agent bundle on this Mac.")
+                    .help("Choose a boss to watch the whole Mac, connect its tools, and bring back recent terminals.")
 
+                    // Lowest weight: create a new agent. U18 — opens the native
+                    // "Create your agent" form (name + provider + credentials, headless),
+                    // NOT the raw `ouro hatch` CLI pane.
                     Button {
-                        model.isNewSessionSheetPresented = true
+                        model.presentNewAgentProviderConfigForm()
                     } label: {
-                        Label("New Terminal", systemImage: "plus")
+                        Label(AgentHomeEmptyStateCopy.createAgentButton, systemImage: "sparkles")
                             .frame(minWidth: 140)
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.large)
-                    .help("Open a blank terminal session.")
+                    .help(AgentHomeEmptyStateCopy.createAgentHelp)
                 }
                 if !model.ouroAgents.isEmpty {
+                    // #U36: the "Installed agents" card is an honest launchpad, not
+                    // an inert look-alike of the sidebar. Each row is the SAME
+                    // interactive SidebarAgentRow (a Button → selectAgent,
+                    // keyboard-reachable, .help(agent.detail)) so clicking it
+                    // selects + inspects that agent exactly like the sidebar. A
+                    // non-ready row shows a human-readable reason (disabled /
+                    // agent.json missing / invalid config) instead of a wordless
+                    // orange dot, via the InstalledAgentRowPresentation seam.
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(spacing: 6) {
                             Image(systemName: "person.crop.circle")
@@ -2563,20 +2806,22 @@ struct AgentHomeEmptyState: View {
                                 .foregroundStyle(.secondary)
                         }
                         ForEach(model.ouroAgents) { agent in
-                            HStack(spacing: 8) {
-                                Circle()
-                                    .fill(agent.status == .ready ? Color.green : Color.orange)
-                                    .frame(width: 7, height: 7)
-                                Text(agent.name)
-                                    .font(.callout.monospaced())
-                                Spacer()
-                                if agent.name == model.state.boss.agentName {
-                                    Text("boss")
-                                        .font(.caption2.weight(.semibold))
-                                        .foregroundStyle(Color.accentColor)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(Color.accentColor.opacity(0.12), in: Capsule())
+                            VStack(alignment: .leading, spacing: 2) {
+                                SidebarAgentRow(
+                                    agent: agent,
+                                    isBoss: agent.name == model.state.boss.agentName,
+                                    isSelected: false,
+                                    select: { model.selectAgent(agent.name) }
+                                )
+                                if let reason = InstalledAgentRowPresentation.reason(
+                                    for: agent.status,
+                                    detail: agent.detail
+                                ) {
+                                    Text(reason)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                        .padding(.leading, 20)
+                                        .fixedSize(horizontal: false, vertical: true)
                                 }
                             }
                         }
@@ -2603,33 +2848,108 @@ struct SidebarFilterField: View {
     @FocusState private var fieldIsFocused: Bool
 
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            TextField("Filter sessions", text: $model.sidebarFilter)
-                .textFieldStyle(.plain)
-                .font(.callout)
-                .focused($fieldIsFocused)
-                .help("Filter the session list: matches name or group; try owner:agent, owner:human, owner:<name>, or status:waiting")
-            if !model.sidebarFilter.isEmpty {
-                Button {
-                    model.sidebarFilter = ""
-                    fieldIsFocused = true
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                // U19(c): a structured example in the placeholder so the grammar is
+                // discoverable at the spot the operator already looks — plain-text
+                // filtering still works with zero learning.
+                TextField("Filter — try status:waiting", text: $model.sidebarFilter)
+                    .textFieldStyle(.plain)
+                    .font(.callout)
+                    .focused($fieldIsFocused)
+                    .help("Filter the session list: matches name or group; structured queries search every workspace — try owner:agent, owner:human, owner:<name>, or status:waiting")
+                if !model.sidebarFilter.isEmpty {
+                    Button {
+                        model.sidebarFilter = ""
+                        fieldIsFocused = true
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Clear filter")
+                    .accessibilityLabel("Clear session filter")
                 }
-                .buttonStyle(.plain)
-                .help("Clear filter")
-                .accessibilityLabel("Clear session filter")
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+
+            if model.sidebarFilterIsActive {
+                // U19(a): scope is never silent — a structured query reads "Searching all
+                // workspaces", a plain one names the current workspace.
+                Text(SidebarFilterPresentation.scopeIndicator(
+                    isGlobal: model.sidebarFilterIsGlobal,
+                    workspaceName: model.selectedProject?.name
+                ))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 4)
+            } else {
+                // U19(c): tap-to-insert suggestion chips surface the structured grammar
+                // without the operator having to discover the token syntax.
+                HStack(spacing: 5) {
+                    ForEach(SidebarFilterField.suggestionChips, id: \.token) { chip in
+                        Button {
+                            model.sidebarFilter = chip.token
+                            fieldIsFocused = true
+                        } label: {
+                            Text(chip.label)
+                                .font(.caption2)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.secondary.opacity(0.12), in: Capsule())
+                        .help("Filter by \(chip.label.lowercased()) — searches every workspace")
+                    }
+                }
+                .padding(.horizontal, 4)
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
         .padding(.horizontal, 10)
+    }
+
+    /// U19(c): one-tap structured-token chips. Inserting one flips the search global.
+    private static let suggestionChips: [(label: String, token: String)] = [
+        (label: "Waiting", token: "status:waiting"),
+        (label: "Agent", token: "owner:agent"),
+        (label: "Idle", token: "status:idle"),
+    ]
+}
+
+/// U19(b): the explained zero-match row for the sidebar's terminals section. Mirrors the
+/// `ContentUnavailableView` pattern the Recovery sheet and command palette already use, so
+/// a filter that hides every row never looks like an empty workspace. Copy comes from
+/// `SidebarFilterPresentation` (pinned in Core); the Clear reuses the existing clear action.
+struct SidebarFilterEmptyStateRow: View {
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(
+                SidebarFilterPresentation.emptyStateTitle(query: model.sidebarFilter),
+                systemImage: "line.3.horizontal.decrease.circle"
+            )
+            .font(.callout.weight(.medium))
+            Text(SidebarFilterPresentation.emptyStateDescription(isGlobal: model.sidebarFilterIsGlobal))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Button {
+                model.sidebarFilter = ""
+            } label: {
+                Label("Clear filter", systemImage: "xmark.circle")
+            }
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+        }
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -2669,12 +2989,18 @@ struct WorkbenchSidebarView: View {
                     )
                 }
                 if model.ouroAgents.isEmpty {
-                    SidebarActionRow(title: "Hatch Your First Agent", systemImage: "sparkles") {
-                        model.isOuroAgentInstallSheetPresented = true
+                    // U18: the newcomer's first-agent row opens the native "Create your
+                    // agent" form, NOT the raw `ouro hatch` CLI pane.
+                    SidebarActionRow(title: "Create Your First Agent", systemImage: "sparkles") {
+                        model.presentNewAgentProviderConfigForm()
                     }
                 } else {
-                    SidebarActionRow(title: "Hatch / Clone Agent", systemImage: "plus") {
-                        model.isOuroAgentInstallSheetPresented = true
+                    // U18: create goes native; clone keeps its dedicated Git-remote sheet.
+                    SidebarActionRow(title: "Create Agent", systemImage: "plus") {
+                        model.presentNewAgentProviderConfigForm()
+                    }
+                    SidebarActionRow(title: "Clone from Git…", systemImage: "arrow.down.doc") {
+                        model.presentCloneAgentSheet()
                     }
                 }
             }
@@ -2711,7 +3037,7 @@ struct WorkbenchSidebarView: View {
                     model.isNewGroupSheetPresented = true
                 }
             }
-            Section(model.selectedProject?.name ?? "Terminals") {
+            Section(WorkbenchSurfacePolicy.terminalsSectionTitle(workspaceName: model.selectedProject?.name)) {
                 ForEach(model.sessionEntries) { entry in
                     TerminalAgentRow(
                         entry: entry,
@@ -2736,6 +3062,14 @@ struct WorkbenchSidebarView: View {
                     // sources from state.processEntries.
                     model.moveSessionEntries(fromOffsets: offsets, toOffset: destination)
                 }
+                // U19(b): a non-empty filter that hides every row gets an explicit,
+                // quoted "No sessions match …" state with a one-click Clear — distinct
+                // from a genuinely-empty workspace (which shows no such row). Without
+                // this the section rendered only "New Terminal", identical pixels to an
+                // empty workspace, so an empty filtered result read as "nothing waiting."
+                if model.sidebarFilterIsActive && model.sessionEntries.isEmpty {
+                    SidebarFilterEmptyStateRow(model: model)
+                }
                 SidebarActionRow(title: "New Terminal", systemImage: "plus") {
                     model.isNewSessionSheetPresented = true
                 }
@@ -2757,7 +3091,11 @@ struct WorkbenchSidebarView: View {
                     }
                 }
             }
-            if WorkbenchSurfacePolicy.shouldShowRecovery(recoverableCount: model.recoverableEntries.count) {
+            // U8b: the section's visibility, its row text, the hover help, the
+            // sheet header, and the sheet's row count ALL derive from the single
+            // `recoveryDigest` so they can never disagree — a lossless-reattach-
+            // only workspace never reads "0 recovery actions" over a non-empty list.
+            if WorkbenchSurfacePolicy.shouldShowRecovery(recoverableCount: model.recoveryDigest.actionableCount) {
                 Section("Recovery") {
                     Button {
                         model.isRecoverySheetPresented = true
@@ -2765,7 +3103,7 @@ struct WorkbenchSidebarView: View {
                         HStack(spacing: 8) {
                             Image(systemName: "arrow.clockwise.circle")
                                 .foregroundStyle(Color.orange)
-                            Text(model.summary.oneLineStatus)
+                            Text(model.recoveryDigest.statusLine)
                                 .font(.caption)
                                 .lineLimit(2)
                                 .truncationMode(.tail)
@@ -2779,7 +3117,7 @@ struct WorkbenchSidebarView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .help("\(model.recoverableEntries.count) session\(model.recoverableEntries.count == 1 ? "" : "s") waiting on recovery. Click to inspect.")
+                    .help(model.recoveryDigest.helpText)
                 }
             }
         }
@@ -2958,13 +3296,22 @@ struct SidebarAgentRow: View {
         .help(agent.detail)
     }
 
+    // #U36: route the dot color through the shared Core seam so the sidebar row
+    // and the empty-state "Installed agents" card never disagree about an agent's
+    // health (both are now this same row, but the seam is the single source).
     private var statusColor: SwiftUI.Color {
-        switch agent.status {
-        case .ready:
+        InstalledAgentRowPresentation.dotColor(for: agent.status).swiftUIColor
+    }
+}
+
+private extension InstalledAgentRowPresentation.DotColor {
+    var swiftUIColor: SwiftUI.Color {
+        switch self {
+        case .green:
             return .green
-        case .disabled, .missingConfig:
+        case .orange:
             return .orange
-        case .invalidConfig:
+        case .red:
             return .red
         }
     }
@@ -3004,7 +3351,7 @@ struct TerminalRowContextMenu: View {
             .disabled(entry.isArchived)
             if model.activeSession(for: entry) != nil {
                 Button(role: .destructive) {
-                    model.terminate(entry)
+                    model.requestStop(entry)
                 } label: {
                     Label("Stop", systemImage: "stop.fill")
                 }
@@ -3423,12 +3770,20 @@ struct HeaderView: View {
         HStack(alignment: .center, spacing: 10) {
             BossSelectorView(model: model)
                 .layoutPriority(2)
-            Text(model.summary.oneLineStatus)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .help(model.summary.oneLineStatus)
+            // #U31b: on a genuinely quiet machine (nobody waiting, 0 running, 0
+            // actionable recovery) the line is just "0 running, nothing to
+            // recover" — two information-free zeros that undercut the calm
+            // no-boss header (U5). The pure seam hides it then and only renders
+            // the informative text when there's something to say.
+            let statusLine = model.headerStatusLine
+            if statusLine.shouldShow {
+                Text(statusLine.text)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .help(statusLine.text)
+            }
             Spacer(minLength: 8)
             if let badge = model.updateBadgeText {
                 Button {
@@ -3443,6 +3798,13 @@ struct HeaderView: View {
             }
             AutonomyStatusButton(model: model)
                 .fixedSize()
+            // #U21: Boss Watch — the hands-off on/off master switch — sits next
+            // to the TTFA pill so the operator SEES whether autonomy is running
+            // and can flip it in one click, without opening the More overflow.
+            // The TTFA pill reads readiness; this reads whether autonomy is
+            // actually running — together they're the autonomy pair.
+            BossWatchHeaderToggle(model: model)
+                .fixedSize()
             Button {
                 model.setBossPaneCollapsed(!model.state.bossPaneCollapsed)
             } label: {
@@ -3456,18 +3818,42 @@ struct HeaderView: View {
             .labelStyle(.iconOnly)
             .buttonStyle(.bordered)
             .controlSize(.small)
+            // #U22: when the pane is collapsed the open-inbox count would vanish
+            // entirely — so an escalation is never silently buried, the count
+            // rides as a badge on the Show Boss Pane button.
+            .overlay(alignment: .topTrailing) {
+                if model.state.bossPaneCollapsed, let door = model.inboxDoor {
+                    Text(door.badgeText)
+                        .font(.system(size: 9, weight: .bold).monospacedDigit())
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(InboxDoorPill.color(for: door.topSeverity), in: Capsule())
+                        .offset(x: 5, y: -5)
+                        .help(door.accessibilityLabel)
+                }
+            }
             .help(model.state.bossPaneCollapsed ? "Show boss dashboard" : "Hide boss dashboard")
             .fixedSize()
             Menu {
                 Button {
                     model.presentOnboarding()
                 } label: {
-                    Label("Set Up Workbench…", systemImage: "wand.and.stars")
+                    // U37(c): "Set up a boss" — match the opt-in-boss framing used
+                    // by the empty-state CTA and the command palette.
+                    Label("\(AgentHomeEmptyStateCopy.setUpBossButton)…", systemImage: "wand.and.stars")
+                }
+                // U18: create goes to the native "Create your agent" form; clone keeps
+                // its own Git-remote sheet. No menu entry opens a raw `ouro hatch` pane.
+                Button {
+                    model.presentNewAgentProviderConfigForm()
+                } label: {
+                    Label("Create an Agent…", systemImage: "sparkles")
                 }
                 Button {
-                    model.isOuroAgentInstallSheetPresented = true
+                    model.presentCloneAgentSheet()
                 } label: {
-                    Label("Hatch an Agent…", systemImage: "sparkles")
+                    Label("Clone an Agent from Git…", systemImage: "arrow.down.doc")
                 }
                 Button {
                     model.presentOpenWorkspacePanel()
@@ -3599,21 +3985,71 @@ struct HeaderView: View {
             .help("Open the command palette (⌘K)")
             .fixedSize()
             Button {
-                Task {
-                    await model.runBossCheckIn()
-                }
+                model.attemptCheckIn()
             } label: {
-                Label("Check In", systemImage: "bubble.left.and.text.bubble.right")
+                Label(WorkbenchViewModel.checkInActionLabel, systemImage: "bubble.left.and.text.bubble.right")
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
+            // U12: only disabled while a check-in is in flight. With no boss the
+            // button stays live and routes the tap to set-up (via attemptCheckIn)
+            // rather than being a loud dead click — and it always has a tooltip.
             .disabled(model.bossCheckInIsRunning)
             .keyboardShortcut("i", modifiers: [.command])
+            .help(model.checkInHelpText)
             .fixedSize()
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
         .frame(minHeight: 44)
+    }
+}
+
+/// #U21: the always-visible Boss Watch master switch. A glanceable pill — eye
+/// glyph + "Watch On"/"Watch Off" — that shows whether autonomy is running and
+/// flips it in one tap, right next to the TTFA readiness pill. The on/off label,
+/// the toggle verb, and the help all come from the pure `BossWatchPresentation`
+/// so this surface, the popover, and the dashboard never disagree.
+struct BossWatchHeaderToggle: View {
+    @ObservedObject var model: WorkbenchViewModel
+
+    private var presentation: BossWatchPresentation { model.bossWatchPresentation }
+
+    private var tint: SwiftUI.Color { presentation.isOn ? .green : .secondary }
+
+    var body: some View {
+        // #U31a: before a usable boss exists there's nothing to watch with — the
+        // pill is hidden entirely so the no-boss header stays calm (U5).
+        if presentation.isVisible {
+            pill
+        }
+    }
+
+    private var pill: some View {
+        Button {
+            model.setBossWatchEnabled(!model.bossWatchIsEnabled)
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: presentation.isOn ? "eye.fill" : "eye.slash")
+                    .font(.caption)
+                Text(presentation.shortLabel)
+                    .font(.caption.weight(.semibold))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(tint.opacity(0.16), in: Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(tint.opacity(0.32), lineWidth: 1)
+            )
+            .foregroundStyle(tint == .green ? Color.green : Color.secondary)
+        }
+        .buttonStyle(.plain)
+        // While a check-in is in flight, flipping the loop mid-run is unsafe —
+        // mirror the More-menu toggle's disable.
+        .disabled(model.bossCheckInIsRunning)
+        .help("\(presentation.help)\nClick to \(presentation.toggleActionTitle.lowercased()).")
+        .accessibilityLabel("Boss Watch \(presentation.label)")
     }
 }
 
@@ -3626,30 +4062,25 @@ struct BossSelectorView: View {
         model.ouroAgent(named: model.state.boss.agentName)
     }
 
+    /// Calm-vs-loud decision (Core seam). A brand-new first run has no boss chosen yet (empty
+    /// `agentName`) — EXPECTED, so this renders calm/neutral. A named-but-missing or invalid boss
+    /// is a REAL problem and stays loud red, exactly as before.
+    private var presentation: HeaderCalmPresentation.Presentation {
+        let installedHelp = bossAgent.map { "\($0.name): \($0.detail)" } ?? ""
+        return HeaderCalmPresentation.resolve(
+            bossAgentName: model.state.boss.agentName,
+            bossAgentStatus: bossAgent?.status,
+            autonomyState: model.autonomyReadiness.state,
+            installedBossHelp: installedHelp
+        )
+    }
+
     private var bossHealthColor: SwiftUI.Color {
-        guard let bossAgent else {
-            // Persisted boss isn't installed — surface that loudly.
-            return .red
-        }
-        switch bossAgent.status {
-        case .ready:
-            return .green
-        case .disabled, .missingConfig:
-            return .orange
-        case .invalidConfig:
-            return .red
-        }
+        presentation.bossDotColor.swiftUIColor
     }
 
     private var bossHealthHelp: String {
-        guard let bossAgent else {
-            return "\(model.state.boss.agentName) is the selected boss but isn't installed on this machine. Pick an installed agent or create one."
-        }
-        return "\(bossAgent.name): \(bossAgent.detail)"
-    }
-
-    private var bossIsMissing: Bool {
-        bossAgent == nil
+        presentation.bossHelp
     }
 
     var body: some View {
@@ -3680,10 +4111,16 @@ struct BossSelectorView: View {
             } label: {
                 Label("Manage Agents…", systemImage: "person.2.badge.gearshape")
             }
+            // U18: create goes native; clone keeps its Git-remote sheet.
             Button {
-                model.isOuroAgentInstallSheetPresented = true
+                model.presentNewAgentProviderConfigForm()
             } label: {
-                Label("Hatch / Clone Agent…", systemImage: "sparkles")
+                Label("Create an Agent…", systemImage: "sparkles")
+            }
+            Button {
+                model.presentCloneAgentSheet()
+            } label: {
+                Label("Clone an Agent from Git…", systemImage: "arrow.down.doc")
             }
         } label: {
             HStack(spacing: 6) {
@@ -3691,11 +4128,11 @@ struct BossSelectorView: View {
                     .fill(bossHealthColor)
                     .frame(width: 7, height: 7)
                     .accessibilityHidden(true)
-                Text("Boss: \(model.state.boss.agentName)")
+                Text(presentation.bossLabelText)
                     .font(.headline)
                     .lineLimit(1)
                     .truncationMode(.middle)
-                if bossIsMissing {
+                if presentation.bossShowsMissingPill {
                     Text("missing")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.red)
@@ -3762,12 +4199,13 @@ struct BossAgentNamePopover: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Boss Agent")
                 .font(.headline)
-            TextField("agent bundle name", text: $agentName)
+            // U18: de-jargoned — "agent name", not "agent bundle name".
+            TextField("agent name", text: $agentName)
                 .textFieldStyle(.roundedBorder)
                 .focused($fieldIsFocused)
                 .onSubmit(apply)
             if !trimmedAgentName.isEmpty && !canApply {
-                Text("Invalid bundle name.")
+                Text("That name can't be used. Avoid slashes, colons, and backslashes.")
                     .font(.caption)
                     .foregroundStyle(.red)
             }
@@ -3802,7 +4240,6 @@ struct OnboardingBossChoice: Identifiable {
     var name: String
     var detail: String
     var status: OuroAgentBundleStatus?
-    var registrationStatus: BossWorkbenchMCPRegistrationStatus?
     var isSelected: Bool
 
     var isUsable: Bool {
@@ -3810,14 +4247,13 @@ struct OnboardingBossChoice: Identifiable {
     }
 
     var statusLabel: String {
-        switch status {
-        case .ready?:
-            return "ready"
-        case .disabled?:
-            return "turned off"
-        case .missingConfig?, .invalidConfig?, nil:
+        // Honest at Choose Boss: `.ready` reads "installed", not "ready" — the live
+        // connection check runs on the next page, so claiming readiness here would be
+        // premature truth. The per-status copy lives in Core (OnboardingBossChoiceCopy).
+        guard let status else {
             return "needs setup"
         }
+        return OnboardingBossChoiceCopy.statusLabel(for: status)
     }
 
     var statusColor: SwiftUI.Color {
@@ -3829,20 +4265,10 @@ struct OnboardingBossChoice: Identifiable {
         }
     }
 
-    var registrationIsCurrent: Bool {
-        registrationStatus == .registered
-    }
-
-    var registrationActionTitle: String {
-        switch registrationStatus {
-        case .registered?:
-            return "Tools On"
-        case .needsUpdate?:
-            return "Update Tools"
-        default:
-            return "Enable Tools"
-        }
-    }
+    // #U27: the per-row registration button (Enable Tools / Update Tools / Tools On) is gone —
+    // Choose Boss is a pure pick that silently ensures tools on selection, and tool status is
+    // shown/fixed in exactly one place (the Connect page). So `registrationActionTitle` /
+    // `registrationIsCurrent` have no consumer and were removed with the button.
 }
 
 struct AutonomyStatusButton: View {
@@ -3852,6 +4278,26 @@ struct AutonomyStatusButton: View {
 
     private var snapshot: AutonomyReadinessSnapshot {
         model.autonomyReadiness.appending(loginItemCheck)
+    }
+
+    /// Calm-vs-loud decision (Core seam), fed the SNAPSHOT's state so the loud (boss-is-set) path
+    /// renders exactly as today. When no boss is chosen yet the pill goes neutral ("TTFA · off").
+    private var presentation: HeaderCalmPresentation.Presentation {
+        HeaderCalmPresentation.resolve(
+            bossAgentName: model.state.boss.agentName,
+            bossAgentStatus: model.ouroAgent(named: model.state.boss.agentName)?.status,
+            autonomyState: snapshot.state
+        )
+    }
+
+    /// Pill tint: gray for the calm no-boss-yet state, the live readiness tint once a boss is set.
+    private var pillTint: SwiftUI.Color {
+        switch presentation.ttfaStyle {
+        case .neutral:
+            return .secondary
+        case .real:
+            return snapshot.state.tint
+        }
     }
 
     private var loginItemCheck: AutonomyReadinessCheck {
@@ -3894,21 +4340,21 @@ struct AutonomyStatusButton: View {
         } label: {
             HStack(spacing: 6) {
                 Circle()
-                    .fill(snapshot.state.tint)
+                    .fill(pillTint)
                     .frame(width: 7, height: 7)
-                Text("\(snapshot.label) · \(snapshot.state.displayName)")
+                Text(presentation.ttfaText)
                     .font(.caption.monospaced().weight(.semibold))
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(snapshot.state.tint.opacity(0.16), in: Capsule())
+            .background(pillTint.opacity(0.16), in: Capsule())
             .overlay(
                 Capsule()
-                    .stroke(snapshot.state.tint.opacity(0.32), lineWidth: 1)
+                    .stroke(pillTint.opacity(0.32), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
-        .help("\(snapshot.headline). Click to open the autonomy readiness checklist.")
+        .help(presentation.ttfaHelp)
         .popover(isPresented: $isPresented) {
             AutonomyStatusPopover(
                 snapshot: snapshot,
@@ -3929,25 +4375,95 @@ struct AutonomyStatusPopover: View {
     @ObservedObject var model: WorkbenchViewModel
     @ObservedObject var loginItem: LoginItemController
 
+    /// The live availability of each in-app remediation actuator — the SINGLE
+    /// source of "does this kind's button have work to do right now". Both the
+    /// calm-vs-loud reframe (via `degradedCheckIds`) and the per-row repair button
+    /// (`AutonomyStatusCheckRow.remediation`) consult it through
+    /// `AutonomyRemediationMapper.hasLiveButton`, so they can never disagree about
+    /// whether a blocker has a tappable fix (FIX 1 / U9-1).
+    private var remediationAvailability: AutonomyRemediationAvailability {
+        AutonomyRemediationAvailability(
+            hasUntrustedTerminals: !model.untrustedAutonomyAgentEntries.isEmpty,
+            hasResumableDisabledTerminals: !model.resumableDisabledAutonomyAgentEntries.isEmpty,
+            mcpRegistrationActionable: model.bossWorkbenchMCPRegistration?.isActionable == true,
+            hasRecoverableEntries: !model.recoverableEntries.isEmpty,
+            bossWatchDisabled: !model.bossWatchIsEnabled,
+            loginItemActionable: loginItem.status != .appBundleMissing
+        )
+    }
+
+    /// Check ids whose non-green state the App knows to be genuinely degraded, even though the bare
+    /// Core state is `.blocker`. Drives the calm-vs-loud reframe so a check with no live in-app fix
+    /// keeps the wall copy while genuinely one-tap toggles get the calm framing.
+    ///
+    /// Two sources, unioned:
+    /// 1. App-only degraded sub-states above the Core seam (a missing boss-mcp binary, a missing app
+    ///    bundle for open-at-login) — the bare check state can't see these.
+    /// 2. Blockers whose abstract remediation exists but whose per-row button the runtime gate
+    ///    suppresses (a `recovery` blocker with only `.manualActionNeeded` entries; a `terminal-resume`
+    ///    blocker whose agents are `.manual` strategy). Consulting the SAME `remediationAvailability`
+    ///    the rows use means the reframe never promises "N things to make this hands-off" over a
+    ///    blocker that has no tappable fix (FIX 1 / U9-1).
+    private var degradedCheckIds: Set<String> {
+        var ids = AutonomyRemediationMapper.runtimeSuppressedDegradedCheckIds(
+            checks: snapshot.checks,
+            availability: remediationAvailability
+        )
+        if model.bossWorkbenchMCPRegistration?.isActionable == false,
+           snapshot.checks.contains(where: { $0.id == "boss-mcp" && $0.state == .blocker }) {
+            ids.insert("boss-mcp")
+        }
+        if loginItem.status == .appBundleMissing {
+            ids.insert("open-at-login")
+        }
+        return ids
+    }
+
+    /// View-level de-alarm (#U9): when the only blockers are one-tap toggles, lead with calm
+    /// action-first copy and drop the red octagon; reserve the wall for genuinely degraded states.
+    private var reframe: AutonomyReadinessReframedCopy {
+        AutonomyReadinessReframe.present(
+            state: snapshot.state,
+            checks: snapshot.checks,
+            degradedCheckIds: degradedCheckIds
+        )
+    }
+
+    /// The pill/headline tint: red only for a genuinely degraded blocker; a calm one-tap-setup
+    /// blocker reads orange ("needs you"), not the red alarm.
+    private var headerTint: SwiftUI.Color {
+        switch reframe.tone {
+        case .degraded:
+            return snapshot.state.tint
+        case .calm:
+            return snapshot.state == .ready ? .green : .orange
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(snapshot.label)
                     .font(.headline.monospaced())
-                StatusPill(text: snapshot.state.displayName, color: snapshot.state.tint)
+                StatusPill(text: reframe.pillText, color: headerTint)
                 Spacer()
             }
             VStack(alignment: .leading, spacing: 3) {
-                Text(snapshot.headline)
+                Text(reframe.headline)
                     .font(.subheadline.weight(.semibold))
-                Text(snapshot.detail)
+                Text(reframe.detail)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(snapshot.checks) { check in
-                    AutonomyStatusCheckRow(check: check)
+                    AutonomyStatusCheckRow(
+                        check: check,
+                        model: model,
+                        loginItem: loginItem,
+                        isDegraded: degradedCheckIds.contains(check.id)
+                    )
                 }
             }
             Divider()
@@ -3959,13 +4475,20 @@ struct AutonomyStatusPopover: View {
                         Label(model.bossWorkbenchMCPActionTitle, systemImage: "point.3.connected.trianglepath.dotted")
                     }
                 }
-                if !model.bossWatchIsEnabled {
-                    Button {
-                        model.setBossWatchEnabled(true)
-                    } label: {
-                        Label("Watch", systemImage: "eye")
-                    }
+                // #U21: bidirectional — the popover used to show a one-way
+                // "Watch" button ONLY when watch was OFF, so in the default ON
+                // state there was no way to pause autonomy from here. Now it
+                // toggles both ways, labelled by the result of the tap.
+                Button {
+                    model.setBossWatchEnabled(!model.bossWatchIsEnabled)
+                } label: {
+                    Label(
+                        model.bossWatchIsEnabled ? "Pause Watch" : "Watch",
+                        systemImage: model.bossWatchIsEnabled ? "eye.slash" : "eye"
+                    )
                 }
+                .disabled(model.bossCheckInIsRunning)
+                .help(model.bossWatchPresentation.help)
                 if !loginItem.isEnabled {
                     Button {
                         loginItem.setEnabled(true)
@@ -3974,13 +4497,15 @@ struct AutonomyStatusPopover: View {
                     }
                 }
                 Button {
-                    Task {
-                        await model.runBossCheckIn()
-                    }
+                    model.attemptCheckIn()
                 } label: {
-                    Label("Ask", systemImage: "bubble.left.and.text.bubble.right")
+                    // U12: one name — the popover used to label this "Ask", which
+                    // collided with the typed-question submit and the Boss Watch
+                    // loop. It's the same manual pull as the header "Check In".
+                    Label(WorkbenchViewModel.checkInActionLabel, systemImage: "bubble.left.and.text.bubble.right")
                 }
                 .disabled(model.bossCheckInIsRunning)
+                .help(model.checkInHelpText)
             }
             .controlSize(.small)
         }
@@ -3989,11 +4514,54 @@ struct AutonomyStatusPopover: View {
 
 struct AutonomyStatusCheckRow: View {
     var check: AutonomyReadinessCheck
+    @ObservedObject var model: WorkbenchViewModel
+    @ObservedObject var loginItem: LoginItemController
+    /// The App knows this check is genuinely degraded (missing binary / bundle / app) even though its
+    /// bare Core state is `.blocker` — keep the stop-sign for it; soften everything else.
+    var isDegraded: Bool = false
+
+    /// Glyph + tint for the leading status dot. A one-tap-fixable blocker reads as a soft orange
+    /// "needs you", not the red stop-sign — the octagon is reserved for the degraded case (#U9).
+    private var indicator: (systemImage: String, tint: SwiftUI.Color) {
+        if check.state == .blocker, remediation != nil, !isDegraded {
+            return ("exclamationmark.circle.fill", .orange)
+        }
+        return (check.state.systemImage, check.state.tint)
+    }
+
+    /// The live availability of each in-app remediation actuator, built from the
+    /// same view-model state the popover's `degradedCheckIds` uses. Routing the
+    /// per-row button gate AND the calm-vs-loud reframe through ONE predicate
+    /// (`AutonomyRemediationMapper.hasLiveButton`) is what keeps the reframe from
+    /// promising a one-tap fix this row would suppress (FIX 1 / U9-1).
+    private var remediationAvailability: AutonomyRemediationAvailability {
+        AutonomyRemediationAvailability(
+            hasUntrustedTerminals: !model.untrustedAutonomyAgentEntries.isEmpty,
+            hasResumableDisabledTerminals: !model.resumableDisabledAutonomyAgentEntries.isEmpty,
+            mcpRegistrationActionable: model.bossWorkbenchMCPRegistration?.isActionable == true,
+            hasRecoverableEntries: !model.recoverableEntries.isEmpty,
+            bossWatchDisabled: !model.bossWatchIsEnabled,
+            loginItemActionable: loginItem.status != .appBundleMissing
+        )
+    }
+
+    /// The one-tap fix this check can offer right now (#U9). Pure Core mapping first; then suppress
+    /// the button via the shared runtime predicate (`hasLiveButton`) for the App-only degraded
+    /// sub-states and no-op cases the Core seam can't see, so a non-green check never shows an
+    /// orphaned or do-nothing button — and the reframe agrees, because it consults the same predicate.
+    private var remediation: AutonomyRemediation? {
+        guard let remediation = AutonomyRemediationMapper.remediation(forCheckId: check.id, state: check.state) else {
+            return nil
+        }
+        return AutonomyRemediationMapper.hasLiveButton(for: remediation.kind, availability: remediationAvailability)
+            ? remediation
+            : nil
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
-            Image(systemName: check.state.systemImage)
-                .foregroundStyle(check.state.tint)
+            Image(systemName: indicator.systemImage)
+                .foregroundStyle(indicator.tint)
                 .frame(width: 16)
             VStack(alignment: .leading, spacing: 1) {
                 Text(check.label)
@@ -4003,6 +4571,56 @@ struct AutonomyStatusCheckRow: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if let remediation {
+                Spacer(minLength: 8)
+                repairButton(remediation)
+            }
+        }
+    }
+
+    /// Inline repair button reusing the OnboardingRepairStepRow vocabulary: a prominent app-runnable
+    /// action. Tapping invokes the matching actuator; the readiness snapshot recomputes off the
+    /// view model's published state, so the check flips toward green in place — the popover stays open.
+    @ViewBuilder
+    private func repairButton(_ remediation: AutonomyRemediation) -> some View {
+        Button {
+            apply(remediation.kind)
+        } label: {
+            Label(remediation.actionLabel, systemImage: remediation.kind.systemImage)
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.small)
+        .fixedSize()
+    }
+
+    private func apply(_ kind: AutonomyRemediationKind) {
+        switch kind {
+        case .trustTerminals:
+            model.trustUntrustedAutonomyAgentTerminals()
+        case .enableResume:
+            model.enableAutoResumeForAutonomyAgentTerminals()
+        case .connectTools:
+            model.installWorkbenchMCPForBoss()
+        case .recover:
+            model.recoverAllRecoverableSessions()
+        case .enableWatch:
+            model.setBossWatchEnabled(true)
+        case .openAtLogin:
+            loginItem.setEnabled(true)
+        }
+    }
+}
+
+private extension AutonomyRemediationKind {
+    /// SF Symbol per repair, matching the OnboardingRepairStepRow / popover-footer icon vocabulary.
+    var systemImage: String {
+        switch self {
+        case .trustTerminals: return "checkmark.shield"
+        case .enableResume: return "arrow.clockwise"
+        case .connectTools: return "point.3.connected.trianglepath.dotted"
+        case .recover: return "arrow.uturn.backward"
+        case .enableWatch: return "eye"
+        case .openAtLogin: return "power"
         }
     }
 }
@@ -4085,6 +4703,23 @@ private extension AutonomyReadinessState {
     }
 }
 
+private extension HeaderCalmPresentation.BossDotColor {
+    /// Map the framework-free Core dot color onto a SwiftUI color. `.neutral` is the calm
+    /// no-boss-yet state (`.secondary`), not an alarm.
+    var swiftUIColor: SwiftUI.Color {
+        switch self {
+        case .neutral:
+            return .secondary
+        case .green:
+            return .green
+        case .orange:
+            return .orange
+        case .red:
+            return .red
+        }
+    }
+}
+
 private extension AutonomyReadinessCheckState {
     var tint: SwiftUI.Color {
         switch self {
@@ -4143,32 +4778,22 @@ struct CommandPaletteSheet: View {
                             )
                             .frame(maxWidth: .infinity, minHeight: 220)
                         }
-                        ForEach(Array(model.filteredCommandPaletteItems.enumerated()), id: \.element.id) { index, command in
-                            Button {
-                                run(command)
-                            } label: {
-                                HStack(spacing: 10) {
-                                    Image(systemName: command.systemImage)
-                                        .frame(width: 20)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(command.title)
-                                            .font(.body.weight(.semibold))
-                                        Text(command.detail)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    Spacer()
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(8)
-                                .background(
-                                    index == selectedIndex ? Color.accentColor.opacity(0.18) : Color.clear,
-                                    in: RoundedRectangle(cornerRadius: 6)
-                                )
-                                .contentShape(Rectangle())
+                        // U37(b): render the flat list grouped into labelled
+                        // sections (Session / Boss / Workspace / Agents /
+                        // Diagnostics / App) via the pure Core classifier. The
+                        // global row index (the position in the FLAT filtered list)
+                        // drives the keyboard highlight + scroll, so ↑/↓ and Return
+                        // keep working across section breaks.
+                        ForEach(sectionedRows, id: \.section) { group in
+                            Text(group.section.title)
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .textCase(.uppercase)
+                                .padding(.horizontal, 8)
+                                .padding(.top, 6)
+                            ForEach(group.rows, id: \.index) { row in
+                                paletteRow(row.command, index: row.index, proxy: proxy)
                             }
-                            .buttonStyle(.plain)
-                            .id(index)
                         }
                     }
                 }
@@ -4196,14 +4821,83 @@ struct CommandPaletteSheet: View {
         }
     }
 
+    /// One palette row carrying its global index in the flat filtered list (the
+    /// index the keyboard highlight + scroll use).
+    private struct IndexedRow {
+        var index: Int
+        var command: WorkbenchCommandDescriptor
+    }
+
+    /// A labelled section of rows for the grouped palette render.
+    private struct SectionedRows: Identifiable {
+        var section: WorkbenchCommandSection
+        var rows: [IndexedRow]
+        var id: WorkbenchCommandSection { section }
+    }
+
+    /// The filtered palette in VISUAL (grouped) order — the single source the
+    /// keyboard highlight, Return, and the rendered rows all index into, so the
+    /// selection can't desync from what's on screen now that grouping reorders the
+    /// flat list.
+    private var visualOrderedItems: [WorkbenchCommandDescriptor] {
+        WorkbenchCommandSection.grouped(model.filteredCommandPaletteItems).flatMap(\.commands)
+    }
+
+    /// The filtered palette grouped into labelled sections, each row tagged with
+    /// its index in `visualOrderedItems` so the keyboard highlight survives the
+    /// section breaks.
+    private var sectionedRows: [SectionedRows] {
+        var nextIndex = 0
+        return WorkbenchCommandSection.grouped(model.filteredCommandPaletteItems).map { group in
+            let rows = group.commands.map { command -> IndexedRow in
+                defer { nextIndex += 1 }
+                return IndexedRow(index: nextIndex, command: command)
+            }
+            return SectionedRows(section: group.section, rows: rows)
+        }
+    }
+
+    @ViewBuilder
+    private func paletteRow(
+        _ command: WorkbenchCommandDescriptor,
+        index: Int,
+        proxy: ScrollViewProxy
+    ) -> some View {
+        Button {
+            run(command)
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: command.systemImage)
+                    .frame(width: 20)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(command.title)
+                        .font(.body.weight(.semibold))
+                    Text(command.detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(8)
+            .background(
+                index == selectedIndex ? Color.accentColor.opacity(0.18) : Color.clear,
+                in: RoundedRectangle(cornerRadius: 6)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .id(index)
+    }
+
     private func moveSelection(by delta: Int) {
-        let count = model.filteredCommandPaletteItems.count
+        let count = visualOrderedItems.count
         guard count > 0 else { return }
         selectedIndex = min(max(selectedIndex + delta, 0), count - 1)
     }
 
     private func runSelectedCommand() {
-        let items = model.filteredCommandPaletteItems
+        let items = visualOrderedItems
         guard selectedIndex >= 0, selectedIndex < items.count else {
             return
         }
@@ -4245,6 +4939,15 @@ struct BossDashboardView: View {
     private var scrollBody: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
+                // #U22: the open-inbox door. When the boss has escalated
+                // something, a prominent tappable pill at the top of the pane
+                // opens the Decision Inbox — no more knowing ⌘K / ⌘J. Calm/absent
+                // when nothing's open.
+                if let door = model.inboxDoor {
+                    InboxDoorPill(door: door) {
+                        model.presentDecisionInbox()
+                    }
+                }
                 if model.bossWatchLastError != nil, model.bossWatchConsecutiveFailures >= 2 {
                     // Surface the boss being down prominently (out of the
                     // buried watch-status line), with the backoff state so the
@@ -4281,10 +4984,16 @@ struct BossDashboardView: View {
                     }
                 }
                 if let dashboard = model.bossDashboard {
-                    DashboardMetricsStrip(dashboard: dashboard)
+                    DashboardMetricsStrip(dashboard: dashboard) {
+                        Task { await model.refreshBossDashboard() }
+                    }
                 }
                 if let visibility = model.workbenchVisibility {
-                    WorkbenchVisibilityStrip(snapshot: visibility)
+                    WorkbenchVisibilityStrip(
+                        snapshot: visibility,
+                        onOpenInbox: { model.presentDecisionInbox() },
+                        onRetry: { Task { await model.refreshWorkbenchVisibility() } }
+                    )
                 }
                 if let dashboard = model.bossDashboard,
                    !dashboard.availability.issues.isEmpty {
@@ -4315,42 +5024,22 @@ struct BossDashboardView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
                 }
-                if let dashboard = model.bossDashboard,
-                   !dashboard.needsMeItems.isEmpty || !dashboard.codingItems.isEmpty {
-                    HStack(alignment: .top, spacing: 16) {
-                        if !dashboard.needsMeItems.isEmpty {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Needs Me")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.secondary)
-                                ForEach(Array(dashboard.needsMeItems.prefix(3))) { item in
-                                    Text("\(item.label) – \(item.detail)")
-                                        .font(.caption)
-                                        .lineLimit(1)
-                                        .truncationMode(.tail)
-                                }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        if !dashboard.codingItems.isEmpty {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Coding")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.secondary)
-                                ForEach(Array(dashboard.codingItems.prefix(3))) { item in
-                                    Text("\(item.runner) – \(item.status)")
-                                        .font(.caption)
-                                        .lineLimit(1)
-                                        .truncationMode(.middle)
-                                }
-                            }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                    }
+                if let dashboard = model.bossDashboard {
+                    // #U23c: the boss's highest-intent "these need you" content,
+                    // now clickable (each row jumps to its session via the ref it
+                    // carries) with a "View all N" instead of silent prefix(3)
+                    // truncation.
+                    BossNeedsMeCodingColumns(dashboard: dashboard, model: model)
                 }
                 if let dashboard = model.bossDashboard {
                     HabitHistoryPanelView(model: dashboard.habitHistory)
                 }
+                // #U21: the boss's recent action receipts, promoted out of
+                // Advanced into the default pane — "Recent actions: 3 ok · 1
+                // failed" with failed autonomous actions surfaced prominently and
+                // an inline expand to the full log. A FAILED action is no longer
+                // invisible by default.
+                BossActionReceiptStrip(model: model)
                 Button {
                     withAnimation(.easeInOut(duration: 0.18)) {
                         showsAdvanced.toggle()
@@ -4405,6 +5094,149 @@ struct BossDashboardView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(minHeight: 100, idealHeight: showsAdvanced ? 320 : 160, maxHeight: showsAdvanced ? 380 : 200, alignment: .topLeading)
+    }
+}
+
+/// #U22: the door into the Decision Inbox. A prominent tappable pill — "N
+/// waiting on you →", tinted by the queue's top severity — that opens the
+/// inbox without a keyboard shortcut. Rendered only when something's open
+/// (the caller guards on `model.inboxDoor != nil`), so it's never a dead
+/// zero-count button.
+struct InboxDoorPill: View {
+    let door: InboxDoorPresentation
+    let action: () -> Void
+
+    private var tint: SwiftUI.Color { Self.color(for: door.topSeverity) }
+
+    static func color(for severity: DecisionSeverity) -> SwiftUI.Color {
+        switch severity {
+        case .critical: return .red
+        case .elevated: return .orange
+        case .normal: return .blue
+        case .low: return .secondary
+        }
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: "tray.full.fill")
+                    .font(.caption)
+                Text(door.label)
+                    .font(.callout.weight(.semibold))
+                Spacer(minLength: 6)
+                Image(systemName: "arrow.right")
+                    .font(.caption.weight(.semibold))
+            }
+            .foregroundStyle(tint)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 9))
+            .overlay(
+                RoundedRectangle(cornerRadius: 9)
+                    .stroke(tint.opacity(0.4), lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(door.help)
+        .accessibilityLabel(door.accessibilityLabel)
+    }
+}
+
+/// #U23c: the "Needs Me" and "Coding" columns, made actionable. Each row is a
+/// button that jumps to its session via the navigation key it already carries;
+/// when there are more than the inline limit, a "View all N" control opens the
+/// full session list instead of silently dropping items 4+.
+struct BossNeedsMeCodingColumns: View {
+    var dashboard: BossDashboardSnapshot
+    @ObservedObject var model: WorkbenchViewModel
+
+    private static let visibleLimit = 3
+
+    private var needsMe: BossPaneListPresentation {
+        BossPaneListPresentation.make(count: dashboard.needsMeItems.count, visibleLimit: Self.visibleLimit)
+    }
+
+    private var coding: BossPaneListPresentation {
+        BossPaneListPresentation.make(count: dashboard.codingItems.count, visibleLimit: Self.visibleLimit)
+    }
+
+    var body: some View {
+        if !dashboard.needsMeItems.isEmpty || !dashboard.codingItems.isEmpty {
+            HStack(alignment: .top, spacing: 16) {
+                if !dashboard.needsMeItems.isEmpty {
+                    column(title: "Needs Me", presentation: needsMe) {
+                        ForEach(Array(dashboard.needsMeItems.prefix(needsMe.visibleCount))) { item in
+                            itemButton(
+                                text: "\(item.label) – \(item.detail)",
+                                key: BossPaneListPresentation.navigationKey(for: item)
+                            )
+                        }
+                    }
+                }
+                if !dashboard.codingItems.isEmpty {
+                    column(title: "Coding", presentation: coding) {
+                        ForEach(Array(dashboard.codingItems.prefix(coding.visibleCount))) { item in
+                            itemButton(
+                                text: "\(item.runner) – \(item.status)",
+                                // Coding items carry an explicit taskRef; fall
+                                // back to the runner name so the jump still tries.
+                                key: item.taskRef ?? item.runner
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func column<Rows: View>(
+        title: String,
+        presentation: BossPaneListPresentation,
+        @ViewBuilder rows: () -> Rows
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            rows()
+            if let viewAll = presentation.viewAllLabel {
+                Button {
+                    // The full, scrollable, already-clickable list is the
+                    // Sessions status list right below — surface it / take the
+                    // operator there rather than inventing a second list.
+                    model.setBossPaneCollapsed(false)
+                } label: {
+                    Label(viewAll, systemImage: "list.bullet")
+                        .font(.caption2.weight(.semibold))
+                }
+                .buttonStyle(.borderless)
+                .help("Show all \(presentation.totalCount) in the Sessions list below")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func itemButton(text: String, key: String) -> some View {
+        Button {
+            model.selectSession(byNavigationKey: key)
+        } label: {
+            HStack(spacing: 4) {
+                Text(text)
+                    .font(.caption)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Jump to this session")
     }
 }
 
@@ -4465,32 +5297,158 @@ struct HabitHistoryPanelView: View {
 
 struct DashboardMetricsStrip: View {
     var dashboard: BossDashboardSnapshot
+    /// #U23b: re-run the dashboard probes when a metric can't report — a
+    /// one-click retry for just the strip. `nil` in contexts with no refresh.
+    var onRetry: (() -> Void)?
+
+    private var availability: BossDashboardAvailability { dashboard.availability }
+
+    /// The specific probe issue (label-prefixed string from `fetchResult`) for a
+    /// metric, so an unavailable chip shows its own reason — not hover-only
+    /// guessing.
+    private func issue(prefix: String) -> String? {
+        availability.issues.first { $0.hasPrefix(prefix) }
+    }
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 MetricChip(label: "daemon", value: dashboard.daemonStatus)
-                MetricChip(label: "needs me", value: dashboard.availability.needsMeAvailable ? "\(dashboard.needsMeItems.count)" : "?")
-                MetricChip(label: "coding", value: dashboard.availability.codingAvailable ? "\(dashboard.activeCodingAgents)" : "?")
-                MetricChip(label: "blocked", value: dashboard.availability.codingAvailable ? "\(dashboard.blockedCodingAgents)" : "?")
-                MetricChip(label: "habits", value: dashboard.habitHistory.isAvailable ? "\(dashboard.habitHistory.rows.count)" : "?")
+                MetricStateChip(
+                    label: "needs me",
+                    presentation: MetricValuePresentation.resolve(
+                        value: dashboard.needsMeItems.count,
+                        isAvailable: availability.needsMeAvailable,
+                        issue: issue(prefix: "needs-me:")
+                    ),
+                    onRetry: onRetry
+                )
+                MetricStateChip(
+                    label: "coding",
+                    presentation: MetricValuePresentation.resolve(
+                        value: dashboard.activeCodingAgents,
+                        isAvailable: availability.codingAvailable,
+                        issue: issue(prefix: "coding:")
+                    ),
+                    onRetry: onRetry
+                )
+                MetricStateChip(
+                    label: "blocked",
+                    presentation: MetricValuePresentation.resolve(
+                        value: dashboard.blockedCodingAgents,
+                        isAvailable: availability.codingAvailable,
+                        issue: issue(prefix: "coding:")
+                    ),
+                    onRetry: onRetry
+                )
+                MetricStateChip(
+                    label: "habits",
+                    presentation: MetricValuePresentation.resolve(
+                        value: dashboard.habitHistory.rows.count,
+                        isAvailable: dashboard.habitHistory.isAvailable,
+                        issue: issue(prefix: "habit-history:")
+                    ),
+                    onRetry: onRetry
+                )
                 MetricChip(label: "mode", value: dashboard.daemonMode)
             }
         }
     }
 }
 
+/// #U23b: a metric chip that renders a `MetricValuePresentation` — a real number,
+/// a genuine zero, or the not-a-value state (a muted em dash, never "?", with the
+/// specific reason and a one-click retry). The unavailable state is visually
+/// distinct from a real value so a transient probe miss no longer reads as
+/// "something's broken".
+struct MetricStateChip: View {
+    var label: String
+    var presentation: MetricValuePresentation
+    var onRetry: (() -> Void)?
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Text(presentation.text)
+                .font(.caption.weight(.semibold).monospacedDigit())
+                .foregroundStyle(presentation.isUnavailable ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.primary))
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            if presentation.isUnavailable {
+                // The "not a real value" affordance: an info glyph revealing the
+                // specific issue, plus a retry that re-runs just this probe set.
+                Image(systemName: "info.circle")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.secondary)
+                if let onRetry, presentation.canRetry {
+                    Button {
+                        onRetry()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 9, weight: .bold))
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Retry this metric")
+                }
+            }
+        }
+        .padding(.vertical, 3)
+        .padding(.horizontal, 8)
+        .background(
+            presentation.isUnavailable
+                ? AnyShapeStyle(Color.orange.opacity(0.12))
+                : AnyShapeStyle(.quaternary.opacity(0.55)),
+            in: RoundedRectangle(cornerRadius: 6)
+        )
+        .help(presentation.isUnavailable ? presentation.reason : label)
+    }
+}
+
 struct WorkbenchVisibilityStrip: View {
     var snapshot: WorkbenchVisibilitySnapshot
+    /// #U22: tapping the "inbox" chip opens the Decision Inbox — the same door
+    /// the boss-pane pill and ⌘K / ⌘J reach. Only wired (and only tappable) when
+    /// there's actually something open.
+    var onOpenInbox: (() -> Void)?
+    /// #U23b: re-run the visibility probe when a count can't report.
+    var onRetry: (() -> Void)?
+
+    /// The first readiness issue, as a label-prefixed reason string, for the
+    /// chips whose count is nil because the probe didn't report.
+    private var firstIssue: String? {
+        snapshot.readiness.issues.first.map { "\($0.code): \($0.detail)" }
+    }
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 MetricChip(label: "visibility", value: snapshot.readiness.status.rawValue)
-                MetricChip(label: "owed", value: render(snapshot.agentWork.counts.owed))
-                MetricChip(label: "returns", value: render(snapshot.agentWork.counts.returnObligations))
+                MetricStateChip(
+                    label: "owed",
+                    presentation: MetricValuePresentation.resolve(
+                        value: snapshot.agentWork.counts.owed,
+                        isAvailable: snapshot.agentWork.counts.owed != nil,
+                        issue: firstIssue
+                    ),
+                    onRetry: onRetry
+                )
+                MetricStateChip(
+                    label: "returns",
+                    presentation: MetricValuePresentation.resolve(
+                        value: snapshot.agentWork.counts.returnObligations,
+                        isAvailable: snapshot.agentWork.counts.returnObligations != nil,
+                        issue: firstIssue
+                    ),
+                    onRetry: onRetry
+                )
                 MetricChip(label: "claims", value: snapshot.agentWork.claims.available ? "ok" : "unknown")
-                MetricChip(label: "inbox", value: "\(snapshot.decisions.openInbox)")
+                MetricChip(
+                    label: "inbox",
+                    value: "\(snapshot.decisions.openInbox)",
+                    // The chip is a live door only when there's an open item AND a
+                    // handler — a zero-count inbox stays a calm, inert chip.
+                    tap: (snapshot.decisions.openInbox > 0) ? onOpenInbox : nil
+                )
                 MetricChip(label: "recover", value: "\(snapshot.workspace.recoverableSessions)")
             }
         }
@@ -4501,27 +5459,45 @@ struct WorkbenchVisibilityStrip: View {
         let issueText = snapshot.readiness.issues.map { "\($0.code): \($0.detail)" }.joined(separator: "\n")
         return issueText.isEmpty ? "Workbench visibility is available." : issueText
     }
-
-    private func render(_ value: Int?) -> String {
-        value.map(String.init) ?? "?"
-    }
 }
 
 struct MetricChip: View {
     var label: String
     var value: String
+    /// #U22: when set, the chip becomes a tappable door (e.g. the "inbox" chip
+    /// opens the Decision Inbox). `nil` keeps the classic inert chip.
+    var tap: (() -> Void)?
 
-    var body: some View {
+    private var chip: some View {
         HStack(spacing: 5) {
             Text(value)
                 .font(.caption.weight(.semibold).monospacedDigit())
             Text(label)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
+            if tap != nil {
+                Image(systemName: "arrow.up.right")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundStyle(.secondary)
+            }
         }
         .padding(.vertical, 3)
         .padding(.horizontal, 8)
-        .background(.quaternary.opacity(0.55), in: RoundedRectangle(cornerRadius: 6))
+        .background(
+            tap != nil ? AnyShapeStyle(Color.accentColor.opacity(0.18)) : AnyShapeStyle(.quaternary.opacity(0.55)),
+            in: RoundedRectangle(cornerRadius: 6)
+        )
+    }
+
+    var body: some View {
+        if let tap {
+            Button(action: tap) {
+                chip.contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        } else {
+            chip
+        }
     }
 }
 
@@ -4650,12 +5626,22 @@ struct OuroAgentManagerView: View {
                 .buttonStyle(.borderless)
                 .help("Refresh local Ouro agents")
                 .fixedSize()
-                Button {
-                    model.isOuroAgentInstallSheetPresented = true
+                // U18: create goes to the native form; clone keeps its Git-remote sheet.
+                Menu {
+                    Button {
+                        model.presentNewAgentProviderConfigForm()
+                    } label: {
+                        Label("Create an Agent…", systemImage: "sparkles")
+                    }
+                    Button {
+                        model.presentCloneAgentSheet()
+                    } label: {
+                        Label("Clone an Agent from Git…", systemImage: "arrow.down.doc")
+                    }
                 } label: {
-                    Label("Install Agent", systemImage: "square.and.arrow.down")
+                    Label("Add Agent", systemImage: "square.and.arrow.down")
                 }
-                .buttonStyle(.bordered)
+                .menuStyle(.borderlessButton)
                 .fixedSize()
             }
             if model.ouroAgents.isEmpty {
@@ -4807,22 +5793,6 @@ struct OuroAgentRowView: View {
     }
 }
 
-private enum OuroAgentInstallSheetMode: String, CaseIterable, Identifiable {
-    case hatch
-    case clone
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .hatch:
-            return "Hatch"
-        case .clone:
-            return "Clone"
-        }
-    }
-}
-
 /// The native provider-config form — the ONE human touchpoint of the cold-start bootstrap.
 ///
 /// Thin wiring over the pure `ProviderConfigForm` Core type: it collects the provider choice and
@@ -4930,135 +5900,151 @@ struct ProviderConfigSheet: View {
     }
 }
 
+/// U18: demoted to its ONLY unique capability — cloning an agent from a Git remote.
+/// Creating an agent now goes through the native `ProviderConfigSheet` "Create your
+/// agent" form. U35: the clone runs HEADLESSLY with inline progress/result — no literal
+/// `ouro clone …` command string is shown, and no terminal pane is spawned for the
+/// operator to converse with. Mirrors the cold-start hatch path's inline reporting.
 struct OuroAgentInstallSheet: View {
     @ObservedObject var model: WorkbenchViewModel
     @Environment(\.dismiss) private var dismiss
-    @State private var mode: OuroAgentInstallSheetMode = .hatch
     @State private var agentName = ""
     @State private var remote = ""
+    @State private var cloneState: CloneAgentFlowState = .idle
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Install Ouro Agent")
+            Text("Clone an Agent from Git")
                 .font(.title3.weight(.semibold))
-            Picker("Mode", selection: $mode) {
-                ForEach(OuroAgentInstallSheetMode.allCases) { mode in
-                    Text(mode.label).tag(mode)
-                }
-            }
-            .pickerStyle(.segmented)
-            Form {
-                switch mode {
-                case .hatch:
-                    Label("Guided Setup", systemImage: "bubble.left.and.bubble.right.fill")
-                case .clone:
-                    TextField("Git Remote", text: $remote)
-                    TextField("Agent Name Override", text: $agentName)
-                }
-            }
-            Text(commandPreview)
-                .font(.caption.monospaced())
+            Text("Bring in an existing Ouro agent from a Git remote. To create a brand-new agent, use Create an Agent instead.")
+                .font(.callout)
                 .foregroundStyle(.secondary)
-                .lineLimit(2)
-                .truncationMode(.middle)
-                .textSelection(.enabled)
+            Form {
+                TextField("Git Remote", text: $remote)
+                    .disabled(cloneState.isBusy)
+                // U15: the name is OPTIONAL — blank defaults to the repo name. Say so on
+                // the field (no bare "Override"), and validate it inline near the field.
+                TextField("Agent name (optional)", text: $agentName)
+                    .help("Defaults to the repository name. Leave blank to use it.")
+                    .disabled(cloneState.isBusy)
+                if cloneNameValidation.isInvalid, let message = cloneNameValidation.message {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            }
+            // U35: inline progress / success / failure — never a raw command string and
+            // never a spawned CLI pane.
+            if let inlineMessage = cloneState.inlineMessage {
+                HStack(spacing: 8) {
+                    if cloneState.isBusy {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else if cloneState.isError {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                    } else {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    }
+                    Text(inlineMessage)
+                        .font(.callout)
+                        .foregroundStyle(cloneState.isError ? Color.red : .secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
             HStack {
                 Spacer()
-                Button("Cancel") {
+                Button(isFinished ? "Done" : "Cancel") {
                     dismiss()
                 }
                 .keyboardShortcut(.cancelAction)
                 Button {
-                    guard install() else {
-                        return
-                    }
-                    dismiss()
+                    startClone()
                 } label: {
-                    Label(primaryButtonTitle, systemImage: "terminal")
+                    if cloneState.isBusy {
+                        Label("Cloning…", systemImage: "arrow.down.doc")
+                    } else {
+                        Label(cloneState.isError ? "Try Again" : "Clone Agent", systemImage: "arrow.down.doc")
+                    }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(!canInstall)
+                .disabled(!canClone)
             }
         }
         .padding()
         .frame(width: 560)
     }
 
-    private var canInstall: Bool {
-        switch mode {
-        case .hatch:
-            return true
-        case .clone:
-            return !remote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        }
+    /// U15 — the pure validation→(isInvalid, message) mapping for the optional clone name.
+    /// Drives both the inline error and `canClone`, so a malformed name disables the
+    /// primary button BEFORE click instead of failing afterward.
+    private var cloneNameValidation: CloneAgentNameValidation.Result {
+        CloneAgentNameValidation.evaluate(agentName)
     }
 
-    private var primaryButtonTitle: String {
-        switch mode {
-        case .hatch:
-            return "Open Conversation"
-        case .clone:
-            return "Open Clone"
-        }
+    /// True once the clone has succeeded — the primary stays disabled and the secondary
+    /// reads "Done".
+    private var isFinished: Bool {
+        if case .succeeded = cloneState { return true }
+        return false
     }
 
-    private var commandPreview: String {
-        do {
-            return try model.ouroAgentInstallPlan(
-                mode: mode.rawValue,
-                agentName: agentName,
-                remote: remote
-            ).commandLine
-        } catch {
-            return error.localizedDescription
-        }
+    private var canClone: Bool {
+        // The flow must allow a start (idle / retry-after-failure), the remote must be
+        // present, and the optional name (if typed) must be well-formed.
+        cloneState.canStart
+            && !remote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !cloneNameValidation.isInvalid
     }
 
-    private func install() -> Bool {
-        model.launchOuroAgentInstall(
-            mode: mode.rawValue,
-            agentName: agentName,
-            remote: remote
-        )
+    private func startClone() {
+        let remoteLabel = CloneAgentFlowState.remoteLabel(forRemote: remote)
+        cloneState = .cloning(remoteLabel: remoteLabel)
+        Task {
+            let result = await model.cloneAgentHeadless(remote: remote, agentName: agentName)
+            await MainActor.run {
+                cloneState = result
+            }
+        }
     }
 }
 
 struct WorkbenchOnboardingSheet: View {
     @ObservedObject var model: WorkbenchViewModel
     @Environment(\.dismiss) private var dismiss
-    @State private var instruction = ""
-    @State private var instructionStatus: String?
-    @State private var page: OnboardingPage = .welcome
+    @State private var page: OnboardingPage = .boss
 
     fileprivate enum OnboardingPage: Int, CaseIterable {
-        case welcome
+        // #U26(a): the Welcome splash is gone — the empty-state already oriented the operator (U2)
+        // and this wizard opens only after they clicked "Set up a boss", so it lands directly on
+        // Choose Boss. Progress dots auto-tighten from `allCases` (now three).
         case boss
         case connect
         case importWork
 
         var title: String {
             switch self {
-            case .welcome:
-                return "Welcome"
             case .boss:
                 return "Choose Boss"
             case .connect:
                 return "Connect"
             case .importWork:
-                return "Arrange Work"
+                // #U26(b): ONE consistent name for the recover-work step — header, progress-dot
+                // a11y label, page heading, and button all say "Bring Back Work". The stale
+                // "Arrange Work" jargon (from the removed scan/arrange flow) is gone.
+                return "Bring Back Work"
             }
         }
 
         var systemImage: String {
             switch self {
-            case .welcome:
-                return "sparkles"
             case .boss:
                 return "person.crop.circle.badge.checkmark"
             case .connect:
                 return "link"
             case .importWork:
-                return "square.grid.2x2"
+                return "arrow.uturn.backward.circle"
             }
         }
 
@@ -5107,13 +6093,6 @@ struct WorkbenchOnboardingSheet: View {
                     .disabled(primaryActionIsDisabled)
                     .keyboardShortcut(.defaultAction)
                 }
-
-                OnboardingAssistantBox(
-                    model: model,
-                    instruction: $instruction,
-                    instructionStatus: instructionStatus,
-                    onSubmit: handleInstruction
-                )
             }
             .padding(22)
         }
@@ -5139,17 +6118,8 @@ struct WorkbenchOnboardingSheet: View {
         }
     }
 
-    private func handleInstruction() {
-        let text = instruction
-        instruction = ""
-        instructionStatus = model.handleOnboardingInstruction(text)
-        syncPageAfterInstruction(text)
-    }
-
     private var primaryActionTitle: String {
         switch page {
-        case .welcome:
-            return "Begin"
         case .boss:
             return "Continue"
         case .connect:
@@ -5161,28 +6131,24 @@ struct WorkbenchOnboardingSheet: View {
 
     private var primaryActionImage: String {
         switch page {
-        case .welcome, .boss:
+        case .boss:
             return "chevron.right"
         case .connect:
-            return model.onboardingFlowDecision.phase == .bossSetupWizard ? "link" : "magnifyingglass"
+            return model.onboardingFlowDecision.phase == .bossSetupWizard ? "link" : "arrow.uturn.backward.circle"
         case .importWork:
             switch model.onboardingFlowDecision.phase {
             case .bossReconstruct:
                 return "arrow.uturn.backward.circle"
-            case .arrangeApprovedImports:
-                return "checkmark.circle"
             case .duplicateCleanup:
                 return "rectangle.stack.badge.minus"
-            default:
-                return "magnifyingglass"
+            case .bossSetupWizard:
+                return "link"
             }
         }
     }
 
     private var primaryActionIsDisabled: Bool {
         switch page {
-        case .welcome:
-            return false
         case .boss:
             return model.onboardingBossChoices.contains { $0.isSelected && $0.isUsable } == false
         case .connect:
@@ -5195,20 +6161,14 @@ struct WorkbenchOnboardingSheet: View {
             if model.onboardingReadiness?.isReady != true {
                 return true
             }
-            // Slice 7: the hand-off button kicks the boss-driven reconstruction. Disable only
-            // while a boss check-in is already in flight so a double-press can't re-hand-off
-            // mid-run; otherwise it's a single, always-actionable "Bring Back My Work" — no
-            // selection gate (the boss, not a hardcoded scan, decides what to bring back).
+            // The hand-off button kicks the boss-driven reconstruction. Disable only while a boss
+            // check-in is already in flight so a double-press can't re-hand-off mid-run; otherwise
+            // it's a single, always-actionable "Bring Back My Work" — no selection gate (the boss,
+            // not a hardcoded scan, decides what to bring back).
             if model.onboardingFlowDecision.phase == .bossReconstruct {
                 return model.bossCheckInIsRunning
             }
             if model.onboardingIsScanning {
-                return true
-            }
-            // Defensive: the legacy arrange phase (no longer produced by the policy) still
-            // gates on a selection so a stale proposal can't dismiss the wizard with nothing.
-            if model.onboardingFlowDecision.phase == .arrangeApprovedImports,
-               (model.onboardingProposal?.selectedTerminalCount ?? 0) == 0 {
                 return true
             }
             return false
@@ -5217,8 +6177,6 @@ struct WorkbenchOnboardingSheet: View {
 
     private func advance() {
         switch page {
-        case .welcome:
-            page = .boss
         case .boss:
             page = .connect
         case .connect:
@@ -5226,10 +6184,9 @@ struct WorkbenchOnboardingSheet: View {
                 model.refreshOnboardingReadiness()
                 model.runOnboardingProviderChecksIfNeeded()
                 model.startFirstRunBootstrapIfNeeded()
-                instructionStatus = "Connecting the boss. Workbench is checking provider and tool readiness now."
                 return
             }
-            // Reaching Arrange Work with a ready boss means setup is genuinely
+            // Reaching Bring Back Work with a ready boss means setup is genuinely
             // done — reconstruction is the payoff, not a gate. Mark onboarding
             // completed so the wizard stops re-presenting on launch and the boss
             // pick is now committed (the rollback on dismiss no longer fires).
@@ -5239,23 +6196,20 @@ struct WorkbenchOnboardingSheet: View {
             model.onboardingHasBeenCompleted = true
             model.onboardingBossSnapshot = nil
             page = .importWork
-            // Slice 7: a ready boss hands off to boss-driven reconstruction the moment we
-            // land on the arrange page — no hardcoded scan. The boss does discover →
-            // optionally propose → relaunch.
+            // A ready boss hands off to boss-driven reconstruction the moment we land on the
+            // recover-work page — no hardcoded scan. The boss does discover → optionally
+            // propose → relaunch.
             if model.onboardingFlowDecision.phase == .bossReconstruct {
                 model.startBossReconstruction()
             }
         case .importWork:
             switch model.onboardingFlowDecision.phase {
-            case .bossReconstruct, .bossReadyWelcome, .scanProposal, .arrangeApprovedImports:
-                // Boss-driven hand-off. The legacy scan/arrange phases collapse here too so a
-                // stale in-memory proposal can never re-trigger the rejected hardcoded scan —
-                // the boss owns reconstruction. The wizard stays open so the operator can watch
-                // the boss work and review any proposal card; they close it with Done.
+            case .bossReconstruct:
+                // Boss-driven hand-off: the boss owns reconstruction. The wizard stays open so
+                // the operator can watch the boss work and review any proposal card; they close
+                // it with Done.
                 model.startBossReconstruction()
-                instructionStatus = WorkbenchOnboardingNarrative.bossReconstructIntro
             case .duplicateCleanup:
-                instructionStatus = model.onboardingFlowDecision.notice
                 Task { await model.runBossQuickQuestion(WorkbenchOnboardingNarrative.duplicateCleanup) }
             case .bossSetupWizard:
                 page = .connect
@@ -5263,14 +6217,6 @@ struct WorkbenchOnboardingSheet: View {
         }
     }
 
-    private func syncPageAfterInstruction(_ text: String) {
-        let lowered = text.lowercased()
-        if lowered.contains("scan") || lowered.contains("bootstrap") {
-            page = model.onboardingReadiness?.isReady == true ? .importWork : .connect
-        } else if lowered.contains("mcp") || lowered.contains("tool") || lowered.contains("provider") {
-            page = .connect
-        }
-    }
 }
 
 private struct OnboardingFlowHeader: View {
@@ -5314,71 +6260,20 @@ private struct OnboardingPageContent: View {
         ScrollView {
             VStack(alignment: .center, spacing: 26) {
                 switch page {
-                case .welcome:
-                    OnboardingWelcomePage()
                 case .boss:
                     OnboardingBossChoiceView(model: model)
                 case .connect:
                     OnboardingReadinessView(model: model)
                 case .importWork:
-                    OnboardingBootstrapView(model: model)
+                    // #U26(c): the recover-work page renders ONLY the boss-driven reconstruction
+                    // surface now — the dead legacy scan/arrange UI behind it is gone.
+                    OnboardingBossReconstructView(model: model)
                 }
             }
             .frame(maxWidth: .infinity)
             .padding(.horizontal, 44)
             .padding(.vertical, 34)
         }
-    }
-}
-
-private struct OnboardingWelcomePage: View {
-    var body: some View {
-        VStack(alignment: .center, spacing: 26) {
-            Image(systemName: "sparkles.rectangle.stack.fill")
-                .font(.system(size: 54, weight: .semibold))
-                .foregroundStyle(Color.accentColor)
-            VStack(alignment: .center, spacing: 12) {
-                Text("Welcome to Ouro Workbench")
-                    .font(.largeTitle.weight(.semibold))
-                    .multilineTextAlignment(.center)
-                Text("Your terminal agents stay real terminals. Your Ouro agent becomes the calm layer that knows what is happening and can keep work moving.")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: 620)
-            }
-            HStack(alignment: .top, spacing: 26) {
-                OnboardingWelcomePoint(systemImage: "terminal", title: "Keep Your Tools", detail: "Claude Code, Codex, Copilot CLI, shells, cmux.")
-                OnboardingWelcomePoint(systemImage: "person.crop.circle.badge.checkmark", title: "Choose a Boss", detail: "One Ouro agent watches this Mac for you.")
-                OnboardingWelcomePoint(systemImage: "square.grid.2x2", title: "Recover the Thread", detail: "Recent work returns as Workbench workspaces.")
-            }
-            .frame(maxWidth: 680)
-        }
-        .frame(maxWidth: .infinity, minHeight: 420)
-    }
-}
-
-private struct OnboardingWelcomePoint: View {
-    var systemImage: String
-    var title: String
-    var detail: String
-
-    var body: some View {
-        VStack(alignment: .center, spacing: 8) {
-            Image(systemName: systemImage)
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(Color.accentColor)
-                .frame(height: 28)
-            Text(title)
-                .font(.callout.weight(.semibold))
-            Text(detail)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity)
     }
 }
 
@@ -5452,77 +6347,6 @@ struct MarkdownMessageView: View {
     }
 }
 
-private struct OnboardingAssistantBox: View {
-    @ObservedObject var model: WorkbenchViewModel
-    @Binding var instruction: String
-    var instructionStatus: String?
-    var onSubmit: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Label("Setup Assistant", systemImage: "bubble.left.and.text.bubble.right")
-                    .font(.caption.weight(.semibold))
-                Text("Ask \(model.state.boss.agentName) for help, or type a setup request.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                if model.bossCheckInIsRunning {
-                    ProgressView()
-                        .controlSize(.small)
-                }
-            }
-
-            HStack(alignment: .center, spacing: 8) {
-                TextField("Ask about setup, providers, or which sessions to arrange", text: $instruction)
-                    .textFieldStyle(.roundedBorder)
-                    .onSubmit(onSubmit)
-                    .disabled(model.bossCheckInIsRunning)
-                Button {
-                    onSubmit()
-                } label: {
-                    Label("Ask", systemImage: "arrow.up.circle.fill")
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(instruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.bossCheckInIsRunning)
-            }
-
-            if let instructionStatus {
-                Label(instructionStatus, systemImage: "info.circle")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            if let answer = model.bossCheckInAnswer {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("\(model.state.boss.agentName) replied")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    ScrollView {
-                        MarkdownMessageView(text: answer, font: .caption)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .frame(maxHeight: 120)
-                }
-                .padding(10)
-                .background {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.secondary.opacity(0.08))
-                }
-            }
-        }
-        .padding(12)
-        .background {
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color.secondary.opacity(0.06))
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.secondary.opacity(0.16), lineWidth: 1)
-        }
-    }
-}
-
 private struct OnboardingStatusRow: View {
     var systemImage: String
     var title: String
@@ -5585,9 +6409,9 @@ private struct OnboardingBossChoiceView: View {
                         Label("Create Agent", systemImage: "plus.circle")
                     }
                     Button {
-                        model.isOuroAgentInstallSheetPresented = true
+                        model.presentCloneAgentSheet()
                     } label: {
-                        Label("Clone Agent", systemImage: "square.and.arrow.down")
+                        Label("Clone from Git…", systemImage: "arrow.down.doc")
                     }
                 }
             } else {
@@ -5630,14 +6454,6 @@ private struct OnboardingBossChoiceRow: View {
                 .lineLimit(2)
             }
             Spacer()
-            Button {
-                model.registerWorkbenchForBossChoice(choice.name)
-            } label: {
-                Label(choice.registrationActionTitle, systemImage: choice.registrationIsCurrent ? "checkmark" : "link.badge.plus")
-            }
-            .controlSize(.small)
-            .disabled(!choice.isUsable || choice.registrationIsCurrent)
-            .help("Give this Ouro agent the Workbench tools it uses to inspect and control local sessions.")
         }
         .padding(14)
         .background {
@@ -5653,8 +6469,12 @@ private struct OnboardingBossChoiceRow: View {
             guard choice.isUsable else {
                 return
             }
-            model.selectBoss(agentName: choice.name)
-            model.refreshOnboardingReadiness()
+            // #U27: Choose Boss is a pure pick — selecting an agent is the ONLY affordance.
+            // Picking it SILENTLY ensures its Workbench tools (registerWorkbenchForBossChoice does
+            // select + install + refresh), so there's no competing per-row Enable-Tools button.
+            // The Connect page remains the single honest place that shows tool status and offers a
+            // fix only when registration isn't current.
+            model.registerWorkbenchForBossChoice(choice.name)
         }
     }
 }
@@ -6057,111 +6877,6 @@ private struct OnboardingRepairStepRow: View {
     }
 }
 
-private struct OnboardingBootstrapView: View {
-    @ObservedObject var model: WorkbenchViewModel
-
-    var body: some View {
-        // Slice 7: a ready boss drives reconstruction. Render the boss-driven hand-off
-        // surface instead of the rejected hardcoded scan/arrange UI. The legacy scan view
-        // remains only as a defensive fallback for the legacy phases the policy no longer
-        // produces.
-        if model.onboardingFlowDecision.phase == .bossReconstruct {
-            OnboardingBossReconstructView(model: model)
-        } else {
-            legacyScanBody
-        }
-    }
-
-    @ViewBuilder
-    private var legacyScanBody: some View {
-        VStack(alignment: .center, spacing: 22) {
-            VStack(alignment: .center, spacing: 10) {
-                Text(WorkbenchOnboardingNarrative.bossReadyWelcome)
-                    .font(.largeTitle.weight(.semibold))
-                    .multilineTextAlignment(.center)
-                Text(WorkbenchOnboardingNarrative.scanIntro)
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: 640)
-            }
-            HStack(spacing: 10) {
-                if model.onboardingIsScanning {
-                    ProgressView()
-                        .controlSize(.small)
-                }
-                Button {
-                    model.scanForOnboardingSessions()
-                } label: {
-                    Label("Scan", systemImage: "magnifyingglass")
-                }
-                .controlSize(.small)
-                .buttonStyle(.borderedProminent)
-                .disabled(model.onboardingIsScanning || model.onboardingReadiness?.isReady != true)
-                if let proposal = model.onboardingProposal {
-                    Button {
-                        _ = model.applyOnboardingProposal()
-                    } label: {
-                        Label("Arrange", systemImage: "checkmark.circle")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                    .disabled(
-                        model.onboardingReadiness?.isReady != true
-                        || proposal.selectedTerminalCount == 0
-                    )
-                    .help(
-                        proposal.selectedTerminalCount == 0
-                        ? "Select at least one terminal to arrange."
-                        : "Arrange \(proposal.selectedTerminalCount) selected terminal\(proposal.selectedTerminalCount == 1 ? "" : "s") in Workbench."
-                    )
-                }
-            }
-            if model.onboardingReadiness?.isReady != true {
-                Text("Finish connecting the boss before scanning.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else if model.onboardingIsScanning {
-                Text("Scanning local coding-agent sessions...")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            } else if let notice = model.onboardingFlowDecision.notice {
-                Text(notice)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: 640)
-            }
-            if let proposal = model.onboardingProposal {
-                VStack(alignment: .leading, spacing: 10) {
-                    OnboardingStatusRow(
-                        systemImage: "square.grid.2x2.fill",
-                        title: model.onboardingReadiness?.isReady == true ? "Proposed workspaces" : "Proposal waiting",
-                        detail: WorkbenchOnboardingNarrative.proposalSummary(
-                            groupCount: proposal.groups.count,
-                            selectedCount: proposal.selectedTerminalCount
-                        ),
-                        color: .blue
-                    )
-                    ForEach(proposal.groups) { group in
-                        OnboardingGroupProposalView(group: group, model: model)
-                    }
-                }
-                .frame(maxWidth: 700)
-            } else {
-                Text(WorkbenchOnboardingNarrative.unclearImport)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .frame(maxWidth: .infinity, minHeight: 420)
-    }
-}
-
 /// Slice 7 — the boss-driven reconstruction hand-off surface. Workbench does NOT scan or
 /// arrange here: it hands the boss the "bring back my work" task and renders the boss's
 /// progress. The boss discovers sessions (`workbench_discover_agent_sessions`), optionally
@@ -6235,221 +6950,6 @@ private struct OnboardingBossReconstructView: View {
             }
         }
         .frame(maxWidth: .infinity, minHeight: 420)
-    }
-}
-
-private struct OnboardingGroupProposalView: View {
-    var group: ProposedWorkbenchGroup
-    @ObservedObject var model: WorkbenchViewModel
-    @State private var previewTerminal: ProposedTerminalImport?
-
-    private var selectedCount: Int {
-        group.terminals.filter(\.selectedByDefault).count
-    }
-
-    private var allSelected: Bool {
-        !group.terminals.isEmpty && selectedCount == group.terminals.count
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(spacing: 8) {
-                Button {
-                    model.setOnboardingGroupSelection(groupID: group.id, selected: !allSelected)
-                } label: {
-                    Image(systemName: allSelected
-                          ? "checkmark.square.fill"
-                          : (selectedCount == 0 ? "square" : "minus.square.fill"))
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(selectedCount == 0 ? Color.secondary : Color.accentColor)
-                }
-                .buttonStyle(.plain)
-                .help(allSelected ? "Deselect every terminal in this workspace" : "Select every terminal in this workspace")
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(group.name)
-                        .font(.subheadline.weight(.semibold))
-                    Text(group.rootPath)
-                        .font(.caption.monospaced())
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
-                Spacer()
-                Text("\(selectedCount)/\(group.terminals.count)")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-            }
-            ForEach(group.terminals) { terminal in
-                ProposedTerminalRow(
-                    terminal: terminal,
-                    group: group,
-                    model: model,
-                    onToggle: {
-                        model.toggleOnboardingSelection(groupID: group.id, terminalID: terminal.id)
-                    },
-                    onPreview: {
-                        previewTerminal = terminal
-                    }
-                )
-            }
-        }
-        .padding(10)
-        .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
-        .sheet(item: $previewTerminal) { terminal in
-            OnboardingSessionPreviewSheet(group: group, terminal: terminal, model: model)
-        }
-    }
-}
-
-private struct ProposedTerminalRow: View {
-    var terminal: ProposedTerminalImport
-    var group: ProposedWorkbenchGroup
-    @ObservedObject var model: WorkbenchViewModel
-    var onToggle: () -> Void
-    var onPreview: () -> Void
-
-    var body: some View {
-        Button(action: onToggle) {
-            HStack(alignment: .center, spacing: 8) {
-                Image(systemName: terminal.selectedByDefault ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 16, weight: .regular))
-                    .foregroundStyle(terminal.selectedByDefault ? Color.accentColor : Color.secondary)
-                    .accessibilityLabel(terminal.selectedByDefault ? "Selected" : "Not selected")
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(terminal.name)
-                        .font(.caption.weight(.semibold))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .foregroundStyle(.primary)
-                    Text(terminal.candidate.summary)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                    Text(terminal.candidate.resumeCommandLine)
-                        .font(.caption2.monospaced())
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
-                Spacer()
-                if let kind = terminal.candidate.agentKind,
-                   let bridge = model.deskBridgePlan(for: kind),
-                   let commandLine = bridge.commandLine {
-                    Button {
-                        model.openDeskBridgeSetup(bridge)
-                    } label: {
-                        Label("Desk Bridge", systemImage: "point.3.connected.trianglepath.dotted")
-                    }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.borderless)
-                    .help(commandLine)
-                }
-                VStack(alignment: .trailing, spacing: 4) {
-                    Button {
-                        onPreview()
-                    } label: {
-                        Label("Preview", systemImage: "text.bubble")
-                    }
-                    .controlSize(.small)
-                    .buttonStyle(.bordered)
-                    Text("confidence \(Int(terminal.candidate.confidence * 100))%")
-                        .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .fixedSize()
-                        .help(model.onboardingConfidenceExplanation(for: terminal))
-                }
-            }
-            .padding(.vertical, 4)
-            .padding(.horizontal, 6)
-            .contentShape(Rectangle())
-            .background(terminal.selectedByDefault ? Color.accentColor.opacity(0.06) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
-        }
-        .buttonStyle(.plain)
-        .help(terminal.selectedByDefault ? "Click to skip this terminal in Arrange" : "Click to include this terminal in Arrange")
-    }
-}
-
-private struct OnboardingSessionPreviewSheet: View {
-    var group: ProposedWorkbenchGroup
-    var terminal: ProposedTerminalImport
-    @ObservedObject var model: WorkbenchViewModel
-    @Environment(\.dismiss) private var dismiss
-    /// Async-loaded so the sheet opens immediately with a "Loading…" placeholder
-    /// instead of stalling for the (watchdog-bounded) sqlite+file read.
-    @State private var previewText: String?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .center, spacing: 12) {
-                Image(systemName: terminal.candidate.agentKind == nil ? "terminal" : "text.bubble")
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(Color.accentColor)
-                    .frame(width: 32)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(terminal.name)
-                        .font(.title3.weight(.semibold))
-                        .lineLimit(1)
-                    Text("\(model.onboardingSourceLabel(for: terminal.candidate)) · \(group.name)")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                Spacer()
-                Button("Done") {
-                    dismiss()
-                }
-                .keyboardShortcut(.cancelAction)
-            }
-            .padding(20)
-
-            Divider()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    OnboardingPreviewInfoGrid(terminal: terminal, model: model)
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("What Workbench Found")
-                            .font(.headline)
-                        Text(terminal.candidate.summary)
-                            .font(.body)
-                            .textSelection(.enabled)
-                        Text(WorkbenchOnboardingNarrative.unclearImport)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Session Preview")
-                            .font(.headline)
-                        Group {
-                            if let previewText {
-                                Text(previewText)
-                                    .font(.system(.body, design: .monospaced))
-                                    .textSelection(.enabled)
-                            } else {
-                                HStack(spacing: 8) {
-                                    ProgressView()
-                                        .controlSize(.small)
-                                    Text("Loading preview…")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(12)
-                        .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
-                    }
-                }
-                .padding(20)
-            }
-        }
-        .frame(width: 760, height: 620)
-        .task(id: terminal.id) {
-            // Defer the (bounded) preview load so the sheet renders immediately.
-            previewText = model.onboardingPreviewText(for: terminal)
-        }
     }
 }
 
@@ -6772,43 +7272,6 @@ private struct SessionStatusRowView: View {
     }
 }
 
-private struct OnboardingPreviewInfoGrid: View {
-    var terminal: ProposedTerminalImport
-    @ObservedObject var model: WorkbenchViewModel
-
-    var body: some View {
-        Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 8) {
-            GridRow {
-                Text("Confidence").foregroundStyle(.secondary)
-                Text("\(Int(terminal.candidate.confidence * 100))% - \(model.onboardingConfidenceExplanation(for: terminal))")
-            }
-            GridRow {
-                Text("Resume").foregroundStyle(.secondary)
-                Text(terminal.candidate.resumeCommandLine)
-                    .font(.system(.callout, design: .monospaced))
-                    .textSelection(.enabled)
-            }
-            GridRow {
-                Text("Root").foregroundStyle(.secondary)
-                Text(terminal.candidate.workingDirectory)
-                    .font(.system(.callout, design: .monospaced))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .textSelection(.enabled)
-            }
-            if !terminal.candidate.evidencePaths.isEmpty {
-                GridRow {
-                    Text("Evidence").foregroundStyle(.secondary)
-                    Text(terminal.candidate.evidencePaths.joined(separator: "\n"))
-                        .font(.system(.caption, design: .monospaced))
-                        .textSelection(.enabled)
-                }
-            }
-        }
-        .font(.callout)
-    }
-}
-
 struct ActionLogView: View {
     var entries: [WorkbenchActionLogEntry]
     @State private var isExpanded = false
@@ -6898,6 +7361,83 @@ struct ActionLogView: View {
     private func actionLogEntryHelp(_ entry: WorkbenchActionLogEntry) -> String {
         let target = entry.targetName.map { " \($0)" } ?? ""
         return "\(entry.source) \(entry.action)\(target): \(entry.result)"
+    }
+}
+
+/// #U21: the boss's recent action receipts in the DEFAULT boss pane. A compact
+/// "Recent actions: 3 ok · 1 failed" line — failed count tinted when non-zero so
+/// a FAILED autonomous action is visible at a glance — that expands inline to the
+/// full action log without sending the operator into the Advanced tooling
+/// cluster. The counts come from the pure `BossActionReceiptSummary`.
+struct BossActionReceiptStrip: View {
+    @ObservedObject var model: WorkbenchViewModel
+    @State private var isExpanded = false
+
+    private var summary: BossActionReceiptSummary { model.bossActionReceiptSummary }
+
+    var body: some View {
+        // Nothing acted yet → stay calm and absent rather than show "0 ok".
+        if !summary.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) { isExpanded.toggle() }
+                } label: {
+                    HStack(spacing: 8) {
+                        Text("Recent actions")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                        HStack(spacing: 4) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.green)
+                            Text("\(summary.okCount) ok")
+                                .font(.caption.monospacedDigit())
+                        }
+                        if summary.hasFailures {
+                            HStack(spacing: 4) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.caption2)
+                                    .foregroundStyle(.orange)
+                                Text("\(summary.failedCount) failed")
+                                    .font(.caption.weight(.semibold).monospacedDigit())
+                                    .foregroundStyle(.orange)
+                            }
+                        }
+                        Spacer(minLength: 4)
+                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("The boss's executed actions — \(summary.label). Click to see the full log.")
+                if isExpanded {
+                    ActionLogView(entries: model.recentActionLogEntries)
+                } else if summary.hasFailures {
+                    // Surface the failed receipts prominently even when collapsed,
+                    // so a failure is never one disclosure away.
+                    ForEach(summary.failedReceipts.prefix(2)) { entry in
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.orange)
+                            Text("\(entry.action)\(entry.targetName.map { " · \($0)" } ?? "")")
+                                .font(.caption)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Text(entry.result)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 }
 
@@ -7154,10 +7694,16 @@ private struct AgentTitleStrip: View {
                     Label("Run ouro check…", systemImage: "stethoscope")
                 }
                 .help("Open a Workbench terminal pre-loaded with `ouro check --agent \(agent.name)`")
+                // U18: create goes native; clone keeps its Git-remote sheet.
                 Button {
-                    model.isOuroAgentInstallSheetPresented = true
+                    model.presentNewAgentProviderConfigForm()
                 } label: {
-                    Label("Hatch / Clone Another…", systemImage: "plus")
+                    Label("Create Another Agent…", systemImage: "plus")
+                }
+                Button {
+                    model.presentCloneAgentSheet()
+                } label: {
+                    Label("Clone an Agent from Git…", systemImage: "arrow.down.doc")
                 }
                 Divider()
                 Button {
@@ -7516,12 +8062,23 @@ private struct AgentActionsCard: View {
                 }
                 .buttonStyle(.bordered)
                 Spacer()
-                Button {
-                    model.isOuroAgentInstallSheetPresented = true
+                // U18: create goes native; clone keeps its Git-remote sheet.
+                Menu {
+                    Button {
+                        model.presentNewAgentProviderConfigForm()
+                    } label: {
+                        Label("Create Another Agent…", systemImage: "sparkles")
+                    }
+                    Button {
+                        model.presentCloneAgentSheet()
+                    } label: {
+                        Label("Clone an Agent from Git…", systemImage: "arrow.down.doc")
+                    }
                 } label: {
-                    Label("Hatch / Clone Another…", systemImage: "plus")
+                    Label("Add Another…", systemImage: "plus")
                 }
-                .buttonStyle(.bordered)
+                .menuStyle(.borderlessButton)
+                .fixedSize()
             }
         }
         .padding(16)
@@ -7560,6 +8117,18 @@ struct SessionDetailView: View {
                 Divider()
             }
             if let session = model.activeSession(for: entry) {
+                // U10: a slim one-line attention banner above the terminal when
+                // THIS live session is waiting/blocked/needs-review — naming the
+                // detected prompt/failure and offering a direct jump to it. No
+                // banner for an active/idle session.
+                if let banner = attentionBanner {
+                    SessionAttentionBanner(banner: banner) {
+                        model.jumpToAttentionPrompt(entry)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    Divider()
+                }
                 ZStack(alignment: .top) {
                     TerminalPane(session: session)
                         .id(session.id)
@@ -7586,6 +8155,66 @@ struct SessionDetailView: View {
         }
         .sheet(isPresented: $showsTranscriptSheet) {
             SessionTranscriptSheet(entry: entry, model: model)
+        }
+    }
+
+    /// The U10 attention banner for this entry, derived from the one shared Core
+    /// seam. Only the active-session branch renders it, so `isActiveSession` is
+    /// true here; the seam returns nil for active/idle (no banner).
+    private var attentionBanner: SessionDetailAttentionPresentation.Banner? {
+        SessionDetailAttentionPresentation.resolve(
+            attention: entry.attention,
+            isActiveSession: model.activeSession(for: entry) != nil,
+            canRecover: model.canRecover(entry),
+            isArchived: entry.isArchived,
+            reason: entry.attentionReason
+        ).banner
+    }
+}
+
+/// U10: the slim one-line attention banner above the terminal pane. Renders the
+/// detected "why" (e.g. "Waiting on you · Proceed? (y/N)"), color-coded to the
+/// attention state via the shared `AttentionState.health*` helpers, with a
+/// direct "Jump to prompt" affordance for the waiting/blocked cases.
+private struct SessionAttentionBanner: View {
+    var banner: SessionDetailAttentionPresentation.Banner
+    var onJump: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: state.healthSymbol)
+                .foregroundStyle(state.healthColor)
+            Text(banner.text)
+                .font(.callout.weight(.medium))
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .foregroundStyle(.primary)
+            Spacer(minLength: 6)
+            if banner.offersJumpToPrompt {
+                Button(action: onJump) {
+                    Label("Jump to prompt", systemImage: "arrow.down.to.line")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                .tint(state.healthColor)
+                .fixedSize()
+                .help("Focus the terminal and put your cursor at the prompt")
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(state.healthColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(banner.text)
+    }
+
+    /// Map the banner kind back onto the shared `AttentionState` so the color +
+    /// glyph match the header dot and the sidebar exactly.
+    private var state: AttentionState {
+        switch banner.kind {
+        case .waitingOnHuman: return .waitingOnHuman
+        case .blocked: return .blocked
+        case .needsBossReview: return .needsBossReview
         }
     }
 }
@@ -7932,6 +8561,19 @@ private struct SessionTitleStrip: View {
                 .truncationMode(.middle)
                 .layoutPriority(2)
 
+            // U10: when a LIVE session is non-idle/non-running, name THAT state
+            // (glyph + short label, color-coded) right beside the title — the
+            // header no longer reads "fine" while the agent is parked on a prompt.
+            if let attention = liveAttentionToAnnounce {
+                Label(attention.healthLabel, systemImage: attention.healthSymbol)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(attention.healthColor)
+                    .labelStyle(.titleAndIcon)
+                    .fixedSize()
+                    .help(attention.healthLabel)
+                    .accessibilityLabel("Attention: \(attention.healthLabel)")
+            }
+
             if let cliName = model.cliName(for: entry) {
                 Text(cliName)
                     .font(.caption2.monospaced().weight(.semibold))
@@ -7958,72 +8600,13 @@ private struct SessionTitleStrip: View {
                 .controlSize(.small)
                 .fixedSize()
             } else {
+                // #U33: ONE sectioned overflow menu (plus the primary Stop/Launch/
+                // Recover), not two adjacent menus. RunningSessionHeaderControls now
+                // owns the whole overflow — the standalone "More" menu that lived
+                // here (and duplicated Copy Launch / Open Dir with the old "Session
+                // Controls" menu) is folded in.
                 RunningSessionHeaderControls(entry: entry, model: model)
                     .fixedSize()
-                Menu {
-                    Button {
-                        Task { await model.runBossQuestion(about: entry) }
-                    } label: {
-                        Label("Ask Boss About This Session", systemImage: "bubble.left.and.text.bubble.right")
-                    }
-                    .disabled(model.bossCheckInIsRunning)
-                    Divider()
-                    Button {
-                        model.copyLaunchCommand(for: entry)
-                    } label: {
-                        Label("Copy Launch Command", systemImage: "doc.on.doc")
-                    }
-                    Button {
-                        model.openWorkingDirectory(for: entry)
-                    } label: {
-                        Label("Open Working Directory", systemImage: "folder")
-                    }
-                    .help(entry.workingDirectory)
-                    if model.isCustomSession(entry) {
-                        Divider()
-                        Button {
-                            model.beginEditingSession(entry)
-                        } label: {
-                            Label("Edit Session…", systemImage: "pencil")
-                        }
-                        .disabled(model.activeSession(for: entry) != nil)
-                        Button {
-                            model.duplicateCustomSession(entry)
-                        } label: {
-                            Label("Duplicate Session", systemImage: "plus.square.on.square")
-                        }
-                        Menu {
-                            ForEach(model.state.projects) { project in
-                                Button(project.name) {
-                                    model.moveSession(entry, to: project.id)
-                                }
-                                .disabled(project.id == entry.projectId)
-                            }
-                        } label: {
-                            Label("Move to Workspace", systemImage: "folder")
-                        }
-                        .disabled(model.activeSession(for: entry) != nil || model.state.projects.count < 2)
-                        Button {
-                            model.archiveCustomSession(entry)
-                        } label: {
-                            Label("Archive Session", systemImage: "archivebox")
-                        }
-                        Divider()
-                        Button(role: .destructive) {
-                            model.requestDeleteCustomSession(entry)
-                        } label: {
-                            Label("Delete Session…", systemImage: "trash")
-                        }
-                    }
-                } label: {
-                    Label("More", systemImage: "ellipsis.circle")
-                        .labelStyle(.iconOnly)
-                }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .controlSize(.small)
-                .fixedSize()
-                .help("More actions for this terminal")
             }
         }
         .padding(.horizontal, 14)
@@ -8031,16 +8614,45 @@ private struct SessionTitleStrip: View {
         .frame(minHeight: 38)
     }
 
+    /// The U10 presentation for THIS entry's header, derived from the one shared
+    /// Core seam so the header dot can't drift from the sidebar / boss signal.
+    private var attentionPresentation: SessionDetailAttentionPresentation.Presentation {
+        SessionDetailAttentionPresentation.resolve(
+            attention: entry.attention,
+            isActiveSession: model.activeSession(for: entry) != nil,
+            canRecover: model.canRecover(entry),
+            isArchived: entry.isArchived,
+            reason: entry.attentionReason
+        )
+    }
+
+    /// The live attention state to name in the header strip — only when a live
+    /// session is non-idle/non-running (the states the operator must see). Active
+    /// (green/running) needs no extra label beside the dot; inactive sessions are
+    /// owned by the recovery surface.
+    private var liveAttentionToAnnounce: AttentionState? {
+        guard case let .attention(state) = attentionPresentation.dot else { return nil }
+        switch state {
+        case .waitingOnHuman, .blocked, .needsBossReview:
+            return state
+        case .active, .idle:
+            return nil
+        }
+    }
+
     @ViewBuilder
     private var statusDot: some View {
-        if entry.isArchived {
-            Circle().fill(Color.secondary.opacity(0.5))
-        } else if model.activeSession(for: entry) != nil {
-            Circle().fill(Color.green)
-        } else if model.canRecover(entry) {
+        switch attentionPresentation.dot {
+        case let .attention(state):
+            // The App maps the shared seam onto SwiftUI via the same
+            // AttentionState.health* helpers the sidebar StatusDot/SessionChip use.
+            Circle().fill(state.healthColor)
+        case .recoverable:
             Circle().fill(Color.orange)
-        } else {
+        case .inactive:
             Circle().fill(Color.secondary)
+        case .archived:
+            Circle().fill(Color.secondary.opacity(0.5))
         }
     }
 }
@@ -8090,11 +8702,12 @@ private struct SessionInspectorPanel: View {
                 SessionNotesView(notes: notes)
             }
             HStack(spacing: 10) {
-                Text("Recovery: \(model.recoveryReason(for: entry))")
+                Text(model.recoveryReasonSentence(for: entry))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
+                    .help("Recovery detail: \(model.recoveryReason(for: entry))")
                 if model.transcriptTail(for: entry) != nil {
                     Button {
                         onShowTranscript()
@@ -8191,11 +8804,12 @@ struct SessionStatusBar: View {
                 }
             }
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(entry.isArchived ? "Restore this session before launching it." : "Recovery: \(model.recoveryReason(for: entry))")
+                Text(entry.isArchived ? "Restore this session before launching it." : model.recoveryReasonSentence(for: entry))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
+                    .help(entry.isArchived ? "" : "Recovery detail: \(model.recoveryReason(for: entry))")
                 if !entry.isArchived, let health = model.executableHealth(for: entry) {
                     Text("Executable: \(health.detail)")
                         .font(.caption)
@@ -8286,10 +8900,17 @@ struct InactiveTerminalSurface: View {
 
     private var isArchived: Bool { entry.isArchived }
     private var canRecover: Bool { !isArchived && model.canRecover(entry) }
+    /// U7: latest run needs recovery but there's no resumable session, so the
+    /// only path forward is a fresh start that discards the prior conversation.
+    private var manualRecoveryNeeded: Bool { model.manualRecoveryNeeded(for: entry) }
 
     private var statusHeadline: String {
         if isArchived {
             return "Archived"
+        }
+        if manualRecoveryNeeded {
+            // Never present a no-resumable-session state as calmly "ready".
+            return "No resumable session"
         }
         if let summary = entry.lastSummary, !summary.isEmpty {
             return summary
@@ -8297,8 +8918,26 @@ struct InactiveTerminalSurface: View {
         return canRecover ? "Ready to recover" : "Ready to launch"
     }
 
+    /// The subtext under the headline. For a recoverable session it explains the
+    /// recovery; for a manual-recovery session it states plainly that starting
+    /// begins a new conversation (U7 — never a calm "Recovery: …" under a state
+    /// whose only action discards history); otherwise it's empty.
+    private var statusSubtext: String? {
+        if isArchived {
+            return "Restore this session to launch it again."
+        }
+        if manualRecoveryNeeded {
+            return model.recoveryReasonSentence(for: entry)
+        }
+        if canRecover {
+            return model.recoveryReasonSentence(for: entry)
+        }
+        return nil
+    }
+
     private var statusTint: SwiftUI.Color {
         if isArchived { return .secondary }
+        if manualRecoveryNeeded { return .orange }
         if canRecover { return .orange }
         return .secondary
     }
@@ -8306,17 +8945,20 @@ struct InactiveTerminalSurface: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .center, spacing: 10) {
-                Image(systemName: isArchived ? "archivebox" : (canRecover ? "arrow.clockwise" : "terminal"))
+                Image(systemName: isArchived ? "archivebox" : (manualRecoveryNeeded ? "exclamationmark.arrow.circlepath" : (canRecover ? "arrow.clockwise" : "terminal")))
                     .font(.system(size: 22, weight: .semibold))
                     .foregroundStyle(statusTint)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(statusHeadline)
                         .font(.title3.weight(.semibold))
-                    Text(isArchived ? "Restore this session to launch it again." : "Recovery: \(model.recoveryReason(for: entry))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .truncationMode(.tail)
+                    if let subtext = statusSubtext {
+                        Text(subtext)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .truncationMode(.tail)
+                            .help("Recovery detail: \(model.recoveryReason(for: entry))")
+                    }
                 }
                 Spacer()
                 if isArchived {
@@ -8326,6 +8968,16 @@ struct InactiveTerminalSurface: View {
                         Label("Restore", systemImage: "tray.and.arrow.up")
                     }
                     .buttonStyle(.borderedProminent)
+                } else if manualRecoveryNeeded {
+                    // U7: no resumable session — the action discards history, so
+                    // it reads "Start fresh" and is gated behind a confirmation.
+                    Button {
+                        model.requestStartFresh(entry)
+                    } label: {
+                        Label("Start fresh", systemImage: "arrow.counterclockwise")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.return, modifiers: [.command])
                 } else {
                     Button {
                         if canRecover {
@@ -8463,39 +9115,155 @@ struct RunningSessionHeaderControls: View {
     var entry: ProcessEntry
     @ObservedObject var model: WorkbenchViewModel
 
+    private var isRunning: Bool { model.activeSession(for: entry) != nil }
+
     var body: some View {
         let controls = WorkbenchSurfacePolicy.sessionControls(
-            isRunning: model.activeSession(for: entry) != nil,
+            isRunning: isRunning,
             isArchived: entry.isArchived,
             isRecoverable: model.recoveryPlan(for: entry) != nil
+        )
+        // #U33: ONE sectioned overflow menu (Ask Boss + Send / Window / This
+        // Session) — driven by the pure SessionActionMenu seam so no command is
+        // duplicated and no section wears a container-word label. The primary
+        // Stop/Launch/Recover stay as their own button(s) beside it.
+        let layout = SessionActionMenu.layout(
+            isRunning: isRunning,
+            isCustomSession: model.isCustomSession(entry)
         )
         HStack(spacing: 8) {
             ForEach(controls.primaryActions, id: \.self) { action in
                 primaryButton(for: action)
             }
             Menu {
-                ForEach(controls.advancedActions, id: \.self) { action in
-                    advancedButton(for: action)
-                }
-                if !controls.advancedActions.isEmpty {
+                menuButton(for: layout.topAction)
+                ForEach(Array(layout.sections.enumerated()), id: \.offset) { _, section in
                     Divider()
-                }
-                Button {
-                    model.copyLaunchCommand(for: entry)
-                } label: {
-                    Label("Copy Launch Command", systemImage: "doc.on.doc")
-                }
-                Button {
-                    model.openWorkingDirectory(for: entry)
-                } label: {
-                    Label("Open Working Directory", systemImage: "folder")
+                    Section(section.title) {
+                        ForEach(section.actions, id: \.self) { action in
+                            menuButton(for: action)
+                        }
+                    }
                 }
             } label: {
-                Label("Session Controls", systemImage: "slider.horizontal.3")
+                Label("More", systemImage: "ellipsis.circle")
+                    .labelStyle(.iconOnly)
             }
-            .help("Session Controls")
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .help("More actions for this terminal")
         }
         .controlSize(.small)
+    }
+
+    /// Maps one pure `SessionActionMenu.Action` onto its button + handler. The
+    /// labels/handlers/disable conditions are exactly those the two old menus used,
+    /// now living in one place so they can't drift or duplicate.
+    @ViewBuilder
+    private func menuButton(for action: SessionActionMenu.Action) -> some View {
+        switch action {
+        case .askBoss:
+            Button {
+                Task { await model.runBossQuestion(about: entry) }
+            } label: {
+                Label("Ask Boss About This Session", systemImage: "bubble.left.and.text.bubble.right")
+            }
+            .disabled(model.bossCheckInIsRunning)
+        case .controlC:
+            Button {
+                model.sendControlC(to: entry)
+            } label: {
+                Label("Ctrl-C", systemImage: "command")
+            }
+            .help("Send Ctrl-C to this terminal")
+        case .escape:
+            Button {
+                model.sendEscape(to: entry)
+            } label: {
+                Label("Esc", systemImage: "escape")
+            }
+            .help("Send Esc to this terminal")
+        case .eof:
+            Button {
+                model.sendEOF(to: entry)
+            } label: {
+                Label("EOF", systemImage: "eject")
+            }
+            .help("Send Ctrl-D / EOF to this terminal")
+        case .redraw:
+            Button {
+                model.redrawTerminal(entry)
+            } label: {
+                Label("Redraw", systemImage: "arrow.clockwise")
+            }
+            .keyboardShortcut("l", modifiers: [.command])
+            .help("Send Ctrl-L to redraw the terminal")
+        case .focus:
+            Button {
+                model.focusTerminal(entry)
+            } label: {
+                Label("Focus", systemImage: "arrow.up.left.and.arrow.down.right")
+            }
+            .keyboardShortcut("f", modifiers: [.command, .shift])
+            .help("Focus this terminal")
+        case .copyLaunchCommand:
+            Button {
+                model.copyLaunchCommand(for: entry)
+            } label: {
+                Label("Copy Launch Command", systemImage: "doc.on.doc")
+            }
+        case .openWorkingDirectory:
+            Button {
+                model.openWorkingDirectory(for: entry)
+            } label: {
+                Label("Open Working Directory", systemImage: "folder")
+            }
+            .help(entry.workingDirectory)
+        case .restart:
+            Button {
+                model.launch(entry)
+            } label: {
+                Label("Restart", systemImage: "play.fill")
+            }
+            .help("Restart this terminal")
+        case .edit:
+            Button {
+                model.beginEditingSession(entry)
+            } label: {
+                Label("Edit Session…", systemImage: "pencil")
+            }
+            .disabled(model.activeSession(for: entry) != nil)
+        case .duplicate:
+            Button {
+                model.duplicateCustomSession(entry)
+            } label: {
+                Label("Duplicate Session", systemImage: "plus.square.on.square")
+            }
+        case .move:
+            Menu {
+                ForEach(model.state.projects) { project in
+                    Button(project.name) {
+                        model.moveSession(entry, to: project.id)
+                    }
+                    .disabled(project.id == entry.projectId)
+                }
+            } label: {
+                Label("Move to Workspace", systemImage: "folder")
+            }
+            .disabled(model.activeSession(for: entry) != nil || model.state.projects.count < 2)
+        case .archive:
+            Button {
+                model.archiveCustomSession(entry)
+            } label: {
+                Label("Archive Session", systemImage: "archivebox")
+            }
+        case .delete:
+            Button(role: .destructive) {
+                model.requestDeleteCustomSession(entry)
+            } label: {
+                Label("Delete Session…", systemImage: "trash")
+            }
+        }
     }
 
     @ViewBuilder
@@ -8503,7 +9271,7 @@ struct RunningSessionHeaderControls: View {
         switch action {
         case .stop:
             Button(role: .destructive) {
-                model.terminate(entry)
+                model.requestStop(entry)
             } label: {
                 Label("Stop", systemImage: "stop.fill")
             }
@@ -8528,57 +9296,6 @@ struct RunningSessionHeaderControls: View {
         }
     }
 
-    @ViewBuilder
-    private func advancedButton(for action: WorkbenchSurfacePolicy.SessionAction) -> some View {
-        switch action {
-        case .focus:
-            Button {
-                model.focusTerminal(entry)
-            } label: {
-                Label("Focus", systemImage: "arrow.up.left.and.arrow.down.right")
-            }
-            .keyboardShortcut("f", modifiers: [.command, .shift])
-            .help("Focus this terminal")
-        case .redraw:
-            Button {
-                model.redrawTerminal(entry)
-            } label: {
-                Label("Redraw", systemImage: "arrow.clockwise")
-            }
-            .keyboardShortcut("l", modifiers: [.command])
-            .help("Send Ctrl-L to redraw the terminal")
-        case .restart:
-            Button {
-                model.launch(entry)
-            } label: {
-                Label("Restart", systemImage: "play.fill")
-            }
-            .help("Restart this terminal")
-        case .controlC:
-            Button {
-                model.sendControlC(to: entry)
-            } label: {
-                Label("Ctrl-C", systemImage: "command")
-            }
-            .help("Send Ctrl-C to this terminal")
-        case .escape:
-            Button {
-                model.sendEscape(to: entry)
-            } label: {
-                Label("Esc", systemImage: "escape")
-            }
-            .help("Send Esc to this terminal")
-        case .eof:
-            Button {
-                model.sendEOF(to: entry)
-            } label: {
-                Label("EOF", systemImage: "eject")
-            }
-            .help("Send Ctrl-D / EOF to this terminal")
-        default:
-            EmptyView()
-        }
-    }
 }
 
 struct TerminalFocusView: View {
@@ -8642,7 +9359,7 @@ struct TerminalFocusView: View {
                 .accessibilityLabel("EOF")
                 .frame(width: 28)
                 Button(role: .destructive) {
-                    model.terminate(entry)
+                    model.requestStop(entry)
                 } label: {
                     Image(systemName: "stop.fill")
                 }
@@ -8713,6 +9430,17 @@ struct NewTerminalGroupSheet: View {
                 HStack {
                     TextField("Root Path", text: $rootPath)
                         .font(.body.monospaced())
+                        // U34: when a root folder is chosen (or typed) and Name is
+                        // still empty, default Name to the folder's basename — porting
+                        // the New Terminal sheet's empty-guarded autofill so the single
+                        // most common workspace name isn't hand-typed and Create isn't
+                        // gratuitously disabled. A name the operator typed first is
+                        // never clobbered (the guard lives in autofilledName).
+                        .onChange(of: rootPath) {
+                            if let autofilled = WorkspaceNameDerivation.autofilledName(currentName: name, chosenPath: rootPath) {
+                                name = autofilled
+                            }
+                        }
                     Button {
                         chooseRootPath()
                     } label: {
@@ -8892,10 +9620,16 @@ struct NewTerminalSessionSheet: View {
         .frame(width: 560)
     }
 
+    // Unit 4 / Slice 3: command and name are OPTIONAL — the factory defaults a
+    // blank name to "Terminal" and turns a blank command into a `/bin/zsh -l`
+    // login shell. Only a working directory is required (there's no sensible
+    // default for where to run). So opening the sheet via the sidebar / ⌘N
+    // shows Create & Launch already enabled, and an empty form launches a blank
+    // login shell rather than being a dead-end with disabled buttons.
+    // U13: the New and Edit sheets share one save-validity rule so they can't
+    // drift apart again.
     private var canCreate: Bool {
-        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && !command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && !workingDirectory.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        CustomTerminalSessionDraft.canSave(workingDirectory: workingDirectory)
     }
 
     private func create(launchAfterCreate: Bool) {
@@ -8996,10 +9730,14 @@ struct EditTerminalSessionSheet: View {
         .frame(width: 560)
     }
 
+    // U13: match the New Terminal sheet — require only a working directory. The
+    // blank login shell U4 creates round-trips to an empty-command draft, so the
+    // old name-AND-command-AND-dir rule wrongly greyed out Save the moment you
+    // opened Edit on it. A blank command saves as the login shell and a blank
+    // name defaults to "Terminal" via the same factory `makeEntry` the save path
+    // already routes through. Shared rule so the two sheets can't drift again.
     private var canSave: Bool {
-        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && !command.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && !workingDirectory.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        CustomTerminalSessionDraft.canSave(workingDirectory: workingDirectory)
     }
 
     private func save() {
@@ -9266,21 +10004,21 @@ struct RecoveryDrillView: View {
             }
             if let result = model.recoveryDrillResult {
                 ForEach(result.items.prefix(5)) { item in
+                    // U8c: the operator-facing row reads as one plain sentence;
+                    // the raw action / status transition / reason live in the
+                    // tooltip for power users, never in the visible copy.
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(model.groupName(forEntryId: item.id).map { "\($0) / \(item.entryName)" } ?? item.entryName)
                             .font(.caption.weight(.semibold))
                             .lineLimit(1)
                             .truncationMode(.middle)
-                        Text("\(item.beforeStatus?.rawValue ?? "none") -> \(item.afterStatus?.rawValue ?? "none")")
-                            .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
-                        Text(item.action.rawValue)
-                            .font(.caption.monospaced())
-                        Text(item.reason)
+                        Text(model.recoveryDrillItemSentence(for: item))
                             .font(.caption)
+                            .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .truncationMode(.tail)
                     }
+                    .help(model.recoveryDrillItemDetail(for: item))
                 }
             }
         }
@@ -9366,15 +10104,17 @@ struct WorkbenchImportApplyResult: Equatable {
     var hasImports: Bool { createdCount > 0 }
 
     var headline: String {
+        // #U26: the recover-work action is "Bring Back Work" everywhere, so the post-import
+        // receipt reads "Brought back N terminals" — not the stale "Arranged" verb.
         switch (createdCount, groupNames.count) {
         case (0, _):
             return "Nothing imported"
         case (1, _):
-            return "Arranged 1 terminal"
+            return "Brought back 1 terminal"
         case (let n, 1):
-            return "Arranged \(n) terminals in 1 workspace"
+            return "Brought back \(n) terminals in 1 workspace"
         case (let n, let g):
-            return "Arranged \(n) terminals across \(g) workspaces"
+            return "Brought back \(n) terminals across \(g) workspaces"
         }
     }
 
@@ -9488,6 +10228,53 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var bossCheckInAnswer: String?
     @Published var bossCheckInIsRunning = false
     @Published var bossQuestion = ""
+
+    /// Whether the selected boss resolves to an installed, ready bundle that can
+    /// actually answer a check-in. A named-but-not-installed/ready boss can't, so
+    /// it reads as "no usable boss" for the Check In affordance.
+    var currentBossIsUsable: Bool {
+        ouroAgent(named: state.boss.agentName)?.isUsableAsBoss ?? false
+    }
+
+    /// U12: the single, pure decision behind every manual Check In surface — the
+    /// header button + ⌘I, the menubar item, the command palette, and the
+    /// autonomy-popover button. So the loudest control never silently no-ops: with
+    /// no usable boss the affordance routes to set-up instead of doing nothing.
+    var checkInAvailability: CheckInAvailability {
+        CheckInAvailability.resolve(
+            bossAgentName: state.boss.agentName,
+            bossIsUsable: currentBossIsUsable,
+            isRunning: bossCheckInIsRunning
+        )
+    }
+
+    /// The tooltip for the current Check In state — describes the one-shot ask and
+    /// its ⌘I shortcut, distinguishes it from the automatic Boss Watch loop, and
+    /// (when there's no boss) points at setting one up. Single-sourced so every
+    /// surface reads identically.
+    var checkInHelpText: String {
+        CheckInAvailability.helpText(for: checkInAvailability, bossAgentName: state.boss.agentName)
+    }
+
+    /// The verb for the manual check-in, used as the label on every surface so the
+    /// action wears ONE name (U12). Distinct from the automatic "Boss Watch" loop
+    /// and from the typed-question submit.
+    static let checkInActionLabel = "Check In"
+
+    /// Drive a manual Check In from any surface (button, ⌘I, menubar, palette,
+    /// popover). When a usable boss is set this runs the check-in; when none is set
+    /// it routes to the set-up-a-boss flow so the tap is never a dead click. A tap
+    /// while a check-in is already running is a no-op (the in-flight guard owns it).
+    func attemptCheckIn() {
+        switch checkInAvailability {
+        case .ready:
+            Task { await runBossCheckIn() }
+        case .needsBoss:
+            presentOnboarding()
+        case .running:
+            break
+        }
+    }
     @Published var bossWatchIsEnabled = false
     @Published var bossWatchLastRunAt: Date?
     @Published var bossWatchLastError: String?
@@ -9508,6 +10295,13 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var transcriptSearchLastQuery: String?
     @Published var recoveryDrillResult: RecoveryDrillResult?
     @Published var bossAppliedActions: [String] = []
+    /// The originating queued-request id for the boss action currently being
+    /// applied (#U24), so `recordActionLog` can stamp it onto the audit entry
+    /// without threading a parameter through every `finishBossAction` call site.
+    /// Set by `applyBossAction` for an externally-queued request and cleared on
+    /// exit (via `defer`); nil for an operator-initiated action. Safe as transient
+    /// state because the apply runs synchronously on the `@MainActor`.
+    private var currentBossActionRequestId: UUID?
     /// R4b first-run cold-start bootstrap (Layer A). The live per-step presentation the Setup
     /// Assistant renders while the native bootstrap (S0→S5) brings the agent online, then the
     /// agent-driven (Layer B) framing once it hands off. Pure `FirstRunBootstrapDrive` output —
@@ -9642,6 +10436,15 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var pendingDeleteGroup: WorkbenchProject?
     @Published var editingSession: ProcessEntry?
     @Published var pendingDeleteSession: ProcessEntry?
+    /// U11: the session whose Stop the operator triggered on a LIVE/holding agent
+    /// (via the ⌘. chord or a Stop button). Drives the named confirmation that
+    /// guards a reflexive cancel-chord from nuking an in-flight agent. Non-nil ⇒
+    /// the confirmation is presented; idle/finished sessions never set it.
+    @Published var pendingStopSession: ProcessEntry?
+    /// U7: the session whose "Start fresh" the operator tapped on the inactive
+    /// surface. Drives the one-line confirmation that names what's lost before
+    /// the fresh-launch path runs. Non-nil ⇒ the confirmation is presented.
+    @Published var pendingStartFresh: ProcessEntry?
     @Published var ouroAgents: [OuroAgentRecord] = []
     @Published var bossWorkbenchMCPRegistration: BossWorkbenchMCPRegistrationSnapshot?
     @Published var bossWorkbenchMCPRegistrationByAgentName: [String: BossWorkbenchMCPRegistrationSnapshot] = [:]
@@ -9713,6 +10516,10 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var bugReportIssueIsFiling = false
     @Published var bugReportIssueURL: String?
     @Published var bugReportIssueError: String?
+    /// U30(a): durable per-report filed-status store. Writes a `status.json` next to
+    /// `report.md` in each bundle so a report's filed/unfiled status + issue URL survive
+    /// the sheet (and the app) closing, and a boss can read them back.
+    let bugReportStatusStore = BugReportStatusStore()
     @Published var isOnboardingPresented = false
     /// Whether onboarding has been GENUINELY completed (the user reached Arrange
     /// Work with a ready boss). Persisted so the wizard keeps presenting on every
@@ -9806,6 +10613,8 @@ final class WorkbenchViewModel: ObservableObject {
     private let transcriptTailReader = TranscriptTailReader()
     private let transcriptSearcher = TranscriptSearcher()
     private let recoveryDrill = RecoveryDrill()
+    private let recoveryPhrasebook = RecoveryReasonPhrasebook()
+    private let terminalCommandPlanPhrasebook = TerminalCommandPlanPhrasebook()
     private let onboardingAdvisor = WorkbenchOnboardingAdvisor()
     private let onboardingProposalBuilder = WorkbenchImportProposalBuilder()
     private let deskBridgePlanner = DeskBridgePlanner()
@@ -9962,7 +10771,12 @@ final class WorkbenchViewModel: ObservableObject {
             state.processRuns[runIndex].exitCode = nil
             state.processRuns[runIndex].rawExitStatus = nil
             updateEntry(entryId) { entry in
-                entry.attention = .needsBossReview
+                // U8a: a session we cleanly detached on quit is an expected
+                // survivor — it reattaches next launch. Leave it CALM (.idle),
+                // never an orange "needs boss review"; the startup reconciler
+                // confirms survival via `screen -ls` and sets the final
+                // "reconnected" copy.
+                entry.attention = .idle
                 entry.lastSummary = "\(entry.name) detached on quit; reattaches on next launch"
             }
         }
@@ -10069,6 +10883,24 @@ final class WorkbenchViewModel: ObservableObject {
         )
     }
 
+    var stopConfirmationIsPresented: Binding<Bool> {
+        Binding(
+            get: { self.pendingStopSession != nil },
+            set: { newValue in
+                if !newValue {
+                    self.pendingStopSession = nil
+                }
+            }
+        )
+    }
+
+    /// Title for the U11 Stop confirmation, naming the pending session. A plain
+    /// `String` so the view's modifier chain stays cheap to type-check.
+    var stopConfirmationTitle: String {
+        guard let entry = pendingStopSession else { return "Stop?" }
+        return WorkbenchSurfacePolicy.stopConfirmationTitle(name: entry.name)
+    }
+
     var deleteGroupConfirmationIsPresented: Binding<Bool> {
         Binding(
             get: { self.pendingDeleteGroup != nil },
@@ -10081,27 +10913,55 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     var sessionEntries: [ProcessEntry] {
-        let visible = applySidebarFilter(projectSessionEntries.filter { !$0.isArchived })
+        let visible = applySidebarFilter(projectSessionEntries.filter { !$0.isArchived }, archived: false)
         // Pinned entries float to the top, preserving stored order within
         // each partition (stable). Concatenation keeps the partition stable
         // where `sorted(by:)` would not, and keeps ID-based reorder coherent.
         return visible.filter(\.isPinned) + visible.filter { !$0.isPinned }
     }
 
-    /// Narrow a project-scoped list to the rows matching `sidebarFilter`. An
-    /// empty filter is a no-op (returns the input unchanged), so the sidebar's
-    /// pinned / archived / reorder behavior is untouched until the operator
-    /// types. The match is delegated to the pure `SidebarSessionFilter` helper
-    /// (tested in Core); the group name comes from the currently selected
-    /// project, which is the group these rows belong to.
-    private func applySidebarFilter(_ entries: [ProcessEntry]) -> [ProcessEntry] {
+    /// U19(a): whether the active sidebar filter is a structured `owner:`/`status:`
+    /// query, which searches GLOBALLY (across all workspaces) rather than only the
+    /// selected workspace. Drives both the scope-of-search and the scope indicator
+    /// shown under the field, so scoping is never silent.
+    var sidebarFilterIsGlobal: Bool {
+        SidebarSessionFilter().isStructuredQuery(sidebarFilter)
+    }
+
+    /// U19(b): whether the operator has typed a filter at all (non-blank). Distinguishes
+    /// a zero-match filtered result ("No sessions match …") from a genuinely empty
+    /// workspace ("No terminals yet").
+    var sidebarFilterIsActive: Bool {
+        !sidebarFilter.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Narrow the session list to the rows matching `sidebarFilter`. An empty filter is
+    /// a no-op (returns the input unchanged), so the sidebar's pinned / archived /
+    /// reorder behavior is untouched until the operator types. The match is delegated to
+    /// the pure `SidebarSessionFilter` helper (tested in Core).
+    ///
+    /// U19(a): a *structured* `owner:`/`status:` query searches across ALL workspaces, so
+    /// a blocked session in an unselected workspace is visible and an empty result truly
+    /// means "nothing matches anywhere." A plain free-text query stays scoped to the
+    /// passed-in (current-workspace) list as before. In the global case each entry's
+    /// group name comes from `groupName(for:)` (its own workspace) rather than the
+    /// selected project, so cross-workspace name/group matching stays correct.
+    private func applySidebarFilter(_ entries: [ProcessEntry], archived: Bool) -> [ProcessEntry] {
         let query = sidebarFilter.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else {
             return entries
         }
-        let groupName = selectedProject?.name ?? ""
         let filter = SidebarSessionFilter()
-        return entries.filter { filter.matches($0, groupName: groupName, query: query) }
+        guard filter.isStructuredQuery(query) else {
+            let groupName = selectedProject?.name ?? ""
+            return entries.filter { filter.matches($0, groupName: groupName, query: query) }
+        }
+        // Global structured search: scan every workspace's sessions (honoring the
+        // caller's archived/non-archived split), each matched against its OWN workspace's
+        // group name so cross-workspace name/group matching stays correct.
+        return allSessionEntries
+            .filter { $0.isArchived == archived }
+            .filter { filter.matches($0, groupName: groupName(for: $0) ?? "", query: query) }
     }
 
     /// SwiftUI `.onMove` handler for the sidebar's non-archived rows. The
@@ -10168,7 +11028,7 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     var archivedSessionEntries: [ProcessEntry] {
-        applySidebarFilter(projectSessionEntries.filter(\.isArchived))
+        applySidebarFilter(projectSessionEntries.filter(\.isArchived), archived: true)
     }
 
     private var allSessionEntries: [ProcessEntry] {
@@ -10311,6 +11171,53 @@ final class WorkbenchViewModel: ObservableObject {
         state.actionLog.sorted { $0.occurredAt > $1.occurredAt }
     }
 
+    /// U31(b): the in-window header's one-line status, gated so a genuinely quiet
+    /// machine ("0 running, nothing to recover") renders nothing — the boss prompt
+    /// builder still reads the raw `summary.oneLineStatus`.
+    var headerStatusLine: HeaderStatusLinePresentation {
+        HeaderStatusLinePresentation.resolve(summary: summary)
+    }
+
+    /// The always-visible read of Boss Watch (#U21) — the on/off label, the
+    /// bidirectional toggle title, and the help string the header pill, the
+    /// popover, and the dashboard all share.
+    var bossWatchPresentation: BossWatchPresentation {
+        // #U31a: the header pill hides entirely when there's no usable boss —
+        // Boss Watch watches *via* a boss, so a green "Watch On" before one exists
+        // is incoherent and breaks the calm no-boss header (U5). The popover and
+        // dashboard controls only render with a boss set, so they read `help` /
+        // `toggleActionTitle` off this same presentation and are unaffected.
+        BossWatchPresentation.resolve(
+            isEnabled: bossWatchIsEnabled,
+            hasUsableBoss: currentBossIsUsable
+        )
+    }
+
+    /// Compact summary of the boss's recent action receipts (#U21) over the most
+    /// recent window, so the default boss pane reads "Recent actions: 3 ok · 1
+    /// failed" and surfaces failed autonomous actions without opening Advanced.
+    var bossActionReceiptSummary: BossActionReceiptSummary {
+        BossActionReceiptSummary.summarize(state.actionLog, window: Self.actionReceiptWindow)
+    }
+
+    /// How many recent receipts the compact summary counts — small enough to
+    /// stay glanceable, large enough to catch a recent failure.
+    static let actionReceiptWindow = 10
+
+    /// The open-inbox "door" (#U22): the tappable "N waiting on you" affordance,
+    /// or `nil` when nothing is open (so the boss pane renders no dead button).
+    /// Drives the boss-pane pill, the tappable "inbox" chip, and the collapsed-
+    /// pane count badge — all from one pure derivation.
+    var inboxDoor: InboxDoorPresentation? {
+        InboxDoorPresentation.resolve(state: state)
+    }
+
+    /// Open the Decision Inbox sheet (#U22) — the click target for the boss-pane
+    /// "N waiting" pill and the "inbox" chip, the same sheet ⌘K / ⌘J open.
+    func presentDecisionInbox() {
+        isDecisionLogPresented = true
+    }
+
     var bossWatchStatusLine: String {
         if let bossWatchLastError {
             return "error: \(bossWatchLastError)"
@@ -10429,45 +11336,19 @@ final class WorkbenchViewModel: ObservableObject {
         return readiness.repairSteps.contains { Self.onboardingConfigGapBlockerIDs.contains($0.id) }
     }
 
-    /// Present onboarding at launch until setup is GENUINELY completed. A forced
-    /// first run always presents; otherwise the wizard keeps appearing while
-    /// `onboardingHasBeenCompleted` is false — which covers `.needsAgent`,
-    /// mid-setup config gaps, AND the stale-boss-but-never-finished case where a
-    /// prior session picked a boss and dismissed before reaching Arrange Work.
-    /// Keying on completion (not "boss set + auto-presented once") is the root-
-    /// cause fix for the stale-boss lockout (#227).
-    var shouldPresentOnboardingOnLaunch: Bool {
-        if isFirstRunSetupForcedOnLaunch {
-            return true
-        }
-        return !onboardingHasBeenCompleted
-    }
-
+    /// Whether the boss-setup wizard auto-presents on launch. Always `false` now:
+    /// the subtractive FRE redesign tore out the forced wizard so first-run lands
+    /// on the working terminals-first app, and the wizard is opt-in via
+    /// `presentOnboarding()`. The decision lives in the pure Core
+    /// `OnboardingPresentationPolicy.shouldAutoPresentOnLaunch` so it's unit-tested
+    /// for both first-run cases (fresh and `force-first-run-setup`). The marker
+    /// still resets state to a clean first run (`isFirstRunSetupForcedOnLaunch`
+    /// drives the state-clearing below) — it just no longer pops the modal.
     var canAutoPresentOnboardingOnLaunch: Bool {
-        shouldPresentOnboardingOnLaunch
-    }
-
-    var onboardingPhaseLabel: String {
-        if onboardingReadiness?.isReady != true {
-            return "choose boss"
-        }
-        if onboardingProposal == nil {
-            return "ready to scan"
-        }
-        if lastImportSummary?.hasImports != true {
-            return "ready to arrange"
-        }
-        return "ready"
-    }
-
-    var onboardingPhaseColor: SwiftUI.Color {
-        if onboardingReadiness?.isReady != true {
-            return .orange
-        }
-        if onboardingProposal == nil {
-            return .blue
-        }
-        return lastImportSummary?.hasImports == true ? .green : .purple
+        OnboardingPresentationPolicy.shouldAutoPresentOnLaunch(
+            isFirstRunForced: isFirstRunSetupForcedOnLaunch,
+            onboardingHasBeenCompleted: onboardingHasBeenCompleted
+        )
     }
 
     var onboardingFlowInput: WorkbenchOnboardingFlowInput {
@@ -10494,35 +11375,22 @@ final class WorkbenchViewModel: ObservableObject {
         return onboardingCandidates.filter { $0.confidence >= 0.50 && $0.confidence < 0.70 }.count
     }
 
-    var onboardingOpeningLine: String {
-        if onboardingReadiness?.isReady == true {
-            return "\(state.boss.agentName) is selected as this Mac's boss. \(WorkbenchOnboardingNarrative.bossReadyWelcome) \(WorkbenchOnboardingNarrative.scanIntro)"
-        }
-        if ouroAgents.count > 1 {
-            return "You have a few agents on this Mac. Pick the one Workbench should check in with — that's your boss."
-        }
-        return "Pick your boss to get started, then Workbench can find your recent work and set it up as terminals and workspaces."
-    }
-
     var onboardingBossChoices: [OnboardingBossChoice] {
         bossAgentChoices.map { name in
             let agent = ouroAgents.first { $0.name.caseInsensitiveCompare(name) == .orderedSame }
-            let registration = bossWorkbenchMCPRegistrationByAgentName[name]
             let isSelected = state.boss.agentName.caseInsensitiveCompare(name) == .orderedSame
             return OnboardingBossChoice(
                 name: name,
                 // First-grade-simple: a friendly readiness line, never the raw
                 // `provider/model · human …/agent …` summary (lane jargon + internal IDs).
-                // The live connection health surfaces after selection, via the checks.
-                detail: agent.map { agent in
-                    switch agent.status {
-                    case .ready: return "Ready to be your boss."
-                    case .disabled: return "Turned off right now."
-                    case .missingConfig, .invalidConfig: return "Needs a little setup first."
-                    }
-                } ?? "We couldn't find this agent on your Mac.",
+                // The live connection health surfaces after selection, via the checks —
+                // so `.ready` here only promises that check, it doesn't claim the boss is
+                // good to go (the premature-truth fix). Copy lives in Core.
+                // #U27: no registrationStatus — the per-row tools button it fed is gone; tool
+                // status is shown only on the Connect page now.
+                detail: agent.map { OnboardingBossChoiceCopy.detail(for: $0.status) }
+                    ?? "We couldn't find this agent on your Mac.",
                 status: agent?.status,
-                registrationStatus: registration?.status,
                 isSelected: isSelected
             )
         }
@@ -10569,17 +11437,20 @@ final class WorkbenchViewModel: ObservableObject {
             ),
             command(
                 .openOnboarding,
-                "Set Up Workbench",
-                "Open the conversational setup and recent-session import surface",
+                // U37(c): "Set up a boss" matches the opt-in-boss framing the rest
+                // of the app now uses (the empty-state CTA, the header menu) —
+                // dropping the pre-subtraction "Set Up Workbench" naming drift.
+                AgentHomeEmptyStateCopy.setUpBossButton,
+                "Choose a boss to watch the whole Mac, connect its tools, and bring back recent terminals",
                 "wand.and.stars",
-                keywords: ["onboarding", "setup", "bootstrap", "desk", "import"]
+                keywords: ["onboarding", "setup", "boss", "bootstrap", "import"]
             ),
             command(
                 .installOuroAgent,
-                "Install Ouro Agent",
-                "Open a managed hatch conversation or clone terminal",
+                "Create an Agent",
+                "Create a new Ouro agent — name it, pick a provider, add credentials (no CLI)",
                 "square.and.arrow.down",
-                keywords: ["hatch", "clone", "agent", "install"]
+                keywords: ["hatch", "create", "new", "agent", "install"]
             ),
             command(
                 .refreshWorkspace,
@@ -10657,10 +11528,13 @@ final class WorkbenchViewModel: ObservableObject {
             commands.insert(
                 command(
                     .bossCheckIn,
-                    "Boss Check In",
-                    "Ask \(state.boss.agentName) what is going on",
+                    // U12: one name for the manual pull — "Check In" everywhere
+                    // (header, ⌘I menu, menubar, here). Distinct from the
+                    // "Ask Boss: …" quick questions below and the Boss Watch loop.
+                    WorkbenchViewModel.checkInActionLabel,
+                    "Ask \(state.boss.agentName) what's going on across your sessions",
                     "bubble.left.and.text.bubble.right",
-                    keywords: ["boss", "ask", "status"]
+                    keywords: ["boss", "ask", "status", "check in"]
                 ),
                 at: 1
             )
@@ -10842,7 +11716,7 @@ final class WorkbenchViewModel: ObservableObject {
                 commands.append(command(
                     .recoverSelectedSession,
                     "\(recoveryButtonTitle(for: selectedEntry)) \(selectedEntry.name)",
-                    recoveryReason(for: selectedEntry),
+                    recoveryReasonSentence(for: selectedEntry),
                     "arrow.clockwise",
                     keywords: ["resume", "recover", "restart"]
                 ))
@@ -10921,12 +11795,17 @@ final class WorkbenchViewModel: ObservableObject {
             )
         }
 
-        if !recoverableEntries.isEmpty {
+        if recoveryDigest.shouldShow {
+            // The count routes through the SAME `recoveryDigest.actionableCount`
+            // the sidebar row, sheet header, and menu-bar item use (U8-2 review
+            // fix). `recoverableEntries.count` excluded `.manualActionNeeded`, so
+            // the palette read a different number than every other operator-facing
+            // recovery surface — two counts disagreeing over the same state.
             commands.append(
                 command(
                     .recoverAllCrashedSessions,
                     "Recover All Crashed Terminals",
-                    "Re-launch every session currently flagged for recovery (\(recoverableEntries.count))",
+                    "Re-launch every session currently flagged for recovery (\(recoveryDigest.actionableCount))",
                     "arrow.clockwise.circle",
                     keywords: ["recover", "restart", "relaunch", "all", "crashed", "fix", "resume", "respawn"]
                 )
@@ -10968,19 +11847,15 @@ final class WorkbenchViewModel: ObservableObject {
             )
         ])
 
-        for agent in ouroAgents {
-            let isBoss = state.boss.agentName.caseInsensitiveCompare(agent.name) == .orderedSame
-            commands.append(
-                WorkbenchCommandDescriptor(
-                    id: .selectAgent,
-                    title: "Select Agent: \(agent.name)\(isBoss ? " (boss)" : "")",
-                    detail: agent.summaryLine,
-                    systemImage: agent.status == .ready ? "person.crop.circle" : "person.crop.circle.badge.exclamationmark",
-                    keywords: ["agent", "bundle", "switch", "open", agent.name],
-                    payload: agent.name
-                )
-            )
-        }
+        // U37(a): exactly one Select-Agent row per installed bundle, de-duped by
+        // name and EXCLUDING the current boss (already addressable via the boss
+        // selector) — the loop here used to emit one row per scanned record, so a
+        // duplicate inventory entry produced a byte-identical duplicate row and the
+        // boss showed up as a redundant "Select Agent: <boss> (boss)".
+        commands.append(contentsOf: AgentSelectCommandList.commands(
+            agents: ouroAgents,
+            bossAgentName: state.boss.agentName
+        ))
 
         if let agent = focusedAgentForCommand(nil) {
             let isBoss = state.boss.agentName.caseInsensitiveCompare(agent.name) == .orderedSame
@@ -11450,10 +12325,11 @@ final class WorkbenchViewModel: ObservableObject {
         } else if let first = ouroAgents.first {
             selectedAgentName = first.name
         } else {
-            // No agent bundles installed yet — kick into the hatching flow
-            // instead of landing on a blank Agents pane.
+            // No agent bundles installed yet — U18: open the native "Create your agent"
+            // form (name + provider + credentials, headless) instead of landing on a
+            // blank Agents pane or the raw `ouro hatch` CLI pane.
             selectedAgentName = nil
-            isOuroAgentInstallSheetPresented = true
+            presentNewAgentProviderConfigForm()
         }
     }
 
@@ -11495,63 +12371,47 @@ final class WorkbenchViewModel: ObservableObject {
         }
     }
 
-    func ouroAgentInstallPlan(
-        mode: String,
-        agentName: String,
-        remote: String
-    ) throws -> OuroAgentInstallPlan {
-        switch mode {
-        case OuroAgentInstallSheetMode.hatch.rawValue:
-            return ouroAgentInstallCommandBuilder.hatch()
-        case OuroAgentInstallSheetMode.clone.rawValue:
-            return try ouroAgentInstallCommandBuilder.clone(
-                remote: remote,
-                agentName: agentName
-            )
-        default:
-            return ouroAgentInstallCommandBuilder.hatch()
-        }
-    }
-
-    @discardableResult
-    func launchOuroAgentInstall(
-        mode: String,
-        agentName: String,
-        remote: String
-    ) -> Bool {
+    /// U35: clone an agent from a Git remote HEADLESSLY (no spawned `ouro clone` pane) and
+    /// return the terminal inline-progress state the sheet renders. Mirrors the cold-start
+    /// hatch path: the remote/name reach `ouro clone` only as natively-built argv tokens,
+    /// never through agent context. The sheet shows `.cloning` while this awaits, then this
+    /// resolves to `.succeeded` / `.failed`. On success the agent list is re-probed so the
+    /// new bundle appears, and a seam-free audit line lands in the action log.
+    func cloneAgentHeadless(remote: String, agentName: String) async -> CloneAgentFlowState {
+        let remoteLabel = CloneAgentFlowState.remoteLabel(forRemote: remote)
+        let plan: OuroAgentInstallPlan
         do {
-            let plan = try ouroAgentInstallPlan(
-                mode: mode,
-                agentName: agentName,
-                remote: remote
-            )
-            let entry = createCustomSession(
-                CustomTerminalSessionDraft(
-                    name: plan.sessionName,
-                    command: plan.commandLine,
-                    workingDirectory: selectedProject?.rootPath ?? FileManager.default.homeDirectoryForCurrentUser.path,
-                    trust: .trusted,
-                    autoResume: true,
-                    notes: plan.notes
-                ),
-                launchAfterCreate: true
-            )
-            guard let entry else {
-                return false
-            }
+            plan = try ouroAgentInstallCommandBuilder.clone(remote: remote, agentName: agentName)
+        } catch {
+            // A bad name is already blocked inline by U15's validation, so this is the
+            // empty-remote / defensive path — report it seam-free, never as raw argv.
+            return .failed(reason: CloneAgentFlowState.failureReason(forRemoteLabel: remoteLabel))
+        }
+
+        do {
+            try await CloneAgentRunner.runHeadless(plan: plan)
+        } catch {
             recordActionLog(
                 source: "native",
-                action: "installOuroAgent",
-                targetEntryId: entry.id,
-                targetName: entry.name,
-                result: "Opened \(entry.name)",
-                succeeded: true
+                action: "cloneOuroAgent",
+                // Audit lane only — carries the raw `ouro clone` verb (NOT secrets).
+                result: "failed `\(plan.commandLine)`",
+                succeeded: false
             )
-            return true
-        } catch {
-            errorMessage = "Workbench couldn't bring that agent in. Please check the link and try again."
-            return false
+            return .failed(reason: CloneAgentFlowState.failureReason(forRemoteLabel: remoteLabel))
         }
+
+        // Success: re-probe so the cloned bundle appears in the agent list.
+        refreshOuroAgents()
+        let resolvedName = agentName.trimmingCharacters(in: .whitespacesAndNewlines)
+        recordActionLog(
+            source: "native",
+            action: "cloneOuroAgent",
+            targetName: resolvedName.isEmpty ? remoteLabel : resolvedName,
+            result: "ran `\(plan.commandLine)` (clone; headless, inline)",
+            succeeded: true
+        )
+        return .succeeded(agentName: resolvedName.isEmpty ? nil : resolvedName)
     }
 
     func selectBoss(agentName: String) {
@@ -11625,6 +12485,27 @@ final class WorkbenchViewModel: ObservableObject {
             selectedProjectID = entry.projectId
         }
         selectedEntryID = entryId
+    }
+
+    /// #U23c: jump to the session a boss-pane "Needs Me" / "Coding" item points
+    /// at, via the navigation key (the ref it carries, else its label). Matches a
+    /// session by name (case-insensitive); selects it and returns true on a hit.
+    /// When nothing matches (the key isn't a live session — e.g. an obligation
+    /// id), falls back to opening the Decision Inbox so the click is never dead,
+    /// and returns false.
+    @discardableResult
+    func selectSession(byNavigationKey key: String) -> Bool {
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              let entry = state.processEntries.first(where: {
+                  $0.name.caseInsensitiveCompare(trimmed) == .orderedSame
+              })
+        else {
+            presentDecisionInbox()
+            return false
+        }
+        selectEntryAcrossGroups(entry.id)
+        return true
     }
 
     // MARK: - Detail split (W5 increment 1)
@@ -12009,13 +12890,18 @@ final class WorkbenchViewModel: ObservableObject {
             errorMessage = WorkbenchSurfacePolicy.workspaceNameRequiredMessage
             return false
         }
-        guard !trimmedRoot.isEmpty else {
-            errorMessage = WorkbenchSurfacePolicy.workspaceRootPathRequiredMessage
+        // U14: reject a non-existent root at create time — for the operator AND the
+        // boss (the MCP `createGroup` action lands here too), instead of acking a bad
+        // path and failing later when a terminal tries to launch in it. Persist the
+        // tilde-expanded path so a `~` root resolves identically everywhere.
+        let rootValidation = WorkspaceRootValidation.validateOnDisk(trimmedRoot)
+        guard rootValidation.isUsable else {
+            errorMessage = rootValidation.errorMessage
             return false
         }
         let project = WorkbenchProject(
             name: trimmedName,
-            rootPath: trimmedRoot,
+            rootPath: rootValidation.expandedPath,
             boss: state.boss
         )
         state.projects.append(project)
@@ -12041,8 +12927,12 @@ final class WorkbenchViewModel: ObservableObject {
             errorMessage = WorkbenchSurfacePolicy.workspaceNameRequiredMessage
             return false
         }
-        guard !trimmedRoot.isEmpty else {
-            errorMessage = WorkbenchSurfacePolicy.workspaceRootPathRequiredMessage
+        // U14: editing a workspace to a non-existent root is rejected the same way as
+        // creating one — keep the sheet open on a path-specific error rather than
+        // saving a bad root that breaks every terminal later.
+        let rootValidation = WorkspaceRootValidation.validateOnDisk(trimmedRoot)
+        guard rootValidation.isUsable else {
+            errorMessage = rootValidation.errorMessage
             return false
         }
         guard let index = state.projects.firstIndex(where: { $0.id == project.id }) else {
@@ -12050,7 +12940,7 @@ final class WorkbenchViewModel: ObservableObject {
             return false
         }
         state.projects[index].name = trimmedName
-        state.projects[index].rootPath = trimmedRoot
+        state.projects[index].rootPath = rootValidation.expandedPath
         editingGroup = nil
         recordActionLog(
             source: "native",
@@ -12210,7 +13100,12 @@ final class WorkbenchViewModel: ObservableObject {
         let previousState = bossWatchBaselineState ?? state
         let changes = changeSummarizer.summarize(previous: previousState, current: state, occurredAt: observedAt)
 
-        let hasActionableState = !summary.waitingOnHuman.isEmpty || !summary.needsRecovery.isEmpty
+        // Gate on the SHARED `RecoveryDigest` needs-action signal (U42) — the same
+        // derivation the recovery drill (U39) and the sidebar read — so the wake
+        // decision can't drift. `hasNeedsAction` is auto-recoverable + needs-you and
+        // excludes lossless `.reattach` survivors, so a pure-reconnect workspace
+        // (nothing to actually do) never wakes the boss.
+        let hasActionableState = !summary.waitingOnHuman.isEmpty || recoveryDigest.hasNeedsAction
         let shouldAskBoss = force || !changes.isEmpty || (hasActionableState && bossWatchLastPromptAt == nil)
         bossWatchLastRunAt = observedAt
         guard shouldAskBoss else {
@@ -12509,8 +13404,80 @@ final class WorkbenchViewModel: ObservableObject {
         }
     }
 
+    /// The raw planner reason, kept for the on-demand tooltip / disclosure.
+    /// Operator-facing surfaces should render `recoveryReasonSentence(for:)`
+    /// instead; this stays the auditable detail behind it.
     func recoveryReason(for entry: ProcessEntry) -> String {
         recoveryPlan(for: entry)?.reason ?? "no action"
+    }
+
+    /// One plain operator-facing sentence for an entry's recovery plan (U8c).
+    /// Falls back to the "nothing to recover" phrasing when no plan exists.
+    func recoveryReasonSentence(for entry: ProcessEntry) -> String {
+        guard let plan = recoveryPlan(for: entry) else {
+            return recoveryPhrasebook.operatorSentence(for: .noAction, rawReason: "no action")
+        }
+        return recoveryPhrasebook.operatorSentence(for: plan.action, rawReason: plan.reason)
+    }
+
+    /// One plain operator-facing sentence for a recovery-DRILL row (U8c). The
+    /// raw action / status transition / reason stay available via the row's
+    /// tooltip (see `recoveryDrillItemDetail`).
+    func recoveryDrillItemSentence(for item: RecoveryDrillItem) -> String {
+        recoveryPhrasebook.operatorSentence(for: item.action, rawReason: item.reason)
+    }
+
+    /// The raw, auditable detail for a recovery-drill row — the internal action,
+    /// the status transition, and the planner's exact reason — shown on demand
+    /// in the row's tooltip rather than verbatim in the operator-facing copy.
+    func recoveryDrillItemDetail(for item: RecoveryDrillItem) -> String {
+        let before = item.beforeStatus?.rawValue ?? "none"
+        let after = item.afterStatus?.rawValue ?? "none"
+        return "\(item.action.rawValue): \(before) → \(after) — \(item.reason)"
+    }
+
+    /// True when the entry's latest run needs recovery but the planner classified
+    /// it `.manualActionNeeded` — i.e. there's NO resumable session, so the only
+    /// path forward is a fresh start that discards the prior conversation. U7
+    /// uses this to label the inactive-surface button "Start fresh" (not the calm
+    /// "Launch") and gate it behind a confirmation. A genuinely never-run entry
+    /// (`.noAction`, "Ready to launch") is NOT manual-recovery — "Launch" is
+    /// honest there because there's no history to lose.
+    func manualRecoveryNeeded(for entry: ProcessEntry) -> Bool {
+        guard !entry.isArchived else { return false }
+        return recoveryPlan(for: entry)?.action == .manualActionNeeded
+    }
+
+    /// The one-line confirmation copy shown before a fresh start that discards an
+    /// agent's prior conversation (U7). Names what's lost and what's preserved.
+    func startFreshConfirmationMessage(for entry: ProcessEntry) -> String {
+        "\(entry.name) has no resumable session — starting begins a new conversation. The previous transcript stays viewable."
+    }
+
+    /// Present the U7 "Start fresh" confirmation for an entry. The actual
+    /// fresh launch only runs from `confirmStartFresh()` once the operator
+    /// confirms.
+    func requestStartFresh(_ entry: ProcessEntry) {
+        pendingStartFresh = entry
+    }
+
+    /// Run the fresh-launch path for the pending entry after the operator
+    /// confirmed the one-line warning. Clears the pending state.
+    func confirmStartFresh() {
+        guard let entry = pendingStartFresh else { return }
+        pendingStartFresh = nil
+        launch(entry)
+    }
+
+    var startFreshConfirmationIsPresented: Binding<Bool> {
+        Binding(
+            get: { self.pendingStartFresh != nil },
+            set: { newValue in
+                if !newValue {
+                    self.pendingStartFresh = nil
+                }
+            }
+        )
     }
 
     func recoveryPlan(for entry: ProcessEntry) -> RecoveryPlan? {
@@ -12565,6 +13532,83 @@ final class WorkbenchViewModel: ObservableObject {
         allSessionEntries.filter { canRecover($0) }
     }
 
+    /// The single shared recovery derivation (U8b). The sidebar row text, its
+    /// help, the sheet header, the sheet's row count, and `shouldShowRecovery`
+    /// all read from this one value so they can never disagree. Built from the
+    /// same `summary.recoveryPlans` (which already reflect live `screen`
+    /// survival via `liveScreenSessionNames`).
+    var recoveryDigest: RecoveryDigest {
+        RecoveryDigest(plans: summary.recoveryPlans)
+    }
+
+    /// Resolve a digest's entry-id list back to the actual entries, preserving
+    /// the digest's order and skipping any id that no longer maps to a session.
+    private func entries(forIDs ids: [UUID]) -> [ProcessEntry] {
+        let byID = Dictionary(allSessionEntries.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        return ids.compactMap { byID[$0] }
+    }
+
+    /// Lossless reconnects + auto-recoverable sessions — the rows the Recovery
+    /// sheet can act on automatically (no history loss for reattach; resume /
+    /// respawn for the rest). Same membership as `recoverableEntries`, but
+    /// ordered by the digest so the sheet groups match the count.
+    var autoRecoverableEntries: [ProcessEntry] {
+        entries(forIDs: recoveryDigest.reattachEntryIDs + recoveryDigest.autoRecoverableEntryIDs)
+    }
+
+    /// Sessions that can't be auto-resumed and need the operator (the U7 "Needs
+    /// you" group): a fresh start, or a one-click fix when the blocker is fixable.
+    var needsYouEntries: [ProcessEntry] {
+        entries(forIDs: recoveryDigest.needsYouEntryIDs)
+    }
+
+    /// True when an entry's recovery is a lossless live reattach — its `screen`
+    /// session kept running, so reconnecting loses nothing (U8b). The Recovery
+    /// sheet labels these distinctly ("Reconnect — no loss") so a calm reconnect
+    /// is never shown as an alarming recovery action.
+    func isLosslessReattach(for entry: ProcessEntry) -> Bool {
+        recoveryPlan(for: entry)?.action == .reattach
+    }
+
+    /// True when an entry's manual-recovery blocker is the untrusted gate — a
+    /// one-click fix: trusting it lets recovery auto-resume instead of forcing a
+    /// fresh start (U7). The planner's untrusted path is the only manual blocker
+    /// that flipping a single toggle clears.
+    func recoveryTrustFixAvailable(for entry: ProcessEntry) -> Bool {
+        guard manualRecoveryNeeded(for: entry) else { return false }
+        guard entry.trust != .trusted else { return false }
+        // Key off the TYPED blocker, not the planner's prose (U38). A reworded
+        // reason string used to silently disable this one-click fix with no test
+        // catching it; the typed `.untrusted` signal survives any wording change.
+        return recoveryPlan(for: entry)?.blocker == .untrusted
+    }
+
+    /// Trust an entry whose manual-recovery blocker was the untrusted gate, then
+    /// recover it — the inline one-click fix the "Needs you" row offers (U7).
+    /// After trusting, the planner reclassifies it to a real recovery action, so
+    /// `recover` resumes/respawns instead of forcing a fresh start.
+    func trustAndRecover(_ entry: ProcessEntry) {
+        guard recoveryTrustFixAvailable(for: entry) else { return }
+        updateEntry(entry.id) { mutable in
+            mutable.trust = .trusted
+            mutable.lastSummary = "\(mutable.name) trusted — recovering"
+        }
+        save()
+        recordActionLog(
+            source: "native",
+            action: "trustAndRecover",
+            targetEntryId: entry.id,
+            targetName: entry.name,
+            result: "Trusted \(entry.name) and recovered",
+            succeeded: true
+        )
+        // Re-read the entry: trust changed, so the planner now yields a real
+        // recovery action.
+        if let refreshed = allSessionEntries.first(where: { $0.id == entry.id }) {
+            recover(refreshed)
+        }
+    }
+
     /// Trigger recovery for every entry the planner currently considers
     /// recoverable. Used by the Recovery sheet's "Recover all" button.
     /// Records a single action log entry summarising the batch so the log
@@ -12581,6 +13625,85 @@ final class WorkbenchViewModel: ObservableObject {
             source: "native",
             action: "recoverAll",
             result: "Recovered \(entries.count) session\(entries.count == 1 ? "" : "s")",
+            succeeded: true
+        )
+    }
+
+    // MARK: - TTFA inline repairs (#U9)
+    //
+    // One-tap actuators the TTFA readiness popover calls per non-green check. Each mirrors the
+    // exact slice of entries the Core `AutonomyReadinessBuilder` flagged, so tapping the button
+    // flips that check toward green in place (the snapshot recomputes off `state`). The popover
+    // gates each button on the matching `*NeedsTrust`/`*Toggle` predicate below so it never renders
+    // an orphaned or no-op button.
+
+    /// Active, non-archived terminal-agent entries — the same set the readiness builder evaluates
+    /// for trust and resume.
+    private var autonomyAgentEntries: [ProcessEntry] {
+        state.processEntries.filter { !$0.isArchived && $0.kind == .terminalAgent }
+    }
+
+    /// Agent terminals the trust check flagged as not trusted.
+    var untrustedAutonomyAgentEntries: [ProcessEntry] {
+        autonomyAgentEntries.filter { $0.trust != .trusted }
+    }
+
+    /// Agent terminals where flipping auto-resume on would actually help: they have an automatic
+    /// resume strategy but it's currently disabled. An agent with only a `.manual` strategy is not
+    /// counted — toggling auto-resume can't give it one, so it's a degraded state, not a one-tap fix.
+    var resumableDisabledAutonomyAgentEntries: [ProcessEntry] {
+        autonomyAgentEntries.filter { entry in
+            guard !entry.autoResume else { return false }
+            guard let agentKind = TerminalAgentDetector.detect(entry: entry),
+                  let preset = TerminalAgentPresets.preset(for: agentKind) else {
+                return false
+            }
+            return preset.resumeStrategy.kind != .manual
+        }
+    }
+
+    /// Trust every untrusted agent terminal so the readiness trust check turns green. Records one
+    /// batched action-log line. No-op (and no log) when nothing is untrusted.
+    func trustUntrustedAutonomyAgentTerminals() {
+        let entries = untrustedAutonomyAgentEntries
+        guard !entries.isEmpty else { return }
+        for entry in entries {
+            // Only flip the trust state. Don't repurpose the operator-visible
+            // `lastSummary` (the session status line, which also feeds the boss
+            // prompt) for a settings-toggle confirmation — that belongs in the
+            // action log below, not the session's status (U41).
+            updateEntry(entry.id) { entry in
+                entry.trust = .trusted
+            }
+        }
+        save()
+        recordActionLog(
+            source: "native",
+            action: "trustAll",
+            result: "Trusted \(entries.count) agent terminal\(entries.count == 1 ? "" : "s")",
+            succeeded: true
+        )
+    }
+
+    /// Enable auto-resume on every agent terminal that has an automatic strategy but it's off, so
+    /// the readiness resume check turns green. No-op (and no log) when nothing is toggleable.
+    func enableAutoResumeForAutonomyAgentTerminals() {
+        let entries = resumableDisabledAutonomyAgentEntries
+        guard !entries.isEmpty else { return }
+        for entry in entries {
+            // Only flip the auto-resume setting. Don't rewrite the
+            // operator-visible `lastSummary` (session status line + boss prompt)
+            // for a settings-toggle confirmation — the action log below is the
+            // right home for that (U41).
+            updateEntry(entry.id) { entry in
+                entry.autoResume = true
+            }
+        }
+        save()
+        recordActionLog(
+            source: "native",
+            action: "enableAutoResumeAll",
+            result: "Enabled auto-resume on \(entries.count) agent terminal\(entries.count == 1 ? "" : "s")",
             succeeded: true
         )
     }
@@ -13005,7 +14128,11 @@ final class WorkbenchViewModel: ObservableObject {
     /// OS, sessions, recent boss decisions, and recent actions. Lands in a
     /// stable, timestamped folder under the app-support root so it's trivial to
     /// open — and for the boss/Claude to read.
-    func submitBugReport() {
+    /// Submit the in-app Report a Bug form. The boss's `workbench_report_bug` path
+    /// (`startReportBug`) reuses this same method (with an explicit note + source) so the
+    /// boss-created bundle goes through the EXACT same `BugReportWriter` + redactor the
+    /// human path uses — never a parallel, un-anonymized path.
+    func submitBugReport(note explicitNote: String? = nil, source: String = "native") {
         guard !bugReportIsSubmitting else {
             return
         }
@@ -13014,7 +14141,7 @@ final class WorkbenchViewModel: ObservableObject {
 
         // Gather everything that needs the main actor / live window up front,
         // then do subprocess + file IO off-main.
-        let note = bugReportNote
+        let note = explicitNote ?? bugReportNote
         let screenshotPNG = captureKeyWindowPNG()
         let sessions = bugReportSessions()
         let decisions = state.decisionLog
@@ -13094,16 +14221,23 @@ final class WorkbenchViewModel: ObservableObject {
                 // A new bundle invalidates any prior issue link.
                 bugReportIssueURL = nil
                 bugReportIssueError = nil
+                // U30(a): persist the durable filed-status (unfiled, with the note + any
+                // collection warnings) next to the bundle, so "was this filed? where?"
+                // survives the sheet/app closing and a boss can read it back.
+                try? bugReportStatusStore.write(
+                    .unfiled(note: note, warnings: bundle.warnings),
+                    into: bundle.directoryURL
+                )
                 recordActionLog(
-                    source: "native",
+                    source: source,
                     action: "submitBugReport",
-                    result: "Wrote \(bundle.directoryURL.lastPathComponent)",
+                    result: "Wrote \(bundle.directoryURL.lastPathComponent) (unfiled)",
                     succeeded: true
                 )
             case let .failure(error):
                 bugReportError = error.localizedDescription
                 recordActionLog(
-                    source: "native",
+                    source: source,
                     action: "submitBugReport",
                     result: "Failed: \(error.localizedDescription)",
                     succeeded: false
@@ -13174,10 +14308,21 @@ final class WorkbenchViewModel: ObservableObject {
             switch outcome {
             case let .success(url):
                 bugReportIssueURL = url
+                // U30(a): stamp the filed outcome (issue URL + time) into the bundle's
+                // durable status, so the filed status survives the sheet closing and a
+                // boss read can answer "filed? where?" — not just an action-log one-liner
+                // that can roll off the bounded log.
+                let priorNote = lastBugReportNote
+                let existing = bugReportStatusStore.read(from: directory)
+                    ?? .unfiled(note: priorNote, warnings: lastBugReportWarnings)
+                try? bugReportStatusStore.write(
+                    existing.markedFiled(issueURL: url, at: Date()),
+                    into: directory
+                )
                 recordActionLog(
                     source: "native",
                     action: "fileBugReportIssue",
-                    result: "Filed \(url)",
+                    result: "Filed \(directory.lastPathComponent) as \(url)",
                     succeeded: true
                 )
             case let .failure(error):
@@ -13542,51 +14687,6 @@ final class WorkbenchViewModel: ObservableObject {
         }.value
     }
 
-    @discardableResult
-    func handleOnboardingInstruction(_ rawText: String) -> String? {
-        let text = rawText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !text.isEmpty else {
-            return nil
-        }
-        if text.looksLikeOnboardingQuestion {
-            bossQuestion = rawText
-            Task {
-                await runBossQuestion()
-            }
-            return "Asking \(state.boss.agentName). The reply will appear here."
-        }
-        if text.contains("scan") || text.contains("bootstrap") || text == "yes" {
-            refreshOnboardingReadiness()
-            guard onboardingReadiness?.isReady == true else {
-                runOnboardingProviderChecksIfNeeded()
-                return "Finish connecting the boss first. Workbench is checking provider and tool readiness now."
-            }
-            scanForOnboardingSessions()
-            return "Scanning recent terminal work. The import proposal will update above."
-        } else if text.contains("apply") || text.contains("arrange") || text.contains("import") {
-            refreshOnboardingReadiness()
-            guard onboardingReadiness?.isReady == true else {
-                runOnboardingProviderChecksIfNeeded()
-                return "Finish connecting the boss first. Arrange stays locked until provider checks pass."
-            }
-            applyOnboardingProposal()
-            return WorkbenchOnboardingNarrative.duplicateCleanup
-        } else if text.contains("mcp") || text.contains("tool") {
-            installWorkbenchMCPForBoss()
-            refreshOnboardingReadiness()
-            return "Connecting Workbench tools to the selected boss agent at runtime."
-        } else if text.contains("hatch") || text.contains("create agent") {
-            presentNewAgentProviderConfigForm()
-            return "Opening the new-agent setup form."
-        } else {
-            bossQuestion = rawText
-            Task {
-                await runBossQuestion()
-            }
-            return "Asking \(state.boss.agentName). The reply will appear here."
-        }
-    }
-
     func scanForOnboardingSessions() {
         guard !onboardingIsScanning else {
             return
@@ -13649,27 +14749,6 @@ final class WorkbenchViewModel: ObservableObject {
         Task {
             await runBossQuickQuestion(WorkbenchOnboardingNarrative.bossReconstructTask)
         }
-    }
-
-    /// Toggle whether a terminal in the current import proposal is selected.
-    /// Returns `true` after the toggle if the terminal is now selected.
-    @discardableResult
-    func toggleOnboardingSelection(groupID: String, terminalID: String) -> Bool? {
-        guard var proposal = onboardingProposal else {
-            return nil
-        }
-        let result = proposal.toggleSelection(groupID: groupID, terminalID: terminalID)
-        onboardingProposal = proposal
-        return result
-    }
-
-    /// Bulk select / clear an entire onboarding group.
-    func setOnboardingGroupSelection(groupID: String, selected: Bool) {
-        guard var proposal = onboardingProposal else {
-            return
-        }
-        proposal.setSelection(groupID: groupID, selected: selected)
-        onboardingProposal = proposal
     }
 
     // MARK: - Boss proposals (workbench_propose CAPABILITY — never a gate)
@@ -13855,232 +14934,6 @@ final class WorkbenchViewModel: ObservableObject {
         return lines.joined(separator: "\n")
     }
 
-    func onboardingSourceLabel(for candidate: RecentSessionCandidate) -> String {
-        switch candidate.source {
-        case .claudeCode:
-            return "Claude Code history"
-        case .cmux:
-            return "cmux live panel"
-        case .openAICodex:
-            return "OpenAI Codex history"
-        case .githubCopilotCLI:
-            return "GitHub Copilot CLI history"
-        case .shellHistory:
-            return "shell history"
-        case .workbench:
-            return "existing Workbench session"
-        }
-    }
-
-    func onboardingConfidenceExplanation(for terminal: ProposedTerminalImport) -> String {
-        let candidate = terminal.candidate
-        if candidate.source == .cmux {
-            return "live cmux panel matched to a terminal process and session metadata"
-        }
-        if candidate.confidence >= 0.95 {
-            return "live or Workbench-owned session with strong resume evidence"
-        }
-        if candidate.confidence >= 0.90 {
-            return "recent session with a known working directory and native resume command"
-        }
-        if candidate.confidence >= 0.70 {
-            return "recent history with enough context to resume, but weaker project evidence"
-        }
-        return "low-confidence shell/history signal; review before importing"
-    }
-
-    func onboardingPreviewText(for terminal: ProposedTerminalImport) -> String {
-        let candidate = terminal.candidate
-        if candidate.source == .openAICodex,
-           let rolloutPath = codexRolloutPath(for: candidate),
-           let preview = previewText(fromEvidencePath: rolloutPath),
-           !preview.isEmpty {
-            return preview
-        }
-        let existingEvidence = candidate.evidencePaths.filter { path in
-            !path.hasPrefix("process:") &&
-                !path.hasPrefix("tty:") &&
-                FileManager.default.fileExists(atPath: path)
-        }
-        for path in existingEvidence {
-            if let preview = previewText(fromEvidencePath: path), !preview.isEmpty {
-                return preview
-            }
-        }
-        return [
-            "No transcript preview file was available for this candidate.",
-            "",
-            "Source: \(onboardingSourceLabel(for: candidate))",
-            "Summary: \(candidate.summary)",
-            "Resume: \(candidate.resumeCommandLine)",
-            "Evidence: \(candidate.evidencePaths.isEmpty ? "none" : candidate.evidencePaths.joined(separator: ", "))"
-        ].joined(separator: "\n")
-    }
-
-    private func codexRolloutPath(for candidate: RecentSessionCandidate) -> String? {
-        guard let sessionId = candidate.resumeCommand.last,
-              candidate.resumeCommand.count >= 2,
-              candidate.resumeCommand[candidate.resumeCommand.count - 2] == "resume",
-              let sqlitePath = candidate.evidencePaths.first(where: { $0.hasSuffix(".sqlite") }) else {
-            return nil
-        }
-        let process = Process()
-        let pipe = Pipe()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/sqlite3")
-        let escapedSessionId = sessionId.replacingOccurrences(of: "'", with: "''")
-        // `-readonly` avoids contending for a write lock on the live Codex DB.
-        process.arguments = [
-            "-readonly",
-            sqlitePath,
-            "select rollout_path from threads where id='\(escapedSessionId)' limit 1;"
-        ]
-        process.standardOutput = pipe
-        process.standardError = Pipe()
-        do {
-            try process.run()
-        } catch {
-            return nil
-        }
-        // This can run on the main actor (the import-preview view calls it), so
-        // bound the wait with a watchdog: a stuck DB lock must not beachball the
-        // app. Terminating closes the pipe so the subsequent read returns.
-        let finished = DispatchSemaphore(value: 0)
-        DispatchQueue.global(qos: .userInitiated).async {
-            process.waitUntilExit()
-            finished.signal()
-        }
-        if finished.wait(timeout: .now() + .milliseconds(1500)) == .timedOut {
-            process.terminate()
-            return nil
-        }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        guard process.terminationStatus == 0 else {
-            return nil
-        }
-        let path = String(decoding: data, as: UTF8.self)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return path.isEmpty ? nil : path
-    }
-
-    private func previewText(fromEvidencePath path: String) -> String? {
-        guard let data = FileManager.default.contents(atPath: path),
-              let text = String(data: data, encoding: .utf8) else {
-            return nil
-        }
-        let lines = text.split(whereSeparator: \.isNewline).suffix(120)
-        var messages: [String] = []
-        for line in lines {
-            guard let message = readablePreviewLine(String(line)),
-                  message != messages.last else {
-                continue
-            }
-            messages.append(message)
-        }
-        let preview = messages.suffix(60).joined(separator: "\n\n")
-        if preview.isEmpty {
-            return String(lines.suffix(60).joined(separator: "\n")).trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        return preview
-    }
-
-    private func readablePreviewLine(_ line: String) -> String? {
-        guard let data = line.data(using: .utf8),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty ? nil : trimmed
-        }
-        guard let eventType = object["type"] as? String else {
-            return nil
-        }
-        if eventType == "response_item",
-           let payload = object["payload"] as? [String: Any] {
-            return readableResponseItem(payload)
-        }
-        if eventType == "event_msg",
-           let payload = object["payload"] as? [String: Any] {
-            return readableEventMessage(payload)
-        }
-        let content = firstReadableContent(in: object)
-        guard let content, !content.isEmpty else {
-            return nil
-        }
-        return "\(eventType): \(content)"
-    }
-
-    private func readableResponseItem(_ payload: [String: Any]) -> String? {
-        guard let type = payload["type"] as? String else {
-            return nil
-        }
-        if type == "message" {
-            let role = stringValue(in: payload, keys: ["role"]) ?? "assistant"
-            guard let contentObject = payload["content"],
-                  let content = firstReadableContent(in: contentObject) else {
-                return nil
-            }
-            return "\(role): \(content)"
-        }
-        return nil
-    }
-
-    private func readableEventMessage(_ payload: [String: Any]) -> String? {
-        guard let type = payload["type"] as? String else {
-            return nil
-        }
-        if type == "agent_message",
-           let message = payload["message"] as? String {
-            return "assistant: \(clippedPreview(message))"
-        }
-        if type == "user_message",
-           let message = payload["message"] as? String {
-            return "user: \(clippedPreview(message))"
-        }
-        return nil
-    }
-
-    private func firstReadableContent(in object: Any) -> String? {
-        if let string = object as? String {
-            let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty ? nil : clippedPreview(trimmed)
-        }
-        if let array = object as? [Any] {
-            return array.compactMap(firstReadableContent(in:)).first
-        }
-        guard let dictionary = object as? [String: Any] else {
-            return nil
-        }
-        if let itemType = dictionary["type"] as? String,
-           itemType == "image_url" || itemType == "input_image" {
-            return nil
-        }
-        for key in ["content", "message", "summary", "text", "prompt", "title"] {
-            if let value = dictionary[key],
-               let content = firstReadableContent(in: value) {
-                return content
-            }
-        }
-        return nil
-    }
-
-    private func clippedPreview(_ text: String) -> String {
-        let normalized = text
-            .replacingOccurrences(of: "\r\n", with: "\n")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard normalized.count > 1_200 else {
-            return normalized
-        }
-        let end = normalized.index(normalized.startIndex, offsetBy: 1_200)
-        return "\(normalized[..<end])..."
-    }
-
-    private func stringValue(in dictionary: [String: Any], keys: [String]) -> String? {
-        for key in keys {
-            if let value = dictionary[key] as? String {
-                return value
-            }
-        }
-        return nil
-    }
-
     /// Dispatch a command palette item with full payload support. Routes
     /// payload-bearing commands (e.g. per-agent select / repair) through this
     /// path and falls back to the ID-only dispatcher for the rest.
@@ -14152,13 +15005,9 @@ final class WorkbenchViewModel: ObservableObject {
         case .newSession:
             isNewSessionSheetPresented = true
         case .bossCheckIn:
-            guard !bossCheckInIsRunning else {
-                errorMessage = "A boss check-in is already running"
-                return
-            }
-            Task {
-                await runBossCheckIn()
-            }
+            // U12: route through the shared affordance so a no-boss palette
+            // invocation opens set-up rather than silently no-opping.
+            attemptCheckIn()
         case .bossQuickWhatsGoingOn:
             Task {
                 await runBossQuickQuestion("What's going on?")
@@ -14182,7 +15031,9 @@ final class WorkbenchViewModel: ObservableObject {
         case .openOnboarding:
             presentOnboarding()
         case .installOuroAgent:
-            isOuroAgentInstallSheetPresented = true
+            // U18: the command-palette create action opens the native form, not the
+            // raw `ouro hatch` CLI pane.
+            presentNewAgentProviderConfigForm()
         case .refreshWorkspace:
             Task {
                 await refreshWorkspace()
@@ -14272,7 +15123,8 @@ final class WorkbenchViewModel: ObservableObject {
                 errorMessage = "No session is selected"
                 return
             }
-            terminate(selectedEntry)
+            // U11: the menubar/palette Stop honors the same consequence gate.
+            requestStop(selectedEntry)
         case .recoverSelectedSession:
             guard let selectedEntry else {
                 errorMessage = "No session is selected"
@@ -14388,7 +15240,10 @@ final class WorkbenchViewModel: ObservableObject {
         }.value
         workbenchVisibility = visibilityBuilder.build(
             state: snapshotState,
-            workCard: workCard
+            workCard: workCard,
+            // #U28: feed the live screen survival signal so the recovery breakdown
+            // classifies reattaches the same way the rest of recovery does.
+            liveSessionNames: liveScreenSessionNames
         )
     }
 
@@ -14873,7 +15728,11 @@ final class WorkbenchViewModel: ObservableObject {
     /// `processing/` files are deleted (at-least-once → applied-and-cleared).
     private func applyExternalActionRequests(_ requests: [WorkbenchActionRequest]) {
         let results = requests.map { request in
-            "External \(request.source): \(applyBossAction(request.action, source: "external:\(request.source)"))"
+            // Stamp the originating requestId onto the action-log entry this
+            // apply writes (#U24), so the boss's queued request and the
+            // operator's audit entry share one key — and workbench_action_result
+            // can resolve the requestId to its applied/failed outcome.
+            "External \(request.source): \(applyBossAction(request.action, source: "external:\(request.source)", requestId: request.id))"
         }
         bossAppliedActions = Array((results + bossAppliedActions).prefix(12))
         let appliedIDs = requests.map(\.id)
@@ -14895,6 +15754,33 @@ final class WorkbenchViewModel: ObservableObject {
             Self.listLiveScreenSessionNames()
         }.value
         liveScreenSessionNames = names
+    }
+
+    /// U8a: re-derive startup attention now that the live-`screen` survival
+    /// signal is known. The synchronous `load()` reconcile ran before the
+    /// `screen -ls` probe, so it couldn't tell survivors from losses and used
+    /// the safe degrade (treat as lost). Once the probe populates
+    /// `liveScreenSessionNames`, re-run the survival-aware reconciler so a
+    /// session whose terminal is still alive flips from a lost-state flag to a
+    /// calm "reconnected" — BEFORE the reattach runs, so the post-reboot screen
+    /// never shows a false orange alarm for an agent that just kept running.
+    ///
+    /// Only entries whose latest run is still `.needsRecovery` are touched (the
+    /// reconciler guards on that), so a session the reattach already brought
+    /// back to `.running` is left alone. Persisted so the calmer truth survives.
+    func reconcileStartupAttentionWithLiveSessions() {
+        let reconciled = startupRecoveryReconciler.rederiveAttention(
+            state,
+            liveSessionNames: liveScreenSessionNames
+        )
+        // Only attention/summary on recovering entries can have changed; assign
+        // the whole reconciled state (runs are idempotent for already-needs-
+        // recovery runs) and persist the calmer truth.
+        guard reconciled.processEntries != state.processEntries else {
+            return
+        }
+        state = reconciled
+        save()
     }
 
     nonisolated private static func listLiveScreenSessionNames() -> Set<String> {
@@ -15046,6 +15932,20 @@ final class WorkbenchViewModel: ObservableObject {
 
     func exitTerminalFocus() {
         terminalFocusEntryID = nil
+    }
+
+    /// U10: the detail banner's "Jump to prompt" action — select the waiting
+    /// session and put the keyboard cursor in its live terminal (redrawing to the
+    /// latest output) so the operator can answer the prompt the agent is parked
+    /// on without hunting for the pane. No-op (with a message) if it isn't live.
+    func jumpToAttentionPrompt(_ entry: ProcessEntry) {
+        guard let session = activeSessions[entry.id] else {
+            errorMessage = "\(entry.name) is not running"
+            return
+        }
+        selectedEntryID = entry.id
+        session.redrawDisplay()
+        session.focusInput()
     }
 
     /// Toggle full-screen focus for the ⇧⌘F menu command: exit if focused,
@@ -15245,6 +16145,29 @@ final class WorkbenchViewModel: ObservableObject {
         )
     }
 
+    /// U11: the consequence-gated Stop entry point used by BOTH the ⌘. chord and
+    /// every Stop button. When the session is a live agent holding context
+    /// (`WorkbenchSurfacePolicy.stopNeedsConfirmation`), present the named
+    /// confirmation instead of killing it outright — so a reflexive cancel-chord
+    /// or a misclick can't nuke an in-flight agent. Idle/finished/never-started
+    /// sessions terminate immediately (no friction where nothing's lost).
+    func requestStop(_ entry: ProcessEntry) {
+        let isLiveProcess = activeSessions[entry.id] != nil
+        if WorkbenchSurfacePolicy.stopNeedsConfirmation(isLiveProcess: isLiveProcess, attention: entry.attention) {
+            pendingStopSession = entry
+        } else {
+            terminate(entry)
+        }
+    }
+
+    /// Confirm a pending Stop (the operator pressed the destructive button in the
+    /// U11 confirmation dialog).
+    func confirmStop() {
+        guard let entry = pendingStopSession else { return }
+        pendingStopSession = nil
+        terminate(entry)
+    }
+
     func terminate(_ entry: ProcessEntry) {
         guard let session = activeSessions[entry.id] else {
             errorMessage = "\(entry.name) is not running"
@@ -15253,6 +16176,16 @@ final class WorkbenchViewModel: ObservableObject {
         manuallyTerminatedRunIDs.insert(session.plan.runId)
         session.terminate()
         markTerminated(entryId: entry.id, runId: session.plan.runId, rawStatus: nil)
+        // U11: record the stop so it's auditable in the action log alongside the
+        // other native actions (who/what/when).
+        recordActionLog(
+            source: "native",
+            action: "stopSession",
+            targetEntryId: entry.id,
+            targetName: entry.name,
+            result: "Stopped \(entry.name)",
+            succeeded: true
+        )
     }
 
     /// Terminate every currently-running session. Useful at end-of-day to
@@ -15283,6 +16216,25 @@ final class WorkbenchViewModel: ObservableObject {
     func createCustomSession(_ draft: CustomTerminalSessionDraft, launchAfterCreate: Bool) -> ProcessEntry? {
         let projectId = selectedProject?.id ?? state.projects.first?.id
         return createCustomSession(draft, in: projectId, launchAfterCreate: launchAfterCreate)
+    }
+
+    /// Unit 4 / Slice 2: the empty-state "New Terminal" primary action — open a
+    /// blank login-shell terminal instantly, zero required typing, no sheet.
+    /// Builds a blank draft (empty command → `/bin/zsh -l` in the factory,
+    /// default name) rooted at the selected project's path — the same working-
+    /// directory default `NewTerminalSessionSheet` uses — and launches it.
+    @discardableResult
+    func createBlankTerminal() -> ProcessEntry? {
+        let workingDirectory = selectedProject?.rootPath
+            ?? FileManager.default.homeDirectoryForCurrentUser.path
+        let draft = CustomTerminalSessionDraft(
+            name: "",
+            command: "",
+            workingDirectory: workingDirectory,
+            trust: .trusted,
+            autoResume: true
+        )
+        return createCustomSession(draft, launchAfterCreate: true)
     }
 
     @discardableResult
@@ -15500,7 +16452,12 @@ final class WorkbenchViewModel: ObservableObject {
         }
     }
 
-    private func applyBossAction(_ action: BossWorkbenchAction, source: String) -> String {
+    private func applyBossAction(_ action: BossWorkbenchAction, source: String, requestId: UUID? = nil) -> String {
+        // Make the originating requestId available to every action-log write this
+        // apply triggers (#U24), then clear it so an operator action that runs
+        // next never inherits a stale id.
+        currentBossActionRequestId = requestId
+        defer { currentBossActionRequestId = nil }
         do {
             try action.validateForQueueing()
         } catch {
@@ -15522,7 +16479,8 @@ final class WorkbenchViewModel: ObservableObject {
         // path — is left UNTOUCHED.
         switch action.action {
         case .createGroup, .createTerminal, .createSession, .repairAgent, .requestProviderConfig,
-             .verifyProvider, .refreshProvider, .selectLane, .registerWorkbenchMCP, .ensureDaemon:
+             .verifyProvider, .refreshProvider, .selectLane, .registerWorkbenchMCP, .ensureDaemon,
+             .reportBug:
             let authorization = bossActionAuthorizer.authorizeEntryless(action)
             guard authorization.isAllowed else {
                 return finishBossAction(
@@ -15608,6 +16566,8 @@ final class WorkbenchViewModel: ObservableObject {
             return startRegisterWorkbenchMCP(action: action, source: source)
         case .ensureDaemon:
             return startEnsureDaemon(action: action, source: source)
+        case .reportBug:
+            return startReportBug(action: action, source: source)
         case .launch, .recover, .terminate, .sendInput, .moveSession, .setTrust, .setAutoResume, .archive, .restore:
             break
         }
@@ -15665,7 +16625,14 @@ final class WorkbenchViewModel: ObservableObject {
                 return finishBossAction(source: source, action: action, entry: entry, result: "Skipped recover for \(entry.name): \(recoveryReason(for: entry))")
             }
             recover(entry)
-            return finishBossAction(source: source, action: action, entry: entry, result: "Recovered \(entry.name)")
+            // #U28: record WHICH recovery class the boss acted on (reattach /
+            // auto_resume / respawn / needs_human) so the operator can audit which
+            // sessions the boss resumed vs escalated — from the same plan source.
+            let recoveryClass = summary.recoveryPlans
+                .first { $0.entryId == entry.id }
+                .flatMap { RecoveryBreakdown.bossActionClass(for: $0.action) }
+            let classSuffix = recoveryClass.map { " (\($0))" } ?? ""
+            return finishBossAction(source: source, action: action, entry: entry, result: "Recovered \(entry.name)\(classSuffix)")
         case .terminate:
             guard activeSessions[entry.id] != nil else {
                 return finishBossAction(source: source, action: action, entry: entry, result: "Skipped terminate for \(entry.name): not running")
@@ -15750,7 +16717,8 @@ final class WorkbenchViewModel: ObservableObject {
             }
             return finishBossAction(source: source, action: action, entry: entry, result: "Restored \(entry.name)")
         case .createGroup, .createTerminal, .createSession, .repairAgent, .requestProviderConfig,
-             .verifyProvider, .refreshProvider, .selectLane, .registerWorkbenchMCP, .ensureDaemon:
+             .verifyProvider, .refreshProvider, .selectLane, .registerWorkbenchMCP, .ensureDaemon,
+             .reportBug:
             return finishBossAction(source: source, action: action, entry: entry, result: "Skipped \(action.action.rawValue): already handled")
         }
     }
@@ -15820,11 +16788,18 @@ final class WorkbenchViewModel: ObservableObject {
     /// Present the provider form to CREATE A NEW AGENT (the empty-machine first-agent
     /// path, and the "create another" path). The form collects the agent name +
     /// provider + credentials and cold-start-hatches headlessly — replacing the
-    /// visible `ouro hatch` CLI pane that `launchOuroAgentInstall` spawned.
+    /// visible `ouro hatch` CLI pane the old install sheet spawned.
     func presentNewAgentProviderConfigForm() {
         providerConfigIsNewAgent = true
         providerConfigAgentName = ""
         isProviderConfigPresented = true
+    }
+
+    /// U18: the install sheet is demoted to its only unique capability — cloning an agent
+    /// from a Git remote. Creating an agent goes through the native form above; this opens
+    /// the (now clone-only) `OuroAgentInstallSheet`.
+    func presentCloneAgentSheet() {
+        isOuroAgentInstallSheetPresented = true
     }
 
     /// Seam-free validation for a new agent's name, or nil if valid. Surfaced inline in
@@ -16489,6 +17464,28 @@ final class WorkbenchViewModel: ObservableObject {
         )
     }
 
+    /// U30(b): the boss's `workbench_report_bug` drain. Captures the defect (carried in
+    /// `action.text`) into the SAME anonymized bug-report bundle a human creates — it reuses
+    /// `submitBugReport(note:source:)`, so the bundle flows through the identical
+    /// `BugReportWriter` + `WorkbenchBugReportRedactor` path (live state: sessions, decisions,
+    /// the action log, a window screenshot) and lands a durable unfiled status. The resulting
+    /// bundle is revealable + File-as-Issue-able exactly like a human-created one; filing to
+    /// GitHub stays human-gated.
+    private func startReportBug(action: BossWorkbenchAction, source: String) -> String {
+        let note = (action.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !note.isEmpty else {
+            return finishBossAction(
+                source: source, action: action, entry: nil,
+                result: "Skipped reportBug: missing note"
+            )
+        }
+        submitBugReport(note: note, source: source)
+        return finishBossAction(
+            source: source, action: action, entry: nil,
+            result: "Writing an anonymized bug report for \"\(note)\"…"
+        )
+    }
+
     /// Surface the recovery-truth outcome of a completed onboarding action. Mirrors
     /// `completeRepairAgent`: human-facing (seam-free) line → `bossAppliedActions`; raw audit
     /// detail → action log; `succeeded` is the recovery truth (from the post-command probe).
@@ -16578,7 +17575,8 @@ final class WorkbenchViewModel: ObservableObject {
                 targetEntryId: targetEntryId,
                 targetName: targetName,
                 result: result,
-                succeeded: succeeded
+                succeeded: succeeded,
+                requestId: currentBossActionRequestId
             ),
             at: 0
         )
@@ -16733,7 +17731,14 @@ final class WorkbenchViewModel: ObservableObject {
     func markStarted(plan: TerminalCommandPlan, pid: Int32?) {
         updateEntry(plan.entryId) { entry in
             entry.attention = .active
-            entry.lastSummary = plan.reason
+            // The operator-visible status (and the boss prompt) read a plain
+            // sentence keyed off the plan's typed `kind` (U40), not the planner's
+            // technical raw `reason` ("respawn X from persisted workbench
+            // context"). The raw reason stays in the plan for logs / disclosure.
+            entry.lastSummary = terminalCommandPlanPhrasebook.operatorSentence(
+                for: plan.kind,
+                entryName: entry.name
+            )
         }
         state.processRuns.removeAll { $0.id == plan.runId }
         state.processRuns.append(
@@ -16812,51 +17817,66 @@ final class WorkbenchViewModel: ObservableObject {
             // isolation boundary. The blocking read + classify happen in a
             // nonisolated helper that captures only Sendable values.
             Task { [weak self] in
-                let signal = await Self.classifyTranscriptTail(path: transcriptPath)
-                self?.applyAttentionSignal(signal, entryId: entryId, runId: runId)
+                let classification = await Self.classifyTranscriptTail(path: transcriptPath)
+                self?.applyAttentionSignal(classification, entryId: entryId, runId: runId)
             }
         }
     }
 
     /// Read a bounded transcript tail and classify it off the main actor.
     /// Nonisolated and capturing only a `Sendable` path so it satisfies strict
-    /// concurrency; returns the `Sendable` `AttentionSignal`.
-    nonisolated private static func classifyTranscriptTail(path: String) async -> AttentionSignal {
+    /// concurrency; returns the `Sendable` `AttentionClassification` (signal +
+    /// the short "why" line U10 surfaces on the header banner and in the boss
+    /// snapshot).
+    nonisolated private static func classifyTranscriptTail(path: String) async -> AttentionClassification {
         await Task.detached(priority: .utility) {
             guard let tail = TranscriptTailReader(maxBytes: 4096).read(path: path) else {
-                return AttentionSignal.unknown
+                return AttentionClassification(signal: .unknown)
             }
-            return AttentionSignalDetector.classify(tail: tail.text)
+            return AttentionSignalDetector.classifyWithReason(tail: tail.text)
         }.value
     }
 
     /// Apply a detected attention signal, guarding that the run is still the
     /// entry's live session so a stale classification can't reanimate a session
-    /// that already moved on.
-    private func applyAttentionSignal(_ signal: AttentionSignal, entryId: UUID, runId: UUID) {
+    /// that already moved on. The detected `reason` is persisted onto the entry
+    /// (and cleared when the signal clears) so the header banner and the boss
+    /// snapshot read the SAME "why" line.
+    private func applyAttentionSignal(_ classification: AttentionClassification, entryId: UUID, runId: UUID) {
         guard activeSessions[entryId]?.plan.runId == runId,
               let entry = state.processEntries.first(where: { $0.id == entryId }),
               !entry.isArchived else {
             return
         }
-        switch signal {
+        let reason = classification.reason
+        switch classification.signal {
         case .waitingOnHuman:
             guard entry.attention == .active || entry.attention == .idle else { return }
-            updateEntry(entryId) { $0.attention = .waitingOnHuman }
+            updateEntry(entryId) {
+                $0.attention = .waitingOnHuman
+                $0.attentionReason = reason
+            }
             save()
             triggerEventDrivenBossCheckIn()
         case .blocked:
             // Stuck on a terminal error. Only escalate from active/idle; don't
             // override a waiting prompt or a boss-set review state.
             guard entry.attention == .active || entry.attention == .idle else { return }
-            updateEntry(entryId) { $0.attention = .blocked }
+            updateEntry(entryId) {
+                $0.attention = .blocked
+                $0.attentionReason = reason
+            }
             save()
             triggerEventDrivenBossCheckIn()
         case .unknown:
             // The agent produced output that's neither a prompt nor a terminal
-            // error: clear a stale detector-set wait/blocked back to active.
+            // error: clear a stale detector-set wait/blocked back to active and
+            // drop the now-stale reason.
             guard entry.attention == .waitingOnHuman || entry.attention == .blocked else { return }
-            updateEntry(entryId) { $0.attention = .active }
+            updateEntry(entryId) {
+                $0.attention = .active
+                $0.attentionReason = nil
+            }
             save()
         }
     }

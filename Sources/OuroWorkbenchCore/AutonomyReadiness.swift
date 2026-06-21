@@ -115,81 +115,41 @@ public struct AutonomyReadinessBuilder: Sendable {
         ])
     }
 
+    /// #U17: the boss + boss/MCP-bridge condition is the overlap the onboarding readiness also
+    /// judges. It's classified ONCE in `BossBridgeContract` and adapted here into the autonomy
+    /// check vocabulary, so the TTFA popover and the onboarding wizard can never render a
+    /// contradictory verdict/tone for the same machine. The contract preserves this check's exact
+    /// prior states + copy, so the live-verified U9 popover behavior is unchanged.
     private func bossCheck(for boss: BossAgentSelection) -> AutonomyReadinessCheck {
-        if BossWorkbenchMCPRegistrar.isValidAgentBundleName(boss.agentName) {
-            return AutonomyReadinessCheck(
-                id: "boss",
-                label: "Boss agent",
-                detail: "\(boss.agentName) is selected.",
-                state: .ok
-            )
-        }
-        return AutonomyReadinessCheck(
-            id: "boss",
-            label: "Boss agent",
-            detail: "The selected boss name is not a valid Ouro agent bundle name.",
-            state: .blocker
-        )
+        Self.check(from: BossBridgeContract.bossVerdict(agentName: boss.agentName))
     }
 
     /// RUNTIME-INJECTION model: the Workbench tools reach the boss at runtime (Workbench passes
     /// `--workbench-mcp` when it launches the boss), so "ready" means the Workbench MCP binary is
     /// present (runtime injection available) AND the boss bundle is clean of any stale entry — not
-    /// that anything is written into the synced bundle.
+    /// that anything is written into the synced bundle. Derived from `BossBridgeContract` (#U17).
     private func mcpCheck(_ registration: BossWorkbenchMCPRegistrationSnapshot?) -> AutonomyReadinessCheck {
-        guard let registration else {
-            return AutonomyReadinessCheck(
-                id: "boss-mcp",
-                label: "Boss bridge",
-                detail: "Workbench tools availability has not been checked.",
-                state: .warning
-            )
-        }
+        Self.check(from: BossBridgeContract.bridgeVerdict(registration))
+    }
 
-        switch registration.status {
-        case .registered:
-            return AutonomyReadinessCheck(
-                id: "boss-mcp",
-                label: "Boss bridge",
-                detail: "Workbench tools are available to \(registration.agentName) at runtime.",
-                state: .ok
-            )
-        case .notRegistered:
-            return AutonomyReadinessCheck(
-                id: "boss-mcp",
-                label: "Boss bridge",
-                detail: "The Workbench tools binary isn't installed, so \(registration.agentName) can't be connected at runtime. Reinstall Workbench.",
-                state: .blocker
-            )
-        case .needsUpdate:
-            return AutonomyReadinessCheck(
-                id: "boss-mcp",
-                label: "Boss bridge",
-                detail: "A stale Workbench entry is left in the boss bundle from an older setup and needs to be cleaned.",
-                state: .blocker
-            )
-        case .agentMissing:
-            return AutonomyReadinessCheck(
-                id: "boss-mcp",
-                label: "Boss bridge",
-                detail: "The selected boss agent bundle is missing.",
-                state: .blocker
-            )
-        case .executableMissing:
-            return AutonomyReadinessCheck(
-                id: "boss-mcp",
-                label: "Boss bridge",
-                detail: "The Workbench tools binary is not installed.",
-                state: .blocker
-            )
-        case .invalidConfig:
-            return AutonomyReadinessCheck(
-                id: "boss-mcp",
-                label: "Boss bridge",
-                detail: "The selected boss agent config cannot be updated safely.",
-                state: .blocker
-            )
+    /// Adapt a shared `BossBridgeContract.Verdict` into the autonomy check vocabulary, mapping the
+    /// shared severity 1:1 onto the check state.
+    private static func check(from verdict: BossBridgeContract.Verdict) -> AutonomyReadinessCheck {
+        let state: AutonomyReadinessCheckState
+        switch verdict.severity {
+        case .ok:
+            state = .ok
+        case .warning:
+            state = .warning
+        case .blocker:
+            state = .blocker
         }
+        return AutonomyReadinessCheck(
+            id: verdict.id,
+            label: verdict.label,
+            detail: verdict.detail,
+            state: state
+        )
     }
 
     private func terminalTrustCheck(for state: WorkspaceState) -> AutonomyReadinessCheck {

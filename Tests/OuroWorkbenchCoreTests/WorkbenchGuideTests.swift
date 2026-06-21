@@ -19,19 +19,52 @@ final class WorkbenchGuideTests: XCTestCase {
         XCTAssertTrue(WorkbenchGuide.actionVerbs.contains("recover"))
     }
 
-    func testBossToolsCoverTheAdvertisedSurface() {
-        let tools = Set(WorkbenchGuide.bossTools.map(\.tool))
-        XCTAssertEqual(tools, [
+    func testBossToolsAreExactlyTheAdvertisedToolSet() {
+        // #U25: bossTools is the single source feeding the check-in prompt,
+        // workbench_sense, and the inner-agent context file, so it must name
+        // EVERY tool tools/list advertises and none it doesn't. The MCP server's
+        // tool list is pinned to `advertisedToolNames` (smoke-mcp-tool-catalog.sh
+        // drives the real binary), and here we assert bossTools == that contract
+        // by set-equality — so adding or removing a tool fails this test until
+        // both catalogs agree, with no subset escape hatch.
+        XCTAssertEqual(
+            Set(WorkbenchGuide.bossTools.map(\.tool)),
+            WorkbenchGuide.advertisedToolNames,
+            "bossTools drifted from the advertised tool set — add/remove the entry so the boss's self-description matches tools/list"
+        )
+    }
+
+    func testAdvertisedToolNamesPinTheFullSurface() {
+        // The canonical contract the MCP server's tools/list must match exactly
+        // (verified end-to-end by smoke-mcp-tool-catalog.sh). Pinned here so a
+        // tool added to the server without updating the catalog is caught.
+        XCTAssertEqual(WorkbenchGuide.advertisedToolNames, [
             "workbench_status",
+            "workbench_onboarding_status",
+            "workbench_autonomy_readiness",
             "workbench_sessions",
+            "workbench_attention_queue",
+            "workbench_action_result",
             "workbench_visibility",
             "workbench_sense",
             "workbench_transcript_tail",
+            "workbench_session_health",
             "workbench_search_transcripts",
             "workbench_recovery_drill",
             "workbench_request_action",
-            "workbench_create_session"
+            "workbench_create_session",
+            "workbench_discover_agent_sessions",
+            "workbench_propose",
+            "workbench_proposal_result",
+            "workbench_report_bug"
         ])
+    }
+
+    func testEveryBossToolHasANonEmptySummary() {
+        // The 5 previously-missing tools each appear with a one-line summary.
+        for capability in WorkbenchGuide.bossTools {
+            XCTAssertFalse(capability.summary.isEmpty, "\(capability.tool) has no summary")
+        }
     }
 
     func testGuideDocListsEveryBossTool() throws {

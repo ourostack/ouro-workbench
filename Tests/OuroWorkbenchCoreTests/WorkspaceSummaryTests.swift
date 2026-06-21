@@ -28,6 +28,68 @@ final class WorkspaceSummaryTests: XCTestCase {
         XCTAssertEqual(summary.oneLineStatus, "Codex waiting on human input")
     }
 
+    /// U8b + flag (a): a workspace whose only recovery is a lossless live
+    /// reattach must keep the count (a reattach IS still a recovery row, so the
+    /// list never reads "0 over a non-empty list") BUT must not WORD it as an
+    /// alarming "recovery action". It routes through the shared RecoveryDigest's
+    /// vocabulary, so a reattach reads as a no-loss reconnect.
+    func testOneLineStatusFramesLosslessReattachAsNoLossReconnect() {
+        let project = WorkbenchProject(name: "Project", rootPath: "/repo")
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "Codex",
+            kind: .terminalAgent,
+            agentKind: .openAICodex,
+            executable: "codex",
+            workingDirectory: "/repo",
+            trust: .trusted,
+            autoResume: true
+        )
+        let run = ProcessRun(entryId: entry.id, status: .needsRecovery)
+        let state = WorkspaceState(projects: [project], processEntries: [entry], processRuns: [run])
+        let liveName = PersistentTerminalSession.sessionName(for: entry.id)
+
+        let summary = WorkspaceSummarizer().summarize(state, liveSessionNames: [liveName])
+        let oneLine = summary.oneLineStatus
+
+        // The plan is a lossless reattach...
+        XCTAssertEqual(summary.recoveryPlans.first?.action, .reattach)
+        // ...the count is kept (re-opening "0 over a non-empty list" is the bug
+        // we must not regress)...
+        XCTAssertEqual(summary.recoveryDigest.actionableCount, 1)
+        // ...it never reads the alarming "recovery action" word...
+        XCTAssertFalse(oneLine.contains("recovery action"), "got: \(oneLine)")
+        // ...and it conveys the no-loss reconnect via the shared vocabulary.
+        XCTAssertTrue(oneLine.contains("reconnect"), "got: \(oneLine)")
+        XCTAssertTrue(oneLine.lowercased().contains("no loss"), "got: \(oneLine)")
+        XCTAssertEqual(oneLine, "0 running, 1 session to reconnect — no loss")
+    }
+
+    /// A genuinely-lost manual-recovery session still reads as needing the
+    /// operator — the no-loss vocabulary doesn't soften a real recovery.
+    func testOneLineStatusSurfacesNeedsYouForManualRecovery() {
+        let project = WorkbenchProject(name: "Project", rootPath: "/repo")
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "Claude",
+            kind: .terminalAgent,
+            executable: "claude",
+            workingDirectory: "/repo",
+            trust: .untrusted,
+            autoResume: true
+        )
+        let run = ProcessRun(entryId: entry.id, status: .needsRecovery)
+        let state = WorkspaceState(projects: [project], processEntries: [entry], processRuns: [run])
+
+        // No live session → not a reattach; untrusted → manual action needed.
+        let summary = WorkspaceSummarizer().summarize(state)
+        let oneLine = summary.oneLineStatus
+
+        XCTAssertEqual(summary.recoveryPlans.first?.action, .manualActionNeeded)
+        XCTAssertFalse(oneLine.contains("recovery action"), "got: \(oneLine)")
+        XCTAssertTrue(oneLine.lowercased().contains("need"), "got: \(oneLine)")
+    }
+
     func testBossPromptIncludesProcessAndRecoveryTruth() {
         let project = WorkbenchProject(name: "Project", rootPath: "/tmp/project")
         let archiveProject = WorkbenchProject(name: "Backlog", rootPath: "/tmp/backlog")
@@ -249,7 +311,7 @@ final class WorkspaceSummaryTests: XCTestCase {
         XCTAssertTrue(summary.processSnapshots.contains { $0.name == "Exited" && $0.summary == "Exited exited with code unknown" && $0.latestRunId == newer.id })
         XCTAssertTrue(summary.processSnapshots.contains { $0.name == "Exited Code" && $0.summary == "Exited Code exited with code 7" })
         XCTAssertTrue(summary.processSnapshots.contains { $0.name == "Configured" && $0.summary == "Configured is configured" })
-        XCTAssertEqual(summary.oneLineStatus, "0 running, 0 recovery actions")
+        XCTAssertEqual(summary.oneLineStatus, "0 running, nothing to recover")
     }
 
     func testConfiguredLatestRunUsesConfiguredSummary() {

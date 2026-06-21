@@ -124,6 +124,36 @@ final class SidebarSessionFilterTests: XCTestCase {
         XCTAssertFalse(matches(name: "session", group: "g", query: "owner: nomatch"))
     }
 
+    // U19(a): a query that contains a structured owner:/status: token should search
+    // GLOBALLY (across all workspaces), not just the current list scope — a blocked
+    // session in another workspace must not read as "nothing waiting." The view model
+    // decides scope from this pure predicate so the rule is pinned + testable.
+    func testStructuredQueryDetectsOwnerAndStatusTokens() {
+        XCTAssertTrue(filter.isStructuredQuery("status:waiting"))
+        XCTAssertTrue(filter.isStructuredQuery("owner:agent"))
+        XCTAssertTrue(filter.isStructuredQuery("owner:slugger"))
+        // Mixed: a plain token alongside a structured token still counts as structured.
+        XCTAssertTrue(filter.isStructuredQuery("recipe status:waiting"))
+        XCTAssertTrue(filter.isStructuredQuery("OWNER:Human"))
+    }
+
+    func testPlainQueryIsNotStructured() {
+        XCTAssertFalse(filter.isStructuredQuery("recipe"))
+        XCTAssertFalse(filter.isStructuredQuery("spoonjoy build"))
+        // Empty / whitespace-only is not a structured query (and matches everything).
+        XCTAssertFalse(filter.isStructuredQuery(""))
+        XCTAssertFalse(filter.isStructuredQuery("   "))
+    }
+
+    func testBarePrefixWithoutValueIsNotStructured() {
+        // A half-typed "owner:" / "status:" (no value yet) is neutral — it matches
+        // everything, so promoting it to a global search would be surprising while the
+        // operator is still typing. Only a token with a value flips scope to global.
+        XCTAssertFalse(filter.isStructuredQuery("owner:"))
+        XCTAssertFalse(filter.isStructuredQuery("status:"))
+        XCTAssertFalse(filter.isStructuredQuery("recipe owner:"))
+    }
+
     func testConvenienceOverloadReadsProcessEntryFields() {
         let entry = ProcessEntry(
             projectId: UUID(),

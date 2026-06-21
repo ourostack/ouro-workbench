@@ -28,7 +28,7 @@ final class WorkbenchSurfacePolicyTests: XCTestCase {
         XCTAssertTrue(source.contains("Section(WorkbenchSurfacePolicy.bossSectionTitle)"))
         XCTAssertTrue(source.contains("Section(WorkbenchSurfacePolicy.workspaceSectionTitle)"))
         XCTAssertTrue(source.contains("SidebarActionRow(title: WorkbenchSurfacePolicy.newWorkspaceTitle"))
-        XCTAssertTrue(source.contains("WorkbenchSurfacePolicy.shouldShowRecovery(recoverableCount: model.recoverableEntries.count)"))
+        XCTAssertTrue(source.contains("WorkbenchSurfacePolicy.shouldShowRecovery(recoverableCount: model.recoveryDigest.actionableCount)"))
         XCTAssertFalse(source.contains("New Terminal Group"))
         XCTAssertFalse(source.contains("Edit Terminal Group"))
         XCTAssertFalse(source.contains("Group name is required"))
@@ -37,7 +37,11 @@ final class WorkbenchSurfacePolicyTests: XCTestCase {
         XCTAssertFalse(source.contains("Keep at least one terminal group"))
     }
 
-    func testEmptyStateLeadsWithWorkbenchSetupInsteadOfTerminalFirst() throws {
+    func testEmptyStateLeadsTerminalsFirstWithBossAsOptIn() throws {
+        // The subtractive FRE redesign inverts the old boss-first empty state: it now
+        // leads with purpose + `New Terminal` (the prominent, gate-free primary) and makes
+        // the boss a secondary opt-in. The copy lives in Core (AgentHomeEmptyStateCopy) so
+        // the view renders it through those constants rather than as raw literals.
         let source = try appSource()
         let emptyState = try sourceSlice(
             in: source,
@@ -45,13 +49,30 @@ final class WorkbenchSurfacePolicyTests: XCTestCase {
             to: "                if !model.ouroAgents.isEmpty {"
         )
 
-        XCTAssertTrue(emptyState.contains("Text(\"Set up Workbench\")"))
-        XCTAssertFalse(emptyState.contains("Pick a terminal"))
-        XCTAssertFalse(emptyState.contains("Ouro Workbench is a calm home for your terminal agents."))
+        // The old boss-first headline / button label are gone.
+        XCTAssertFalse(emptyState.contains("Text(\"Set up Workbench\")"))
+        XCTAssertFalse(emptyState.contains("Label(\"Set Up Workbench\""))
 
-        let setupLabel = try XCTUnwrap(emptyState.range(of: "Label(\"Set Up Workbench\""))
-        let newTerminalLabel = try XCTUnwrap(emptyState.range(of: "Label(\"New Terminal\""))
-        XCTAssertLessThan(setupLabel.lowerBound, newTerminalLabel.lowerBound)
+        // Headline + subtext are wired through the Core copy seam, not view literals.
+        XCTAssertTrue(emptyState.contains("Text(AgentHomeEmptyStateCopy.headline)"))
+        XCTAssertTrue(emptyState.contains("Text(AgentHomeEmptyStateCopy.subtext)"))
+
+        // New Terminal is the prominent primary and leads the button row; the boss
+        // opt-in ("Set up a boss") comes after it and uses a plain bordered style.
+        let newTerminalLabel = try XCTUnwrap(
+            emptyState.range(of: "Label(AgentHomeEmptyStateCopy.newTerminalButton")
+        )
+        let setUpBossLabel = try XCTUnwrap(
+            emptyState.range(of: "Label(AgentHomeEmptyStateCopy.setUpBossButton")
+        )
+        XCTAssertLessThan(newTerminalLabel.lowerBound, setUpBossLabel.lowerBound)
+
+        // The prominent style attaches to New Terminal only — assert it appears between the
+        // New Terminal label and the Set up a boss label (i.e. on the primary button).
+        let prominent = try XCTUnwrap(
+            emptyState.range(of: ".buttonStyle(.borderedProminent)", range: newTerminalLabel.upperBound..<emptyState.endIndex)
+        )
+        XCTAssertLessThan(prominent.lowerBound, setUpBossLabel.lowerBound)
     }
 
     func testTitleStripUsesSessionControlPolicyWithoutPrimaryRestartLeak() throws {
@@ -68,8 +89,11 @@ final class WorkbenchSurfacePolicyTests: XCTestCase {
         XCTAssertFalse(source.contains("Move this session to another group"))
     }
 
-    func testSetupWorkspaceNameIsUnsortedSessionsNotThisMac() {
-        XCTAssertEqual(WorkbenchSurfacePolicy.setupWorkspaceName, "Unsorted Sessions")
+    func testSetupWorkspaceNameIsNeutralHomeNotUnsortedOrThisMac() {
+        // U32: the default workspace is a neutral "Home", not the state-claiming
+        // "Unsorted Sessions" (nor "This Mac").
+        XCTAssertEqual(WorkbenchSurfacePolicy.setupWorkspaceName, "Home")
+        XCTAssertNotEqual(WorkbenchSurfacePolicy.setupWorkspaceName, "Unsorted Sessions")
         XCTAssertNotEqual(WorkbenchSurfacePolicy.setupWorkspaceName, "This Mac")
     }
 
@@ -135,6 +159,77 @@ final class WorkbenchSurfacePolicyTests: XCTestCase {
 
         XCTAssertTrue(policy.primaryActions.isEmpty)
         XCTAssertTrue(policy.advancedActions.isEmpty)
+    }
+
+    // MARK: - U11: Stop confirmation gate (keyed on run/attention state)
+
+    func testStopNeedsConfirmationForALiveHoldingAgent() {
+        // A live process holding context — running, parked on a prompt, stuck, or
+        // flagged for review — must confirm before being killed: something real
+        // is lost.
+        for attention in [AttentionState.active, .waitingOnHuman, .blocked, .needsBossReview] {
+            XCTAssertTrue(
+                WorkbenchSurfacePolicy.stopNeedsConfirmation(isLiveProcess: true, attention: attention),
+                "expected confirmation for live \(attention.rawValue)"
+            )
+        }
+    }
+
+    func testStopDoesNotConfirmWhenNoLiveProcess() {
+        // Idle / finished / never-started: nothing is lost, so stop is frictionless
+        // regardless of the stored attention.
+        for attention in [AttentionState.active, .waitingOnHuman, .blocked, .needsBossReview, .idle] {
+            XCTAssertFalse(
+                WorkbenchSurfacePolicy.stopNeedsConfirmation(isLiveProcess: false, attention: attention),
+                "expected no confirmation when there's no live process (\(attention.rawValue))"
+            )
+        }
+    }
+
+    func testStopDoesNotConfirmForABareIdleLiveShell() {
+        // A live but plainly-idle shell parked at its prompt holds no agent context
+        // — stopping it is frictionless.
+        XCTAssertFalse(WorkbenchSurfacePolicy.stopNeedsConfirmation(isLiveProcess: true, attention: .idle))
+    }
+
+    func testStopConfirmationCopyNamesTheSessionAndStatesTheConsequence() {
+        XCTAssertEqual(
+            WorkbenchSurfacePolicy.stopConfirmationTitle(name: "claude-fix-bug"),
+            "Stop claude-fix-bug?"
+        )
+        let message = WorkbenchSurfacePolicy.stopConfirmationMessage
+        XCTAssertTrue(message.contains("ends the running agent"))
+        XCTAssertTrue(message.contains("live context"))
+    }
+
+    func testStopConfirmationButtonNamesTheSession() {
+        XCTAssertEqual(
+            WorkbenchSurfacePolicy.stopConfirmationButton(name: "claude-fix-bug"),
+            "Stop claude-fix-bug"
+        )
+    }
+
+    func testStopCallSitesRouteThroughTheConfirmationGate() throws {
+        // U11: every human Stop entry point — the ⌘. chord and the Stop buttons —
+        // must go through requestStop (the consequence gate), never call
+        // model.terminate(entry) directly, so a reflexive chord can't nuke a live
+        // agent. (The bulk Stop-All / reset / boss-MCP paths intentionally keep
+        // calling terminate directly and are asserted elsewhere by behavior.)
+        let source = try appSource()
+
+        // The ⌘. menu chord handler is gated.
+        XCTAssertTrue(source.contains("if let entry = model.activeEntry { model.requestStop(entry) }"))
+        XCTAssertFalse(source.contains("if let entry = model.activeEntry { model.terminate(entry) }"))
+
+        // The Stop buttons call requestStop.
+        XCTAssertFalse(
+            source.contains("Button(role: .destructive) {\n                    model.terminate(entry)"),
+            "no Stop button calls model.terminate directly"
+        )
+        XCTAssertTrue(source.contains("model.requestStop(entry)"))
+
+        // The menubar / palette Stop-Selected command is gated too.
+        XCTAssertTrue(source.contains("requestStop(selectedEntry)"))
     }
 
     private func appSource() throws -> String {

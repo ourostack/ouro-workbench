@@ -217,6 +217,124 @@ final class RecoveryPlannerTests: XCTestCase {
         XCTAssertEqual(plan.first?.reason, "entry is not trusted")
     }
 
+    /// U38: the untrusted manual-recovery plan carries the typed `.untrusted`
+    /// blocker — the signal the inline "Trust & resume" fix keys off, instead of
+    /// the brittle prose match it used to. If the planner's reason text is ever
+    /// reworded, the typed signal must survive so the one-click fix doesn't
+    /// silently vanish.
+    func testUntrustedNeedsRecoveryCarriesTypedUntrustedBlocker() {
+        let project = WorkbenchProject(name: "Harness", rootPath: "/repo")
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "Untrusted",
+            kind: .command,
+            executable: "rm",
+            arguments: ["-rf", "/tmp/example"],
+            workingDirectory: "/repo",
+            trust: .untrusted,
+            autoResume: true
+        )
+        let run = ProcessRun(entryId: entry.id, status: .needsRecovery)
+        let state = WorkspaceState(projects: [project], processEntries: [entry], processRuns: [run])
+
+        let plan = RecoveryPlanner().planRecovery(for: state).first
+
+        XCTAssertEqual(plan?.action, .manualActionNeeded)
+        XCTAssertEqual(plan?.blocker, .untrusted)
+    }
+
+    /// U38: a manual-recovery plan blocked for a DIFFERENT reason (a native-resume
+    /// preset that lacks a persisted session id) must NOT carry `.untrusted` —
+    /// otherwise the one-click trust fix would offer to "trust & resume" a session
+    /// that trusting can't unblock.
+    func testManualRecoveryFromMissingSessionIdIsNotUntrustedBlocker() {
+        let project = WorkbenchProject(name: "Harness", rootPath: "/repo")
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "Claude",
+            kind: .terminalAgent,
+            agentKind: .claudeCode,
+            executable: "claude",
+            workingDirectory: "/repo",
+            trust: .trusted,
+            autoResume: true
+        )
+        let run = ProcessRun(entryId: entry.id, status: .needsRecovery)
+        let preset = TerminalAgentPreset(
+            id: .claudeCode,
+            displayName: "Claude Code",
+            executable: "claude",
+            defaultArguments: [],
+            yoloArguments: [],
+            resumeStrategy: ResumeStrategy(kind: .nativeResumeCommand, notes: "native only")
+        )
+
+        let plan = RecoveryPlanner().planRecovery(for: entry, latestRun: run, presetFor: { _ in preset })
+
+        XCTAssertEqual(plan.action, .manualActionNeeded)
+        XCTAssertEqual(plan.reason, "Claude Code lacks a persisted session id")
+        XCTAssertNotEqual(plan.blocker, .untrusted)
+        XCTAssertNil(plan.blocker)
+    }
+
+    /// U38: a real recovery action (auto-resume) carries no blocker — the typed
+    /// blocker is present only on the plans where recovery is actually gated.
+    func testRecoverablePlanHasNoBlocker() {
+        let project = WorkbenchProject(name: "Harness", rootPath: "/repo")
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "Claude",
+            kind: .terminalAgent,
+            agentKind: .claudeCode,
+            executable: "claude",
+            workingDirectory: "/repo",
+            trust: .trusted,
+            autoResume: true
+        )
+        let run = ProcessRun(
+            entryId: entry.id,
+            status: .needsRecovery,
+            terminalSessionId: "sess-abc"
+        )
+
+        let plan = RecoveryPlanner().planRecovery(for: entry, latestRun: run)
+
+        XCTAssertEqual(plan.action, .autoResume)
+        XCTAssertNil(plan.blocker)
+    }
+
+    /// U7 one-click fix soundness: trusting an untrusted needs-recovery agent
+    /// reclassifies its plan away from `.manualActionNeeded` to a real recovery
+    /// action — so the "Trust & resume" inline fix actually unblocks recovery
+    /// (rather than just relabelling the same dead end).
+    func testTrustingUntrustedNeedsRecoveryAgentEnablesAutoResume() {
+        let project = WorkbenchProject(name: "Harness", rootPath: "/repo")
+        var entry = ProcessEntry(
+            projectId: project.id,
+            name: "Claude",
+            kind: .terminalAgent,
+            agentKind: .claudeCode,
+            executable: "claude",
+            workingDirectory: "/repo",
+            trust: .untrusted,
+            autoResume: true
+        )
+        let run = ProcessRun(
+            entryId: entry.id,
+            status: .needsRecovery,
+            terminalSessionId: "sess-abc"
+        )
+
+        let untrustedPlan = RecoveryPlanner().planRecovery(for: entry, latestRun: run)
+        XCTAssertEqual(untrustedPlan.action, .manualActionNeeded)
+        XCTAssertEqual(untrustedPlan.reason, "entry is not trusted")
+
+        entry.trust = .trusted
+        let trustedPlan = RecoveryPlanner().planRecovery(for: entry, latestRun: run)
+        XCTAssertEqual(trustedPlan.action, .autoResume)
+        XCTAssertNotEqual(trustedPlan.action, .manualActionNeeded)
+    }
+
     func testExitedRunDoesNotRecover() {
         let project = WorkbenchProject(name: "Harness", rootPath: "/repo")
         let entry = ProcessEntry(

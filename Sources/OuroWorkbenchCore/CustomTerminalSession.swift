@@ -58,25 +58,63 @@ public struct CustomTerminalSessionDraft: Equatable, Sendable {
         self.discoveredHarness = discoveredHarness
         self.discoveredSessionId = discoveredSessionId
     }
+
+    /// Single source of truth for whether a terminal-session draft can be saved,
+    /// shared by the New and Edit terminal sheets so they can't drift apart (U4
+    /// relaxed New; U13 brought Edit to parity). Only a non-empty working
+    /// directory is required: a blank command becomes the `/bin/zsh -l` login
+    /// shell and a blank name defaults to "Terminal", both handled by
+    /// `CustomTerminalSessionFactory.makeEntry`. The sheets hold their fields as
+    /// raw `@State` strings before constructing a draft, so this gates on the raw
+    /// working-directory string the same way `makeEntry` trims and validates it.
+    public static func canSave(workingDirectory: String) -> Bool {
+        !workingDirectory.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 }
 
 public struct CustomTerminalSessionFactory: Sendable {
     public init() {}
 
+    /// Default name for a blank login-shell session when the draft carries no
+    /// name. Mirrors the empty-state "New Terminal" intent: zero required typing.
+    public static let defaultBlankSessionName = "Terminal"
+
     public func makeEntry(projectId: UUID, draft: CustomTerminalSessionDraft) throws -> ProcessEntry {
-        let name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedName = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
         let command = draft.command.trimmingCharacters(in: .whitespacesAndNewlines)
         let workingDirectory = draft.workingDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
         let notes = draft.notes.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard !name.isEmpty else {
-            throw CustomTerminalSessionError.emptyName
-        }
-        guard !command.isEmpty else {
-            throw CustomTerminalSessionError.emptyCommand
-        }
+        // Unit 4 / Slice 1: an empty command is the instant-blank-terminal path,
+        // not an error. We default the name and fall through to a bare login
+        // shell below — no required typing for the "open a blank terminal" case.
+        // A name is likewise optional (defaulted); only the working directory is
+        // required, since there's no sensible default for where to run.
+        let name = trimmedName.isEmpty ? Self.defaultBlankSessionName : trimmedName
         guard !workingDirectory.isEmpty else {
             throw CustomTerminalSessionError.emptyWorkingDirectory
+        }
+
+        // Blank command → bare login shell (`/bin/zsh -l`), the same shape
+        // `WorkbenchScenarioMatrix` already uses for `user_shell`. No detected
+        // agent, plain interactive shell.
+        guard !command.isEmpty else {
+            return ProcessEntry(
+                projectId: projectId,
+                name: name,
+                kind: .terminalAgent,
+                agentKind: nil,
+                executable: "/bin/zsh",
+                arguments: ["-l"],
+                workingDirectory: workingDirectory,
+                trust: draft.trust,
+                autoResume: draft.autoResume,
+                attention: .idle,
+                lastSummary: "Terminal session: login shell",
+                notes: notes.isEmpty ? nil : notes,
+                discoveredHarness: draft.discoveredHarness,
+                discoveredSessionId: draft.discoveredSessionId
+            )
         }
 
         let parsed = TerminalCommandParser.parse(command)
@@ -139,8 +177,15 @@ public struct CustomTerminalSessionManager: Sendable {
         }
         let command: String
         if entry.executable == "/bin/zsh",
-           entry.arguments.count == 2,
-           entry.arguments[0] == "-lc" {
+           entry.arguments == ["-l"] {
+            // Unit 4 / Slice 1: a bare login shell round-trips to an empty
+            // command so editing it shows a blank Command field (and re-saving
+            // re-creates the same login shell) rather than surfacing the
+            // `/bin/zsh -l` internals as a literal command the user must clear.
+            command = ""
+        } else if entry.executable == "/bin/zsh",
+                  entry.arguments.count == 2,
+                  entry.arguments[0] == "-lc" {
             command = entry.arguments[1]
         } else {
             command = ([entry.executable] + entry.arguments).map(shellQuote).joined(separator: " ")
