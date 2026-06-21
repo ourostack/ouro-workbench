@@ -65,6 +65,26 @@ public enum AttentionState: String, Codable, Sendable {
             return false
         }
     }
+
+    /// Whether this attention is a HUMAN-attention item given who drives the
+    /// session (#U25b). The owner is the discriminator the bare `needsHuman` can't
+    /// see: an agent-owned session merely parked at — or stuck in — its OWN loop
+    /// (`waitingOnHuman` / `blocked`) is the agent's turn, not the human's, so it
+    /// is NOT a human-attention item and must stay out of the boss's
+    /// waiting-on-you bucket. A `needsBossReview` flag is a genuine boss-RAISED
+    /// review item, so it remains a human item even on an agent-owned session —
+    /// suppressing the agent's own loop must never hide a real review.
+    /// `idle` / `active` are never human items.
+    public func isHumanAttention(owner: SessionOwner) -> Bool {
+        switch self {
+        case .needsBossReview:
+            return true
+        case .waitingOnHuman, .blocked:
+            return owner.agentName == nil
+        case .idle, .active:
+            return false
+        }
+    }
 }
 
 public struct BossAgentSelection: Codable, Equatable, Sendable {
@@ -203,6 +223,14 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
     /// decoded with decodeIfPresent so pre-pin state loads unchanged.
     public var isPinned: Bool
     public var attention: AttentionState
+    /// A short, bounded human-readable "why" line for the current non-idle
+    /// `attention` — the prompt the agent is waiting on, or the error it's stuck
+    /// on (see `AttentionSignalDetector.classifyWithReason`). The live detail
+    /// banner and the boss-facing `SessionSnapshot` both read THIS string, so the
+    /// operator and the boss agree on why a session is waiting. Nil when there's
+    /// no derived reason (idle/active, or no informative line). Decoded
+    /// if-present so pre-U10 state loads unchanged.
+    public var attentionReason: String?
     public var lastSummary: String?
     public var notes: String?
     /// The friend (human or agent) this session acts for / as, governing whose
@@ -239,6 +267,7 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         case isArchived
         case isPinned
         case attention
+        case attentionReason
         case lastSummary
         case notes
         case friend
@@ -261,6 +290,7 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         isArchived: Bool = false,
         isPinned: Bool = false,
         attention: AttentionState = .idle,
+        attentionReason: String? = nil,
         lastSummary: String? = nil,
         notes: String? = nil,
         friend: SessionFriend? = nil,
@@ -281,6 +311,7 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         self.isArchived = isArchived
         self.isPinned = isPinned
         self.attention = attention
+        self.attentionReason = attentionReason
         self.lastSummary = lastSummary
         self.notes = notes
         self.friend = friend
@@ -312,6 +343,7 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         self.isArchived = try container.decodeIfPresent(Bool.self, forKey: .isArchived) ?? false
         self.isPinned = try container.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
         self.attention = try container.decodeIfPresent(AttentionState.self, forKey: .attention) ?? .idle
+        self.attentionReason = try container.decodeIfPresent(String.self, forKey: .attentionReason)
         self.lastSummary = try container.decodeIfPresent(String.self, forKey: .lastSummary)
         self.notes = try container.decodeIfPresent(String.self, forKey: .notes)
         self.friend = try container.decodeIfPresent(SessionFriend.self, forKey: .friend)
@@ -386,6 +418,12 @@ public struct WorkbenchActionLogEntry: Codable, Equatable, Identifiable, Sendabl
     public var targetName: String?
     public var result: String
     public var succeeded: Bool
+    /// The originating `WorkbenchActionRequest.id` when this log entry recorded a
+    /// queued boss request the app drained (#U24), so the boss's queued request
+    /// and the operator's audit entry share ONE key. Nil for actions the operator
+    /// took directly (no queued request) and for pre-U24 state, where synthesized
+    /// Codable decodes the absent key as nil so old logs load unchanged.
+    public var requestId: UUID?
 
     public init(
         id: UUID = UUID(),
@@ -395,7 +433,8 @@ public struct WorkbenchActionLogEntry: Codable, Equatable, Identifiable, Sendabl
         targetEntryId: UUID? = nil,
         targetName: String? = nil,
         result: String,
-        succeeded: Bool
+        succeeded: Bool,
+        requestId: UUID? = nil
     ) {
         self.id = id
         self.occurredAt = occurredAt
@@ -405,6 +444,7 @@ public struct WorkbenchActionLogEntry: Codable, Equatable, Identifiable, Sendabl
         self.targetName = targetName
         self.result = result
         self.succeeded = succeeded
+        self.requestId = requestId
     }
 }
 

@@ -6,6 +6,25 @@ public enum CommandPlanningError: Error, Equatable, Sendable {
     case emptyExecutable(entryName: String)
 }
 
+/// What a `TerminalCommandPlan` does, as a typed signal (U40). The planner's raw
+/// `reason` is precise but technical ("respawn X from persisted workbench
+/// context"); the post-launch session-status line and the boss prompt need a plain
+/// operator sentence instead. Keying that sentence off this enum — not the prose —
+/// is the same shape `RecoveryReasonPhrasebook` uses for `RecoveryAction`, so the
+/// status reads plainly while the raw reason stays available for logs / disclosure.
+public enum TerminalCommandPlanKind: String, Codable, Sendable, CaseIterable {
+    /// A fresh start of a configured session.
+    case launch
+    /// Reconnect to a session that's still alive under `screen`.
+    case reattach
+    /// Auto-resume a session's last conversation (native or fallback resume).
+    case resume
+    /// Reopen a session from its saved checkpoint context.
+    case respawn
+    /// A command staged for the operator to inspect before running.
+    case manualReview
+}
+
 public struct TerminalCommandPlan: Equatable, Identifiable, Sendable {
     public var id: UUID
     public var entryId: UUID
@@ -17,6 +36,9 @@ public struct TerminalCommandPlan: Equatable, Identifiable, Sendable {
     public var recoveryAction: RecoveryAction?
     public var persistentSessionName: String?
     public var reason: String
+    /// The typed meaning of this plan (U40). Drives the plain operator sentence
+    /// shown post-launch; the raw `reason` stays untouched for logs / disclosure.
+    public var kind: TerminalCommandPlanKind
 
     public init(
         id: UUID = UUID(),
@@ -28,7 +50,8 @@ public struct TerminalCommandPlan: Equatable, Identifiable, Sendable {
         transcriptPath: String? = nil,
         recoveryAction: RecoveryAction? = nil,
         persistentSessionName: String? = nil,
-        reason: String
+        reason: String,
+        kind: TerminalCommandPlanKind = .launch
     ) {
         self.id = id
         self.entryId = entryId
@@ -40,6 +63,7 @@ public struct TerminalCommandPlan: Equatable, Identifiable, Sendable {
         self.recoveryAction = recoveryAction
         self.persistentSessionName = persistentSessionName
         self.reason = reason
+        self.kind = kind
     }
 
     public var displayCommand: String {
@@ -220,6 +244,7 @@ public struct WorkbenchCommandPlanner: Sendable {
             var plan = try launchPlan(for: entry)
             plan.recoveryAction = action
             plan.reason = "reconnect to running \(entry.name)"
+            plan.kind = .reattach
             return plan
         case .autoResume:
             return try nativeResumePlan(for: entry, latestRun: latestRun, action: action)
@@ -232,11 +257,13 @@ public struct WorkbenchCommandPlanner: Sendable {
             plan.reason = checkpointRecoveryPromptIsNeeded(for: entry)
                 ? "respawn \(entry.name) with checkpoint recovery prompt"
                 : "respawn \(entry.name) from persisted workbench context"
+            plan.kind = .respawn
             return plan
         case .manualActionNeeded, .noAction:
             var plan = try launchPlan(for: entry)
             plan.recoveryAction = action
             plan.reason = "prepare \(entry.name) command for manual review"
+            plan.kind = .manualReview
             return plan
         }
     }
@@ -245,6 +272,7 @@ public struct WorkbenchCommandPlanner: Sendable {
         guard let agentKind = TerminalAgentDetector.detect(entry: entry) else {
             var plan = try launchPlan(for: entry)
             plan.recoveryAction = action
+            plan.kind = .resume
             return plan
         }
 
@@ -265,7 +293,8 @@ public struct WorkbenchCommandPlanner: Sendable {
                     transcriptPath: paths?.transcriptURL(entryId: entry.id, runId: runId).path,
                     recoveryAction: action,
                     persistentSessionName: PersistentTerminalSession.sessionName(for: entry.id),
-                    reason: "resume \(entry.name) using latest-session fallback"
+                    reason: "resume \(entry.name) using latest-session fallback",
+                    kind: .resume
                 )
             }
             throw CommandPlanningError.missingSessionId(entryName: entry.name)
@@ -286,7 +315,8 @@ public struct WorkbenchCommandPlanner: Sendable {
             transcriptPath: paths?.transcriptURL(entryId: entry.id, runId: runId).path,
             recoveryAction: action,
             persistentSessionName: PersistentTerminalSession.sessionName(for: entry.id),
-            reason: "resume \(entry.name) using native session metadata"
+            reason: "resume \(entry.name) using native session metadata",
+            kind: .resume
         )
     }
 

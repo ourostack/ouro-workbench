@@ -2,10 +2,12 @@ import XCTest
 @testable import OuroWorkbenchCore
 
 final class WorkbenchBootstrapperTests: XCTestCase {
-    func testDefaultBootstrapCreatesUnsortedWorkspaceWithoutLocalShell() throws {
+    func testDefaultBootstrapCreatesNeutralHomeWorkspaceWithoutLocalShell() throws {
         let state = WorkbenchBootstrapper().bootstrappedState(from: WorkspaceState())
 
+        // U32: the default workspace name is the neutral "Home", not "Unsorted Sessions".
         XCTAssertEqual(state.projects.map(\.name), [WorkbenchSurfacePolicy.setupWorkspaceName])
+        XCTAssertEqual(state.projects.map(\.name), ["Home"])
         XCTAssertFalse(state.projects.contains { $0.name == "This Mac" })
         XCTAssertTrue(state.processEntries.isEmpty)
         XCTAssertNil(state.selectedEntryId)
@@ -29,13 +31,14 @@ final class WorkbenchBootstrapperTests: XCTestCase {
         XCTAssertEqual(state.projects.first?.rootPath, "/tmp/workbench")
     }
 
-    func testBootstrapSetupModeCreatesUnsortedWorkspaceWithoutLocalShell() throws {
+    func testBootstrapSetupModeCreatesNeutralHomeWorkspaceWithoutLocalShell() throws {
         let state = WorkbenchBootstrapper().bootstrappedState(
             from: WorkspaceState(),
             defaults: .firstRunSetup(projectRootPath: "/tmp/workbench")
         )
 
-        XCTAssertEqual(state.projects.map(\.name), ["Unsorted Sessions"])
+        // U32: first-run setup mode also names the default workspace the neutral "Home".
+        XCTAssertEqual(state.projects.map(\.name), ["Home"])
         XCTAssertFalse(state.projects.contains { $0.name == "This Mac" })
         XCTAssertTrue(state.processEntries.isEmpty)
         XCTAssertNil(state.selectedEntryId)

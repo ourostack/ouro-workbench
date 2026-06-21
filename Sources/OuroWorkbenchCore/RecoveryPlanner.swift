@@ -27,17 +27,42 @@ public enum RecoveryAction: String, Codable, Sendable {
     }
 }
 
+/// Why a `.manualActionNeeded` plan can't recover on its own — a typed signal so
+/// surfaces can act on the *cause* instead of pattern-matching the planner's prose
+/// `reason` (U38). The inline "Trust & resume" one-click fix keys off `.untrusted`;
+/// if the reason wording is ever reworded the typed blocker survives, so the fix
+/// can't silently vanish. `nil` means the plan isn't gated on a recognised,
+/// surface-actionable blocker (it may still be `.manualActionNeeded` for a cause
+/// no single toggle clears, e.g. a missing persisted session id).
+public enum RecoveryBlocker: String, Codable, Sendable {
+    /// The entry isn't trusted, so the side-effectful respawn/resume path is gated
+    /// behind a human. Clearing it is one toggle — the only manual blocker the
+    /// "Trust & resume" inline fix can resolve.
+    case untrusted
+}
+
 public struct RecoveryPlan: Codable, Equatable, Sendable {
     public var entryId: UUID
     public var runId: UUID?
     public var action: RecoveryAction
     public var reason: String
+    /// The typed cause behind a `.manualActionNeeded` plan, when it's one a surface
+    /// can act on (U38). `nil` for recoverable plans and for manual blockers no
+    /// single toggle clears.
+    public var blocker: RecoveryBlocker?
 
-    public init(entryId: UUID, runId: UUID?, action: RecoveryAction, reason: String) {
+    public init(
+        entryId: UUID,
+        runId: UUID?,
+        action: RecoveryAction,
+        reason: String,
+        blocker: RecoveryBlocker? = nil
+    ) {
         self.entryId = entryId
         self.runId = runId
         self.action = action
         self.reason = reason
+        self.blocker = blocker
     }
 }
 
@@ -162,7 +187,8 @@ public struct RecoveryPlanner: Sendable {
                 entryId: entry.id,
                 runId: latestRun.id,
                 action: .manualActionNeeded,
-                reason: "entry is not trusted"
+                reason: "entry is not trusted",
+                blocker: .untrusted
             )
         }
 

@@ -69,7 +69,17 @@ final class WorkbenchVisibilityTests: XCTestCase {
         XCTAssertEqual(snapshot.workspace.runningSessions, 1)
         XCTAssertEqual(snapshot.workspace.waitingOnHumanSessions, 1)
         XCTAssertEqual(snapshot.workspace.blockedSessions, 1)
-        XCTAssertEqual(snapshot.workspace.recoverableSessions, 1)
+        // #U28: recoverable is now sourced from the recovery PLANS, not raw
+        // `.needsRecovery` status. This needs-recovery entry is trusted but has
+        // auto-resume OFF, so its plan is `.noAction` — there's nothing the boss
+        // OR the operator can recover, so it correctly reads 0 (the old raw-status
+        // count falsely reported 1).
+        XCTAssertEqual(snapshot.workspace.recoverableSessions, 0)
+        XCTAssertEqual(snapshot.workspace.recovery.reattach, 0)
+        XCTAssertEqual(snapshot.workspace.recovery.autoResume, 0)
+        XCTAssertEqual(snapshot.workspace.recovery.respawn, 0)
+        XCTAssertEqual(snapshot.workspace.recovery.needsHuman, 0)
+        XCTAssertEqual(snapshot.workspace.recovery.bossActionable, 0)
         XCTAssertEqual(snapshot.decisions.openInbox, 1)
         XCTAssertEqual(snapshot.decisions.recentActions, 2)
         XCTAssertEqual(snapshot.decisions.failedRecentActions, 1)
@@ -303,6 +313,47 @@ final class WorkbenchVisibilityTests: XCTestCase {
         let text = WorkbenchVisibilityTextRenderer().render(snapshot)
         XCTAssertTrue(text.contains("Claims: available"))
         XCTAssertTrue(text.contains("owed=3"))
+    }
+
+    func testRecoveryBreakdownSourcesFromPlansNotRawStatus() throws {
+        // #U28: a live reattach + an auto-resumable agent + a respawn vs an
+        // untrusted manual-action session — the boss-facing scalar must split them
+        // by class (and a needs-human one is NOT counted as boss-actionable).
+        let project = WorkbenchProject(name: "Harness", rootPath: "/repo")
+        // Reattach: trusted, its screen session is live.
+        let reattach = ProcessEntry(projectId: project.id, name: "Live", kind: .terminalAgent, agentKind: .claudeCode, executable: "claude", workingDirectory: "/repo", trust: .trusted, autoResume: true)
+        // Auto-resume: trusted + autoResume, native-resume metadata present.
+        let resume = ProcessEntry(projectId: project.id, name: "Resumable", kind: .terminalAgent, agentKind: .claudeCode, executable: "claude", workingDirectory: "/repo", trust: .trusted, autoResume: true)
+        // Needs-human: untrusted, so the plan is manualActionNeeded.
+        let manual = ProcessEntry(projectId: project.id, name: "Untrusted", kind: .terminalAgent, agentKind: .claudeCode, executable: "claude", workingDirectory: "/repo", trust: .untrusted, autoResume: true)
+        let state = WorkspaceState(
+            boss: BossAgentSelection(agentName: "slugger"),
+            projects: [project],
+            processEntries: [reattach, resume, manual],
+            processRuns: [
+                ProcessRun(entryId: reattach.id, status: .needsRecovery, startedAt: now),
+                ProcessRun(entryId: resume.id, status: .needsRecovery, startedAt: now, terminalSessionId: "sess-123"),
+                ProcessRun(entryId: manual.id, status: .needsRecovery, startedAt: now)
+            ]
+        )
+
+        let snapshot = WorkbenchVisibilityBuilder().build(
+            state: state,
+            workCard: .unavailable(WorkbenchVisibilityIssue(code: "x", severity: "unavailable", source: "s", detail: "d")),
+            now: now,
+            liveSessionNames: [PersistentTerminalSession.sessionName(for: reattach.id)]
+        )
+
+        XCTAssertEqual(snapshot.workspace.recovery.reattach, 1)
+        XCTAssertEqual(snapshot.workspace.recovery.autoResume, 1)
+        XCTAssertEqual(snapshot.workspace.recovery.needsHuman, 1)
+        // boss may self-trigger reattach + auto_resume + respawn, NOT needs_human.
+        XCTAssertEqual(snapshot.workspace.recovery.bossActionable, 2)
+        // recoverable total sums every class (matches the digest's actionable total).
+        XCTAssertEqual(snapshot.workspace.recoverableSessions, 3)
+
+        let text = WorkbenchVisibilityTextRenderer().render(snapshot)
+        XCTAssertTrue(text.contains("Recovery: reattach=1 auto_resume=1 respawn=0 needs_human=1 boss_actionable=2"), "got:\n\(text)")
     }
 
     func testBuilderAddsDefaultClaimsIssueAndRedactedFallbackWithoutSource() throws {

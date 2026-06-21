@@ -2,10 +2,9 @@ import XCTest
 @testable import OuroWorkbenchCore
 
 final class OnboardingNarrativeTests: XCTestCase {
-    func testBossReadyWelcomeCopy() {
-        XCTAssertEqual(WorkbenchOnboardingNarrative.bossReadyWelcome, "I can see this Mac now.")
-    }
-
+    // #U26(c): the boss-ready / unclear-import / ambiguous-candidate / proposal-summary copy and
+    // their tests went away with the dead hardcoded scan/arrange flow. `scanIntro` stays — the
+    // Connect "boss is ready" panel still uses it — so its test stays too.
     func testScanIntroNamesLocalAgentStores() {
         XCTAssertEqual(
             WorkbenchOnboardingNarrative.scanIntro,
@@ -13,36 +12,10 @@ final class OnboardingNarrativeTests: XCTestCase {
         )
     }
 
-    func testUnclearImportCopyPromisesToAsk() {
-        XCTAssertEqual(WorkbenchOnboardingNarrative.unclearImport, "I will ask before importing anything unclear.")
-    }
-
-    func testAmbiguousCandidateCopyIncludesCount() {
-        XCTAssertEqual(
-            WorkbenchOnboardingNarrative.ambiguousCandidates(count: 1),
-            "I found 1 unclear session. I will ask before importing them."
-        )
-        XCTAssertEqual(
-            WorkbenchOnboardingNarrative.ambiguousCandidates(count: 2),
-            "I found 2 unclear sessions. I will ask before importing them."
-        )
-    }
-
     func testDuplicateCleanupCopyGuidesExternalSessionShutdown() {
         XCTAssertEqual(
             WorkbenchOnboardingNarrative.duplicateCleanup,
             "After I resume these in Workbench, I will help you close matching sessions still running outside Workbench so work does not fork."
-        )
-    }
-
-    func testProposalSummaryCopyUsesWorkspaces() {
-        XCTAssertEqual(
-            WorkbenchOnboardingNarrative.proposalSummary(groupCount: 1, selectedCount: 1),
-            "I found 1 likely session across 1 workspace."
-        )
-        XCTAssertEqual(
-            WorkbenchOnboardingNarrative.proposalSummary(groupCount: 3, selectedCount: 5),
-            "I found 5 likely sessions across 3 workspaces."
         )
     }
 
@@ -60,10 +33,9 @@ final class OnboardingNarrativeTests: XCTestCase {
         XCTAssertNil(decision.notice)
     }
 
-    // Slice 7 replaced the hardcoded scan routing (`.bossReadyWelcome` / `.scanProposal` /
-    // `.arrangeApprovedImports`) with the boss-driven `.bossReconstruct` hand-off. A ready
-    // boss now stays in the hand-off regardless of any stale legacy proposal/selection
-    // inputs — those fields no longer steer the policy.
+    // A ready boss routes to the boss-driven `.bossReconstruct` hand-off regardless of any stale
+    // legacy proposal/selection inputs — those fields no longer steer the policy, and the dead
+    // scan-routing phases they once produced are gone (#U26).
     func testFlowRoutesReadyBossToReconstructRegardlessOfLegacyProposalInputs() {
         let inputs: [WorkbenchOnboardingFlowInput] = [
             WorkbenchOnboardingFlowInput(bossIsReady: true, hasProposal: false, selectedTerminalCount: 0, ambiguousCandidateCount: 0, importSummaryHasImports: false),

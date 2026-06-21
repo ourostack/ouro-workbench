@@ -27,6 +27,7 @@ final class WorkbenchSessionsRendererTests: XCTestCase {
             workingDirectory: "/tmp/proj",
             trust: .untrusted,
             attention: .waitingOnHuman,
+            attentionReason: "Do you want to make this edit?",
             owner: .agent(name: "slugger")
         )
         let archived = ProcessEntry(
@@ -81,8 +82,24 @@ final class WorkbenchSessionsRendererTests: XCTestCase {
         XCTAssertEqual(agent.owner.kind, "agent")
         XCTAssertEqual(agent.owner.name, "slugger")
         XCTAssertEqual(agent.attention, "waitingOnHuman")
-        XCTAssertEqual(agent.needsHuman, true)
+        // #U25b: the raw attention is preserved, but this is an AGENT-owned session
+        // parked at its own loop's prompt — the agent's turn, not the human's — so
+        // needsHuman is false (it used to falsely read true). See the dedicated
+        // driver/actionable tests below.
+        XCTAssertEqual(agent.needsHuman, false)
+        XCTAssertEqual(agent.driver, "agent")
+        XCTAssertFalse(agent.actionable)
         XCTAssertEqual(agent.trust, "untrusted")
+        // U10: the operator-facing reason is exposed to the boss over MCP, not
+        // only rendered in the UI, so the boss's "this one is waiting because X"
+        // can be audited against the live view.
+        XCTAssertEqual(agent.attentionReason, "Do you want to make this edit?")
+    }
+
+    func testSnapshotOmitsAttentionReasonWhenNone() throws {
+        let f = makeFixture()
+        let human = try XCTUnwrap(renderer.snapshots(state: f.state).first { $0.id == f.human.id.uuidString })
+        XCTAssertNil(human.attentionReason, "an active session with no derived reason carries none")
     }
 
     func testOwnerFilterReturnsOnlyThatAgentsSessions() {
@@ -109,6 +126,81 @@ final class WorkbenchSessionsRendererTests: XCTestCase {
         XCTAssertEqual(archived?.isArchived, true)
     }
 
+    func testAgentOwnedWaitingRowIsAgentDrivenAndNotHumanActionable() throws {
+        // #U25b: the agent fixture is waitingOnHuman + agent-owned. Its row must
+        // carry driver=agent / actionable=false and needsHuman=false, so the boss
+        // can tell from the row data (not the preamble) that the agent's own loop
+        // is driving it — not a human-attention item to act on.
+        let f = makeFixture()
+        let agent = try XCTUnwrap(renderer.snapshots(state: f.state).first { $0.id == f.agent.id.uuidString })
+        XCTAssertEqual(agent.attention, "waitingOnHuman", "raw attention is preserved on the row")
+        XCTAssertEqual(agent.driver, "agent")
+        XCTAssertFalse(agent.actionable)
+        XCTAssertFalse(agent.needsHuman, "an agent-driven prompt is not a human-attention item")
+    }
+
+    func testHumanOwnedWaitingRowIsHumanDrivenAndActionable() throws {
+        let project = WorkbenchProject(name: "Proj", rootPath: "/tmp/proj")
+        let humanWaiting = ProcessEntry(
+            projectId: project.id,
+            name: "human-asker",
+            kind: .terminalAgent,
+            executable: "claude",
+            workingDirectory: "/tmp/proj",
+            attention: .waitingOnHuman,
+            owner: .human
+        )
+        let state = WorkspaceState(projects: [project], processEntries: [humanWaiting], processRuns: [])
+        let row = try XCTUnwrap(renderer.snapshots(state: state).first)
+        XCTAssertEqual(row.driver, "human")
+        XCTAssertTrue(row.actionable)
+        XCTAssertTrue(row.needsHuman)
+    }
+
+    func testAgentOwnedNeedsBossReviewRowStaysHumanActionable() throws {
+        // A genuine boss-raised review item on an agent-owned session is still a
+        // human-attention item — suppression of the agent's own loop must not hide
+        // a real review.
+        let project = WorkbenchProject(name: "Proj", rootPath: "/tmp/proj")
+        let agentReview = ProcessEntry(
+            projectId: project.id,
+            name: "agent-review",
+            kind: .terminalAgent,
+            executable: "claude",
+            workingDirectory: "/tmp/proj",
+            attention: .needsBossReview,
+            owner: .agent(name: "slugger")
+        )
+        let state = WorkspaceState(projects: [project], processEntries: [agentReview], processRuns: [])
+        let row = try XCTUnwrap(renderer.snapshots(state: state).first)
+        XCTAssertEqual(row.driver, "agent")
+        XCTAssertTrue(row.actionable, "a boss-raised review is actionable even on an agent-owned session")
+        XCTAssertTrue(row.needsHuman)
+    }
+
+    func testAttentionFilterReturnsOnlyMatchingStates() {
+        let f = makeFixture()
+        // The agent fixture is waitingOnHuman; the human is active.
+        let waiting = renderer.snapshots(state: f.state, attention: ["waitingOnHuman", "blocked", "needsBossReview"])
+        XCTAssertEqual(waiting.map(\.id), [f.agent.id.uuidString])
+
+        // An attention set matching nothing returns empty (a loop that only cares
+        // about the attention queue never receives idle/active rows).
+        XCTAssertTrue(renderer.snapshots(state: f.state, attention: ["blocked"]).isEmpty)
+    }
+
+    func testPromptSnippetsAttachToTheirRow() throws {
+        let f = makeFixture()
+        let snapshots = renderer.snapshots(
+            state: f.state,
+            promptSnippets: [f.agent.id: "Apply this edit? (y/n)"]
+        )
+        let agent = try XCTUnwrap(snapshots.first { $0.id == f.agent.id.uuidString })
+        let human = try XCTUnwrap(snapshots.first { $0.id == f.human.id.uuidString })
+        XCTAssertEqual(agent.attentionPrompt, "Apply this edit? (y/n)")
+        XCTAssertNil(human.attentionPrompt, "a row with no supplied snippet carries none")
+    }
+
     /// The client treats absent keys as "not applicable", so nil optionals must
     /// be omitted from the encoded JSON (synthesized encodeIfPresent).
     func testEncodedJSONOmitsNilOptionals() throws {
@@ -123,5 +215,7 @@ final class WorkbenchSessionsRendererTests: XCTestCase {
         XCTAssertTrue(json.contains("\"group\":\"Proj\""))
         XCTAssertFalse(json.contains("exitCode"), "nil exitCode is omitted")
         XCTAssertFalse(json.contains("transcriptPath"), "nil transcriptPath is omitted")
+        XCTAssertFalse(json.contains("attentionReason"), "nil attentionReason is omitted")
+        XCTAssertFalse(json.contains("attentionPrompt"), "nil attentionPrompt is omitted")
     }
 }

@@ -87,9 +87,10 @@ that belongs to a *different* friend (a delegated agent, a teammate).
 
 1. **Preference-driven, not allow-list.** The friend's notes are the policy. No
    global "these commands are safe" table.
-2. **Automate-first (TTFA), with total auditability.** The goal is the lowest
-   time-to-first-action: the boss auto-advances everything it can confidently
-   map to the friend's preferences, rather than escalating by default. The
+2. **Automate-first (TTFA — Trust the Fucking Agent), with total auditability.**
+   The goal is to trust the agent to act: the boss auto-advances everything it
+   can confidently map to the friend's preferences, rather than escalating by
+   default. The
    safety budget is spent on the **decision log** — every decision recorded with
    its full reasoning so the operator can *audit and tune*, not pre-approve.
    (Destructive/secret prompts are the bounded exception below.)

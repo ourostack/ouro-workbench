@@ -107,6 +107,58 @@ final class OnboardingTests: XCTestCase {
         )
     }
 
+    // MARK: - OnboardingPresentationPolicy.shouldAutoPresentOnLaunch
+    //
+    // The forced wizard was a distraction torn out of the FRE: terminal creation
+    // has no gate and the main UI is fully functional, so the wizard is now opt-in
+    // (the empty-state "Set up a boss" button → `presentOnboarding()`) and never
+    // auto-presents on launch — neither for a fresh/never-completed machine nor for
+    // the `force-first-run-setup` marker. The marker still resets state to a clean
+    // first run; it just no longer pops the modal.
+
+    func testAutoPresentIsFalseForFreshFirstRun() {
+        // Fresh machine (never completed onboarding), no forced marker: the old
+        // behavior auto-presented here. It must NOT anymore — land on the app.
+        XCTAssertFalse(
+            OnboardingPresentationPolicy.shouldAutoPresentOnLaunch(
+                isFirstRunForced: false,
+                onboardingHasBeenCompleted: false
+            )
+        )
+    }
+
+    func testAutoPresentIsFalseForForcedFirstRun() {
+        // The `force-first-run-setup` marker (fresh + forced) is THE first-run case
+        // the doing doc calls out: it must not trigger the modal either.
+        XCTAssertFalse(
+            OnboardingPresentationPolicy.shouldAutoPresentOnLaunch(
+                isFirstRunForced: true,
+                onboardingHasBeenCompleted: false
+            )
+        )
+    }
+
+    func testAutoPresentIsFalseForCompletedMachine() {
+        // Already-onboarded users also just land on their normal UI.
+        XCTAssertFalse(
+            OnboardingPresentationPolicy.shouldAutoPresentOnLaunch(
+                isFirstRunForced: false,
+                onboardingHasBeenCompleted: true
+            )
+        )
+    }
+
+    func testAutoPresentIsFalseForForcedAndCompleted() {
+        // Forced + completed is a degenerate combination, but the policy is total
+        // and never auto-presents regardless of inputs.
+        XCTAssertFalse(
+            OnboardingPresentationPolicy.shouldAutoPresentOnLaunch(
+                isFirstRunForced: true,
+                onboardingHasBeenCompleted: true
+            )
+        )
+    }
+
     func testEmptyBossSurfacesChooseCopyWithoutBlankName() {
         // Unresolved boss + more than one usable agent: the readiness must offer a
         // human choice with honest copy — never "The selected boss  is not
@@ -303,7 +355,17 @@ final class OnboardingTests: XCTestCase {
                     agentFacing: OuroAgentLane(provider: "openai-codex", model: "gpt-5.5")
                 )
             ],
-            mcpRegistration: nil,
+            // #U17: a genuinely-blocked bridge (binary missing). An UNCHECKED bridge (`nil`) is now
+            // the soft watch-point register that matches the autonomy popover — it no longer nags a
+            // repair step here — so to exercise the `workbench-mcp` step we pass a real blocker.
+            mcpRegistration: BossWorkbenchMCPRegistrationSnapshot(
+                agentName: "slugger",
+                serverName: "ouro_workbench",
+                commandPath: "/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP",
+                agentConfigPath: "/bundles/slugger.ouro/agent.json",
+                status: .notRegistered,
+                detail: "Workbench tools aren't available to this boss at runtime yet."
+            ),
             providerChecks: [
                 "outward": OnboardingProviderCheckResult(lane: "outward", state: .running, detail: "checking"),
                 "inner": OnboardingProviderCheckResult(lane: "inner", state: .passed, detail: "ok")
@@ -1721,6 +1783,47 @@ final class OnboardingTests: XCTestCase {
         XCTAssertTrue(rendered.contains("ouro-workbench-actions"))
         XCTAssertTrue(rendered.contains("operator keyboard shortcuts"))
         XCTAssertTrue(rendered.contains("Boss Check In"))
+    }
+
+    func testWorkbenchSenseBreaksRecoveryOutByBossActionClass() {
+        // #U28: the sense pulse must split recovery by how the boss may act —
+        // reattach / auto_resume / respawn (self-trigger) vs needs_human (escalate)
+        // — sourced from the same plan classification the operator surfaces use, so
+        // the boss isn't handed a single 'recoverable=N' that lumps them together.
+        let project = WorkbenchProject(name: "Proj", rootPath: temporaryDirectory.path)
+        let entry = ProcessEntry(
+            projectId: project.id,
+            name: "Crashed",
+            kind: .terminalAgent,
+            agentKind: .claudeCode,
+            executable: "claude",
+            workingDirectory: project.rootPath,
+            autoResume: true
+        )
+        let state = WorkspaceState(projects: [project], processEntries: [entry])
+        // Hand-built summary so the recovery plan classification is deterministic.
+        let summary = WorkspaceSummary(
+            boss: state.boss,
+            processSnapshots: [],
+            recoveryPlans: [
+                RecoveryPlan(entryId: UUID(), runId: nil, action: .reattach, reason: "live"),
+                RecoveryPlan(entryId: UUID(), runId: nil, action: .autoResume, reason: "resume"),
+                RecoveryPlan(entryId: UUID(), runId: nil, action: .manualActionNeeded, reason: "manual")
+            ]
+        )
+
+        let rendered = WorkbenchSenseRenderer().render(state: state, summary: summary)
+        XCTAssertTrue(
+            rendered.contains("recovery: reattach=1 auto_resume=1 respawn=0 needs_human=1"),
+            "sense should break recovery out by boss-action class; got:\n\(rendered)"
+        )
+    }
+
+    func testWorkbenchSenseOmitsRecoveryLineWhenNothingToRecover() {
+        let project = WorkbenchProject(name: "Proj", rootPath: temporaryDirectory.path)
+        let state = WorkspaceState(projects: [project])
+        let rendered = WorkbenchSenseRenderer().render(state: state, summary: WorkspaceSummarizer().summarize(state))
+        XCTAssertFalse(rendered.contains("recovery: reattach="), "no recovery line on a quiet machine")
     }
 
     func testDeskBridgePlansAndSenseReadinessCopy() {

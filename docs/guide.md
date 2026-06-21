@@ -608,14 +608,22 @@ Workbench MCP exposes:
 | Tool | Purpose |
 | --- | --- |
 | `workbench_status` | Summarize persisted state, process entries, recovery plans, and transcript paths. |
-| `workbench_sessions` | Machine-readable JSON list of sessions for programmatic clients (filters: `owner` / `name` / `includeArchived`). |
+| `workbench_onboarding_status` | Read the selected boss's daemon/credential onboarding readiness: ordered steps, each with its remediation. |
+| `workbench_autonomy_readiness` | Read the boss's TTFA autonomy-readiness snapshot (read-only sensor): overall state (`ready`/`watch`/`blocked`), each check's status, and per non-green check whether the boss can queue the fix itself (a `workbench_request_action` verb), the operator has a one-tap fix to relay, or it's genuinely degraded — plus one human-relayable "get to green" ask. |
+| `workbench_sessions` | Machine-readable JSON list of sessions for programmatic clients (filters: `owner` / `name` / `attention` / `includeArchived`). |
+| `workbench_attention_queue` | One-call attention queue: only the sessions needing a human, each with its inline waiting-prompt, in triage order. |
+| `workbench_action_result` | Poll a `workbench_request_action`'s `requestId` for its outcome (`queued` / `applied` / `failed` / `unknown`). |
 | `workbench_visibility` | Read Workbench session counts, boss-decision counts, and Ouro Work Card state with typed unknown/unavailable fields instead of false zeroes. |
 | `workbench_sense` | Render the Workbench sense contract: boss boundary, group/Desk mirror, tool affordances, the action protocol, and the operator keyboard shortcuts (so the boss can answer how-do-I questions). |
 | `workbench_transcript_tail` | Read a bounded tail from the latest transcript for a session. |
+| `workbench_session_health` | Read one session's structured health (process, transcript, git, recovery). |
 | `workbench_search_transcripts` | Search saved transcript lines across runs. |
 | `workbench_recovery_drill` | Dry-run restart recovery planning. |
 | `workbench_request_action` | Queue terminal control and organization actions for the native app. |
 | `workbench_create_session` | Create and launch an agent-owned coding session (tagged `owner:agent:<owner>`, same trust gating as a human-created terminal). |
+| `workbench_discover_agent_sessions` | Discover agent coding sessions running outside Workbench that it could adopt/recover. |
+| `workbench_propose` | Show the operator an editable plan and get their ticks/edits/approvals back. |
+| `workbench_proposal_result` | Read back the operator's decision for a `workbench_propose` proposal. |
 
 External MCP action requests are written to disk, drained by the native app, and
 then authorized by the same trust gates used for boss conversation actions.

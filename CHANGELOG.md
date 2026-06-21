@@ -247,7 +247,7 @@
 
 ## 0.1.103 - The boss reacts the moment a session needs you
 
-- Auto-advance and escalation now fire **event-driven**: the instant a session is flagged waiting or blocked, the boss is asked to decide right then, instead of waiting up to the ~60s Boss Watch poll. Much lower time-to-first-action, and the boss is called only when there's actually something to do rather than on every tick. The periodic poll stays as a backstop.
+- Auto-advance and escalation now fire **event-driven**: the instant a session is flagged waiting or blocked, the boss is asked to decide right then, instead of waiting up to the ~60s Boss Watch poll. The boss reacts much faster, and is called only when there's actually something to do rather than on every tick. The periodic poll stays as a backstop.
 - Rate-limited (a burst of events coalesces into one ask) and fully guarded — it never overlaps a running check-in and respects the Boss Watch switch. The throttle is the pure, tested `BossWatchEventPolicy`.
 
 ## 0.1.102 - The boss manages your sessions automatically (opt-out)
@@ -284,7 +284,7 @@
 
 ## 0.1.96 - Boss auto-advances waiting sessions (preference-driven inbox, phase 2)
 
-- The boss now *acts*: when a session is waiting and the boss decides `autoAdvance`, Workbench sends the proposed input for it — closing the loop from detect → decide → act, for the lowest time-to-first-action.
+- The boss now *acts*: when a session is waiting and the boss decides `autoAdvance`, Workbench sends the proposed input for it — closing the loop from detect → decide → act, with the least possible delay.
 - Defense-in-depth gate (`evaluateAutoAdvanceGate`): a send happens only when the kill-switch is on **and** the session is `Trusted` (untrusted is the default, so this is your per-session opt-in) **and** the friend's trust is family/friend **and** the new `PromptSafetyClassifier` clears the prompt — destructive, secret, financial, deploy, and agreement prompts always escalate, never auto-answered, even if the boss proposed an answer. Idempotent: a prompt already decided is never re-sent.
 - A **Settings → Boss** toggle ("Let the boss auto-advance waiting sessions") is the global kill-switch (defaults on). Every attempt — sent (`applied`) or held with its reason (`recorded`) — lands in the Boss Decision Log (⌘K), so the automation is fully auditable. Inner agents are told in their context file that a boss may answer their prompts on trusted sessions.
 

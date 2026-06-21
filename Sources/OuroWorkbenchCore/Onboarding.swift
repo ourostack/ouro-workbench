@@ -347,16 +347,25 @@ public struct WorkbenchOnboardingAdvisor: Sendable {
         // runtime (Workbench passes `--workbench-mcp` when it launches the boss) — nothing is
         // written to the synced bundle. This step is therefore "are the Workbench tools available
         // to this boss at runtime" — i.e. the Workbench MCP binary is present on disk AND the
-        // bundle is clean of any stale entry an older Workbench left. `.registered` means both
-        // hold; anything else surfaces this step. The boss actually HAVING the tools is confirmed
-        // by the handoff `status` round-trip, not the bundle.
-        if mcpRegistration?.status != .registered {
+        // bundle is clean of any stale entry an older Workbench left.
+        //
+        // #U17: this is the boss/MCP-bridge condition the autonomy (TTFA) readiness also judges, so
+        // its verdict comes from the shared `BossBridgeContract` rather than an ad-hoc
+        // `!= .registered` check. The contract makes the two surfaces agree: a `.blocker` bridge
+        // (binary missing / stale entry / bad bundle) surfaces this repair step; an UNCHECKED bridge
+        // (`nil` snapshot — the transient state at wizard open) is the soft watch-point register in
+        // BOTH surfaces and does NOT yet nag a repair step. The boss actually HAVING the tools is
+        // confirmed by the handoff `status` round-trip, not the bundle.
+        // A `.blocker` severity can only come from a present-but-unhealthy snapshot — an UNCHECKED
+        // bridge (`nil`) is `.warning`, never `.blocker` — so the live snapshot detail is always
+        // available here (no fallback arm to keep alive).
+        if let mcpRegistration, BossBridgeContract.bridgeVerdict(mcpRegistration).severity == .blocker {
             repairSteps.append(
                 OnboardingRepairStep(
                     id: "workbench-mcp",
                     actor: .agentRunnable,
                     title: "Connect Workbench tools",
-                    detail: mcpRegistration?.detail ?? "Workbench tools aren't available to this boss at runtime yet."
+                    detail: mcpRegistration.detail
                 )
             )
         }
@@ -477,6 +486,25 @@ public enum OnboardingPresentationPolicy {
     /// (no sessions): those must still present, or the stale-boss lockout returns.
     public static func shouldMarkCompletedAtLaunch(isReady: Bool, hasUsedWorkbench: Bool, alreadyCompleted: Bool) -> Bool {
         !alreadyCompleted && isReady && hasUsedWorkbench
+    }
+
+    /// Whether the boss-setup wizard should AUTO-present itself on launch.
+    ///
+    /// The answer is always `false`. The terminals-first product already works underneath:
+    /// terminal creation has no gate (⌘N works anytime) and the main window is fully
+    /// functional. The 4-page wizard was a forced ceremony that hid the working terminals and
+    /// pushed the breakable `ouro check` Connect step onto the critical first-run path — the
+    /// distraction torn out by the subtractive FRE redesign. The wizard is now strictly opt-in
+    /// (the empty-state "Set up a boss" button → `presentOnboarding()`); nothing in the app
+    /// pops it for the user.
+    ///
+    /// The inputs are kept so the seam reads honestly at the call site and so the two first-run
+    /// cases the doing doc calls out are pinned by tests: a fresh / never-completed machine
+    /// (`!onboardingHasBeenCompleted`) and the `force-first-run-setup` marker
+    /// (`isFirstRunForced`). The marker still resets state to a clean first run elsewhere; it
+    /// just no longer triggers the modal.
+    public static func shouldAutoPresentOnLaunch(isFirstRunForced: Bool, onboardingHasBeenCompleted: Bool) -> Bool {
+        false
     }
 }
 
@@ -1821,6 +1849,15 @@ public struct WorkbenchSenseRenderer: Sendable {
             lines.append("readiness: \(readiness.state.rawValue) - \(readiness.headline)")
         }
         lines.append("status: \(summary.oneLineStatus)")
+        // #U28: break the boss-actionable recovery out by class so the boss knows
+        // which it may self-trigger via request_action (reattach/auto_resume/
+        // respawn) vs which it must surface to the operator (needs_human) — from
+        // the SAME plan classification the operator surfaces use, not a lumped
+        // 'recoverable=N'. Omitted on a quiet machine to keep the pulse calm.
+        let recoveryBreakdown = RecoveryBreakdown(plans: summary.recoveryPlans)
+        if recoveryBreakdown.total > 0 {
+            lines.append("recovery: \(recoveryBreakdown.scalarText)")
+        }
         lines.append("")
         lines.append("organization:")
         for project in state.projects {

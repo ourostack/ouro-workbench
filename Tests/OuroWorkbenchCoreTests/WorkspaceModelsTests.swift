@@ -93,6 +93,62 @@ final class WorkspaceModelsTests: XCTestCase {
         XCTAssertEqual(decoded.name, "Legacy")
     }
 
+    func testProcessEntryAttentionReasonDefaultsToNil() {
+        // A fresh entry carries no attention reason until the detector derives one.
+        let entry = ProcessEntry(
+            projectId: UUID(),
+            name: "Plain",
+            kind: .terminalAgent,
+            executable: "claude",
+            workingDirectory: "/repo"
+        )
+        XCTAssertNil(entry.attentionReason)
+    }
+
+    func testProcessEntryAttentionReasonRoundTrips() throws {
+        // The "why" line the detector derived survives encode → decode so the
+        // boss snapshot and the header banner read the same persisted string.
+        let original = ProcessEntry(
+            projectId: UUID(),
+            name: "Waiting",
+            kind: .terminalAgent,
+            executable: "claude",
+            workingDirectory: "/repo",
+            attention: .waitingOnHuman,
+            attentionReason: "Do you want to make this edit?"
+        )
+
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(ProcessEntry.self, from: data)
+
+        XCTAssertEqual(decoded.attentionReason, "Do you want to make this edit?")
+        XCTAssertEqual(decoded, original)
+    }
+
+    func testProcessEntryDecodesLegacyJSONWithoutAttentionReason() throws {
+        // Backward-compat: a persisted entry written before U10 has no
+        // `attentionReason` key. It must still decode, leaving the field nil.
+        let legacy = """
+        {
+            "id": "00000000-0000-0000-0000-000000000001",
+            "projectId": "00000000-0000-0000-0000-000000000002",
+            "name": "Legacy",
+            "kind": "terminalAgent",
+            "executable": "claude",
+            "arguments": [],
+            "workingDirectory": "/repo",
+            "trust": "trusted",
+            "autoResume": false,
+            "attention": "waitingOnHuman"
+        }
+        """
+
+        let decoded = try JSONDecoder().decode(ProcessEntry.self, from: Data(legacy.utf8))
+
+        XCTAssertNil(decoded.attentionReason)
+        XCTAssertEqual(decoded.attention, .waitingOnHuman)
+    }
+
     func testProcessEntryDecodesUnknownDiscoveredHarnessToCustom() throws {
         // A forward-memory record from a newer build whose harness raw value is
         // unknown decodes to `.custom` (matching AgentHarness's lenient policy)

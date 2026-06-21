@@ -52,14 +52,31 @@ public struct WorkspaceSummary: Codable, Equatable, Sendable {
         }
     }
 
+    /// The single shared recovery derivation (U8b). Every recovery count the UI
+    /// shows — the sidebar row, its help, the sheet header/row count, and the
+    /// recovery count baked into `oneLineStatus` here — reads from this so they
+    /// can never disagree. Counts `.reattach` (a lossless reconnect is still a
+    /// recovery row), so a reattach-only workspace never reads "0 recovery
+    /// actions" over a non-empty list.
+    public var recoveryDigest: RecoveryDigest {
+        RecoveryDigest(plans: recoveryPlans)
+    }
+
     public var oneLineStatus: String {
         if !waitingOnHuman.isEmpty {
             let names = waitingOnHuman.map(\.name).joined(separator: ", ")
             return "\(names) waiting on human input"
         }
+        // Keep the COUNT (a `.reattach` is still a recovery row, so dropping it
+        // re-opens the "0 over a non-empty list" bug U8b fixed) but route the
+        // WORDING through the same RecoveryDigest vocabulary the sidebar/sheet
+        // use (flag (a)): a lossless reconnect reads "…to reconnect — no loss",
+        // never the alarming "recovery action". `statusLine` already counts every
+        // actionable plan and reads as a clause after "N running, ".
         let runningCount = processSnapshots.filter { $0.status == .running }.count
-        let recoveryCount = needsRecovery.count
-        return "\(runningCount) running, \(recoveryCount) recovery action\(recoveryCount == 1 ? "" : "s")"
+        let digest = recoveryDigest
+        let recoveryClause = digest.actionableCount > 0 ? digest.statusLine : "nothing to recover"
+        return "\(runningCount) running, \(recoveryClause)"
     }
 }
 

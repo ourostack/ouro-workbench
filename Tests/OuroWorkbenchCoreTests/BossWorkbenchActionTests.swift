@@ -134,6 +134,22 @@ final class BossWorkbenchActionTests: XCTestCase {
         }
     }
 
+    func testReportBugRequiresNonEmptyNoteBeforeQueueing() {
+        // U30(b): the boss-file path carries the defect note in `text`; a non-empty note
+        // is required so an empty enqueue never produces a noteless bundle.
+        let valid = BossWorkbenchAction(action: .reportBug, text: "Recovery drill failed to reattach session 3")
+        XCTAssertNoThrow(try valid.validateForQueueing())
+
+        let missingNote = BossWorkbenchAction(action: .reportBug)
+        XCTAssertThrowsError(try missingNote.validateForQueueing()) { error in
+            XCTAssertEqual(error as? BossWorkbenchActionValidationError, .missingNoteForReportBug)
+        }
+        let blankNote = BossWorkbenchAction(action: .reportBug, text: "   ")
+        XCTAssertThrowsError(try blankNote.validateForQueueing()) { error in
+            XCTAssertEqual(error as? BossWorkbenchActionValidationError, .missingNoteForReportBug)
+        }
+    }
+
     func testCreateSessionParsesAndCarriesOwner() throws {
         let reply = """
         ```ouro-workbench-actions
@@ -274,6 +290,7 @@ final class BossWorkbenchActionTests: XCTestCase {
             (.missingLane(.selectLane), "selectLane requires a lane"),
             (.missingProviderForSelectLane, "selectLane requires a non-empty provider"),
             (.missingModelForSelectLane, "selectLane requires a non-empty model"),
+            (.missingNoteForReportBug, "reportBug requires a non-empty note (the defect description, in text)"),
         ]
 
         for (error, description) in cases {

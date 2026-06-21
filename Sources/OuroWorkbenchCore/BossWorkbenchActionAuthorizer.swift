@@ -190,7 +190,10 @@ public struct BossWorkbenchActionAuthorizer: Sendable {
             // The daemon is machine-scoped infrastructure (no agent name). Authorized under the
             // trusted-onboarding posture (auto-apply + mandatory audit).
             return .allowed(posture: .trustedOnboarding)
-        case .createGroup, .createTerminal, .createSession:
+        case .createGroup, .createTerminal, .createSession, .reportBug:
+            // `reportBug` is a known-legit entry-less write — the boss capturing a defect into
+            // the same local anonymized bundle a human would create (U30b). Reversible local
+            // artifact; filing to GitHub stays human-gated.
             return .allowed(posture: .knownEntryless)
         case .launch, .recover, .terminate, .sendInput, .moveSession,
              .setTrust, .setAutoResume, .archive, .restore:

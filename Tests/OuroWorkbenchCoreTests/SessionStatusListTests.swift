@@ -43,6 +43,75 @@ final class SessionStatusListTests: XCTestCase {
         XCTAssertEqual(list.running.first?.group, "Recipes")
     }
 
+    func testAgentOwnedWaitingSessionIsNotWaitingOnYouWhileHumanOwnedOneIs() {
+        // #U25b: an agent-owned session merely parked at its own loop's prompt
+        // (attention waitingOnHuman) is the AGENT's turn, not the human's — it must
+        // NOT land in the boss's waiting-on-you bucket. A human-owned waiting
+        // session still does.
+        let humanWaiting = entry(name: "HumanAsker", projectId: project.id, attention: .waitingOnHuman, owner: .human)
+        let agentWaiting = entry(name: "AgentLoop", projectId: project.id, attention: .waitingOnHuman, owner: .agent(name: "slugger"))
+        let agentBlocked = entry(name: "AgentStuck", projectId: project.id, attention: .blocked, owner: .agent(name: "slugger"))
+        let state = WorkspaceState(
+            projects: [project],
+            processEntries: [humanWaiting, agentWaiting, agentBlocked],
+            processRuns: [
+                ProcessRun(entryId: humanWaiting.id, status: .running, startedAt: Date(timeIntervalSince1970: 10)),
+                ProcessRun(entryId: agentWaiting.id, status: .running, startedAt: Date(timeIntervalSince1970: 10)),
+                ProcessRun(entryId: agentBlocked.id, status: .running, startedAt: Date(timeIntervalSince1970: 10))
+            ]
+        )
+
+        let list = SessionStatusList.make(from: state)
+
+        XCTAssertEqual(list.waitingOnYou.map(\.name), ["HumanAsker"], "only the human-owned waiting session is waiting on you")
+        // The agent-driven sessions are the agent's own active work → running.
+        XCTAssertEqual(Set(list.running.map(\.name)), ["AgentLoop", "AgentStuck"])
+    }
+
+    func testAgentOwnedWaitingForInputRunIsTheAgentsTurnNotWaitingOnYou() {
+        // #U25b: a run parked at a prompt (.waitingForInput) is the operator's turn
+        // for a HUMAN-owned session, but the agent's own loop for an agent-owned one
+        // (with calm attention) — so the agent-owned one is running, not waiting-on-you.
+        let agent = entry(name: "AgentLoop", projectId: project.id, attention: .active, owner: .agent(name: "slugger"))
+        let human = entry(name: "HumanShell", projectId: project.id, attention: .active, owner: .human)
+        let state = WorkspaceState(
+            projects: [project],
+            processEntries: [agent, human],
+            processRuns: [
+                ProcessRun(entryId: agent.id, status: .waitingForInput, startedAt: Date(timeIntervalSince1970: 10)),
+                ProcessRun(entryId: human.id, status: .waitingForInput, startedAt: Date(timeIntervalSince1970: 10))
+            ]
+        )
+
+        let list = SessionStatusList.make(from: state)
+        XCTAssertEqual(list.waitingOnYou.map(\.name), ["HumanShell"])
+        XCTAssertEqual(list.running.map(\.name), ["AgentLoop"])
+        // Pin both arms of the run-status branch at the seam.
+        XCTAssertEqual(
+            SessionStatusList.classify(attention: .active, owner: .agent(name: "x"), runStatus: .waitingForInput),
+            .running
+        )
+        XCTAssertEqual(
+            SessionStatusList.classify(attention: .active, owner: .human, runStatus: .waitingForInput),
+            .waitingOnYou
+        )
+    }
+
+    func testAgentOwnedNeedsBossReviewStillSurfacesAsWaitingOnYou() {
+        // #U25b: a genuine boss-RAISED review item (needsBossReview) is a real
+        // human-attention item even on an agent-owned session — suppression of the
+        // agent's own loop must not hide a review the boss escalated.
+        let agentReview = entry(name: "AgentReview", projectId: project.id, attention: .needsBossReview, owner: .agent(name: "slugger"))
+        let state = WorkspaceState(
+            projects: [project],
+            processEntries: [agentReview],
+            processRuns: [ProcessRun(entryId: agentReview.id, status: .running, startedAt: Date(timeIntervalSince1970: 10))]
+        )
+
+        let list = SessionStatusList.make(from: state)
+        XCTAssertEqual(list.waitingOnYou.map(\.name), ["AgentReview"])
+    }
+
     func testWaitingOnHumanAttentionLandsInWaitingBucketEvenWhenRunning() {
         // Attention that needs the human wins over a still-running process: the
         // operator must be told it's waiting on them, not buried under "running".
@@ -101,25 +170,61 @@ final class SessionStatusListTests: XCTestCase {
         XCTAssertEqual(list.done.first?.exitCode, 0)
     }
 
-    func testNeedsRecoveryRunWaitsOnYou() {
-        // A run that died and needs recovery is the operator's call, not "done".
-        let e = entry(name: "Crashed", projectId: project.id, attention: .idle)
+    func testNeedsRecoveryWithCalmIdleAttentionDoesNotWaitOnYou() {
+        // U8-1: a survivor kept running while Workbench was closed lives in
+        // `.needsRecovery` with the calm `.idle` attention the reconciler
+        // assigned, during the async reattach window. Bucketing it
+        // waiting-on-you off the raw run status would re-create the exact
+        // false-alarm U8a killed — on the operator side. It must NOT surface as
+        // the operator's turn; it's settled, reconnecting.
+        let e = entry(name: "Survivor", projectId: project.id, attention: .idle)
+        let run = ProcessRun(entryId: e.id, status: .needsRecovery, startedAt: Date(timeIntervalSince1970: 10))
+        let state = WorkspaceState(projects: [project], processEntries: [e], processRuns: [run])
+
+        let list = SessionStatusList.make(from: state)
+
+        XCTAssertTrue(list.waitingOnYou.isEmpty)
+        XCTAssertEqual(list.done.map(\.name), ["Survivor"])
+        // Pinned at the seam too, so the contract is unambiguous.
+        XCTAssertEqual(
+            SessionStatusList.classify(attention: .idle, owner: .human, runStatus: .needsRecovery),
+            .done
+        )
+    }
+
+    func testNeedsRecoveryWithNeedsBossReviewStillWaitsOnYou() {
+        // A genuinely-lost manual-recovery session — the reconciler raises
+        // `.needsBossReview` for it — still surfaces as the operator's turn.
+        let e = entry(name: "Crashed", projectId: project.id, attention: .needsBossReview)
         let run = ProcessRun(entryId: e.id, status: .needsRecovery, startedAt: Date(timeIntervalSince1970: 10))
         let state = WorkspaceState(projects: [project], processEntries: [e], processRuns: [run])
 
         let list = SessionStatusList.make(from: state)
 
         XCTAssertEqual(list.waitingOnYou.map(\.name), ["Crashed"])
+        XCTAssertEqual(
+            SessionStatusList.classify(attention: .needsBossReview, owner: .human, runStatus: .needsRecovery),
+            .waitingOnYou
+        )
     }
 
-    func testManualActionNeededRunWaitsOnYou() {
-        let e = entry(name: "Manual", projectId: project.id, attention: .idle)
-        let run = ProcessRun(entryId: e.id, status: .manualActionNeeded, startedAt: Date(timeIntervalSince1970: 10))
-        let state = WorkspaceState(projects: [project], processEntries: [e], processRuns: [run])
+    func testManualActionNeededRunConsultsAttention() {
+        // Same contract for `.manualActionNeeded`: calm attention is settled,
+        // a needs-you attention flag surfaces.
+        let calm = entry(name: "CalmManual", projectId: project.id, attention: .idle)
+        let calmRun = ProcessRun(entryId: calm.id, status: .manualActionNeeded, startedAt: Date(timeIntervalSince1970: 10))
+        let flagged = entry(name: "FlaggedManual", projectId: project.id, attention: .needsBossReview)
+        let flaggedRun = ProcessRun(entryId: flagged.id, status: .manualActionNeeded, startedAt: Date(timeIntervalSince1970: 10))
+        let state = WorkspaceState(
+            projects: [project],
+            processEntries: [calm, flagged],
+            processRuns: [calmRun, flaggedRun]
+        )
 
         let list = SessionStatusList.make(from: state)
 
-        XCTAssertEqual(list.waitingOnYou.map(\.name), ["Manual"])
+        XCTAssertEqual(list.waitingOnYou.map(\.name), ["FlaggedManual"])
+        XCTAssertEqual(list.done.map(\.name), ["CalmManual"])
     }
 
     func testConfiguredNeverRunEntryLandsInDoneBucket() {

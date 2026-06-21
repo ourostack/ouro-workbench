@@ -67,36 +67,14 @@ final class CustomTerminalSessionTests: XCTestCase {
         XCTAssertEqual(entry.lastSummary, "Detected Claude Code: ANTHROPIC_MODEL=opus claude --dangerously-skip-permissions")
     }
 
-    func testCustomSessionRequiresNameCommandAndWorkingDirectory() {
+    func testCustomSessionRequiresOnlyWorkingDirectory() {
         let projectId = UUID()
         let factory = CustomTerminalSessionFactory()
 
-        XCTAssertThrowsError(try factory.makeEntry(
-            projectId: projectId,
-            draft: CustomTerminalSessionDraft(
-                name: " ",
-                command: "aider",
-                workingDirectory: "/repo",
-                trust: .trusted,
-                autoResume: true
-            )
-        )) { error in
-            XCTAssertEqual(error as? CustomTerminalSessionError, .emptyName)
-        }
-
-        XCTAssertThrowsError(try factory.makeEntry(
-            projectId: projectId,
-            draft: CustomTerminalSessionDraft(
-                name: "Aider",
-                command: " ",
-                workingDirectory: "/repo",
-                trust: .trusted,
-                autoResume: true
-            )
-        )) { error in
-            XCTAssertEqual(error as? CustomTerminalSessionError, .emptyCommand)
-        }
-
+        // A blank name is no longer fatal — the factory defaults it (see
+        // testBlankCommandProducesLoginShellWithDefaultName). Only a blank
+        // working directory is required, since the factory can't invent a
+        // sensible default for where the shell should run.
         XCTAssertThrowsError(try factory.makeEntry(
             projectId: projectId,
             draft: CustomTerminalSessionDraft(
@@ -109,6 +87,101 @@ final class CustomTerminalSessionTests: XCTestCase {
         )) { error in
             XCTAssertEqual(error as? CustomTerminalSessionError, .emptyWorkingDirectory)
         }
+    }
+
+    /// Unit 4 / Slice 1: an empty command is the instant-blank-terminal path.
+    /// Instead of throwing `.emptyCommand`, the factory produces a bare login
+    /// shell (`/bin/zsh -l`) — the same shape `WorkbenchScenarioMatrix` already
+    /// uses for `user_shell`. A blank name defaults to "Terminal".
+    func testBlankCommandProducesLoginShellWithDefaultName() throws {
+        let projectId = UUID()
+        let entry = try CustomTerminalSessionFactory().makeEntry(
+            projectId: projectId,
+            draft: CustomTerminalSessionDraft(
+                name: "   ",
+                command: "   ",
+                workingDirectory: "  /repo  ",
+                trust: .trusted,
+                autoResume: true
+            )
+        )
+
+        XCTAssertEqual(entry.projectId, projectId)
+        XCTAssertEqual(entry.name, "Terminal")
+        XCTAssertEqual(entry.kind, .terminalAgent)
+        XCTAssertNil(entry.agentKind)
+        XCTAssertEqual(entry.executable, "/bin/zsh")
+        XCTAssertEqual(entry.arguments, ["-l"])
+        XCTAssertEqual(entry.workingDirectory, "/repo")
+        XCTAssertEqual(entry.trust, .trusted)
+        XCTAssertTrue(entry.autoResume)
+        XCTAssertFalse(entry.isArchived)
+        XCTAssertEqual(entry.lastSummary, "Terminal session: login shell")
+    }
+
+    /// A blank command with a non-empty name keeps the caller-supplied name but
+    /// still produces the bare login shell.
+    func testBlankCommandKeepsProvidedName() throws {
+        let entry = try CustomTerminalSessionFactory().makeEntry(
+            projectId: UUID(),
+            draft: CustomTerminalSessionDraft(
+                name: "  Scratch  ",
+                command: "",
+                workingDirectory: "/repo",
+                trust: .untrusted,
+                autoResume: false
+            )
+        )
+
+        XCTAssertEqual(entry.name, "Scratch")
+        XCTAssertEqual(entry.executable, "/bin/zsh")
+        XCTAssertEqual(entry.arguments, ["-l"])
+        XCTAssertNil(entry.notes)
+    }
+
+    /// A blank-command login shell still carries trimmed notes when supplied.
+    func testBlankCommandPreservesNotes() throws {
+        let entry = try CustomTerminalSessionFactory().makeEntry(
+            projectId: UUID(),
+            draft: CustomTerminalSessionDraft(
+                name: "",
+                command: "",
+                workingDirectory: "/repo",
+                trust: .trusted,
+                autoResume: true,
+                notes: "  scratch shell for poking around  "
+            )
+        )
+
+        XCTAssertEqual(entry.executable, "/bin/zsh")
+        XCTAssertEqual(entry.arguments, ["-l"])
+        XCTAssertEqual(entry.notes, "scratch shell for poking around")
+    }
+
+    /// Round-trip: a `/bin/zsh -l` login-shell entry maps back to an
+    /// empty-command draft so editing it doesn't surface `/bin/zsh -l` as a
+    /// literal command the user has to clear.
+    func testManagerExtractsEmptyCommandDraftFromLoginShellEntry() throws {
+        let entry = try CustomTerminalSessionFactory().makeEntry(
+            projectId: UUID(),
+            draft: CustomTerminalSessionDraft(
+                name: "Terminal",
+                command: "",
+                workingDirectory: "/repo",
+                trust: .trusted,
+                autoResume: true
+            )
+        )
+
+        let draft = try CustomTerminalSessionManager().draft(from: entry)
+
+        XCTAssertEqual(draft, CustomTerminalSessionDraft(
+            name: "Terminal",
+            command: "",
+            workingDirectory: "/repo",
+            trust: .trusted,
+            autoResume: true
+        ))
     }
 
     func testManagerExtractsDraftFromCustomSession() throws {
@@ -611,6 +684,109 @@ final class CustomTerminalSessionTests: XCTestCase {
         XCTAssertNotEqual(duplicate.id, original.id)
         XCTAssertEqual(duplicate.discoveredHarness, .githubCopilotCLI)
         XCTAssertEqual(duplicate.discoveredSessionId, "cop-9")
+    }
+
+    // MARK: - U13: shared save-validity rule (New & Edit terminal sheets)
+
+    /// The validity rule both the New and Edit terminal sheets gate their primary
+    /// button on lives in one place so they can't drift (U4 relaxed New; U13
+    /// brought Edit to parity). The rule: only a non-empty working directory is
+    /// required — a blank command becomes the login shell, a blank name defaults
+    /// to "Terminal" — matching what the factory already accepts.
+    func testSaveValidityRequiresOnlyAWorkingDirectory() {
+        XCTAssertTrue(CustomTerminalSessionDraft.canSave(workingDirectory: "/repo"))
+        XCTAssertTrue(CustomTerminalSessionDraft.canSave(workingDirectory: "  /repo  "))
+    }
+
+    func testSaveValidityRejectsABlankWorkingDirectory() {
+        XCTAssertFalse(CustomTerminalSessionDraft.canSave(workingDirectory: ""))
+        XCTAssertFalse(CustomTerminalSessionDraft.canSave(workingDirectory: "   "))
+        XCTAssertFalse(CustomTerminalSessionDraft.canSave(workingDirectory: "\n\t "))
+    }
+
+    /// U13 round-trip: editing the blank login-shell terminal U4 creates yields a
+    /// draft with an empty command (the manager round-trips `/bin/zsh -l` → ""),
+    /// and saving that edit must re-produce the same login-shell entry — Save is
+    /// no longer wrongly gated, and a blank-command edit doesn't degrade the
+    /// session. The save path routes through the same factory `makeEntry` the New
+    /// sheet uses, so an empty command → `/bin/zsh -l` + defaulted name.
+    func testEditingBlankLoginShellRoundTripsToLoginShellEntry() throws {
+        let manager = CustomTerminalSessionManager()
+        let original = try CustomTerminalSessionFactory().makeEntry(
+            projectId: UUID(),
+            draft: CustomTerminalSessionDraft(
+                name: "Terminal",
+                command: "",
+                workingDirectory: "/repo",
+                trust: .trusted,
+                autoResume: true
+            )
+        )
+
+        // Edit opens with the round-tripped draft: blank command, present dir.
+        let draft = try manager.draft(from: original)
+        XCTAssertEqual(draft.command, "")
+        // The relaxed Save gate must accept this draft (only the dir is required).
+        XCTAssertTrue(CustomTerminalSessionDraft.canSave(workingDirectory: draft.workingDirectory))
+
+        // Saving the unchanged blank-command edit re-creates the login shell.
+        let saved = try manager.updatedEntry(original, draft: draft)
+        XCTAssertEqual(saved.id, original.id)
+        XCTAssertEqual(saved.executable, "/bin/zsh")
+        XCTAssertEqual(saved.arguments, ["-l"])
+        XCTAssertEqual(saved.name, "Terminal")
+        XCTAssertEqual(saved.workingDirectory, "/repo")
+    }
+
+    /// Clearing the Command field on a real-command session and saving converts it
+    /// to the login shell (parity with New Terminal) — the relaxed gate doesn't
+    /// require a command, and the factory does the rest.
+    func testEditingClearsCommandToLoginShell() throws {
+        let manager = CustomTerminalSessionManager()
+        let original = try CustomTerminalSessionFactory().makeEntry(
+            projectId: UUID(),
+            draft: CustomTerminalSessionDraft(
+                name: "Aider",
+                command: "aider --yes",
+                workingDirectory: "/repo",
+                trust: .trusted,
+                autoResume: true
+            )
+        )
+
+        var cleared = try manager.draft(from: original)
+        cleared.command = ""
+        XCTAssertTrue(CustomTerminalSessionDraft.canSave(workingDirectory: cleared.workingDirectory))
+
+        let saved = try manager.updatedEntry(original, draft: cleared)
+        XCTAssertEqual(saved.executable, "/bin/zsh")
+        XCTAssertEqual(saved.arguments, ["-l"])
+        XCTAssertEqual(saved.name, "Aider")
+    }
+
+    /// Editing a real-command session and keeping a command still saves it as that
+    /// command — the relax doesn't break the normal edit path.
+    func testEditingRealCommandSessionIsUnaffected() throws {
+        let manager = CustomTerminalSessionManager()
+        let original = try CustomTerminalSessionFactory().makeEntry(
+            projectId: UUID(),
+            draft: CustomTerminalSessionDraft(
+                name: "Aider",
+                command: "aider --yes",
+                workingDirectory: "/repo",
+                trust: .trusted,
+                autoResume: true
+            )
+        )
+
+        var edited = try manager.draft(from: original)
+        edited.command = "codex --yolo"
+        XCTAssertTrue(CustomTerminalSessionDraft.canSave(workingDirectory: edited.workingDirectory))
+
+        let saved = try manager.updatedEntry(original, draft: edited)
+        XCTAssertEqual(saved.agentKind, .openAICodex)
+        XCTAssertEqual(saved.executable, "codex")
+        XCTAssertEqual(saved.arguments, ["--yolo"])
     }
 
     private func makeShellEntry(

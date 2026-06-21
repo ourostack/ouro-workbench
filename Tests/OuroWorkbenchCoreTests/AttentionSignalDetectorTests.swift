@@ -190,4 +190,109 @@ final class AttentionSignalDetectorTests: XCTestCase {
         for i in 0..<20 { lines.append("log line \(i) processing batch") }
         XCTAssertEqual(AttentionSignalDetector.classify(tail: lines.joined(separator: "\n")), .unknown)
     }
+
+    // MARK: - classifyWithReason: signal carries a short "why" line (U10)
+
+    func testReasonForApprovalMenuIsTheQuestionAboveIt() {
+        // The menu line itself ("❯ 1. Yes") is uninformative; the operator wants
+        // to know WHAT is being approved, so the reason is the question line.
+        let tail = """
+        Edit file src/main.swift?
+
+        Do you want to make this edit?
+        ❯ 1. Yes
+          2. Yes, and don't ask again
+          3. No, and tell Claude what to do differently
+        """
+        let result = AttentionSignalDetector.classifyWithReason(tail: tail)
+        XCTAssertEqual(result.signal, .waitingOnHuman)
+        XCTAssertEqual(result.reason, "Do you want to make this edit?")
+    }
+
+    func testReasonForYesNoPromptIsThePromptLine() {
+        let result = AttentionSignalDetector.classifyWithReason(tail: "Proceed with deployment? (y/N) ")
+        XCTAssertEqual(result.signal, .waitingOnHuman)
+        XCTAssertEqual(result.reason, "Proceed with deployment? (y/N)")
+    }
+
+    func testReasonForPassphrasePromptIsThePromptLine() {
+        let result = AttentionSignalDetector.classifyWithReason(
+            tail: "Enter passphrase for key '/Users/me/.ssh/id_ed25519': "
+        )
+        XCTAssertEqual(result.signal, .waitingOnHuman)
+        XCTAssertEqual(result.reason, "Enter passphrase for key '/Users/me/.ssh/id_ed25519':")
+    }
+
+    func testReasonForBlockedIsTheErrorLine() {
+        let tail = """
+        Compiling OuroWorkbenchCore (12 sources)
+        error: cannot find 'foo' in scope
+        Build failed after 3.2s
+        """
+        let result = AttentionSignalDetector.classifyWithReason(tail: tail)
+        XCTAssertEqual(result.signal, .blocked)
+        XCTAssertEqual(result.reason, "Build failed after 3.2s")
+    }
+
+    func testReasonIsNilForUnknown() {
+        let result = AttentionSignalDetector.classifyWithReason(tail: "Resolving graph\nDownloading 88%")
+        XCTAssertEqual(result.signal, .unknown)
+        XCTAssertNil(result.reason)
+    }
+
+    func testReasonIsNilForEmptyTail() {
+        let result = AttentionSignalDetector.classifyWithReason(tail: "   \n  \n")
+        XCTAssertEqual(result.signal, .unknown)
+        XCTAssertNil(result.reason)
+    }
+
+    func testReasonIsTruncatedToABoundedLength() throws {
+        // A pathologically long prompt line is clipped so the banner/snapshot
+        // never carries an unbounded blob.
+        let longQuestion = "Do you want to proceed with " + String(repeating: "a", count: 400) + "?"
+        let result = AttentionSignalDetector.classifyWithReason(tail: longQuestion)
+        XCTAssertEqual(result.signal, .waitingOnHuman)
+        let reason = try XCTUnwrap(result.reason)
+        XCTAssertLessThanOrEqual(reason.count, AttentionSignalDetector.maxReasonLength)
+        XCTAssertTrue(reason.hasSuffix("…"), "a clipped reason ends with an ellipsis")
+    }
+
+    func testBoundedReasonReturnsNilForAWhitespaceOnlyLine() {
+        // Defensive guard: a blank candidate yields no reason.
+        XCTAssertNil(AttentionSignalDetector.boundedReason("   "))
+        XCTAssertEqual(AttentionSignalDetector.boundedReason("  hi  "), "hi")
+    }
+
+    func testReasonForArrowMenuWithoutAQuestionFallsBackToTheMenuLine() {
+        // No question line above the menu → the menu/selected option is the best
+        // available reason rather than nothing.
+        let tail = """
+        ❯ 1. Yes
+          2. No
+        """
+        let result = AttentionSignalDetector.classifyWithReason(tail: tail)
+        XCTAssertEqual(result.signal, .waitingOnHuman)
+        XCTAssertEqual(result.reason, "❯ 1. Yes")
+    }
+
+    func testReasonStripsAnsiBeforeReporting() {
+        let tail = "\u{1B}[1mDo you want to proceed?\u{1B}[0m\n\u{1B}[36m❯ 1. Yes\u{1B}[0m"
+        let result = AttentionSignalDetector.classifyWithReason(tail: tail)
+        XCTAssertEqual(result.signal, .waitingOnHuman)
+        XCTAssertEqual(result.reason, "Do you want to proceed?")
+    }
+
+    func testClassifyStillReturnsBareSignalAndAgreesWithReasonVariant() {
+        // The legacy `classify` is the `.signal` of `classifyWithReason`.
+        for tail in [
+            "Proceed? (y/N)",
+            "Compiling\nbuild failed",
+            "Resolving graph"
+        ] {
+            XCTAssertEqual(
+                AttentionSignalDetector.classify(tail: tail),
+                AttentionSignalDetector.classifyWithReason(tail: tail).signal
+            )
+        }
+    }
 }

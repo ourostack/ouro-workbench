@@ -52,6 +52,13 @@ public enum BossWorkbenchActionKind: String, Codable, Sendable, CaseIterable {
     /// Entry-less and MACHINE-SCOPED: the daemon is machine infrastructure, so this carries no
     /// agent name. Recovery truth from the post-start verify probe, never an exit code.
     case ensureDaemon
+    /// U30(b): capture a Workbench/session defect into the SAME anonymized bug-report bundle
+    /// a human would create. Entry-less — the defect note rides in `text`. The bundle needs
+    /// live app state (sessions, decisions, action log, screenshot), so this is enqueued and
+    /// the running app drains it through `BugReportWriter` + `WorkbenchBugReportRedactor` —
+    /// the same redaction path the in-app reporter uses, never a bypass. Filing-to-GitHub
+    /// stays human-gated; this only writes the local bundle.
+    case reportBug
 
     /// Whether this kind's effect is to OPEN the native provider-config form rather than
     /// execute a command. Only `requestProviderConfig` is a UI-opening signal: it shows UI and
@@ -198,6 +205,7 @@ public enum BossWorkbenchActionValidationError: LocalizedError, Equatable, Senda
     case missingLane(BossWorkbenchActionKind)
     case missingProviderForSelectLane
     case missingModelForSelectLane
+    case missingNoteForReportBug
 
     public var errorDescription: String? {
         switch self {
@@ -227,6 +235,8 @@ public enum BossWorkbenchActionValidationError: LocalizedError, Equatable, Senda
             return "selectLane requires a non-empty provider"
         case .missingModelForSelectLane:
             return "selectLane requires a non-empty model"
+        case .missingNoteForReportBug:
+            return "reportBug requires a non-empty note (the defect description, in text)"
         }
     }
 }
@@ -239,7 +249,8 @@ public extension BossWorkbenchAction {
                 throw BossWorkbenchActionValidationError.missingEntry(action)
             }
         case .createGroup, .createTerminal, .createSession, .repairAgent, .requestProviderConfig,
-             .verifyProvider, .refreshProvider, .selectLane, .registerWorkbenchMCP, .ensureDaemon:
+             .verifyProvider, .refreshProvider, .selectLane, .registerWorkbenchMCP, .ensureDaemon,
+             .reportBug:
             break
         }
 
@@ -306,6 +317,12 @@ public extension BossWorkbenchAction {
             }
             guard model?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
                 throw BossWorkbenchActionValidationError.missingModelForSelectLane
+            }
+        case .reportBug:
+            // The defect note rides in `text`; a non-empty note is required so the boss
+            // never enqueues a noteless bundle.
+            guard text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+                throw BossWorkbenchActionValidationError.missingNoteForReportBug
             }
         case .launch, .recover, .terminate, .archive, .restore, .requestProviderConfig, .ensureDaemon:
             // requestProviderConfig carries no required payload: it only signals the app to

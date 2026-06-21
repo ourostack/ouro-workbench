@@ -71,9 +71,17 @@ public struct RecoveryDrill: Sendable {
                 reason: plan.reason
             )
         }
-        let actionableCount = items.filter { item in
-            item.action == .autoResume || item.action == .respawn || item.action == .manualActionNeeded
-        }.count
+        // Route the headline count through the SHARED `RecoveryDigest` derivation
+        // (U39) instead of recomputing it here — `needsActionCount` is the
+        // auto-recoverable + needs-you total (a lossless `.reattach` is a reconnect,
+        // not an action), the same number the boss-watch gate (U42) reads, so no
+        // operator-visible recovery count can disagree.
+        let digest = RecoveryDigest(
+            plans: items.map { item in
+                RecoveryPlan(entryId: item.id, runId: nil, action: item.action, reason: item.reason)
+            }
+        )
+        let actionableCount = digest.needsActionCount
         let oneLineStatus = "\(actionableCount) recovery action\(actionableCount == 1 ? "" : "s") after simulated restart"
         return RecoveryDrillResult(ranAt: now, oneLineStatus: oneLineStatus, items: items)
     }
