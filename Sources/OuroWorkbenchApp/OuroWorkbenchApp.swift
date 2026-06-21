@@ -18622,18 +18622,78 @@ final class WorkbenchViewModel: ObservableObject {
             // after `selectedEntryID` is finalized so the one-session-per-pane
             // check resolves against the actual restored primary selection.
             restoreDetailLayout()
+            // F5: lenient decode silently drops rows it can't decode (so one
+            // corrupt row doesn't sink the whole workspace), and the re-save
+            // below would then atomically overwrite the original WITHOUT those
+            // rows — permanently. Read the loaded state's decodeReport (the RAW
+            // `loaded`, before bootstrap/reconcile transforms) and, on a lossy
+            // load, salvage the ORIGINAL pre-drop bytes FIRST.
+            //
+            // ORDERING IS LOAD-BEARING: writeSalvageCopy() copies the live file
+            // (still the pre-drop original at this point), so it must run BEFORE
+            // recordActionLog (whose internal save() rewrites the file with the
+            // survivors-only state) and BEFORE the trailing store.save(state).
+            if case let .salvageBeforeResave(reason) = postLoadDecision(for: loaded.decodeReport) {
+                let salvageURL = try? store.writeSalvageCopy()
+                if let salvageURL {
+                    errorMessage = """
+                    Some saved items couldn't be read (\(reason)) and were left out of your \
+                    workspace. The original was copied to:
+                    \(salvageURL.path)
+
+                    Loaded everything else. Recover the skipped items from that copy if you need them.
+                    """
+                    recordActionLog(
+                        source: "store",
+                        action: "loadSalvage",
+                        result: "Skipped \(loaded.decodeReport.skippedRowCount) rows; original copied to \(salvageURL.path)",
+                        succeeded: false
+                    )
+                } else {
+                    // Salvage copy failed — do NOT misreport a recovery file we
+                    // couldn't write. Still surface the loss honestly.
+                    errorMessage = """
+                    Some saved items couldn't be read (\(reason)) and were left out of your workspace. \
+                    A backup copy of the original couldn't be written.
+                    """
+                    recordActionLog(
+                        source: "store",
+                        action: "loadSalvage",
+                        result: "Skipped \(loaded.decodeReport.skippedRowCount) rows; salvage copy failed",
+                        succeeded: false
+                    )
+                }
+            }
             try store.save(state)
         } catch {
-            // The store quarantines an unreadable file before we get here, so
-            // resetting to an empty workspace below no longer destroys the
-            // user's data — point them at where the old copy was saved.
-            if case let WorkbenchStoreError.unreadableState(quarantineURL, reason) = error {
-                errorMessage = """
-                Your workspace couldn't be read (\(reason)) and was set aside at:
-                \(quarantineURL.path)
+            // The store tries to quarantine an unreadable file before we get
+            // here. Whether that move SUCCEEDED is now a checked value, so we
+            // can only reset-to-empty + save when the original was actually
+            // moved aside — otherwise the original is still live at stateURL and
+            // resetting + saving would clobber it.
+            if case let WorkbenchStoreError.unreadableState(preserved, reason) = error {
+                switch preserved {
+                case let .moved(quarantineURL):
+                    errorMessage = """
+                    Your workspace couldn't be read (\(reason)) and was set aside at:
+                    \(quarantineURL.path)
 
-                Starting with a fresh workspace. Your previous data is preserved in that file if you need to recover it.
-                """
+                    Starting with a fresh workspace. Your previous data is preserved in that file if you need to recover it.
+                    """
+                case .moveFailed(_, _):
+                    // The move FAILED: the original is STILL at stateURL. Do NOT
+                    // reset to empty and do NOT save — an atomic overwrite would
+                    // destroy the only surviving copy. Tell the operator exactly
+                    // where their data still is, and bail before any save.
+                    errorMessage = """
+                    Your workspace couldn't be read (\(reason)) and could NOT be set aside. \
+                    Your original data was NOT moved — it remains at:
+                    \(store.stateURL.path)
+
+                    The workbench won't overwrite it. Move or fix that file, then relaunch.
+                    """
+                    return
+                }
             } else {
                 errorMessage = "Couldn't load workspace: \(error.localizedDescription)"
             }

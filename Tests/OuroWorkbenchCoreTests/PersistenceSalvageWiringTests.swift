@@ -124,10 +124,14 @@ final class PersistenceSalvageWiringTests: XCTestCase {
         )
     }
 
-    /// The `.moveFailed` arm only — its dedicated branch within the catch.
+    /// The `.moveFailed` case only — from its `case` label to the close of the
+    /// `unreadableState` switch (the `} else {` that handles non-quarantine
+    /// errors). Excludes the SHARED reset-to-empty code that the `.moved` /
+    /// non-quarantine paths fall through to, so the no-reset/no-save assertions
+    /// scope to the failure branch alone.
     private func moveFailedArm() throws -> String {
         let arm = try loadCatchArm()
-        return try sourceSlice(in: arm, from: ".moveFailed", to: "private func restoreDetailLayout")
+        return try sourceSlice(in: arm, from: ".moveFailed", to: "} else {")
     }
 
     /// The success block: from the load through the re-save, before the catch.
