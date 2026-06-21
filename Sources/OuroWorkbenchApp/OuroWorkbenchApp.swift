@@ -18196,6 +18196,114 @@ final class WorkbenchViewModel: ObservableObject {
                 self?.applyAttentionSignal(classification, entryId: entryId, runId: runId)
             }
         }
+        // F4: a run's output has settled, so the agent has had time to write its
+        // native session file. This is the moment to back-fill the native session
+        // id onto the still-id-less RUNNING run, reviving native-id resume (the
+        // planner's `--resume <id>` branch is dead until this writes the id).
+        backfillSessionIdsForFlushedRuns(runIds)
+    }
+
+    /// F4 — back-fill the native agent session id onto still-id-less RUNNING runs.
+    /// `markStarted` builds the run the instant the PTY child reports its shell pid,
+    /// BEFORE the agent has written `~/.claude/projects/<dir>/<id>.jsonl` /
+    /// `~/.copilot/session-state/<id>/`, so it can't know the id (it STAYS AS-IS).
+    /// This sibling of the attention reclassify fires once output has settled —
+    /// late enough that the session file exists. It runs the same `ps`-backed scan
+    /// the MCP discovery path uses, asks the pure `SessionIdBackfill` seam which
+    /// `(runId → sessionId)` writes are safe (never clobbering a non-empty id,
+    /// never handing two same-cwd runs the same id), and applies them on the main
+    /// actor — each guarded by `== nil` so a concurrent write can't be overwritten.
+    private func backfillSessionIdsForFlushedRuns(_ runIds: [UUID]) {
+        // Only do the (cheap) scan when at least one flushed run is a live,
+        // still-id-less terminal-agent run — otherwise there's nothing to fill.
+        let candidateRunIds = Set(runIds)
+        let hasCandidate = state.processRuns.contains { run in
+            candidateRunIds.contains(run.id)
+                && run.status == .running
+                && (run.terminalSessionId ?? "").isEmpty
+        }
+        guard hasCandidate else { return }
+
+        // Snapshot the Sendable state for the off-main scan; the blocking `ps`
+        // shell + FS scan run on a detached utility task, then the resulting
+        // back-fills are applied main-isolated.
+        let snapshot = state
+        Task { [weak self] in
+            let records = await Self.scanAgentSessions(state: snapshot)
+            let backfills = SessionIdBackfill.sessionIdBackfills(
+                runs: snapshot.processRuns,
+                entries: snapshot.processEntries,
+                records: records
+            )
+            self?.applySessionIdBackfills(backfills)
+        }
+    }
+
+    /// Apply the seam's `(runId → sessionId)` writes. Each is guarded by
+    /// `terminalSessionId == nil` against the CURRENT state (not the snapshot the
+    /// scan ran on) so a concurrent recovery/relaunch that already set an id is
+    /// never clobbered. Persists once if anything changed.
+    private func applySessionIdBackfills(_ backfills: [UUID: String]) {
+        guard !backfills.isEmpty else { return }
+        var didMutate = false
+        for (runId, sessionId) in backfills {
+            guard let index = state.processRuns.firstIndex(where: { $0.id == runId }) else { continue }
+            if state.processRuns[index].terminalSessionId == nil {
+                state.processRuns[index].terminalSessionId = sessionId
+                didMutate = true
+            }
+        }
+        if didMutate {
+            save()
+        }
+    }
+
+    /// Run the agent-session scan off the main actor for the back-fill seam, using
+    /// the same `ps`-backed `processLister` + `AgentSessionScanner` the MCP
+    /// discovery path uses — but via `backfillRecords`, NOT `scan`. The display
+    /// `scan` `merge`-collapses same-`harness|cwd` records; the App's `ps` lister
+    /// reports no cwd, so EVERY running record lands at `cwd:""` and a merge would
+    /// fold ALL same-harness live pids into ONE survivor — handing the seam at most
+    /// one pid per harness and silently breaking multi-agent (and even single-run)
+    /// recovery. `backfillRecords` returns the UN-MERGED union (all live pids + the
+    /// un-collapsed recent native ids) so `SessionIdBackfill` sees every pid it must
+    /// pin. nonisolated + capturing only the Sendable state snapshot so it satisfies
+    /// strict concurrency.
+    nonisolated private static func scanAgentSessions(state: WorkspaceState) async -> [AgentSessionRecord] {
+        await Task.detached(priority: .utility) {
+            AgentSessionScanner().backfillRecords(
+                state: state,
+                processLister: Self.psBackedProcessLines
+            )
+        }.value
+    }
+
+    /// The App's `ps`-backed process lister — a thin `Process` shell around
+    /// `ps -axww -o pid=,command=` whose stdout feeds the pure, covered
+    /// `RunningProcessLine.parsePS`. Mirrors the MCP target's `RunningProcessLister`
+    /// (which is internal to that target). `cwd` is left nil on every line — `ps`
+    /// can't report a working directory, and the back-fill seam disambiguates
+    /// same-cwd runs by pid rather than by the running record's cwd, so an
+    /// unresolved cwd here costs nothing. Returns [] on any failure so discovery
+    /// degrades to recent-only.
+    nonisolated private static func psBackedProcessLines() -> [RunningProcessLine] {
+        let process = Process()
+        let pipe = Pipe()
+        process.executableURL = URL(fileURLWithPath: "/bin/ps")
+        process.arguments = ["-axww", "-o", "pid=,command="]
+        process.standardOutput = pipe
+        process.standardError = Pipe()
+        do {
+            try process.run()
+        } catch {
+            return []
+        }
+        // Drain BEFORE waiting so a large process table can't fill the pipe buffer
+        // and deadlock `ps` (the standard drain-then-wait idiom).
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        ProcessWatchdog.waitUntilExit(process, timeoutSeconds: 10)
+        guard process.terminationStatus == 0 else { return [] }
+        return RunningProcessLine.parsePS(String(decoding: data, as: UTF8.self))
     }
 
     /// Read a bounded transcript tail and classify it off the main actor.

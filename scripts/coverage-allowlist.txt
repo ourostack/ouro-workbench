@@ -17,17 +17,14 @@ BossAgentMCPClient.swift 1 3
 # or branch a test can target for it.
 SessionActivityReader.swift 0 1
 
-# The public `defaultSyncReachability(timeoutSeconds:)` overload forwards to the
-# internal one, supplying `cancelTask: cancelTaskDefault`. Swift synthesizes a
-# function-to-closure conversion region for that argument whose execution count
-# is only incremented when the closure is *invoked* — i.e. on the timeout-cancel
-# path. The public overload hardcodes the real `127.0.0.1:6876` health URL, so no
-# deterministic test can force its dataTask to time out and fire that closure;
-# the synthesized region therefore stays at count 0 (llvm-cov rolls it up as both
-# 1 partial line and 1 uncovered region on line 182). Removing the default
-# argument did not eliminate it — the region rides on whatever expression supplies
-# `cancelTask` at the public call site. The cancel logic itself is fully covered
-# by `cancelTaskDefault(_:)`'s direct unit test and by the internal overload's
-# timeout test, which injects its own cancel closure. Same uncountable-synthesized
-# -region class as the SessionActivityReader.swift entry above.
-DaemonLiveness.swift 1 1
+# DaemonLiveness.swift is intentionally NOT listed: it is genuinely 100% line +
+# region covered. The former entry covered a flaky synthesized call-site region
+# for the public `defaultSyncReachability(timeoutSeconds:)` overload's `cancelTask`
+# argument — a thunk whose count only incremented when the closure fired on a real
+# timeout, which a fast runner never reached. The fix removed that timeout-only
+# injected parameter entirely: the internal overload now takes a single REQUIRED
+# `waitForResult` seam (invoked on every call, so its call-site region is always
+# covered) and inlines `task.cancel()` on the timeout arm. A deterministic test
+# injects `waitForResult: { _, _ in .timedOut }` to cover the cancel + return-false
+# arm on every run. No timeout-only synthesized region survives, so no allowlist
+# entry is needed.

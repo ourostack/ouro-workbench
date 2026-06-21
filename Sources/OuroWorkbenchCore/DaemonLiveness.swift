@@ -179,22 +179,39 @@ public struct DaemonLivenessProbe: Sendable {
         defaultSyncReachability(
             url: URL(string: "http://127.0.0.1:6876/api/machine")!,
             timeoutSeconds: timeoutSeconds,
-            cancelTask: cancelTaskDefault
+            waitForResult: semaphoreWaitDefault
         )
     }
 
-    /// Default cancellation behavior for a timed-out sync-reachability data task: cancel it.
-    /// Extracted from an inline closure literal so it is a single coverable line a unit test can
-    /// invoke directly — the inline form was only reachable via a timing-dependent timeout race,
-    /// which made coverage of that region flaky. Behavior is identical.
-    static func cancelTaskDefault(_ task: URLSessionDataTask) {
-        task.cancel()
+    /// Default semaphore-wait behavior for the sync-reachability backstop: a real blocking wait.
+    ///
+    /// The internal overload takes `waitForResult` as the SINGLE injectable seam, and the public
+    /// overload forwards THIS named function by reference. `waitForResult` is invoked on every
+    /// call (the wait always runs), so its call-site region is covered deterministically — unlike
+    /// the old `cancelTask` argument, whose thunk region was only incremented when the closure
+    /// actually fired on a real timeout. That timeout-only call-site region was the residual
+    /// coverage flake; it no longer exists because there is no longer a timeout-only injected
+    /// parameter (cancellation is now inlined on the timeout arm). The body is exercised by every
+    /// public-overload call and by `testSemaphoreWaitDefaultPerformsARealWait`.
+    static func semaphoreWaitDefault(_ semaphore: DispatchSemaphore, _ deadline: DispatchTime) -> DispatchTimeoutResult {
+        semaphore.wait(timeout: deadline)
     }
 
+    /// Internal reachability worker. `waitForResult` is a REQUIRED parameter (NO default) — the
+    /// ONLY injected closure seam, and one that is invoked on EVERY call. There is deliberately
+    /// no defaulted/timeout-only closure parameter, so no synthesized default-argument or
+    /// timeout-only call-site coverage region exists (that class of region was the flake).
+    ///
+    /// Injecting `waitForResult` lets a test drive the timeout arm deterministically
+    /// (`{ _, _ in .timedOut }` → `task.cancel()` + `return false`) and the success arm
+    /// (`{ _, _ in .success }` → `return box.reachable`) WITHOUT a real wall-clock timeout. The
+    /// public overload passes the real `semaphoreWaitDefault`. Cancellation on the timeout arm is
+    /// inlined (`task.cancel()`) rather than injected, so it is covered by the same deterministic
+    /// `.timedOut` test on every run.
     static func defaultSyncReachability(
         url: URL,
         timeoutSeconds: TimeInterval?,
-        cancelTask: (URLSessionDataTask) -> Void,
+        waitForResult: (DispatchSemaphore, DispatchTime) -> DispatchTimeoutResult,
         waitTimeoutPadding: TimeInterval = 0.25
     ) -> Bool {
         var request = URLRequest(url: url)
@@ -210,8 +227,8 @@ public struct DaemonLivenessProbe: Sendable {
             semaphore.signal()
         }
         task.resume()
-        if semaphore.wait(timeout: .now() + budget + waitTimeoutPadding) == .timedOut {
-            cancelTask(task)
+        if waitForResult(semaphore, .now() + budget + waitTimeoutPadding) == .timedOut {
+            task.cancel()
             return false
         }
         return box.reachable
