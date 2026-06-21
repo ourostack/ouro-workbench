@@ -549,6 +549,47 @@ public struct PaneLayoutState: Codable, Equatable, Sendable {
     }
 }
 
+/// What lenient decode silently dropped on a load. `WorkspaceState.init(from:)`
+/// turns per-element decode failures into skipped rows (so one corrupt row can't
+/// sink the whole workspace) — this report SURFACES those drops so the load path
+/// can salvage the original bytes before the survivors-only state is re-saved.
+///
+/// Non-persisted: it describes one decode pass, not durable state, so it's
+/// excluded from `WorkspaceState.CodingKeys` and defaults to lossless.
+public struct DecodeReport: Equatable, Sendable {
+    /// Total rows dropped across all leniently-decoded collections.
+    public var skippedRowCount: Int
+    /// Per-collection drop counts, keyed by the `CodingKeys` string (e.g.
+    /// `"projects"`). Only collections that actually dropped a row appear.
+    public var skippedByCollection: [String: Int]
+
+    public init(skippedRowCount: Int = 0, skippedByCollection: [String: Int] = [:]) {
+        self.skippedRowCount = skippedRowCount
+        self.skippedByCollection = skippedByCollection
+    }
+
+    /// `true` iff decode dropped at least one row — i.e. the loaded state is a
+    /// strict subset of what's on disk and re-saving it would lose data.
+    public var isLossy: Bool { skippedRowCount > 0 }
+}
+
+/// Whether it's safe to re-save the just-loaded state over the original file, or
+/// whether the original must be salvaged first because the decode was lossy.
+public enum PostLoadDecision: Equatable {
+    case safeToResave
+    case salvageBeforeResave(reason: String)
+}
+
+/// `.salvageBeforeResave` iff the report is lossy (any dropped row) — otherwise
+/// `.safeToResave`. The reason names the drop count so the audit log + operator
+/// message are honest about how much was at risk.
+public func postLoadDecision(for report: DecodeReport) -> PostLoadDecision {
+    guard report.isLossy else {
+        return .safeToResave
+    }
+    return .salvageBeforeResave(reason: "decode dropped \(report.skippedRowCount) row(s)")
+}
+
 public struct WorkspaceState: Codable, Equatable, Sendable {
     public var schemaVersion: Int
     public var boss: BossAgentSelection
@@ -570,6 +611,12 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
     /// operators' state loads unchanged. See `PaneLayoutState`.
     public var detailLayout: PaneLayoutState?
     public var updatedAt: Date
+    /// Non-persisted account of what lenient decode dropped while loading THIS
+    /// instance. Excluded from `CodingKeys` (it describes a decode pass, not
+    /// durable state) and defaults to lossless, so a memberwise-built or
+    /// re-encoded state always round-trips equal. Read by the load path to
+    /// decide whether to salvage the original before re-saving the survivors.
+    public var decodeReport: DecodeReport = DecodeReport()
 
     private enum CodingKeys: String, CodingKey {
         case schemaVersion
@@ -600,7 +647,8 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         actionLog: [WorkbenchActionLogEntry] = [],
         decisionLog: [BossInboxDecision] = [],
         detailLayout: PaneLayoutState? = nil,
-        updatedAt: Date = Date()
+        updatedAt: Date = Date(),
+        decodeReport: DecodeReport = DecodeReport()
     ) {
         self.schemaVersion = schemaVersion
         self.boss = boss
@@ -615,6 +663,7 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         self.decisionLog = decisionLog
         self.detailLayout = detailLayout
         self.updatedAt = updatedAt
+        self.decodeReport = decodeReport
     }
 
     public init(from decoder: Decoder) throws {
@@ -628,17 +677,30 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         // Decode the collections leniently: a single corrupt or
         // schema-drifted element is skipped rather than throwing and taking
         // the entire workspace down with it (which, combined with the load
-        // catch path, used to wipe the user's setup).
-        var skipped = 0
-        self.projects = try container.decodeLenientArray(WorkbenchProject.self, forKey: .projects, skipped: &skipped)
-        self.processEntries = try container.decodeLenientArray(ProcessEntry.self, forKey: .processEntries, skipped: &skipped)
-        self.processRuns = try container.decodeLenientArray(ProcessRun.self, forKey: .processRuns, skipped: &skipped)
-        self.actionLog = try container.decodeLenientArray(WorkbenchActionLogEntry.self, forKey: .actionLog, skipped: &skipped)
-        self.decisionLog = try container.decodeLenientArray(BossInboxDecision.self, forKey: .decisionLog, skipped: &skipped)
+        // catch path, used to wipe the user's setup). F5: each genuine drop is
+        // now ATTRIBUTED into `decodeReport` so the load path can salvage the
+        // original bytes before re-saving the survivors-only state.
+        var report = DecodeReport()
+        self.projects = try container.decodeLenientArray(
+            WorkbenchProject.self, forKey: .projects, into: &report, collection: "projects"
+        )
+        self.processEntries = try container.decodeLenientArray(
+            ProcessEntry.self, forKey: .processEntries, into: &report, collection: "processEntries"
+        )
+        self.processRuns = try container.decodeLenientArray(
+            ProcessRun.self, forKey: .processRuns, into: &report, collection: "processRuns"
+        )
+        self.actionLog = try container.decodeLenientArray(
+            WorkbenchActionLogEntry.self, forKey: .actionLog, into: &report, collection: "actionLog"
+        )
+        self.decisionLog = try container.decodeLenientArray(
+            BossInboxDecision.self, forKey: .decisionLog, into: &report, collection: "decisionLog"
+        )
         // Additive (W5 increment 2). Absent in every pre-increment-2 state
         // file → `nil` → classic single-pane behavior, no schema bump.
         self.detailLayout = try container.decodeIfPresent(PaneLayoutState.self, forKey: .detailLayout)
         self.updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        self.decodeReport = report
     }
 }
 

@@ -141,6 +141,25 @@ public final class WorkbenchStore {
         }
     }
 
+    /// COPY the current on-disk `stateURL` to a timestamped `.salvage-<stamp>`
+    /// sibling and return its URL. Used when a lenient decode dropped rows: the
+    /// loaded state is about to be re-saved over `stateURL` WITHOUT the dropped
+    /// rows, so we preserve the original (pre-drop) bytes first.
+    ///
+    /// `copyItem`, NOT `moveItem` — the live file must stay in place because the
+    /// imminent re-save writes over it; moving it would defeat the re-save and
+    /// strand the workspace. Throws if the live file is missing or the copy
+    /// fails (the caller treats salvage as best-effort via `try?`).
+    public func writeSalvageCopy() throws -> URL {
+        let stamp = ISO8601DateFormatter().string(from: Date())
+            .replacingOccurrences(of: ":", with: "-")
+        let salvageURL = stateURL
+            .deletingLastPathComponent()
+            .appendingPathComponent("\(stateURL.lastPathComponent).salvage-\(stamp)")
+        try FileManager.default.copyItem(at: stateURL, to: salvageURL)
+        return salvageURL
+    }
+
     public func save(_ state: WorkspaceState) throws {
         try FileManager.default.createDirectory(
             at: stateURL.deletingLastPathComponent(),
