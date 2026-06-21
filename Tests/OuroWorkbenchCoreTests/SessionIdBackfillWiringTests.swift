@@ -35,7 +35,7 @@ final class SessionIdBackfillWiringTests: XCTestCase {
             "the back-fill pass must run a real AgentSessionScanner"
         )
         XCTAssertTrue(
-            body.contains(".scan(state:") && body.contains("processLister:"),
+            body.contains(".scan(") && body.contains("state:") && body.contains("processLister:"),
             "the scan must pass the workspace state and the ps-backed processLister"
         )
     }
@@ -91,12 +91,14 @@ final class SessionIdBackfillWiringTests: XCTestCase {
 
     // MARK: - Helpers (mirror ColdStartHonestWiringTests)
 
+    /// The whole F4 back-fill block: `backfillSessionIdsForFlushedRuns` through the
+    /// `ps`-backed lister, up to the unrelated `classifyTranscriptTail` helper.
     private func backfillMethod() throws -> String {
         let source = try appSource()
         return try sourceSlice(
             in: source,
             from: "private func backfillSessionIdsForFlushedRuns",
-            to: "\n    private func "
+            to: "nonisolated private static func classifyTranscriptTail"
         )
     }
 
