@@ -5865,14 +5865,28 @@ struct ProviderConfigSheet: View {
                     dismiss()
                 }
                 .disabled(model.providerConfigColdStartInFlight)
-                Button {
-                    submit()
-                } label: {
-                    Label(model.providerConfigIsNewAgent ? "Create Agent" : "Connect",
-                          systemImage: model.providerConfigIsNewAgent ? "plus.circle" : "link")
+                // F13 — the honest needs-vault recovery affordance. Shown ONLY when the cold-start
+                // landed in `.needsVaultSetup` (the agent exists but the headless hatch couldn't
+                // persist the credential). Runs the documented `ouro vault create && auth && refresh`
+                // chain in a native terminal where the human re-enters the secret + credential.
+                if model.providerConfigNeedsVaultSetup {
+                    Button {
+                        model.beginVaultOnboarding()
+                    } label: {
+                        Label("Finish setup", systemImage: "key.horizontal")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(model.providerConfigColdStartInFlight)
+                } else {
+                    Button {
+                        submit()
+                    } label: {
+                        Label(model.providerConfigIsNewAgent ? "Create Agent" : "Connect",
+                              systemImage: model.providerConfigIsNewAgent ? "plus.circle" : "link")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(model.providerConfigColdStartInFlight)
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(model.providerConfigColdStartInFlight)
             }
         }
         .padding()
@@ -10610,6 +10624,21 @@ final class WorkbenchViewModel: ObservableObject {
     /// ready (created-but-not-connected, or an honest failure). nil while in flight / on success.
     @Published var providerConfigColdStartMessage: String?
 
+    /// F13 — true ONLY for the honest needs-vault cold-start outcome (the agent was created but
+    /// its provider isn't connected yet because the headless hatch couldn't persist the credential
+    /// into a vault that needs an interactive TTY secret). It gates the "Finish setup" affordance
+    /// in the provider-config form, which runs the documented `ouro vault create && auth && refresh`
+    /// recovery chain in a native terminal. Stays true across a failed recovery attempt so the user
+    /// can retry; cleared only when the re-probe confirms `.working`. NEVER set for a plain
+    /// `.failed` cold-start (that path never produced a recoverable bundle).
+    @Published var providerConfigNeedsVaultSetup = false
+
+    /// F13 — the provider the user typed in the cold-start form, stashed so the vault-onboarding
+    /// recovery chain (`ouro auth --provider <p>`) can name it. The credential itself is NOT stored
+    /// here — it's gone after the ephemeral hatch argv, which is exactly why F13 must re-collect it
+    /// interactively in the native recovery terminal. Set alongside `providerConfigNeedsVaultSetup`.
+    @Published var providerConfigColdStartProvider: WorkbenchProvider?
+
     private let paths: WorkbenchPaths
     private let store: WorkbenchStore
     private let bootstrapper = WorkbenchBootstrapper()
@@ -10660,6 +10689,13 @@ final class WorkbenchViewModel: ObservableObject {
     private let proposalQueue: AgentProposalQueue
     private let releaseUpdateChecker: ReleaseUpdateChecker
     private var manuallyTerminatedRunIDs = Set<UUID>()
+    /// F13 — the entry id + runId of the in-flight vault-onboarding recovery terminal (the one-shot
+    /// `ouro vault create && auth && refresh` chain), captured at launch so `markTerminated` can
+    /// recognize ITS exit (and only its exit) and re-probe. Both nil when no recovery is in flight.
+    /// The agent name is held too so the re-probe + `.ready` log name the right agent.
+    private var vaultOnboardingEntryID: UUID?
+    private var vaultOnboardingRunID: UUID?
+    private var vaultOnboardingAgentName: String?
     private var bossWatchBaselineState: WorkspaceState?
     private var bossWatchTickIsRunning = false
     private var bossWatchLastPromptAt: Date?
@@ -16919,6 +16955,13 @@ final class WorkbenchViewModel: ObservableObject {
     func presentProviderConfigForm(agentName: String) {
         let trimmed = agentName.trimmingCharacters(in: .whitespacesAndNewlines)
         providerConfigIsNewAgent = false
+        // Start each form session clean: the cold-start vault-onboarding flags are otherwise
+        // cleared ONLY on a verified-ready completion, so without this reset opening the form
+        // for a DIFFERENT agent would carry a prior agent's stale `.needsVaultSetup` + stashed
+        // provider — wrongly offering "Finish setup" for the new target.
+        providerConfigNeedsVaultSetup = false
+        providerConfigColdStartProvider = nil
+        providerConfigColdStartMessage = nil
         providerConfigAgentName = trimmed.isEmpty ? state.boss.agentName : trimmed
         isProviderConfigPresented = true
     }
@@ -16929,6 +16972,11 @@ final class WorkbenchViewModel: ObservableObject {
     /// visible `ouro hatch` CLI pane the old install sheet spawned.
     func presentNewAgentProviderConfigForm() {
         providerConfigIsNewAgent = true
+        // Start each form session clean (see presentProviderConfigForm): never let a prior agent's
+        // stale `.needsVaultSetup` + stashed provider leak into this fresh form session.
+        providerConfigNeedsVaultSetup = false
+        providerConfigColdStartProvider = nil
+        providerConfigColdStartMessage = nil
         providerConfigAgentName = ""
         isProviderConfigPresented = true
     }
@@ -17039,10 +17087,31 @@ final class WorkbenchViewModel: ObservableObject {
                             succeeded: true
                         )
                         self.isProviderConfigPresented = false
-                    case .needsVaultSetup, .failed:
+                    case .needsVaultSetup:
+                        // F13 — the agent EXISTS but the headless hatch couldn't persist the
+                        // credential (a fresh agent has no vault, and creating one needs an
+                        // interactive TTY secret). This is the recoverable case: keep the form open,
+                        // surface the seam-free outcome line, AND offer "Finish setup" — which runs
+                        // the documented `ouro vault create && auth && refresh` recovery chain in a
+                        // native terminal. Stash the provider so the chain can name it; the
+                        // credential itself is gone (ephemeral hatch argv) and is re-collected
+                        // interactively in that terminal.
+                        self.providerConfigColdStartMessage = outcome.humanFacingLine(agentName: resolvedAgent)
+                        self.providerConfigNeedsVaultSetup = true
+                        self.providerConfigColdStartProvider = provider
+                        self.recordActionLog(
+                            source: "native",
+                            action: "providerConfigColdStart",
+                            targetName: resolvedAgent,
+                            result: "ran `ouro hatch --agent \(resolvedAgent) --provider \(provider.providerFlagValue)` (cold-start; outcome: \(outcome.auditReason))",
+                            succeeded: false
+                        )
+                    case .failed:
                         // Honest failure: keep the form open, surface the seam-free outcome line,
                         // and route to the onboarding readiness surface (which owns the
                         // .needsCredentials repair step). Do NOT dismiss and do NOT log success.
+                        // NOT recoverable via finish-setup: a `.failed` cold-start never produced a
+                        // usable bundle, so the vault flag stays false.
                         self.providerConfigColdStartMessage = outcome.humanFacingLine(agentName: resolvedAgent)
                         self.recordActionLog(
                             source: "native",
@@ -17056,6 +17125,133 @@ final class WorkbenchViewModel: ObservableObject {
             }
             // No synchronous dismiss / success-log: the truth is only known after the probe above.
             return nil
+        }
+    }
+
+    /// F13 — "Finish setup": the in-app recovery for the honest `.needsVaultSetup` cold-start.
+    ///
+    /// The credential the user typed is GONE and un-replayable (it reached `ouro hatch` only as
+    /// ephemeral argv; re-running hatch hard-errors "bundle already exists"; `ouro auth` re-prompts
+    /// AND needs the vault to exist first). So we cannot persist silently — we run the CLI's
+    /// documented recovery chain (`ouro vault create && ouro auth && ouro provider refresh`) in a
+    /// NATIVE Workbench terminal (a real TTY), where the human enters the unlock secret (twice) and
+    /// re-enters the provider credential. The terminal is `.trusted` so F3's autonomy gate doesn't
+    /// block those legitimate human prompts. We capture the launched entry id + runId so
+    /// `markTerminated` recognizes its exit and re-probes; the re-probe (not the exit) is the sole
+    /// authority on `.ready` (the chain can exit 0 with a wedged daemon — the F1 safety invariant).
+    func beginVaultOnboarding() {
+        let agentName = providerConfigAgentName.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Without a resolved agent name + stashed provider there's nothing to recover.
+        guard !agentName.isEmpty, let provider = providerConfigColdStartProvider else {
+            return
+        }
+        // Build the chained recovery command from the PURE Core seam (single source of truth for
+        // the command shape + shell-quoting). Default email is `<name>@ouro.bot`.
+        let command = VaultOnboardingCommand.finishSetupCommandLine(
+            agentName: agentName,
+            providerFlag: provider.providerFlagValue,
+            email: nil
+        )
+        let draft = CustomTerminalSessionDraft(
+            name: "Finish setup: \(agentName)",
+            command: command,
+            workingDirectory: FileManager.default.homeDirectoryForCurrentUser.path,
+            trust: .trusted,
+            autoResume: false,
+            notes: "Workbench vault onboarding (finish setup) for \(agentName)"
+        )
+        guard let entry = createCustomSession(draft, launchAfterCreate: true) else {
+            // The terminal couldn't even be created/launched — surface a launch failure honestly
+            // (re-probe never runs; the machine folds a nil exit to .vaultCommandLaunchError).
+            completeVaultOnboarding(vaultExitCode: nil)
+            return
+        }
+        // Capture the run for exit-matching. `launch` populates `activeSessions[entry.id]`
+        // synchronously, so its plan's runId is available now.
+        vaultOnboardingEntryID = entry.id
+        vaultOnboardingRunID = activeSessions[entry.id]?.plan.runId
+        vaultOnboardingAgentName = agentName
+        recordActionLog(
+            source: "native",
+            action: "beginVaultOnboarding",
+            targetName: agentName,
+            // Audit lane only — the raw recovery verbs (no credential; the human types that in the TTY).
+            result: "opened finish-setup terminal: \(command)",
+            succeeded: true
+        )
+    }
+
+    /// F13 — fold the finish-setup terminal's exit into the next state, gating `.ready` on a
+    /// positive re-probe (the F1 safety invariant: NEVER `.ready` on a bare clean exit — the chain
+    /// can exit 0 with a wedged daemon, so the re-probe is the sole authority on readiness).
+    ///
+    /// Called from `markTerminated` when the onboarding session ends. `vaultExitCode` is the decoded
+    /// process exit, or `nil` when the terminal never launched. (When the one-shot screen session is
+    /// still detached at terminate time we pass `0` — the chain DID launch and we observed no
+    /// non-zero failure, so the decision falls entirely to the re-probe, which can only yield
+    /// `.ready` on a real `.working`.)
+    func completeVaultOnboarding(vaultExitCode: Int32?) {
+        let agentName = (vaultOnboardingAgentName
+            ?? providerConfigAgentName).trimmingCharacters(in: .whitespacesAndNewlines)
+        // Clear the in-flight markers up front so a second termination event can't double-fire.
+        vaultOnboardingEntryID = nil
+        vaultOnboardingRunID = nil
+        vaultOnboardingAgentName = nil
+        providerConfigColdStartInFlight = true
+        Task { [weak self] in
+            // Only re-probe when the chain exited cleanly; a non-zero / never-launched exit is a
+            // command failure the machine classifies WITHOUT a verdict (and re-probing a known
+            // failure just burns 15s).
+            let verdict: ProviderConnectionVerdict?
+            if vaultExitCode == 0 {
+                verdict = await self?.runColdStartProviderCheck(agentName: agentName, lane: "outward")
+            } else {
+                verdict = nil
+            }
+            let state = VaultOnboardingMachine.afterVaultTerminal(
+                vaultExitCode: vaultExitCode,
+                reprobeVerdict: verdict
+            )
+            await MainActor.run {
+                guard let self else { return }
+                self.providerConfigColdStartInFlight = false
+                // Always refresh inventory/readiness so the bundle surfaces with its TRUE state.
+                self.refreshOuroAgents()
+                self.refreshOnboardingReadiness()
+                self.runOnboardingProviderChecksIfNeeded()
+                switch state {
+                case .ready:
+                    // Verified working — reuse F1's EXACT cold-start `.ready` side-effects, and
+                    // clear the needs-vault flag so the form stops offering "Finish setup".
+                    self.providerConfigNeedsVaultSetup = false
+                    self.providerConfigColdStartProvider = nil
+                    self.providerConfigColdStartMessage = nil
+                    self.runFirstRunBootstrap()
+                    self.recordActionLog(
+                        source: "native",
+                        action: "completeVaultOnboarding",
+                        targetName: agentName,
+                        result: "finish-setup recovery verified ready",
+                        succeeded: true
+                    )
+                    self.isProviderConfigPresented = false
+                case let .failed(reason):
+                    // Honest failure: surface the seam-free Core human line and KEEP "Finish setup"
+                    // available for retry (do NOT dismiss, do NOT clear the flag, do NOT log success).
+                    self.providerConfigColdStartMessage =
+                        VaultOnboardingMachine.humanLine(for: state, agentName: agentName)
+                    self.recordActionLog(
+                        source: "native",
+                        action: "completeVaultOnboarding",
+                        targetName: agentName,
+                        result: "finish-setup recovery did not verify (outcome: \(reason.rawValue))",
+                        succeeded: false
+                    )
+                default:
+                    // afterVaultTerminal only ever returns .ready or .failed; this is unreachable.
+                    break
+                }
+            }
         }
     }
 
@@ -18087,6 +18283,12 @@ final class WorkbenchViewModel: ObservableObject {
         let currentPlan = activeSessions[entryId]?.plan
         let isCurrentSession = currentPlan?.runId == runId
         let manuallyTerminated = manuallyTerminatedRunIDs.remove(runId) != nil
+        // F13 — is this the in-flight finish-setup recovery terminal? Every custom session is
+        // wrapped in `screen`, so this one-shot chain can route through EITHER the detached-
+        // persistent branch (the screen session is still alive when the local client ends) OR the
+        // normal branch (the chain finished and screen exited). Hook both — the re-probe inside
+        // `completeVaultOnboarding` is the authoritative `.ready` gate regardless of which branch.
+        let isVaultOnboardingSession = entryId == vaultOnboardingEntryID && runId == vaultOnboardingRunID
         let detachedPersistentSession = isCurrentSession
             && !manuallyTerminated
             && currentPlan?.persistentSessionName.map(persistentSessionIsListed) == true
@@ -18105,6 +18307,12 @@ final class WorkbenchViewModel: ObservableObject {
             state.processRuns[runIndex].exitCode = nil
             state.processRuns[runIndex].rawExitStatus = nil
             save()
+            if isVaultOnboardingSession {
+                // The chain DID launch and we observed no non-zero failure (the screen session is
+                // merely still detached). Pass 0 so the decision falls entirely to the re-probe —
+                // which can only return `.ready` on a real `.working`.
+                completeVaultOnboarding(vaultExitCode: 0)
+            }
             return
         }
         let nextRunStatus = terminationPolicy.statusAfterTermination(
@@ -18147,6 +18355,12 @@ final class WorkbenchViewModel: ObservableObject {
         state.processRuns[runIndex].exitCode = status.exitCode
         state.processRuns[runIndex].rawExitStatus = status.rawWaitStatus
         save()
+        if isVaultOnboardingSession {
+            // The recovery chain finished and its `screen` session exited (the common, happy path).
+            // Decode + hand the real exit to the fold; `completeVaultOnboarding` re-probes on a
+            // clean exit and gates `.ready` on the verdict.
+            completeVaultOnboarding(vaultExitCode: status.exitCode)
+        }
     }
 
     /// Whether enough time has passed since the last unexpected-exit
