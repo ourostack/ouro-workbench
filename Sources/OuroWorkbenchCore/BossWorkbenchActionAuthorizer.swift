@@ -1,5 +1,70 @@
 import Foundation
 
+/// F3 — the auto-advance state the injection gate needs to decide whether the
+/// boss may inject live input into a session: the operator's global kill-switch
+/// (`bossAutoAdvanceEnabled`) and the effective friend governing the target
+/// session. Carries no policy of its own — `evaluateBossInjectionGate` reads it.
+public struct BossAutoAdvanceContext: Equatable, Sendable {
+    /// The operator's auto-advance kill-switch. When OFF, the operator chose to
+    /// make the boss "escalate everything instead" — so no channel may inject.
+    public let autoAdvanceEnabled: Bool
+    /// The effective friend for the target session (own assignment → group
+    /// default → machine owner). nil means unassigned, which never injects.
+    public let friend: SessionFriend?
+
+    public init(autoAdvanceEnabled: Bool, friend: SessionFriend?) {
+        self.autoAdvanceEnabled = autoAdvanceEnabled
+        self.friend = friend
+    }
+}
+
+public extension BossWorkbenchActionKind {
+    /// Whether applying this kind INJECTS live input into a session's terminal —
+    /// the keystroke channel the auto-advance kill-switch governs. ONLY
+    /// `sendInput` does today: control/read verbs (launch, recover, terminate,
+    /// archive, …) drive the session lifecycle but never type into a live prompt,
+    /// so the kill-switch must not block them. Keeping this an explicit predicate
+    /// (rather than an inline `== .sendInput`) makes the one injecting verb a
+    /// named, testable concept — a new injecting kind opts in here.
+    var injectsLiveInput: Bool {
+        self == .sendInput
+    }
+}
+
+/// F3 — the decision of whether the boss may inject live input into a session,
+/// given the auto-advance context. `allow` clears the gate; `deny` carries the
+/// audit reason. Pure + exhaustively testable so the kill-switch can't be
+/// silently re-opened by a channel that forgets to consult it.
+public enum BossInjectionGate: Equatable, Sendable {
+    case allow
+    case deny(String)
+}
+
+/// The single boss-injection gate, folded into the authorizer so EVERY channel
+/// (app apply, MCP enqueue) inherits the operator's auto-advance kill-switch and
+/// per-friend trust. Mirrors `evaluateAutoAdvanceGate`'s enabled + friend-trust
+/// floor for the actions/MCP path that previously never reached it.
+///
+/// - Non-injecting verbs (everything but `sendInput`) are always allowed: the
+///   kill-switch governs keystroke injection only, not control/read verbs.
+/// - A nil context fails CLOSED for an injecting verb (the auto-advance state was
+///   unavailable — e.g. the MCP enqueue path has no app state — so refuse rather
+///   than guess permissive).
+/// - Otherwise: the kill-switch must be ON, the session must have a friend, and
+///   that friend must be trusted (family/friend) — the same floor the decisions
+///   channel applies.
+public func evaluateBossInjectionGate(
+    action: BossWorkbenchActionKind,
+    context: BossAutoAdvanceContext?
+) -> BossInjectionGate {
+    guard action.injectsLiveInput else { return .allow }
+    guard let context else { return .deny("auto-advance state unavailable") }
+    guard context.autoAdvanceEnabled else { return .deny("auto-advance disabled") }
+    guard let friend = context.friend else { return .deny("session has no friend") }
+    guard friend.trust.isTrusted else { return .deny("friend trust is \(friend.trust.rawValue)") }
+    return .allow
+}
+
 /// The posture under which an action was (or was not) authorized.
 ///
 /// Entry-less actions never had an authorization posture before R2 — they bypassed the
@@ -71,10 +136,19 @@ public struct BossWorkbenchActionAuthorizer: Sendable {
     /// input (`y`/`1`), so the safety floor must see it. Callers that have no
     /// live prompt may omit it; the classifier then sees only the input (the old
     /// input-only behavior), which still catches a dangerous input verbatim.
+    ///
+    /// `autoAdvanceContext` (F3) carries the operator's auto-advance kill-switch
+    /// and the target session's effective friend. It is OPTIONAL with a `nil`
+    /// default so every pre-F3 caller/test compiles unchanged — but `nil` FAILS
+    /// CLOSED for a `sendInput` (an injecting verb with no known auto-advance
+    /// state must refuse, not guess permissive). The app apply path builds a real
+    /// context; the MCP enqueue path passes none (so an enqueued `sendInput` is
+    /// denied at enqueue, and the app apply path is the authoritative gate).
     public func authorize(
         _ action: BossWorkbenchAction,
         for entry: ProcessEntry,
-        livePrompt: String = ""
+        livePrompt: String = "",
+        autoAdvanceContext: BossAutoAdvanceContext? = nil
     ) -> BossWorkbenchActionAuthorization {
         guard !entry.isArchived || action.action == .restore else {
             return .denied("entry is archived")
@@ -95,6 +169,18 @@ public struct BossWorkbenchActionAuthorizer: Sendable {
                 return .denied("withheld unsafe input (\(reason)) — escalated to a human")
             }
         }
+        // F3 — the auto-advance kill-switch + per-friend trust gate, folded in
+        // AFTER the safety floor so the gate is purely ADDITIVE: a dangerous
+        // `sendInput` is still withheld with its safety-floor reason, and only a
+        // SAFE injecting input is then subject to the kill-switch / friend-trust
+        // floor. Non-injecting verbs (launch/recover/…) clear the gate unchanged.
+        // This is THE chokepoint — every channel that calls `authorize` (app
+        // apply, MCP enqueue via `gate`/`resolvedEntry`) inherits it, closing the
+        // bypass where the actions/MCP `sendInput` channel never consulted the
+        // operator's kill-switch.
+        if case let .deny(reason) = evaluateBossInjectionGate(action: action.action, context: autoAdvanceContext) {
+            return .denied(reason)
+        }
         return .allowed()
     }
 
@@ -113,13 +199,20 @@ public struct BossWorkbenchActionAuthorizer: Sendable {
     /// `authorize(_:for:livePrompt:)` (forwarding `livePrompt`), so live's destructive-input
     /// safety floor still fires on the entry-scoped `sendInput` channel. The entry-less branch
     /// is a NEW, separate path that never touches the floor.
+    ///
+    /// `autoAdvanceContext` (F3) forwards to the entry-scoped check (the entry-less
+    /// branch never injects live input — `sendInput` arriving entry-less is denied
+    /// outright — so it has no auto-advance gate to consult). Optional + nil-default
+    /// so existing callers are unchanged; the MCP enqueue path leaves it nil, which
+    /// fails closed for an entry-scoped `sendInput`.
     public func authorize(
         _ action: BossWorkbenchAction,
         resolvedEntry entry: ProcessEntry?,
-        livePrompt: String = ""
+        livePrompt: String = "",
+        autoAdvanceContext: BossAutoAdvanceContext? = nil
     ) -> BossWorkbenchActionAuthorization {
         if let entry {
-            return authorize(action, for: entry, livePrompt: livePrompt)
+            return authorize(action, for: entry, livePrompt: livePrompt, autoAdvanceContext: autoAdvanceContext)
         }
         return authorizeEntryless(action)
     }
@@ -141,9 +234,15 @@ public struct BossWorkbenchActionAuthorizer: Sendable {
     public func gate(
         _ action: BossWorkbenchAction,
         resolvedEntry entry: ProcessEntry?,
-        livePrompt: String = ""
+        livePrompt: String = "",
+        autoAdvanceContext: BossAutoAdvanceContext? = nil
     ) -> GateDecision {
-        let authorization = authorize(action, resolvedEntry: entry, livePrompt: livePrompt)
+        let authorization = authorize(
+            action,
+            resolvedEntry: entry,
+            livePrompt: livePrompt,
+            autoAdvanceContext: autoAdvanceContext
+        )
         return GateDecision(
             authorization: authorization,
             deniedTarget: entry?.name ?? action.action.rawValue
