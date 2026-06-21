@@ -93,6 +93,9 @@ jobs:
       - name: Verify GUI smoke timeout guard
         run: scripts/smoke-verify-app-timeout.sh
 
+      - name: Verify MCP tool catalog matches advertised tools
+        run: scripts/smoke-mcp-tool-catalog.sh
+
       - name: Verify package shallow checkout guard
         run: scripts/smoke-package-shallow-guard.sh
 

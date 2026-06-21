@@ -55,7 +55,8 @@ final class WorkbenchGuideTests: XCTestCase {
             "workbench_create_session",
             "workbench_discover_agent_sessions",
             "workbench_propose",
-            "workbench_proposal_result"
+            "workbench_proposal_result",
+            "workbench_report_bug"
         ])
     }
 

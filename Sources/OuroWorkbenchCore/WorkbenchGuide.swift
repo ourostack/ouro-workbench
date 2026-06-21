@@ -144,7 +144,8 @@ public enum WorkbenchGuide {
         Capability(tool: "workbench_create_session", summary: "create and launch an agent-owned coding session"),
         Capability(tool: "workbench_discover_agent_sessions", summary: "discover agent coding sessions running outside Workbench that it could adopt/recover"),
         Capability(tool: "workbench_propose", summary: "show the operator an editable plan and get their ticks/edits/approvals back"),
-        Capability(tool: "workbench_proposal_result", summary: "read back the operator's decision for a workbench_propose proposal")
+        Capability(tool: "workbench_proposal_result", summary: "read back the operator's decision for a workbench_propose proposal"),
+        Capability(tool: WorkbenchReportBugRenderer.toolName, summary: "report a Workbench defect you hit — anonymized note → the operator's Report a Bug card (text scrubbed; screenshot/diagnostics verbatim, nothing uploaded)")
     ]
 
     /// The canonical set of tool names the MCP server's `tools/list` advertises —
@@ -173,7 +174,8 @@ public enum WorkbenchGuide {
         "workbench_create_session",
         "workbench_discover_agent_sessions",
         "workbench_propose",
-        "workbench_proposal_result"
+        "workbench_proposal_result",
+        "workbench_report_bug"
     ]
 
     /// Every action verb the boss may put in an `ouro-workbench-actions` block.

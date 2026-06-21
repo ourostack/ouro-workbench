@@ -624,6 +624,7 @@ Workbench MCP exposes:
 | `workbench_discover_agent_sessions` | Discover agent coding sessions running outside Workbench that it could adopt/recover. |
 | `workbench_propose` | Show the operator an editable plan and get their ticks/edits/approvals back. |
 | `workbench_proposal_result` | Read back the operator's decision for a `workbench_propose` proposal. |
+| `workbench_report_bug` | Capture a Workbench/session defect you hit into the same anonymized bug-report bundle a human would create. The report TEXT is anonymized (usernames, home paths, agent names, tokens stripped); the window SCREENSHOT and diagnostics zip are verbatim, everything stays in a local bundle on the operator's Mac, and filing to GitHub stays human-gated. Returns an enqueue ack — the running app builds the bundle on drain; read it back from the operator's Report a Bug card. |
 
 External MCP action requests are written to disk, drained by the native app, and
 then authorized by the same trust gates used for boss conversation actions.
