@@ -112,7 +112,130 @@ final class PersistenceSalvageWiringTests: XCTestCase {
         }
     }
 
+    // MARK: - Implicit-save suppression arm (the clobber the grep-pin is BLIND to)
+    //
+    // The ordering pins above only see the EXPLICIT `writeSalvageCopy` /
+    // `store.save(state)` calls in load()'s source. They are structurally blind
+    // to the IMPLICIT saves: load() restores `selectedProjectID` /
+    // `selectedEntryID` / the detail layout, and EACH of those `@Published`
+    // assignments fires a `didSet` → `save()` → `store.save(state)`. Because
+    // `bootstrappedState` guarantees non-empty `projects`, `selectedProjectID`
+    // always transitions nil→non-nil, so that implicit save ALWAYS fires — and
+    // it fires ~20 lines BEFORE `writeSalvageCopy()`. On a lossy load it
+    // atomically overwrites `stateURL` with the survivors-only state, so the
+    // salvage then copies the ALREADY-clobbered file and the dropped rows are
+    // gone. The fix is a load-time save-suppression guard (`isLoadingState`).
+    // These pins fail on the pre-fix code (no guard) and pass once it exists.
+
+    func testSaveEarlyReturnsWhileLoadingState() throws {
+        let save = try viewModelSaveBody()
+        // The mechanism: save() must short-circuit while a load is in progress,
+        // so the selection/layout `didSet` observers can't persist mid-load.
+        XCTAssertTrue(
+            save.contains("isLoadingState"),
+            "save() must consult isLoadingState so observer-triggered saves are suppressed during load()"
+        )
+        XCTAssertTrue(
+            save.contains("guard !isLoadingState") || save.contains("guard isLoadingState == false"),
+            "save() must early-return (guard) while isLoadingState is true — otherwise an implicit didSet save clobbers the original before the salvage"
+        )
+    }
+
+    func testLoadSuccessBlockSetsLoadingGuardBeforeSelectionAndSalvage() throws {
+        let success = try loadSuccessBlock()
+        let guardIdx = try XCTUnwrap(
+            success.range(of: "isLoadingState = true")?.lowerBound,
+            "load()'s success block must set isLoadingState = true to suppress the implicit saves its assignments trigger"
+        )
+        XCTAssertTrue(
+            success.contains("defer { isLoadingState = false }")
+                || success.contains("defer { self.isLoadingState = false }"),
+            "the guard must be cleared via defer so it's reset no matter how load() exits"
+        )
+        // The guard MUST be raised before the selection assignment whose didSet
+        // would otherwise persist the survivors-only state…
+        let selectionIdx = try XCTUnwrap(
+            success.range(of: "selectedProjectID =")?.lowerBound,
+            "load() must restore selectedProjectID (whose didSet fires the implicit save)"
+        )
+        XCTAssertTrue(
+            guardIdx < selectionIdx,
+            "isLoadingState must be raised BEFORE selectedProjectID is assigned — otherwise that assignment's didSet save fires unguarded and clobbers the original"
+        )
+        // …and, transitively, before the salvage CALL itself (match the call
+        // `store.writeSalvageCopy`, not the prose mentions of writeSalvageCopy()
+        // in the surrounding comments).
+        let salvageIdx = try XCTUnwrap(
+            success.range(of: "store.writeSalvageCopy")?.lowerBound,
+            "load() must call store.writeSalvageCopy() on a lossy load"
+        )
+        XCTAssertTrue(
+            guardIdx < salvageIdx,
+            "the suppression window must already be open by the time the salvage runs"
+        )
+    }
+
+    func testTrailingDeliberateSaveBypassesTheLoadingGuard() throws {
+        let success = try loadSuccessBlock()
+        // The guard suppresses save(); the deliberate persistence at the end of
+        // load() must therefore call the STORE directly (store.save(state)) so
+        // the final survivors-only state is still written — AFTER the salvage.
+        XCTAssertTrue(
+            success.contains("store.save(state)"),
+            "the trailing deliberate save must call store.save(state) directly (bypassing the guarded save()) so the survivors-only state is persisted after the salvage"
+        )
+    }
+
+    func testSelectionAssignmentsRouteThroughGuardedSave() throws {
+        // Confirms the implicit-save vector the ordering grep is blind to is
+        // real: the selectedProjectID / selectedEntryID didSet observers call
+        // save() (now guarded). If a refactor moved these off save(), the guard
+        // would silently stop protecting them — so pin the wiring.
+        let projectObserver = try selectedProjectIDDidSet()
+        XCTAssertTrue(
+            projectObserver.contains("save()"),
+            "selectedProjectID.didSet must route through save() — this is the implicit save the load-time guard suppresses"
+        )
+        let entryObserver = try selectedEntryIDDidSet()
+        XCTAssertTrue(
+            entryObserver.contains("save()"),
+            "selectedEntryID.didSet must route through save() — this is the implicit save the load-time guard suppresses"
+        )
+    }
+
     // MARK: - Helpers (mirror SessionIdBackfillWiringTests)
+
+    /// The `WorkbenchViewModel.save()` body — NOT the unrelated sheet `save()`
+    /// earlier in the file. Anchored on the reset-suppression comment that is
+    /// unique to the view-model save.
+    private func viewModelSaveBody() throws -> String {
+        let source = try appSource()
+        return try sourceSlice(
+            in: source,
+            from: "// While resetting to first run we've deliberately removed the state",
+            to: "private func fetchResult"
+        )
+    }
+
+    /// The `selectedProjectID` `didSet` observer body.
+    private func selectedProjectIDDidSet() throws -> String {
+        let source = try appSource()
+        return try sourceSlice(
+            in: source,
+            from: "@Published var selectedProjectID:",
+            to: "@Published var selectedEntryID:"
+        )
+    }
+
+    /// The `selectedEntryID` `didSet` observer body.
+    private func selectedEntryIDDidSet() throws -> String {
+        let source = try appSource()
+        return try sourceSlice(
+            in: source,
+            from: "@Published var selectedEntryID:",
+            to: "@Published var selectedAgentName:"
+        )
+    }
 
     /// The whole `load()` catch arm — from the catch through the end of `load()`.
     private func loadCatchArm() throws -> String {
