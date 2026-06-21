@@ -19,12 +19,12 @@ fail-closed deny for sendInput at enqueue (app-apply is authoritative).
 ## Units
 
 ### Unit 0a (test): Core seam — `evaluateBossInjectionGate` + `BossAutoAdvanceContext` + `injectsLiveInput`
-- ⬜ Write failing tests for the pure gate (T8 + direct gate cases) in PromptSafetyClassifierTests / new file
+- ✅ Wrote failing tests (BossInjectionGateTests, 7 tests) — red on missing types
 - Acceptance: gate returns .allow for non-injecting kinds (nil ctx); fail-closed denies for sendInput
 
 ### Unit 0b (impl): Core seam types + function
-- ⬜ Add `BossAutoAdvanceContext`, `injectsLiveInput`, `BossInjectionGate`, `evaluateBossInjectionGate`
-- Acceptance: 0a tests green; 100% line+region on new code
+- ✅ Added `BossAutoAdvanceContext`, `injectsLiveInput`, `BossInjectionGate`, `evaluateBossInjectionGate`
+- Acceptance: 0a tests green (7/7); Core builds clean
 
 ### Unit 1a (test): authorizer integration — T1..T9
 - ⬜ Add T1 (CANARY, red on HEAD), T2, T3, T4, T5, T6, T7, T9 to BossWorkbenchActionAuthorizerTests
@@ -57,3 +57,5 @@ fail-closed deny for sendInput at enqueue (app-apply is authoritative).
 - [ ] R4 finding reported
 
 ## Progress Log
+
+- 2026-06-21 12:54 Unit 0a/0b complete: BossInjectionGate core seam (types + pure gate), 7 gate tests green, Core builds clean. Commits f4e6fc9 (test), 5104f96 (impl).
