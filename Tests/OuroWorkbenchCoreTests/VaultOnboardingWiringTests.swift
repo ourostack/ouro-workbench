@@ -218,7 +218,13 @@ final class VaultOnboardingWiringTests: XCTestCase {
 
     private func markTerminatedMethod() throws -> String {
         let source = try appSource()
-        return try sourceSlice(in: source, from: "func markTerminated(entryId:", to: "\n    func markStarted(")
+        // `markTerminated` is immediately followed by the `shouldPostExitNotification` helper
+        // (its doc-comment is the slice boundary).
+        return try sourceSlice(
+            in: source,
+            from: "func markTerminated(entryId:",
+            to: "/// Whether enough time has passed since the last unexpected-exit"
+        )
     }
 
 

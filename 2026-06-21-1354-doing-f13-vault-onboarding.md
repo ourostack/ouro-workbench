@@ -118,7 +118,7 @@ captures the new entry id + runId for exit matching. Pin the "Finish setup" affo
 Output: tests FAIL.
 Acceptance: red.
 
-### Unit 3b — beginVaultOnboarding IMPL (green) ⬜
+### Unit 3b — beginVaultOnboarding IMPL (green) ✅
 What: Implement `beginVaultOnboarding()` + the "Finish setup" affordance. Build the draft
 (name "Finish setup: <name>", command = chain, workingDirectory = home, trust `.trusted`),
 call `createCustomSession(_:launchAfterCreate:true)`, stash the onboarding entry id + runId.
@@ -137,7 +137,7 @@ true (retry) + surfaces `humanLine` + refreshes readiness.
 Output: tests FAIL.
 Acceptance: red.
 
-### Unit 4b — completeVaultOnboarding IMPL (green) + termination-model decision ⬜
+### Unit 4b — completeVaultOnboarding IMPL (green) + termination-model decision ✅
 What: Implement exit detection in `markTerminated` (decide + DOCUMENT the one-shot-terminal
 termination model: normal vs `detachedPersistentSession` — launch non-persistent or hook
 both branches; re-probe is authoritative regardless). Implement
@@ -184,3 +184,6 @@ Acceptance: see Completion Criteria.
 - 2026-06-21 13:55 Unit 0 complete: doing doc + artifacts dir on fix/f13-vault-onboarding off 9764b1f; identity ari@mendelow.me.
 - 2026-06-21 13:57 Unit 1a complete: VaultOnboardingTests.swift (12 tests) written; red confirmed (missing VaultOnboarding symbols).
 - 2026-06-21 14:00 Unit 1b complete: VaultOnboarding.swift implemented; 12 tests green; full suite 1975 green; build clean. Test note: the seam-free `humanLine` check strips the agent name before scanning (the canonical name "ouroboros" contains substring "ouro"); the check still catches real CLI/vault vocabulary leaks. This is a test-quality fix (false-positive substring collision), not an implementation accommodation — the copy is genuinely seam-free.
+- 2026-06-21 14:03 Unit 1c complete: coverage gate PASS — VaultOnboarding.swift 100% line+region, no allowlist entry (added testMachineIsConstructible to cover the documented public init). Cold reviewer CONVERGED on Units 1a-1c (safety invariant airtight, command chain exact, copy seam-free, table complete).
+- 2026-06-21 14:06 Unit 2a+2b complete: split the shared `.needsVaultSetup, .failed` arm; added @Published providerConfigNeedsVaultSetup + providerConfigColdStartProvider; the needs-vault arm sets the flag + stashes the provider. F1 ColdStartHonestWiringTests still green. Build clean.
+- 2026-06-21 14:13 Units 3a-4b complete: beginVaultOnboarding() builds the chain via VaultOnboardingCommand and opens a .trusted native terminal via createCustomSession(launchAfterCreate:true), capturing entry id + runId. "Finish setup" affordance gated on providerConfigNeedsVaultSetup. markTerminated detects the onboarding session in BOTH branches (normal + detachedPersistentSession) and calls completeVaultOnboarding, which re-probes via runColdStartProviderCheck (exit 0 only), folds via afterVaultTerminal, gates F1's exact .ready side-effects on the machine, and keeps retry on .failed. Termination-model decision recorded in f13-vault-onboarding/termination-model-decision.md. Full suite 1989 green; build clean.
