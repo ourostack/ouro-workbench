@@ -29,17 +29,21 @@ final class CloneHonestWiringTests: XCTestCase {
         )
     }
 
-    func testCloneChecksForAgentJsonOnDisk() throws {
+    func testCloneChecksForAgentJsonPresence() throws {
         let body = try cloneBranch()
-        // gap #2 — the clean-exit arm must consult the bundle: build the agent.json path via the
-        // pure locator and probe the filesystem for it.
+        // gap #2 — the clean-exit arm must consult the bundle's agent.json presence. The F7
+        // cold-review fix unifies BOTH the named and blank paths through the roster (which IS the
+        // on-disk agent.json scan): the resolver reports `agentJsonPresent`, and the clean-exit arm
+        // feeds it into the classifier. This replaces the old raw per-name `fileExists` probe — the
+        // roster is the consistent presence source for both paths (and the only one that works for
+        // the blank-name default).
         XCTAssertTrue(
-            body.contains("CloneBundleLocator.agentJsonPath"),
-            "the clean-exit arm must locate the cloned agent.json via CloneBundleLocator"
+            body.contains("agentJsonPresent"),
+            "the clean-exit arm must consult agent.json presence (now via the resolver, gap #2)"
         )
         XCTAssertTrue(
-            body.contains("fileExists"),
-            "the clean-exit arm must check the cloned agent.json exists on disk (gap #2)"
+            body.contains("resolution.agentJsonPresent") || body.contains("resolvedClone.agentJsonPresent"),
+            "presence must come from the resolver's roster-derived agentJsonPresent (unifies named + blank paths)"
         )
     }
 
@@ -156,6 +160,74 @@ final class CloneHonestWiringTests: XCTestCase {
         XCTAssertTrue(
             body.contains("refreshOuroAgents()"),
             "the branch must refresh the agent roster on every outcome"
+        )
+    }
+
+    // MARK: - F7 cold-review CRITICAL: resolve the cloned agent from the refreshed roster
+
+    /// The blank-name false-red fix routes the clean-exit arm through the pure
+    /// `ClonedAgentResolver.resolveClonedAgent` seam instead of deriving + assuming. BOTH the named
+    /// and blank paths must use it (the roster IS the consistent on-disk agent.json source).
+    func testCloneResolvesTheClonedAgentViaTheResolverSeam() throws {
+        let body = try cloneBranch()
+        XCTAssertTrue(
+            body.contains("ClonedAgentResolver.resolveClonedAgent"),
+            "the clean-exit arm must resolve the cloned agent via ClonedAgentResolver.resolveClonedAgent"
+        )
+    }
+
+    /// THE bug: the whole bundle/probe inspection was gated on `!resolvedName.isEmpty`, so a BLANK
+    /// agent name (the recommended default) skipped it and a clean successful clone was reported as
+    /// the false `.invalidMissingAgentJson`. That gate must be GONE.
+    func testCloneNoLongerSkipsInspectionOnABlankName() throws {
+        let body = try cloneBranch()
+        XCTAssertFalse(
+            body.contains("!resolvedName.isEmpty"),
+            "the clean-exit arm must NOT gate inspection on a non-blank name — a blank name is the default"
+        )
+    }
+
+    /// The resolver verifies against REALITY, so the roster must be snapshotted BEFORE the clone (the
+    /// diff baseline) and the refresh must precede the resolver read (it's synchronous).
+    func testCloneSnapshotsTheRosterBeforeTheClone() throws {
+        let body = try cloneBranch()
+        guard let runRange = body.range(of: "await CloneAgentRunner.runHeadless(plan: plan)") else {
+            return XCTFail("expected the runner await")
+        }
+        let beforeRun = String(body[body.startIndex..<runRange.lowerBound])
+        XCTAssertTrue(
+            beforeRun.contains("rosterNamesBefore") || beforeRun.contains("namesBefore"),
+            "the roster names must be snapshotted BEFORE the clone runs (the resolver's diff baseline)"
+        )
+    }
+
+    /// The refresh (which re-scans agent.json) must precede the resolver call so the resolver reads
+    /// the post-clone reality, and the resolver call must precede classification.
+    func testCloneRefreshesRosterBeforeResolvingAndClassifying() throws {
+        let body = try cloneBranch()
+        guard let refreshIdx = body.range(of: "refreshOuroAgents()")?.lowerBound,
+              let resolveIdx = body.range(of: "ClonedAgentResolver.resolveClonedAgent")?.lowerBound,
+              let classifyIdx = body.range(of: "CloneOutcomeClassifier.classifyClone")?.lowerBound
+        else {
+            return XCTFail("expected refresh, resolve, and classify in the branch")
+        }
+        XCTAssertTrue(refreshIdx < resolveIdx, "refreshOuroAgents() must run BEFORE the resolver reads the roster")
+        XCTAssertTrue(resolveIdx < classifyIdx, "the resolver must run BEFORE classifyClone consumes its result")
+    }
+
+    /// The post-clone probe must check the RESOLVED name (what actually landed), not the raw
+    /// operator input — a blank input would otherwise probe an empty agent name.
+    func testCloneProbeUsesTheResolvedName() throws {
+        let body = try cloneBranch()
+        guard let probeRange = body.range(of: "runCloneProviderCheck(agentName:") else {
+            return XCTFail("expected the clone provider probe call")
+        }
+        let afterProbe = String(body[probeRange.lowerBound...])
+        // The argument must reference the resolution's name, not the raw `resolvedName`/`agentName`.
+        let probeCallLine = String(afterProbe.prefix(while: { $0 != ")" }))
+        XCTAssertTrue(
+            probeCallLine.contains("resolution.name") || probeCallLine.contains("resolvedClone"),
+            "the probe must check the resolver's name (the agent that actually landed), not the raw input"
         )
     }
 
