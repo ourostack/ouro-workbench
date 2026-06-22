@@ -250,25 +250,10 @@ final class ProviderConfigFormTests: XCTestCase {
         XCTAssertFalse(WorkbenchProvider.githubCopilot.supportsColdStartHatch)
     }
 
-    // MARK: - Existing-agent credential-refresh gap (gap a — honest, seam-free, NOT a pane)
-
-    func testExistingAgentRefreshMessageIsHonestAndSeamFree() {
-        // Refreshing an EXISTING agent's provider credentials has no headless `ouro`
-        // non-interactive sink today (the documented narrow gap). The form must say so
-        // honestly — never fabricate a command and never reopen a CLI pane. The copy is a
-        // pure Core value so the cohesive-product wording is unit-tested.
-        let message = ProviderConfigForm.existingAgentRefreshUnavailableMessage(agentName: "slugger")
-
-        // Names the agent and is honest that it's "not available yet" (no false promise of work).
-        XCTAssertTrue(message.contains("slugger"), "message should name the agent: \(message)")
-        let lowered = message.lowercased()
-        XCTAssertTrue(
-            lowered.contains("not available") || lowered.contains("isn't available") || lowered.contains("yet"),
-            "message must honestly signal the affordance is not available yet: \(message)"
-        )
-        // Seam-free: no CLI/daemon/hatch vocabulary leaks to the human.
-        assertSeamFree(message)
-    }
+    // NOTE (F6): the former `testExistingAgentRefreshMessageIsHonestAndSeamFree` is gone with the
+    // `existingAgentRefreshUnavailableMessage` it covered — an existing agent's Connect now drives a
+    // real credential rotation (see `CredentialRotationTests` for the rotation command + flavored
+    // copy, and `CredentialRotationWiringTests` for the short-circuit replacement).
 
     // MARK: - Whitespace trimming
 

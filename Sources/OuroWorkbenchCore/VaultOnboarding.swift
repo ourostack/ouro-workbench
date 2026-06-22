@@ -44,6 +44,19 @@ public enum VaultOnboardingFailure: String, Equatable, Sendable {
     case couldNotConfirm
 }
 
+/// Which flavor of vault-terminal flow the human copy describes. The state machine + fold are
+/// flavor-agnostic (F6 reuses F13's `afterVaultTerminal` verbatim); ONLY the human copy differs:
+///
+/// - `.onboarding` (F13) — a NEW agent finishing first-time setup ("Finish connecting … set an
+///   unlock secret and re-enter your provider details").
+/// - `.rotation` (F6) — an EXISTING agent reconnecting / rotating its credential ("Reconnect … you'll
+///   unlock its vault and re-enter your provider details"). The vault already exists, so the copy
+///   speaks of unlocking/reconnecting, not first-time setup.
+public enum VaultOnboardingFlavor: Sendable, Equatable {
+    case onboarding
+    case rotation
+}
+
 /// The pure state machine behind in-app vault onboarding. No I/O: every method is a total
 /// function over its inputs, so the App wiring stays a thin fold.
 public struct VaultOnboardingMachine: Sendable {
@@ -85,13 +98,29 @@ public struct VaultOnboardingMachine: Sendable {
     }
 
     /// Seam-free human copy for a state — names the agent, never leaks `ouro`/`vault`/`hatch`/
-    /// argv flags. Returns a line for every state.
-    public static func humanLine(for state: VaultOnboardingState, agentName: String) -> String? {
+    /// argv flags. Returns a line for every state. `flavor` selects onboarding (F13, first-time
+    /// setup) vs rotation (F6, an existing agent reconnecting) wording; the default is `.onboarding`
+    /// so F13's existing 2-arg call sites are unchanged.
+    public static func humanLine(
+        for state: VaultOnboardingState,
+        agentName: String,
+        flavor: VaultOnboardingFlavor = .onboarding
+    ) -> String? {
         switch state {
         case .needsSecret:
-            return "Finish connecting \(agentName): you'll set an unlock secret and re-enter your provider details."
+            switch flavor {
+            case .onboarding:
+                return "Finish connecting \(agentName): you'll set an unlock secret and re-enter your provider details."
+            case .rotation:
+                return "Reconnect \(agentName): you'll enter its unlock secret and re-enter your provider details."
+            }
         case .runningVaultTerminal:
-            return "Finishing setup for \(agentName) — follow the prompts in the window that just opened."
+            switch flavor {
+            case .onboarding:
+                return "Finishing setup for \(agentName) — follow the prompts in the window that just opened."
+            case .rotation:
+                return "Reconnecting \(agentName) — follow the prompts in the window that just opened."
+            }
         case .persisting:
             return "Checking that \(agentName) is connected…"
         case .ready:
@@ -99,9 +128,19 @@ public struct VaultOnboardingMachine: Sendable {
         case let .failed(reason):
             switch reason {
             case .vaultCommandLaunchError:
-                return "Workbench couldn't open the setup window for \(agentName). Please try again."
+                switch flavor {
+                case .onboarding:
+                    return "Workbench couldn't open the setup window for \(agentName). Please try again."
+                case .rotation:
+                    return "Workbench couldn't open the reconnect window for \(agentName). Please try again."
+                }
             case .vaultCommandNonZeroExit:
-                return "Setup for \(agentName) didn't complete. Please try again."
+                switch flavor {
+                case .onboarding:
+                    return "Setup for \(agentName) didn't complete. Please try again."
+                case .rotation:
+                    return "Reconnecting \(agentName) didn't complete. Please try again."
+                }
             case .stillNotConnected:
                 return "\(agentName) still isn't connected. Re-enter your provider details and try again."
             case .couldNotConfirm:
@@ -141,5 +180,36 @@ public enum VaultOnboardingCommand {
             ["ouro", "provider", "refresh", "--agent", agentName]
         )
         return [vaultCreate, auth, refresh].joined(separator: " && ")
+    }
+
+    /// F6 — the chained credential-ROTATION command for an EXISTING agent's native terminal:
+    ///
+    /// ```
+    /// ouro vault unlock --agent <name> && ouro auth --agent <name> --provider <p> && ouro provider refresh --agent <name>
+    /// ```
+    ///
+    /// An existing agent's vault ALREADY exists, so rotation UNLOCKS it (it does NOT `create` it,
+    /// which would be the cold-start `finishSetupCommandLine` path), and carries NO `--email` (the
+    /// vault account is already provisioned — only `vault create` takes the account email). Like
+    /// F13's chain there is still no non-interactive `ouro` credential-set sink, so `auth` must run
+    /// in a real TTY where the human re-enters the unlock secret + the provider credential; this is
+    /// why F6 drives the chain in a native Workbench terminal rather than persisting silently.
+    ///
+    /// Every argument is quoted via `ShellArgumentEscaper`; the ` && ` separators between the three
+    /// `ouro` invocations are literal and never quoted (mirrors `finishSetupCommandLine`).
+    public static func rotateCredentialCommandLine(
+        agentName: String,
+        providerFlag: String
+    ) -> String {
+        let vaultUnlock = ShellArgumentEscaper.commandLine(
+            ["ouro", "vault", "unlock", "--agent", agentName]
+        )
+        let auth = ShellArgumentEscaper.commandLine(
+            ["ouro", "auth", "--agent", agentName, "--provider", providerFlag]
+        )
+        let refresh = ShellArgumentEscaper.commandLine(
+            ["ouro", "provider", "refresh", "--agent", agentName]
+        )
+        return [vaultUnlock, auth, refresh].joined(separator: " && ")
     }
 }
