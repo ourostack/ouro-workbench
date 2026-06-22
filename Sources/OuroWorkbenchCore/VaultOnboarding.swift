@@ -142,4 +142,35 @@ public enum VaultOnboardingCommand {
         )
         return [vaultCreate, auth, refresh].joined(separator: " && ")
     }
+
+    /// F6 — the chained credential-ROTATION command for an EXISTING agent's native terminal:
+    ///
+    /// ```
+    /// ouro vault unlock --agent <name> && ouro auth --agent <name> --provider <p> && ouro provider refresh --agent <name>
+    /// ```
+    ///
+    /// An existing agent's vault ALREADY exists, so rotation UNLOCKS it (it does NOT `create` it,
+    /// which would be the cold-start `finishSetupCommandLine` path), and carries NO `--email` (the
+    /// vault account is already provisioned — only `vault create` takes the account email). Like
+    /// F13's chain there is still no non-interactive `ouro` credential-set sink, so `auth` must run
+    /// in a real TTY where the human re-enters the unlock secret + the provider credential; this is
+    /// why F6 drives the chain in a native Workbench terminal rather than persisting silently.
+    ///
+    /// Every argument is quoted via `ShellArgumentEscaper`; the ` && ` separators between the three
+    /// `ouro` invocations are literal and never quoted (mirrors `finishSetupCommandLine`).
+    public static func rotateCredentialCommandLine(
+        agentName: String,
+        providerFlag: String
+    ) -> String {
+        let vaultUnlock = ShellArgumentEscaper.commandLine(
+            ["ouro", "vault", "unlock", "--agent", agentName]
+        )
+        let auth = ShellArgumentEscaper.commandLine(
+            ["ouro", "auth", "--agent", agentName, "--provider", providerFlag]
+        )
+        let refresh = ShellArgumentEscaper.commandLine(
+            ["ouro", "provider", "refresh", "--agent", agentName]
+        )
+        return [vaultUnlock, auth, refresh].joined(separator: " && ")
+    }
 }
