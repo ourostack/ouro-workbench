@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 /// Up/down result of a daemon-liveness probe.
 ///
@@ -388,25 +389,29 @@ public struct DaemonManager: Sendable {
     /// `TerminalEnvironment().valuesWithResolvedPath()`) so `ouro` resolves from a
     /// Finder-launched `.app`'s minimal PATH. The child's stdio is redirected to `/dev/null`
     /// so quitting Workbench never closes the daemon's streams, and we DO NOT wait on it —
-    /// Workbench never becomes the daemon's parent-of-record for lifecycle purposes. NOTE:
-    /// `/dev/null` stdio is NOT a `setsid`-equivalent — it does not create a new session or
-    /// process group; the child still inherits Workbench's process group (relevant to the F8
-    /// watchdog: a killpg here would reap Workbench, which is why group-reap stays gated).
+    /// Workbench never becomes the daemon's parent-of-record for lifecycle purposes.
+    ///
+    /// F8b — spawned via `SpawnInOwnGroup` (`POSIX_SPAWN_SETPGROUP`, pgid == child pid), so the
+    /// daemon is born in its OWN process group rather than inheriting Workbench's. This is the
+    /// truer detach: the daemon's group is independent of Workbench's, so nothing here could
+    /// ever reap Workbench's group, and any grandchildren the daemon forks belong to the
+    /// daemon's group, not the app's. (We still fire-and-forget — the returned pid is
+    /// discarded; the post-start verify probe is what establishes recovery truth.)
     @Sendable
     public static func detachedStart() async throws {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["ouro", "up"]
-        process.environment = TerminalEnvironment().valuesWithResolvedPath()
+        // Detach stdio so quitting Workbench never closes the daemon's streams. Closing the
+        // parent's copy after the spawn is unconditional (a no-op for an unexpected -1).
+        let devNull = open("/dev/null", O_RDWR)
+        defer { close(devNull) }
 
-        // Detach stdio so quitting Workbench never closes the daemon's streams.
-        let devNull = FileHandle.nullDevice
-        process.standardInput = devNull
-        process.standardOutput = devNull
-        process.standardError = devNull
-
-        try process.run()
-        // Deliberately do NOT wait: the daemon is independent. `ouro up` returns once the
-        // daemon is launched; the post-start verify probe is what establishes recovery truth.
+        _ = try SpawnInOwnGroup.spawn(
+            executablePath: "/usr/bin/env",
+            arguments: ["env", "ouro", "up"],
+            environment: TerminalEnvironment().valuesWithResolvedPath(),
+            stdio: SpawnInOwnGroup.StdioFDs(stdin: devNull, stdout: devNull, stderr: devNull)
+        )
+        // Deliberately do NOT wait and DISCARD the pid: the daemon is independent. `ouro up`
+        // returns once the daemon is launched; the post-start verify probe is what establishes
+        // recovery truth.
     }
 }
