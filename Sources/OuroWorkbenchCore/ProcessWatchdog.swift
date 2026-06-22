@@ -13,12 +13,50 @@ import Foundation
 /// line is ever surfaced (the post-command probe that produces it runs only AFTER the
 /// wait). This terminates the child past the deadline so the wait unwinds and the probe
 /// can classify the (now-failed) outcome honestly.
+///
+/// F8 — a bare `terminate()` (SIGTERM) is not enough: a wedged child that IGNORES
+/// SIGTERM (a `node` swallowing the signal, a stuck syscall) survives the kill and the
+/// wait still hangs forever. The watchdog now ESCALATES — SIGTERM, then after a grace
+/// window SIGKILL the child pid — via the pure `WatchdogEscalation` policy. `killpg`
+/// (group reap, for grandchildren) is gated behind `childInOwnGroup`, which is `false`
+/// for every current spawn because they SHARE Workbench's process group; killpg would
+/// otherwise reap Workbench itself. See `WatchdogEscalation`.
 public enum ProcessWatchdog {
     /// Wait for `process` to exit, terminating it if it runs past `timeoutSeconds`.
     /// `process` must already be running (`try process.run()` called by the caller).
+    ///
+    /// Thin back-compat wrapper over the escalating overload with the safe defaults
+    /// (2s grace, child-only SIGKILL, real `kill`) so the existing callers are unchanged.
     public static func waitUntilExit(_ process: Process, timeoutSeconds: Double) {
+        waitUntilExit(process, timeoutSeconds: timeoutSeconds, gracePeriodSeconds: 2.0)
+    }
+
+    /// Wait for `process` to exit, escalating SIGTERM → (grace) → SIGKILL past the deadline.
+    ///
+    /// - Parameters:
+    ///   - timeoutSeconds: how long to let the child run before the watchdog fires.
+    ///   - gracePeriodSeconds: after SIGTERM, how long to let a cooperative child flush +
+    ///     exit before SIGKILL. Default 2.0s.
+    ///   - childInOwnGroup: proven `true` ONLY when the spawn placed the child in its own
+    ///     process group. Gates the `killpg` group reap; `false` (the default) means the
+    ///     escalation SIGKILLs the child pid only, never the (shared) group.
+    ///   - signalDeliverer: the syscall seam — delivers `(pid, signal)`. Default is the
+    ///     real `kill`; tests inject a fake to cover the escalation ORCHESTRATION without
+    ///     a child that deterministically ignores SIGTERM.
+    public static func waitUntilExit(
+        _ process: Process,
+        timeoutSeconds: Double,
+        gracePeriodSeconds: Double = 2.0,
+        childInOwnGroup: Bool = false,
+        signalDeliverer: @escaping @Sendable (pid_t, Int32) -> Void = { kill($0, $1) }
+    ) {
         let watchdog = DispatchWorkItem {
-            terminateIfRunning(process)
+            escalateTermination(
+                process,
+                gracePeriodSeconds: gracePeriodSeconds,
+                childInOwnGroup: childInOwnGroup,
+                signalDeliverer: signalDeliverer
+            )
         }
         DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + timeoutSeconds, execute: watchdog)
         process.waitUntilExit()
@@ -37,6 +75,9 @@ public enum ProcessWatchdog {
     /// watchdog closure and read after the wait, both under an `NSLock` so the closure's write
     /// happens-before the caller's read with no swift-atomics dependency (the closure runs on a
     /// global queue; the wait unwinds on the caller's thread).
+    ///
+    /// F8 — the watchdog now escalates SIGTERM → (grace) → SIGKILL, same as the void variant, so a
+    /// SIGTERM-ignoring child can't keep this wait hung past the report either.
     public static func waitUntilExitReportingTimeout(_ process: Process, timeoutSeconds: Double) -> Bool {
         let lock = NSLock()
         var didFire = false
@@ -44,7 +85,7 @@ public enum ProcessWatchdog {
             lock.lock()
             didFire = true
             lock.unlock()
-            terminateIfRunning(process)
+            escalateTermination(process, gracePeriodSeconds: 2.0, childInOwnGroup: false, signalDeliverer: { kill($0, $1) })
         }
         DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + timeoutSeconds, execute: watchdog)
         process.waitUntilExit()
@@ -68,6 +109,64 @@ public enum ProcessWatchdog {
     static func terminateIfRunning(_ process: Process) {
         if process.isRunning {
             process.terminate()
+        }
+    }
+
+    /// The escalation: SIGTERM, then (after `gracePeriodSeconds` of the child still running)
+    /// the escalated kill chosen by `WatchdogEscalation.nextSignal`. Pure decision, impure
+    /// delivery: the policy is unit-tested in `WatchdogEscalationTests`; the orchestration is
+    /// covered by injecting a fake `signalDeliverer`; only the raw syscall lines
+    /// (`kill`/`killpg`/`getpgid` defaults and the killpg target) are uncoverable (a child that
+    /// ignores SIGTERM through a real grace window is timing-flaky) — those are allowlisted.
+    ///
+    /// Recycled-pid safety: capture `processIdentifier` while `isRunning`, and re-check
+    /// `isRunning` immediately before each signal — never signal a pid the OS may have reaped
+    /// and reassigned. `getpgid` returning -1 (the pid is already gone) also aborts the group
+    /// reap.
+    static func escalateTermination(
+        _ process: Process,
+        gracePeriodSeconds: Double,
+        childInOwnGroup: Bool,
+        signalDeliverer: @Sendable (pid_t, Int32) -> Void
+    ) {
+        // Stage 1 — SIGTERM. Capture the pid while the child is provably running. (The policy's
+        // pre-grace decision is `.terminate` for any non-negative elapsed, so SIGTERM is
+        // unconditional here; the policy is consulted at stage 3 where the real branch lives.)
+        guard process.isRunning else {
+            return
+        }
+        let pid = process.processIdentifier
+        signalDeliverer(pid, SIGTERM)
+
+        // Stage 2 — grace. Poll for the child to exit on its own; bounded so a wedged child
+        // can't hang us here either. If it exits during grace, the re-check below skips SIGKILL.
+        let deadline = Date().addingTimeInterval(gracePeriodSeconds)
+        while process.isRunning && Date() < deadline {
+            usleep(20_000) // 20ms
+        }
+
+        // Stage 3 — escalate. Re-check isRunning to avoid signalling a reaped/recycled pid.
+        guard process.isRunning else {
+            return
+        }
+        // The pure policy decides child-only vs group reap. At elapsed == grace it returns
+        // `.killChild` (the safe default) or `.killGroup` (ONLY when childInOwnGroup) — never
+        // `.none`/`.terminate`, so the group-vs-child gate is the only live branch.
+        if WatchdogEscalation.nextSignal(
+            elapsedSinceDeadline: gracePeriodSeconds,
+            graceSeconds: gracePeriodSeconds,
+            childInOwnGroup: childInOwnGroup
+        ) == .killGroup {
+            // GATED + structurally unreachable in F8 (no spawn sets childInOwnGroup): killpg of a
+            // SHARED group would reap Workbench. getpgid/killpg are the uncoverable syscalls
+            // (allowlisted; full rationale in scripts/coverage-allowlist.txt).
+            let pgid = getpgid(pid)
+            if pgid != -1 {
+                killpg(pgid, SIGKILL)
+            }
+        } else {
+            // `.killChild` — SIGKILL the child pid only (the safe F8 default).
+            signalDeliverer(pid, SIGKILL)
         }
     }
 }
