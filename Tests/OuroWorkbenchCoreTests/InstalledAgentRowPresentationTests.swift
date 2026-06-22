@@ -12,18 +12,18 @@ final class InstalledAgentRowPresentationTests: XCTestCase {
     // MARK: - 3-way dot color (matches SidebarAgentRow)
 
     func testReadyIsGreen() {
-        XCTAssertEqual(InstalledAgentRowPresentation.dotColor(for: .ready), .green)
+        XCTAssertEqual(InstalledAgentRowPresentation.dotColor(for: OuroAgentBundleStatus.ready), .green)
     }
 
     func testDisabledAndMissingConfigAreOrange() {
-        XCTAssertEqual(InstalledAgentRowPresentation.dotColor(for: .disabled), .orange)
-        XCTAssertEqual(InstalledAgentRowPresentation.dotColor(for: .missingConfig), .orange)
+        XCTAssertEqual(InstalledAgentRowPresentation.dotColor(for: OuroAgentBundleStatus.disabled), .orange)
+        XCTAssertEqual(InstalledAgentRowPresentation.dotColor(for: OuroAgentBundleStatus.missingConfig), .orange)
     }
 
     func testInvalidConfigIsRed() {
         // An invalid config is a genuine error, distinct from a deliberate disable
         // or a not-yet-configured agent — it gets the loud red dot, not orange.
-        XCTAssertEqual(InstalledAgentRowPresentation.dotColor(for: .invalidConfig), .red)
+        XCTAssertEqual(InstalledAgentRowPresentation.dotColor(for: OuroAgentBundleStatus.invalidConfig), .red)
     }
 
     // MARK: - Human-readable reason for non-ready rows
