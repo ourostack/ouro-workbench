@@ -16,7 +16,7 @@ final class BossBridgeContractTests: XCTestCase {
     func testBridgeVerdictSeverityMatchesRegistrationStatus() {
         XCTAssertEqual(BossBridgeContract.bridgeVerdict(nil).severity, .warning)
         XCTAssertEqual(BossBridgeContract.bridgeVerdict(registration(.registered)).severity, .ok)
-        for status in [BossWorkbenchMCPRegistrationStatus.notRegistered, .needsUpdate, .agentMissing, .executableMissing, .invalidConfig] {
+        for status in [BossWorkbenchMCPRegistrationStatus.notRegistered, .needsUpdate, .agentMissing, .executableMissing, .invalidConfig, .toolsNotInjected] {
             XCTAssertEqual(
                 BossBridgeContract.bridgeVerdict(registration(status)).severity,
                 .blocker,
@@ -33,7 +33,7 @@ final class BossBridgeContractTests: XCTestCase {
     /// builders off `BossBridgeContract` makes the overlapping verdict identical in both surfaces.
     func testAutonomyAndOnboardingNeverContradictOnTheBridgeCondition() {
         let bridgeStatuses: [BossWorkbenchMCPRegistrationStatus?] = [
-            nil, .registered, .notRegistered, .needsUpdate, .agentMissing, .executableMissing, .invalidConfig
+            nil, .registered, .notRegistered, .needsUpdate, .agentMissing, .executableMissing, .invalidConfig, .toolsNotInjected
         ]
 
         for status in bridgeStatuses {

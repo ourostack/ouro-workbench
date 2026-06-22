@@ -128,6 +128,16 @@ public enum BossBridgeContract {
                 detail: "The selected boss agent config cannot be updated safely.",
                 severity: .blocker
             )
+        case .toolsNotInjected:
+            // #F9 — the binary is on disk but the live tools didn't load: an old `ouro`
+            // silently stripped them. Name the concrete version target (allowed in human
+            // copy) but keep raw CLI verbs out of this lane.
+            return Verdict(
+                id: "boss-mcp",
+                label: "Boss bridge",
+                detail: "Workbench tools didn't load for \(registration.agentName). Your ouro may be too old — update to ouro alpha.660+, then reopen Workbench.",
+                severity: .blocker
+            )
         }
     }
 }

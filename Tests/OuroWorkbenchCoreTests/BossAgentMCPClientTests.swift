@@ -386,6 +386,225 @@ final class BossAgentMCPClientTests: XCTestCase {
         }
     }
 
+    // MARK: - listToolNames (#F9 tools/list injection probe)
+
+    /// Source-pin: the `tools/list` request body is the JSON-RPC the spawn writes as id 2,
+    /// sibling of `tools/call`. No params/arguments — `tools/list` takes none.
+    func testToolsListRequestBodyShape() throws {
+        let body = BossAgentMCPClient.toolsListRequest(id: 2)
+        XCTAssertEqual(body["jsonrpc"] as? String, "2.0")
+        XCTAssertEqual(body["id"] as? Int, 2)
+        XCTAssertEqual(body["method"] as? String, "tools/list")
+        // Round-trips to valid JSON (the spawn serializes it with JSONSerialization).
+        let data = try JSONSerialization.data(withJSONObject: body)
+        let reparsed = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        XCTAssertEqual(reparsed?["method"] as? String, "tools/list")
+    }
+
+    /// Source-pin: `listToolNames` spawns with the IDENTICAL arg shape as `callTool` —
+    /// `mcpServeArguments(agentName:)` — so `--workbench-mcp` is passed the same way.
+    func testListToolNamesUsesSameSpawnArgsAsCallTool() {
+        let client = BossAgentMCPClient(
+            workbenchMCPPath: "/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP"
+        )
+        XCTAssertEqual(
+            client.mcpServeArguments(agentName: "slugger"),
+            ["mcp-serve", "--agent", "slugger", "--workbench-mcp", "/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP"]
+        )
+    }
+
+    func testListToolNamesReturnsInjectedWorkbenchTools() async throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OuroWorkbenchMCPClientTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let mockOuro = temporaryDirectory.appendingPathComponent("ouro")
+        let script = """
+        #!/bin/sh
+        read initialize
+        read tools_list
+        echo '{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"ask"},{"name":"workbench_status"}]}}'
+        read _hold
+        """
+        try script.write(to: mockOuro, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: mockOuro.path)
+        let oldPath = getenv("PATH").map { String(cString: $0) }
+        setenv("PATH", "\(temporaryDirectory.path):\(oldPath ?? "")", 1)
+        defer {
+            if let oldPath { setenv("PATH", oldPath, 1) } else { unsetenv("PATH") }
+        }
+
+        let names = try await BossAgentMCPClient(timeoutNanoseconds: 2_000_000_000)
+            .listToolNames(agentName: "slugger")
+
+        XCTAssertEqual(names, ["ask", "workbench_status"])
+        XCTAssertEqual(WorkbenchToolsInjectionProbe.verdict(fromToolNames: names), .present)
+    }
+
+    func testRawLineIfMatchingReturnsLineOnIdMatchAndNilOtherwise() {
+        let line = #"{"jsonrpc":"2.0","id":2,"result":{"tools":[]}}"#
+        // Matches id 2 (Int) → returns the line verbatim.
+        XCTAssertEqual(BossAgentMCPClient.rawLineIfMatching(line: line, id: 2), line)
+        // String id also matches.
+        XCTAssertEqual(
+            BossAgentMCPClient.rawLineIfMatching(line: #"{"id":"2","result":{}}"#, id: 2),
+            #"{"id":"2","result":{}}"#
+        )
+        // Wrong id → nil (keep scanning).
+        XCTAssertNil(BossAgentMCPClient.rawLineIfMatching(line: line, id: 1))
+        // Non-JSON → nil.
+        XCTAssertNil(BossAgentMCPClient.rawLineIfMatching(line: "not json", id: 2))
+        // JSON but non-object id → nil.
+        XCTAssertNil(BossAgentMCPClient.rawLineIfMatching(line: #"{"id":true,"result":{}}"#, id: 2))
+    }
+
+    func testListToolNamesReadsFinalLineWithoutTrailingNewline() async throws {
+        // Exercises the readRawLine EOF-with-buffered-data branch (no trailing newline).
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OuroWorkbenchMCPClientTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let mockOuro = temporaryDirectory.appendingPathComponent("ouro")
+        let script = """
+        #!/bin/sh
+        read initialize
+        read tools_list
+        printf '%s' '{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"workbench_status"}]}}'
+        """
+        try script.write(to: mockOuro, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: mockOuro.path)
+        let oldPath = getenv("PATH").map { String(cString: $0) }
+        setenv("PATH", "\(temporaryDirectory.path):\(oldPath ?? "")", 1)
+        defer {
+            if let oldPath { setenv("PATH", oldPath, 1) } else { unsetenv("PATH") }
+        }
+
+        let names = try await BossAgentMCPClient(timeoutNanoseconds: 2_000_000_000)
+            .listToolNames(agentName: "slugger")
+
+        XCTAssertEqual(names, ["workbench_status"])
+    }
+
+    func testListToolNamesSkipsNonMatchingIdLinesBeforeTheAnswer() async throws {
+        // Exercises rawLineIfMatching returning nil for an id-1 line emitted before id 2.
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OuroWorkbenchMCPClientTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let mockOuro = temporaryDirectory.appendingPathComponent("ouro")
+        let script = """
+        #!/bin/sh
+        read initialize
+        read tools_list
+        echo '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05"}}'
+        echo '{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"workbench_sessions"}]}}'
+        read _hold
+        """
+        try script.write(to: mockOuro, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: mockOuro.path)
+        let oldPath = getenv("PATH").map { String(cString: $0) }
+        setenv("PATH", "\(temporaryDirectory.path):\(oldPath ?? "")", 1)
+        defer {
+            if let oldPath { setenv("PATH", oldPath, 1) } else { unsetenv("PATH") }
+        }
+
+        let names = try await BossAgentMCPClient(timeoutNanoseconds: 2_000_000_000)
+            .listToolNames(agentName: "slugger")
+
+        XCTAssertEqual(names, ["workbench_sessions"])
+    }
+
+    func testListToolNamesReturnsBossNativeOnlyForOldRuntime() async throws {
+        // An old mcp-serve that ignored --workbench-mcp answers tools/list with only
+        // boss-native tools. listToolNames returns them verbatim → verdict .absent.
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OuroWorkbenchMCPClientTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let mockOuro = temporaryDirectory.appendingPathComponent("ouro")
+        let script = """
+        #!/bin/sh
+        read initialize
+        read tools_list
+        echo '{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"ask"},{"name":"status"}]}}'
+        read _hold
+        """
+        try script.write(to: mockOuro, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: mockOuro.path)
+        let oldPath = getenv("PATH").map { String(cString: $0) }
+        setenv("PATH", "\(temporaryDirectory.path):\(oldPath ?? "")", 1)
+        defer {
+            if let oldPath { setenv("PATH", oldPath, 1) } else { unsetenv("PATH") }
+        }
+
+        let names = try await BossAgentMCPClient(timeoutNanoseconds: 2_000_000_000)
+            .listToolNames(agentName: "slugger")
+
+        XCTAssertEqual(names, ["ask", "status"])
+        XCTAssertEqual(WorkbenchToolsInjectionProbe.verdict(fromToolNames: names), .absent)
+    }
+
+    func testListToolNamesTimesOutWhenServerNeverAnswers() async throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OuroWorkbenchMCPClientTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let mockOuro = temporaryDirectory.appendingPathComponent("ouro")
+        let script = """
+        #!/bin/sh
+        read initialize
+        read tools_list
+        read _hold
+        """
+        try script.write(to: mockOuro, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: mockOuro.path)
+        let oldPath = getenv("PATH").map { String(cString: $0) }
+        setenv("PATH", "\(temporaryDirectory.path):\(oldPath ?? "")", 1)
+        defer {
+            if let oldPath { setenv("PATH", oldPath, 1) } else { unsetenv("PATH") }
+        }
+
+        do {
+            _ = try await BossAgentMCPClient(timeoutNanoseconds: 50_000_000).listToolNames(agentName: "slugger")
+            XCTFail("Expected timeout")
+        } catch {
+            XCTAssertEqual(error as? BossAgentMCPClientError, .timeout)
+        }
+    }
+
+    func testListToolNamesSurfacesProcessStderrWhenServerCannotStart() async throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OuroWorkbenchMCPClientTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let mockOuro = temporaryDirectory.appendingPathComponent("ouro")
+        let script = """
+        #!/bin/sh
+        echo 'agent bundle slugger is locked' >&2
+        exit 1
+        """
+        try script.write(to: mockOuro, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: mockOuro.path)
+        let oldPath = getenv("PATH").map { String(cString: $0) }
+        setenv("PATH", "\(temporaryDirectory.path):\(oldPath ?? "")", 1)
+        defer {
+            if let oldPath { setenv("PATH", oldPath, 1) } else { unsetenv("PATH") }
+        }
+
+        do {
+            _ = try await BossAgentMCPClient(timeoutNanoseconds: 2_000_000_000).listToolNames(agentName: "slugger")
+            XCTFail("Expected listToolNames to throw")
+        } catch let error as BossAgentMCPClientError {
+            XCTAssertEqual(error, .processNotAvailable("agent bundle slugger is locked"))
+        }
+    }
+
     // MARK: - retryingOnEmpty
 
     func testRetryingOnEmptyReturnsFirstSuccessWithoutRetry() async throws {
