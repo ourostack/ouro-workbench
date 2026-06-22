@@ -416,6 +416,10 @@ struct WorkbenchRootView: View {
             model.reconcileStartupAttentionWithLiveSessions()
             model.recoverEligibleSessionsOnStartup()
             model.launchAutoResumeSessionsOnStartup()
+            // F12a gap 3b — now that startup attention is settled, escalate any
+            // session that was waiting on a human across the restart with no boss
+            // decision, so it's triaged instead of stranded out of the inbox.
+            model.reconcileWaitingSessionsIntoInbox()
             model.refreshExecutableHealth()
             model.refreshGitStatus()
             model.refreshSessionActivity()
@@ -16048,8 +16052,23 @@ final class WorkbenchViewModel: ObservableObject {
                 return
             }
             bossCheckInAnswer = answer
+            // F12a gap 3a — persist the boss's prose. `bossCheckInAnswer` is a
+            // transient @Published the next tick overwrites, so without this the
+            // operator's record of what the boss SAID is lost. Only the SUCCESS
+            // path records (the catch's product-voice fallback line is not prose);
+            // gated on a non-empty answer so an empty turn doesn't persist noise.
+            // Routed through the model's `save()` (which already suppresses
+            // isLoadingState / isResettingToFirstRun), not a bespoke write.
+            if !answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                state.recordProse(BossProseEntry(source: "boss:\(requestedBoss)", text: answer))
+                save()
+            }
             applyBossActions(from: answer)
             recordBossDecisions(from: answer)
+            // F12a gap 3b — after recording the boss's own decisions, escalate any
+            // waiting session the boss DIDN'T decide on, so it can't fall silently
+            // out of triage.
+            reconcileWaitingSessionsIntoInbox()
             bossWatchLastError = nil
             // Boss responded — clear any backoff so the automatic loop resumes
             // its normal cadence immediately.
@@ -16165,6 +16184,52 @@ final class WorkbenchViewModel: ObservableObject {
                 )
             )
             changed += 1
+        }
+        if changed > 0 {
+            save()
+        }
+    }
+
+    /// F12a gap 3b — escalate any waiting-on-human session the boss DIDN'T already
+    /// triage, so it can't fall silently out of the inbox. A waiting session enters
+    /// the inbox only via a boss decision; if the boss emitted no decisions block
+    /// (or a decision whose entry couldn't be resolved), the session was stranded.
+    /// The pure `WaitingSessionReconciler` finds the uncovered waiting ids against
+    /// the LIVE entries + the open inbox; each is recorded as a synthesized
+    /// `.escalate` via `recordDecisionIfNew` — the prompt+kind dedup that prevents
+    /// re-escalating a still-waiting session every tick (inbox flooding). Saves only
+    /// when something was added, and rides the model's `save()` (which already
+    /// suppresses isLoadingState / isResettingToFirstRun), so a startup reconcile
+    /// can't fire a premature save during a lossy load.
+    func reconcileWaitingSessionsIntoInbox() {
+        let untriaged = WaitingSessionReconciler.untriagedWaitingEntryIds(
+            entries: state.processEntries,
+            openInbox: state.openInbox()
+        )
+        guard !untriaged.isEmpty else {
+            return
+        }
+        var changed = 0
+        for entryId in untriaged {
+            guard let entry = state.processEntries.first(where: { $0.id == entryId }) else {
+                continue
+            }
+            let prompt = String((bossActionLivePrompt(for: entry).isEmpty
+                ? (entry.attentionReason ?? entry.lastSummary ?? "Waiting on you")
+                : bossActionLivePrompt(for: entry)).prefix(2000))
+            let recorded = state.recordDecisionIfNew(
+                BossInboxDecision(
+                    source: "workbench:reconcile",
+                    entryId: entry.id,
+                    sessionName: entry.name,
+                    prompt: prompt,
+                    kind: .escalate,
+                    reasoning: "Waiting on a human with no boss decision yet — surfaced for triage."
+                )
+            )
+            if recorded {
+                changed += 1
+            }
         }
         if changed > 0 {
             save()

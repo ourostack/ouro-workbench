@@ -611,6 +611,12 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
     /// what the boss decided and why. Bounded like `actionLog`; decoded
     /// leniently and present-or-empty so existing state loads unchanged.
     public var decisionLog: [BossInboxDecision]
+    /// Durable, newest-first history of the boss's check-in prose — what the boss
+    /// SAID (#F12a gap 3a). `bossCheckInAnswer` is transient and overwritten each
+    /// tick; this persists it. Bounded like `actionLog`; decoded leniently and
+    /// present-or-empty (additive, NO `schemaVersion` bump) so existing state loads
+    /// unchanged. See `BossProseEntry`.
+    public var proseLog: [BossProseEntry]
     /// Persisted detail-pane split (W5 increment 2). `nil` = classic single
     /// pane (and every pre-increment-2 state file, which lacks the key).
     /// Additive, decoded if-present — no `schemaVersion` bump, so existing
@@ -636,6 +642,7 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         case processRuns
         case actionLog
         case decisionLog
+        case proseLog
         case detailLayout
         case updatedAt
     }
@@ -652,6 +659,7 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         processRuns: [ProcessRun] = [],
         actionLog: [WorkbenchActionLogEntry] = [],
         decisionLog: [BossInboxDecision] = [],
+        proseLog: [BossProseEntry] = [],
         detailLayout: PaneLayoutState? = nil,
         updatedAt: Date = Date(),
         decodeReport: DecodeReport = DecodeReport()
@@ -667,6 +675,7 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         self.processRuns = processRuns
         self.actionLog = actionLog
         self.decisionLog = decisionLog
+        self.proseLog = proseLog
         self.detailLayout = detailLayout
         self.updatedAt = updatedAt
         self.decodeReport = decodeReport
@@ -701,6 +710,12 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         )
         self.decisionLog = try container.decodeLenientArray(
             BossInboxDecision.self, forKey: .decisionLog, into: &report, collection: "decisionLog"
+        )
+        // Additive (#F12a gap 3a). Absent in every pre-F12a state file → []
+        // (no schema bump). Decoded leniently so one corrupt prose entry never
+        // takes the workspace down with it, mirroring the other logs.
+        self.proseLog = try container.decodeLenientArray(
+            BossProseEntry.self, forKey: .proseLog, into: &report, collection: "proseLog"
         )
         // Additive (W5 increment 2). Absent in every pre-increment-2 state
         // file → `nil` → classic single-pane behavior, no schema bump.
