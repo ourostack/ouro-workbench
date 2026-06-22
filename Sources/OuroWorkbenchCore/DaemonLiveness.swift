@@ -395,23 +395,83 @@ public struct DaemonManager: Sendable {
     /// daemon is born in its OWN process group rather than inheriting Workbench's. This is the
     /// truer detach: the daemon's group is independent of Workbench's, so nothing here could
     /// ever reap Workbench's group, and any grandchildren the daemon forks belong to the
-    /// daemon's group, not the app's. (We still fire-and-forget — the returned pid is
-    /// discarded; the post-start verify probe is what establishes recovery truth.)
+    /// daemon's group, not the app's.
+    ///
+    /// CHILD LIFETIME (F8b cold-review). `env ouro up` is a SHORT-LIVED launcher: it forks/launches
+    /// the long-lived daemon (a grandchild, born in this own group) and then EXITS once the daemon
+    /// is launched (the verify probe — not this child — establishes recovery truth). Two distinct
+    /// processes therefore exist:
+    ///   • the long-lived DAEMON (the grandchild) — it OUTLIVES Workbench and is reparented to
+    ///     launchd on Workbench exit, so it is NOT our zombie and must NEVER be `waitpid`-blocked
+    ///     (a blocking wait on the daemon would hang the cold-start path forever);
+    ///   • the short-lived `env ouro up` CHILD — it exits promptly and, like the raw-`posix_spawn`
+    ///     mcp-serve child, becomes a `<defunct>` zombie unless reaped. Lower volume (recovery-only)
+    ///     than the per-turn mcp-serve leak, but the same defect class.
+    /// So we REAP the short-lived child — but via a DETACHED `waitpid` (the `reap` seam runs the
+    /// blocking wait off this task) so `detachedStart` still returns at once and never blocks on
+    /// the long-lived daemon. The detached wait reaps the launcher whenever it exits.
     @Sendable
     public static func detachedStart() async throws {
+        try detachedStartSync(spawn: defaultSpawn, reap: defaultReap)
+    }
+
+    /// Seamed core of `detachedStart` — deliberately SYNCHRONOUS (no `async`). `spawn` performs the
+    /// own-group `env ouro up` spawn and returns the short-lived launcher pid; `reap` reaps THAT pid
+    /// (the default fires a detached `waitpid` so the long-lived daemon grandchild is never blocked
+    /// on). Injectable so a test can assert the launcher pid is reaped exactly once without a real
+    /// process or a real wait.
+    ///
+    /// Kept sync (rather than `async throws`) on purpose: the work is a non-blocking spawn + a
+    /// fire-and-forget reap, so it needs no suspension point. Threading it as an extra async frame
+    /// inside the already-async `detachedStart()` perturbs Swift's task-allocator layout enough to
+    /// trip a `swift_task_dealloc` fatal in concurrently-running async DaemonManager tests under
+    /// strict-concurrency debug builds; the sync helper avoids adding that frame entirely.
+    static func detachedStartSync(
+        spawn: @Sendable () throws -> pid_t,
+        reap: @Sendable (pid_t) -> Void
+    ) throws {
+        let launcherPID = try spawn()
+        // Reap the short-lived launcher (detached, so we don't block on it OR on the daemon it
+        // forked). The daemon grandchild is independent and reparents to launchd on our exit.
+        reap(launcherPID)
+    }
+
+    /// Default spawn: the real own-group `env ouro up` spawn with `/dev/null` stdio. Returns the
+    /// short-lived launcher's pid.
+    @Sendable
+    private static func defaultSpawn() throws -> pid_t {
         // Detach stdio so quitting Workbench never closes the daemon's streams. Closing the
         // parent's copy after the spawn is unconditional (a no-op for an unexpected -1).
         let devNull = open("/dev/null", O_RDWR)
         defer { close(devNull) }
 
-        _ = try SpawnInOwnGroup.spawn(
+        let spawned = try SpawnInOwnGroup.spawn(
             executablePath: "/usr/bin/env",
             arguments: ["env", "ouro", "up"],
             environment: TerminalEnvironment().valuesWithResolvedPath(),
             stdio: SpawnInOwnGroup.StdioFDs(stdin: devNull, stdout: devNull, stderr: devNull)
         )
-        // Deliberately do NOT wait and DISCARD the pid: the daemon is independent. `ouro up`
-        // returns once the daemon is launched; the post-start verify probe is what establishes
-        // recovery truth.
+        return spawned.pid
+    }
+
+    /// Default reap: a DETACHED `waitpid` on the short-lived launcher, run on a DEDICATED
+    /// `Thread` (NOT a Dispatch global queue). Detached so the blocking wait (which returns the
+    /// instant the launcher exits — it's a fast fork-and-exit) never stalls `detachedStart`, and so
+    /// the long-lived daemon grandchild it forked is never waited on.
+    ///
+    /// A dedicated `Thread` rather than `DispatchQueue.global().async` is deliberate: a blocking
+    /// `waitpid` parked on a Dispatch global-queue worker occupies a thread the Swift COOPERATIVE
+    /// executor shares, which can starve the cooperative pool and trip the task allocator
+    /// (`swift_task_dealloc` fatal) in an async caller running concurrently — the same
+    /// cooperative-executor starvation class `probeSynchronously` documents and avoids. A standalone
+    /// `Thread` is outside both pools, so the blocking wait is isolated.
+    @Sendable
+    private static func defaultReap(_ launcherPID: pid_t) {
+        let reaper = Thread {
+            var status: Int32 = 0
+            waitpid(launcherPID, &status, 0)
+        }
+        reaper.stackSize = 64 * 1024
+        reaper.start()
     }
 }

@@ -334,7 +334,10 @@ public final class BossAgentMCPClient: @unchecked Sendable {
     private func stop(_ processBox: ProcessIOBox) async {
         processBox.terminate()
         try? await Task.sleep(nanoseconds: 100_000_000)
-        processBox.forceKill()
+        // forceKill (escalate past grace) THEN reap — `stop()` does both. Without the reap the
+        // raw-`posix_spawn` mcp-serve child becomes a `<defunct>` zombie that persists for
+        // Workbench's whole lifetime; every callTool/listToolNames turn would leak one.
+        processBox.stop()
     }
 
     private func writeLine(_ object: [String: Any], to handle: FileHandle) throws {
@@ -453,6 +456,13 @@ final class ProcessIOBox: @unchecked Sendable {
     private let isAlive: @Sendable (pid_t) -> Bool
     private let processKiller: @Sendable (pid_t, Int32) -> Int32
     private let groupKiller: @Sendable (pid_t, Int32) -> Int32
+    /// The child-reaping seam. F8b dropped Foundation's `Process` for raw `posix_spawn`, which
+    /// also dropped the implicit per-pid child-reaping `Process` did (a `DISPATCH_SOURCE_TYPE_PROC`
+    /// watcher that `waitpid`s on exit). Without it, a raw-`posix_spawn` mcp-serve child that exits
+    /// becomes a `STAT Z <defunct>` zombie — and EVERY `callTool`/`listToolNames` turn leaks one,
+    /// accumulating unbounded until `posix_spawn` fails `EAGAIN`. `stop()` reaps the child through
+    /// this seam on every lifecycle end. Default is a blocking `waitpid`; a fake records the call.
+    private let reaper: @Sendable (pid_t) -> Void
 
     init(
         pid: pid_t,
@@ -462,7 +472,8 @@ final class ProcessIOBox: @unchecked Sendable {
         graceSeconds: Double = 2.0,
         isAlive: @escaping @Sendable (pid_t) -> Bool = { kill($0, 0) == 0 },
         processKiller: @escaping @Sendable (pid_t, Int32) -> Int32 = { kill($0, $1) },
-        groupKiller: @escaping @Sendable (pid_t, Int32) -> Int32 = { killpg($0, $1) }
+        groupKiller: @escaping @Sendable (pid_t, Int32) -> Int32 = { killpg($0, $1) },
+        reaper: @escaping @Sendable (pid_t) -> Void = { var status: Int32 = 0; waitpid($0, &status, 0) }
     ) {
         self.pid = pid
         self.stdout = stdout
@@ -472,6 +483,7 @@ final class ProcessIOBox: @unchecked Sendable {
         self.isAlive = isAlive
         self.processKiller = processKiller
         self.groupKiller = groupKiller
+        self.reaper = reaper
     }
 
     /// Decode the tool-call text from the matching id line (`tools/call`).
@@ -551,6 +563,24 @@ final class ProcessIOBox: @unchecked Sendable {
         default:
             _ = processKiller(pid, SIGKILL)
         }
+    }
+
+    /// Single always-run cleanup for the spawned child — the F8b zombie-leak fix. Called on EVERY
+    /// `ProcessIOBox` lifecycle end (normal completion, timeout, error), it (a) ensures the child is
+    /// dead (`forceKill` SIGKILLs it if still alive — a no-op once the read loop's EOF means it
+    /// already exited) and then (b) reaps it via the `reaper` seam so it can't linger as a
+    /// `<defunct>` zombie.
+    ///
+    /// NO-HANG GUARANTEE: the `waitpid` inside the default reaper blocks only until the child has
+    /// exited, and by the time we call it the child is provably already dead — either the read loop
+    /// hit EOF (the child exited on its own → `waitpid` reaps immediately) or `forceKill` just
+    /// SIGKILLed it (the kernel tears it down promptly → `waitpid` returns at once). We deliberately
+    /// do NOT use `WNOHANG`: a non-blocking poll could miss the child before the kernel has
+    /// finished the teardown and skip the reap, re-leaking the zombie. The blocking wait is safe
+    /// precisely because the child is guaranteed dead before it runs.
+    func stop() {
+        forceKill()
+        reaper(pid)
     }
 
     private func readStderrText() -> String {

@@ -151,13 +151,26 @@ final class ProcessIOBoxTests: XCTestCase {
 
     // MARK: - F8b cold-review fix — the child is REAPED on stop() (no zombie leak)
 
+    /// Records the ordered sequence of lifecycle events (kill / killpg / reap) so stop()'s
+    /// "force-kill THEN reap" ordering is asserted deterministically without a real child.
+    private final class EventLog: @unchecked Sendable {
+        private let lock = NSLock()
+        private(set) var events: [String] = []
+        func add(_ event: String) { lock.lock(); events.append(event); lock.unlock() }
+    }
+
+    /// Records every pid passed to the reaper seam.
+    private final class ReapLog: @unchecked Sendable {
+        private let lock = NSLock()
+        private(set) var pids: [pid_t] = []
+        func reap(_ pid: pid_t) { lock.lock(); pids.append(pid); lock.unlock() }
+    }
+
     func testStopReapsTheChildViaTheInjectedReaper() {
         // The reaper seam must be invoked for the box's pid on stop() — the per-turn reap that
         // prevents the zombie leak. Driven with fakes (no real child) so the seam call is covered
         // deterministically: stop() must (a) signal-if-alive then (b) reap via the seam.
-        let rec = Recorder()
-        let reaped = NSMutableArray()
-        let reapLock = NSLock()
+        let reaped = ReapLog()
         let out = Pipe(); let err = Pipe()
         let box = ProcessIOBox(
             pid: 5150,
@@ -165,20 +178,18 @@ final class ProcessIOBoxTests: XCTestCase {
             stderr: err.fileHandleForReading,
             childInOwnGroup: true,
             isAlive: { _ in false }, // already exited: read loop hit EOF → child gone → reap immediately
-            processKiller: { rec.record($0, $1); return 0 },
-            groupKiller: { rec.record($0, $1); return 0 },
-            reaper: { pid in reapLock.lock(); reaped.add(pid); reapLock.unlock() }
+            processKiller: { _, _ in 0 },
+            groupKiller: { _, _ in 0 },
+            reaper: { reaped.reap($0) }
         )
         box.stop()
-        reapLock.lock(); let captured = reaped.copy() as! [pid_t]; reapLock.unlock()
-        XCTAssertEqual(captured, [5150], "stop() must reap the child's pid exactly once via the seam")
+        XCTAssertEqual(reaped.pids, [5150], "stop() must reap the child's pid exactly once via the seam")
     }
 
     func testStopForceKillsAStillAliveChildBeforeReaping() {
         // If the child is still alive at stop() (timeout/error path), stop() must SIGKILL it
         // (so the subsequent waitpid can't block) and THEN reap. Order: kill before reap.
-        let order = NSMutableArray()
-        let orderLock = NSLock()
+        let log = EventLog()
         let out = Pipe(); let err = Pipe()
         let box = ProcessIOBox(
             pid: 6789,
@@ -186,14 +197,13 @@ final class ProcessIOBoxTests: XCTestCase {
             stderr: err.fileHandleForReading,
             childInOwnGroup: true,
             isAlive: { _ in true }, // still alive → must be force-killed before the reap
-            processKiller: { _, _ in orderLock.lock(); order.add("kill"); orderLock.unlock(); return 0 },
-            groupKiller: { _, _ in orderLock.lock(); order.add("killpg"); orderLock.unlock(); return 0 },
-            reaper: { _ in orderLock.lock(); order.add("reap"); orderLock.unlock() }
+            processKiller: { _, _ in log.add("kill"); return 0 },
+            groupKiller: { _, _ in log.add("killpg"); return 0 },
+            reaper: { _ in log.add("reap") }
         )
         box.stop()
-        orderLock.lock(); let seen = order.copy() as! [String]; orderLock.unlock()
         XCTAssertEqual(
-            seen, ["killpg", "reap"],
+            log.events, ["killpg", "reap"],
             "a still-alive own-group child must be killpg'd, THEN reaped — never reaped while alive (would hang)"
         )
     }
@@ -257,18 +267,16 @@ final class ProcessIOBoxTests: XCTestCase {
     }
 
     private func waitForChildToExit(_ pid: pid_t, timeout: TimeInterval = 5) {
-        // Wait until the child is a zombie (exited but not yet reaped): kill(pid,0)==0 still holds
-        // for a zombie, so poll WCONTINUED-style via a non-blocking waitpid that DOESN'T reap.
+        // Wait until the trivial child has EXITED (so it's a zombie, not yet reaped) WITHOUT
+        // reaping it ourselves — the box must do that. A `WNOHANG` waitpid returns 0 while the
+        // child still runs and `pid` (reaping) once it exits; we instead poll with a non-reaping
+        // proxy: `/usr/bin/true` exits within milliseconds, and a zombie still answers kill(pid,0).
+        // A brief settle is enough to guarantee the exit happened before the box's reap.
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
-            var status: Int32 = 0
-            // WNOHANG | non-reaping check: a return of 0 means "still running"; >0 would reap.
-            // We don't want to reap here (the box must do it), so just sleep a touch and rely on
-            // /usr/bin/true exiting near-instantly.
-            _ = status
             usleep(20_000)
-            // /usr/bin/true exits within milliseconds; one poll cycle is plenty.
-            break
+            // The child has had ample time to exit; the zombie persists until the box reaps it.
+            return
         }
     }
 
