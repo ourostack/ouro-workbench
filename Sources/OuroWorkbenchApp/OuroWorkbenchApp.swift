@@ -2848,6 +2848,8 @@ struct AgentHomeEmptyState: View {
                                     agent: agent,
                                     isBoss: agent.name == model.state.boss.agentName,
                                     isSelected: false,
+                                    verdict: model.agentOutwardVerdicts[agent.name],
+                                    isChecking: model.agentChecksInFlight.contains(agent.name),
                                     select: { model.selectAgent(agent.name) }
                                 )
                                 if let reason = InstalledAgentRowPresentation.reason(
@@ -3022,6 +3024,8 @@ struct WorkbenchSidebarView: View {
                         agent: agent,
                         isBoss: model.state.boss.agentName.caseInsensitiveCompare(agent.name) == .orderedSame,
                         isSelected: model.selectedAgentName?.caseInsensitiveCompare(agent.name) == .orderedSame,
+                        verdict: model.agentOutwardVerdicts[agent.name],
+                        isChecking: model.agentChecksInFlight.contains(agent.name),
                         select: { model.selectAgent(agent.name) }
                     )
                 }
@@ -3286,6 +3290,13 @@ struct SidebarAgentRow: View {
     var agent: OuroAgentRecord
     var isBoss: Bool
     var isSelected: Bool
+    /// The live outward-lane `ouro check` verdict for this agent, or `nil` when no live
+    /// check has produced a verdict yet. Folded with `agent.status` + `isChecking` into an
+    /// honest `LiveReadiness` so the row's dot/tooltip never false-green a config-only
+    /// `.ready` that hasn't been live-confirmed.
+    var verdict: ProviderConnectionVerdict?
+    /// Whether a live outward check is currently in flight for this agent (→ "checking…").
+    var isChecking: Bool
     var select: () -> Void
 
     var body: some View {
@@ -3330,14 +3341,27 @@ struct SidebarAgentRow: View {
             )
         }
         .buttonStyle(.plain)
-        .help(agent.detail)
+        .help(InstalledAgentRowPresentation.help(for: liveReadiness, detail: agent.detail))
     }
 
-    // #U36: route the dot color through the shared Core seam so the sidebar row
-    // and the empty-state "Installed agents" card never disagree about an agent's
-    // health (both are now this same row, but the seam is the single source).
+    /// The honest, LIVE readiness for this row — the scanner's config-only `agent.status`
+    /// folded with the real outward-lane verdict and the in-flight flag. The bug: the row
+    /// used to render the config-only `.ready` as a green "ready" dot/tooltip WITHOUT a live
+    /// check (slugger read "ready" while `ouro check` returned `401 … expired`). This is now
+    /// only `.ready`/green when a live check actually returned `.working`.
+    private var liveReadiness: InstalledAgentRowPresentation.LiveReadiness {
+        InstalledAgentRowPresentation.liveReadiness(
+            status: agent.status,
+            verdict: verdict,
+            isChecking: isChecking
+        )
+    }
+
+    // Route the dot color through the shared Core seam, now LIVE-aware: the sidebar row and
+    // the empty-state "Installed agents" card stay in agreement, and neither shows green
+    // unless the live check confirmed it.
     private var statusColor: SwiftUI.Color {
-        InstalledAgentRowPresentation.dotColor(for: agent.status).swiftUIColor
+        InstalledAgentRowPresentation.dotColor(for: liveReadiness).swiftUIColor
     }
 }
 

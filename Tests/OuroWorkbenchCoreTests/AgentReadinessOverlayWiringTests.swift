@@ -78,7 +78,79 @@ final class AgentReadinessOverlayWiringTests: XCTestCase {
         )
     }
 
+    // MARK: - Unit 3: rows route through the live-aware seam
+
+    func testSidebarAgentRowTakesLiveReadinessInputs() throws {
+        let body = try sidebarAgentRowDecl()
+        XCTAssertTrue(
+            body.contains("verdict: ProviderConnectionVerdict?"),
+            "SidebarAgentRow must accept a live ProviderConnectionVerdict? so the row reflects the real check"
+        )
+        XCTAssertTrue(
+            body.contains("isChecking"),
+            "SidebarAgentRow must know whether a live check is in flight (to show 'checking…')"
+        )
+    }
+
+    func testSidebarAgentRowDotNoLongerDerivedFromConfigStatus() throws {
+        let body = try sidebarAgentRowDecl()
+        XCTAssertFalse(
+            body.contains("dotColor(for: agent.status)"),
+            "the dot must NOT be derived from the config-only agent.status (that was the false green)"
+        )
+    }
+
+    func testSidebarAgentRowDotDerivedFromLiveReadiness() throws {
+        let body = try sidebarAgentRowDecl()
+        XCTAssertTrue(
+            body.contains("liveReadiness"),
+            "the row must resolve a live readiness via InstalledAgentRowPresentation.liveReadiness"
+        )
+        XCTAssertTrue(
+            body.contains("dotColor(for: liveReadiness)"),
+            "the dot must be derived from the live readiness, not the config status"
+        )
+    }
+
+    func testSidebarAgentRowTooltipNoLongerRawDetail() throws {
+        let body = try sidebarAgentRowDecl()
+        XCTAssertFalse(
+            body.contains(".help(agent.detail)"),
+            "the readiness tooltip must no longer be the raw config detail (which said 'ready' for a dead agent)"
+        )
+        XCTAssertTrue(
+            body.contains("help(for: liveReadiness"),
+            "the tooltip must come from the live-aware InstalledAgentRowPresentation.help(for:detail:)"
+        )
+    }
+
+    func testSidebarAgentRowCallSitesThreadLiveState() throws {
+        let source = try appSource()
+        // Both call sites (home-screen "Installed agents" card + the sidebar list) must thread the
+        // per-agent live verdict + in-flight flag from the viewmodel into the row.
+        let occurrences = source.components(separatedBy: "agentOutwardVerdicts[").count - 1
+        XCTAssertGreaterThanOrEqual(
+            occurrences, 2,
+            "both SidebarAgentRow call sites must pass model.agentOutwardVerdicts[agent.name]"
+        )
+        let inflight = source.components(separatedBy: "agentChecksInFlight.contains(").count - 1
+        XCTAssertGreaterThanOrEqual(
+            inflight, 2,
+            "both SidebarAgentRow call sites must pass model.agentChecksInFlight.contains(agent.name)"
+        )
+    }
+
     // MARK: - Helpers (mirror ColdStartHonestWiringTests)
+
+    private func sidebarAgentRowDecl() throws -> String {
+        let source = try appSource()
+        return try sourceSlice(
+            in: source,
+            from: "struct SidebarAgentRow: View {",
+            to: "\nprivate extension InstalledAgentRowPresentation.DotColor {"
+        )
+    }
+
 
     private func refreshOuroAgentsBody() throws -> String {
         let source = try appSource()
