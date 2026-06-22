@@ -41,7 +41,7 @@ removes markApplied or orders it AFTER confirm, the crash window reopens → dou
   twin whose id in applied/ NOT a processing-dup; convenience init sets appliedDirectoryURL.
 - Acceptance: red→green; Core 100%.
 
-### U3 — App wiring + `ReplayDedupWiringTests` ⬜
+### U3 — App wiring + `ReplayDedupWiringTests` ✅
 - What:
   - skip-on-replay at applyBossAction TOP (after validateForQueueing, BEFORE first switch):
     if requestId != nil → ReplayDedupDecider().decide(...); on .skipAlreadyApplied →
@@ -66,12 +66,13 @@ removes markApplied or orders it AFTER confirm, the crash window reopens → dou
 - [x] applied/ marker-dir ledger (markApplied/appliedRequestIds/clearApplied) + hasProcessingDuplicate
 - [x] enqueue gate ORs in processing-dup; applied ids excluded from processing-dup
 - [x] crash-mid-processing test proves replay is skipped
-- [ ] App: universal skip-on-replay at applyBossAction top
-- [ ] App: markApplied ordering pinned (after apply, before detached confirm)
-- [ ] App: detached loop confirmApplied + clearApplied; startup orphan sweep wired
-- [ ] isNewDecision sendInput guard unchanged
+- [x] App: universal skip-on-replay at applyBossAction top
+- [x] App: markApplied ordering pinned (after apply, before detached confirm)
+- [x] App: detached loop confirmApplied + clearApplied; startup orphan sweep wired
+- [x] isNewDecision sendInput guard unchanged
 - [ ] swift test (strict) green; coverage PASS; strict build clean
 
 ## Progress Log
 - 2026-06-21 23:11 U1 complete: ReplayDedupDecider seam (enum ReplayDecision {apply; skipAlreadyApplied}, id-keyed decide). Red (type missing) → green, 3 arms pass. Commit 6874e3a.
 - 2026-06-21 23:18 U2 complete: applied/ marker-dir ledger (markApplied/appliedRequestIds/clearApplied) + hasProcessingDuplicate OR'd into enqueue (applied ids excluded). Red (members missing) → green, 30 queue tests pass incl. crash-mid-processing (recoverUnconfirmed STILL returns + appliedRequestIds contains → decider .skipAlreadyApplied). Core 100% line+region, no new allowlist. Commit 959bec1.
+- 2026-06-21 23:22 U3 complete: App wiring. Universal skip-on-replay at applyBossAction top (requestId-gated, decider on externalActionQueue.appliedRequestIds(), AFTER validateForQueueing BEFORE first switch); markApplied main-actor-sync AFTER applyBossAction BEFORE detached confirm; detached loop confirmApplied THEN clearApplied; sweepOrphanedAppliedMarkers wired after recoverUnconfirmed; isNewDecision sendInput guard unchanged. Red (7 wiring tests) → green; strict build clean. Commit 55ccdff.
