@@ -13,6 +13,19 @@ public enum WorkbenchToolsInjection: String, Equatable, Sendable {
     case absent
 }
 
+/// The outcome of running the `tools/list` injection probe at the handoff edge (#F9). The
+/// distinction between a CONFIRMED verdict and an UNCONFIRMED one is load-bearing: only a
+/// confirmed `.absent` is the hard "tools stripped" blocker; a probe that couldn't answer
+/// (timeout / spawn error) is `.unconfirmed` and must NEVER block — a slow cold start must
+/// not false-report "your ouro is too old".
+public enum WorkbenchToolsInjectionProbeOutcome: Equatable, Sendable {
+    /// The `tools/list` answered and yielded a definite verdict.
+    case confirmed(WorkbenchToolsInjection)
+    /// The probe could not produce a verdict (timeout / process error). Treat as
+    /// `.absent`-but-UNCONFIRMED: stay awaiting, never a blocker.
+    case unconfirmed
+}
+
 /// Pure, framework-free verdict + parse for the `tools/list` injection probe (#F9 Seam A).
 /// No live process here — `BossAgentMCPClient.listToolNames` does the spawn and feeds the
 /// answer line into `toolNames(fromToolsListJSON:)`, then `verdict(fromToolNames:)`.

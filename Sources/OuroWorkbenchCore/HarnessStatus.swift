@@ -366,6 +366,8 @@ public struct HarnessBossReachability: Equatable, Sendable {
             return "install app first"
         case .invalidConfig:
             return "config issue"
+        case .toolsNotInjected:
+            return "tools didn't load — update ouro"
         }
     }
 

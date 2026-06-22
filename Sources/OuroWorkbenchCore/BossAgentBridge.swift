@@ -79,6 +79,12 @@ public enum BossWorkbenchMCPRegistrationStatus: String, Codable, Equatable, Send
     case agentMissing
     case executableMissing
     case invalidConfig
+    /// #F9 — the binary is present on disk (the registrar's on-disk snapshot would read
+    /// `.registered`) BUT a CONFIRMED live `tools/list` probe found zero `workbench_*` tools
+    /// injected: an older `ouro` that silently ignored `--workbench-mcp`. This is never an
+    /// on-disk fact — it's OVERLAID onto a `.registered` snapshot by
+    /// `applyingInjectionVerdict` from the cached handoff-edge probe verdict.
+    case toolsNotInjected
 }
 
 public struct BossWorkbenchMCPRegistrationSnapshot: Equatable, Sendable {
@@ -107,6 +113,26 @@ public struct BossWorkbenchMCPRegistrationSnapshot: Equatable, Sendable {
 
     public var isActionable: Bool {
         status == .notRegistered || status == .needsUpdate
+    }
+
+    /// #F9 — overlay a cached handoff-edge injection verdict onto an on-disk snapshot.
+    /// ONLY a CONFIRMED `.absent` against an otherwise-`.registered` snapshot flips the
+    /// status to `.toolsNotInjected` (the boss's binary is on disk but an old `ouro`
+    /// stripped the tools). A confirmed `.present`, an `.unconfirmed` probe (timeout /
+    /// not-probed), or a `nil` verdict leave the snapshot untouched — never block on an
+    /// unanswered probe. A NON-registered on-disk status is preserved as-is: the binary /
+    /// bundle problem is the real story, not the (downstream) injection result.
+    public static func applyingInjectionVerdict(
+        _ outcome: WorkbenchToolsInjectionProbeOutcome?,
+        to snapshot: BossWorkbenchMCPRegistrationSnapshot
+    ) -> BossWorkbenchMCPRegistrationSnapshot {
+        guard case .confirmed(.absent) = outcome, snapshot.status == .registered else {
+            return snapshot
+        }
+        var stripped = snapshot
+        stripped.status = .toolsNotInjected
+        stripped.detail = "Workbench tools didn't load at runtime for \(snapshot.agentName)."
+        return stripped
     }
 }
 

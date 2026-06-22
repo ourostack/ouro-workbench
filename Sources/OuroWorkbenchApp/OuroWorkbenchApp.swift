@@ -1592,6 +1592,28 @@ private extension OuroAgentBundleStatus {
     }
 }
 
+/// #F9 — a tiny thread-safe sink for the handoff-edge `tools/list` injection verdict. The
+/// `@Sendable` `statusPing` closure runs off the main actor, so it can't touch `@Published`
+/// state directly; it records the per-agent verdict here, and the main actor drains it after
+/// the bootstrap finishes. Last write per agent wins (one probe per bringup).
+final class WorkbenchToolsInjectionRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var outcomes: [String: WorkbenchToolsInjectionProbeOutcome] = [:]
+
+    func record(agentName: String, outcome: WorkbenchToolsInjectionProbeOutcome) {
+        lock.lock()
+        defer { lock.unlock() }
+        outcomes[agentName] = outcome
+    }
+
+    /// Read (and keep) the recorded verdicts — called on the main actor to overlay them.
+    func snapshot() -> [String: WorkbenchToolsInjectionProbeOutcome] {
+        lock.lock()
+        defer { lock.unlock() }
+        return outcomes
+    }
+}
+
 private extension BossWorkbenchMCPRegistrationStatus {
     var harnessTint: SwiftUI.Color {
         switch self {
@@ -1600,8 +1622,9 @@ private extension BossWorkbenchMCPRegistrationStatus {
         case .needsUpdate:
             // Cleanup-pending (stale bundle entry, binary present) — auto-fixable.
             return .orange
-        case .notRegistered, .agentMissing, .executableMissing, .invalidConfig:
-            // Binary missing (`.notRegistered`) or structural failure — needs a reinstall/fix.
+        case .notRegistered, .agentMissing, .executableMissing, .invalidConfig, .toolsNotInjected:
+            // Binary missing (`.notRegistered`) / structural failure / a too-old runtime that
+            // stripped the tools (`.toolsNotInjected`) — needs a reinstall / ouro update.
             return .red
         }
     }
@@ -1620,6 +1643,8 @@ private extension BossWorkbenchMCPRegistrationStatus {
             return "no app"
         case .invalidConfig:
             return "bad cfg"
+        case .toolsNotInjected:
+            return "old ouro"
         }
     }
 }
@@ -5827,6 +5852,8 @@ struct OuroAgentRowView: View {
             return "app missing"
         case .invalidConfig:
             return "config"
+        case .toolsNotInjected:
+            return "old ouro"
         }
     }
 
@@ -5836,7 +5863,7 @@ struct OuroAgentRowView: View {
             return .green
         case .notRegistered, .needsUpdate:
             return .orange
-        case .agentMissing, .executableMissing, .invalidConfig:
+        case .agentMissing, .executableMissing, .invalidConfig, .toolsNotInjected:
             return .red
         }
     }
@@ -8026,6 +8053,8 @@ private struct AgentStatusCard: View {
             return "app missing"
         case .invalidConfig:
             return "config"
+        case .toolsNotInjected:
+            return "old ouro"
         }
     }
 
@@ -8035,7 +8064,7 @@ private struct AgentStatusCard: View {
             return .green
         case .notRegistered, .needsUpdate:
             return .orange
-        case .agentMissing, .executableMissing, .invalidConfig:
+        case .agentMissing, .executableMissing, .invalidConfig, .toolsNotInjected:
             return .red
         }
     }
@@ -10537,6 +10566,16 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var agentPendingRemoval: OuroAgentRecord?
     @Published var bossWorkbenchMCPRegistration: BossWorkbenchMCPRegistrationSnapshot?
     @Published var bossWorkbenchMCPRegistrationByAgentName: [String: BossWorkbenchMCPRegistrationSnapshot] = [:]
+    /// #F9 — the CACHED `tools/list` injection verdict per agent, set ONCE at the handoff edge
+    /// (never on every readiness getter — that would spawn an `ouro mcp-serve` per popover
+    /// open). `refreshWorkbenchMCPRegistration` overlays it onto the on-disk snapshot so a
+    /// present-but-stripped boss reads `.toolsNotInjected`. Re-probed only on explicit refresh
+    /// / boss change. Only a CONFIRMED `.absent` here flips the status to the loud blocker; an
+    /// `.unconfirmed` (timeout / not-probed) leaves the snapshot alone.
+    @Published var bossWorkbenchToolsInjectionByAgentName: [String: WorkbenchToolsInjectionProbeOutcome] = [:]
+    /// #F9 — the cross-actor sink the current bootstrap's handoff-edge probe writes to. Drained
+    /// into the published map on the main actor in `completeFirstRunBootstrap`.
+    var bossWorkbenchToolsInjectionRecorder = WorkbenchToolsInjectionRecorder()
     @Published var executableHealthByEntryID: [UUID: ExecutableHealth] = [:]
     @Published var gitStatusByEntryID: [UUID: GitSessionStatus] = [:]
     /// Per-session activity (todo progress, current step, last tool, token/$)
@@ -12114,6 +12153,8 @@ final class WorkbenchViewModel: ObservableObject {
             return "install app first"
         case .invalidConfig:
             return "config issue"
+        case .toolsNotInjected:
+            return "tools didn't load — update ouro to alpha.660+"
         }
     }
 
@@ -12127,8 +12168,9 @@ final class WorkbenchViewModel: ObservableObject {
         case .needsUpdate:
             // Cleanup-pending (stale bundle entry, binary present) — auto-fixable.
             return .orange
-        case .notRegistered, .agentMissing, .executableMissing, .invalidConfig:
-            // Binary missing (`.notRegistered`) or structural failure — needs a reinstall/fix.
+        case .notRegistered, .agentMissing, .executableMissing, .invalidConfig, .toolsNotInjected:
+            // Binary missing (`.notRegistered`) / structural failure / a too-old runtime that
+            // stripped the tools (`.toolsNotInjected`) — needs a reinstall / ouro update.
             return .red
         }
     }
@@ -13491,13 +13533,29 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     func refreshWorkbenchMCPRegistration() {
-        let selectedSnapshot = bossWorkbenchMCPRegistrar.snapshot(for: state.boss)
+        // #F9 — overlay the cached handoff-edge injection verdict onto each on-disk snapshot,
+        // so a boss whose binary is present but whose `workbench_*` tools were silently
+        // stripped (old `ouro`) reads `.toolsNotInjected` instead of a false `.registered`.
+        func overlaid(_ snapshot: BossWorkbenchMCPRegistrationSnapshot, agentName: String) -> BossWorkbenchMCPRegistrationSnapshot {
+            BossWorkbenchMCPRegistrationSnapshot.applyingInjectionVerdict(
+                bossWorkbenchToolsInjectionByAgentName[agentName],
+                to: snapshot
+            )
+        }
+
+        let selectedSnapshot = overlaid(
+            bossWorkbenchMCPRegistrar.snapshot(for: state.boss),
+            agentName: state.boss.agentName
+        )
         bossWorkbenchMCPRegistration = selectedSnapshot
         var snapshots = Dictionary(
             uniqueKeysWithValues: ouroAgents.map { agent in
                 (
                     agent.name,
-                    bossWorkbenchMCPRegistrar.snapshot(for: BossAgentSelection(agentName: agent.name))
+                    overlaid(
+                        bossWorkbenchMCPRegistrar.snapshot(for: BossAgentSelection(agentName: agent.name)),
+                        agentName: agent.name
+                    )
                 )
             }
         )
@@ -17810,6 +17868,11 @@ final class WorkbenchViewModel: ObservableObject {
     /// this is the thin app-side wiring that injects the real effects and publishes the result.
     func runFirstRunBootstrap() {
         guard !firstRunBootstrapIsRunning else { return }
+        // #F9 — fresh recorder for THIS run's handoff-edge injection probe. The @Sendable
+        // statusPing closure (off-main) writes the confirmed verdict here; `completeFirstRun‐
+        // Bootstrap` (on main) drains it into `bossWorkbenchToolsInjectionByAgentName`. One
+        // probe per bringup — never per readiness getter.
+        bossWorkbenchToolsInjectionRecorder = WorkbenchToolsInjectionRecorder()
         let bossName = (onboardingReadiness?.selectedBossName ?? state.boss.agentName)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         // Without an explicitly-resolved boss name there's nothing to bootstrap against; the
@@ -17858,6 +17921,9 @@ final class WorkbenchViewModel: ObservableObject {
         let bundlesURL = ouroAgentInventory.agentBundlesURL
         let registrar = bossWorkbenchMCPRegistrar
         let client = bossMCPClient
+        // #F9 — the handoff-edge probe writes the per-agent injection verdict here (off-main);
+        // drained into the published cache on the main actor after the run finishes.
+        let injectionRecorder = bossWorkbenchToolsInjectionRecorder
 
         // S3/S4 post-command verify probes reuse the SAME readiness signal as the handoff edge:
         // a `BossAgentMCPClient.status` round-trip (usable answer = healthy; any failure =
@@ -17932,10 +17998,38 @@ final class WorkbenchViewModel: ObservableObject {
                 case .needsManual: return .needsManual
                 }
             },
-            // Handoff edge — the first successful `status` round-trip ends Layer A.
+            // Handoff edge (#F9) — the boss-native `status` round-trip ALONE no longer ends
+            // Layer A: an old `ouro` answers `status` fine after silently stripping every
+            // `workbench_*` tool. So we AND it with a live `tools/list` injection probe and
+            // hand off only when the boss can actually drive Workbench (`WorkbenchHandoffGate`):
+            //   • status fails              → not handed off (awaiting).
+            //   • status ok + CONFIRMED present → handed off.
+            //   • status ok + CONFIRMED absent  → tools stripped: stay awaiting AND record
+            //                                     the verdict so the registration flips to the
+            //                                     `.toolsNotInjected` blocker.
+            //   • status ok + probe couldn't answer (timeout / spawn error) → stay awaiting,
+            //                                     UNCONFIRMED — never a false "your ouro is too
+            //                                     old" on a slow cold start.
             statusPing: { name in
-                do { _ = try await client.status(agentName: name); return true }
-                catch { return false }
+                let statusOK: Bool
+                do { _ = try await client.status(agentName: name); statusOK = true }
+                catch { statusOK = false }
+
+                // Only probe injection once status answered — a dead boss is awaiting, not
+                // stripped. A probe that throws (timeout / spawn error) is UNCONFIRMED.
+                var injection: WorkbenchToolsInjectionProbeOutcome = .unconfirmed
+                if statusOK {
+                    do {
+                        let names = try await client.listToolNames(agentName: name)
+                        injection = .confirmed(WorkbenchToolsInjectionProbe.verdict(fromToolNames: names))
+                    } catch {
+                        injection = .unconfirmed
+                    }
+                }
+                injectionRecorder.record(agentName: name, outcome: injection)
+
+                let decision = WorkbenchHandoffGate.decide(statusPingSucceeded: statusOK, injectionProbe: injection)
+                return decision.isHandedOff
             }
         )
     }
@@ -17949,10 +18043,28 @@ final class WorkbenchViewModel: ObservableObject {
         firstRunBootstrapIsRunning = false
         let presentation = firstRunDrive.present(result: result, activeStep: nil)
         firstRunPresentation = presentation
+        // #F9 — drain the handoff-edge injection verdict BEFORE refreshing the registration, so
+        // the overlay flips a present-but-stripped boss to `.toolsNotInjected` in the same pass.
+        let injectionVerdicts = bossWorkbenchToolsInjectionRecorder.snapshot()
+        for (agent, outcome) in injectionVerdicts {
+            bossWorkbenchToolsInjectionByAgentName[agent] = outcome
+        }
         // Keep the readiness snapshot coherent with whatever the bootstrap just changed.
         refreshOuroAgents()
         refreshWorkbenchMCPRegistration()
         refreshOnboardingReadiness()
+
+        // #F9 — audit a confirmed tool-strip in the action-log / debug lane (raw verbs allowed
+        // here only — the human-facing copy lives in `BossBridgeContract.bridgeVerdict`).
+        if case .confirmed(.absent) = injectionVerdicts[agentName] {
+            recordActionLog(
+                source: "native",
+                action: "workbenchToolsInjectionProbe",
+                targetName: agentName,
+                result: "tools/list returned no workbench_* tools — `ouro mcp-serve --workbench-mcp` likely ignored by an ouro below alpha.\(OuroVersionFloor.minimumAlpha); registration flipped to toolsNotInjected.",
+                succeeded: false
+            )
+        }
 
         // Audit the settled phase (raw verbs allowed in the action log / debug lane only).
         recordActionLog(

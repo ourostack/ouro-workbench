@@ -30,9 +30,13 @@ public enum WorkbenchMCPRegistrationTruth: String, Codable, Equatable, Sendable 
         case .needsUpdate:
             // Binary present, a stale bundle entry remains — the cleanup re-runs.
             return .stillUnregistered
-        case .notRegistered, .agentMissing, .executableMissing, .invalidConfig:
+        case .notRegistered, .agentMissing, .executableMissing, .invalidConfig, .toolsNotInjected:
             // Binary missing (`notRegistered`) is NOT auto-recoverable — the registrar can't
             // install a binary — so it is needs-manual alongside the structural failures.
+            // `.toolsNotInjected` is a version-too-old runtime strip the registrar's
+            // install/cleanup can't fix either, so it's needs-manual as well. (This is an
+            // overlay status the registrar's own snapshot probe never emits, but the switch
+            // stays exhaustive.)
             return .needsManual
         }
     }
