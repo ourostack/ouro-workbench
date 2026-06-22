@@ -6899,7 +6899,14 @@ private struct OnboardingRepairStepRow: View {
                     .lineLimit(2)
             }
             Spacer()
-            if step.id == "workbench-mcp" {
+            if step.id == "workbench-mcp", model.bossWorkbenchMCPRegistration?.isActionable == true {
+                // #F9 — gate the Register button on `isActionable`, matching the autonomy-popover
+                // (`installWorkbenchMCPForBoss`) and boss-pane buttons. Registration can only fix a
+                // `.notRegistered` / `.needsUpdate` snapshot; a `.toolsNotInjected` blocker
+                // (`isActionable == false`) is a too-old-`ouro` strip that a registrar run can't
+                // repair, so its row surfaces the "update to alpha.660+" copy WITHOUT a futile
+                // Register button. The legitimate needs-registration case (`isActionable == true`)
+                // still shows it.
                 Button {
                     model.installWorkbenchMCPForBoss()
                     model.refreshOnboardingReadiness()
@@ -12269,6 +12276,13 @@ final class WorkbenchViewModel: ObservableObject {
            selected.caseInsensitiveCompare(agent.name) == .orderedSame {
             selectedAgentName = nil
         }
+        // #F9 — drop the deleted agent's CACHED `tools/list` injection verdict. The bundle is gone;
+        // its verdict is meaningless. Without this, re-installing a same-name agent would inherit
+        // the stale `.confirmed(.absent)` and show `.toolsNotInjected` on its inventory row until a
+        // fresh probe (cosmetic — `selectBoss` clears it before a good boss is ever blocked — but a
+        // re-added agent shouldn't wear a deleted predecessor's strip). Keyed to match the cache
+        // (the trimmed agent name the bootstrap drain / selectBoss write under).
+        bossWorkbenchToolsInjectionByAgentName[live.name] = nil
         // Risk (b) — if the deleted agent was the boss, clear the now-dangling boss name so the
         // refresh's auto-resolution can adopt the sole remaining usable agent (or leave it for the
         // choose path). Without this the boss name would keep pointing at a deleted bundle.
@@ -12602,10 +12616,16 @@ final class WorkbenchViewModel: ObservableObject {
         do {
             let selection = BossAgentSelection(agentName: agent.name)
             let snapshot = try bossWorkbenchMCPRegistrar.install(for: selection)
-            bossWorkbenchMCPRegistrationByAgentName[agent.name] = snapshot
-            if state.boss.agentName.caseInsensitiveCompare(agent.name) == .orderedSame {
-                bossWorkbenchMCPRegistration = snapshot
-            }
+            // #F9 — DO NOT raw-assign `snapshot` into the published registration vars: that would
+            // skip `BossWorkbenchMCPRegistrationSnapshot.applyingInjectionVerdict` and re-open the
+            // false-GREEN. A registrar cleanup can't fix a too-old `ouro` (the `workbench_*` strip
+            // is upstream of the bundle), so the install snapshot reads `.registered` even when the
+            // cached handoff-edge verdict is `.confirmed(.absent)`. Route through the refresh, which
+            // re-reads the on-disk snapshot AND overlays the cached injection verdict — so a present-
+            // but-stripped boss re-asserts `.toolsNotInjected` no matter which path triggered the
+            // install. (`succeeded`/the action-log copy still key off the raw install `snapshot`,
+            // which reflects whether the install itself wrote a clean bundle.)
+            refreshWorkbenchMCPRegistration()
             let succeeded = snapshot.status == .registered
             // Never surface the raw registrar `snapshot.detail` — for an unparseable bundle it
             // is a raw decoding error (BossAgentBridge `.invalidConfig`). Friendly copy instead.
