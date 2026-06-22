@@ -20,15 +20,15 @@ Re-add the pure F8-removed policy: `enum WatchdogSignal {none;terminate;killChil
 `import Darwin`. `posix_spawn` + `POSIX_SPAWN_SETPGROUP` + `setpgroup(&attr,0)` + file_actions dup2 of the 3 fds. `static func spawn(executablePath:arguments:environment:stdio:) throws -> Spawned {pid}`. FACTOR argv/envp marshalling into a PURE 100%-tested helper so only the raw `posix_spawn` call + its `guard rc==0` are impure.
 - **Acceptance:** pure marshalling 100%; integration: `/usr/bin/env true` own-group → `getpgid(pid)==pid`; `/bin/sh -c 'sleep 30 & wait'` own-group → `killpg(SIGKILL)` → BOTH shell AND sleep grandchild gone (THE grandchild-reap proof); error arm: absolute non-existent path → throws. Target: NO allowlist entry.
 
-### U3 — Rewire the two mcp-serve spawns (RISKIEST) ⬜
+### U3 — Rewire the two mcp-serve spawns (RISKIEST) ✅
 Replace `Process()`+`process.run()` in `callTool` + `listToolNames` with `SpawnInOwnGroup.spawn(...)`. Byte-identical: same exe (`/usr/bin/env`), argv (`["env","ouro"]+mcpServeArguments`), env (`TerminalEnvironment().valuesWithResolvedPath()`), stdio. Rewrite `ProcessIOBox` to hold pid + pipe FileHandles + seams (drop `Process`): `terminate()`→`kill(pid,SIGTERM)`; `forceKill()`→`nextSignal(...childInOwnGroup:true)`→`.killGroup`→`killpg(pid,SIGKILL)` via injectable `groupKiller` seam (keep `processKiller`); liveness via `kill(pid,0)==0` seam. FAIL-CLOSED: after spawn verify `getpgid(pid)==pid`; on mismatch treat as child-only + audit line.
 - **Acceptance:** existing BossAgentMCPClient end-to-end tests stay green; ProcessIOBox seam tests (forceKill routes via groupKiller for own-group; liveness skip when reaped; fail-closed child-only path).
 
-### U4 — `detachedStart` (DaemonLiveness) ⬜
+### U4 — `detachedStart` (DaemonLiveness) ✅
 Spawn via `SpawnInOwnGroup` (`/dev/null` fds), discard pid. Fix the over-claiming "setsid-equivalent" doc comment. Update ProcessWatchdog "F8b … arrives" doc comments.
 - **Acceptance:** detachedStart spawns via SpawnInOwnGroup; doc comments corrected.
 
-### U5 — ProcessWatchdog latent gated arm ⬜
+### U5 — ProcessWatchdog latent gated arm ✅
 `escalateTermination` gains `childInOwnGroup:Bool=false` + `groupSignalDeliverer:@Sendable(pid_t,Int32)->Void={killpg($0,$1)}`; post-grace `switch nextSignal(...){case .killGroup: groupSignalDeliverer(pid,SIGKILL); default: signalDeliverer(pid,SIGKILL)}`. All 8 callers default `false`. INVERT the F8 `testProcessWatchdogNeverGroupReaps` pin → assert killpg arm GATED on `.killGroup`/`childInOwnGroup`.
 - **Acceptance:** fake groupSignalDeliverer test (childInOwnGroup:true→killpg-not-kill; false→kill-not-killpg); inverted gate pin.
 
@@ -46,3 +46,6 @@ Spawn via `SpawnInOwnGroup` (`/dev/null` fds), discard pid. Fix the over-claimin
 - 2026-06-21 23:40 Doc created; spec + all source/test files read; build order locked.
 - 2026-06-21 23:42 U1 complete (1aad1f4): WatchdogEscalation re-added, 5 tests green, pure.
 - 2026-06-21 23:46 U2 complete (dd2b97e): SpawnInOwnGroup primitive; 7 tests incl. getpgid==pid + grandchild-reap proof + ENOENT error arm; 100% line+region NO allowlist.
+- 2026-06-22 00:05 U3 complete (6525870): mcp-serve callTool+listToolNames rewired to SpawnInOwnGroup (byte-identical /usr/bin/env+argv+env+stdio); ProcessIOBox now pid+pipes+seams, forceKill→killpg via WatchdogEscalation policy, fail-closed getpgid via pure ownGroupVerification; all 35 BossAgentMCPClient e2e tests + 13 ProcessIOBox tests green; coverage gate PASS, NO new allowlist (BossAgentMCPClient region budget LOWERED 3→2).
+- 2026-06-22 00:09 U4 complete (c57217e): detachedStart spawns via SpawnInOwnGroup (own group, /dev/null stdio), pid discarded; over-claiming setsid-equivalent doc fixed; DaemonLiveness 100%.
+- 2026-06-22 00:21 U5 complete (c209170): ProcessWatchdog gained latent gated killpg arm (childInOwnGroup default false + groupSignalDeliverer routed via nextSignal); F8 never-group-reap pin INVERTED → asserts killpg gated on .killGroup/childInOwnGroup; 1-line documented allowlist for the structurally-dead latent default killpg (real killpg proven elsewhere). Coverage gate PASS.
