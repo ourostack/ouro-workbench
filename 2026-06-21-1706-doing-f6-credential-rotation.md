@@ -1,6 +1,6 @@
 # F6 — existing-agent credential rotation + remove-agent
 
-**Status:** in-progress
+**Status:** done
 **Execution Mode:** direct
 **Branch:** fix/f6-credential-rotation (no push/PR/merge)
 **Artifacts:** ./2026-06-21-1706-doing-f6-credential-rotation/
@@ -56,3 +56,10 @@ in (a) the command (unlock chain, not create) and (b) the human copy flavor.
 - 2026-06-21 17:08 Unit 1 complete: `rotateCredentialCommandLine` (unlock chain, no --email), 4 tests.
 - 2026-06-21 17:10 Unit 2 complete: `VaultOnboardingFlavor` + flavor-aware `humanLine`; rotation copy seam-free for every state; 2-arg overload defaults to onboarding. 8 rotation tests + F13 suite green.
 - 2026-06-21 17:14 Unit 3 complete: `AgentRemoval` seam — `decide` (delete on-disk bundle, uniform across status) + seam-free confirmation copy (permanent deletion; boss heads-up). 7 tests. Core coverage PASS 100%.
+- 2026-06-21 17:24 Unit 4 complete: App wiring. Replaced existing-agent short-circuit → `beginCredentialRotation` (unlock chain in native `.trusted` terminal, reuses F13 markers + `completeVaultOnboarding` → single `afterVaultTerminal` fold, `.rotation` flavor). Added `removeAgent` (delete `.ouro` bundle, clear dangling selection/boss, refresh roster) behind a `confirmationDialog` using `AgentRemoval.confirmationCopy`. Removed obsolete `existingAgentRefreshUnavailableMessage` + updated 2 stale doc comments. 14 wiring tests.
+- 2026-06-21 17:30 All gates passed: Gate 1 implementation-coverage (every unit committed + matches), Gate 2 full suite (2067 tests, 0 failures, 1 pre-existing skip) + strict build clean, Gate 3 PR review (rotation uses unlock chain not create; single fold; existing-agent-only; remove clears dangling state), Gate 4 finalize. Coverage PASS 100% line+region, no new allowlist entries.
+
+## Behavioral-risk resolutions (defended)
+- (a) Re-probe invariant reused, not re-implemented: rotation captures the SAME `vaultOnboarding*` markers so `markTerminated` → `completeVaultOnboarding` → `afterVaultTerminal` is the SAME single fold. `testCompletionFoldIsNotDuplicatedForRotation` pins exactly ONE `afterVaultTerminal` call site; `.ready` only on a positive `.working` verdict (clean exit alone is never ready).
+- (b) No dangling reference after remove: `removeAgent` clears `selectedAgentName` when it pointed at the deleted agent, clears the boss name (so refresh auto-resolution re-adopts), clears `bossDashboard`, and calls `refreshOuroAgents()` to re-scan the filesystem roster. Detail pane is additionally guarded by `ouroAgent(named:)`. Pinned by `testRemoveAgentRefreshesTheRosterAfterDeleting` + `testRemoveAgentClearsDanglingSelectionAndBoss`.
+- (c) Existing-vs-new detection: rotation fires only on `providerConfigAgentAlreadyExists`; a new-agent name is validated as a non-collision upstream (sheet `submit()`), so it never reaches the rotation branch. `.coldStartHatch` (new-agent) path left intact — pinned by `testNewAgentPathStillColdStartHatches`.
