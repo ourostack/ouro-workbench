@@ -119,26 +119,28 @@ final class WorkbenchMCPServer {
             return nil
         }
 
-        // F10a JSON-RPC-layer dedup. Derive the envelope-id key; nil (no usable
-        // id) bypasses dedup entirely. For a real id, observe BEFORE any
-        // side-effecting handler runs:
-        //   .replayCached  → return the ORIGINAL response verbatim (carrying the
-        //                    original request.id), never re-enter dispatch;
-        //   .rejectInFlight → the original is still running; reject the retry;
-        //   .proceed        → fall through to dispatch, then complete(...) below.
-        // Date() lives only here at the call boundary; the ledger is pure.
-        let key = MCPRequestKey.from(rawID: id)
-        if let key {
-            let (decision, afterObserve) = dedupLedger.observe(key: key, now: Date())
-            dedupLedger = afterObserve
-            switch decision {
-            case let .replayCached(cached):
-                return cached.payload
-            case .rejectInFlight:
-                return errorResponse(id: id, MCPError.duplicateInFlight(id: "\(id ?? NSNull())"))
-            case .proceed:
-                break
-            }
+        // F10a JSON-RPC-layer dedup, scoped to SIDE-EFFECTING tools and keyed on
+        // request IDENTITY (envelope id + method + a stable params hash) by the pure
+        // `MCPDispatchDedup` seam. Reads + handshakes ALWAYS process fresh — caching
+        // a read replays stale data on a re-read; and a recycled id for different
+        // content is a distinct key, so it can never replay an unrelated response.
+        //   .passThroughFresh → a read/handshake (or an unkeyable side-effecting
+        //                       call): dispatch fresh, no ledger interaction;
+        //   .replayCached     → a byte-identical side-effecting retry: return the
+        //                       ORIGINAL response verbatim, never re-enter dispatch;
+        //   .rejectInFlight   → the original side-effecting call is still running;
+        //   .proceed          → first sight of a side-effecting call: dispatch, then
+        //                       complete(...) below.
+        // Date() lives only here at the call boundary; the seam + ledger are pure.
+        let (decision, afterObserve) = MCPDispatchDedup.decide(request: request, ledger: dedupLedger, now: Date())
+        dedupLedger = afterObserve
+        switch decision {
+        case let .replayCached(cached):
+            return cached.payload
+        case .rejectInFlight:
+            return errorResponse(id: id, MCPError.duplicateInFlight(id: "\(id ?? NSNull())"))
+        case .passThroughFresh, .proceed:
+            break
         }
 
         // ONE exit. Compute `response` on BOTH the success and the thrown arm,
@@ -146,6 +148,8 @@ final class WorkbenchMCPServer {
         // handler succeeded or threw. A thrown handler RELEASES its in-flight
         // slot (response: nil) so its retry can proceed; a produced response
         // (incl. an isError:true tools/call result) is cached as final.
+        // complete() is a no-op for the .passThroughFresh path (a read never
+        // entered the ledger, and must never be cached).
         let response: [String: Any]
         let cacheable: MCPDedupCachedResponse?
         do {
@@ -178,9 +182,7 @@ final class WorkbenchMCPServer {
             cacheable = nil
         }
 
-        if let key {
-            dedupLedger = dedupLedger.complete(key: key, response: cacheable, now: Date())
-        }
+        dedupLedger = MCPDispatchDedup.complete(request: request, response: cacheable, ledger: dedupLedger, now: Date())
         return response
     }
 

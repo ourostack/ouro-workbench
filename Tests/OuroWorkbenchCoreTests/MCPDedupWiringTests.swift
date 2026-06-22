@@ -7,13 +7,17 @@ import XCTest
 /// same technique BossForwardStatusWiringTests uses for the App target.
 ///
 /// These assertions defend the behavioral risks a source grep can't see by
-/// pinning the ORDER and SHAPE of the dedup chokepoint:
-///  - the notification short-circuit precedes the ledger (notifications never
-///    enter dedup);
-///  - `observe` precedes the dispatch switch / `callTool` (the side-effecting
-///    handlers run strictly AFTER `.proceed`);
-///  - `complete` is reached on BOTH the success arm and the catch arm (one
-///    exit), so a thrown handler releases its in-flight slot;
+/// pinning the ORDER and SHAPE of the dedup chokepoint. The dedup DECISION itself
+/// is the pure `MCPDispatchDedup` seam (behaviorally unit-tested, including a real
+/// two-request sequence, in MCPDispatchDedupTests); these pins only guard that the
+/// chokepoint wires that seam correctly:
+///  - the notification short-circuit precedes the seam (notifications never enter
+///    dedup);
+///  - `MCPDispatchDedup.decide` precedes the dispatch switch / `callTool` (the
+///    side-effecting handlers run strictly AFTER `.proceed`/`.passThroughFresh`);
+///  - `MCPDispatchDedup.complete` is reached on BOTH the success arm and the catch
+///    arm (one exit), so a thrown handler releases its in-flight slot — and it is
+///    a no-op for the read/handshake `.passThroughFresh` path;
 ///  - `.replayCached` returns the cached payload WITHOUT re-entering `callTool`;
 ///  - `.rejectInFlight` and the parse / method-not-found / serialization error
 ///    sites route through `MCPError`'s mapping rather than inline literals.
@@ -30,40 +34,42 @@ final class MCPDedupWiringTests: XCTestCase {
 
     // MARK: - Ordering inside handle(line:)
 
-    func testNotificationGuardPrecedesLedgerObserve() throws {
+    func testNotificationGuardPrecedesDedupDecision() throws {
         let handle = try handleBody()
         let notifGuard = try XCTUnwrap(
             handle.range(of: #"hasPrefix("notifications/")"#)?.lowerBound,
             "notification short-circuit must exist in handle(line:)"
         )
-        let observe = try XCTUnwrap(
-            handle.range(of: "dedupLedger.observe")?.lowerBound,
-            "handle(line:) must call dedupLedger.observe"
+        let decide = try XCTUnwrap(
+            handle.range(of: "MCPDispatchDedup.decide")?.lowerBound,
+            "handle(line:) must call MCPDispatchDedup.decide"
         )
         XCTAssertTrue(
-            notifGuard < observe,
-            "the notification short-circuit must precede observe so notifications never enter dedup"
+            notifGuard < decide,
+            "the notification short-circuit must precede the dedup decision so notifications never enter dedup"
         )
     }
 
-    func testObservePrecedesCallTool() throws {
+    func testDedupDecisionPrecedesCallTool() throws {
         let handle = try handleBody()
-        let observe = try XCTUnwrap(handle.range(of: "dedupLedger.observe")?.lowerBound)
+        let decide = try XCTUnwrap(handle.range(of: "MCPDispatchDedup.decide")?.lowerBound)
         let callTool = try XCTUnwrap(
             handle.range(of: "callTool(")?.lowerBound,
             "handle(line:) must dispatch through callTool"
         )
         XCTAssertTrue(
-            observe < callTool,
-            "observe must precede callTool so every side-effecting handler runs only after .proceed"
+            decide < callTool,
+            "the dedup decision must precede callTool so every side-effecting handler runs only after .proceed/.passThroughFresh"
         )
     }
 
-    func testKeyDerivedViaMCPRequestKeyFrom() throws {
+    func testDecisionFedTheWholeRequestNotJustTheId() throws {
         let handle = try handleBody()
+        // The seam keys on request IDENTITY (id + method + params hash), so the
+        // chokepoint must hand it the FULL parsed request, not a bare envelope id.
         XCTAssertTrue(
-            handle.contains("MCPRequestKey.from(rawID:"),
-            "the dedup key must be derived from the raw id via MCPRequestKey.from"
+            handle.contains("MCPDispatchDedup.decide(request: request"),
+            "the chokepoint must feed the whole parsed request to the identity-keyed seam"
         )
     }
 
@@ -88,10 +94,23 @@ final class MCPDedupWiringTests: XCTestCase {
 
     func testRejectInFlightRoutesThroughMCPError() throws {
         let handle = try handleBody()
-        let arm = try sourceSlice(in: handle, from: "case .rejectInFlight", to: "case .proceed")
+        // The reject arm sits between `.rejectInFlight` and the combined
+        // `.passThroughFresh, .proceed:` fall-through arm.
+        let arm = try sourceSlice(in: handle, from: "case .rejectInFlight", to: "case .passThroughFresh")
         XCTAssertTrue(
             arm.contains("MCPError.duplicateInFlight"),
             ".rejectInFlight must build its error from MCPError.duplicateInFlight.jsonRPCError"
+        )
+    }
+
+    func testPassThroughFreshAndProceedShareTheFallThroughArm() throws {
+        let handle = try handleBody()
+        // Reads (.passThroughFresh) and side-effecting first sight (.proceed) both
+        // fall through to the dispatch switch — pinned as a single combined arm so
+        // a read is never accidentally short-circuited.
+        XCTAssertTrue(
+            handle.contains("case .passThroughFresh, .proceed:"),
+            "reads and side-effecting first sight must share the dispatch fall-through arm"
         )
     }
 
@@ -99,15 +118,15 @@ final class MCPDedupWiringTests: XCTestCase {
 
     func testCompleteReachableFromBothArms() throws {
         let handle = try handleBody()
-        // One-exit shape: a single `complete(...)` call sits after the do/catch
-        // computes `response` on EITHER arm, then returns. So `complete` must
-        // appear exactly once for the .proceed path, AFTER the catch block.
+        // One-exit shape: a single `MCPDispatchDedup.complete(...)` call sits after
+        // the do/catch computes `response` on EITHER arm, then returns. So complete
+        // must appear exactly once, AFTER the catch block.
         let catchRange = try XCTUnwrap(
             handle.range(of: "} catch {"),
             "handle(line:) must have a catch arm"
         )
         let completeAfterCatch = handle.range(
-            of: "dedupLedger.complete",
+            of: "MCPDispatchDedup.complete",
             range: catchRange.upperBound..<handle.endIndex
         )
         XCTAssertNotNil(
@@ -121,7 +140,7 @@ final class MCPDedupWiringTests: XCTestCase {
         // Guard against the leak bug: complete() must NOT live inside the do
         // block (success-only) where a thrown handler would skip it. There is
         // exactly one complete() call, and it is after the catch.
-        let occurrences = handle.components(separatedBy: "dedupLedger.complete").count - 1
+        let occurrences = handle.components(separatedBy: "MCPDispatchDedup.complete").count - 1
         XCTAssertEqual(
             occurrences, 1,
             "there must be exactly one complete() call (the one-exit point), not a per-arm duplicate"
