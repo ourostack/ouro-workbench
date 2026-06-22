@@ -23,7 +23,7 @@ the headline AND shows a green pill on the surface an operator opens to check ag
 
 ## Units
 
-### ⬜ Unit 1 (Core, `HarnessStatus.swift`) — make `isReady` live-aware
+### ✅ Unit 1 (Core, `HarnessStatus.swift`) — make `isReady` live-aware
 - Add to `HarnessAgentEntry`: `var verdict: ProviderConnectionVerdict?` (default `nil`) and
   `var isChecking: Bool` (default `false`) — ADDITIVE init params with defaults.
 - Add computed `var liveReadiness: InstalledAgentRowPresentation.LiveReadiness`.
@@ -64,3 +64,8 @@ the headline AND shows a green pill on the surface an operator opens to check ag
 - `Scripts/check-coverage.sh` (Core 100% line+region; allowlist 2)
 
 ## Progress log
+- 2026-06-22 16:16 Unit 1 complete (c0598df): `HarnessAgentEntry` gains `verdict`/`isChecking`
+  (defaulted) + `liveReadiness` accessor; `isReady` = `liveReadiness == .ready`. Verdict maps
+  threaded through `HarnessStatusBuilder.build()`. Updated existing `.ready` fixtures to carry
+  `verdict: .working`; added 6 false-green honesty tests. 2447 tests pass (was 2441), Core 100%
+  line+region, allowlist still 2. Strict build + strict harness tests green.
