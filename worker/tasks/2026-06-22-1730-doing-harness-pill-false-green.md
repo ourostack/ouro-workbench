@@ -37,7 +37,7 @@ the headline AND shows a green pill on the surface an operator opens to check ag
   config-problem entries unaffected (config dominates).
 - **Acceptance:** `swift test` green; `Scripts/check-coverage.sh` 100% Core; allowlist stays 2.
 
-### ⬜ Unit 2 (App wiring, `harnessStatus` / `refreshHarnessStatus`)
+### ✅ Unit 2 (App wiring, `harnessStatus` / `refreshHarnessStatus`)
 - At the `harnessStatusBuilder.build(...)` call site, thread
   `outwardVerdicts: agentOutwardVerdicts`, `checksInFlight: agentChecksInFlight`.
 - Confirm `refreshHarnessStatus()` → `refreshOuroAgents()` → `refreshAgentOutwardReadiness()`
@@ -69,3 +69,9 @@ the headline AND shows a green pill on the surface an operator opens to check ag
   threaded through `HarnessStatusBuilder.build()`. Updated existing `.ready` fixtures to carry
   `verdict: .working`; added 6 false-green honesty tests. 2447 tests pass (was 2441), Core 100%
   line+region, allowlist still 2. Strict build + strict harness tests green.
+- 2026-06-22 16:18 Unit 2 complete (2e0d5bd): `harnessStatus` build now threads
+  `outwardVerdicts: agentOutwardVerdicts` + `checksInFlight: agentChecksInFlight`. Confirmed the
+  trigger chain reaches the sheet: `refreshHarnessStatus` → `refreshOuroAgents` →
+  `refreshAgentOutwardReadiness` (already wired by #261), so the dict is populated/refreshed when
+  the sheet (re)builds. New `HarnessReadinessOverlayWiringTests` source-pins the threading + chain.
+  Strict build + strict wiring tests green.
