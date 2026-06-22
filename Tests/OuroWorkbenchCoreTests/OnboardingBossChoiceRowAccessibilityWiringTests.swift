@@ -71,12 +71,22 @@ final class OnboardingBossChoiceRowAccessibilityWiringTests: XCTestCase {
     func testSelectedStateIsAnnouncedToVoiceOver() throws {
         let body = try rowBody()
         XCTAssertTrue(
-            body.contains(".accessibilityAddTraits(.isSelected)"),
-            "the row must add the .isSelected accessibility trait when choice.isSelected so VoiceOver announces the selected state (single-select radio group)"
+            body.contains(".accessibilityAddTraits(") && body.contains(".isSelected"),
+            "the row must add the .isSelected accessibility trait so VoiceOver announces the selected state (single-select radio group)"
         )
+        // The trait must be CONDITIONAL on choice.isSelected — adding .isSelected
+        // unconditionally would announce every row selected. Pin the gate so the
+        // single-select radio semantics survive.
         XCTAssertTrue(
-            body.contains("choice.isSelected"),
-            "the .isSelected trait must be gated on choice.isSelected"
+            body.contains("choice.isSelected ? [.isSelected]")
+                || body.contains("choice.isSelected ? .isSelected"),
+            "the .isSelected trait must be gated on choice.isSelected (the picked boss), not added unconditionally"
+        )
+        // Reads the row as one element ("<name>, selected, ready") instead of fragmented
+        // static text.
+        XCTAssertTrue(
+            body.contains(".accessibilityElement(children: .combine)"),
+            "the row should combine its children so VoiceOver reads it as a single element"
         )
     }
 
