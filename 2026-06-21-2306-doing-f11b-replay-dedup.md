@@ -26,7 +26,7 @@ removes markApplied or orders it AFTER confirm, the crash window reopens → dou
 - Tests: `ReplayDedupDeciderTests` 3 arms (in-set→skip, not-in→apply, empty→apply).
 - Acceptance: red→green; 100% line+region on new file.
 
-### U2 — Extend `WorkbenchActionRequestQueue.swift` (applied ledger + processing dedup) ⬜
+### U2 — Extend `WorkbenchActionRequestQueue.swift` (applied ledger + processing dedup) ✅
 - What:
   - `appliedDirectoryURL` (= directoryURL/applied/, MARKER-DIR like processing/, set in init)
   - `markApplied(_ requestId:)` zero-byte `<id>.json` marker, atomic, idempotent
@@ -63,9 +63,9 @@ removes markApplied or orders it AFTER confirm, the crash window reopens → dou
 
 ## Completion Criteria
 - [x] ReplayDedupDecider seam exists, pure, 3-arm tested (100% verified in U4)
-- [ ] applied/ marker-dir ledger (markApplied/appliedRequestIds/clearApplied) + hasProcessingDuplicate
-- [ ] enqueue gate ORs in processing-dup; applied ids excluded from processing-dup
-- [ ] crash-mid-processing test proves replay is skipped
+- [x] applied/ marker-dir ledger (markApplied/appliedRequestIds/clearApplied) + hasProcessingDuplicate
+- [x] enqueue gate ORs in processing-dup; applied ids excluded from processing-dup
+- [x] crash-mid-processing test proves replay is skipped
 - [ ] App: universal skip-on-replay at applyBossAction top
 - [ ] App: markApplied ordering pinned (after apply, before detached confirm)
 - [ ] App: detached loop confirmApplied + clearApplied; startup orphan sweep wired
@@ -74,3 +74,4 @@ removes markApplied or orders it AFTER confirm, the crash window reopens → dou
 
 ## Progress Log
 - 2026-06-21 23:11 U1 complete: ReplayDedupDecider seam (enum ReplayDecision {apply; skipAlreadyApplied}, id-keyed decide). Red (type missing) → green, 3 arms pass. Commit 6874e3a.
+- 2026-06-21 23:18 U2 complete: applied/ marker-dir ledger (markApplied/appliedRequestIds/clearApplied) + hasProcessingDuplicate OR'd into enqueue (applied ids excluded). Red (members missing) → green, 30 queue tests pass incl. crash-mid-processing (recoverUnconfirmed STILL returns + appliedRequestIds contains → decider .skipAlreadyApplied). Core 100% line+region, no new allowlist. Commit 959bec1.
