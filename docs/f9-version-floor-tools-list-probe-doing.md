@@ -263,3 +263,10 @@ only for the message fast-path, not required for the core gate.)
 3. **Client** — `BossAgentMCPClient.listToolNames(agentName:)` (source-pin test: arg shape == `mcpServeArguments`, `tools/list` request body).
 4. **Wiring** — new registration status/verdict threading; update `BossBridgeContract` + `HarnessStatus` switches + the `BossBridgeContractTests` Codable/contract pins; gate the handoff `statusPing` closure on `.present`.
 5. **(optional)** `ouro --version` fast-path for the too-old message.
+
+---
+
+## Progress log
+
+- 2026-06-21 19:47 Unit 1 (Seam A) complete — `WorkbenchToolsInjectionProbe.swift` + tests. `WorkbenchToolsInjection {present, absent}`; `verdict(fromToolNames:)` reuses `WorkbenchGuide.advertisedToolNames.contains` (no hand-rolled prefix); `toolNames(fromToolsListJSON:)` tolerant `JSONSerialization` parse with every guard arm (bad JSON / non-object root / no result / no tools / non-array tools / non-object entry / nameless entry). 19 tests green incl. silent-strip `["ask","status","catchup"] → .absent`.
+- 2026-06-21 19:49 Unit 2 (Seam B) complete — `OuroVersionFloor.swift` + tests. `OuroWorkbenchMCPSupport {supported, tooOld, unknown}`; `support(forVersionString:)` locates `alpha.<N>`, reads leading digits, compares to `minimumAlpha = 660`. `.unknown` for no-token / non-numeric / `alpha.` — pinned NEVER to block. 13 tests green.
