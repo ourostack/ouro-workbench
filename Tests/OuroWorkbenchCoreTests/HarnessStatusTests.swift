@@ -72,7 +72,10 @@ final class HarnessStatusTests: XCTestCase {
             registrationByAgentName: [
                 "slugger": registration("slugger", status: .registered),
                 "boss-b": registration("boss-b", status: .notRegistered)
-            ]
+            ],
+            // A config-only `.ready` is no longer counted as ready without a live
+            // verdict; a `.working` outward check is what earns the green.
+            outwardVerdicts: ["slugger": .working, "boss-b": .working]
         )
 
         // Daemon
@@ -114,7 +117,8 @@ final class HarnessStatusTests: XCTestCase {
             registrationByAgentName: [
                 "slugger": registration("slugger", status: .registered),
                 "boss-b": registration("boss-b", status: .registered)
-            ]
+            ],
+            outwardVerdicts: ["slugger": .working, "boss-b": .working]
         )
 
         // Daemon read failed — surfaced as unreachable with the real reason,
@@ -180,7 +184,8 @@ final class HarnessStatusTests: XCTestCase {
             dashboard: dashboard(daemonStatus: "running"),
             agents: [agent("slugger")],
             bossRegistration: registration("slugger", status: .needsUpdate),
-            registrationByAgentName: ["slugger": registration("slugger", status: .needsUpdate)]
+            registrationByAgentName: ["slugger": registration("slugger", status: .needsUpdate)],
+            outwardVerdicts: ["slugger": .working]
         )
 
         // needsUpdate ⇒ not "reachable" (must be .registered), but the boss
@@ -201,7 +206,8 @@ final class HarnessStatusTests: XCTestCase {
                 agent("retired", status: .disabled, detail: "disabled in agent.json")
             ],
             bossRegistration: registration("slugger", status: .registered),
-            registrationByAgentName: ["slugger": registration("slugger", status: .registered)]
+            registrationByAgentName: ["slugger": registration("slugger", status: .registered)],
+            outwardVerdicts: ["slugger": .working]
         )
 
         XCTAssertTrue(status.agents.hasUnready)
@@ -209,6 +215,168 @@ final class HarnessStatusTests: XCTestCase {
         XCTAssertEqual(status.agents.total, 2)
         // Daemon up + boss reachable, but an unready agent keeps it at attention.
         XCTAssertEqual(status.overallState, .attention)
+    }
+
+    // MARK: - Live-verdict honesty (the harness false-green fix)
+
+    /// A config-`.ready` agent whose live OUTWARD check came back `.unauthorized`
+    /// (expired token) must NOT count as ready anywhere: the per-entry `isReady`
+    /// is false, it's excluded from `readyCount`, drives `hasUnready`, and the
+    /// headline + overallState reflect the degraded agent. This is the bug the
+    /// harness surface used to hide behind a config-only green.
+    func testExpiredTokenAgentIsNotReadyDespiteConfigReady() {
+        let status = HarnessStatusBuilder().build(
+            boss: BossAgentSelection(agentName: "slugger"),
+            dashboard: dashboard(daemonStatus: "running"),
+            agents: [agent("slugger"), agent("helper")],
+            bossRegistration: registration("slugger", status: .registered),
+            registrationByAgentName: [
+                "slugger": registration("slugger", status: .registered),
+                "helper": registration("helper", status: .registered)
+            ],
+            // slugger's token is alive; helper's outward check returned 401.
+            outwardVerdicts: ["slugger": .working, "helper": .unauthorized]
+        )
+
+        let helper = status.agents.entries.first { $0.name == "helper" }
+        XCTAssertEqual(helper?.verdict, .unauthorized)
+        XCTAssertEqual(helper?.liveReadiness, .authExpired)
+        XCTAssertEqual(helper?.isReady, false)
+
+        // Rollups are now honest: only slugger counts as ready.
+        XCTAssertEqual(status.agents.readyCount, 1)
+        XCTAssertEqual(status.agents.total, 2)
+        XCTAssertTrue(status.agents.hasUnready)
+        XCTAssertEqual(status.agents.summaryLine, "2 local, 1 ready")
+        // Daemon up + boss reachable, but the expired agent keeps it at attention,
+        // and the headline counts it out of the ready tally.
+        XCTAssertEqual(status.overallState, .attention)
+        XCTAssertEqual(status.headline, "Daemon up · 1 of 2 agents ready · boss slugger reachable")
+    }
+
+    /// A config-`.ready` agent that's still mid-check (a live probe is in flight,
+    /// no verdict yet) is NOT ready — the surface shows "checking…", never a
+    /// premature green. The in-flight flag overrides the absence of a verdict.
+    func testInFlightAgentIsNotReady() {
+        let status = HarnessStatusBuilder().build(
+            boss: BossAgentSelection(agentName: "slugger"),
+            dashboard: dashboard(daemonStatus: "running"),
+            agents: [agent("slugger")],
+            bossRegistration: registration("slugger", status: .registered),
+            registrationByAgentName: ["slugger": registration("slugger", status: .registered)],
+            // No verdict yet, but a check is in flight for slugger.
+            checksInFlight: ["slugger"]
+        )
+
+        let slugger = status.agents.entries.first { $0.name == "slugger" }
+        XCTAssertNil(slugger?.verdict)
+        XCTAssertEqual(slugger?.isChecking, true)
+        XCTAssertEqual(slugger?.liveReadiness, .checking)
+        XCTAssertEqual(slugger?.isReady, false)
+        XCTAssertEqual(status.agents.readyCount, 0)
+        XCTAssertTrue(status.agents.hasUnready)
+        // Boss bundle isn't confirmed-ready while its check is in flight, so the
+        // boss isn't reachable yet either.
+        XCTAssertFalse(status.boss.isReachable)
+    }
+
+    /// A config-`.ready` agent with no verdict and no in-flight check is
+    /// `.unverified` — still NOT ready. A config-only `.ready` never earns green
+    /// on its own (the whole point of the fix).
+    func testConfigReadyWithoutAnyLiveCheckIsUnverifiedNotReady() {
+        let status = HarnessStatusBuilder().build(
+            boss: BossAgentSelection(agentName: "slugger"),
+            dashboard: dashboard(daemonStatus: "running"),
+            agents: [agent("slugger")],
+            bossRegistration: registration("slugger", status: .registered),
+            registrationByAgentName: ["slugger": registration("slugger", status: .registered)]
+        )
+
+        let slugger = status.agents.entries.first { $0.name == "slugger" }
+        XCTAssertNil(slugger?.verdict)
+        XCTAssertEqual(slugger?.isChecking, false)
+        XCTAssertEqual(slugger?.liveReadiness, .unverified)
+        XCTAssertEqual(slugger?.isReady, false)
+        XCTAssertEqual(status.agents.readyCount, 0)
+        XCTAssertTrue(status.agents.hasUnready)
+    }
+
+    /// Config problems dominate the live verdict: a `.disabled` bundle is never
+    /// "ready" even if a stale `.working` verdict is somehow present. The honesty
+    /// invariant resolves config-state first.
+    func testConfigProblemDominatesStaleWorkingVerdict() {
+        let status = HarnessStatusBuilder().build(
+            boss: BossAgentSelection(agentName: "slugger"),
+            dashboard: dashboard(daemonStatus: "running"),
+            agents: [
+                agent("slugger"),
+                agent("retired", status: .disabled, detail: "disabled in agent.json")
+            ],
+            bossRegistration: registration("slugger", status: .registered),
+            registrationByAgentName: ["slugger": registration("slugger", status: .registered)],
+            // A leftover `.working` verdict for the now-disabled agent must NOT
+            // resurrect it as ready.
+            outwardVerdicts: ["slugger": .working, "retired": .working]
+        )
+
+        let retired = status.agents.entries.first { $0.name == "retired" }
+        XCTAssertEqual(retired?.liveReadiness, .disabled)
+        XCTAssertEqual(retired?.isReady, false)
+        XCTAssertEqual(status.agents.readyCount, 1)
+        XCTAssertTrue(status.agents.hasUnready)
+    }
+
+    /// The boss bundle's reachability keys off the SAME honest `isReady`: a boss
+    /// whose outward check is `.unauthorized` is not bundle-ready, so the boss is
+    /// not reachable even with the MCP registered and the daemon up.
+    func testBossWithExpiredTokenIsNotReachable() {
+        let status = HarnessStatusBuilder().build(
+            boss: BossAgentSelection(agentName: "slugger"),
+            dashboard: dashboard(daemonStatus: "running"),
+            agents: [agent("slugger")],
+            bossRegistration: registration("slugger", status: .registered),
+            registrationByAgentName: ["slugger": registration("slugger", status: .registered)],
+            outwardVerdicts: ["slugger": .unauthorized]
+        )
+
+        XCTAssertFalse(status.boss.bundleIsReady)
+        XCTAssertFalse(status.boss.isReachable)
+        XCTAssertEqual(status.boss.bundleText, "missing or not ready")
+        XCTAssertEqual(status.overallState, .blocked)
+        XCTAssertEqual(status.headline, "Boss slugger is not reachable")
+    }
+
+    /// The `liveReadiness` computed accessor folds the entry's own
+    /// status/verdict/isChecking through the shared presentation seam, so the
+    /// harness pill and the steady-state rows can never disagree.
+    func testLiveReadinessComputedMatchesPresentationSeam() {
+        let cases: [(OuroAgentBundleStatus, ProviderConnectionVerdict?, Bool, InstalledAgentRowPresentation.LiveReadiness)] = [
+            (.ready, .working, false, .ready),
+            (.ready, .unauthorized, false, .authExpired),
+            (.ready, .vaultLocked, false, .vaultLocked),
+            (.ready, .unreachable, false, .unreachable),
+            (.ready, .indeterminate, false, .unverified),
+            (.ready, nil, true, .checking),
+            (.ready, nil, false, .unverified),
+            (.disabled, .working, false, .disabled),
+            (.missingConfig, nil, false, .missingConfig),
+            (.invalidConfig, nil, false, .invalidConfig)
+        ]
+        for (status, verdict, isChecking, expected) in cases {
+            let entry = HarnessAgentEntry(
+                name: "a",
+                status: status,
+                detail: "d",
+                isSelectedBoss: false,
+                verdict: verdict,
+                isChecking: isChecking
+            )
+            XCTAssertEqual(
+                entry.liveReadiness, expected,
+                "status=\(status) verdict=\(String(describing: verdict)) isChecking=\(isChecking)"
+            )
+            XCTAssertEqual(entry.isReady, expected == .ready)
+        }
     }
 
     // MARK: - No dashboard yet (pre-first-refresh)
@@ -240,10 +408,13 @@ final class HarnessStatusTests: XCTestCase {
     }
 
     func testAgentInventorySummaryAndEntryID() {
-        let entry = HarnessAgentEntry(name: "slugger", status: .ready, detail: "ready", isSelectedBoss: true)
+        // A config-`.ready` boss earns "ready" only with a live `.working` verdict.
+        let entry = HarnessAgentEntry(name: "slugger", status: .ready, detail: "ready", isSelectedBoss: true, verdict: .working)
         let inventory = HarnessAgentInventory(entries: [entry, HarnessAgentEntry(name: "helper", status: .disabled, detail: "off", isSelectedBoss: false)])
 
         XCTAssertEqual(entry.id, "slugger")
+        XCTAssertTrue(entry.isReady)
+        XCTAssertEqual(entry.liveReadiness, .ready)
         XCTAssertEqual(inventory.summaryLine, "2 local, 1 ready")
         XCTAssertEqual(inventory.selectedBoss?.id, "slugger")
     }
@@ -291,7 +462,8 @@ final class HarnessStatusTests: XCTestCase {
             dashboard: dashboard(daemonStatus: "running"),
             agents: [agent("slugger")],
             bossRegistration: registration("slugger", status: .registered),
-            registrationByAgentName: ["slugger": registration("slugger", status: .registered)]
+            registrationByAgentName: ["slugger": registration("slugger", status: .registered)],
+            outwardVerdicts: ["slugger": .working]
         )
 
         XCTAssertEqual(status.headline, "Daemon up · 1 of 1 agent ready · boss slugger reachable")

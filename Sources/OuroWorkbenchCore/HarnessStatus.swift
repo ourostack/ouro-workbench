@@ -243,6 +243,14 @@ public struct HarnessAgentEntry: Equatable, Identifiable, Sendable {
     public var isSelectedBoss: Bool
     /// MCP-registration status for this specific agent, when known.
     public var mcpStatus: BossWorkbenchMCPRegistrationStatus?
+    /// The result of a live outward-lane `ouro check` for this agent, when one
+    /// has run. `nil` means no live verdict yet (config-only). REUSES the same
+    /// verdicts the steady-state rows compute (`agentOutwardVerdicts`); the
+    /// harness sheet does NOT run its own check.
+    public var verdict: ProviderConnectionVerdict?
+    /// Whether a live check is currently in flight for this agent — so the pill
+    /// can read "checking…" rather than flickering through a stale state.
+    public var isChecking: Bool
 
     public var id: String { name }
 
@@ -251,17 +259,38 @@ public struct HarnessAgentEntry: Equatable, Identifiable, Sendable {
         status: OuroAgentBundleStatus,
         detail: String,
         isSelectedBoss: Bool,
-        mcpStatus: BossWorkbenchMCPRegistrationStatus? = nil
+        mcpStatus: BossWorkbenchMCPRegistrationStatus? = nil,
+        verdict: ProviderConnectionVerdict? = nil,
+        isChecking: Bool = false
     ) {
         self.name = name
         self.status = status
         self.detail = detail
         self.isSelectedBoss = isSelectedBoss
         self.mcpStatus = mcpStatus
+        self.verdict = verdict
+        self.isChecking = isChecking
     }
 
+    /// The HONEST live readiness of this agent — the config-only `status` folded
+    /// together with the live `verdict` + in-flight flag through the shared
+    /// presentation seam. The single source of truth the harness pill renders and
+    /// `isReady` keys off, so the diagnostic sheet can never disagree with the
+    /// steady-state sidebar / "Installed agents" rows about an agent's health.
+    public var liveReadiness: InstalledAgentRowPresentation.LiveReadiness {
+        InstalledAgentRowPresentation.liveReadiness(
+            status: status,
+            verdict: verdict,
+            isChecking: isChecking
+        )
+    }
+
+    /// Ready IFF a live outward check confirmed it (`verdict == .working`, which
+    /// is the ONLY producer of `.ready`). A config-only `.ready` — no verdict, or
+    /// an `.unauthorized` / `.unreachable` / in-flight verdict — is NOT ready, so
+    /// the harness headline / readyCount / boss-reachability never false-green.
     public var isReady: Bool {
-        status == .ready
+        liveReadiness == .ready
     }
 }
 
@@ -393,18 +422,28 @@ public struct HarnessStatusBuilder: Sendable {
     ///   - bossRegistration: MCP-registration snapshot for the selected boss.
     ///   - registrationByAgentName: Per-agent MCP-registration snapshots, so
     ///     each inventory row can show its own registration status.
+    ///   - outwardVerdicts: Per-agent live outward-lane `ouro check` verdicts —
+    ///     the SAME map the steady-state rows use (`agentOutwardVerdicts`). The
+    ///     harness sheet REUSES these; it never runs its own check. Absent
+    ///     entries mean no verdict yet (config-only).
+    ///   - checksInFlight: Agent names whose live check is currently in flight,
+    ///     so the pill reads "checking…" instead of a premature green/red.
     public func build(
         boss: BossAgentSelection,
         dashboard: BossDashboardSnapshot?,
         agents: [OuroAgentRecord],
         bossRegistration: BossWorkbenchMCPRegistrationSnapshot?,
-        registrationByAgentName: [String: BossWorkbenchMCPRegistrationSnapshot] = [:]
+        registrationByAgentName: [String: BossWorkbenchMCPRegistrationSnapshot] = [:],
+        outwardVerdicts: [String: ProviderConnectionVerdict] = [:],
+        checksInFlight: Set<String> = []
     ) -> HarnessStatus {
         let daemon = daemonStatus(dashboard: dashboard)
         let inventory = agentInventory(
             boss: boss,
             agents: agents,
-            registrationByAgentName: registrationByAgentName
+            registrationByAgentName: registrationByAgentName,
+            outwardVerdicts: outwardVerdicts,
+            checksInFlight: checksInFlight
         )
         let reachability = bossReachability(
             boss: boss,
@@ -459,7 +498,9 @@ public struct HarnessStatusBuilder: Sendable {
     private func agentInventory(
         boss: BossAgentSelection,
         agents: [OuroAgentRecord],
-        registrationByAgentName: [String: BossWorkbenchMCPRegistrationSnapshot]
+        registrationByAgentName: [String: BossWorkbenchMCPRegistrationSnapshot],
+        outwardVerdicts: [String: ProviderConnectionVerdict],
+        checksInFlight: Set<String>
     ) -> HarnessAgentInventory {
         let entries = agents.map { agent -> HarnessAgentEntry in
             HarnessAgentEntry(
@@ -467,7 +508,9 @@ public struct HarnessStatusBuilder: Sendable {
                 status: agent.status,
                 detail: agent.detail,
                 isSelectedBoss: agent.name.caseInsensitiveCompare(boss.agentName) == .orderedSame,
-                mcpStatus: registrationByAgentName[agent.name]?.status
+                mcpStatus: registrationByAgentName[agent.name]?.status,
+                verdict: outwardVerdicts[agent.name],
+                isChecking: checksInFlight.contains(agent.name)
             )
         }
         return HarnessAgentInventory(entries: entries)
