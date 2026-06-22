@@ -168,7 +168,10 @@ public enum PersistentTerminalSession: Sendable {
         [
             "-U",
             "-T", "xterm-256color",
-            "-h", "0",
+            // Scrollback history depth. `0` discards the buffer, so a `-D -RR`
+            // reattach would show an empty screen (the agent's prior output gone);
+            // a non-zero default preserves it. 10000 lines is the conventional cap.
+            "-h", "10000",
             "-e", "^]]",
             "-D",
             "-RR",

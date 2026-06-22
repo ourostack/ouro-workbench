@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 /// File-backed transport for the boss's `workbench_propose` CAPABILITY (never a
 /// gate). The boss enqueues an `AgentProposal`; the App's native card picks it up
@@ -98,13 +99,30 @@ public final class AgentProposalQueue {
         resultsDirectoryURL.appendingPathComponent("\(fileSafe(id)).json")
     }
 
-    /// Replace every non-alphanumeric scalar with `_`. Total (never nil) and
-    /// deterministic, so the same id always maps to the same basename — which is
-    /// what lets a re-enqueue/re-result replace the prior file for that id.
+    /// Map an id to a filesystem-safe basename that is total, deterministic, AND
+    /// injective (distinct ids → distinct basenames).
+    ///
+    /// A readable prefix alone is NOT injective: mapping every non-alphanumeric
+    /// scalar to `_` collapses `recover-1`, `recover.1`, and `recover/1` to the same
+    /// `recover_1`, so the boss (which correlates a proposal to its answer by the
+    /// ORIGINAL id) could read back another proposal's result, or a colliding
+    /// re-enqueue could silently overwrite a different pending proposal. We restore
+    /// injectivity by appending a stable content hash of the FULL id: a SHA-256 hex
+    /// prefix. Same id → same hash → same basename (so a re-enqueue/re-result still
+    /// replaces the prior file for that id), and distinct ids → distinct hashes (so
+    /// they can't collide). The hash is over the full id, so the readable prefix's
+    /// 40-scalar cap never causes a collision.
     private func fileSafe(_ id: String) -> String {
-        String(id.unicodeScalars.map { scalar in
-            CharacterSet.alphanumerics.contains(scalar) ? Character(scalar) : "_"
-        })
+        let readable = String(
+            id.unicodeScalars.map { scalar in
+                CharacterSet.alphanumerics.contains(scalar) ? Character(scalar) : "_"
+            }
+        ).prefix(40)
+        let digest = SHA256.hash(data: Data(id.utf8))
+            .prefix(16)
+            .map { String(format: "%02x", $0) }
+            .joined()
+        return "\(readable)-\(digest)"
     }
 
     /// Decode every `.json` file in `directory` as `T`, skipping undecodable files

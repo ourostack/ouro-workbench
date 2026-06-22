@@ -205,6 +205,54 @@ final class AgentProposalQueueTests: XCTestCase {
         XCTAssertEqual(queue.readResult(id: "card-2")?.items, [])
     }
 
+    // MARK: - basename injectivity (distinct ids must not collide)
+
+    /// `recover-1` and `recover.1` differ only in one non-alphanumeric scalar, which
+    /// the old `fileSafe` collapsed to the same `_`, mapping BOTH ids to the same
+    /// basename. The boss correlates a proposal to its answer by the ORIGINAL id, so
+    /// a collision lets it (a) see only one pending where it enqueued two, and (b)
+    /// read back ANOTHER proposal's result. The basename must be injective: distinct
+    /// ids → distinct files, each round-tripping to its own pending + result.
+    func testDistinctIdsThatCollapseToSameBasenameDoNotCollide() throws {
+        let queue = AgentProposalQueue(directoryURL: try temporaryDirectory())
+
+        try queue.enqueue(sampleProposal(id: "recover-1", title: "Dash one"))
+        try queue.enqueue(sampleProposal(id: "recover.1", title: "Dot one"))
+
+        // Both pending proposals survive — neither overwrote the other.
+        XCTAssertEqual(queue.pendingProposals().map(\.id), ["recover-1", "recover.1"])
+        XCTAssertEqual(
+            Set(queue.pendingProposals().map(\.title)),
+            ["Dash one", "Dot one"]
+        )
+
+        // And each id reads back ITS OWN result, not the other's.
+        try queue.writeResult(AgentProposalResult(id: "recover-1", items: [
+            AgentProposalItem(id: "dash", label: "Dash", command: "claude --resume dash", selected: true),
+        ]))
+        try queue.writeResult(AgentProposalResult(id: "recover.1", items: [
+            AgentProposalItem(id: "dot", label: "Dot", command: "claude --resume dot", selected: true),
+        ]))
+
+        XCTAssertEqual(queue.readResult(id: "recover-1")?.items.map(\.id), ["dash"])
+        XCTAssertEqual(queue.readResult(id: "recover.1")?.items.map(\.id), ["dot"])
+    }
+
+    /// Regression for the same-id-replaces-same-file contract the injective basename
+    /// must preserve: enqueuing the SAME id twice (the boss re-proposed the same plan)
+    /// must still leave exactly one pending file, with the second replacing the first.
+    func testSameIdReEnqueueStillReplaces() throws {
+        let queue = AgentProposalQueue(directoryURL: try temporaryDirectory())
+
+        try queue.enqueue(sampleProposal(id: "recover/1", title: "First"))
+        try queue.enqueue(sampleProposal(id: "recover/1", title: "Second"))
+
+        let pending = queue.pendingProposals()
+        XCTAssertEqual(pending.count, 1)
+        XCTAssertEqual(pending.first?.id, "recover/1")
+        XCTAssertEqual(pending.first?.title, "Second")
+    }
+
     // MARK: - convenience init via WorkbenchPaths
 
     func testConvenienceInitUsesWorkbenchPathsProposalsDirectory() {
