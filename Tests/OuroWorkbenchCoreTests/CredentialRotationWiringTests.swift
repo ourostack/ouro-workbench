@@ -95,6 +95,82 @@ final class CredentialRotationWiringTests: XCTestCase {
         )
     }
 
+    // MARK: - re-entrancy gate (the MEDIUM cold-review bug)
+
+    func testBeginCredentialRotationSetsTheInFlightGateBeforeLaunchingTheTerminal() throws {
+        let method = try beginCredentialRotationMethod()
+        // The MEDIUM bug: without this gate, Connect/Cancel stay enabled with no spinner while the
+        // reconnect terminal is live, so a second Connect re-enters and OVERWRITES the exit-matching
+        // markers to a second terminal — orphaning the first (its exit fails the entryId/runId match
+        // so its re-probe fold never runs). The gate (`providerConfigColdStartInFlight = true`) drives
+        // the `.disabled(...)` modifiers on Connect/Cancel. It must be set BEFORE the terminal
+        // launches; otherwise the window between launch and gate is exactly the double-fire window.
+        let gateRange = try XCTUnwrap(
+            method.range(of: "providerConfigColdStartInFlight = true"),
+            "rotation must set the in-flight gate so Connect/Cancel are disabled while the terminal runs"
+        )
+        let launchRange = try XCTUnwrap(
+            method.range(of: "createCustomSession("),
+            "rotation must launch its terminal via createCustomSession"
+        )
+        XCTAssertTrue(
+            gateRange.lowerBound < launchRange.lowerBound,
+            "the in-flight gate must be set BEFORE the terminal launches (that ordering closes the double-fire window)"
+        )
+    }
+
+    func testConnectAndCancelButtonsAreGatedOnTheInFlightFlag() throws {
+        let source = try appSource()
+        // The gate only prevents re-entry because the form's Connect AND Cancel buttons are disabled
+        // on `providerConfigColdStartInFlight`. Pin both disables so a refactor that drops one (and
+        // re-opens the double-fire window) trips this.
+        let sheet = try sourceSlice(
+            in: source,
+            from: "if model.providerConfigColdStartInFlight {",
+            to: ".padding()"
+        )
+        let disableCount = sheet.components(separatedBy: ".disabled(model.providerConfigColdStartInFlight)").count - 1
+        XCTAssertGreaterThanOrEqual(
+            disableCount, 2,
+            "both Connect and Cancel must be .disabled(providerConfigColdStartInFlight) so the gate actually blocks re-entry"
+        )
+    }
+
+    func testSpinnerLabelBranchesOnFlavorNotHardcodedToCreateCopy() throws {
+        let source = try appSource()
+        // The shared in-flight spinner serves two flavors (cold-start hatch vs reconnect). Its label
+        // must render the published `providerConfigInFlightLabel` (which the model sets per-flavor),
+        // NOT a hardcoded "Creating your agent…" Text — that copy is wrong for a reconnect.
+        let sheet = try sourceSlice(
+            in: source,
+            from: "if model.providerConfigColdStartInFlight {",
+            to: "Spacer()"
+        )
+        XCTAssertTrue(
+            sheet.contains("Text(model.providerConfigInFlightLabel)"),
+            "the spinner label must render the published per-flavor label, not a hardcoded create-copy string"
+        )
+        XCTAssertFalse(
+            sheet.contains("Text(\"Creating your agent…\")"),
+            "the spinner must NOT hardcode the cold-start label (it's wrong for the reconnect flavor)"
+        )
+    }
+
+    func testRotationSetsTheReconnectFlavoredSpinnerLabel() throws {
+        let method = try beginCredentialRotationMethod()
+        // Rotation must set the per-flavor spinner label to the reconnect-flavored running copy
+        // (reusing the Core seam) so the spinner doesn't read "Creating your agent…" during a reconnect.
+        XCTAssertTrue(
+            method.contains("providerConfigInFlightLabel ="),
+            "rotation must set the spinner label so it reads as a reconnect, not a cold-start create"
+        )
+        XCTAssertTrue(
+            method.contains("VaultOnboardingMachine.humanLine(for: .runningVaultTerminal")
+                && method.contains("flavor: .rotation"),
+            "rotation's spinner label must reuse the seam-free rotation-flavored running line"
+        )
+    }
+
     func testCompletionFoldIsNotDuplicatedForRotation() throws {
         let source = try appSource()
         // The prompt forbids duplicating F13's fold. There must be exactly ONE call site of
@@ -160,6 +236,27 @@ final class CredentialRotationWiringTests: XCTestCase {
         XCTAssertTrue(
             method.contains("state.boss.agentName"),
             "removeAgent must handle the case where the deleted agent was the boss"
+        )
+    }
+
+    func testRemoveAgentReResolvesTheLiveRecordBeforeDeleting() throws {
+        let method = try removeAgentMethod()
+        // LOW hardening (cold-review): the armed `agent` captured `bundlePath` when the trash icon was
+        // tapped. If the roster re-scanned and the bundle moved between arm and confirm, that path is
+        // stale. removeAgent must re-resolve the LIVE record by name from the current scan and decide
+        // against THAT (not the stale snapshot), bailing if it's gone.
+        XCTAssertTrue(
+            method.contains("ouroAgents.first(where:"),
+            "removeAgent must re-resolve the live record from the current ouroAgents scan (not trust the armed snapshot)"
+        )
+        // The decision must be taken against the re-resolved live record, not the stale `agent` arg.
+        XCTAssertTrue(
+            method.contains("AgentRemoval.decide(for: live)"),
+            "removeAgent must decide against the live re-resolved record so a moved bundle isn't deleted by stale path"
+        )
+        XCTAssertFalse(
+            method.contains("AgentRemoval.decide(for: agent)"),
+            "removeAgent must NOT decide against the stale armed snapshot"
         )
     }
 

@@ -110,6 +110,27 @@ final class VaultOnboardingWiringTests: XCTestCase {
         )
     }
 
+    func testBeginVaultOnboardingSetsTheInFlightGateBeforeLaunchingTheTerminal() throws {
+        let method = try beginVaultOnboardingMethod()
+        // Cold-review latent fix: the "Finish setup" button has the same double-fire shape as F6's
+        // Connect — it's `.disabled(providerConfigColdStartInFlight)`, but this path never set that
+        // flag, so the disable never engaged during its own run. A second tap would overwrite the
+        // exit-matching markers to a second terminal, orphaning the first. The gate must be set
+        // BEFORE the terminal launches (mirror of the F6 rotation gate).
+        let gateRange = try XCTUnwrap(
+            method.range(of: "providerConfigColdStartInFlight = true"),
+            "finish-setup must set the in-flight gate so the button is disabled while the terminal runs"
+        )
+        let launchRange = try XCTUnwrap(
+            method.range(of: "createCustomSession("),
+            "finish-setup must launch its terminal via createCustomSession"
+        )
+        XCTAssertTrue(
+            gateRange.lowerBound < launchRange.lowerBound,
+            "the in-flight gate must be set BEFORE the terminal launches (closes the double-fire window)"
+        )
+    }
+
     func testFinishSetupAffordanceIsGatedOnTheVaultFlag() throws {
         let source = try appSource()
         // The sheet shows "Finish setup" ONLY when providerConfigNeedsVaultSetup, and it calls

@@ -5905,7 +5905,9 @@ struct ProviderConfigSheet: View {
                 if model.providerConfigColdStartInFlight {
                     ProgressView()
                         .controlSize(.small)
-                    Text("Creating your agent…")
+                    // F6 — branch the label on the in-flight flavor: "Creating your agent…" for a
+                    // cold-start, reconnect-flavored copy for a rotation. Set by the model at launch.
+                    Text(model.providerConfigInFlightLabel)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -10686,6 +10688,14 @@ final class WorkbenchViewModel: ObservableObject {
     /// classifies the real outcome.
     @Published var providerConfigColdStartInFlight = false
 
+    /// F6 — the spinner label shown next to `providerConfigColdStartInFlight`'s ProgressView. The
+    /// flag is shared by two distinct in-flight flavors (cold-start hatch vs existing-agent
+    /// reconnect), so the label must branch on which one is running — "Creating your agent…" is
+    /// wrong for a reconnect. The model sets this at launch (where it knows the flavor); the view
+    /// just renders it. Seam-free copy (no `ouro`/`vault` leakage). Defaults to the cold-start
+    /// wording so the existing cold-start path reads unchanged.
+    @Published var providerConfigInFlightLabel = "Creating your agent…"
+
     /// F1 — the seam-free outcome line surfaced in the form when a cold-start did NOT verify as
     /// ready (created-but-not-connected, or an honest failure). nil while in flight / on success.
     @Published var providerConfigColdStartMessage: String?
@@ -12192,7 +12202,18 @@ final class WorkbenchViewModel: ObservableObject {
         // Clear the armed confirmation up front so a re-render can't re-present it for a now-deleted
         // agent (and a second tap can't double-delete).
         agentPendingRemoval = nil
-        let decision = AgentRemoval.decide(for: agent)
+        // LOW hardening — `agent` was captured when the trash icon armed the confirmation
+        // (`agentPendingRemoval`). If the roster re-scanned and the bundle MOVED between arm and
+        // confirm, `agent.bundlePath` is a stale snapshot and we'd delete the wrong (or a vanished)
+        // path. Re-resolve the LIVE record by name from the current scan; if it's gone, bail
+        // honestly instead of deleting a stale path. Delete the re-resolved live bundlePath.
+        guard let live = ouroAgents.first(where: {
+            $0.name.caseInsensitiveCompare(agent.name) == .orderedSame
+        }) else {
+            errorMessage = "\(agent.name) is no longer present."
+            return false
+        }
+        let decision = AgentRemoval.decide(for: live)
         guard decision.deletesBundle else { return false }
         do {
             try FileManager.default.removeItem(atPath: decision.bundlePath)
@@ -17188,6 +17209,9 @@ final class WorkbenchViewModel: ObservableObject {
             // else keeps the form open with the seam-free outcome line and surfaces the bundle as
             // needs-credentials, NOT ready.
             providerConfigColdStartInFlight = true
+            // F6 — the spinner label is shared with the reconnect flavor; reset it to the
+            // cold-start wording so a prior rotation can't leave a stale "Reconnecting…" label here.
+            providerConfigInFlightLabel = "Creating your agent…"
             Task { [weak self] in
                 let run = await ColdStartHatchRunner.runHeadless(plan: plan)
                 // `.launchFailed` → nil (never ran); `.exited` → its real code.
@@ -17281,6 +17305,21 @@ final class WorkbenchViewModel: ObservableObject {
         guard !agentName.isEmpty, let provider = providerConfigColdStartProvider else {
             return
         }
+        // RE-ENTRANCY GATE — same latent double-fire shape as F6's beginCredentialRotation. The
+        // "Finish setup" button is `.disabled(model.providerConfigColdStartInFlight)`, but this path
+        // never sets that flag, so the disable never engages during its OWN run: a second tap would
+        // re-enter and overwrite vaultOnboardingEntryID/RunID to a second terminal, orphaning the
+        // first (its exit would fail the entryId/runId match in markTerminated, so its re-probe fold
+        // never runs). Setting it true gates the button until `completeVaultOnboarding` clears it on
+        // EVERY exit path (the unconditional clear before its switch — success AND failure — so a
+        // failed finish-setup re-enables the button for retry). Clean mirror of the F6 gate.
+        providerConfigColdStartInFlight = true
+        // F6/F13 — flavor the spinner label for this onboarding-flavored finish-setup (the shared
+        // flag's default "Creating your agent…" reads fine here, but the running-state copy is more
+        // accurate). Seam-free copy from the Core seam.
+        providerConfigInFlightLabel =
+            VaultOnboardingMachine.humanLine(for: .runningVaultTerminal, agentName: agentName, flavor: .onboarding)
+            ?? "Creating your agent…"
         // Build the chained recovery command from the PURE Core seam (single source of truth for
         // the command shape + shell-quoting). Default email is `<name>@ouro.bot`.
         let command = VaultOnboardingCommand.finishSetupCommandLine(
@@ -17335,6 +17374,24 @@ final class WorkbenchViewModel: ObservableObject {
         guard !trimmed.isEmpty else {
             return
         }
+        // RE-ENTRANCY GATE — mirror the cold-start hatch branch (which sets this flag synchronously
+        // at ~submitProviderConfig before launching). Without it, Connect/Cancel stay fully enabled
+        // with no spinner while the reconnect terminal is live, so a second Connect click re-enters
+        // submitProviderConfig → beginCredentialRotation and OVERWRITES vaultOnboardingEntryID/RunID
+        // to a SECOND terminal. The first terminal's exit then fails the entryId/runId match in
+        // markTerminated, so its completion fold (the re-probe) never runs — the first terminal is
+        // silently orphaned and two reconnect terminals race on the same vault. Setting this true
+        // disables Connect/Cancel (the `.disabled(model.providerConfigColdStartInFlight)` modifiers
+        // on those buttons) until `completeVaultOnboarding` clears it on EVERY exit path (the
+        // unconditional `self.providerConfigColdStartInFlight = false` before its switch — success
+        // AND failure — so a failed rotation re-enables the form for retry).
+        providerConfigColdStartInFlight = true
+        // F6 — flavor the spinner label for a reconnect (the shared flag's default copy reads
+        // "Creating your agent…", which is wrong here). Reuse the rotation-flavored running line
+        // from the Core seam so it stays seam-free and consistent with the secondary status text.
+        providerConfigInFlightLabel =
+            VaultOnboardingMachine.humanLine(for: .runningVaultTerminal, agentName: trimmed, flavor: .rotation)
+            ?? "Reconnecting…"
         // Build the unlock chain from the PURE Core seam (single source of truth for the command
         // shape + shell-quoting). No `--email`: the existing agent's vault account already exists.
         let command = VaultOnboardingCommand.rotateCredentialCommandLine(
