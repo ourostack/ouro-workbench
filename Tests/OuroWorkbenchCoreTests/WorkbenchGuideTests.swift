@@ -140,6 +140,39 @@ final class WorkbenchGuideTests: XCTestCase {
         XCTAssertTrue(contents.contains("slugger"))
     }
 
+    // MARK: - F10b Part-1 tripwires (no source change; pin the already-landed fix)
+
+    func testReportBugToolIsInBothIndependentCatalogs() {
+        // F10b Part 1 (the missing `workbench_report_bug` catalog entry) was
+        // resolved by 9c0c28f. Pin the concrete tool name in BOTH independent
+        // literals so a future edit that drops it from one — but not the other —
+        // is caught here even if the set-equality test were ever re-tautologized.
+        XCTAssertTrue(
+            WorkbenchGuide.bossTools.contains { $0.tool == "workbench_report_bug" },
+            "bossTools must advertise workbench_report_bug"
+        )
+        XCTAssertTrue(
+            WorkbenchGuide.advertisedToolNames.contains("workbench_report_bug"),
+            "advertisedToolNames must contain workbench_report_bug"
+        )
+    }
+
+    func testCIRunsToolCatalogSmoke() throws {
+        // The end-to-end catalog gate (smoke-mcp-tool-catalog.sh drives the real
+        // binary's tools/list) only protects the surface while CI invokes it. A
+        // .swift grep can't see a YAML deletion, so pin the workflow reference —
+        // the only durable defense against the gate silently evaporating.
+        let ciURL = repoRoot()
+            .appendingPathComponent(".github", isDirectory: true)
+            .appendingPathComponent("workflows", isDirectory: true)
+            .appendingPathComponent("ci.yml")
+        let ci = try String(contentsOf: ciURL, encoding: .utf8)
+        XCTAssertTrue(
+            ci.contains("smoke-mcp-tool-catalog.sh"),
+            ".github/workflows/ci.yml must still invoke smoke-mcp-tool-catalog.sh — the end-to-end tool-catalog gate"
+        )
+    }
+
     /// Repo root from this test file: Tests/OuroWorkbenchCoreTests/<file> → up 3.
     private func repoRoot() -> URL {
         URL(fileURLWithPath: #filePath)

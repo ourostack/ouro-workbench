@@ -234,7 +234,23 @@ final class WorkbenchMCPServer {
     }
 
     private func workbenchStatus() throws -> String {
-        let state = try currentState()
+        // F10b Option B: for the boss's highest-traffic read, render a
+        // newer-schema state as first-class CONTENT ("upgrade Workbench") rather
+        // than an error string — the main check-in shouldn't read as a failure
+        // when the only problem is a stale binary against intact data. ONLY the
+        // schema case becomes content; genuine corruption (.stateUnreadable) and
+        // every other read tool re-throw and surface honestly through Seam A
+        // (WorkbenchStoreError: LocalizedError) in the dispatch catch.
+        let state: WorkspaceState
+        do {
+            state = try currentState()
+        } catch {
+            if let reason = degradedReadReason(for: error),
+               case .stateWrittenByNewerWorkbench = reason {
+                return reason.advisory
+            }
+            throw error
+        }
         let summary = summarizer.summarize(state)
         // Collision-safe builders (keep first): `bootstrappedState` already
         // de-dups entries by id, but guard here too so a duplicate id can never

@@ -17,7 +17,7 @@ public enum QuarantineOutcome: Equatable, Sendable {
     case moveFailed(attemptedURL: URL, reason: String)
 }
 
-public enum WorkbenchStoreError: Error, Equatable {
+public enum WorkbenchStoreError: Error, LocalizedError, Equatable {
     case unsupportedStateVersion(Int)
     /// The state file existed but couldn't be read/decoded. `preserved` records
     /// what happened to the original — either it was `.moved` aside (safe to
@@ -25,6 +25,33 @@ public enum WorkbenchStoreError: Error, Equatable {
     /// caller must NOT overwrite it). Carrying the outcome means the error can't
     /// claim a recovery location that doesn't exist. Cause described by `reason`.
     case unreadableState(preserved: QuarantineOutcome, reason: String)
+
+    /// Honest, boss-facing message. Without `LocalizedError`, every MCP read tool
+    /// surfaces the Foundation default ("The operation couldn't be completed.
+    /// (…WorkbenchStoreError error 0.)") through `error.localizedDescription` in
+    /// the dispatch catch — blinding the boss (no schema number, no instruction).
+    /// These messages name the cause AND the recovery, so the boss can act.
+    public var errorDescription: String? {
+        switch self {
+        case let .unsupportedStateVersion(version):
+            return "This Workbench state was written by a newer Workbench "
+                + "(state schema v\(version); this build understands "
+                + "v\(WorkspaceState.currentSchemaVersion)). Upgrade Workbench to read it. "
+                + "Your data is intact and untouched."
+        case let .unreadableState(preserved, reason):
+            switch preserved {
+            case let .moved(quarantineURL):
+                return "Workbench couldn't read its state (\(reason)). The "
+                    + "unreadable file was moved aside to "
+                    + "\(quarantineURL.lastPathComponent) and the workspace reset "
+                    + "to an empty workspace; recover from that file."
+            case let .moveFailed(_, moveReason):
+                return "Workbench couldn't read its state (\(reason)) and couldn't "
+                    + "move the unreadable file aside (\(moveReason)). The original "
+                    + "is untouched in place."
+            }
+        }
+    }
 
     public static func == (lhs: WorkbenchStoreError, rhs: WorkbenchStoreError) -> Bool {
         switch (lhs, rhs) {
@@ -85,7 +112,7 @@ public final class WorkbenchStore {
 
         do {
             let state = try decoder.decode(WorkspaceState.self, from: data)
-            guard state.schemaVersion == 1 else {
+            guard state.schemaVersion == WorkspaceState.currentSchemaVersion else {
                 if quarantineCorruptFile {
                     throw quarantine(reason: "unsupported schema version \(state.schemaVersion)")
                 }
