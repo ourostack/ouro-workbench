@@ -39,7 +39,7 @@ status:)` + `reason(for:detail:)`.
   dotColor + label. 100% line+region. Allowlist stays at 2 entries.
 - **Acceptance:** `swift test` green; `Scripts/check-coverage.sh` 100% Core.
 
-### ⬜ Unit 2 (App wiring) — run the live check + store verdicts
+### ✅ Unit 2 (App wiring) — run the live check + store verdicts
 On `WorkbenchViewModel` add `@Published var agentOutwardVerdicts: [String:
 ProviderConnectionVerdict]` + `@Published var agentChecksInFlight: Set<String>`. Add
 `func refreshAgentOutwardReadiness()` that, for each `ouroAgents` record with `status ==
@@ -74,7 +74,7 @@ in-flight — all `@Published` mutations on main actor, per-agent checks concurr
 
 ## Completion Criteria
 - [x] Unit 1: live-aware seam + exhaustive Core tests, 100% coverage.
-- [ ] Unit 2: viewmodel runs outward checks concurrently, stores verdicts, wired into refresh.
+- [x] Unit 2: viewmodel runs outward checks concurrently, stores verdicts, wired into refresh.
 - [ ] Unit 3: sidebar + card rows render live readiness; harness-pill decision recorded.
 - [ ] Strict build + full test suite green; coverage gate passes; allowlist at 2.
 
