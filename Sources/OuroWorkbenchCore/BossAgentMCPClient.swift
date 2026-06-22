@@ -385,46 +385,34 @@ final class ProcessIOBox: @unchecked Sendable {
         self.processKiller = processKiller
     }
 
+    /// Decode the tool-call text from the matching id line (`tools/call`).
     func readResponse(id: Int) throws -> String {
-        var buffer = Data()
-        while true {
-            let chunk = stdout.availableData
-            if chunk.isEmpty {
-                if !buffer.isEmpty {
-                    let line = String(decoding: buffer, as: UTF8.self)
-                    if let text = try BossAgentMCPClient.extractTextIfMatching(line: line, id: id) {
-                        return text
-                    }
-                }
-                let stderrText = readStderrText()
-                if !stderrText.isEmpty {
-                    throw BossAgentMCPClientError.processNotAvailable(stderrText)
-                }
-                throw BossAgentMCPClientError.closed
-            }
-            buffer.append(chunk)
-            while let newlineIndex = buffer.firstIndex(of: 0x0a) {
-                let lineData = buffer.prefix(upTo: newlineIndex)
-                buffer.removeSubrange(...newlineIndex)
-                let line = String(decoding: lineData, as: UTF8.self)
-                if let text = try BossAgentMCPClient.extractTextIfMatching(line: line, id: id) {
-                    return text
-                }
-            }
+        try readMatchingLine { line in
+            try BossAgentMCPClient.extractTextIfMatching(line: line, id: id)
         }
     }
 
-    /// Like `readResponse` but returns the matching id line VERBATIM (for `tools/list`).
-    /// Same EOF / stderr / closed semantics so a stuck or unstartable runtime surfaces
-    /// the same errors as a tool call.
+    /// Return the matching id line VERBATIM (for `tools/list`, whose `result.tools` shape the
+    /// tool-call decoders don't model). Same EOF / stderr / closed semantics as `readResponse`.
     func readRawLine(id: Int) throws -> String {
+        try readMatchingLine { line in
+            BossAgentMCPClient.rawLineIfMatching(line: line, id: id)
+        }
+    }
+
+    /// Shared line reader: pull stdout chunks, split on newlines, and return the first line for
+    /// which `transform` yields non-nil. Handles a final line with no trailing newline at EOF,
+    /// surfaces stderr as `.processNotAvailable`, and reports `.closed` on a clean EOF with no
+    /// match. Both `readResponse` (decode tool text) and `readRawLine` (keep the line) flow
+    /// through here so there's a single read loop.
+    private func readMatchingLine(_ transform: (String) throws -> String?) throws -> String {
         var buffer = Data()
         while true {
             let chunk = stdout.availableData
             if chunk.isEmpty {
                 if !buffer.isEmpty {
                     let line = String(decoding: buffer, as: UTF8.self)
-                    if let matched = BossAgentMCPClient.rawLineIfMatching(line: line, id: id) {
+                    if let matched = try transform(line) {
                         return matched
                     }
                 }
@@ -439,7 +427,7 @@ final class ProcessIOBox: @unchecked Sendable {
                 let lineData = buffer.prefix(upTo: newlineIndex)
                 buffer.removeSubrange(...newlineIndex)
                 let line = String(decoding: lineData, as: UTF8.self)
-                if let matched = BossAgentMCPClient.rawLineIfMatching(line: line, id: id) {
+                if let matched = try transform(line) {
                     return matched
                 }
             }

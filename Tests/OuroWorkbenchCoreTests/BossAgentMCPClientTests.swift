@@ -442,6 +442,81 @@ final class BossAgentMCPClientTests: XCTestCase {
         XCTAssertEqual(WorkbenchToolsInjectionProbe.verdict(fromToolNames: names), .present)
     }
 
+    func testRawLineIfMatchingReturnsLineOnIdMatchAndNilOtherwise() {
+        let line = #"{"jsonrpc":"2.0","id":2,"result":{"tools":[]}}"#
+        // Matches id 2 (Int) → returns the line verbatim.
+        XCTAssertEqual(BossAgentMCPClient.rawLineIfMatching(line: line, id: 2), line)
+        // String id also matches.
+        XCTAssertEqual(
+            BossAgentMCPClient.rawLineIfMatching(line: #"{"id":"2","result":{}}"#, id: 2),
+            #"{"id":"2","result":{}}"#
+        )
+        // Wrong id → nil (keep scanning).
+        XCTAssertNil(BossAgentMCPClient.rawLineIfMatching(line: line, id: 1))
+        // Non-JSON → nil.
+        XCTAssertNil(BossAgentMCPClient.rawLineIfMatching(line: "not json", id: 2))
+        // JSON but non-object id → nil.
+        XCTAssertNil(BossAgentMCPClient.rawLineIfMatching(line: #"{"id":true,"result":{}}"#, id: 2))
+    }
+
+    func testListToolNamesReadsFinalLineWithoutTrailingNewline() async throws {
+        // Exercises the readRawLine EOF-with-buffered-data branch (no trailing newline).
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OuroWorkbenchMCPClientTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let mockOuro = temporaryDirectory.appendingPathComponent("ouro")
+        let script = """
+        #!/bin/sh
+        read initialize
+        read tools_list
+        printf '%s' '{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"workbench_status"}]}}'
+        """
+        try script.write(to: mockOuro, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: mockOuro.path)
+        let oldPath = getenv("PATH").map { String(cString: $0) }
+        setenv("PATH", "\(temporaryDirectory.path):\(oldPath ?? "")", 1)
+        defer {
+            if let oldPath { setenv("PATH", oldPath, 1) } else { unsetenv("PATH") }
+        }
+
+        let names = try await BossAgentMCPClient(timeoutNanoseconds: 2_000_000_000)
+            .listToolNames(agentName: "slugger")
+
+        XCTAssertEqual(names, ["workbench_status"])
+    }
+
+    func testListToolNamesSkipsNonMatchingIdLinesBeforeTheAnswer() async throws {
+        // Exercises rawLineIfMatching returning nil for an id-1 line emitted before id 2.
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OuroWorkbenchMCPClientTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let mockOuro = temporaryDirectory.appendingPathComponent("ouro")
+        let script = """
+        #!/bin/sh
+        read initialize
+        read tools_list
+        echo '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05"}}'
+        echo '{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"workbench_sessions"}]}}'
+        read _hold
+        """
+        try script.write(to: mockOuro, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: mockOuro.path)
+        let oldPath = getenv("PATH").map { String(cString: $0) }
+        setenv("PATH", "\(temporaryDirectory.path):\(oldPath ?? "")", 1)
+        defer {
+            if let oldPath { setenv("PATH", oldPath, 1) } else { unsetenv("PATH") }
+        }
+
+        let names = try await BossAgentMCPClient(timeoutNanoseconds: 2_000_000_000)
+            .listToolNames(agentName: "slugger")
+
+        XCTAssertEqual(names, ["workbench_sessions"])
+    }
+
     func testListToolNamesReturnsBossNativeOnlyForOldRuntime() async throws {
         // An old mcp-serve that ignored --workbench-mcp answers tools/list with only
         // boss-native tools. listToolNames returns them verbatim → verdict .absent.
