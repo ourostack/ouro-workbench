@@ -6556,50 +6556,65 @@ private struct OnboardingBossChoiceRow: View {
     @ObservedObject var model: WorkbenchViewModel
 
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
-            Image(systemName: choice.isSelected ? "largecircle.fill.circle" : "circle")
-                .foregroundStyle(choice.isSelected ? Color.accentColor : .secondary)
-                .font(.system(size: 18, weight: .semibold))
-                .frame(width: 24)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(choice.name)
-                        .font(.headline.weight(.semibold))
-                    if choice.isSelected {
-                        StatusPill(text: "selected", color: .green)
-                            .fixedSize()
-                    }
-                    StatusPill(text: choice.statusLabel, color: choice.statusColor)
-                        .fixedSize()
-                }
-                Text(choice.detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                .lineLimit(2)
-            }
-            Spacer()
-        }
-        .padding(14)
-        .background {
-            RoundedRectangle(cornerRadius: 8)
-                .fill(choice.isSelected ? Color.accentColor.opacity(0.08) : Color.secondary.opacity(0.08))
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(choice.isSelected ? Color.accentColor.opacity(0.55) : Color.clear, lineWidth: 1)
-        }
-        .contentShape(RoundedRectangle(cornerRadius: 8))
-        .onTapGesture {
-            guard choice.isUsable else {
-                return
-            }
+        // Accessibility: this is a real Button (not a bare onTapGesture) so the row is
+        // keyboard-focusable (Tab) and VoiceOver-actionable — selecting a boss is the
+        // gateway to the whole autonomy feature and must not be mouse-only. SwiftUI does
+        // NOT surface an onTapGesture as an accessibility action, which is the bug this
+        // fixes. Every other selectable row in the app (e.g. SidebarProjectRow) is a
+        // Button, so this matches the app's convention. `.buttonStyle(.plain)` keeps the
+        // custom radio/name/pills/detail visual exactly as before.
+        Button {
             // #U27: Choose Boss is a pure pick — selecting an agent is the ONLY affordance.
             // Picking it SILENTLY ensures its Workbench tools (registerWorkbenchForBossChoice does
             // select + install + refresh), so there's no competing per-row Enable-Tools button.
             // The Connect page remains the single honest place that shows tool status and offers a
             // fix only when registration isn't current.
             model.registerWorkbenchForBossChoice(choice.name)
+        } label: {
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: choice.isSelected ? "largecircle.fill.circle" : "circle")
+                    .foregroundStyle(choice.isSelected ? Color.accentColor : .secondary)
+                    .font(.system(size: 18, weight: .semibold))
+                    .frame(width: 24)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(choice.name)
+                            .font(.headline.weight(.semibold))
+                        if choice.isSelected {
+                            StatusPill(text: "selected", color: .green)
+                                .fixedSize()
+                        }
+                        StatusPill(text: choice.statusLabel, color: choice.statusColor)
+                            .fixedSize()
+                    }
+                    Text(choice.detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                }
+                Spacer()
+            }
+            .padding(14)
+            .background {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(choice.isSelected ? Color.accentColor.opacity(0.08) : Color.secondary.opacity(0.08))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(choice.isSelected ? Color.accentColor.opacity(0.55) : Color.clear, lineWidth: 1)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 8))
         }
+        .buttonStyle(.plain)
+        // Preserves the only-usable-choices-select behaviour (the old inline usability
+        // gate) while ALSO announcing the control as disabled to VoiceOver — a gate
+        // swallowed inside the action would leave it silently inert instead.
+        .disabled(!choice.isUsable)
+        // Single-select radio group: combine the fragments so VoiceOver reads the row as
+        // one element, and announce the selected row so it reads "<name>, selected, …"
+        // rather than leaving the selection state visual-only.
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(choice.isSelected ? [.isSelected] : [])
     }
 }
 
