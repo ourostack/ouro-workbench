@@ -12849,6 +12849,13 @@ final class WorkbenchViewModel: ObservableObject {
         onboardingCandidates = []
         onboardingProviderChecks = [:]
         onboardingReconstructionHandedOff = false
+        // #F9 — drop the incoming boss's CACHED `tools/list` injection verdict so a re-selected
+        // boss re-probes on its next bootstrap rather than inheriting a stale `.toolsNotInjected`.
+        // Without this, re-selecting a boss that was stripped under an OLD ouro would keep
+        // reading the blocker even after the operator upgraded ouro (a sticky false-blocker; the
+        // cache is otherwise only overwritten by a bootstrap drain). A cleared entry overlays as
+        // `nil` ⇒ the on-disk snapshot status stands until a fresh probe confirms otherwise.
+        bossWorkbenchToolsInjectionByAgentName[normalizedAgentName] = nil
         save()
         refreshWorkbenchMCPRegistration()
         refreshOnboardingReadiness()
