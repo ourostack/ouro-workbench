@@ -112,7 +112,6 @@ final class ProcessWatchdogTests: XCTestCase {
         ProcessWatchdog.escalateTermination(
             process,
             gracePeriodSeconds: 0.2,
-            childInOwnGroup: false,
             signalDeliverer: { rec.deliver($0, $1) }
         )
         // The fake never actually killed the child — reap it ourselves to keep the test clean.
@@ -139,7 +138,6 @@ final class ProcessWatchdogTests: XCTestCase {
         ProcessWatchdog.escalateTermination(
             process,
             gracePeriodSeconds: 0.2,
-            childInOwnGroup: false,
             signalDeliverer: { rec.deliver($0, $1) }
         )
         XCTAssertEqual(rec.calls.count, 0, "an already-exited child must trigger no escalation signals")
@@ -155,7 +153,6 @@ final class ProcessWatchdogTests: XCTestCase {
             process,
             timeoutSeconds: 10,
             gracePeriodSeconds: 0.2,
-            childInOwnGroup: false,
             signalDeliverer: { rec.deliver($0, $1) }
         )
         XCTAssertFalse(process.isRunning)
@@ -176,7 +173,6 @@ final class ProcessWatchdogTests: XCTestCase {
         ProcessWatchdog.escalateTermination(
             process,
             gracePeriodSeconds: 1.5,
-            childInOwnGroup: false,
             signalDeliverer: { pid, sig in rec.deliver(pid, sig); kill(pid, sig) }
         )
         process.waitUntilExit()
@@ -189,29 +185,27 @@ final class ProcessWatchdogTests: XCTestCase {
         )
     }
 
-    // MARK: - F8 — source-pin the killpg-safety branch
+    // MARK: - F8 — source-pin the never-group-reap safety property
 
-    /// Pin that the escalation routes its post-grace signal through
-    /// `WatchdogEscalation.nextSignal` and that the `.killGroup` arm is gated behind a
-    /// `getpgid`/`killpg` path distinct from the child-only `kill` path — so a future edit
-    /// can't silently SIGKILL the whole (shared) group of a `childInOwnGroup: false` child.
-    func testProcessWatchdogPinsTheKillpgSafetyBranch() throws {
+    /// Pin the F8 SAFETY PROPERTY: `ProcessWatchdog` NEVER group-reaps. Every current spawn
+    /// shares Workbench's process group, so a `killpg` would reap Workbench itself — F8's
+    /// escalation must SIGKILL the CHILD pid only. A future edit that reintroduces a group
+    /// reap before the F8b `posix_spawn` own-group opt-in lands would trip this pin. (The
+    /// behavioral child-only SIGKILL contract is enforced by the injected-deliverer tests
+    /// above; this source pin is the structural backstop.)
+    func testProcessWatchdogNeverGroupReaps() throws {
         let source = try processWatchdogSource()
-        XCTAssertTrue(
-            source.contains("WatchdogEscalation.nextSignal"),
-            "the escalation must consult the pure WatchdogEscalation policy, not inline ad-hoc logic"
+        XCTAssertFalse(
+            source.contains("killpg"),
+            "F8 must never group-reap: a killpg of the SHARED group would reap Workbench itself"
+        )
+        XCTAssertFalse(
+            source.contains("getpgid"),
+            "F8 takes no process-group syscall — the group reap (and getpgid) lands in F8b"
         )
         XCTAssertTrue(
-            source.contains("== .killGroup"),
-            "the escalation must gate its group reap on the .killGroup policy arm (childInOwnGroup)"
-        )
-        XCTAssertTrue(
-            source.contains("killpg") && source.contains("getpgid"),
-            "the .killGroup arm must use killpg(getpgid(...)) — the group-reaping syscall"
-        )
-        XCTAssertTrue(
-            source.contains("childInOwnGroup"),
-            "the safety gate boolean must be threaded into the escalation (group vs child-only)"
+            source.contains("signalDeliverer(pid, SIGKILL)"),
+            "the post-grace stage must SIGKILL the CHILD pid through the injected deliverer"
         )
     }
 

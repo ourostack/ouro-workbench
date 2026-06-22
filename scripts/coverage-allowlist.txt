@@ -11,22 +11,6 @@
 # IO solely to colour a brace would be worse than the exclusion.
 BossAgentMCPClient.swift 1 3
 
-# ProcessWatchdog.escalateTermination's `.killGroup` arm is the killpg group-reap
-# path: getpgid(pid) + killpg(pgid, SIGKILL). It is GATED behind the pure
-# WatchdogEscalation policy returning `.killGroup`, which happens ONLY when
-# childInOwnGroup is true. NO current spawn opts into its own process group (all
-# spawned `ouro` children SHARE Workbench's pgid — a naive killpg would reap
-# Workbench itself), so the wiring passes childInOwnGroup: false everywhere and
-# this arm is STRUCTURALLY UNREACHABLE from every F8 call site. The 3 syscall lines
-# (getpgid, the != -1 guard, killpg) + 3 doc-comment lines + the closing brace are
-# the 7 uncovered lines / 3 uncovered regions. The escalation ORCHESTRATION
-# (SIGTERM → grace → child-only SIGKILL, plus the isRunning re-checks) is fully
-# covered by injecting a fake signalDeliverer; only these raw group-reap syscalls
-# remain — unlocked, and made coverable, by the sequenced posix_spawn own-group
-# opt-in follow-up. The killGroup-only-when-childInOwnGroup gate is independently
-# 100%-tested in WatchdogEscalationTests, and source-pinned in ProcessWatchdogTests.
-ProcessWatchdog.swift 7 3
-
 # 100% line, every identifiable branch covered. One synthesized region (a
 # default-argument / branch region the Swift `llvm-cov --show-regions` view does
 # not surface as an uncovered arm) remains uncountable; there is no source line

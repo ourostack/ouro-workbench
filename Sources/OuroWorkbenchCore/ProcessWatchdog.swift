@@ -17,10 +17,11 @@ import Foundation
 /// F8 — a bare `terminate()` (SIGTERM) is not enough: a wedged child that IGNORES
 /// SIGTERM (a `node` swallowing the signal, a stuck syscall) survives the kill and the
 /// wait still hangs forever. The watchdog now ESCALATES — SIGTERM, then after a grace
-/// window SIGKILL the child pid — via the pure `WatchdogEscalation` policy. `killpg`
-/// (group reap, for grandchildren) is gated behind `childInOwnGroup`, which is `false`
-/// for every current spawn because they SHARE Workbench's process group; killpg would
-/// otherwise reap Workbench itself. See `WatchdogEscalation`.
+/// window SIGKILL the CHILD pid only. F8 deliberately never group-reaps: every current
+/// spawn SHARES Workbench's process group, so a process-group SIGKILL would reap Workbench
+/// itself. The grandchild-reaping group reap — plus the `posix_spawn` own-group opt-in and
+/// the escalation-policy seam that gates it — arrives together in the sequenced F8b
+/// follow-up, where the group-reap syscall is born reachable and coverable.
 public enum ProcessWatchdog {
     /// Wait for `process` to exit, terminating it if it runs past `timeoutSeconds`.
     /// `process` must already be running (`try process.run()` called by the caller).
@@ -37,9 +38,6 @@ public enum ProcessWatchdog {
     ///   - timeoutSeconds: how long to let the child run before the watchdog fires.
     ///   - gracePeriodSeconds: after SIGTERM, how long to let a cooperative child flush +
     ///     exit before SIGKILL. Default 2.0s.
-    ///   - childInOwnGroup: proven `true` ONLY when the spawn placed the child in its own
-    ///     process group. Gates the `killpg` group reap; `false` (the default) means the
-    ///     escalation SIGKILLs the child pid only, never the (shared) group.
     ///   - signalDeliverer: the syscall seam — delivers `(pid, signal)`. Default is the
     ///     real `kill`; tests inject a fake to cover the escalation ORCHESTRATION without
     ///     a child that deterministically ignores SIGTERM.
@@ -47,14 +45,12 @@ public enum ProcessWatchdog {
         _ process: Process,
         timeoutSeconds: Double,
         gracePeriodSeconds: Double = 2.0,
-        childInOwnGroup: Bool = false,
         signalDeliverer: @escaping @Sendable (pid_t, Int32) -> Void = { kill($0, $1) }
     ) {
         let watchdog = DispatchWorkItem {
             escalateTermination(
                 process,
                 gracePeriodSeconds: gracePeriodSeconds,
-                childInOwnGroup: childInOwnGroup,
                 signalDeliverer: signalDeliverer
             )
         }
@@ -85,7 +81,7 @@ public enum ProcessWatchdog {
             lock.lock()
             didFire = true
             lock.unlock()
-            escalateTermination(process, gracePeriodSeconds: 2.0, childInOwnGroup: false, signalDeliverer: { kill($0, $1) })
+            escalateTermination(process, gracePeriodSeconds: 2.0, signalDeliverer: { kill($0, $1) })
         }
         DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + timeoutSeconds, execute: watchdog)
         process.waitUntilExit()
@@ -113,25 +109,21 @@ public enum ProcessWatchdog {
     }
 
     /// The escalation: SIGTERM, then (after `gracePeriodSeconds` of the child still running)
-    /// the escalated kill chosen by `WatchdogEscalation.nextSignal`. Pure decision, impure
-    /// delivery: the policy is unit-tested in `WatchdogEscalationTests`; the orchestration is
-    /// covered by injecting a fake `signalDeliverer`; only the raw syscall lines
-    /// (`kill`/`killpg`/`getpgid` defaults and the killpg target) are uncoverable (a child that
-    /// ignores SIGTERM through a real grace window is timing-flaky) — those are allowlisted.
+    /// SIGKILL the CHILD pid only. Impure delivery through the injected `signalDeliverer`: the
+    /// orchestration (SIGTERM → grace → child-only SIGKILL, plus the `isRunning` re-checks) is
+    /// covered by injecting a fake deliverer. F8 never group-reaps — see the type doc; the
+    /// group reap + the escalation policy that would gate it are deferred to the F8b
+    /// own-group follow-up.
     ///
     /// Recycled-pid safety: capture `processIdentifier` while `isRunning`, and re-check
     /// `isRunning` immediately before each signal — never signal a pid the OS may have reaped
-    /// and reassigned. `getpgid` returning -1 (the pid is already gone) also aborts the group
-    /// reap.
+    /// and reassigned.
     static func escalateTermination(
         _ process: Process,
         gracePeriodSeconds: Double,
-        childInOwnGroup: Bool,
         signalDeliverer: @Sendable (pid_t, Int32) -> Void
     ) {
-        // Stage 1 — SIGTERM. Capture the pid while the child is provably running. (The policy's
-        // pre-grace decision is `.terminate` for any non-negative elapsed, so SIGTERM is
-        // unconditional here; the policy is consulted at stage 3 where the real branch lives.)
+        // Stage 1 — SIGTERM. Capture the pid while the child is provably running.
         guard process.isRunning else {
             return
         }
@@ -149,24 +141,9 @@ public enum ProcessWatchdog {
         guard process.isRunning else {
             return
         }
-        // The pure policy decides child-only vs group reap. At elapsed == grace it returns
-        // `.killChild` (the safe default) or `.killGroup` (ONLY when childInOwnGroup) — never
-        // `.none`/`.terminate`, so the group-vs-child gate is the only live branch.
-        if WatchdogEscalation.nextSignal(
-            elapsedSinceDeadline: gracePeriodSeconds,
-            graceSeconds: gracePeriodSeconds,
-            childInOwnGroup: childInOwnGroup
-        ) == .killGroup {
-            // GATED + structurally unreachable in F8 (no spawn sets childInOwnGroup): killpg of a
-            // SHARED group would reap Workbench. getpgid/killpg are the uncoverable syscalls
-            // (allowlisted; full rationale in scripts/coverage-allowlist.txt).
-            let pgid = getpgid(pid)
-            if pgid != -1 {
-                killpg(pgid, SIGKILL)
-            }
-        } else {
-            // `.killChild` — SIGKILL the child pid only (the safe F8 default).
-            signalDeliverer(pid, SIGKILL)
-        }
+        // SIGKILL the CHILD pid only — the safe F8 default. F8 deliberately never group-reaps:
+        // every current spawn shares Workbench's process group, so a process-group SIGKILL
+        // would reap Workbench itself. The group reap (and its own-group gate) lands in F8b.
+        signalDeliverer(pid, SIGKILL)
     }
 }
