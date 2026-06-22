@@ -52,13 +52,23 @@ in-flight — all `@Published` mutations on main actor, per-agent checks concurr
   `"outward"` + gates on `humanFacing`; the @Published props exist.
 - **Acceptance:** build + test green with strict flags.
 
-### ⬜ Unit 3 (App views) — route rows through the live-aware seam
+### ✅ Unit 3 (App views) — route rows through the live-aware seam
 - `SidebarAgentRow`: take `verdict` + `isChecking` (or pre-resolved `LiveReadiness`).
   Dot via `dotColor(for: liveReadiness)` (replace `dotColor(for: agent.status)`); tooltip
   via `help(for: liveReadiness, detail:)` (replace `.help(agent.detail)`).
 - Home-screen card (call site ~2847) + sidebar list (~3021): thread params from
   `agentOutwardVerdicts`/`agentChecksInFlight`.
-- Harness pill (`HarnessAgentRow`/`harnessLabel`): DECISION pending — record in report.
+- Harness pill (`HarnessAgentRow`/`harnessLabel`): **DECISION — left as-is.** It lives in
+  the Harness Status DIAGNOSTIC sheet ("Local agents" section), built in Core
+  (`HarnessStatus.swift`) from `OuroAgentRecord.status` via a `Sendable` `HarnessAgentEntry`
+  that carries `status: OuroAgentBundleStatus` (+ an `mcpStatus`), driven by its own separate
+  `refreshHarnessStatus()` async pipeline — NOT by the viewmodel's `agentOutwardVerdicts`. It
+  represents the same installed agents and its "ready" pill carries the same config-only
+  false-green, but routing live verdicts through it means adding fields to a pure Core type,
+  threading them through `refreshHarnessStatus`, and changing the section's `hasUnready` health
+  rollup — a meaningfully larger, separable change on a distinct surface. The task's primary
+  surfaces (sidebar + home card, the F2-uncovered steady-state rows) are fixed; the harness
+  diagnostic pill is logged as a fast-follow.
 - Source-pin: `SidebarAgentRow` no longer `.help(agent.detail)` for readiness, no longer
   `dotColor(for: agent.status)`; consults live-aware API.
 - **Acceptance:** build + test green; coverage 100%; ~2409 tests pass.
@@ -75,7 +85,7 @@ in-flight — all `@Published` mutations on main actor, per-agent checks concurr
 ## Completion Criteria
 - [x] Unit 1: live-aware seam + exhaustive Core tests, 100% coverage.
 - [x] Unit 2: viewmodel runs outward checks concurrently, stores verdicts, wired into refresh.
-- [ ] Unit 3: sidebar + card rows render live readiness; harness-pill decision recorded.
+- [x] Unit 3: sidebar + card rows render live readiness; harness-pill decision recorded (left as-is — distinct diagnostic surface; see report).
 - [ ] Strict build + full test suite green; coverage gate passes; allowlist at 2.
 
 ## Progress log
