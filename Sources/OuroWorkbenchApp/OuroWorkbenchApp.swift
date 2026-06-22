@@ -402,6 +402,14 @@ struct WorkbenchRootView: View {
             // Detect still-alive `screen` sessions first so startup recovery can
             // reattach to running agents losslessly instead of respawning them.
             await model.refreshLiveScreenSessions()
+            // F11a Defect 1 — now that the live-`screen` set is known AND state
+            // has loaded (in init, before this task), reap orphan screens: live
+            // sessions no known entry owns (past crashes / prior-run delete-or-
+            // archive that left a detached-but-alive screen). Gated on
+            // load-success so an empty/failed load never quits reattachable
+            // survivors. Must run AFTER refreshLiveScreenSessions (reuses that
+            // cache) and BEFORE recovery reattaches survivors.
+            await model.reapOrphanedScreenSessions()
             // Now that survival is known, re-derive startup attention so
             // sessions whose terminal kept running read as calmly reconnected
             // (not an orange "needs boss review") BEFORE the reattach runs.
@@ -10833,6 +10841,14 @@ final class WorkbenchViewModel: ObservableObject {
     private let eventDrivenCheckInCooldown: TimeInterval = 15
     private var didAttemptStartupRecovery = false
     private var didAttemptAutoResumeLaunch = false
+    /// F11a — whether the most recent `load()` succeeded (read a real workspace,
+    /// not the empty bootstrap a failed/quarantined load falls back to). The
+    /// startup orphan-screen reaper GATES on this: a failed load looks identical
+    /// to "no entries" (`state.processEntries` is empty either way), and an empty
+    /// `knownEntryIds` would make the reaper quit EVERY live `screen` — including
+    /// reattachable survivors (F8-class "kill the wrong thing"). `false` until a
+    /// load actually restores state.
+    private var stateLoadSucceeded = false
     /// Last time we posted an unexpected-exit notification per entry, to
     /// throttle banner spam when a session crash-loops or several are
     /// recovered at once.
@@ -16313,6 +16329,96 @@ final class WorkbenchViewModel: ObservableObject {
         liveScreenSessionNames = names
     }
 
+    /// F11a Defect 1 — spawn a single `screen -X quit` off the main thread with a
+    /// bounded 1.5s watchdog. Shared by the per-entry leak fix
+    /// (`quitPersistentScreenIfNeeded`), the startup reaper
+    /// (`reapOrphanedScreenSessions`), and the controller's
+    /// `terminatePersistentSessionIfNeeded`, so the watchdog isn't copy-pasted
+    /// and every quit site is equally protected from a wedged `screen` socket
+    /// (e.g. an NFS home dir) hanging a worker thread forever. Fire-and-forget:
+    /// the caller doesn't await the quit (use `terminatePersistentSessionAwaiting`
+    /// when a quit must complete before a relaunch).
+    nonisolated static func spawnScreenQuit(arguments: [String], environment: [String: String]) {
+        let executable = PersistentTerminalSession.executable
+        DispatchQueue.global(qos: .userInitiated).async {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: executable)
+            process.arguments = arguments
+            process.environment = environment
+            do {
+                try process.run()
+            } catch {
+                // The screen session / socket may already be gone.
+                return
+            }
+            let finished = DispatchSemaphore(value: 0)
+            DispatchQueue.global(qos: .userInitiated).async {
+                process.waitUntilExit()
+                finished.signal()
+            }
+            if finished.wait(timeout: .now() + .milliseconds(1500)) == .timedOut {
+                process.terminate()
+            }
+        }
+    }
+
+    /// F11a Defect 1 — quit the `ouro-wb-<id>` screen for one entry if (and only
+    /// if) it's currently live. `archiveCustomSession` / `deleteCustomSession`
+    /// only ever guarded `activeSessions[id] == nil` and then mutated state —
+    /// they never quit the screen, so a detached-but-alive session (after
+    /// `markTerminated` cleared `activeSessions` without quitting) leaked its
+    /// screen + child process forever. Reads the cached `liveScreenSessionNames`
+    /// (no second `screen -ls` probe) and asks the pure reaper for the quit
+    /// arguments — `nil` when the entry's screen isn't live (avoids a spurious
+    /// "No screen session found").
+    func quitPersistentScreenIfNeeded(forEntryId entryId: UUID) {
+        guard let arguments = ScreenSessionReaper.quitArguments(
+            forEntryId: entryId,
+            liveSessionNames: liveScreenSessionNames
+        ) else {
+            return
+        }
+        Self.spawnScreenQuit(
+            arguments: arguments,
+            environment: TerminalEnvironment().valuesWithResolvedPath()
+        )
+    }
+
+    /// F11a Defect 1 — at startup, quit every live `ouro-wb-<id>` screen that no
+    /// known workbench entry owns. Past crashes (and detached-but-alive sessions
+    /// that were deleted/archived in a prior run before this fix) leave orphan
+    /// screens running their child processes forever; this is the catch-up sweep.
+    ///
+    /// ORDERING IS LOAD-BEARING. This MUST run AFTER `refreshLiveScreenSessions`
+    /// (so `liveScreenSessionNames` is the real, current set — it reuses that
+    /// cache, no second probe) AND only when state-load SUCCEEDED. The
+    /// `stateLoadSucceeded` gate is the critical no-kill guard: a failed/empty
+    /// load is indistinguishable from "no entries" by `state.processEntries`
+    /// alone, and an empty `knownEntryIds` would make the reaper treat EVERY live
+    /// session as an orphan — quitting reattachable survivors (F8-class). Forward
+    /// derivation in the seam means a session a known id hashes to is spared by
+    /// construction.
+    func reapOrphanedScreenSessions() async {
+        guard stateLoadSucceeded else {
+            return
+        }
+        let knownEntryIds = Set(state.processEntries.map(\.id))
+        let orphans = ScreenSessionReaper.orphanedSessionNames(
+            liveSessionNames: liveScreenSessionNames,
+            knownEntryIds: knownEntryIds
+        )
+        guard !orphans.isEmpty else {
+            return
+        }
+        let environment = TerminalEnvironment().valuesWithResolvedPath()
+        for name in orphans {
+            Self.spawnScreenQuit(
+                arguments: PersistentTerminalSession.terminateArguments(sessionName: name),
+                environment: environment
+            )
+        }
+    }
+
     /// U8a: re-derive startup attention now that the live-`screen` survival
     /// signal is known. The synchronous `load()` reconcile ran before the
     /// `screen -ls` probe, so it couldn't tell survivors from losses and used
@@ -16906,6 +17012,11 @@ final class WorkbenchViewModel: ObservableObject {
             errorMessage = "Stop \(entry.name) before archiving it"
             return
         }
+        // F11a Defect 1 — quit the persistent `ouro-wb-<id>` screen BEFORE we
+        // replace the entry with its archived form. A detached-but-alive session
+        // would otherwise keep its screen + child process running forever. No-op
+        // when its screen isn't live.
+        quitPersistentScreenIfNeeded(forEntryId: entry.id)
         do {
             let archived = try customSessionManager.archivedEntry(entry)
             replaceEntry(archived)
@@ -16971,6 +17082,11 @@ final class WorkbenchViewModel: ObservableObject {
             errorMessage = "\(entry.name) is not a managed terminal session"
             return
         }
+        // F11a Defect 1 — quit the persistent `ouro-wb-<id>` screen BEFORE we
+        // remove the entry (and lose the id needed to derive the session name).
+        // A detached-but-alive session would otherwise leak its screen + process
+        // forever. No-op when its screen isn't live.
+        quitPersistentScreenIfNeeded(forEntryId: entry.id)
         state.processEntries.removeAll { $0.id == entry.id }
         state.processRuns.removeAll { $0.entryId == entry.id }
         pendingDeleteSession = nil
@@ -19155,6 +19271,11 @@ final class WorkbenchViewModel: ObservableObject {
     static let terminalFontSizeBounds: ClosedRange<CGFloat> = 9...28
 
     private func load() {
+        // F11a — assume failure until a path proves otherwise. The startup
+        // orphan-screen reaper gates on this; never let a partially-applied or
+        // thrown load leave a stale `true` that would let the reaper run with an
+        // untrustworthy (possibly empty) entry set.
+        stateLoadSucceeded = false
         if isFirstRunSetupForcedOnLaunch {
             state = bootstrapper.bootstrappedState(
                 from: WorkspaceState(),
@@ -19171,6 +19292,10 @@ final class WorkbenchViewModel: ObservableObject {
             } catch {
                 errorMessage = String(describing: error)
             }
+            // A forced first-run setup IS a successful load: state.processEntries
+            // is the trustworthy first-run default set, so the reaper's
+            // knownEntryIds derivation is safe.
+            stateLoadSucceeded = true
             return
         }
         do {
@@ -19252,6 +19377,10 @@ final class WorkbenchViewModel: ObservableObject {
                 }
             }
             try store.save(state)
+            // The load read a real workspace (a lossy-but-salvaged load still
+            // counts: the survivors in state.processEntries are real entries the
+            // reaper must spare). Mark success so the startup reaper can run.
+            stateLoadSucceeded = true
         } catch {
             // The store tries to quarantine an unreadable file before we get
             // here. Whether that move SUCCEEDED is now a checked value, so we
@@ -19920,38 +20049,18 @@ final class TerminalSessionController: NSObject, ObservableObject, Identifiable,
         }
         // Run `screen -X quit` off the main thread so stopping a session never
         // blocks the UI on an external process (a hung `screen` socket would
-        // otherwise beachball the whole app). Fire-and-forget: the caller also
-        // terminates the local client right after, and the run is recorded as
-        // manually ended regardless of whether the quit raced ahead.
-        let executable = PersistentTerminalSession.executable
-        let arguments = PersistentTerminalSession.terminateArguments(sessionName: sessionName)
-        let environment = environmentValues
-        DispatchQueue.global(qos: .userInitiated).async {
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: executable)
-            process.arguments = arguments
-            process.environment = environment
-            do {
-                try process.run()
-            } catch {
-                // The attached terminal process may already be gone.
-                return
-            }
-            // Bound the wait like the other `screen` call sites
-            // (`listLiveScreenSessionNames`, `persistentSessionIsListed`): a
-            // wedged `screen` socket (e.g. an NFS home dir) can hang
-            // `waitUntilExit()` forever, which would leak this stuck `Process`
-            // and park this worker thread for the app's whole life. If `screen`
-            // doesn't finish within the deadline, kill it and move on.
-            let finished = DispatchSemaphore(value: 0)
-            DispatchQueue.global(qos: .userInitiated).async {
-                process.waitUntilExit()
-                finished.signal()
-            }
-            if finished.wait(timeout: .now() + .milliseconds(1500)) == .timedOut {
-                process.terminate()
-            }
-        }
+        // otherwise beachball the whole app). Fire-and-forget via the shared
+        // `spawnScreenQuit` (off-main + 1.5s watchdog so a wedged socket can't
+        // park a worker thread for the app's life): the caller also terminates
+        // the local client right after, and the run is recorded as manually
+        // ended regardless of whether the quit raced ahead. App-exit and the
+        // standalone Stop path use THIS non-awaiting quit deliberately — they
+        // must NOT block the main actor (the awaiting variant is only for the
+        // start-race fix, where one quit must finish before the relaunch).
+        WorkbenchViewModel.spawnScreenQuit(
+            arguments: PersistentTerminalSession.terminateArguments(sessionName: sessionName),
+            environment: environmentValues
+        )
     }
 
     private func recordOutput(_ bytes: ArraySlice<UInt8>) {
