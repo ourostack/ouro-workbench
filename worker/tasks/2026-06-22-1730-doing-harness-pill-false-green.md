@@ -3,7 +3,7 @@
 - **Branch:** `fix/harness-pill-false-green` (off `main` @ 335967d)
 - **Execution Mode:** direct
 - **Artifacts:** `./2026-06-22-1730-doing-harness-pill-false-green/`
-- **Status:** in progress
+- **Status:** done
 
 ## The bug
 PR #261 fixed the steady-state sidebar + home "Installed agents" rows to show green/"ready"
@@ -46,7 +46,7 @@ the headline AND shows a green pill on the surface an operator opens to check ag
   build threads `agentOutwardVerdicts` + `agentChecksInFlight`.
 - **Acceptance:** build + test green with strict flags.
 
-### ⬜ Unit 3 (App view, `HarnessAgentRow`)
+### ✅ Unit 3 (App view, `HarnessAgentRow`)
 - Render pill label + tint + dot via `InstalledAgentRowPresentation.label(for: entry.liveReadiness)`,
   `dotColor(for: entry.liveReadiness)`, `help(for: entry.liveReadiness, detail: entry.detail)` —
   replacing `entry.status.harnessLabel`/`harnessTint`. Add a SwiftUI mapping from
@@ -63,6 +63,14 @@ the headline AND shows a green pill on the surface an operator opens to check ag
 - `swift test -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete`
 - `Scripts/check-coverage.sh` (Core 100% line+region; allowlist 2)
 
+## Completion gates
+- [x] All 3 units committed and match their unit descriptions (c0598df, 2e0d5bd, 0d9844a).
+- [x] Full strict suite: 2453 tests, 0 failures, 1 skipped (was 2441; +12 from this task).
+- [x] Strict build clean (`-warnings-as-errors -strict-concurrency=complete`).
+- [x] Core 100% line+region; coverage allowlist unchanged at 2 entries.
+- [x] `harnessLabel`/`harnessTint` (OuroAgentBundleStatus) removed; MCP variants kept.
+- [x] Honesty invariant preserved: pill/rollups green IFF live `verdict == .working`.
+
 ## Progress log
 - 2026-06-22 16:16 Unit 1 complete (c0598df): `HarnessAgentEntry` gains `verdict`/`isChecking`
   (defaulted) + `liveReadiness` accessor; `isReady` = `liveReadiness == .ready`. Verdict maps
@@ -75,3 +83,9 @@ the headline AND shows a green pill on the surface an operator opens to check ag
   `refreshAgentOutwardReadiness` (already wired by #261), so the dict is populated/refreshed when
   the sheet (re)builds. New `HarnessReadinessOverlayWiringTests` source-pins the threading + chain.
   Strict build + strict wiring tests green.
+- 2026-06-22 16:21 Unit 3 complete (0d9844a): `HarnessAgentRow` resolves `entry.liveReadiness`
+  and renders dot tint / pill label / tooltip via `InstalledAgentRowPresentation`
+  `dotColor`/`label`/`help(for:)` (replacing config-only `harnessLabel`/`harnessTint`). Removed
+  the now-unused `OuroAgentBundleStatus.harnessLabel`/`harnessTint` extension (kept the
+  `BossWorkbenchMCPRegistrationStatus` variants — still used for the MCP pill). Strict build
+  clean (proves the removal + no unused-decl). 6 wiring tests green.
