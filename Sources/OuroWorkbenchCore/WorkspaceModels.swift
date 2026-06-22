@@ -641,7 +641,7 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
     }
 
     public init(
-        schemaVersion: Int = 1,
+        schemaVersion: Int = WorkspaceState.currentSchemaVersion,
         boss: BossAgentSelection = BossAgentSelection(),
         bossWatchEnabled: Bool = true,
         bossPaneCollapsed: Bool = true,
