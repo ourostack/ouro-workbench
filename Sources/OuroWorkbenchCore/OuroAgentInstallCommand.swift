@@ -217,13 +217,26 @@ public enum CloneAgentFlowState: Equatable, Sendable {
 /// SECURITY: the remote (and any `--agent` name) reach `ouro clone` ONLY here, as argv
 /// tokens built natively from the form — never through the agent's context/transcript/MCP.
 public enum CloneAgentRunner {
-    /// Run the built clone plan headlessly and wait for it to exit. The plan's first token
-    /// is `ouro`, so the remaining tokens are passed as argv to `/usr/bin/env`. Throws if
-    /// the process can't be launched; a non-zero exit surfaces via `CloneFailedError`.
+    /// Run the built clone plan headlessly and wait for it to exit, REPORTING the outcome.
+    /// The plan's first token is `ouro`, so the remaining tokens are passed as argv to
+    /// `/usr/bin/env`.
+    ///
+    /// F7 — this used to THROW `CloneFailedError` on any non-zero exit and silently
+    /// kill-then-throw on a 120s watchdog timeout, so the App mapped EVERY failure (including a
+    /// wedge) to "Check the Git remote" — the wrong cause (gap #3). It now returns a
+    /// `CloneRunResult` so the classifier can name the real cause: `.launchFailed` (never started),
+    /// `.timedOut` (the watchdog fired — a DISTINCT cause from a real non-zero exit, read from
+    /// `waitUntilExitReportingTimeout` BEFORE `terminationStatus`, B-1), or `.exited(code:)`.
+    /// `executableURL` is injectable ONLY so a test can point at a non-existent binary to exercise
+    /// the `.launchFailed` path (with `/usr/bin/env` hardcoded, `run()` never throws via argv);
+    /// production always uses the default `/usr/bin/env`. Mirrors `ColdStartHatchRunner.runHeadless`.
     @Sendable
-    public static func runHeadless(plan: OuroAgentInstallPlan) async throws {
+    public static func runHeadless(
+        plan: OuroAgentInstallPlan,
+        executableURL: URL = URL(fileURLWithPath: "/usr/bin/env")
+    ) async -> CloneRunResult {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.executableURL = executableURL
         process.arguments = plan.tokens
         process.environment = TerminalEnvironment().valuesWithResolvedPath()
 
@@ -232,23 +245,20 @@ public enum CloneAgentRunner {
         process.standardOutput = devNull
         process.standardError = devNull
 
-        try process.run()
-        // Bound the wait — a clone can legitimately take a while (fetching a repo), but
-        // must still not hang forever on a wedged `ouro`/`git` child.
-        ProcessWatchdog.waitUntilExit(process, timeoutSeconds: 120)
-        // A non-zero clone is a real failure the operator needs to see inline (unlike the
-        // cold-start hatch, whose truth is a separate handoff probe).
-        guard process.terminationStatus == 0 else {
-            throw CloneFailedError(exitCode: process.terminationStatus)
+        do {
+            try process.run()
+        } catch {
+            // The process couldn't be launched at all — nothing was cloned.
+            return .launchFailed
         }
-    }
-
-    /// Thrown when `ouro clone` exits non-zero. Carries only the exit code — the operator
-    /// sees the seam-free `CloneAgentFlowState.failureReason`, not this raw value.
-    public struct CloneFailedError: Error, Equatable, Sendable {
-        public let exitCode: Int32
-        public init(exitCode: Int32) {
-            self.exitCode = exitCode
+        // Bound the wait — a clone can legitimately take a while (fetching a repo), but must still
+        // not hang forever on a wedged `ouro`/`git` child. Read the watchdog's verdict BEFORE
+        // `terminationStatus`: a kill and a real git failure both exit non-zero, so the timeout
+        // signal is the ONLY way to tell a 120s wedge apart from a remote failure (gap #3 / B-1).
+        let timedOut = ProcessWatchdog.waitUntilExitReportingTimeout(process, timeoutSeconds: 120)
+        if timedOut {
+            return .timedOut
         }
+        return .exited(code: process.terminationStatus)
     }
 }
