@@ -1,4 +1,5 @@
 import XCTest
+import Darwin
 @testable import OuroWorkbenchCore
 
 final class ProcessWatchdogTests: XCTestCase {
@@ -185,27 +186,99 @@ final class ProcessWatchdogTests: XCTestCase {
         )
     }
 
-    // MARK: - F8 — source-pin the never-group-reap safety property
+    // MARK: - F8b — latent gated group-reap arm
+    //
+    // The REAL killpg mechanism (that `.killGroup` would deliver in production) is proven
+    // against own-group children in SpawnInOwnGroupTests (the grandchild-reap proof) and the
+    // ProcessIOBox default-killpg test. Here the group deliverer is a FAKE: a real killpg of a
+    // `Process` (which always shares Workbench's group) would reap the test runner, so the
+    // routing is asserted via an injected recorder.
 
-    /// Pin the F8 SAFETY PROPERTY: `ProcessWatchdog` NEVER group-reaps. Every current spawn
-    /// shares Workbench's process group, so a `killpg` would reap Workbench itself — F8's
-    /// escalation must SIGKILL the CHILD pid only. A future edit that reintroduces a group
-    /// reap before the F8b `posix_spawn` own-group opt-in lands would trip this pin. (The
-    /// behavioral child-only SIGKILL contract is enforced by the injected-deliverer tests
-    /// above; this source pin is the structural backstop.)
-    func testProcessWatchdogNeverGroupReaps() throws {
-        let source = try processWatchdogSource()
-        XCTAssertFalse(
-            source.contains("killpg"),
-            "F8 must never group-reap: a killpg of the SHARED group would reap Workbench itself"
+    func testEscalationGroupReapsAnOwnGroupChildPastGrace() throws {
+        // F8b: a child explicitly flagged `childInOwnGroup: true` that survives SIGTERM through
+        // grace → the post-grace SIGKILL routes through the GROUP deliverer (killpg), NOT the
+        // child-only one. This is the latent arm — no production ProcessWatchdog caller opts in
+        // yet, but the mechanism is reachable + covered.
+        let process = makeProcess("/bin/sleep", ["30"])
+        try process.run()
+        let pid = process.processIdentifier
+        let childRec = RecordingDeliverer()
+        let groupRec = RecordingDeliverer()
+        ProcessWatchdog.escalateTermination(
+            process,
+            gracePeriodSeconds: 0.2,
+            signalDeliverer: { childRec.deliver($0, $1) },
+            childInOwnGroup: true,
+            groupSignalDeliverer: { groupRec.deliver($0, $1) }
         )
+        // The fakes never reaped the real child — clean it up.
+        process.terminate()
+        process.waitUntilExit()
+
+        // SIGTERM still goes through the child-only deliverer (the polite first ask).
+        XCTAssertEqual(childRec.calls.first?.signal, SIGTERM, "SIGTERM must precede the group reap")
         XCTAssertFalse(
-            source.contains("getpgid"),
-            "F8 takes no process-group syscall — the group reap (and getpgid) lands in F8b"
+            childRec.calls.contains { $0.signal == SIGKILL },
+            "an own-group child must NOT receive a child-only SIGKILL — the group reap takes over"
+        )
+        // The post-grace SIGKILL goes through the GROUP deliverer.
+        XCTAssertEqual(groupRec.calls.count, 1, "expected exactly one group SIGKILL, got \(groupRec.calls)")
+        XCTAssertEqual(groupRec.calls.first?.signal, SIGKILL)
+        XCTAssertEqual(groupRec.calls.first?.pid, pid)
+    }
+
+    func testEscalationChildOnlyDefaultDoesNotGroupReap() throws {
+        // The DEFAULT (childInOwnGroup: false) — every current caller — must SIGKILL the child
+        // pid only and NEVER touch the group deliverer.
+        let process = makeProcess("/bin/sleep", ["30"])
+        try process.run()
+        let pid = process.processIdentifier
+        let childRec = RecordingDeliverer()
+        let groupRec = RecordingDeliverer()
+        ProcessWatchdog.escalateTermination(
+            process,
+            gracePeriodSeconds: 0.2,
+            signalDeliverer: { childRec.deliver($0, $1) },
+            childInOwnGroup: false,
+            groupSignalDeliverer: { groupRec.deliver($0, $1) }
+        )
+        process.terminate()
+        process.waitUntilExit()
+
+        XCTAssertEqual(childRec.calls.last?.signal, SIGKILL, "child-only default must SIGKILL the child pid")
+        XCTAssertEqual(childRec.calls.last?.pid, pid)
+        XCTAssertEqual(groupRec.calls.count, 0, "the child-only default must NEVER killpg")
+    }
+
+    // MARK: - F8b — source-pin the group-reap is GATED (can't ungate)
+
+    /// INVERTED F8 pin. F8b adds the killpg arm, but it is GATED: `killpg` is only ever reached
+    /// via the `.killGroup` case of `WatchdogEscalation.nextSignal`, which returns `.killGroup`
+    /// IFF `childInOwnGroup` is true. The default for every current caller is `false`, so a plain
+    /// `Process()` (shared group) can never be group-reaped. This pins that the killpg is wired
+    /// through the gate (not an ungated raw `killpg(pid, …)` on the escalation's main path).
+    func testProcessWatchdogGroupReapIsGatedOnOwnGroup() throws {
+        let source = try processWatchdogSource()
+        // The killpg arm exists now (F8b).
+        XCTAssertTrue(source.contains("killpg"), "F8b adds the group-reap arm")
+        // It is gated on the .killGroup case (the policy returns that IFF childInOwnGroup).
+        XCTAssertTrue(
+            source.contains("case .killGroup"),
+            "the group reap must be reached only through the .killGroup policy case (the gate)"
         )
         XCTAssertTrue(
+            source.contains("childInOwnGroup"),
+            "escalateTermination must take the childInOwnGroup gate flag"
+        )
+        // The child-only SIGKILL is still the default arm.
+        XCTAssertTrue(
             source.contains("signalDeliverer(pid, SIGKILL)"),
-            "the post-grace stage must SIGKILL the CHILD pid through the injected deliverer"
+            "the default (non-own-group) arm must SIGKILL the CHILD pid through the injected deliverer"
+        )
+        // The gate flag defaults to false → no current caller opts in.
+        XCTAssertTrue(
+            source.contains("childInOwnGroup: Bool = false"),
+            "the gate must default to false so finite-runner callers stay child-only"
         )
     }
 
