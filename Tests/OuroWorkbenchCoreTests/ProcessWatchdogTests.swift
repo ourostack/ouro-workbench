@@ -51,4 +51,33 @@ final class ProcessWatchdogTests: XCTestCase {
         ProcessWatchdog.terminateIfRunning(process)
         XCTAssertFalse(process.isRunning)
     }
+
+    // MARK: - F7 — waitUntilExitReportingTimeout (B-1 structural defense)
+
+    func testReportingVariantReturnsTrueAndTerminatesAWedgedProcess() throws {
+        // A real sleeper still running at the deadline → the watchdog FIRES, terminates it, and the
+        // method reports `true`. This is the load-bearing distinction that lets the runner return
+        // `.timedOut` (a wedge) BEFORE reading the kill's `terminationStatus` (B-1): a watchdog kill
+        // is otherwise indistinguishable from a real non-zero git failure.
+        let process = makeProcess("/bin/sleep", ["30"])
+        try process.run()
+        let start = Date()
+        let timedOut = ProcessWatchdog.waitUntilExitReportingTimeout(process, timeoutSeconds: 0.3)
+        XCTAssertTrue(timedOut, "the watchdog fired on a wedged child — must report true")
+        XCTAssertFalse(process.isRunning, "the wedged child must be terminated")
+        XCTAssertLessThan(Date().timeIntervalSince(start), 10)
+    }
+
+    func testReportingVariantReturnsFalseForAFastProcess() throws {
+        // A fast process exits on its own before the deadline → the watchdog never fires and the
+        // method reports `false` (the runner then trusts `terminationStatus`). Covers the
+        // did-NOT-fire branch of the NSLock-guarded flag.
+        let process = makeProcess("/bin/echo", ["ready"])
+        try process.run()
+        let start = Date()
+        let timedOut = ProcessWatchdog.waitUntilExitReportingTimeout(process, timeoutSeconds: 10)
+        XCTAssertFalse(timedOut, "a fast process never trips the watchdog — must report false")
+        XCTAssertFalse(process.isRunning)
+        XCTAssertLessThan(Date().timeIntervalSince(start), 5)
+    }
 }
