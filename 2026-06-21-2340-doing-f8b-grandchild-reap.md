@@ -12,11 +12,11 @@
 
 ## Build order (de-risking — do NOT reorder)
 
-### U1 — `WatchdogEscalation.swift` (re-add pure policy; 100%) ⬜
+### U1 — `WatchdogEscalation.swift` (re-add pure policy; 100%) ✅
 Re-add the pure F8-removed policy: `enum WatchdogSignal {none;terminate;killChild;killGroup}` + `nextSignal(elapsedSinceDeadline:graceSeconds:childInOwnGroup:)` (4 arms; killGroup IFF childInOwnGroup). Unit-test all 4 arms.
 - **Acceptance:** `WatchdogEscalationTests` all 4 arms + killGroup-iff-own-group pin; pure 100% line+region.
 
-### U2 — `SpawnInOwnGroup.swift` (own-group spawn primitive) ⬜
+### U2 — `SpawnInOwnGroup.swift` (own-group spawn primitive) ✅
 `import Darwin`. `posix_spawn` + `POSIX_SPAWN_SETPGROUP` + `setpgroup(&attr,0)` + file_actions dup2 of the 3 fds. `static func spawn(executablePath:arguments:environment:stdio:) throws -> Spawned {pid}`. FACTOR argv/envp marshalling into a PURE 100%-tested helper so only the raw `posix_spawn` call + its `guard rc==0` are impure.
 - **Acceptance:** pure marshalling 100%; integration: `/usr/bin/env true` own-group → `getpgid(pid)==pid`; `/bin/sh -c 'sleep 30 & wait'` own-group → `killpg(SIGKILL)` → BOTH shell AND sleep grandchild gone (THE grandchild-reap proof); error arm: absolute non-existent path → throws. Target: NO allowlist entry.
 
@@ -44,3 +44,5 @@ Spawn via `SpawnInOwnGroup` (`/dev/null` fds), discard pid. Fix the over-claimin
 
 ## Progress log
 - 2026-06-21 23:40 Doc created; spec + all source/test files read; build order locked.
+- 2026-06-21 23:42 U1 complete (1aad1f4): WatchdogEscalation re-added, 5 tests green, pure.
+- 2026-06-21 23:46 U2 complete (dd2b97e): SpawnInOwnGroup primitive; 7 tests incl. getpgid==pid + grandchild-reap proof + ENOENT error arm; 100% line+region NO allowlist.
