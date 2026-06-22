@@ -83,13 +83,16 @@ final class DegradedReadTests: XCTestCase {
         let stateURL = root.appendingPathComponent("workspace.json")
         let tooNew = WorkspaceState.currentSchemaVersion + 1
         let json = """
-        { "schemaVersion": \(tooNew), "boss": { "agentName": null, "scope": "machine" },
-          "bossWatchEnabled": true, "bossPaneCollapsed": true,
-          "projects": [], "processEntries": [], "processRuns": [],
-          "actionLog": [], "decisionLog": [],
-          "updatedAt": "2026-05-23T00:00:00Z" }
+        {
+          "boss": { "agentName": "slugger", "scope": "machine" },
+          "processEntries": [],
+          "processRuns": [],
+          "projects": [],
+          "schemaVersion": \(tooNew),
+          "updatedAt": "2026-05-23T00:00:00Z"
+        }
         """
-        try XCTUnwrap(json.data(using: .utf8)).write(to: stateURL)
+        try Data(json.utf8).write(to: stateURL)
 
         XCTAssertThrowsError(
             try WorkbenchStore(stateURL: stateURL).load(quarantineCorruptFile: false)
