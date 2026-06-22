@@ -80,3 +80,4 @@ in-flight — all `@Published` mutations on main actor, per-agent checks concurr
 
 ## Progress log
 - 2026-06-22 15:23 Unit 1 complete: Core live-aware seam (LiveReadiness + dotColor/label/help), exhaustive truth table, 2430 tests pass, coverage 100%, allowlist still 2. SHA 4585aa6.
+- 2026-06-22 15:38 Unit 2 complete: WorkbenchViewModel runs concurrent outward ouro-check per config-ready agent (TaskGroup), stores verdicts + in-flight set, wired into refreshOuroAgents. Strict build clean; 6 wiring tests green; coverage gate PASS. SHA 7bc8a23. (Noted a pre-existing intermittent test flake — no test invokes the viewmodel, so it is independent of this diff; characterizing in background.)
