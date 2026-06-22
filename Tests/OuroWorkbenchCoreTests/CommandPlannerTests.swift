@@ -31,7 +31,7 @@ final class CommandPlannerTests: XCTestCase {
         XCTAssertEqual(plan.launchInvocation.arguments, [
             "-U",
             "-T", "xterm-256color",
-            "-h", "0",
+            "-h", "10000",
             "-e", "^]]",
             "-D",
             "-RR",
@@ -42,6 +42,25 @@ final class CommandPlannerTests: XCTestCase {
             "--yolo",
         ])
         XCTAssertEqual(plan.launchInvocation.execName, "screen")
+    }
+
+    /// Reattach (`-D -RR`) must keep a non-empty scrollback buffer so the operator
+    /// sees the agent's prior output, not an empty screen. `screen`'s `-h` flag sets
+    /// the scrollback history depth; `-h 0` discards it. Assert `-h` is immediately
+    /// followed by a non-zero count.
+    func testReattachPreservesScrollback() {
+        let args = PersistentTerminalSession.attachOrCreateArguments(
+            sessionName: "ouro-wb-abc",
+            command: ["/usr/bin/env", "codex"]
+        )
+
+        let flagIndex = try? XCTUnwrap(args.firstIndex(of: "-h"))
+        let index = flagIndex ?? -1
+        XCTAssertGreaterThanOrEqual(index, 0, "expected a -h scrollback flag")
+        XCTAssertLessThan(index + 1, args.count, "expected a value after -h")
+        let value = Int(args[index + 1])
+        XCTAssertNotNil(value, "expected a numeric -h value, got \(args[index + 1])")
+        XCTAssertGreaterThan(value ?? 0, 0, "scrollback depth must be non-zero on reattach")
     }
 
     func testLaunchPlanThrowsOnEmptyExecutable() {
