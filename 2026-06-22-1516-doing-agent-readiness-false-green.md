@@ -26,7 +26,7 @@ Root cause: `OuroAgentInventory.swift:157` sets `status = enabled==false ? .disa
 
 ## Units
 
-### ⬜ Unit 1 (Core) — live-aware presentation seam
+### ✅ Unit 1 (Core) — live-aware presentation seam
 Extend `InstalledAgentRowPresentation` (do NOT touch `OuroAgentBundleStatus`). Add
 `LiveReadiness` enum + `liveReadiness(status:verdict:isChecking:)` + `dotColor(for:
 LiveReadiness)` + `label(for:)` + `help(for:detail:)`. Keep existing `dotColor(for
@@ -73,7 +73,7 @@ in-flight — all `@Published` mutations on main actor, per-agent checks concurr
 - No Co-Authored-By; no AI attribution. Commit per unit. Push branch. NO PR / merge.
 
 ## Completion Criteria
-- [ ] Unit 1: live-aware seam + exhaustive Core tests, 100% coverage.
+- [x] Unit 1: live-aware seam + exhaustive Core tests, 100% coverage.
 - [ ] Unit 2: viewmodel runs outward checks concurrently, stores verdicts, wired into refresh.
 - [ ] Unit 3: sidebar + card rows render live readiness; harness-pill decision recorded.
 - [ ] Strict build + full test suite green; coverage gate passes; allowlist at 2.
