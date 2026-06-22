@@ -410,6 +410,219 @@ final class WorkbenchActionRequestQueueTests: XCTestCase {
         try? FileManager.default.removeItem(at: root)
     }
 
+    // MARK: F11b — applied/ ledger + processing-dup enqueue gate
+
+    func testConvenienceInitSetsAppliedDirectoryURLAsSiblingOfProcessing() {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("WorkbenchActionRequestQueueTests-\(UUID().uuidString)", isDirectory: true)
+        let queue = WorkbenchActionRequestQueue(directoryURL: root)
+        XCTAssertEqual(queue.appliedDirectoryURL, root.appendingPathComponent("applied", isDirectory: true))
+        // And it's a sibling of processing/ (same parent), so the non-recursive
+        // pending/drain listings skip it just like they skip processing/.
+        XCTAssertEqual(
+            queue.appliedDirectoryURL.deletingLastPathComponent(),
+            queue.processingDirectoryURL.deletingLastPathComponent()
+        )
+        let paths = WorkbenchPaths(rootURL: root)
+        XCTAssertEqual(
+            WorkbenchActionRequestQueue(paths: paths).appliedDirectoryURL,
+            paths.actionRequestsURL.appendingPathComponent("applied", isDirectory: true)
+        )
+    }
+
+    func testMarkAppliedRecordsRequestIdAndIsIdempotent() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let queue = WorkbenchActionRequestQueue(directoryURL: root)
+        let id = UUID(uuidString: "00000000-0000-0000-0000-0000000000a1")!
+
+        queue.markApplied(id)
+        XCTAssertTrue(queue.appliedRequestIds().contains(id))
+        // The marker is a zero-byte <id>.json file in applied/.
+        let markerURL = queue.appliedDirectoryURL.appendingPathComponent("\(id.uuidString).json")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: markerURL.path))
+        let size = try FileManager.default.attributesOfItem(atPath: markerURL.path)[.size] as? Int
+        XCTAssertEqual(size, 0)
+
+        // Idempotent: marking again keeps exactly one marker, set still contains id.
+        queue.markApplied(id)
+        XCTAssertEqual(queue.appliedRequestIds(), [id])
+    }
+
+    func testMarkAppliedBestEffortSwallowsWriteFailure() throws {
+        // markApplied must be best-effort: a failure to land the durable marker
+        // (here applied/ is a FILE, so createDirectory fails) is swallowed — the
+        // processing/ file + isNewDecision guard remain as defense-in-depth — and
+        // the request is simply absent from the ledger (no throw, no crash).
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let queue = WorkbenchActionRequestQueue(directoryURL: root)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try Data("not a directory".utf8).write(to: queue.appliedDirectoryURL)
+        let id = UUID(uuidString: "00000000-0000-0000-0000-0000000000aa")!
+
+        queue.markApplied(id) // must not throw
+        XCTAssertEqual(queue.appliedRequestIds(), [])
+    }
+
+    func testClearAppliedRemovesMarkerAndIsNoOpWhenAbsent() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let queue = WorkbenchActionRequestQueue(directoryURL: root)
+        let id = UUID(uuidString: "00000000-0000-0000-0000-0000000000a2")!
+
+        // Absent marker → clearApplied is a no-op (no throw, set stays empty).
+        queue.clearApplied(id)
+        XCTAssertFalse(queue.appliedRequestIds().contains(id))
+
+        queue.markApplied(id)
+        XCTAssertTrue(queue.appliedRequestIds().contains(id))
+        queue.clearApplied(id)
+        XCTAssertFalse(queue.appliedRequestIds().contains(id))
+        // Clearing again is still a no-op.
+        queue.clearApplied(id)
+        XCTAssertEqual(queue.appliedRequestIds(), [])
+    }
+
+    func testAppliedRequestIdsIsEmptyWhenAppliedDirectoryAbsent() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let queue = WorkbenchActionRequestQueue(directoryURL: root)
+        // Nothing has been marked, so applied/ doesn't exist yet.
+        XCTAssertEqual(queue.appliedRequestIds(), [])
+    }
+
+    func testAppliedRequestIdsBestEffortEmptyWhenAppliedPathCannotBeListed() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let queue = WorkbenchActionRequestQueue(directoryURL: root)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        // applied/ is a FILE, not a directory → listing fails → best-effort [].
+        try Data("not a directory".utf8).write(to: queue.appliedDirectoryURL)
+        XCTAssertEqual(queue.appliedRequestIds(), [])
+    }
+
+    func testAppliedRequestIdsIgnoresMarkersThatAreNotUUIDs() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let queue = WorkbenchActionRequestQueue(directoryURL: root)
+        let id = UUID(uuidString: "00000000-0000-0000-0000-0000000000a3")!
+        queue.markApplied(id)
+        // A stray non-UUID marker must be skipped, not crash the parse.
+        try Data("".utf8).write(to: queue.appliedDirectoryURL.appendingPathComponent("not-a-uuid.json"))
+        XCTAssertEqual(queue.appliedRequestIds(), [id])
+    }
+
+    func testCrashMidProcessingLeavesReplayableFileButAppliedLedgerSkipsIt() throws {
+        // THE crash-mid-processing invariant. The App applies the side effect,
+        // then markApplied lands the durable marker, then (off-main) confirmApplied
+        // would delete the processing/ file. If the app CRASHES after markApplied
+        // but BEFORE confirmApplied, the processing/ file remains — so
+        // recoverUnconfirmed() STILL returns the request on the next launch — BUT
+        // appliedRequestIds() now contains its id, so ReplayDedupDecider decides
+        // .skipAlreadyApplied and the side effect is NOT replayed.
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let queue = WorkbenchActionRequestQueue(directoryURL: root)
+        let request = WorkbenchActionRequest(
+            id: UUID(uuidString: "00000000-0000-0000-0000-0000000000b9")!,
+            createdAt: Date(timeIntervalSince1970: 1),
+            source: "ouro-workbench-mcp",
+            action: BossWorkbenchAction(action: .sendInput, entry: "Claude Code", text: "go")
+        )
+        try queue.enqueue(request)
+        // drain moves the file into processing/ (handed to the app, not yet confirmed).
+        XCTAssertEqual(try queue.drain().map(\.id), [request.id])
+        // App applied the side effect → markApplied lands the durable marker.
+        queue.markApplied(request.id)
+
+        // CRASH here — neither confirmApplied nor clearApplied ran.
+        // On next launch recovery STILL surfaces the request (processing/ file remains)...
+        XCTAssertEqual(queue.recoverUnconfirmed().map(\.id), [request.id])
+        // ...but the applied ledger contains its id...
+        XCTAssertTrue(queue.appliedRequestIds().contains(request.id))
+        // ...so the decider would skip it (no double-execute).
+        XCTAssertEqual(
+            ReplayDedupDecider().decide(requestId: request.id, appliedRequestIds: queue.appliedRequestIds()),
+            .skipAlreadyApplied
+        )
+    }
+
+    func testEnqueueDropsFingerprintTwinAlreadyMidFlightInProcessing() throws {
+        // hasPendingDuplicate only scans top-level pending → it misses a twin that
+        // drain() already moved into processing/. The enqueue gate must ALSO scan
+        // processing/ so an identical-fingerprint twin enqueued AFTER its sibling
+        // drained (but before it's confirmed) is dropped — otherwise the same
+        // effect drains+applies twice.
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let queue = WorkbenchActionRequestQueue(directoryURL: root)
+        let first = WorkbenchActionRequest(
+            id: UUID(uuidString: "00000000-0000-0000-0000-0000000000c1")!,
+            createdAt: Date(timeIntervalSince1970: 1),
+            source: "ouro-workbench-mcp",
+            action: BossWorkbenchAction(action: .sendInput, entry: "Claude Code", text: "continue")
+        )
+        try queue.enqueue(first)
+        // Drain moves `first` into processing/ — pending is now empty.
+        XCTAssertEqual(try queue.drain().map(\.id), [first.id])
+        XCTAssertEqual(pendingJSONFileNames(in: root), [])
+
+        // The empty-retry re-enqueues the SAME effect (fresh id) while `first` is
+        // mid-flight in processing/. It must be dropped (no new pending file).
+        let twin = WorkbenchActionRequest(
+            id: UUID(uuidString: "00000000-0000-0000-0000-0000000000c2")!,
+            createdAt: Date(timeIntervalSince1970: 2),
+            source: "boss:slugger",
+            action: BossWorkbenchAction(action: .sendInput, entry: "Claude Code", text: "continue")
+        )
+        try queue.enqueue(twin)
+        XCTAssertEqual(pendingJSONFileNames(in: root), [])
+        XCTAssertEqual(try queue.drain(), [])
+    }
+
+    func testProcessingTwinWhoseIdIsAlreadyAppliedIsNotTreatedAsAProcessingDup() throws {
+        // The processing-dup scan must SKIP ids already in applied/: once a
+        // processing/ file has been markApplied (crash-recovered, awaiting clear),
+        // it's not a live mid-flight twin — it's a residue the applied-id ledger
+        // already guards. A genuinely new request with the same fingerprint must
+        // still enqueue (and then drain), not be false-dropped by the residue.
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let queue = WorkbenchActionRequestQueue(directoryURL: root)
+        let applied = WorkbenchActionRequest(
+            id: UUID(uuidString: "00000000-0000-0000-0000-0000000000d1")!,
+            createdAt: Date(timeIntervalSince1970: 1),
+            source: "ouro-workbench-mcp",
+            action: BossWorkbenchAction(action: .sendInput, entry: "Claude Code", text: "continue")
+        )
+        try queue.enqueue(applied)
+        XCTAssertEqual(try queue.drain().map(\.id), [applied.id])
+        // Mark it applied — its processing/ file is now applied residue (crash before clear).
+        queue.markApplied(applied.id)
+
+        // A deliberate re-issue (NEW id, same effect) must NOT be treated as a
+        // processing-dup of the applied residue — it enqueues and drains.
+        let fresh = WorkbenchActionRequest(
+            id: UUID(uuidString: "00000000-0000-0000-0000-0000000000d2")!,
+            createdAt: Date(timeIntervalSince1970: 2),
+            source: "boss:slugger",
+            action: BossWorkbenchAction(action: .sendInput, entry: "Claude Code", text: "continue")
+        )
+        try queue.enqueue(fresh)
+        XCTAssertEqual(try queue.drain().map(\.id), [fresh.id])
+    }
+
+    func testHasProcessingDuplicateBestEffortFalseWhenProcessingPathCannotBeListed() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let queue = WorkbenchActionRequestQueue(directoryURL: root)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try Data("not a directory".utf8).write(to: queue.processingDirectoryURL)
+        let request = WorkbenchActionRequest(source: "mcp", action: BossWorkbenchAction(action: .launch, entry: "Claude"))
+        XCTAssertFalse(queue.hasProcessingDuplicate(of: request))
+    }
+
     private func pendingJSONFileNames(in root: URL) -> [String] {
         ((try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)) ?? [])
             .filter { $0.pathExtension == "json" }
