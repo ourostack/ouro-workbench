@@ -62,4 +62,83 @@ final class CredentialRotationTests: XCTestCase {
         )
         XCTAssertTrue(line.contains("--provider 'weird provider'"), "provider flag must be shell-quoted; got: \(line)")
     }
+
+    // MARK: - Rotation human copy: present + seam-free for every state, distinct from onboarding
+
+    /// No state's human copy may leak a CLI/vault seam BEYOND the agent name itself (the agent name
+    /// is human-chosen and may legitimately contain a substring like "ouro"). Strip the name first,
+    /// then scan the remaining copy for CLI/vault vocabulary.
+    private func assertSeamFreeBeyondName(
+        _ line: String,
+        agentName: String,
+        file: StaticString = #filePath,
+        line ln: UInt = #line
+    ) {
+        // Mirror F13's proven seam-token list (VaultOnboardingTests): these are the literal CLI /
+        // argv leaks. "unlock secret" is product-facing human language (the human really does enter
+        // an unlock secret), so "unlock" is NOT a seam — only the raw `vault`/`ouro`/argv tokens are.
+        let withoutName = line.replacingOccurrences(of: agentName, with: "").lowercased()
+        for token in ["ouro", "vault", "hatch", "--", ".bot", "&&"] {
+            XCTAssertFalse(
+                withoutName.contains(token),
+                "rotation copy leaked the seam token \"\(token)\" (agent name aside): \(line)",
+                file: file, line: ln
+            )
+        }
+    }
+
+    private let allStates: [VaultOnboardingState] = [
+        .needsSecret,
+        .runningVaultTerminal,
+        .persisting,
+        .ready,
+        .failed(reason: .vaultCommandLaunchError),
+        .failed(reason: .vaultCommandNonZeroExit),
+        .failed(reason: .stillNotConnected),
+        .failed(reason: .couldNotConfirm),
+    ]
+
+    func testRotationHumanLinePresentAndSeamFreeForEveryState() {
+        // Use a seam-colliding agent name ("ouroboros" contains "ouro") to prove the seam check
+        // strips the name rather than false-passing on a name with no seam substring.
+        let agentName = "ouroboros"
+        for state in allStates {
+            let line = VaultOnboardingMachine.humanLine(for: state, agentName: agentName, flavor: .rotation)
+            let copy = try? XCTUnwrap(line, "every state must have rotation human copy: \(state)")
+            guard let copy else { continue }
+            XCTAssertFalse(copy.isEmpty, "rotation human copy must be non-empty for \(state)")
+            assertSeamFreeBeyondName(copy, agentName: agentName)
+        }
+    }
+
+    func testRotationHumanLineNamesTheAgent() {
+        for state in allStates {
+            let line = VaultOnboardingMachine.humanLine(for: state, agentName: "scout", flavor: .rotation)
+            XCTAssertTrue((line ?? "").contains("scout"), "rotation copy should name the agent for \(state); got: \(line ?? "nil")")
+        }
+    }
+
+    func testRotationFirstStepCopyIsReconnectFlavored() {
+        // The needs-secret entry copy is the operator's first read — it must be rotation-flavored
+        // (reconnect / re-enter), NOT the onboarding "Finish connecting" first-setup copy.
+        let rotation = VaultOnboardingMachine.humanLine(for: .needsSecret, agentName: "scout", flavor: .rotation)
+        let onboarding = VaultOnboardingMachine.humanLine(for: .needsSecret, agentName: "scout", flavor: .onboarding)
+        XCTAssertNotEqual(
+            rotation, onboarding,
+            "rotation's first-step copy must differ from onboarding's (reconnect vs first-setup)"
+        )
+        let lowered = (rotation ?? "").lowercased()
+        XCTAssertTrue(lowered.contains("reconnect"), "rotation copy should read as a reconnect; got: \(rotation ?? "nil")")
+    }
+
+    func testHumanLineDefaultsToOnboardingFlavor() {
+        // The 2-arg overload (F13's call sites) must remain the onboarding flavor for back-compat.
+        for state in allStates {
+            XCTAssertEqual(
+                VaultOnboardingMachine.humanLine(for: state, agentName: "scout"),
+                VaultOnboardingMachine.humanLine(for: state, agentName: "scout", flavor: .onboarding),
+                "the 2-arg humanLine must equal the onboarding-flavored 3-arg form for \(state)"
+            )
+        }
+    }
 }
