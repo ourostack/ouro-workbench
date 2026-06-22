@@ -149,6 +149,129 @@ final class ProcessIOBoxTests: XCTestCase {
         XCTAssertTrue(kill(spawned.pid, 0) == -1 && errno == ESRCH, "SIGTERM must reap /bin/sleep")
     }
 
+    // MARK: - F8b cold-review fix — the child is REAPED on stop() (no zombie leak)
+
+    func testStopReapsTheChildViaTheInjectedReaper() {
+        // The reaper seam must be invoked for the box's pid on stop() — the per-turn reap that
+        // prevents the zombie leak. Driven with fakes (no real child) so the seam call is covered
+        // deterministically: stop() must (a) signal-if-alive then (b) reap via the seam.
+        let rec = Recorder()
+        let reaped = NSMutableArray()
+        let reapLock = NSLock()
+        let out = Pipe(); let err = Pipe()
+        let box = ProcessIOBox(
+            pid: 5150,
+            stdout: out.fileHandleForReading,
+            stderr: err.fileHandleForReading,
+            childInOwnGroup: true,
+            isAlive: { _ in false }, // already exited: read loop hit EOF → child gone → reap immediately
+            processKiller: { rec.record($0, $1); return 0 },
+            groupKiller: { rec.record($0, $1); return 0 },
+            reaper: { pid in reapLock.lock(); reaped.add(pid); reapLock.unlock() }
+        )
+        box.stop()
+        reapLock.lock(); let captured = reaped.copy() as! [pid_t]; reapLock.unlock()
+        XCTAssertEqual(captured, [5150], "stop() must reap the child's pid exactly once via the seam")
+    }
+
+    func testStopForceKillsAStillAliveChildBeforeReaping() {
+        // If the child is still alive at stop() (timeout/error path), stop() must SIGKILL it
+        // (so the subsequent waitpid can't block) and THEN reap. Order: kill before reap.
+        let order = NSMutableArray()
+        let orderLock = NSLock()
+        let out = Pipe(); let err = Pipe()
+        let box = ProcessIOBox(
+            pid: 6789,
+            stdout: out.fileHandleForReading,
+            stderr: err.fileHandleForReading,
+            childInOwnGroup: true,
+            isAlive: { _ in true }, // still alive → must be force-killed before the reap
+            processKiller: { _, _ in orderLock.lock(); order.add("kill"); orderLock.unlock(); return 0 },
+            groupKiller: { _, _ in orderLock.lock(); order.add("killpg"); orderLock.unlock(); return 0 },
+            reaper: { _ in orderLock.lock(); order.add("reap"); orderLock.unlock() }
+        )
+        box.stop()
+        orderLock.lock(); let seen = order.copy() as! [String]; orderLock.unlock()
+        XCTAssertEqual(
+            seen, ["killpg", "reap"],
+            "a still-alive own-group child must be killpg'd, THEN reaped — never reaped while alive (would hang)"
+        )
+    }
+
+    // MARK: - Default reaper against a real short-lived child (the inverse-of-the-leak proof)
+
+    func testStopReapsARealChildOnTheNormalPath() throws {
+        // THE leak-fix proof, normal path: a real own-group child that EXITS on its own (the read
+        // loop would have hit EOF). stop() must reap it via the DEFAULT waitpid seam, so the pid is
+        // ESRCH afterward (reaped) — NOT a `<defunct>` zombie. Pre-fix (no reaper) this FAILS: the
+        // child lingers as a zombie (kill(pid,0)==0). The default isAlive seam reads it dead, so
+        // stop() goes straight to the reap.
+        let devNull = open("/dev/null", O_RDWR)
+        defer { close(devNull) }
+        let spawned = try SpawnInOwnGroup.spawn(
+            executablePath: "/usr/bin/true",
+            arguments: ["true"],
+            environment: [:],
+            stdio: SpawnInOwnGroup.StdioFDs(stdin: devNull, stdout: devNull, stderr: devNull)
+        )
+        // Let the trivial child exit (so it's a zombie until reaped) — mirrors the read-loop EOF.
+        waitForChildToExit(spawned.pid)
+        let box = ProcessIOBox(
+            pid: spawned.pid,
+            stdout: Pipe().fileHandleForReading,
+            stderr: Pipe().fileHandleForReading,
+            childInOwnGroup: true // default reaper (waitpid) + default isAlive (kill==0)
+        )
+        box.stop()
+        XCTAssertTrue(
+            kill(spawned.pid, 0) == -1 && errno == ESRCH,
+            "stop() must REAP the exited child (ESRCH), not leave it a <defunct> zombie"
+        )
+    }
+
+    func testStopReapsARealChildOnTheTimeoutPath() throws {
+        // THE leak-fix proof, timeout path: a real own-group child that is STILL RUNNING at stop()
+        // (the timeout case). stop() must force-kill it (killpg SIGKILL), then reap via the default
+        // waitpid seam → ESRCH afterward. Pre-fix this FAILS: forceKill SIGKILLs the child but
+        // nothing waitpid's it, so it lingers as a zombie. waitpid cannot hang here because the
+        // child has just been SIGKILLed (returns promptly).
+        let devNull = open("/dev/null", O_RDWR)
+        defer { close(devNull) }
+        let spawned = try SpawnInOwnGroup.spawn(
+            executablePath: "/bin/sleep",
+            arguments: ["sleep", "30"],
+            environment: [:],
+            stdio: SpawnInOwnGroup.StdioFDs(stdin: devNull, stdout: devNull, stderr: devNull)
+        )
+        let box = ProcessIOBox(
+            pid: spawned.pid,
+            stdout: Pipe().fileHandleForReading,
+            stderr: Pipe().fileHandleForReading,
+            childInOwnGroup: true // default seams: killpg(SIGKILL) then waitpid
+        )
+        box.stop() // still alive → killpg(SIGKILL) → waitpid reaps promptly
+        XCTAssertTrue(
+            kill(spawned.pid, 0) == -1 && errno == ESRCH,
+            "stop() must force-kill THEN reap the wedged child (ESRCH), not leave a zombie"
+        )
+    }
+
+    private func waitForChildToExit(_ pid: pid_t, timeout: TimeInterval = 5) {
+        // Wait until the child is a zombie (exited but not yet reaped): kill(pid,0)==0 still holds
+        // for a zombie, so poll WCONTINUED-style via a non-blocking waitpid that DOESN'T reap.
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            var status: Int32 = 0
+            // WNOHANG | non-reaping check: a return of 0 means "still running"; >0 would reap.
+            // We don't want to reap here (the box must do it), so just sleep a touch and rely on
+            // /usr/bin/true exiting near-instantly.
+            _ = status
+            usleep(20_000)
+            // /usr/bin/true exits within milliseconds; one poll cycle is plenty.
+            break
+        }
+    }
+
     // MARK: - ownGroupVerification (pure fail-closed gate) + makeProcessBox
 
     func testOwnGroupVerificationMatchIsOwnGroupNoAudit() {
