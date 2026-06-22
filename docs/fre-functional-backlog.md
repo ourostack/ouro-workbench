@@ -6,6 +6,15 @@
 > 10 capability auditors deep-traced real end-to-end flows (terminals, boss-connect,
 > autonomy, recovery, MCP surface, agent lifecycle, ouro integration, persistence, error
 > modes, the coverage-gap surfaces), ran the tests, then adversarial-verify → synthesize.
+>
+> **✅ RESOLVED (2026-06-22):** all units below landed on `main` (F1–F13 + the F8b/F10a-b/F11a-b/F12a-b
+> splits, 17 fix-PRs + the FRE overhaul). Each unit shipped via strict-TDD red→green, 100% Core
+> coverage (no new allowlist), and an **independent cold-review subagent** — which caught a real
+> bug on 9 of the substantive units (the App-fold/wiring/semantic defects the implementer's own
+> tests missed). The "3 P0s block first-run / unreliable P1 tail" verdict no longer holds.
+> Live drive-through / on-screen verification remains queued for the operator (computer-use was
+> off this run); see the per-unit notes + the F8b live-confirmation (boss conversation + `ps`
+> for orphaned `node`).
 
 ## Mandate + verification protocol
 
@@ -203,4 +212,21 @@ proposal-id filenames.
 
 ## Progress log
 
-_(append one line per landed unit: `- DATE Fn ✅ (PR #NNN, main <sha>). one-line.`)_
+- 2026-06-21 **F1** ✅ (PR #243, main `9764b1f`). Cold-start probes + classifies honestly — no false "ready".
+- 2026-06-21 **F2** ✅ (PR #241, main `219de04`). Connect check classified from output, not exit code (kills false-green).
+- 2026-06-21 **F3** ✅ (PR #242, main `c2fc0ee`). Boss autonomy kill-switch + per-friend trust gated on every `sendInput` channel.
+- 2026-06-21 **F4** ✅ (PR #245, main `c7ae207`). Native session-id back-fill — recovery resumes the right session, no multi-session collapse.
+- 2026-06-21 **F5** ✅ (PR #246, main `938d571`). Persistence stops silently destroying data — honest quarantine + pre-resave salvage.
+- 2026-06-21 **F6** ✅ (PR #247, main `bab0cda`). Existing-agent credential rotation (unlock chain) + a confirmation-gated remove-agent.
+- 2026-06-21 **F7** ✅ (PR #248, main `9071164`). Honest headless-clone outcome — no false success, no false failure on the blank-name default.
+- 2026-06-21 **F8** ✅ (PR #249, main `3664061`). Boss-loop daemon-down backoff + watchdog SIGTERM→grace→SIGKILL (child-only).
+- 2026-06-22 **F8b** ✅ (PR #255, main `680d8a7`). Reap `mcp-serve` node grandchildren via own-process-group `posix_spawn` + `killpg` (+ zombie-reap).
+- 2026-06-21 **F9** ✅ (PR #250, main `b6e1869`). Gate boss readiness on an actual `workbench_*` tool injection (`tools/list` probe + ouro version floor).
+- 2026-06-22 **F10a** ✅ (PR #251, main `a6e3543`). Dedup retried side-effecting MCP requests by identity (id+method+params) + `MCPError: LocalizedError`.
+- 2026-06-22 **F10b** ✅ (PR #252, main `bfb9e84`). `WorkbenchStoreError: LocalizedError` + a honest degraded-read advisory (newer-schema → "upgrade", not opaque).
+- 2026-06-22 **F11a** ✅ (PR #253, main `3a49abf`). Stop screen-session leaks (unconditional quit on delete/archive + startup reaper) + fix the start-race (await quit before reattach).
+- 2026-06-22 **F11b** ✅ (PR #254, main `d1223c1`). Prevent crash-replay double-execution — persisted applied-id ledger + `processing/`-aware enqueue dedup.
+- 2026-06-22 **F12a** ✅ (PR #256, main `f12d7eb`). Degraded-mode honesty: `action_result` save-fail, missing-`screen` 127, boss prose history + waiting-session triage, Copilot respawn delivery.
+- 2026-06-22 **F12b** ✅ (PR #257, main `ca13cd4`). Preserve reattach scrollback (`-h 10000`) + injective proposal-id filenames (hash-suffix).
+- 2026-06-21 **F13** ✅ (PR #244, main `04d199b`). In-app vault onboarding — cold-start can finish to a working agent (no TTY dead-end).
+- 2026-06-21 **FRE+UX overhaul** ✅ (PR #240, main `9c0c28f`). Terminals-first onboarding, opt-in boss, TTFA get-to-green (U1–U42).
