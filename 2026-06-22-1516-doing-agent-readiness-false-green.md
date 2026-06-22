@@ -79,4 +79,4 @@ in-flight — all `@Published` mutations on main actor, per-agent checks concurr
 - [ ] Strict build + full test suite green; coverage gate passes; allowlist at 2.
 
 ## Progress log
-- %Y->- (HEAD -> fix/agent-readiness-false-green) 79df7f66e62742667641dfaa0fdd2da8a2401b25:%M Unit 1 complete: Core live-aware seam (LiveReadiness + dotColor/label/help), exhaustive truth table, 2430 tests pass, coverage 100%, allowlist still 2. SHA 4585aa6.
+- 2026-06-22 15:23 Unit 1 complete: Core live-aware seam (LiveReadiness + dotColor/label/help), exhaustive truth table, 2430 tests pass, coverage 100%, allowlist still 2. SHA 4585aa6.
