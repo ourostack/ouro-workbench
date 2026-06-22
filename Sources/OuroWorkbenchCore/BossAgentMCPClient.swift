@@ -105,6 +105,48 @@ public final class BossAgentMCPClient: @unchecked Sendable {
         }
     }
 
+    /// Probe the live boss `mcp-serve` process for the tool names it actually advertises
+    /// (#F9). Spawns `ouro` with the IDENTICAL `mcpServeArguments` as `callTool` (so
+    /// `--workbench-mcp` is passed the same way), writes `initialize` (id 1) then
+    /// `tools/list` (id 2), reads the id-2 line, and parses it via the pure
+    /// `WorkbenchToolsInjectionProbe.toolNames` seam. An `alpha.660+` runtime injects the
+    /// `workbench_*` catalog into that list; an old runtime returns only boss-native tools
+    /// (the silent-strip). Errors/timeouts surface exactly like `callTool` so a hung or
+    /// unstartable runtime is observable rather than read as a green empty list.
+    public func listToolNames(agentName: String) async throws -> [String] {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = ["ouro"] + mcpServeArguments(agentName: agentName)
+        process.environment = TerminalEnvironment().valuesWithResolvedPath()
+
+        let stdin = Pipe()
+        let stdout = Pipe()
+        let stderr = Pipe()
+        process.standardInput = stdin
+        process.standardOutput = stdout
+        process.standardError = stderr
+
+        let processBox = ProcessIOBox(
+            process: process,
+            stdout: stdout.fileHandleForReading,
+            stderr: stderr.fileHandleForReading
+        )
+        try process.run()
+
+        do {
+            try writeLine(initializeRequest(id: 1), to: stdin.fileHandleForWriting)
+            try writeLine(Self.toolsListRequest(id: 2), to: stdin.fileHandleForWriting)
+            let line = try await readResponseLine(processBox, id: 2, timeoutNanoseconds: timeoutNanoseconds)
+            try? stdin.fileHandleForWriting.close()
+            await stop(processBox)
+            return WorkbenchToolsInjectionProbe.toolNames(fromToolsListJSON: line)
+        } catch {
+            try? stdin.fileHandleForWriting.close()
+            await stop(processBox)
+            throw error
+        }
+    }
+
     public func callTool(agentName: String, name: String, arguments: [String: String]) async throws -> String {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
@@ -209,6 +251,25 @@ public final class BossAgentMCPClient: @unchecked Sendable {
         }
     }
 
+    /// Like `readResponse` but returns the matching id line VERBATIM (no tool-result
+    /// decode), for `tools/list` — whose `result.tools` shape the private `MCPResponse`
+    /// decoders don't model. The pure seam parses the raw line.
+    private func readResponseLine(_ processBox: ProcessIOBox, id: Int, timeoutNanoseconds: UInt64) async throws -> String {
+        try await withThrowingTaskGroup(of: String.self) { group in
+            defer { group.cancelAll() }
+            group.addTask {
+                try processBox.readRawLine(id: id)
+            }
+            group.addTask {
+                try await Task.sleep(nanoseconds: timeoutNanoseconds)
+                processBox.terminate()
+                processBox.forceKill()
+                throw BossAgentMCPClientError.timeout
+            }
+            return try await firstTaskResult(of: &group, orThrow: BossAgentMCPClientError.closed)
+        }
+    }
+
     private func stop(_ processBox: ProcessIOBox) async {
         processBox.terminate()
         try? await Task.sleep(nanoseconds: 100_000_000)
@@ -227,6 +288,16 @@ public final class BossAgentMCPClient: @unchecked Sendable {
             "id": id,
             "method": "initialize",
             "params": [:],
+        ]
+    }
+
+    /// The `tools/list` JSON-RPC request — sibling of `toolCallRequest`. Takes no params.
+    /// Static + public so the spawn site and the source-pin test agree on the exact body.
+    public static func toolsListRequest(id: Int) -> [String: Any] {
+        [
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": "tools/list",
         ]
     }
 
@@ -251,6 +322,20 @@ public final class BossAgentMCPClient: @unchecked Sendable {
             return nil
         }
         return try extractText(fromJSONLine: line)
+    }
+
+    /// Returns the line verbatim iff it's a JSON object whose `id` matches — used by the
+    /// `tools/list` probe, which keeps the raw line for the pure-seam parse rather than
+    /// decoding tool-call content. Non-JSON / id-mismatch ⇒ `nil` (keep scanning).
+    static func rawLineIfMatching(line: String, id: Int) -> String? {
+        let data = Data(line.utf8)
+        guard
+            let raw = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            responseID(raw["id"], matches: id)
+        else {
+            return nil
+        }
+        return line
     }
 
     private static func responseID(_ rawID: Any?, matches expectedID: Int) -> Bool {
@@ -324,6 +409,38 @@ final class ProcessIOBox: @unchecked Sendable {
                 let line = String(decoding: lineData, as: UTF8.self)
                 if let text = try BossAgentMCPClient.extractTextIfMatching(line: line, id: id) {
                     return text
+                }
+            }
+        }
+    }
+
+    /// Like `readResponse` but returns the matching id line VERBATIM (for `tools/list`).
+    /// Same EOF / stderr / closed semantics so a stuck or unstartable runtime surfaces
+    /// the same errors as a tool call.
+    func readRawLine(id: Int) throws -> String {
+        var buffer = Data()
+        while true {
+            let chunk = stdout.availableData
+            if chunk.isEmpty {
+                if !buffer.isEmpty {
+                    let line = String(decoding: buffer, as: UTF8.self)
+                    if let matched = BossAgentMCPClient.rawLineIfMatching(line: line, id: id) {
+                        return matched
+                    }
+                }
+                let stderrText = readStderrText()
+                if !stderrText.isEmpty {
+                    throw BossAgentMCPClientError.processNotAvailable(stderrText)
+                }
+                throw BossAgentMCPClientError.closed
+            }
+            buffer.append(chunk)
+            while let newlineIndex = buffer.firstIndex(of: 0x0a) {
+                let lineData = buffer.prefix(upTo: newlineIndex)
+                buffer.removeSubrange(...newlineIndex)
+                let line = String(decoding: lineData, as: UTF8.self)
+                if let matched = BossAgentMCPClient.rawLineIfMatching(line: line, id: id) {
+                    return matched
                 }
             }
         }
