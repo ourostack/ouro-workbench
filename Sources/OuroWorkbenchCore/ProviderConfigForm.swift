@@ -16,6 +16,20 @@ public enum WorkbenchProvider: String, CaseIterable, Identifiable, Equatable, Se
 
     public var id: String { rawValue }
 
+    /// Resolve a provider from its `--provider` flag value (the string `ouro` writes into a bundle's
+    /// `agent.json` lane). F7 / B-4: a CLONED agent has no operator-entered provider, so the
+    /// needs-vault-unlock path reads the provider STRING from the cloned `agent.json` outward lane
+    /// and maps it back here to drive F6's reconnect chain. Returns `nil` for an unrecognized /
+    /// absent value (the App then degrades to the "couldn't confirm" copy rather than guessing).
+    /// NOTE: distinct from `init(rawValue:)` — the flag value (`openai-codex`, `github-copilot`)
+    /// differs from the Swift case rawValue (`openaiCodex`, `githubCopilot`).
+    public init?(providerFlagValue: String) {
+        guard let match = WorkbenchProvider.allCases.first(where: { $0.providerFlagValue == providerFlagValue }) else {
+            return nil
+        }
+        self = match
+    }
+
     /// The raw `--provider` value passed to `ouro hatch` (an audit/command surface, not human copy).
     public var providerFlagValue: String {
         switch self {
