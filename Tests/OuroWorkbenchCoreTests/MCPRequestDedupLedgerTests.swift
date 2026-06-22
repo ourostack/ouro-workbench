@@ -39,8 +39,15 @@ final class MCPRequestDedupLedgerTests: XCTestCase {
     }
 
     func testKeyFromUnexpectedTypeIsNil() {
-        // A dictionary/array/bool id is not a valid JSON-RPC scalar id for us.
+        // A dictionary/array id is not a valid JSON-RPC scalar id for us.
         XCTAssertNil(MCPRequestKey.from(rawID: ["nested": 1]))
+    }
+
+    func testKeyFromBoolIsNil() {
+        // JSONSerialization bridges a JSON bool to NSNumber too — but a bool id
+        // is not a valid scalar id, so it must be rejected (not coerced to 0/1).
+        XCTAssertNil(MCPRequestKey.from(rawID: true))
+        XCTAssertNil(MCPRequestKey.from(rawID: false))
     }
 
     func testStringAndNumberKeysAreDistinct() {

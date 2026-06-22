@@ -33,7 +33,10 @@ public enum MCPError: Error, Equatable, Sendable, LocalizedError {
     /// (JSON-RPC `-32603`).
     case internalError(detail: String)
 
-    public var errorDescription: String? {
+    /// The non-opaque, salient message for this error. Non-optional — both
+    /// `errorDescription` and `jsonRPCError` reuse it, so the salient detail is
+    /// defined once and rides along verbatim everywhere.
+    public var message: String {
         switch self {
         case let .parseError(detail):
             return "Parse error: \(detail)"
@@ -50,24 +53,27 @@ public enum MCPError: Error, Equatable, Sendable, LocalizedError {
         }
     }
 
+    public var errorDescription: String? {
+        message
+    }
+
     /// The canonical JSON-RPC `(code, message)` for this error, or `nil` for
     /// `.toolFailure` (which is surfaced as an `isError` tools/call result, not
-    /// a protocol-level error). The message reuses `errorDescription` so the
-    /// salient detail rides along verbatim.
+    /// a protocol-level error). The message reuses `message` verbatim.
     public var jsonRPCError: (code: Int, message: String)? {
         switch self {
         case .parseError:
-            return (-32700, errorDescription ?? "Parse error")
+            return (-32700, message)
         case .methodNotFound:
-            return (-32601, errorDescription ?? "Unknown method")
+            return (-32601, message)
         case .invalidParams:
-            return (-32602, errorDescription ?? "Invalid params")
+            return (-32602, message)
         case .duplicateInFlight:
-            return (-32603, errorDescription ?? "Duplicate request in flight")
+            return (-32603, message)
         case .toolFailure:
             return nil
         case .internalError:
-            return (-32603, errorDescription ?? "Internal error")
+            return (-32603, message)
         }
     }
 }

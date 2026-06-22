@@ -79,7 +79,7 @@ final class MCPDedupWiringTests: XCTestCase {
 
     func testReplayCachedReturnsWithoutReenteringCallTool() throws {
         let handle = try handleBody()
-        let arm = try sourceSlice(in: handle, from: "case .replayCached", to: "case .rejectInFlight")
+        let arm = try sourceSlice(in: handle, from: ".replayCached(", to: "case .rejectInFlight")
         XCTAssertFalse(
             arm.contains("callTool("),
             ".replayCached must return the cached payload verbatim, never re-enter callTool"
