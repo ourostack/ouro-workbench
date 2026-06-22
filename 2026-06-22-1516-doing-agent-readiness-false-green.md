@@ -3,7 +3,7 @@
 - **Branch:** `fix/agent-readiness-false-green` (off `main` @ 911a93e)
 - **Execution Mode:** direct
 - **Artifacts:** `./2026-06-22-1516-doing-agent-readiness-false-green/`
-- **Status:** in-progress
+- **Status:** done
 
 ## The bug
 Steady-state agent rows (sidebar `SidebarAgentRow` + home-screen "Installed agents"
@@ -86,7 +86,7 @@ in-flight — all `@Published` mutations on main actor, per-agent checks concurr
 - [x] Unit 1: live-aware seam + exhaustive Core tests, 100% coverage.
 - [x] Unit 2: viewmodel runs outward checks concurrently, stores verdicts, wired into refresh.
 - [x] Unit 3: sidebar + card rows render live readiness; harness-pill decision recorded (left as-is — distinct diagnostic surface; see report).
-- [ ] Strict build + full test suite green; coverage gate passes; allowlist at 2.
+- [x] Strict build + full test suite green; coverage gate passes; allowlist at 2.
 
 ## Progress log
 - 2026-06-22 15:23 Unit 1 complete: Core live-aware seam (LiveReadiness + dotColor/label/help), exhaustive truth table, 2430 tests pass, coverage 100%, allowlist still 2. SHA 4585aa6.
