@@ -4,7 +4,7 @@
 - Execution Mode: direct
 - Planning: `/tmp/f12-design-spec.md` (PR A = F12a = gaps 1, 2, 3, 5)
 - Artifacts: `./f12a-degraded-mode-honesty/`
-- Status: in progress
+- Status: done (all 4 gaps committed; gates passed)
 - Constraints: strict TDD (red→green per gap); commit on branch; NO push/PR/merge.
   No Co-Authored-By, no attribution. `git add` only files I change (ignore
   `SerpentGuide.ouro/`, `*-doing-*.md` leftovers). Pin App wiring BY SYMBOL.
@@ -50,7 +50,7 @@ decoding if SwiftTerm is bumped. Out of scope for F12a.
 - NOTE (flag, don't fix): SwiftTerm `LocalProcess.swift:399-406` `#if false` dead
   re-decode path — if SwiftTerm upgrades, revisit ProcessExitStatus.
 
-### Gap 3 — boss prose overwritten + un-triaged waiting  ⬜
+### Gap 3 — boss prose overwritten + un-triaged waiting  ✅ (5dc1310)
 - 3a Core: add `proseLog: [BossProseEntry] = []` to `WorkspaceState` (additive
   Codable, NO schemaVersion bump); `BossProseEntry {id,occurredAt,source,
   text(.prefix(4000))}`; `recordProse` newest-first cap(50).
@@ -66,7 +66,7 @@ decoding if SwiftTerm is bumped. Out of scope for F12a.
   suppressions (already gated in save()); route 3b through `recordDecisionIfNew`
   (dedup, no inbox flooding); cap prose text + log at 50.
 
-### Gap 5 — respawn bare positional → Copilot dead-ends  ⬜
+### Gap 5 — respawn bare positional → Copilot dead-ends  ✅ (34c1faa)
 - Core: `TerminalCommandPlan` gains `enum CheckpointPromptDelivery {positional;
   sendAfterLaunch(String)}` + `checkpointPromptDelivery`. Pure
   `CheckpointPromptDeliveryResolver.delivery(for: TerminalAgentKind?)` (Copilot→
@@ -95,3 +95,22 @@ decoding if SwiftTerm is bumped. Out of scope for F12a.
   persistentSessionName (BEFORE inner-agent early-out); markTerminated 127 backstop
   gated on the screen wrapper. RED→GREEN; strict build clean. SwiftTerm re-decode
   hazard flagged above (not fixed).
+- 2026-06-22 01:59 Gap 3 complete (5dc1310): BossProseEntry + proseLog (additive
+  Codable, no schema bump), recordProse cap(50)/text-cap(4000); WaitingSessionReconciler
+  seam; check-in success records prose+save (catch path doesn't); reconcileWaiting
+  SessionsIntoInbox via recordDecisionIfNew (dedup) wired after recordBossDecisions
+  + at startup; both saves ride the suppression-gated save(). RED→GREEN; strict
+  build clean; full suite green.
+- 2026-06-22 02:04 Gap 5 complete (34c1faa): CheckpointPromptDelivery enum + field on
+  TerminalCommandPlan; pure CheckpointPromptDeliveryResolver (Copilot→sendAfterLaunch,
+  generic→positional, native-resume→nil); recoveryPlan keys delivery off detected
+  kind (Copilot NOT appended to argv); controller types .sendAfterLaunch from
+  recordOutput (first-output interactive) gated on one-shot hasDeliveredCheckpoint
+  Prompt; CommandPlannerTests Copilot assertions moved to checkpointPromptDelivery.
+  RED→GREEN.
+- 2026-06-22 02:08 Scenario-matrix detection made delivery-aware (273a4b8) — the only
+  full-suite fallout from gap 5; expectedRecoveryPrompt now checks both channels.
+- 2026-06-22 02:10 GATES: full strict test suite 2406 tests, 0 failures (1 pre-existing
+  env-gated skip); strict build clean; check-coverage.sh PASS — Core 100% line+region,
+  NO new allowlist (my 5 new/touched Core files all 100%). Gaps 4/6 untouched (F12b).
+  No push/PR/merge per instructions.
