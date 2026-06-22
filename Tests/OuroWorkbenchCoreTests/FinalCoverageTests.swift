@@ -1,4 +1,5 @@
 import XCTest
+import Darwin
 @testable import OuroWorkbenchCore
 
 /// Clean-DI / fixture-driven coverage for the last residual branches in
@@ -117,42 +118,41 @@ final class FinalCoverageTests: XCTestCase {
         var value: (pid: pid_t, sig: Int32)? { lock.lock(); defer { lock.unlock() }; return stored }
     }
 
-    // forceKill signals a running process with SIGKILL (injected killer spy),
-    // and is a no-op once the process has exited.
+    // forceKill on a NON-own-group box signals the child pid with SIGKILL via the child-only
+    // killer (injected spy), and is a no-op once the process has exited (default liveness seam).
     func testProcessIOBoxForceKillSendsSIGKILLToRunningProcessOnly() throws {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/sleep")
-        process.arguments = ["30"]
         let out = Pipe(), err = Pipe()
-        process.standardOutput = out
-        process.standardError = err
+        let devNull = open("/dev/null", O_RDWR)
+        defer { close(devNull) }
+        // Real running child so the DEFAULT `isAlive` (kill(pid,0)) seam reads alive then reaped.
+        let spawned = try SpawnInOwnGroup.spawn(
+            executablePath: "/bin/sleep",
+            arguments: ["sleep", "30"],
+            environment: [:],
+            stdio: SpawnInOwnGroup.StdioFDs(stdin: devNull, stdout: devNull, stderr: devNull))
 
         let recorder = SignalRecorder()
+        // childInOwnGroup: false → forceKill must route through the CHILD-only killer (the spy),
+        // never killpg. Default isAlive seam (kill(pid,0)) is exercised against the real child.
         let box = ProcessIOBox(
-            process: process,
+            pid: spawned.pid,
             stdout: out.fileHandleForReading,
             stderr: err.fileHandleForReading,
+            childInOwnGroup: false,
             processKiller: { pid, sig in recorder.record(pid, sig); return 0 })
 
-        try process.run()
-        XCTAssertTrue(process.isRunning)
         box.forceKill()
         XCTAssertEqual(recorder.value?.sig, SIGKILL)
-        XCTAssertEqual(recorder.value?.pid, process.processIdentifier)
+        XCTAssertEqual(recorder.value?.pid, spawned.pid)
 
-        // Real cleanup (the spy did not actually kill it), then forceKill is a no-op.
-        process.terminate()
-        process.waitUntilExit()
+        // Real cleanup (the spy did not actually kill it), then forceKill is a no-op once the
+        // default liveness seam reads the child as reaped.
+        kill(spawned.pid, SIGKILL)
+        var status: Int32 = 0
+        waitpid(spawned.pid, &status, 0)
         recorder.reset()
         box.forceKill()
-        XCTAssertNil(recorder.value)
-
-        // Constructing without an explicit killer exercises the production default.
-        let defaulted = ProcessIOBox(
-            process: Process(),
-            stdout: Pipe().fileHandleForReading,
-            stderr: Pipe().fileHandleForReading)
-        defaulted.forceKill() // not running → no-op, default killer never fires
+        XCTAssertNil(recorder.value, "default isAlive seam must read the reaped child as gone")
     }
 
     // A codex rollout whose head records a matching cwd (payload form and
@@ -280,22 +280,30 @@ final class FinalCoverageTests: XCTestCase {
         XCTAssertNil(reader.activity(forDirectory: "/x", agentKind: .openAICodex))
     }
 
-    // The default process killer actually signals a running process.
+    // The DEFAULT group killer (killpg) actually reaps a real own-group child. This exercises
+    // the production `groupKiller` + `isAlive` defaults end-to-end: an own-group box past grace
+    // → killpg(pid, SIGKILL) tears down the child tree.
     func testProcessIOBoxDefaultKillerSignalsRunningProcess() throws {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/sleep")
-        process.arguments = ["30"]
         let out = Pipe(), err = Pipe()
-        process.standardOutput = out
-        process.standardError = err
-        let box = ProcessIOBox( // default killer = kill(pid, SIGKILL)
-            process: process,
+        let devNull = open("/dev/null", O_RDWR)
+        defer { close(devNull) }
+        let spawned = try SpawnInOwnGroup.spawn(
+            executablePath: "/bin/sleep",
+            arguments: ["sleep", "30"],
+            environment: [:],
+            stdio: SpawnInOwnGroup.StdioFDs(stdin: devNull, stdout: devNull, stderr: devNull))
+        // childInOwnGroup: true → forceKill takes the .killGroup arm with the DEFAULT killpg seam.
+        let box = ProcessIOBox(
+            pid: spawned.pid,
             stdout: out.fileHandleForReading,
-            stderr: err.fileHandleForReading)
-        try process.run()
+            stderr: err.fileHandleForReading,
+            childInOwnGroup: true)
         box.forceKill()
-        process.waitUntilExit()
-        XCTAssertFalse(process.isRunning)
+        var status: Int32 = 0
+        waitpid(spawned.pid, &status, 0)
+        // The child is gone (killpg reaped its own group).
+        let gone = kill(spawned.pid, 0) == -1 && errno == ESRCH
+        XCTAssertTrue(gone, "default killpg seam must reap the own-group child")
     }
 
     // modificationDate falls back to .distantPast when the URL's metadata can't

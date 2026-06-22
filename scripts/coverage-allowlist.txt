@@ -8,8 +8,10 @@
 # readResponse(id:) reads the MCP subprocess with a `while true` loop that only
 # exits via `return`/`throw`; the closing brace + its fall-through regions after
 # the loop are unreachable by construction. Restructuring battle-tested PTY-read
-# IO solely to colour a brace would be worse than the exclusion.
-BossAgentMCPClient.swift 1 3
+# IO solely to colour a brace would be worse than the exclusion. (F8b lowered the
+# region count 3→2: the rewired own-group spawn path is fully covered, including the
+# fail-closed audit emission, which a direct `makeProcessBox` mismatch test exercises.)
+BossAgentMCPClient.swift 1 2
 
 # 100% line, every identifiable branch covered. One synthesized region (a
 # default-argument / branch region the Swift `llvm-cov --show-regions` view does

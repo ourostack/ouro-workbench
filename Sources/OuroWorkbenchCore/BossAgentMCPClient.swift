@@ -66,6 +66,97 @@ public final class BossAgentMCPClient: @unchecked Sendable {
         Self.mcpServeArguments(agentName: agentName, workbenchMCPPath: workbenchMCPPath)
     }
 
+    /// One spawned mcp-serve turn: the stdin write handle (the caller drives JSON-RPC into it)
+    /// + the `ProcessIOBox` that owns the pid and the read side.
+    struct SpawnedMCPServe {
+        let stdinWrite: FileHandle
+        let box: ProcessIOBox
+    }
+
+    /// Spawn `/usr/bin/env ouro <mcpServeArguments>` into its OWN process group via
+    /// `SpawnInOwnGroup`, with the SAME executable / argv / environment / stdio the prior
+    /// `Process()` path used (byte-identical → PATH-resolution of `ouro` is unchanged).
+    ///
+    /// FIDELITY: executable `/usr/bin/env`; argv `["env", "ouro"] + mcpServeArguments(...)`
+    /// (note argv[0] is `"env"`, matching how `Process(executableURL: /usr/bin/env,
+    /// arguments: ["ouro", …])` builds the child's argv); environment
+    /// `TerminalEnvironment().valuesWithResolvedPath()`; stdio the three pipe ends. After the
+    /// spawn the parent closes ITS copies of the child-side ends so the read loop sees EOF when
+    /// the child exits (Foundation did this implicitly; with raw `posix_spawn` we do it).
+    ///
+    /// FAIL-CLOSED: `childInOwnGroup` is set from `getpgid(pid) == pid` via the pure
+    /// `makeProcessBox` seam — a child whose group could not be verified is treated as child-only
+    /// (never killpg).
+    private func spawnMCPServe(agentName: String) throws -> SpawnedMCPServe {
+        let stdinPipe = Pipe()
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
+
+        let spawned = try SpawnInOwnGroup.spawn(
+            executablePath: "/usr/bin/env",
+            arguments: ["env", "ouro"] + mcpServeArguments(agentName: agentName),
+            environment: TerminalEnvironment().valuesWithResolvedPath(),
+            stdio: SpawnInOwnGroup.StdioFDs(
+                stdin: stdinPipe.fileHandleForReading.fileDescriptor,
+                stdout: stdoutPipe.fileHandleForWriting.fileDescriptor,
+                stderr: stderrPipe.fileHandleForWriting.fileDescriptor
+            )
+        )
+
+        // The child holds its own dup'd copies now; close the parent's copies of the child-side
+        // ends so a closed child stdout/stderr reads EOF (and the child's stdin sees EOF on
+        // our write-end close).
+        try? stdinPipe.fileHandleForReading.close()
+        try? stdoutPipe.fileHandleForWriting.close()
+        try? stderrPipe.fileHandleForWriting.close()
+
+        let box = Self.makeProcessBox(
+            spawnedPID: spawned.pid,
+            actualPGID: getpgid(spawned.pid),
+            stdout: stdoutPipe.fileHandleForReading,
+            stderr: stderrPipe.fileHandleForReading
+        )
+        return SpawnedMCPServe(stdinWrite: stdinPipe.fileHandleForWriting, box: box)
+    }
+
+    /// THE single-flag invariant + fail-closed gate, PURE and value-tested: returns whether the
+    /// child is provably in its own group (`actualPGID == spawnedPID`, i.e. SETPGROUP took) and,
+    /// on a MISMATCH, a diagnostic audit line. A child that can't be verified is treated as
+    /// child-only by the caller (forceKill → `kill`, never `killpg`) — the audit is informational;
+    /// the fail-closed SAFETY does not depend on it.
+    static func ownGroupVerification(spawnedPID: pid_t, actualPGID: pid_t) -> (inOwnGroup: Bool, auditLine: String?) {
+        if actualPGID == spawnedPID {
+            return (true, nil)
+        }
+        return (
+            false,
+            "F8b fail-closed: spawned pid \(spawnedPID) is NOT in its own group "
+                + "(getpgid=\(actualPGID)); treating as child-only (no killpg)."
+        )
+    }
+
+    /// Construct the `ProcessIOBox` from the spawned pid and the pgid the OS reports for it.
+    /// Delegates the own-group decision to the pure `ownGroupVerification` seam; on a mismatch it
+    /// emits the fail-closed audit line to stderr. A dedicated test drives the mismatch path
+    /// directly (so the audit emission is covered) since a real own-group spawn never mismatches.
+    static func makeProcessBox(
+        spawnedPID: pid_t,
+        actualPGID: pid_t,
+        stdout: FileHandle,
+        stderr: FileHandle
+    ) -> ProcessIOBox {
+        let verification = ownGroupVerification(spawnedPID: spawnedPID, actualPGID: actualPGID)
+        if let auditLine = verification.auditLine {
+            FileHandle.standardError.write(Data((auditLine + "\n").utf8))
+        }
+        return ProcessIOBox(
+            pid: spawnedPID,
+            stdout: stdout,
+            stderr: stderr,
+            childInOwnGroup: verification.inOwnGroup
+        )
+    }
+
     public func ask(agentName: String, question: String) async throws -> String {
         try await callTool(agentName: agentName, name: "ask", arguments: ["question": question])
     }
@@ -114,74 +205,44 @@ public final class BossAgentMCPClient: @unchecked Sendable {
     /// (the silent-strip). Errors/timeouts surface exactly like `callTool` so a hung or
     /// unstartable runtime is observable rather than read as a green empty list.
     public func listToolNames(agentName: String) async throws -> [String] {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["ouro"] + mcpServeArguments(agentName: agentName)
-        process.environment = TerminalEnvironment().valuesWithResolvedPath()
-
-        let stdin = Pipe()
-        let stdout = Pipe()
-        let stderr = Pipe()
-        process.standardInput = stdin
-        process.standardOutput = stdout
-        process.standardError = stderr
-
-        let processBox = ProcessIOBox(
-            process: process,
-            stdout: stdout.fileHandleForReading,
-            stderr: stderr.fileHandleForReading
-        )
-        try process.run()
+        let spawned = try spawnMCPServe(agentName: agentName)
+        let processBox = spawned.box
+        let stdinWrite = spawned.stdinWrite
 
         do {
-            try writeLine(initializeRequest(id: 1), to: stdin.fileHandleForWriting)
-            try writeLine(Self.toolsListRequest(id: 2), to: stdin.fileHandleForWriting)
+            try writeLine(initializeRequest(id: 1), to: stdinWrite)
+            try writeLine(Self.toolsListRequest(id: 2), to: stdinWrite)
             let line = try await readResponseLine(processBox, id: 2, timeoutNanoseconds: timeoutNanoseconds)
-            try? stdin.fileHandleForWriting.close()
+            try? stdinWrite.close()
             await stop(processBox)
             return WorkbenchToolsInjectionProbe.toolNames(fromToolsListJSON: line)
         } catch {
-            try? stdin.fileHandleForWriting.close()
+            try? stdinWrite.close()
             await stop(processBox)
             throw error
         }
     }
 
     public func callTool(agentName: String, name: String, arguments: [String: String]) async throws -> String {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["ouro"] + mcpServeArguments(agentName: agentName)
-        process.environment = TerminalEnvironment().valuesWithResolvedPath()
-
-        let stdin = Pipe()
-        let stdout = Pipe()
-        let stderr = Pipe()
-        process.standardInput = stdin
-        process.standardOutput = stdout
-        process.standardError = stderr
-
-        let processBox = ProcessIOBox(
-            process: process,
-            stdout: stdout.fileHandleForReading,
-            stderr: stderr.fileHandleForReading
-        )
-        try process.run()
+        let spawned = try spawnMCPServe(agentName: agentName)
+        let processBox = spawned.box
+        let stdinWrite = spawned.stdinWrite
 
         do {
             try writeLine(
                 initializeRequest(id: 1),
-                to: stdin.fileHandleForWriting
+                to: stdinWrite
             )
             try writeLine(
                 toolCallRequest(id: 2, name: name, arguments: arguments),
-                to: stdin.fileHandleForWriting
+                to: stdinWrite
             )
             let response = try await readResponse(processBox, id: 2, timeoutNanoseconds: timeoutNanoseconds)
-            try? stdin.fileHandleForWriting.close()
+            try? stdinWrite.close()
             await stop(processBox)
             return response
         } catch {
-            try? stdin.fileHandleForWriting.close()
+            try? stdinWrite.close()
             await stop(processBox)
             throw error
         }
@@ -370,22 +431,47 @@ private struct MCPTextContent: Decodable {
     var text: String
 }
 
+/// Holds the live mcp-serve child for one `callTool` / `listToolNames` turn: the raw pid,
+/// the stdout/stderr pipe read handles, and the kill/liveness seams. It no longer wraps a
+/// `Process` — the child is spawned by `SpawnInOwnGroup` (own process group, pgid == pid), so
+/// `forceKill()` can `killpg(pid, SIGKILL)` to reap the boss's `node` grandchildren as a unit
+/// (the F8b leak fix) instead of orphaning them with a child-only `kill`.
+///
+/// `childInOwnGroup` is the load-bearing single-flag invariant: it is `true` ONLY when the
+/// spawn site verified `getpgid(pid) == pid` after `SpawnInOwnGroup.spawn`. The escalation
+/// policy (`WatchdogEscalation.nextSignal`) returns `.killGroup` IFF that flag is set, so
+/// `killpg` can never fire for a child that isn't provably in its own group (fail-closed).
 final class ProcessIOBox: @unchecked Sendable {
-    private let process: Process
+    private let pid: pid_t
     private let stdout: FileHandle
     private let stderr: FileHandle
+    private let childInOwnGroup: Bool
+    /// Grace window fed to the escalation policy. `forceKill()` represents the post-grace
+    /// decision (the caller already sent SIGTERM and waited), so it queries `nextSignal` at
+    /// `elapsedSinceDeadline == graceSeconds` to land on the SIGKILL arm.
+    private let graceSeconds: Double
+    private let isAlive: @Sendable (pid_t) -> Bool
     private let processKiller: @Sendable (pid_t, Int32) -> Int32
+    private let groupKiller: @Sendable (pid_t, Int32) -> Int32
 
     init(
-        process: Process,
+        pid: pid_t,
         stdout: FileHandle,
         stderr: FileHandle,
-        processKiller: @escaping @Sendable (pid_t, Int32) -> Int32 = { kill($0, $1) }
+        childInOwnGroup: Bool,
+        graceSeconds: Double = 2.0,
+        isAlive: @escaping @Sendable (pid_t) -> Bool = { kill($0, 0) == 0 },
+        processKiller: @escaping @Sendable (pid_t, Int32) -> Int32 = { kill($0, $1) },
+        groupKiller: @escaping @Sendable (pid_t, Int32) -> Int32 = { killpg($0, $1) }
     ) {
-        self.process = process
+        self.pid = pid
         self.stdout = stdout
         self.stderr = stderr
+        self.childInOwnGroup = childInOwnGroup
+        self.graceSeconds = graceSeconds
+        self.isAlive = isAlive
         self.processKiller = processKiller
+        self.groupKiller = groupKiller
     }
 
     /// Decode the tool-call text from the matching id line (`tools/call`).
@@ -437,15 +523,33 @@ final class ProcessIOBox: @unchecked Sendable {
         }
     }
 
+    /// SIGTERM the child (the polite first ask). Skipped if the child already exited, so a
+    /// reaped/recycled pid is never signalled.
     func terminate() {
-        if process.isRunning {
-            process.terminate()
+        guard isAlive(pid) else {
+            return
         }
+        _ = processKiller(pid, SIGTERM)
     }
 
+    /// Escalate past grace. Routes through the pure escalation policy: an own-group child →
+    /// `.killGroup` → `killpg(pid, SIGKILL)` (reaps the boss's `node` grandchild tree); a child
+    /// NOT provably in its own group → `.killChild` → `kill(pid, SIGKILL)` (child-only, the
+    /// fail-closed safe default — never killpg a shared group). Skipped if already reaped.
     func forceKill() {
-        if process.isRunning {
-            _ = processKiller(process.processIdentifier, SIGKILL)
+        guard isAlive(pid) else {
+            return
+        }
+        let signal = WatchdogEscalation.nextSignal(
+            elapsedSinceDeadline: graceSeconds,
+            graceSeconds: graceSeconds,
+            childInOwnGroup: childInOwnGroup
+        )
+        switch signal {
+        case .killGroup:
+            _ = groupKiller(pid, SIGKILL)
+        default:
+            _ = processKiller(pid, SIGKILL)
         }
     }
 
