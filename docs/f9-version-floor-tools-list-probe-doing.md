@@ -281,3 +281,17 @@ only for the message fast-path, not required for the core gate.)
   - App wiring: `statusPing` closure now ANDs `status` with `listToolNames`→verdict via the gate; records the verdict into a thread-safe `WorkbenchToolsInjectionRecorder` (off-main), drained on the main actor in `completeFirstRunBootstrap` BEFORE `refreshWorkbenchMCPRegistration` (which applies the overlay). Probe runs ONCE per bringup; cached into `@Published bossWorkbenchToolsInjectionByAgentName` — never per readiness getter. A confirmed strip is audited in the `recordActionLog` lane (raw `mcp-serve`/`--workbench-mcp` verbs allowed there only).
   - Full suite: 2193 tests, 0 failures, strict build clean, coverage gate PASS (Core 100%, no new allowlist entries).
 - 2026-06-21 Unit 5 (optional `ouro --version` fast-path) DEFERRED — out of scope per the doc ("No `ouro --version` invocation exists yet — adding one is in scope only for the message fast-path, not required for the core gate"). The authoritative gate is the `tools/list` probe (Seam A); `OuroVersionFloor` (Seam B) is shipped and ready to sharpen copy when/if a version string is obtained, but no `ouro --version` spawn is added.
+- 2026-06-21 Cold-review (adversarial fold-bug pass over the 6 documented App-fold risks): Items 1–5 CLEAN — probe runs once at the handoff edge only (single `listToolNames` caller, never a per-getter spawn); timeout/spawn-error stays `.unconfirmed` → `awaitingHandoff`, never a blocker; `.absent` never reports `.handedOff` (`AgentReadinessBootstrap.run()` calls `statusPing` once and returns, no loop); overlay flips only on confirmed-`.absent` against `.registered`; recorder drained before `refreshWorkbenchMCPRegistration` in the same main-actor pass. Item 6 (MINOR, safe direction — a sticky false-BLOCKER, never a false-green): a boss re-selected after being stripped under an OLD ouro could inherit a stale `.toolsNotInjected` if ouro was upgraded without a bootstrap in between. FIXED — `selectBoss` now clears the incoming boss's cached injection verdict so its next bootstrap re-probes (commit 92c97fd). The Core recovery contract (a `nil` cached verdict leaves the on-disk status standing) was already pinned by the overlay's `nil` test.
+
+---
+
+## Completion
+
+Status: **done**. Units 1–4 landed (Unit 5 deferred per the doc as out-of-scope). Strict TDD red→green throughout; per-unit commits on `fix/f9-version-floor-tools-probe`; no push/PR/merge.
+
+Gates:
+- **Implementation coverage:** every unit committed and matches its spec description; locked decisions verified present in the diff (reuse `advertisedToolNames` not `hasPrefix`; `minimumAlpha=660`; `.unknown` never blocks; `timeoutNanoseconds` reused; seam-aware copy — raw `mcp-serve`/`--workbench-mcp` verbs only in the `recordActionLog` audit lane).
+- **Build:** `swift build -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete` — clean.
+- **Tests:** full suite 2196 tests, 1 skipped, 0 failures (strict flags).
+- **Coverage:** `Scripts/check-coverage.sh` PASS — Core 100% line+region; NO new allowlist entries (the consolidated single read-loop's unreachable `while true` closing brace fits the pre-existing `BossAgentMCPClient.swift 1 3` budget; the three pure seams are fully covered).
+- **PR review (design match):** all spec-locked decisions + CRITICAL/IMPORTANT fold risks verified in the implementation, not just documented.
