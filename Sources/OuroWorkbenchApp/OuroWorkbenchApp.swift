@@ -5734,10 +5734,59 @@ struct OuroAgentRowView: View {
             .buttonStyle(.borderless)
             .help(agent.bundlePath)
             .fixedSize()
+            // F6 — the destructive remove-agent affordance. Taps ARM a confirmation (sets
+            // `agentPendingRemoval`); it never deletes on the first tap.
+            Button(role: .destructive) {
+                model.agentPendingRemoval = agent
+            } label: {
+                Label("Remove Agent", systemImage: "trash")
+            }
+            .labelStyle(.iconOnly)
+            .buttonStyle(.borderless)
+            .help("Remove \(agent.name) from this Mac")
+            .fixedSize()
         }
         .padding(.vertical, 3)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(agent.name), \(agent.summaryLine)")
+        // F6 — the confirmation gate for this row's removal. Uses the seam-free Core copy, which
+        // states the deletion is permanent (and warns when removing the current boss). Only the
+        // confirm action calls `removeAgent`, which performs the deletion + re-derives roster state.
+        .confirmationDialog(
+            removalCopy.title,
+            isPresented: removalConfirmationBinding,
+            titleVisibility: .visible
+        ) {
+            Button(removalCopy.confirmTitle, role: .destructive) {
+                model.removeAgent(agent)
+            }
+            Button(removalCopy.cancelTitle, role: .cancel) {
+                model.agentPendingRemoval = nil
+            }
+        } message: {
+            Text(removalCopy.message)
+        }
+    }
+
+    /// The seam-free confirmation copy for removing THIS row's agent, flavored when it's the boss.
+    private var removalCopy: AgentRemoval.ConfirmationCopy {
+        AgentRemoval.confirmationCopy(
+            agentName: agent.name,
+            isBoss: model.state.boss.agentName.caseInsensitiveCompare(agent.name) == .orderedSame
+        )
+    }
+
+    /// Present this row's confirmation only when THIS agent is the one armed for removal, so a single
+    /// shared `agentPendingRemoval` doesn't fan a dialog out across every row.
+    private var removalConfirmationBinding: Binding<Bool> {
+        Binding(
+            get: { model.agentPendingRemoval?.id == agent.id },
+            set: { presented in
+                if !presented, model.agentPendingRemoval?.id == agent.id {
+                    model.agentPendingRemoval = nil
+                }
+            }
+        )
     }
 
     private var agentStatusImage: String {
@@ -6735,12 +6784,13 @@ private struct OnboardingReadinessView: View {
 /// you") and inner ("thinks with") roles when they differ. An unconfigured lane reads "not
 /// connected yet".
 ///
-/// Changing the provider/model is OUT OF SCOPE here: the native provider-config form is a
-/// cold-start (new-agent hatch) flow with NO model field, and updating an EXISTING agent's
-/// provider has no headless `ouro` sink today (the documented gap a — see
-/// `ProviderConfigForm.existingAgentRefreshUnavailableMessage`). So rather than build a new
-/// model picker (deferred), this surface points the operator at their agent's provider settings.
-/// The proactive "a newer model is available" nudge is also deferred (#237 — no ouro model catalog).
+/// Changing the MODEL is OUT OF SCOPE here: the native provider-config form has NO model field. The
+/// CREDENTIAL, by contrast, is now rotatable — F6 drives the documented unlock chain
+/// (`ouro vault unlock && ouro auth && ouro provider refresh`) in a native `.trusted` terminal from
+/// the form's Connect action (there's still no headless non-interactive `ouro` credential-set sink,
+/// gap a, so it re-collects the credential in a real TTY rather than persisting silently). So rather
+/// than build a new model picker (deferred), this surface points the operator at their agent's
+/// provider settings. The proactive "a newer model is available" nudge is also deferred (#237).
 private struct OnboardingAgentProviderSummary: View {
     var agent: OuroAgentRecord?
 
@@ -10480,6 +10530,9 @@ final class WorkbenchViewModel: ObservableObject {
     /// the fresh-launch path runs. Non-nil ⇒ the confirmation is presented.
     @Published var pendingStartFresh: ProcessEntry?
     @Published var ouroAgents: [OuroAgentRecord] = []
+    /// F6 — the agent the operator has armed for removal (the destructive remove-agent action sits
+    /// behind a confirmation). Non-nil ⇒ the confirmation dialog is presented; `removeAgent` clears it.
+    @Published var agentPendingRemoval: OuroAgentRecord?
     @Published var bossWorkbenchMCPRegistration: BossWorkbenchMCPRegistrationSnapshot?
     @Published var bossWorkbenchMCPRegistrationByAgentName: [String: BossWorkbenchMCPRegistrationSnapshot] = [:]
     @Published var executableHealthByEntryID: [UUID: ExecutableHealth] = [:]
@@ -10709,6 +10762,11 @@ final class WorkbenchViewModel: ObservableObject {
     private var vaultOnboardingEntryID: UUID?
     private var vaultOnboardingRunID: UUID?
     private var vaultOnboardingAgentName: String?
+    /// F6 — which flavor the in-flight vault terminal is (onboarding = F13 first-time setup, or
+    /// rotation = an existing agent reconnecting). Captured at launch so `completeVaultOnboarding`
+    /// surfaces the correctly-flavored seam-free copy on a failed re-probe. Defaults to onboarding
+    /// (F13's behavior) and is reset there so a stale flavor can't leak across attempts.
+    private var vaultOnboardingFlavor: VaultOnboardingFlavor = .onboarding
     private var bossWatchBaselineState: WorkspaceState?
     private var bossWatchTickIsRunning = false
     private var bossWatchLastPromptAt: Date?
@@ -12116,6 +12174,62 @@ final class WorkbenchViewModel: ObservableObject {
         NSWorkspace.shared.activateFileViewerSelecting([
             URL(fileURLWithPath: targetPath)
         ])
+    }
+
+    /// F6 — remove an agent. Workbench's roster is a pure filesystem scan of `~/AgentBundles/*.ouro`
+    /// (`OuroAgentInventory.scan`), so there is NO Workbench-side registration to deregister from:
+    /// the only honest removal is deleting the on-disk `.ouro` bundle directory. The destructive
+    /// confirmation copy (`AgentRemoval.confirmationCopy`) says that plainly; this performs the
+    /// deletion the operator confirmed, then re-derives all roster-dependent state.
+    ///
+    /// Risk (b) — leave NO dangling reference to the removed agent: clear the detail-pane selection
+    /// if it pointed at this agent, clear a boss name that now resolves to nothing, and
+    /// `refreshOuroAgents()` (which re-scans the filesystem AND re-runs boss auto-resolution) so the
+    /// removed agent stops appearing in any `@Published`-derived view, selection, or boss pill. Always
+    /// clears the armed-removal flag so the confirmation can't re-fire on a deleted agent.
+    @discardableResult
+    func removeAgent(_ agent: OuroAgentRecord) -> Bool {
+        // Clear the armed confirmation up front so a re-render can't re-present it for a now-deleted
+        // agent (and a second tap can't double-delete).
+        agentPendingRemoval = nil
+        let decision = AgentRemoval.decide(for: agent)
+        guard decision.deletesBundle else { return false }
+        do {
+            try FileManager.default.removeItem(atPath: decision.bundlePath)
+        } catch {
+            // Honest failure: surface it and leave the roster untouched (the agent still exists).
+            errorMessage = "Couldn't remove \(agent.name): \(error.localizedDescription)"
+            return false
+        }
+        // Risk (b) — drop the detail-pane selection if it pointed at the deleted agent.
+        if let selected = selectedAgentName,
+           selected.caseInsensitiveCompare(agent.name) == .orderedSame {
+            selectedAgentName = nil
+        }
+        // Risk (b) — if the deleted agent was the boss, clear the now-dangling boss name so the
+        // refresh's auto-resolution can adopt the sole remaining usable agent (or leave it for the
+        // choose path). Without this the boss name would keep pointing at a deleted bundle.
+        if state.boss.agentName.caseInsensitiveCompare(agent.name) == .orderedSame {
+            state.boss.agentName = ""
+            for index in state.projects.indices {
+                state.projects[index].boss.agentName = ""
+            }
+            // The selected boss changed out from under any cached boss-pane state — clear it the same
+            // way selectBoss does so a stale dashboard can't reference the removed agent.
+            bossDashboard = nil
+        }
+        save()
+        // Re-scan the filesystem roster + re-run boss auto-resolution so every derived view updates.
+        refreshOuroAgents()
+        refreshOnboardingReadiness()
+        recordActionLog(
+            source: "native",
+            action: "removeAgent",
+            targetName: agent.name,
+            result: "removed agent bundle for \(agent.name)",
+            succeeded: true
+        )
+        return true
     }
 
     /// Open `agent.json` in the user's default editor (or whichever app the
@@ -15040,8 +15154,9 @@ final class WorkbenchViewModel: ObservableObject {
         // R3 deleted: the human is never handed a CLI, not even in an app-opened pane. The
         // cold-start gate (`request-provider-config`) carries no command at all; the existing-
         // agent lane-completion steps (`outward-lane` / `inner-lane`) still carry an audit-lane
-        // command in Core, but here they route to the native form (and the form honestly reports
-        // the existing-agent gap — gap a — rather than spawning a pane).
+        // command in Core, but here they route to the native form — where an existing agent's
+        // Connect now drives a real credential rotation (F6) in a native TTY rather than spawning a
+        // pane or dead-ending on a gap-a "not available" message.
         if step.isProviderSetup {
             presentProviderConfigForm(agentName: onboardingReadiness?.selectedBossName ?? state.boss.agentName)
             return
@@ -17033,12 +17148,20 @@ final class WorkbenchViewModel: ObservableObject {
         let agentName = providerConfigAgentName.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedAgent = agentName.isEmpty ? state.boss.agentName : agentName
 
-        // EXISTING-AGENT credential refresh has no headless `ouro` non-interactive sink today
-        // (the documented narrow gap, gap a). Surface the honest, seam-free Core copy — do NOT
-        // reintroduce a `connect providers` pane and do NOT block.
-        // FUTURE: needs ouro non-interactive credential-set affordance.
+        // F6 — EXISTING-AGENT credential ROTATION. There is still no headless `ouro` non-interactive
+        // credential-set sink (the documented gap a), so we DON'T pretend to set it silently: we drive
+        // the documented unlock chain (`ouro vault unlock && ouro auth && ouro provider refresh`) in a
+        // native `.trusted` terminal (a real TTY) and gate the `.ready` outcome on a positive
+        // `.working` re-probe (F1's invariant, reused via completeVaultOnboarding). This REPLACES the
+        // old dead-end that returned `existingAgentRefreshUnavailableMessage` and did nothing.
+        //
+        // Risk (c): this branch fires ONLY when the bundle already exists; a brand-new agent's name
+        // is rejected upstream as a collision and never reaches here, so rotation can't fire for a
+        // new agent. Returning nil (no synchronous message) keeps the form open with the in-flight
+        // status `beginCredentialRotation` surfaces; the result follows from the re-probe.
         if providerConfigAgentAlreadyExists(named: resolvedAgent) {
-            return ProviderConfigForm.existingAgentRefreshUnavailableMessage(agentName: resolvedAgent)
+            beginCredentialRotation(agentName: resolvedAgent, provider: provider)
+            return nil
         }
 
         let form = ProviderConfigForm(agentName: resolvedAgent, humanName: humanName)
@@ -17184,12 +17307,73 @@ final class WorkbenchViewModel: ObservableObject {
         vaultOnboardingEntryID = entry.id
         vaultOnboardingRunID = activeSessions[entry.id]?.plan.runId
         vaultOnboardingAgentName = agentName
+        // F13's flow is the onboarding flavor (first-time setup); F6's rotation captures `.rotation`.
+        vaultOnboardingFlavor = .onboarding
         recordActionLog(
             source: "native",
             action: "beginVaultOnboarding",
             targetName: agentName,
             // Audit lane only — the raw recovery verbs (no credential; the human types that in the TTY).
             result: "opened finish-setup terminal: \(command)",
+            succeeded: true
+        )
+    }
+
+    /// F6 — "Reconnect": rotate an EXISTING agent's credential. Unlike F13's cold-start finish-setup
+    /// (a brand-new agent whose vault doesn't exist yet), an existing agent's vault ALREADY exists,
+    /// so this runs the UNLOCK chain (`ouro vault unlock && ouro auth && ouro provider refresh`) — no
+    /// `vault create`, no `--email`. There is still NO non-interactive `ouro` credential-set sink (the
+    /// documented gap a), so we cannot rotate silently: the chain runs in a NATIVE `.trusted` terminal
+    /// (a real TTY) where the human enters the unlock secret + re-enters the provider credential.
+    ///
+    /// This REUSES F13's exit-matching markers + `completeVaultOnboarding` (so the re-probe-gated fold
+    /// — `VaultOnboardingMachine.afterVaultTerminal`, which carries F1's `.working` invariant — is the
+    /// SAME single fold, never duplicated). It records `.rotation` so a failed re-probe surfaces
+    /// reconnect-flavored copy. The credential never routes through any agent context — only the TTY.
+    func beginCredentialRotation(agentName: String, provider: WorkbenchProvider) {
+        let trimmed = agentName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return
+        }
+        // Build the unlock chain from the PURE Core seam (single source of truth for the command
+        // shape + shell-quoting). No `--email`: the existing agent's vault account already exists.
+        let command = VaultOnboardingCommand.rotateCredentialCommandLine(
+            agentName: trimmed,
+            providerFlag: provider.providerFlagValue
+        )
+        let draft = CustomTerminalSessionDraft(
+            name: "Reconnect: \(trimmed)",
+            command: command,
+            workingDirectory: FileManager.default.homeDirectoryForCurrentUser.path,
+            trust: .trusted,
+            autoResume: false,
+            notes: "Workbench credential rotation (reconnect) for \(trimmed)"
+        )
+        guard let entry = createCustomSession(draft, launchAfterCreate: true) else {
+            // The terminal couldn't even launch — surface a launch failure honestly (the machine
+            // folds a nil exit to .vaultCommandLaunchError). Set the flavor first so the failure copy
+            // reads as a reconnect, then drive the SAME completion path.
+            vaultOnboardingAgentName = trimmed
+            vaultOnboardingFlavor = .rotation
+            completeVaultOnboarding(vaultExitCode: nil)
+            return
+        }
+        // Reuse the SAME exit-matching markers so markTerminated → completeVaultOnboarding handles
+        // this terminal's exit with F13's re-probe-gated fold (no duplicated fold).
+        vaultOnboardingEntryID = entry.id
+        vaultOnboardingRunID = activeSessions[entry.id]?.plan.runId
+        vaultOnboardingAgentName = trimmed
+        vaultOnboardingFlavor = .rotation
+        // F6 — show the form's honest in-flight/read-only status while the reconnect runs; the result
+        // is only known after the re-probe (never from the terminal exit alone).
+        providerConfigColdStartMessage =
+            VaultOnboardingMachine.humanLine(for: .runningVaultTerminal, agentName: trimmed, flavor: .rotation)
+        recordActionLog(
+            source: "native",
+            action: "beginCredentialRotation",
+            targetName: trimmed,
+            // Audit lane only — the raw recovery verbs (no credential; the human types that in the TTY).
+            result: "opened reconnect terminal: \(command)",
             succeeded: true
         )
     }
@@ -17206,6 +17390,9 @@ final class WorkbenchViewModel: ObservableObject {
     func completeVaultOnboarding(vaultExitCode: Int32?) {
         let agentName = (vaultOnboardingAgentName
             ?? providerConfigAgentName).trimmingCharacters(in: .whitespacesAndNewlines)
+        // F6 — capture the flavor (onboarding vs rotation) BEFORE clearing markers, so a failed
+        // re-probe surfaces the correctly-flavored seam-free copy.
+        let flavor = vaultOnboardingFlavor
         // Clear the in-flight markers up front so a second termination event can't double-fire.
         vaultOnboardingEntryID = nil
         vaultOnboardingRunID = nil
@@ -17239,6 +17426,8 @@ final class WorkbenchViewModel: ObservableObject {
                     self.providerConfigNeedsVaultSetup = false
                     self.providerConfigColdStartProvider = nil
                     self.providerConfigColdStartMessage = nil
+                    // Reset to the default flavor so a later onboarding attempt isn't mis-flavored.
+                    self.vaultOnboardingFlavor = .onboarding
                     self.runFirstRunBootstrap()
                     self.recordActionLog(
                         source: "native",
@@ -17251,8 +17440,10 @@ final class WorkbenchViewModel: ObservableObject {
                 case let .failed(reason):
                     // Honest failure: surface the seam-free Core human line and KEEP "Finish setup"
                     // available for retry (do NOT dismiss, do NOT clear the flag, do NOT log success).
+                    // F6 — flavor the copy so an existing-agent ROTATION failure reads as a reconnect,
+                    // not first-time setup.
                     self.providerConfigColdStartMessage =
-                        VaultOnboardingMachine.humanLine(for: state, agentName: agentName)
+                        VaultOnboardingMachine.humanLine(for: state, agentName: agentName, flavor: flavor)
                     self.recordActionLog(
                         source: "native",
                         action: "completeVaultOnboarding",

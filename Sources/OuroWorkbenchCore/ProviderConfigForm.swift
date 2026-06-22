@@ -152,15 +152,12 @@ public struct ProviderConfigForm: Sendable {
         "Choose a provider and enter your credentials so your agent can start working. This is the only step that needs you."
     }
 
-    /// Honest, seam-free copy for the EXISTING-agent credential-refresh gap (gap a). Refreshing
-    /// an already-set-up agent's provider has no headless `ouro` non-interactive credential-set
-    /// affordance today, so the form tells the human plainly that this isn't available yet —
-    /// it never fabricates a command and never reopens a CLI pane. (Cold-start, by contrast,
-    /// runs headlessly via `submit`'s hatch plan.)
-    // FUTURE: needs ouro non-interactive credential-set affordance (existing-agent cred-refresh).
-    public static func existingAgentRefreshUnavailableMessage(agentName: String) -> String {
-        "\(agentName) is already set up. Updating an existing agent's provider isn't available here yet — Workbench will add this soon."
-    }
+    // NOTE (F6): the former `existingAgentRefreshUnavailableMessage` (the "not available yet" gap-a
+    // copy) is gone — an existing agent's Connect now drives a real credential ROTATION via the
+    // native unlock-chain terminal (`WorkbenchViewModel.beginCredentialRotation`), so there is no
+    // longer a dead-end to surface. There is still no headless non-interactive `ouro` credential-set
+    // sink (gap a stands), which is exactly why rotation re-collects the credential in a real TTY
+    // rather than persisting silently — see `VaultOnboardingCommand.rotateCredentialCommandLine`.
 
     /// Validate a brand-new agent's name for cold-start creation (the empty-machine /
     /// "create an agent" path). Returns a seam-free message if invalid, else nil.
