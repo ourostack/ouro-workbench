@@ -1442,9 +1442,17 @@ private struct HarnessAgentRow: View {
     var entry: HarnessAgentEntry
 
     var body: some View {
+        // Render the readiness pill/dot/tooltip through the SAME live-aware seam
+        // the steady-state sidebar / "Installed agents" rows use, so the
+        // diagnostic sheet can never disagree with them — and a config-only
+        // `.ready` with an expired token reads "sign-in needed" (orange), not a
+        // false green. Driven by the live outward verdict + in-flight flag folded
+        // into `entry.liveReadiness`; never the config-only status.
+        let readiness = entry.liveReadiness
+        let tint = InstalledAgentRowPresentation.dotColor(for: readiness).swiftUIColor
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Image(systemName: entry.isReady ? "person.crop.circle" : "person.crop.circle.badge.exclamationmark")
-                .foregroundStyle(entry.status.harnessTint)
+                .foregroundStyle(tint)
                 .font(.system(size: 13))
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
@@ -1463,11 +1471,12 @@ private struct HarnessAgentRow: View {
                     .truncationMode(.tail)
             }
             Spacer()
-            StatusPill(text: entry.status.harnessLabel, color: entry.status.harnessTint)
+            StatusPill(text: InstalledAgentRowPresentation.label(for: readiness), color: tint)
             if let mcpStatus = entry.mcpStatus {
                 StatusPill(text: "mcp \(mcpStatus.harnessShortLabel)", color: mcpStatus.harnessTint)
             }
         }
+        .help(InstalledAgentRowPresentation.help(for: readiness, detail: entry.detail))
     }
 }
 
@@ -1574,32 +1583,6 @@ private extension HarnessHealthState {
             return "attention"
         case .blocked:
             return "blocked"
-        }
-    }
-}
-
-private extension OuroAgentBundleStatus {
-    var harnessTint: SwiftUI.Color {
-        switch self {
-        case .ready:
-            return .green
-        case .disabled, .missingConfig:
-            return .orange
-        case .invalidConfig:
-            return .red
-        }
-    }
-
-    var harnessLabel: String {
-        switch self {
-        case .ready:
-            return "ready"
-        case .disabled:
-            return "disabled"
-        case .missingConfig:
-            return "no config"
-        case .invalidConfig:
-            return "bad config"
         }
     }
 }

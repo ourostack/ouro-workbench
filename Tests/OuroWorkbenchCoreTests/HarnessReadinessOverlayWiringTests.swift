@@ -47,7 +47,73 @@ final class HarnessReadinessOverlayWiringTests: XCTestCase {
         )
     }
 
+    // MARK: - Unit 3: the harness pill renders via the live-aware seam
+
+    func testHarnessAgentRowNoLongerDerivesReadinessFromConfigOnlyLabelTint() throws {
+        let body = try harnessAgentRowDecl()
+        XCTAssertFalse(
+            body.contains("entry.status.harnessLabel"),
+            "the harness pill must NOT label off the config-only OuroAgentBundleStatus.harnessLabel (that was the false green)"
+        )
+        XCTAssertFalse(
+            body.contains("entry.status.harnessTint"),
+            "the harness pill/dot must NOT tint off the config-only OuroAgentBundleStatus.harnessTint"
+        )
+    }
+
+    func testHarnessAgentRowRendersViaLiveReadinessSeam() throws {
+        let body = try harnessAgentRowDecl()
+        XCTAssertTrue(
+            body.contains("entry.liveReadiness"),
+            "the row must resolve the live readiness (folds the live outward verdict + in-flight flag through the shared seam)"
+        )
+        XCTAssertTrue(
+            body.contains("InstalledAgentRowPresentation.label(for:"),
+            "the pill label must come from the live-aware InstalledAgentRowPresentation.label(for:)"
+        )
+        XCTAssertTrue(
+            body.contains("InstalledAgentRowPresentation.dotColor(for:"),
+            "the pill/dot tint must come from the live-aware InstalledAgentRowPresentation.dotColor(for:)"
+        )
+        XCTAssertTrue(
+            body.contains("InstalledAgentRowPresentation.help(for:"),
+            "the row tooltip must come from the live-aware InstalledAgentRowPresentation.help(for:detail:)"
+        )
+    }
+
+    func testConfigOnlyHarnessLabelAndTintExtensionRemoved() throws {
+        // Once the row routes through the live seam, the config-only
+        // OuroAgentBundleStatus.harnessLabel / harnessTint extension is dead code;
+        // an unused private decl breaks -warnings-as-errors, so it must be gone.
+        let source = try appSource()
+        let bundleStatusExtension = "private extension OuroAgentBundleStatus {"
+        if let range = source.range(of: bundleStatusExtension) {
+            let slice = source[range.lowerBound...]
+            // If the extension still exists at all, it must not re-declare the
+            // config-only readiness label/tint that the live seam replaced.
+            let extBody = String(slice.prefix(400))
+            XCTAssertFalse(
+                extBody.contains("var harnessLabel"),
+                "the config-only OuroAgentBundleStatus.harnessLabel must be removed once the row uses the live seam"
+            )
+            XCTAssertFalse(
+                extBody.contains("var harnessTint"),
+                "the config-only OuroAgentBundleStatus.harnessTint must be removed once the row uses the live seam"
+            )
+        }
+    }
+
     // MARK: - Helpers (mirror AgentReadinessOverlayWiringTests)
+
+    private func harnessAgentRowDecl() throws -> String {
+        let source = try appSource()
+        return try sourceSlice(
+            in: source,
+            from: "private struct HarnessAgentRow: View {",
+            to: "\n/// A confirm-gated control button"
+        )
+    }
+
 
     private func harnessStatusComputedDecl() throws -> String {
         let source = try appSource()
