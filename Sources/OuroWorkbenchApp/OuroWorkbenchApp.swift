@@ -12602,12 +12602,14 @@ final class WorkbenchViewModel: ObservableObject {
             return .failed(reason: CloneAgentFlowState.failureReason(forRemoteLabel: remoteLabel))
         }
 
-        let resolvedName = agentName.trimmingCharacters(in: .whitespacesAndNewlines)
-        // The label the operator sees in audit/result lines (named agent, else the friendly remote).
-        let auditName = resolvedName.isEmpty ? remoteLabel : resolvedName
-        // The seam-free human surface names the agent; fall back to the friendly remote label when
-        // the operator didn't type a name (the clone derives one, but we can't know it pre-scan).
-        let humanName = resolvedName.isEmpty ? remoteLabel : resolvedName
+        let givenName = agentName.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // F7 cold-review CRITICAL — verify the clone against REALITY, not an assumed derivation. The
+        // agent-name field is OPTIONAL and the recommended DEFAULT is BLANK (the clone derives the
+        // name from the repo). Snapshot the roster BEFORE the clone so the pure
+        // `ClonedAgentResolver` can diff it against the refreshed roster and find what ACTUALLY
+        // landed — for both the named and the blank-default paths.
+        let rosterNamesBefore = ouroAgents.map(\.name)
 
         // F7 — STOP THE THREE LIES. The runner no longer throws: it REPORTS the outcome so we can
         // name the real cause. We only inspect the bundle / probe on a CLEAN exit (B-2: a wedged or
@@ -12616,33 +12618,58 @@ final class WorkbenchViewModel: ObservableObject {
         // alone is NEVER ready — it needs a present agent.json AND a positive `.working` probe.
         let run = await CloneAgentRunner.runHeadless(plan: plan)
 
+        // Always re-probe the roster so the cloned bundle surfaces with its TRUE state (a
+        // credential-less / dead clone shows as needs-credentials, not ready — never vanishes). This
+        // runs BEFORE the resolver read because the resolver's authority IS this refreshed roster
+        // (the on-disk agent.json scan); `refreshOuroAgents()` is synchronous.
+        refreshOuroAgents()
+
         // gap #2 — consult the bundle, but ONLY on a clean exit (otherwise a non-zero / timed-out
-        // run hasn't produced a trustworthy bundle to read).
+        // run hasn't produced a trustworthy bundle to read). The presence + provider both come from
+        // the resolver (driven by the refreshed roster) so the BLANK-name default is handled too:
+        // the old code gated this whole block on a non-blank name, so a blank name skipped it and a
+        // clean SUCCESSFUL clone was reported as the false `.invalidMissingAgentJson`.
         var agentJsonPresent = false
         var checkVerdict: ProviderConnectionVerdict?
-        if case .exited(code: 0) = run, !resolvedName.isEmpty {
-            let agentJsonPath = CloneBundleLocator.agentJsonPath(
-                agentName: resolvedName,
-                agentBundlesRoot: ouroAgentInventory.agentBundlesURL
+        var resolvedClone: ClonedAgentResolution?
+        if case .exited(code: 0) = run {
+            let resolution = ClonedAgentResolver.resolveClonedAgent(
+                givenName: givenName,
+                remote: remote,
+                rosterNamesBefore: rosterNamesBefore,
+                rosterAfter: ouroAgents.map {
+                    ClonedRosterEntry(
+                        name: $0.name,
+                        // The roster reports `.missingConfig` when the bundle dir exists but its
+                        // agent.json doesn't — that IS the honest "agent.json absent" signal.
+                        agentJsonPresent: $0.status != .missingConfig,
+                        provider: $0.humanFacing?.provider
+                    )
+                }
             )
-            agentJsonPresent = FileManager.default.fileExists(atPath: agentJsonPath)
+            resolvedClone = resolution
+            agentJsonPresent = resolution.agentJsonPresent
             // Only probe when there's a bundle to probe (a missing agent.json is already a failure).
             if agentJsonPresent {
-                // The clone configures the OUTWARD lane (the one onboarding surfaces). Probe it on a
-                // short budget so a flaky-daemon hang degrades to "couldn't confirm" fast.
-                checkVerdict = await runCloneProviderCheck(agentName: resolvedName, lane: "outward")
+                // The clone configures the OUTWARD lane (the one onboarding surfaces). Probe the
+                // RESOLVED name (the agent that actually landed) on a short budget so a flaky-daemon
+                // hang degrades to "couldn't confirm" fast.
+                checkVerdict = await runCloneProviderCheck(agentName: resolution.name, lane: "outward")
             }
         }
+
+        // The label the operator sees in audit / human-facing lines: the resolver's name when the
+        // clone landed (so even the blank-default path names the real agent), else the typed name,
+        // else the friendly remote label.
+        let surfaceName = resolvedClone?.name ?? (givenName.isEmpty ? remoteLabel : givenName)
+        let auditName = surfaceName
+        let humanName = surfaceName
 
         let outcome = CloneOutcomeClassifier.classifyClone(
             runResult: run,
             agentJsonPresent: agentJsonPresent,
             checkVerdict: checkVerdict
         )
-
-        // Always re-probe the roster so the cloned bundle surfaces with its TRUE state (a
-        // credential-less / dead clone shows as needs-credentials, not ready — never vanishes).
-        refreshOuroAgents()
 
         switch outcome {
         case .ready:
@@ -12654,13 +12681,14 @@ final class WorkbenchViewModel: ObservableObject {
                 result: "ran `\(plan.commandLine)` (clone; headless, inline; verified ready)",
                 succeeded: true
             )
-            return .succeeded(agentName: resolvedName.isEmpty ? nil : resolvedName)
+            return .succeeded(agentName: resolvedClone?.name)
         case .needsVaultUnlock:
-            // B-4 — a clone has NO operator-entered provider. Read it from the freshly-scanned
-            // cloned record's outward (humanFacing) lane and map it back to a WorkbenchProvider to
-            // drive F6's reconnect chain. If the lane provider is absent/unrecognized we can't run
-            // the unlock chain honestly — degrade to the "couldn't confirm" copy.
-            if let laneProvider = ouroAgent(named: resolvedName)?.humanFacing?.provider,
+            // B-4 — a clone has NO operator-entered provider. The resolver already read the provider
+            // from the cloned record's outward (humanFacing) lane in the refreshed roster; map it
+            // back to a WorkbenchProvider to drive F6's reconnect chain. If the lane provider is
+            // absent/unrecognized we can't run the unlock chain honestly — degrade to "couldn't
+            // confirm".
+            if let laneProvider = resolvedClone?.provider,
                let provider = WorkbenchProvider(providerFlagValue: laneProvider) {
                 recordActionLog(
                     source: "native",
@@ -12672,8 +12700,9 @@ final class WorkbenchViewModel: ObservableObject {
                 // B-5 — beginCredentialRotation sets the .rotation flavor + reuses F6's vault markers
                 // (vaultOnboardingEntryID/RunID/completeVaultOnboarding) and its in-flight gate. It
                 // drives the unlock/reconnect terminal; the sheet shows the honest needs-unlock line
-                // while it runs (the re-probe — not this return — is the authority on readiness).
-                beginCredentialRotation(agentName: resolvedName, provider: provider)
+                // while it runs (the re-probe — not this return — is the authority on readiness). Use
+                // the RESOLVED name so the blank-default path reconnects the agent that landed.
+                beginCredentialRotation(agentName: resolvedClone?.name ?? surfaceName, provider: provider)
                 return .failed(reason: outcome.humanFacingLine(agentName: humanName))
             }
             // Couldn't resolve the provider — surface the honest could-not-confirm copy instead of

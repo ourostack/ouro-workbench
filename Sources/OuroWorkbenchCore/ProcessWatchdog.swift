@@ -51,6 +51,11 @@ public enum ProcessWatchdog {
         // The process exited (on its own, or because the watchdog terminated it). Cancel any
         // still-pending kill, then read the flag under the lock so a kill the closure already
         // started is observed.
+        // HONEST EDGE (safe): if the child exits naturally in the sub-millisecond window AFTER the
+        // deadline closure has ALREADY begun executing, `cancel()` is a no-op (the closure isn't
+        // pending) and `didFire` is observed `true` — so a clone that just-barely-finished can be
+        // reported `.timedOut`. The outcome is safe (the clone path's `.timedOut` is a retry), and
+        // the window is vanishingly small; we accept it rather than add a fragile race-narrowing.
         watchdog.cancel()
         lock.lock()
         let fired = didFire
