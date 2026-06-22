@@ -10595,6 +10595,19 @@ final class WorkbenchViewModel: ObservableObject {
     /// the fresh-launch path runs. Non-nil ⇒ the confirmation is presented.
     @Published var pendingStartFresh: ProcessEntry?
     @Published var ouroAgents: [OuroAgentRecord] = []
+    /// Live steady-state readiness overlay for the agent rows. The scanner's `.ready`
+    /// only means "agent.json present & enabled" — a config-only fact that the sidebar /
+    /// "Installed agents" rows used to render as a green "ready" dot WITHOUT any live
+    /// connection check (false green: slugger reads ready while `ouro check` returns
+    /// `failed (401 … expired)`). `refreshAgentOutwardReadiness()` runs a real outward-lane
+    /// `ouro check` per config-ready agent and records the F2-classified verdict here; the
+    /// rows fold it through `InstalledAgentRowPresentation.liveReadiness(...)` so a row is
+    /// only green when a live check actually returned `.working`. Absent key ⇒ no live
+    /// verdict yet (row reads "checking…" while in-flight, else "not verified").
+    @Published var agentOutwardVerdicts: [String: ProviderConnectionVerdict] = [:]
+    /// The set of agent names whose outward `ouro check` is currently in flight, so a row
+    /// can honestly show "checking…" rather than a premature green or a stale "not verified".
+    @Published var agentChecksInFlight: Set<String> = []
     /// F6 — the agent the operator has armed for removal (the destructive remove-agent action sits
     /// behind a confirmation). Non-nil ⇒ the confirmation dialog is presented; `removeAgent` clears it.
     @Published var agentPendingRemoval: OuroAgentRecord?
@@ -12251,6 +12264,10 @@ final class WorkbenchViewModel: ObservableObject {
         ouroAgents = ouroAgentInventory.scan()
         resolveBossFromInventoryIfNeeded()
         refreshWorkbenchMCPRegistration()
+        // Kick off a live outward-lane `ouro check` per config-ready agent so the steady-state
+        // rows show an HONEST dot/label (never a config-only false green). Non-blocking: this
+        // fires on launch AND on the "Refresh Agents" button (both call refreshOuroAgents).
+        refreshAgentOutwardReadiness()
     }
 
     /// When the persisted boss is unresolved (a fresh / factory-reset machine, or
@@ -15106,6 +15123,54 @@ final class WorkbenchViewModel: ObservableObject {
         save()
         refreshOnboardingReadiness()
         onboardingBossSnapshot = nil
+    }
+
+    /// Run a live outward-lane `ouro check` for every config-ready agent with a configured
+    /// outward lane, recording each F2-classified verdict so the steady-state rows can show an
+    /// HONEST dot/label instead of the scanner's config-only false green.
+    ///
+    /// Non-blocking: the per-agent checks run concurrently in a detached `Task` + `TaskGroup`, so
+    /// one slow / wedged agent can't stall the others or the UI. All `@Published` mutations
+    /// (`agentChecksInFlight`, `agentOutwardVerdicts`) happen on the main actor. A `nil` probe
+    /// result (couldn't confirm) leaves no verdict — the row degrades to "not verified", never a
+    /// false green. Called at the end of `refreshOuroAgents()`, so it fires on launch AND on the
+    /// "Refresh Agents" button.
+    func refreshAgentOutwardReadiness() {
+        // Snapshot, on the main actor, the agents worth probing: config-ready bundles whose
+        // OUTWARD (humanFacing) lane is fully configured. A disabled / missing / invalid bundle
+        // can't connect, and an unconfigured outward lane has nothing to check.
+        let targets = ouroAgents.filter { agent in
+            agent.status == .ready
+                && agent.humanFacing?.provider != nil
+                && agent.humanFacing?.model != nil
+        }
+        guard !targets.isEmpty else { return }
+
+        let names = targets.map(\.name)
+        // Mark every target in-flight up front so the rows immediately read "checking…" rather
+        // than flickering through a stale "not verified".
+        agentChecksInFlight.formUnion(names)
+
+        Task { [weak self] in
+            await withTaskGroup(of: (String, ProviderConnectionVerdict?).self) { group in
+                for name in names {
+                    group.addTask { [weak self] in
+                        guard let self else { return (name, nil) }
+                        let verdict = await self.runColdStartProviderCheck(agentName: name, lane: "outward")
+                        return (name, verdict)
+                    }
+                }
+                for await (name, verdict) in group {
+                    guard let self else { continue }
+                    // Store the verdict (or leave it absent on nil → "not verified") and clear the
+                    // in-flight flag, both on the main actor.
+                    if let verdict {
+                        self.agentOutwardVerdicts[name] = verdict
+                    }
+                    self.agentChecksInFlight.remove(name)
+                }
+            }
+        }
     }
 
     /// F1 — the post-hatch credential probe for a freshly cold-started agent. Runs `ouro check`
