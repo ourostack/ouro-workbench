@@ -103,9 +103,20 @@ final class WorkbenchScenarioMatrixTests: XCTestCase {
                 latestRun: fixture.latestRun,
                 action: RecoveryAction(rawValue: row.expectedRecovery) ?? .noAction
             )
-            let includesCheckpointPrompt = planned.arguments.contains {
-                $0.contains("Recover this Ouro Workbench terminal-agent session")
+            // F12a gap 5 — the checkpoint prompt can be delivered EITHER as the last
+            // positional argv token (generic argv-reading TUIs) OR via
+            // `.sendAfterLaunch` (Copilot, whose TUI ignores an argv prompt). The
+            // matrix's `expectedRecoveryPrompt` means "a checkpoint prompt is
+            // provided", independent of channel, so detection must consider both.
+            let promptMarker = "Recover this Ouro Workbench terminal-agent session"
+            let argvHasPrompt = planned.arguments.contains { $0.contains(promptMarker) }
+            let sendAfterLaunchHasPrompt: Bool
+            if case let .sendAfterLaunch(text) = planned.checkpointPromptDelivery {
+                sendAfterLaunchHasPrompt = text.contains(promptMarker)
+            } else {
+                sendAfterLaunchHasPrompt = false
             }
+            let includesCheckpointPrompt = argvHasPrompt || sendAfterLaunchHasPrompt
             if includesCheckpointPrompt != row.expectedRecoveryPrompt {
                 mismatches.append(
                     "\(row.caseID): checkpoint prompt expected \(row.expectedRecoveryPrompt), got \(includesCheckpointPrompt)"
