@@ -24,7 +24,18 @@
 - Risk: `.appliedUnconfirmed` DISTINCT, never plain `.applied`; ledger read in
   MCP wiring not hardcoded.
 
-### Gap 2 — missing `screen` → "exited 127" dead-end  ⬜
+### Gap 2 — missing `screen` → "exited 127" dead-end  ✅ (see progress log)
+
+LATENT HAZARD (flagged, NOT fixed): SwiftTerm `LocalProcess.swift` decodes the
+child's `terminationStatus` into an `Int32?` exitCode via its own switch (around the
+`Process completed` / `childStopped()` block, ~L399-410 in the pinned 1.13.x
+checkout). Our `ProcessExitStatus(rawWaitStatus:)` ALSO decodes a raw wait status.
+Today the App passes SwiftTerm's already-decoded code as `rawStatus` and we re-wrap
+it, which is benign for the 127 case (127 decodes to 127). But if a future SwiftTerm
+upgrade changes that re-decode (e.g. emits a raw wait status rather than a plain
+exit code, or maps signals differently), the 127 gate in `TerminalExitDiagnosis`
+could miss a screen-missing exit. Revisit `ProcessExitStatus` ↔ SwiftTerm exit
+decoding if SwiftTerm is bumped. Out of scope for F12a.
 - Core: new `TerminalExitDiagnosis.swift` — `screenWrappedExit(exitCode:Int32?,
   screenHealth:ExecutableHealthStatus) -> String?` (phrasebook idiom). 4 arms:
   non-127→nil; 127+.missing→reinstall; 127+.notExecutable→reinstall; 127+.available
@@ -79,3 +90,8 @@
 - 2026-06-22 01:43 Gap 1 complete (9276459): Core readback + isApplied/.appliedUnconfirmed
   (RED→GREEN), MCP wiring threads queue.appliedRequestIds(), tool desc updated;
   strict build clean; 11 Core arms + 3 source-pins green.
+- 2026-06-22 01:49 Gap 2 complete: TerminalExitDiagnosis seam (4 arms, gated on
+  127); preflight checks PersistentTerminalSession.executable gated on
+  persistentSessionName (BEFORE inner-agent early-out); markTerminated 127 backstop
+  gated on the screen wrapper. RED→GREEN; strict build clean. SwiftTerm re-decode
+  hazard flagged above (not fixed).

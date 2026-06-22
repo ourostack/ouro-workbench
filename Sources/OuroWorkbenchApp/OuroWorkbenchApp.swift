@@ -18800,6 +18800,22 @@ final class WorkbenchViewModel: ObservableObject {
                 return "\(entry.name): working directory doesn't exist — \(workingDirectory)"
             }
         }
+        // F12a gap 2 — the OUTER `screen` multiplexer every persistent session is
+        // wrapped in (PersistentTerminalSession.executable). If it's missing or not
+        // runnable the wrapped command exits 127 with a dead-end message; catch that
+        // BEFORE the spawn (the primary fix; markTerminated is the TOCTOU backstop).
+        // GATED on `plan.persistentSessionName != nil`: a direct spawn (cold-start /
+        // provider probe runs `ouro`/`gh` without a screen wrapper) has no
+        // multiplexer to blame, so its 127 must never be misattributed here.
+        if plan.persistentSessionName != nil {
+            let screenHealth = executableHealthChecker.health(for: PersistentTerminalSession.executable)
+            switch screenHealth.status {
+            case .missing, .notExecutable:
+                return "\(entry.name): the terminal multiplexer (screen) is missing or not runnable — \(screenHealth.detail)"
+            case .available:
+                break
+            }
+        }
         // Only validate a command that's an explicit path; bare names and
         // shell-wrapped commands resolve through PATH / the shell at launch in
         // ways the checker can't fully model, so blocking them risks false
@@ -19246,9 +19262,23 @@ final class WorkbenchViewModel: ObservableObject {
             if terminalFocusEntryID == entryId {
                 terminalFocusEntryID = nil
             }
+            // F12a gap 2 — TOCTOU backstop. The preflight catches a missing `screen`
+            // before launch, but it can vanish between preflight and exit; a
+            // screen-wrapped session that exits 127 then renders a dead-end "exited
+            // with code 127". Replace that with the honest TerminalExitDiagnosis.
+            // GATED on the screen wrapper (currentPlan?.persistentSessionName != nil)
+            // so a direct-spawn 127 is never misattributed to a missing multiplexer.
+            let screenDiagnosis: String? = currentPlan?.persistentSessionName != nil
+                ? TerminalExitDiagnosis.screenWrappedExit(
+                    exitCode: status.exitCode,
+                    screenHealth: executableHealthChecker.health(for: PersistentTerminalSession.executable).status
+                )
+                : nil
             updateEntry(entryId) { entry in
                 entry.attention = nextRunStatus == .manualActionNeeded ? .needsBossReview : .idle
-                if nextRunStatus == .manualActionNeeded {
+                if let screenDiagnosis {
+                    entry.lastSummary = "\(entry.name): \(screenDiagnosis)"
+                } else if nextRunStatus == .manualActionNeeded {
                     entry.lastSummary = "\(entry.name) recovery attempt exited with code \(status.exitCode.map(String.init) ?? "unknown")"
                 } else {
                     entry.lastSummary = "\(entry.name) exited with code \(status.exitCode.map(String.init) ?? "unknown")"
