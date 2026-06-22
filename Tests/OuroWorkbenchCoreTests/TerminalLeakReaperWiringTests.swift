@@ -23,19 +23,36 @@ import XCTest
 final class TerminalLeakReaperWiringTests: XCTestCase {
     // MARK: Per-entry quit helper
 
-    func testQuitHelperExistsAndConsultsTheReaperSeam() throws {
+    func testQuitHelperQuitsUnconditionallyAndIsNotGatedOnTheStaleCache() throws {
+        // HIGH cold-review fix: the per-entry quit MUST be unconditional. The old
+        // shape gated the quit on `ScreenSessionReaper.quitArguments(...,
+        // liveSessionNames: liveScreenSessionNames)`, which returns nil unless the
+        // name is in the startup-only `liveScreenSessionNames` cache. That cache is
+        // populated EXACTLY once (refreshLiveScreenSessions at launch) and never
+        // refreshed, so a session created THIS run is never in it → the quit was
+        // silently skipped. For archive (the entry keeps its id and stays in
+        // state.processEntries) that leaks the screen PERMANENTLY. The quit must be
+        // issued for `sessionName(for: entryId)` with NO liveness gate.
         let body = try quitHelper()
-        XCTAssertTrue(
-            body.contains("ScreenSessionReaper.quitArguments"),
-            "quitPersistentScreenIfNeeded must ask the pure reaper for the quit arguments (nil when not live)"
-        )
-        XCTAssertTrue(
-            body.contains("liveScreenSessionNames"),
-            "the quit helper must read the cached live-session set (no second screen -ls probe)"
-        )
         XCTAssertTrue(
             body.contains("spawnScreenQuit"),
             "the quit helper must spawn via the shared spawnScreenQuit (off-main + watchdog), not a bespoke spawn"
+        )
+        XCTAssertTrue(
+            body.contains("PersistentTerminalSession.terminateArguments(") &&
+                body.contains("PersistentTerminalSession.sessionName(for: entryId)"),
+            "the quit helper must issue terminateArguments(sessionName: sessionName(for: entryId)) UNCONDITIONALLY for the entry"
+        )
+        // Regression guards: re-introducing the stale-cache liveness gate must trip
+        // this. The helper must NOT consult the startup-only cache and must NOT
+        // route the decision through the nil-gated reaper seam.
+        XCTAssertFalse(
+            body.contains("liveScreenSessionNames"),
+            "the per-entry quit must NOT be gated on the startup-only liveScreenSessionNames cache (a within-run session is never in it → quit silently skipped → permanent archive leak)"
+        )
+        XCTAssertFalse(
+            body.contains("ScreenSessionReaper.quitArguments"),
+            "the per-entry quit must NOT route through the nil-gated quitArguments seam (that seam re-introduces the stale-cache liveness gate)"
         )
     }
 
