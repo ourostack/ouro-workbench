@@ -53,4 +53,20 @@ public enum BossWatchBackoff {
         }
         return now >= nextRetryAt
     }
+
+    /// One automatic-loop failure: bump the consecutive count and compute the next
+    /// allowed retry instant. Pure mirror of the catch-path bump, so the daemon-down
+    /// early-return and the empty/transport failure path share ONE escalation rule and
+    /// can't drift. Returns the new failure count and the armed `nextRetryAt` —
+    /// `delay(consecutiveFailures: count)` from `now`. The caller assigns both back to
+    /// its published state.
+    public static func registerFailure(
+        consecutiveFailures: Int,
+        now: Date,
+        base: TimeInterval = 60,
+        cap: TimeInterval = 900
+    ) -> (consecutiveFailures: Int, nextRetryAt: Date) {
+        let next = consecutiveFailures + 1
+        return (next, now.addingTimeInterval(delay(consecutiveFailures: next, base: base, cap: cap)))
+    }
 }
