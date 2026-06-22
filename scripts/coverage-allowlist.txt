@@ -8,14 +8,22 @@
 # readResponse(id:) reads the MCP subprocess with a `while true` loop that only
 # exits via `return`/`throw`; the closing brace + its fall-through regions after
 # the loop are unreachable by construction. Restructuring battle-tested PTY-read
-# IO solely to colour a brace would be worse than the exclusion.
-BossAgentMCPClient.swift 1 3
+# IO solely to colour a brace would be worse than the exclusion. (F8b lowered the
+# region count 3→2: the rewired own-group spawn path is fully covered, including the
+# fail-closed audit emission, which a direct `makeProcessBox` mismatch test exercises.)
+BossAgentMCPClient.swift 1 2
 
 # 100% line, every identifiable branch covered. One synthesized region (a
 # default-argument / branch region the Swift `llvm-cov --show-regions` view does
 # not surface as an uncovered arm) remains uncountable; there is no source line
 # or branch a test can target for it.
 SessionActivityReader.swift 0 1
+
+# ProcessWatchdog.swift is intentionally NOT listed: it is genuinely 100% line + region
+# covered. F8b briefly added a structurally-dead gated `.killGroup` default-killpg arm here
+# (with a 1-line/1-region allowlist entry); the F8b cold-review removed that dead arm, so the
+# escalation once again takes no process-group syscall and needs no exclusion. The own-group
+# killpg reap lives in ProcessIOBox.forceKill (covered there).
 
 # DaemonLiveness.swift is intentionally NOT listed: it is genuinely 100% line +
 # region covered. The former entry covered a flaky synthesized call-site region

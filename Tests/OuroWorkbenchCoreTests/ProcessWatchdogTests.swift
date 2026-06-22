@@ -1,4 +1,5 @@
 import XCTest
+import Darwin
 @testable import OuroWorkbenchCore
 
 final class ProcessWatchdogTests: XCTestCase {
@@ -185,23 +186,38 @@ final class ProcessWatchdogTests: XCTestCase {
         )
     }
 
-    // MARK: - F8 — source-pin the never-group-reap safety property
+    // MARK: - F8b cold-review — ProcessWatchdog never group-reaps (the dead arm is removed)
+    //
+    // The `childInOwnGroup`/`groupSignalDeliverer` `.killGroup` arm was STRUCTURALLY DEAD: all 8
+    // ProcessWatchdog callers go through `waitUntilExit`/`waitUntilExitReportingTimeout`, NEITHER
+    // of which forwards those parameters, so `.killGroup` was unreachable from any production path
+    // (the real killpg lives in `ProcessIOBox.forceKill`, not a ProcessWatchdog caller). F8's
+    // cold-review removed this exact arm; F8b re-introduced it. The cold-review removes it again,
+    // restoring ProcessWatchdog to 100% no-allowlist. The own-group killpg + WatchdogEscalation
+    // policy stay LIVE + tested via `ProcessIOBox` (unchanged) — nothing is lost here.
 
-    /// Pin the F8 SAFETY PROPERTY: `ProcessWatchdog` NEVER group-reaps. Every current spawn
-    /// shares Workbench's process group, so a `killpg` would reap Workbench itself — F8's
-    /// escalation must SIGKILL the CHILD pid only. A future edit that reintroduces a group
-    /// reap before the F8b `posix_spawn` own-group opt-in lands would trip this pin. (The
-    /// behavioral child-only SIGKILL contract is enforced by the injected-deliverer tests
-    /// above; this source pin is the structural backstop.)
+    // MARK: - F8/F8b — source-pin the never-group-reap safety property (re-inverted)
+
+    /// RE-INVERTED to the F8 pin. F8b's cold-review removed the dead `.killGroup` arm from
+    /// `ProcessWatchdog`, so the file must once again take NO process-group syscall: `ProcessWatchdog`
+    /// NEVER group-reaps. Every current spawn that flows through a ProcessWatchdog caller shares
+    /// Workbench's process group, so a `killpg` would reap Workbench itself — the escalation's
+    /// post-grace stage must SIGKILL the CHILD pid only. A future edit that re-introduces a group
+    /// reap (or the dead gate) before an AWAITED own-group spawn actually wires it up would trip this
+    /// pin. The live own-group killpg lives in `ProcessIOBox.forceKill` (tested there).
     func testProcessWatchdogNeverGroupReaps() throws {
         let source = try processWatchdogSource()
         XCTAssertFalse(
             source.contains("killpg"),
-            "F8 must never group-reap: a killpg of the SHARED group would reap Workbench itself"
+            "ProcessWatchdog must never group-reap: a killpg of the SHARED group would reap Workbench itself"
         )
         XCTAssertFalse(
-            source.contains("getpgid"),
-            "F8 takes no process-group syscall — the group reap (and getpgid) lands in F8b"
+            source.contains("groupSignalDeliverer"),
+            "the dead group-reap seam must be gone — the real killpg lives in ProcessIOBox.forceKill"
+        )
+        XCTAssertFalse(
+            source.contains("childInOwnGroup"),
+            "escalateTermination must take NO own-group gate flag (the arm it gated was structurally dead)"
         )
         XCTAssertTrue(
             source.contains("signalDeliverer(pid, SIGKILL)"),

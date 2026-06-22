@@ -377,6 +377,29 @@ final class DaemonLivenessTests: XCTestCase {
         try await DaemonManager.detachedStart()
     }
 
+    // MARK: - F8b cold-review — detachedStart reaps its short-lived `env ouro up` child
+
+    /// Records every pid passed to the reap seam.
+    private final class ReapRecorder: @unchecked Sendable {
+        private let lock = NSLock()
+        private(set) var pids: [pid_t] = []
+        func reap(_ pid: pid_t) { lock.lock(); pids.append(pid); lock.unlock() }
+    }
+
+    func testDetachedStartReapsTheShortLivedUpChildViaTheSeam() throws {
+        // `env ouro up` is a SHORT-LIVED launcher: it forks/launches the long-lived daemon
+        // (a grandchild in the own group) and EXITS. The long-lived daemon outlives Workbench
+        // (reparented to launchd) and must NEVER be waitpid-blocked — but the `env ouro up`
+        // child itself becomes a `<defunct>` zombie unless reaped. detachedStart must hand that
+        // pid to the reap seam (a detached waitpid), exactly once. Pre-fix there is no reap seam.
+        let rec = ReapRecorder()
+        try DaemonManager.detachedStartSync(
+            spawn: { 4242 },           // fake the short-lived child's pid (no real process)
+            reap: { rec.reap($0) }     // record instead of a real detached waitpid
+        )
+        XCTAssertEqual(rec.pids, [4242], "detachedStart must reap the short-lived `env ouro up` child exactly once")
+    }
+
     func testDaemonManagerDefaultStartSeamIsNotInvokedWhenAlreadyUp() async {
         let probe = DaemonLivenessProbe(
             configuration: DaemonLivenessConfiguration(probeTimeoutNanoseconds: 1_000_000),

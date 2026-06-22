@@ -16,12 +16,23 @@ import Foundation
 ///
 /// F8 — a bare `terminate()` (SIGTERM) is not enough: a wedged child that IGNORES
 /// SIGTERM (a `node` swallowing the signal, a stuck syscall) survives the kill and the
-/// wait still hangs forever. The watchdog now ESCALATES — SIGTERM, then after a grace
-/// window SIGKILL the CHILD pid only. F8 deliberately never group-reaps: every current
-/// spawn SHARES Workbench's process group, so a process-group SIGKILL would reap Workbench
-/// itself. The grandchild-reaping group reap — plus the `posix_spawn` own-group opt-in and
-/// the escalation-policy seam that gates it — arrives together in the sequenced F8b
-/// follow-up, where the group-reap syscall is born reachable and coverable.
+/// wait still hangs forever. The watchdog ESCALATES — SIGTERM, then after a grace
+/// window SIGKILL.
+///
+/// ProcessWatchdog NEVER group-reaps. Every `Process` that flows through one of its callers
+/// SHARES Workbench's process group (a plain `Process()` inherits it), so a process-group SIGKILL
+/// here would reap Workbench itself — the post-grace stage SIGKILLs the CHILD pid only. The
+/// own-group group-reap (for the mcp-serve child and the detached daemon, both spawned via
+/// `SpawnInOwnGroup` / `POSIX_SPAWN_SETPGROUP`) lives in `ProcessIOBox.forceKill`, which is NOT a
+/// ProcessWatchdog caller.
+///
+/// (History: F8b briefly added an own-group-gated group-reap arm here. It was structurally DEAD —
+/// all 8 ProcessWatchdog callers go through `waitUntilExit` / `waitUntilExitReportingTimeout`,
+/// NEITHER of which forwards the gate, so the group arm was unreachable from any production path.
+/// F8's cold-review had already removed that exact arm; the F8b cold-review removed it again. The
+/// `WatchdogEscalation` policy + its own-group `.killGroup` case stay LIVE, exercised by
+/// `ProcessIOBox` — nothing is lost. The pin `testProcessWatchdogNeverGroupReaps` keeps this file
+/// free of any process-group-reap syscall + own-group gate flag.)
 public enum ProcessWatchdog {
     /// Wait for `process` to exit, terminating it if it runs past `timeoutSeconds`.
     /// `process` must already be running (`try process.run()` called by the caller).
@@ -108,12 +119,19 @@ public enum ProcessWatchdog {
         }
     }
 
-    /// The escalation: SIGTERM, then (after `gracePeriodSeconds` of the child still running)
-    /// SIGKILL the CHILD pid only. Impure delivery through the injected `signalDeliverer`: the
-    /// orchestration (SIGTERM → grace → child-only SIGKILL, plus the `isRunning` re-checks) is
-    /// covered by injecting a fake deliverer. F8 never group-reaps — see the type doc; the
-    /// group reap + the escalation policy that would gate it are deferred to the F8b
-    /// own-group follow-up.
+    /// The escalation: SIGTERM, then (after `gracePeriodSeconds` of the child still running) a
+    /// child-only SIGKILL. Impure delivery through the injected `signalDeliverer`: the
+    /// orchestration is covered by injecting a fake.
+    ///
+    /// NEVER group-reaps. Every `Process` that flows through a ProcessWatchdog caller SHARES
+    /// Workbench's process group, so a process-group SIGKILL here would reap Workbench itself — the
+    /// post-grace stage SIGKILLs the CHILD pid only. (The own-group group-reap — for the mcp-serve
+    /// child and the detached daemon — lives in `ProcessIOBox.forceKill`, which is NOT a
+    /// ProcessWatchdog caller. A gated own-group arm was once added here but was structurally DEAD:
+    /// none of the 8 ProcessWatchdog callers — all via `waitUntilExit` /
+    /// `waitUntilExitReportingTimeout`, neither of which forwards an own-group flag — could ever
+    /// reach it. It was removed; re-adding it before an AWAITED own-group spawn wires it up would
+    /// just re-introduce dead code.)
     ///
     /// Recycled-pid safety: capture `processIdentifier` while `isRunning`, and re-check
     /// `isRunning` immediately before each signal — never signal a pid the OS may have reaped
@@ -141,9 +159,10 @@ public enum ProcessWatchdog {
         guard process.isRunning else {
             return
         }
-        // SIGKILL the CHILD pid only — the safe F8 default. F8 deliberately never group-reaps:
-        // every current spawn shares Workbench's process group, so a process-group SIGKILL
-        // would reap Workbench itself. The group reap (and its own-group gate) lands in F8b.
+        // SIGKILL the CHILD pid only — the safe default. Every spawn that flows through a
+        // ProcessWatchdog caller shares Workbench's process group, so a process-group SIGKILL
+        // would reap Workbench itself. The group reap (and its own-group gate) live in
+        // `ProcessIOBox.forceKill`, against children spawned via `SpawnInOwnGroup`.
         signalDeliverer(pid, SIGKILL)
     }
 }
