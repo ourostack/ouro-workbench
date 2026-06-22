@@ -9,8 +9,7 @@ import Foundation
 /// `markTerminated` cleared `activeSessions` without quitting), or that survived
 /// an app crash, leaks the screen and its child process forever. This seam
 /// decides, from a snapshot of live session names and the set of *known* entry
-/// ids, which live sessions have no owning entry (orphans to quit) and the quit
-/// arguments for a single entry's session.
+/// ids, which live sessions have no owning entry (orphans to quit).
 ///
 /// Derivation is FORWARD only: hash each known id to its session name and
 /// subtract that set from the live names. A live session is spared ONLY if some
@@ -29,20 +28,5 @@ public enum ScreenSessionReaper: Sendable {
     ) -> Set<String> {
         let ownedNames = Set(knownEntryIds.map(PersistentTerminalSession.sessionName(for:)))
         return liveSessionNames.subtracting(ownedNames)
-    }
-
-    /// The `screen -X quit` arguments for a single entry's session, or `nil` when
-    /// that entry's session isn't live. Returning `nil` (instead of quitting
-    /// unconditionally) avoids a spurious "No screen session found" for an entry
-    /// whose screen already exited.
-    public static func quitArguments(
-        forEntryId entryId: UUID,
-        liveSessionNames: Set<String>
-    ) -> [String]? {
-        let name = PersistentTerminalSession.sessionName(for: entryId)
-        guard liveSessionNames.contains(name) else {
-            return nil
-        }
-        return PersistentTerminalSession.terminateArguments(sessionName: name)
     }
 }

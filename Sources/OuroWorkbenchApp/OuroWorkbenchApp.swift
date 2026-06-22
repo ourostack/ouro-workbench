@@ -16372,24 +16372,31 @@ final class WorkbenchViewModel: ObservableObject {
         }
     }
 
-    /// F11a Defect 1 — quit the `ouro-wb-<id>` screen for one entry if (and only
-    /// if) it's currently live. `archiveCustomSession` / `deleteCustomSession`
-    /// only ever guarded `activeSessions[id] == nil` and then mutated state —
-    /// they never quit the screen, so a detached-but-alive session (after
-    /// `markTerminated` cleared `activeSessions` without quitting) leaked its
-    /// screen + child process forever. Reads the cached `liveScreenSessionNames`
-    /// (no second `screen -ls` probe) and asks the pure reaper for the quit
-    /// arguments — `nil` when the entry's screen isn't live (avoids a spurious
-    /// "No screen session found").
+    /// F11a Defect 1 — quit the `ouro-wb-<id>` screen for one entry,
+    /// UNCONDITIONALLY. `archiveCustomSession` / `deleteCustomSession` only ever
+    /// guarded `activeSessions[id] == nil` and then mutated state — they never
+    /// quit the screen, so a detached-but-alive session (after `markTerminated`
+    /// cleared `activeSessions` without quitting via the
+    /// `detachedPersistentSession` branch) leaked its screen + child process
+    /// forever.
+    ///
+    /// The quit MUST NOT be gated on the cached `liveScreenSessionNames`: that
+    /// cache is populated EXACTLY once (`refreshLiveScreenSessions` at launch) and
+    /// never refreshed, so a session created THIS run is never in it. Gating on it
+    /// made the quit a silent no-op for within-run sessions — and for archive (the
+    /// archived entry keeps its id and stays in `state.processEntries`, so the
+    /// startup reaper later treats the still-live screen as owned and spares it
+    /// FOREVER) that gate leaked the screen PERMANENTLY. We instead issue the quit
+    /// directly for `sessionName(for: entryId)`, matching the Stop path
+    /// (`terminatePersistentSessionIfNeeded`), which already quits unconditionally.
+    /// A quit against an absent socket just prints "No screen session found" to the
+    /// discarded pipe (harmless); the liveness gate was only cosmetic. Spawn keeps
+    /// the shared off-main + 1.5s-watchdog `spawnScreenQuit` (a wedged socket can't
+    /// hang a worker thread).
     func quitPersistentScreenIfNeeded(forEntryId entryId: UUID) {
-        guard let arguments = ScreenSessionReaper.quitArguments(
-            forEntryId: entryId,
-            liveSessionNames: liveScreenSessionNames
-        ) else {
-            return
-        }
+        let sessionName = PersistentTerminalSession.sessionName(for: entryId)
         Self.spawnScreenQuit(
-            arguments: arguments,
+            arguments: PersistentTerminalSession.terminateArguments(sessionName: sessionName),
             environment: TerminalEnvironment().valuesWithResolvedPath()
         )
     }

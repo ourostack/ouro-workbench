@@ -176,10 +176,14 @@ final class TerminalLeakReaperWiringTests: XCTestCase {
     // MARK: - Helpers
 
     private func quitHelper() throws -> String {
+        // Slice exactly the helper's signature + body. Stop at its closing brace
+        // (the blank line before the NEXT member's doc comment) so the reaper's
+        // docstring — which legitimately mentions liveScreenSessionNames — can't
+        // bleed in and mask the stale-cache regression guard below.
         try sourceSlice(
             in: try appSource(),
             from: "func quitPersistentScreenIfNeeded",
-            to: "\n    func "
+            to: "\n    }\n"
         )
     }
 
