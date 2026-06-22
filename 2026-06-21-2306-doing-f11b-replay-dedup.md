@@ -3,7 +3,7 @@
 Execution Mode: direct
 Branch: fix/f11b-replay-dedup (off F11a-merged main 3a49abf)
 Spec: /tmp/f11-design-spec.md (build ONLY F11b = PR2, replay-dedup action layer)
-Status: in-progress
+Status: done
 
 ## Disambiguation
 This is the DISJOINT ACTION layer (persisted applied-requestIds + `processing/` count),
@@ -56,7 +56,7 @@ removes markApplied or orders it AFTER confirm, the crash window reopens → dou
   confirmApplied + clearApplied; isNewDecision guard UNCHANGED; startup sweep wired).
 - Acceptance: red→green.
 
-### U4 — Verify ⬜
+### U4 — Verify ✅
 - `swift test -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete` green
 - `Scripts/check-coverage.sh` PASS, Core 100% line+region, no new allowlist
 - Strict build clean
@@ -70,9 +70,10 @@ removes markApplied or orders it AFTER confirm, the crash window reopens → dou
 - [x] App: markApplied ordering pinned (after apply, before detached confirm)
 - [x] App: detached loop confirmApplied + clearApplied; startup orphan sweep wired
 - [x] isNewDecision sendInput guard unchanged
-- [ ] swift test (strict) green; coverage PASS; strict build clean
+- [x] swift test (strict) green; coverage PASS; strict build clean
 
 ## Progress Log
 - 2026-06-21 23:11 U1 complete: ReplayDedupDecider seam (enum ReplayDecision {apply; skipAlreadyApplied}, id-keyed decide). Red (type missing) → green, 3 arms pass. Commit 6874e3a.
 - 2026-06-21 23:18 U2 complete: applied/ marker-dir ledger (markApplied/appliedRequestIds/clearApplied) + hasProcessingDuplicate OR'd into enqueue (applied ids excluded). Red (members missing) → green, 30 queue tests pass incl. crash-mid-processing (recoverUnconfirmed STILL returns + appliedRequestIds contains → decider .skipAlreadyApplied). Core 100% line+region, no new allowlist. Commit 959bec1.
 - 2026-06-21 23:22 U3 complete: App wiring. Universal skip-on-replay at applyBossAction top (requestId-gated, decider on externalActionQueue.appliedRequestIds(), AFTER validateForQueueing BEFORE first switch); markApplied main-actor-sync AFTER applyBossAction BEFORE detached confirm; detached loop confirmApplied THEN clearApplied; sweepOrphanedAppliedMarkers wired after recoverUnconfirmed; isNewDecision sendInput guard unchanged. Red (7 wiring tests) → green; strict build clean. Commit 55ccdff.
+- 2026-06-21 23:24 U4 complete: full strict suite green (2334 tests, 0 failures, 1 pre-existing skip); Scripts/check-coverage.sh PASS (Core 100% line+region, no new allowlist); strict build clean. Gate1 impl-coverage: each ✅ unit has a committed feat/test commit matching its What/Output/Acceptance. Gate3 PR-review: all 6 spec decisions verified against the diff (id-keyed not fingerprint; markApplied ordering pinned by index; detached confirm+clear; startup sweep; isNewDecision unchanged). All gates passed.
