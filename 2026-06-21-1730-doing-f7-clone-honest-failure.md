@@ -1,6 +1,6 @@
 # F7 — honest headless-clone outcome
 
-**Status:** in-progress
+**Status:** done
 **Execution Mode:** direct
 **Branch:** fix/f7-clone-honest-failure (no push/PR/merge)
 **Artifacts:** ./2026-06-21-1730-doing-f7-clone-honest-failure/
@@ -56,9 +56,9 @@ NEVER `.ready` — requires `agentJsonPresent && checkVerdict == .working`.
 - [x] App wiring: runner returns `CloneRunResult`; classify fold; succeeded gated behind `.ready`
 - [x] `.needsVaultUnlock` reuses `beginCredentialRotation` (no new clone vault-create)
 - [x] Source-pin `CloneHonestWiringTests`
-- [ ] `swift test -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete` green
-- [ ] `Scripts/check-coverage.sh` PASS, Core 100% line+region, no new allowlist entries
-- [ ] Strict build clean
+- [x] `swift test -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete` green
+- [x] `Scripts/check-coverage.sh` PASS, Core 100% line+region, no new allowlist entries
+- [x] Strict build clean
 
 ## Progress log
 - 2026-06-21 17:56 Doing doc + artifacts dir committed.
@@ -67,3 +67,5 @@ NEVER `.ready` — requires `agentJsonPresent && checkVerdict == .working`.
 - 2026-06-21 18:04 Unit 3a/3b complete: `WorkbenchProvider(providerFlagValue:)` failable init round-trips all 5 cases + nil for unknown/absent (B-4 provider resolution from cloned agent.json lane). Coverage PASS 100%, no new allowlist entries.
 - 2026-06-21 18:08 Unit 5 (source-pin red) complete: `CloneHonestWiringTests` — 10/11 red against unmodified App (only refreshOuroAgents pre-existed). Helper block copied from ColdStartHonestWiringTests.
 - 2026-06-21 18:14 Unit 4 (App wiring green) complete: `CloneAgentRunner.runHeadless` → `CloneRunResult` (no throw), `CloneFailedError` deleted, runner tests → `.exited`/`.launchFailed`. `cloneAgentHeadless` folds run + agent.json (gap #2, only on `.exited(code:0)`) + `runCloneProviderCheck` probe via `classifyClone`; `refreshOuroAgents()` always; `succeeded:true` behind `.ready` ONLY; `.needsVaultUnlock` resolves provider from cloned outward lane (B-4) → `beginCredentialRotation` (F6 reuse, B-5 flavor) and returns `.failed(reason:humanFacingLine)` while the terminal runs, degrading to `.couldNotConfirm` copy if provider unresolved; `.failed` → per-cause copy (no "Git remote" for timed-out/missing). Strict build clean, 49 clone tests green.
+- 2026-06-21 18:18 Coverage-close: added B-1 runner `.timedOut` test with a REAL sleeper (injectable `timeoutSeconds`, default 120) — closes the one uncovered Core line (`return .timedOut`). End-to-end proves the runner returns `.timedOut` (not `.cloneNonZeroExit`) on a wedge.
+- 2026-06-21 18:22 All gates passed. Gate 1 (impl coverage): every unit maps to a committed diff. Gate 2: 2114 tests pass strict-mode (1 pre-existing skip, 0 failures), strict build clean, Core 100% line+region (only 2 pre-existing allowlist entries, both unrelated to F7). Gate 3 (PR review): adversarial cold-review fork confirmed all 8 spec checks — safety invariant (exit-0 alone never `.ready`), B-1 ordering (`.timedOut` returned before `terminationStatus` read), enum-case-before-code==0, succeeded-gated-behind-`.ready`, B-4 honest degradation with roster refreshed before the provider read, B-5 marker reuse, seam-free copy (only `.cloneNonZeroExit` says "Git remote"), no stale `CloneFailedError`/throw refs, `runCloneProviderCheck` verbatim-faithful. Gate 4: finalized. Status: done.
