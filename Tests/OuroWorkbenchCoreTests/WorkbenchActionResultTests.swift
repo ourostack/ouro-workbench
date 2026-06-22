@@ -5,7 +5,7 @@ final class WorkbenchActionResultTests: XCTestCase {
     private let classifier = WorkbenchActionResultClassifier()
 
     func testStillQueuedReadsAsQueuedNotReady() {
-        let readback = classifier.readback(requestId: "req-1", stillQueued: true, logEntry: nil)
+        let readback = classifier.readback(requestId: "req-1", stillQueued: true, isApplied: false, logEntry: nil)
         XCTAssertEqual(readback.state, .queued)
         XCTAssertNil(readback.result)
         XCTAssertNil(readback.succeeded)
@@ -15,13 +15,32 @@ final class WorkbenchActionResultTests: XCTestCase {
         // The queue is the live truth: a request still in flight is `queued` even
         // if a log entry with the same id somehow exists.
         let entry = WorkbenchActionLogEntry(source: "external", action: "recover", result: "ok", succeeded: true)
-        let readback = classifier.readback(requestId: "req-1", stillQueued: true, logEntry: entry)
+        let readback = classifier.readback(requestId: "req-1", stillQueued: true, isApplied: false, logEntry: entry)
+        XCTAssertEqual(readback.state, .queued)
+    }
+
+    func testQueuedWinsEvenOverTheAppliedLedger() {
+        // The queue is the live truth: a request still in flight reads `queued`
+        // even if the applied-ledger marker already exists (the apply hasn't
+        // confirmed yet). stillQueued has highest precedence.
+        let readback = classifier.readback(requestId: "req-1", stillQueued: true, isApplied: true, logEntry: nil)
         XCTAssertEqual(readback.state, .queued)
     }
 
     func testAppliedResolvesFromASucceededLogEntry() {
         let entry = WorkbenchActionLogEntry(source: "external", action: "recover", result: "Recovered Build", succeeded: true)
-        let readback = classifier.readback(requestId: "req-2", stillQueued: false, logEntry: entry)
+        let readback = classifier.readback(requestId: "req-2", stillQueued: false, isApplied: false, logEntry: entry)
+        XCTAssertEqual(readback.state, .applied)
+        XCTAssertEqual(readback.result, "Recovered Build")
+        XCTAssertEqual(readback.succeeded, true)
+    }
+
+    func testLogEntryWinsOverTheAppliedLedger() {
+        // The action-log entry is the resolved truth: when present it decides
+        // .applied/.failed even if the applied marker also exists (the steady
+        // state after a successful apply+save, before the marker is swept).
+        let entry = WorkbenchActionLogEntry(source: "external", action: "recover", result: "Recovered Build", succeeded: true)
+        let readback = classifier.readback(requestId: "req-2", stillQueued: false, isApplied: true, logEntry: entry)
         XCTAssertEqual(readback.state, .applied)
         XCTAssertEqual(readback.result, "Recovered Build")
         XCTAssertEqual(readback.succeeded, true)
@@ -29,14 +48,32 @@ final class WorkbenchActionResultTests: XCTestCase {
 
     func testFailedResolvesFromAFailedLogEntry() {
         let entry = WorkbenchActionLogEntry(source: "external", action: "recover", result: "Skipped recover: not authorized", succeeded: false)
-        let readback = classifier.readback(requestId: "req-3", stillQueued: false, logEntry: entry)
+        let readback = classifier.readback(requestId: "req-3", stillQueued: false, isApplied: false, logEntry: entry)
         XCTAssertEqual(readback.state, .failed)
         XCTAssertEqual(readback.result, "Skipped recover: not authorized")
         XCTAssertEqual(readback.succeeded, false)
     }
 
-    func testUnknownWhenNeitherQueuedNorLogged() {
-        let readback = classifier.readback(requestId: "nope", stillQueued: false, logEntry: nil)
+    func testAppliedUnconfirmedWhenLedgerSaysAppliedButLogEntryIsLost() {
+        // THE gap-1 fix: the action RAN (the applied/ marker is present) but the
+        // post-apply save() threw, so no log entry was persisted. Without this
+        // arm the classifier would lie `.unknown` even though the side effect
+        // landed. Must be a DISTINCT state, succeeded:true, with honest copy.
+        let readback = classifier.readback(requestId: "req-4", stillQueued: false, isApplied: true, logEntry: nil)
+        XCTAssertEqual(readback.state, .appliedUnconfirmed)
+        XCTAssertEqual(readback.result, "Applied; detailed outcome unavailable (state save failed).")
+        XCTAssertEqual(readback.succeeded, true)
+    }
+
+    func testAppliedUnconfirmedIsNeverReportedAsPlainApplied() {
+        // Regression guard: a save-fail must NOT be hidden behind `.applied`,
+        // which would claim a confirmed outcome the workbench never persisted.
+        let readback = classifier.readback(requestId: "req-4", stillQueued: false, isApplied: true, logEntry: nil)
+        XCTAssertNotEqual(readback.state, .applied)
+    }
+
+    func testUnknownWhenNeitherQueuedNorAppliedNorLogged() {
+        let readback = classifier.readback(requestId: "nope", stillQueued: false, isApplied: false, logEntry: nil)
         XCTAssertEqual(readback.state, .unknown)
         XCTAssertNil(readback.result)
         XCTAssertNil(readback.succeeded)
