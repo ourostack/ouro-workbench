@@ -12,10 +12,10 @@ Do NOT touch the action queue / applyBossAction (that is F11b).
 
 ## Units
 
-- ⬜ Unit 1a: ScreenSessionReaperTests (Core, RED) — orphan; KNOWN-id no-kill; empty live; known-no-live; mixed; quitArguments live vs nil; name round-trip.
-- ⬜ Unit 1b: ScreenSessionReaper.swift (Core, GREEN, 100%) — orphanedSessionNames (FORWARD derivation) + quitArguments(forEntryId:liveSessionNames:).
-- ⬜ Unit 2a: StartSequencerTests (Core, RED) — hasActive:true → quitThenAwait(name); false → launchImmediately; round-trip.
-- ⬜ Unit 2b: StartSequencer.swift (Core, GREEN, 100%) — StartSequenceStep enum + step(forEntryId:hasActiveSessionOnSocket:).
+- ✅ Unit 1a: ScreenSessionReaperTests (Core, RED) — orphan; KNOWN-id no-kill; empty live; known-no-live; mixed; quitArguments live vs nil; name round-trip.
+- ✅ Unit 1b: ScreenSessionReaper.swift (Core, GREEN, 100%) — orphanedSessionNames (FORWARD derivation) + quitArguments(forEntryId:liveSessionNames:).
+- ✅ Unit 2a: StartSequencerTests (Core, RED) — hasActive:true → quitThenAwait(name); false → launchImmediately; round-trip.
+- ✅ Unit 2b: StartSequencer.swift (Core, GREEN, 100%) — StartSequenceStep enum + step(forEntryId:hasActiveSessionOnSocket:).
 - ⬜ Unit 3a: TerminalLeakReaperWiringTests (App source-pins, RED).
 - ⬜ Unit 3b: App wiring Defect 1 (GREEN) — spawnScreenQuit, quitPersistentScreenIfNeeded, reapOrphanedScreenSessions, load-success flag, delete/archive calls, startup ordering.
 - ⬜ Unit 4a: StartSequenceAwaitWiringTests (App source-pins, RED).
@@ -30,3 +30,5 @@ Do NOT touch the action queue / applyBossAction (that is F11b).
 - [ ] app-exit / terminate(_:) still use non-awaiting terminate()
 
 ## Progress Log
+- 2026-06-21 22:19 Unit 1a/1b complete: ScreenSessionReaper Core seam (forward-derived orphan set + quitArguments), 8 tests green.
+- 2026-06-21 22:21 Unit 2a/2b complete: StartSequencer Core seam (quitThenAwait/launchImmediately), 3 tests green.
