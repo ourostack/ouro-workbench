@@ -11428,7 +11428,14 @@ final class WorkbenchViewModel: ObservableObject {
             dashboard: bossDashboard,
             agents: ouroAgents,
             bossRegistration: bossWorkbenchMCPRegistration,
-            registrationByAgentName: bossWorkbenchMCPRegistrationByAgentName
+            registrationByAgentName: bossWorkbenchMCPRegistrationByAgentName,
+            // Reuse the SAME live outward-lane verdicts / in-flight set the
+            // steady-state rows compute (`refreshAgentOutwardReadiness`, kicked
+            // off by `refreshOuroAgents` → driven by `refreshHarnessStatus`) so
+            // the diagnostic sheet's pills + rollups are honest — never a
+            // config-only false green. No extra `ouro check` here.
+            outwardVerdicts: agentOutwardVerdicts,
+            checksInFlight: agentChecksInFlight
         )
     }
 
