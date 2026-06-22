@@ -1344,7 +1344,7 @@ struct HarnessStatusSheet: View {
             HarnessDetailRow(
                 label: "Bundle",
                 value: status.boss.bundleText,
-                valueColor: status.boss.bundleIsReady ? .green : .orange
+                valueColor: status.boss.bundleIsInstalled ? .green : .orange
             )
             HarnessDetailRow(
                 label: "Workbench MCP",

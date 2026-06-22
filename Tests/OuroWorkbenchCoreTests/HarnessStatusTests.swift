@@ -170,7 +170,7 @@ final class HarnessStatusTests: XCTestCase {
         )
 
         XCTAssertNil(status.agents.selectedBoss)
-        XCTAssertFalse(status.boss.bundleIsReady)
+        XCTAssertFalse(status.boss.bundleIsInstalled)
         XCTAssertEqual(status.boss.bundleText, "missing or not ready")
         XCTAssertFalse(status.boss.isReachable)
         XCTAssertEqual(status.boss.state, .blocked)
@@ -255,8 +255,13 @@ final class HarnessStatusTests: XCTestCase {
     }
 
     /// A config-`.ready` agent that's still mid-check (a live probe is in flight,
-    /// no verdict yet) is NOT ready — the surface shows "checking…", never a
-    /// premature green. The in-flight flag overrides the absence of a verdict.
+    /// no verdict yet) is NOT ready on its PILL — the surface shows "checking…",
+    /// never a premature green. But mid-check is PENDING, not a problem: it must
+    /// NOT raise the alarm, and — crucially — when that agent is the boss, the
+    /// boss stays REACHABLE (drivable). Reachability keys on the boss bundle being
+    /// CONFIG-installed + MCP-registered + daemon up, not on whether its outward
+    /// check has returned. This is the false-RED guard: a healthy boss mid-check
+    /// on first sheet open must not read "Blocked / not reachable".
     func testInFlightAgentIsNotReady() {
         let status = HarnessStatusBuilder().build(
             boss: BossAgentSelection(agentName: "slugger"),
@@ -268,21 +273,29 @@ final class HarnessStatusTests: XCTestCase {
             checksInFlight: ["slugger"]
         )
 
+        // The per-agent PILL is still honestly not-ready while mid-check.
         let slugger = status.agents.entries.first { $0.name == "slugger" }
         XCTAssertNil(slugger?.verdict)
         XCTAssertEqual(slugger?.isChecking, true)
         XCTAssertEqual(slugger?.liveReadiness, .checking)
         XCTAssertEqual(slugger?.isReady, false)
         XCTAssertEqual(status.agents.readyCount, 0)
-        XCTAssertTrue(status.agents.hasUnready)
-        // Boss bundle isn't confirmed-ready while its check is in flight, so the
-        // boss isn't reachable yet either.
-        XCTAssertFalse(status.boss.isReachable)
+        // Pending, not a problem — no alarm.
+        XCTAssertFalse(status.agents.hasUnready)
+        // The boss bundle is CONFIG-installed (status == .ready) + MCP registered
+        // + daemon up, so the boss is reachable regardless of the in-flight check.
+        XCTAssertTrue(status.boss.bundleIsInstalled)
+        XCTAssertTrue(status.boss.isReachable)
+        // And the rollup stays calm — NOT blocked, NOT "not reachable".
+        XCTAssertEqual(status.overallState, .healthy)
+        XCTAssertFalse(status.headline.contains("not reachable"))
     }
 
     /// A config-`.ready` agent with no verdict and no in-flight check is
-    /// `.unverified` — still NOT ready. A config-only `.ready` never earns green
-    /// on its own (the whole point of the fix).
+    /// `.unverified` — still NOT ready (config-only `.ready` never earns green on
+    /// its own). But `.unverified` is PENDING, not a problem, so it must NOT
+    /// escalate the alarm rollup: `hasUnready` stays false. (The false-RED fix —
+    /// a not-yet-confirmed agent isn't an alarm, just "checking".)
     func testConfigReadyWithoutAnyLiveCheckIsUnverifiedNotReady() {
         let status = HarnessStatusBuilder().build(
             boss: BossAgentSelection(agentName: "slugger"),
@@ -297,8 +310,90 @@ final class HarnessStatusTests: XCTestCase {
         XCTAssertEqual(slugger?.isChecking, false)
         XCTAssertEqual(slugger?.liveReadiness, .unverified)
         XCTAssertEqual(slugger?.isReady, false)
+        // Pending, not ready: excluded from readyCount …
         XCTAssertEqual(status.agents.readyCount, 0)
-        XCTAssertTrue(status.agents.hasUnready)
+        // … but it is NOT a problem, so it must not raise the alarm.
+        XCTAssertFalse(status.agents.hasUnready)
+        XCTAssertEqual(slugger?.isPending, true)
+        XCTAssertEqual(slugger?.isProblem, false)
+    }
+
+    // MARK: - Pending grace (false-RED fix): pending agents don't raise the alarm
+
+    /// `hasUnready` (which drives `overallState == .attention`) must return true
+    /// ONLY for PROBLEM entries — a confirmed-bad live verdict or a config
+    /// problem. PENDING entries (`.checking` in flight, `.unverified` no-verdict)
+    /// are not-ready but not an alarm, so on launch the rollup stays calm while
+    /// checks complete instead of flapping to attention.
+    func testPendingOnlyAgentsDoNotRaiseUnready() {
+        let pendingCases: [(String, ProviderConnectionVerdict?, Bool, InstalledAgentRowPresentation.LiveReadiness)] = [
+            ("inflight", nil, true, .checking),
+            ("noverdict", nil, false, .unverified),
+            ("indeterminate", .indeterminate, false, .unverified),
+        ]
+        for (name, verdict, isChecking, expectedReadiness) in pendingCases {
+            let entry = HarnessAgentEntry(
+                name: name,
+                status: .ready,
+                detail: "ready",
+                isSelectedBoss: false,
+                verdict: verdict,
+                isChecking: isChecking
+            )
+            XCTAssertEqual(entry.liveReadiness, expectedReadiness, name)
+            XCTAssertFalse(entry.isReady, name)
+            XCTAssertTrue(entry.isPending, name)
+            XCTAssertFalse(entry.isProblem, name)
+
+            let inventory = HarnessAgentInventory(entries: [entry])
+            XCTAssertFalse(inventory.hasUnready, "\(name) is pending, must not be unready")
+            XCTAssertEqual(inventory.readyCount, 0, name)
+        }
+    }
+
+    /// Each PROBLEM state — a confirmed-bad live verdict (authExpired / vaultLocked
+    /// / unreachable) or a config problem (disabled / missingConfig / invalidConfig)
+    /// — is honestly an alarm: `isProblem`, not pending, and raises `hasUnready`.
+    func testProblemAgentsRaiseUnready() {
+        let problemCases: [(String, OuroAgentBundleStatus, ProviderConnectionVerdict?, InstalledAgentRowPresentation.LiveReadiness)] = [
+            ("authExpired", .ready, .unauthorized, .authExpired),
+            ("vaultLocked", .ready, .vaultLocked, .vaultLocked),
+            ("unreachable", .ready, .unreachable, .unreachable),
+            ("disabled", .disabled, nil, .disabled),
+            ("missingConfig", .missingConfig, nil, .missingConfig),
+            ("invalidConfig", .invalidConfig, nil, .invalidConfig),
+        ]
+        for (name, status, verdict, expectedReadiness) in problemCases {
+            let entry = HarnessAgentEntry(
+                name: name,
+                status: status,
+                detail: "d",
+                isSelectedBoss: false,
+                verdict: verdict
+            )
+            XCTAssertEqual(entry.liveReadiness, expectedReadiness, name)
+            XCTAssertFalse(entry.isReady, name)
+            XCTAssertFalse(entry.isPending, name)
+            XCTAssertTrue(entry.isProblem, name)
+
+            let inventory = HarnessAgentInventory(entries: [entry])
+            XCTAssertTrue(inventory.hasUnready, "\(name) is a problem, must be unready")
+        }
+    }
+
+    /// A ready entry is neither pending nor a problem.
+    func testReadyAgentIsNeitherPendingNorProblem() {
+        let entry = HarnessAgentEntry(
+            name: "ready",
+            status: .ready,
+            detail: "d",
+            isSelectedBoss: false,
+            verdict: .working
+        )
+        XCTAssertTrue(entry.isReady)
+        XCTAssertFalse(entry.isPending)
+        XCTAssertFalse(entry.isProblem)
+        XCTAssertFalse(HarnessAgentInventory(entries: [entry]).hasUnready)
     }
 
     /// Config problems dominate the live verdict: a `.disabled` bundle is never
@@ -326,10 +421,15 @@ final class HarnessStatusTests: XCTestCase {
         XCTAssertTrue(status.agents.hasUnready)
     }
 
-    /// The boss bundle's reachability keys off the SAME honest `isReady`: a boss
-    /// whose outward check is `.unauthorized` is not bundle-ready, so the boss is
-    /// not reachable even with the MCP registered and the daemon up.
-    func testBossWithExpiredTokenIsNotReachable() {
+    /// A boss whose outward check came back CONFIRMED-bad (`.unauthorized`,
+    /// expired token) is still REACHABLE — the Workbench can DRIVE it hands-off
+    /// (bundle config-installed + MCP registered + daemon up). Its outward-provider
+    /// health is a SEPARATE axis: the per-agent pill shows `.authExpired`
+    /// ("sign-in needed") and the confirmed problem raises `hasUnready`, so the
+    /// rollup is `.attention` (amber) — NOT `.blocked` (red), NOT "not reachable".
+    /// Reachability ≠ readiness: a false-RED "Blocked" here would be as wrong as
+    /// the false-green this branch fixed.
+    func testBossWithExpiredTokenIsReachableButAttention() {
         let status = HarnessStatusBuilder().build(
             boss: BossAgentSelection(agentName: "slugger"),
             dashboard: dashboard(daemonStatus: "running"),
@@ -339,11 +439,48 @@ final class HarnessStatusTests: XCTestCase {
             outwardVerdicts: ["slugger": .unauthorized]
         )
 
-        XCTAssertFalse(status.boss.bundleIsReady)
-        XCTAssertFalse(status.boss.isReachable)
-        XCTAssertEqual(status.boss.bundleText, "missing or not ready")
-        XCTAssertEqual(status.overallState, .blocked)
-        XCTAssertEqual(status.headline, "Boss slugger is not reachable")
+        // Reachable (drivable): bundle config-installed + MCP registered + daemon up.
+        XCTAssertTrue(status.boss.bundleIsInstalled)
+        XCTAssertTrue(status.boss.isReachable)
+        XCTAssertEqual(status.boss.bundleText, "installed and ready")
+
+        // The expired token shows ONLY on the per-agent pill / problem axis.
+        let slugger = status.agents.entries.first { $0.name == "slugger" }
+        XCTAssertEqual(slugger?.liveReadiness, .authExpired)
+        XCTAssertEqual(slugger?.isReady, false)
+        XCTAssertEqual(slugger?.isProblem, true)
+        XCTAssertTrue(status.agents.hasUnready)
+
+        // Amber attention — honest about the bad token — never red "Blocked".
+        XCTAssertEqual(status.overallState, .attention)
+        XCTAssertFalse(status.headline.contains("not reachable"))
+    }
+
+    /// The false-RED regression guard, end to end. A perfectly HEALTHY machine —
+    /// daemon running, boss bundle CONFIG-installed, MCP registered — with the
+    /// boss's outward verdict still IN FLIGHT (in `checksInFlight`, no entry in
+    /// `outwardVerdicts`) must read `.healthy` and reachable on first sheet open.
+    /// Before the fix this flapped to `.blocked` + "Boss … is not reachable" for
+    /// ~15s until the verdict landed.
+    func testHealthyBossMidCheckIsReachableAndHealthy() {
+        let status = HarnessStatusBuilder().build(
+            boss: BossAgentSelection(agentName: "slugger"),
+            dashboard: dashboard(daemonStatus: "running"),
+            agents: [agent("slugger")],
+            bossRegistration: registration("slugger", status: .registered),
+            registrationByAgentName: ["slugger": registration("slugger", status: .registered)],
+            // Verdict still in flight: no entry in outwardVerdicts.
+            outwardVerdicts: [:],
+            checksInFlight: ["slugger"]
+        )
+
+        XCTAssertTrue(status.daemon.isReachable)
+        XCTAssertTrue(status.boss.bundleIsInstalled)
+        XCTAssertTrue(status.boss.isReachable)
+        XCTAssertFalse(status.agents.hasUnready)
+        XCTAssertEqual(status.overallState, .healthy)
+        XCTAssertFalse(status.headline.contains("not reachable"))
+        XCTAssertNotEqual(status.overallState, .blocked)
     }
 
     /// The `liveReadiness` computed accessor folds the entry's own
@@ -420,7 +557,7 @@ final class HarnessStatusTests: XCTestCase {
     }
 
     func testBossReachabilityUnknownAndNonActionableMCPStatuses() {
-        let unknown = HarnessBossReachability(agentName: "slugger", bundleIsReady: true, mcpStatus: nil)
+        let unknown = HarnessBossReachability(agentName: "slugger", bundleIsInstalled: true, mcpStatus: nil)
         XCTAssertEqual(unknown.state, .attention)
         XCTAssertEqual(unknown.mcpStatusText, "unknown")
 
@@ -430,13 +567,13 @@ final class HarnessStatusTests: XCTestCase {
             (.invalidConfig, "config issue"),
         ]
         for (status, text) in cases {
-            let boss = HarnessBossReachability(agentName: "slugger", bundleIsReady: true, mcpStatus: status)
+            let boss = HarnessBossReachability(agentName: "slugger", bundleIsInstalled: true, mcpStatus: status)
             XCTAssertEqual(boss.mcpStatusText, text)
             XCTAssertEqual(boss.state, .blocked)
         }
 
-        XCTAssertEqual(HarnessBossReachability(agentName: "slugger", bundleIsReady: true, mcpStatus: .needsUpdate).state, .attention)
-        XCTAssertEqual(HarnessBossReachability(agentName: "slugger", bundleIsReady: false, mcpStatus: .needsUpdate).state, .blocked)
+        XCTAssertEqual(HarnessBossReachability(agentName: "slugger", bundleIsInstalled: true, mcpStatus: .needsUpdate).state, .attention)
+        XCTAssertEqual(HarnessBossReachability(agentName: "slugger", bundleIsInstalled: false, mcpStatus: .needsUpdate).state, .blocked)
     }
 
     func testMachineIssueFallbackWhenNoMachinePrefixedIssueExists() {
