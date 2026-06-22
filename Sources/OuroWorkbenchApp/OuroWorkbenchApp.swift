@@ -20211,6 +20211,10 @@ final class TerminalSessionController: NSObject, ObservableObject, Identifiable,
     private let onTerminated: (Int32?) -> Void
     private var recorder: TranscriptRecorder?
     private var hasStarted = false
+    /// F12a gap 5 — one-shot guard so a `.sendAfterLaunch` checkpoint prompt is typed
+    /// EXACTLY once, on the first output (the interactive signal), not on every PTY
+    /// chunk.
+    private var hasDeliveredCheckpointPrompt = false
 
     init(
         plan: TerminalCommandPlan,
@@ -20371,7 +20375,30 @@ final class TerminalSessionController: NSObject, ObservableObject, Identifiable,
 
     private func recordOutput(_ bytes: ArraySlice<UInt8>) {
         recorder?.append(bytes)
+        // F12a gap 5 — the first output is the post-start INTERACTIVE signal: the
+        // TUI has painted and is ready for input. Deliver a `.sendAfterLaunch`
+        // checkpoint prompt here (NOT in start()/onStarted — typing before the TUI is
+        // ready loses the prompt). The one-shot guard fires it exactly once.
+        deliverCheckpointPromptIfNeeded()
         onOutput()
+    }
+
+    /// F12a gap 5 — type a Copilot respawn's checkpoint recovery prompt once the TUI
+    /// is interactive. Copilot ignores an argv prompt after `--`, so the planner
+    /// carries the prompt in `plan.checkpointPromptDelivery == .sendAfterLaunch`
+    /// rather than appending it; here we type it (with a trailing newline to submit)
+    /// on the first output. Gated on the one-shot `hasDeliveredCheckpointPrompt` so a
+    /// later output chunk never re-types it. `.positional` plans deliver nothing here
+    /// (the prompt is already in argv — the generic-TUI path is untouched).
+    private func deliverCheckpointPromptIfNeeded() {
+        guard !hasDeliveredCheckpointPrompt else {
+            return
+        }
+        guard case let .sendAfterLaunch(text) = plan.checkpointPromptDelivery else {
+            return
+        }
+        hasDeliveredCheckpointPrompt = true
+        sendInput("\(text)\n")
     }
 
     func sizeChanged(source: LocalProcessTerminalView, newCols: Int, newRows: Int) {}
