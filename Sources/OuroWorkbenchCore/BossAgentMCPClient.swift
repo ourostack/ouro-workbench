@@ -351,10 +351,13 @@ public final class BossAgentMCPClient: @unchecked Sendable {
 
 private struct MCPResponse: Decodable {
     var result: MCPToolResult?
-    var error: MCPError?
+    var error: MCPClientResponseError?
 }
 
-private struct MCPError: Decodable {
+/// The `error` object a remote MCP server returns in a JSON-RPC response, as the
+/// boss MCP *client* decodes it. Distinct from the server-side `MCPError`
+/// protocol-error vocabulary (F10a) — this is purely a wire-decode shape.
+private struct MCPClientResponseError: Decodable {
     var message: String
 }
 

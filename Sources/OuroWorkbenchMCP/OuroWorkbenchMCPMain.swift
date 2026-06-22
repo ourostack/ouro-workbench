@@ -62,6 +62,14 @@ final class WorkbenchMCPServer {
     // tick/edit/approve; `workbench_proposal_result` reads the operator's decision
     // back. The boss may also just act — nothing here forces this round-trip.
     private let proposalQueue: AgentProposalQueue
+    // F10a JSON-RPC-layer dedup. Keyed on the JSON-RPC envelope `id`, this is a
+    // DISTINCT layer from the action-fingerprint dedup in
+    // WorkbenchActionRequestQueue (which dedups by side effect). Both stay: this
+    // catches a same-id retry/replay/reconnect before any side-effecting handler
+    // runs; the queue catches a different-id same-effect. NOTE: this `var` is not
+    // thread-safe — today's run() is a synchronous readLine loop so no concurrent
+    // access occurs; a future concurrent rewrite would wrap it in an actor.
+    private var dedupLedger = MCPRequestDedupLedger()
     private let jsonEncoder: JSONEncoder = {
         let encoder = JSONEncoder()
         // Deterministic key order (stable tests / diffs) + readable timestamps.
@@ -100,18 +108,54 @@ final class WorkbenchMCPServer {
             // a parse error (id null) rather than silently dropping it, so the
             // caller never hangs waiting for a response. (One JSON object per
             // line is the contract — pretty-printed/batched input won't parse.)
-            return error(id: nil, code: -32700, message: "Parse error: expected a single JSON-RPC object per line")
+            return errorResponse(id: nil, MCPError.parseError(detail: "expected a single JSON-RPC object per line"))
         }
 
         let id = request["id"]
+        // Notifications carry no id and expect no reply — short-circuit BEFORE
+        // the dedup ledger so a notification never enters it (and structurally,
+        // MCPRequestKey.from would return nil for it anyway).
         if id == nil, method.hasPrefix("notifications/") {
             return nil
         }
 
+        // F10a JSON-RPC-layer dedup, scoped to SIDE-EFFECTING tools and keyed on
+        // request IDENTITY (envelope id + method + a stable params hash) by the pure
+        // `MCPDispatchDedup` seam. Reads + handshakes ALWAYS process fresh — caching
+        // a read replays stale data on a re-read; and a recycled id for different
+        // content is a distinct key, so it can never replay an unrelated response.
+        //   .passThroughFresh → a read/handshake (or an unkeyable side-effecting
+        //                       call): dispatch fresh, no ledger interaction;
+        //   .replayCached     → a byte-identical side-effecting retry: return the
+        //                       ORIGINAL response verbatim, never re-enter dispatch;
+        //   .rejectInFlight   → the original side-effecting call is still running;
+        //   .proceed          → first sight of a side-effecting call: dispatch, then
+        //                       complete(...) below.
+        // Date() lives only here at the call boundary; the seam + ledger are pure.
+        let (decision, afterObserve) = MCPDispatchDedup.decide(request: request, ledger: dedupLedger, now: Date())
+        dedupLedger = afterObserve
+        switch decision {
+        case let .replayCached(cached):
+            return cached.payload
+        case .rejectInFlight:
+            return errorResponse(id: id, MCPError.duplicateInFlight(id: "\(id ?? NSNull())"))
+        case .passThroughFresh, .proceed:
+            break
+        }
+
+        // ONE exit. Compute `response` on BOTH the success and the thrown arm,
+        // then complete the ledger and return — so complete() fires whether the
+        // handler succeeded or threw. A thrown handler RELEASES its in-flight
+        // slot (response: nil) so its retry can proceed; a produced response
+        // (incl. an isError:true tools/call result) is cached as final.
+        // complete() is a no-op for the .passThroughFresh path (a read never
+        // entered the ledger, and must never be cached).
+        let response: [String: Any]
+        let cacheable: MCPDedupCachedResponse?
         do {
             switch method {
             case "initialize":
-                return success(id: id, result: [
+                response = success(id: id, result: [
                     "protocolVersion": "2024-11-05",
                     "capabilities": ["tools": [:]],
                     "serverInfo": [
@@ -120,16 +164,26 @@ final class WorkbenchMCPServer {
                     ]
                 ])
             case "tools/list":
-                return success(id: id, result: ["tools": toolDefinitions()])
+                response = success(id: id, result: ["tools": toolDefinitions()])
             case "tools/call":
                 let text = try callTool(params: request["params"] as? [String: Any] ?? [:])
-                return toolResult(id: id, text: text, isError: false)
+                response = toolResult(id: id, text: text, isError: false)
             default:
-                return error(id: id, code: -32601, message: "Unknown method: \(method)")
+                response = errorResponse(id: id, MCPError.methodNotFound(method: method))
             }
+            // A produced response is the final, deterministic answer for this id
+            // — cache it so a retry replays it byte-for-byte (same request.id).
+            cacheable = MCPDedupCachedResponse(payload: response)
         } catch {
-            return toolResult(id: id, text: error.localizedDescription, isError: true)
+            // A thrown handler is transient: surface the failure as an isError
+            // tools/call result, but RELEASE the in-flight slot (don't cache a
+            // transient failure as the permanent answer) so a retry re-executes.
+            response = toolResult(id: id, text: error.localizedDescription, isError: true)
+            cacheable = nil
         }
+
+        dedupLedger = MCPDispatchDedup.complete(request: request, response: cacheable, ledger: dedupLedger, now: Date())
+        return response
     }
 
     private func callTool(params: [String: Any]) throws -> String {
@@ -1262,6 +1316,18 @@ final class WorkbenchMCPServer {
         ]
     }
 
+    /// Build a JSON-RPC error response from an `MCPError`, routing through its
+    /// canonical `jsonRPCError` mapping (F10a) so codes/messages are defined in
+    /// one place. A `.toolFailure` (no protocol mapping) falls back to an
+    /// internal-error envelope — but the dispatch never feeds one here; tool
+    /// failures surface as isError tools/call results upstream.
+    private func errorResponse(id: Any?, _ mcpError: MCPError) -> [String: Any] {
+        if let mapping = mcpError.jsonRPCError {
+            return error(id: id, code: mapping.code, message: mapping.message)
+        }
+        return error(id: id, code: -32603, message: mcpError.errorDescription ?? "Internal error")
+    }
+
     private func write(_ object: [String: Any]) {
         if let data = try? JSONSerialization.data(withJSONObject: object),
            let text = String(data: data, encoding: .utf8) {
@@ -1271,9 +1337,22 @@ final class WorkbenchMCPServer {
         }
         // Serialization failed (should never happen for our String/Dict
         // responses, but never hang the caller): emit a minimal, guaranteed
-        // valid reply. id is dropped to null since the unserializable value
+        // valid reply built from MCPError.internalError (one place owns the
+        // code/message). id is dropped to null since the unserializable value
         // may be the id itself.
-        print(#"{"jsonrpc":"2.0","id":null,"error":{"code":-32603,"message":"Internal error: response could not be serialized"}}"#)
+        let fallback = MCPError.internalError(detail: "response could not be serialized")
+        let code = fallback.jsonRPCError?.code ?? -32603
+        let message = fallback.jsonRPCError?.message ?? "Internal error"
+        if let escapedMessage = try? JSONSerialization.data(withJSONObject: [message]),
+           let messageJSON = String(data: escapedMessage, encoding: .utf8) {
+            // messageJSON is `["...escaped..."]`; strip the array brackets to get
+            // the bare JSON string literal, keeping the reply hand-built (so a
+            // second serialization failure can't recurse here).
+            let bare = messageJSON.dropFirst().dropLast()
+            print(#"{"jsonrpc":"2.0","id":null,"error":{"code":\#(code),"message":\#(bare)}}"#)
+        } else {
+            print(#"{"jsonrpc":"2.0","id":null,"error":{"code":-32603,"message":"Internal error"}}"#)
+        }
         fflush(stdout)
     }
 }
