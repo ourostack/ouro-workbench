@@ -19,15 +19,20 @@ import Foundation
 /// wait still hangs forever. The watchdog ESCALATES — SIGTERM, then after a grace
 /// window SIGKILL.
 ///
-/// F8b — the escalation gained a GATED group-reap arm. The post-grace SIGKILL is routed
-/// through `WatchdogEscalation.nextSignal`: a child explicitly flagged `childInOwnGroup`
-/// (spawned via `SpawnInOwnGroup`, `POSIX_SPAWN_SETPGROUP`) is reaped with `killpg` (child +
-/// grandchildren), while every other child — a plain `Process()` that SHARES Workbench's
-/// process group — is SIGKILLed child-only (a `killpg` there would reap Workbench itself).
-/// The gate (`childInOwnGroup`) defaults to `false`, so this arm is LATENT: no current
-/// ProcessWatchdog caller opts in (the finite remediation runners all wait on shared-group
-/// children). It exists, born reachable + coverable, for future awaited own-group spawns;
-/// the LIVE grandchild-leak fix lands in `ProcessIOBox.forceKill` (mcp-serve), not here.
+/// ProcessWatchdog NEVER group-reaps. Every `Process` that flows through one of its callers
+/// SHARES Workbench's process group (a plain `Process()` inherits it), so a process-group SIGKILL
+/// here would reap Workbench itself — the post-grace stage SIGKILLs the CHILD pid only. The
+/// own-group group-reap (for the mcp-serve child and the detached daemon, both spawned via
+/// `SpawnInOwnGroup` / `POSIX_SPAWN_SETPGROUP`) lives in `ProcessIOBox.forceKill`, which is NOT a
+/// ProcessWatchdog caller.
+///
+/// (History: F8b briefly added an own-group-gated group-reap arm here. It was structurally DEAD —
+/// all 8 ProcessWatchdog callers go through `waitUntilExit` / `waitUntilExitReportingTimeout`,
+/// NEITHER of which forwards the gate, so the group arm was unreachable from any production path.
+/// F8's cold-review had already removed that exact arm; the F8b cold-review removed it again. The
+/// `WatchdogEscalation` policy + its own-group `.killGroup` case stay LIVE, exercised by
+/// `ProcessIOBox` — nothing is lost. The pin `testProcessWatchdogNeverGroupReaps` keeps this file
+/// free of any process-group-reap syscall + own-group gate flag.)
 public enum ProcessWatchdog {
     /// Wait for `process` to exit, terminating it if it runs past `timeoutSeconds`.
     /// `process` must already be running (`try process.run()` called by the caller).
@@ -115,18 +120,18 @@ public enum ProcessWatchdog {
     }
 
     /// The escalation: SIGTERM, then (after `gracePeriodSeconds` of the child still running) a
-    /// SIGKILL routed through the `WatchdogEscalation.nextSignal` policy — `killpg` for an
-    /// own-group child (`childInOwnGroup: true`), child-only `kill` otherwise. Impure delivery
-    /// through the injected `signalDeliverer` (child) / `groupSignalDeliverer` (group): the
-    /// orchestration is covered by injecting fakes.
+    /// child-only SIGKILL. Impure delivery through the injected `signalDeliverer`: the
+    /// orchestration is covered by injecting a fake.
     ///
-    /// - Parameters:
-    ///   - childInOwnGroup: the GATE. `true` ONLY when the child was spawned into its own
-    ///     process group (`SpawnInOwnGroup`); gates the `.killGroup` arm. Defaults `false` so
-    ///     every current caller (the finite remediation runners, all waiting on shared-group
-    ///     children) stays child-only and can NEVER group-reap Workbench.
-    ///   - groupSignalDeliverer: the `killpg` seam (the `.killGroup` arm). Defaults to the real
-    ///     `killpg`; a test injects a fake to assert the gated routing without a real group reap.
+    /// NEVER group-reaps. Every `Process` that flows through a ProcessWatchdog caller SHARES
+    /// Workbench's process group, so a process-group SIGKILL here would reap Workbench itself — the
+    /// post-grace stage SIGKILLs the CHILD pid only. (The own-group group-reap — for the mcp-serve
+    /// child and the detached daemon — lives in `ProcessIOBox.forceKill`, which is NOT a
+    /// ProcessWatchdog caller. A gated own-group arm was once added here but was structurally DEAD:
+    /// none of the 8 ProcessWatchdog callers — all via `waitUntilExit` /
+    /// `waitUntilExitReportingTimeout`, neither of which forwards an own-group flag — could ever
+    /// reach it. It was removed; re-adding it before an AWAITED own-group spawn wires it up would
+    /// just re-introduce dead code.)
     ///
     /// Recycled-pid safety: capture `processIdentifier` while `isRunning`, and re-check
     /// `isRunning` immediately before each signal — never signal a pid the OS may have reaped
@@ -134,16 +139,7 @@ public enum ProcessWatchdog {
     static func escalateTermination(
         _ process: Process,
         gracePeriodSeconds: Double,
-        signalDeliverer: @Sendable (pid_t, Int32) -> Void,
-        childInOwnGroup: Bool = false,
-        // LATENT group-reap seam (the `.killGroup` arm). The default real `killpg` is
-        // STRUCTURALLY DEAD from every production path: `escalateTermination` only takes a
-        // `Process`, which always SHARES Workbench's group, and no current caller sets
-        // `childInOwnGroup: true`, so `.killGroup` is reached ONLY by the injected-fake routing
-        // test (a real killpg of a shared group would reap the test runner). The real killpg
-        // mechanism is proven separately against `SpawnInOwnGroup` children (SpawnInOwnGroupTests,
-        // ProcessIOBox's default-killpg test). Hence the 1-line allowlist on this default closure.
-        groupSignalDeliverer: @Sendable (pid_t, Int32) -> Void = { killpg($0, $1) }
+        signalDeliverer: @Sendable (pid_t, Int32) -> Void
     ) {
         // Stage 1 — SIGTERM. Capture the pid while the child is provably running.
         guard process.isRunning else {
@@ -163,19 +159,10 @@ public enum ProcessWatchdog {
         guard process.isRunning else {
             return
         }
-        // Route the SIGKILL through the policy. The gate (childInOwnGroup) decides: an own-group
-        // child → `.killGroup` → killpg (reaps the grandchild tree); a shared-group child →
-        // `.killChild` → child-only kill (a killpg would reap Workbench). At this point the child
-        // has survived the full grace window, so elapsed == grace selects the SIGKILL arm.
-        switch WatchdogEscalation.nextSignal(
-            elapsedSinceDeadline: gracePeriodSeconds,
-            graceSeconds: gracePeriodSeconds,
-            childInOwnGroup: childInOwnGroup
-        ) {
-        case .killGroup:
-            groupSignalDeliverer(pid, SIGKILL)
-        default:
-            signalDeliverer(pid, SIGKILL)
-        }
+        // SIGKILL the CHILD pid only — the safe default. Every spawn that flows through a
+        // ProcessWatchdog caller shares Workbench's process group, so a process-group SIGKILL
+        // would reap Workbench itself. The group reap (and its own-group gate) live in
+        // `ProcessIOBox.forceKill`, against children spawned via `SpawnInOwnGroup`.
+        signalDeliverer(pid, SIGKILL)
     }
 }

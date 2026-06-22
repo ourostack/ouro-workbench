@@ -19,16 +19,11 @@ BossAgentMCPClient.swift 1 2
 # or branch a test can target for it.
 SessionActivityReader.swift 0 1
 
-# F8b — escalateTermination's LATENT group-reap default. The default group deliverer
-# `{ killpg($0, $1) }` is structurally dead from every production path: escalateTermination
-# only takes a `Process` (which ALWAYS shares Workbench's process group), and no current
-# caller sets `childInOwnGroup: true`, so the `.killGroup` arm is reached ONLY by the
-# injected-fake routing test — a real `killpg` of a shared group would reap the test runner.
-# The real killpg MECHANISM is proven against own-group children elsewhere
-# (SpawnInOwnGroupTests' grandchild-reap proof + ProcessIOBox's default-killpg test); the LIVE
-# grandchild-leak fix lands in ProcessIOBox.forceKill, not here. This arm is born reachable +
-# gated for future awaited own-group spawns. (1 line, 1 region: the dead default closure body.)
-ProcessWatchdog.swift 1 1
+# ProcessWatchdog.swift is intentionally NOT listed: it is genuinely 100% line + region
+# covered. F8b briefly added a structurally-dead gated `.killGroup` default-killpg arm here
+# (with a 1-line/1-region allowlist entry); the F8b cold-review removed that dead arm, so the
+# escalation once again takes no process-group syscall and needs no exclusion. The own-group
+# killpg reap lives in ProcessIOBox.forceKill (covered there).
 
 # DaemonLiveness.swift is intentionally NOT listed: it is genuinely 100% line +
 # region covered. The former entry covered a flaky synthesized call-site region
