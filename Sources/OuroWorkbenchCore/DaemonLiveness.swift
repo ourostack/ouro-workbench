@@ -386,9 +386,12 @@ public struct DaemonManager: Sendable {
     ///
     /// Mirrors the `BossAgentMCPClient` spawn shape (`/usr/bin/env ouro …` +
     /// `TerminalEnvironment().valuesWithResolvedPath()`) so `ouro` resolves from a
-    /// Finder-launched `.app`'s minimal PATH. The child is fully detached: a fresh session
-    /// (`setsid`-equivalent via `/dev/null` stdio + no inherited pipes), and we DO NOT wait
-    /// on it — Workbench never becomes the daemon's parent-of-record for lifecycle purposes.
+    /// Finder-launched `.app`'s minimal PATH. The child's stdio is redirected to `/dev/null`
+    /// so quitting Workbench never closes the daemon's streams, and we DO NOT wait on it —
+    /// Workbench never becomes the daemon's parent-of-record for lifecycle purposes. NOTE:
+    /// `/dev/null` stdio is NOT a `setsid`-equivalent — it does not create a new session or
+    /// process group; the child still inherits Workbench's process group (relevant to the F8
+    /// watchdog: a killpg here would reap Workbench, which is why group-reap stays gated).
     @Sendable
     public static func detachedStart() async throws {
         let process = Process()

@@ -15823,6 +15823,24 @@ final class WorkbenchViewModel: ObservableObject {
         await runBossCheckIn(question: bossBridgePlanner.checkInQuestion(userQuestion: question), recentChanges: [])
     }
 
+    /// One automatic-loop check-in FAILURE: bump the consecutive-failure count and arm
+    /// `bossWatchNextRetryAt` via the pure `BossWatchBackoff.registerFailure` seam. BOTH the
+    /// daemon-down early-return AND the transport/empty catch path call this, so the backoff
+    /// escalation can't drift between them. (F8 — the daemon-down path previously bailed WITHOUT
+    /// arming the retry, so a dead daemon hot-looped every poll forever.) A *manual* check-in is
+    /// never gated by the backoff; only the automatic loop/event triggers consult `mayAttempt`.
+    private func registerBossWatchFailure(auditDetail: String) {
+        let result = BossWatchBackoff.registerFailure(
+            consecutiveFailures: bossWatchConsecutiveFailures,
+            now: Date()
+        )
+        bossWatchConsecutiveFailures = result.consecutiveFailures
+        bossWatchNextRetryAt = result.nextRetryAt
+        if bossWatchIsEnabled {
+            bossWatchLastError = auditDetail
+        }
+    }
+
     private func runBossCheckIn(
         question: String,
         recentChanges: [WorkspaceChangeSummary]
@@ -15866,9 +15884,11 @@ final class WorkbenchViewModel: ObservableObject {
         }
         if daemonOutcome.needsManualRecovery {
             bossAppliedActions = []
-            if bossWatchIsEnabled {
-                bossWatchLastError = daemonOutcome.auditDetail
-            }
+            // F8 — a dead/unrecoverable daemon is a genuine automatic-loop FAILURE: bump the
+            // backoff (arming bossWatchNextRetryAt) so runBossWatchTick's mayAttempt gate defers
+            // the next tick, instead of hot-looping `ouro mcp-serve` every poll forever. Routes
+            // through the SAME helper as the catch path so the two escalations can't drift.
+            registerBossWatchFailure(auditDetail: daemonOutcome.auditDetail)
             return
         }
         guard state.boss.agentName == requestedBoss else {
@@ -15929,13 +15949,9 @@ final class WorkbenchViewModel: ObservableObject {
             // The precise detail stays in the audit/debug surface (`bossWatchLastError`).
             bossCheckInAnswer = "Your agent didn't answer just now. Workbench will try again shortly."
             bossAppliedActions = []
-            bossWatchConsecutiveFailures += 1
-            bossWatchNextRetryAt = Date().addingTimeInterval(
-                BossWatchBackoff.delay(consecutiveFailures: bossWatchConsecutiveFailures)
-            )
-            if bossWatchIsEnabled {
-                bossWatchLastError = error.localizedDescription
-            }
+            // F8 — route through the SAME shared helper as the daemon-down early-return so the
+            // backoff bump (count + nextRetryAt) is computed in exactly one place and can't drift.
+            registerBossWatchFailure(auditDetail: error.localizedDescription)
         }
     }
 
