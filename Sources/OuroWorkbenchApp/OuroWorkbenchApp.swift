@@ -416,6 +416,10 @@ struct WorkbenchRootView: View {
             model.reconcileStartupAttentionWithLiveSessions()
             model.recoverEligibleSessionsOnStartup()
             model.launchAutoResumeSessionsOnStartup()
+            // F12a gap 3b — now that startup attention is settled, escalate any
+            // session that was waiting on a human across the restart with no boss
+            // decision, so it's triaged instead of stranded out of the inbox.
+            model.reconcileWaitingSessionsIntoInbox()
             model.refreshExecutableHealth()
             model.refreshGitStatus()
             model.refreshSessionActivity()
@@ -16048,8 +16052,23 @@ final class WorkbenchViewModel: ObservableObject {
                 return
             }
             bossCheckInAnswer = answer
+            // F12a gap 3a — persist the boss's prose. `bossCheckInAnswer` is a
+            // transient @Published the next tick overwrites, so without this the
+            // operator's record of what the boss SAID is lost. Only the SUCCESS
+            // path records (the catch's product-voice fallback line is not prose);
+            // gated on a non-empty answer so an empty turn doesn't persist noise.
+            // Routed through the model's `save()` (which already suppresses
+            // isLoadingState / isResettingToFirstRun), not a bespoke write.
+            if !answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                state.recordProse(BossProseEntry(source: "boss:\(requestedBoss)", text: answer))
+                save()
+            }
             applyBossActions(from: answer)
             recordBossDecisions(from: answer)
+            // F12a gap 3b — after recording the boss's own decisions, escalate any
+            // waiting session the boss DIDN'T decide on, so it can't fall silently
+            // out of triage.
+            reconcileWaitingSessionsIntoInbox()
             bossWatchLastError = nil
             // Boss responded — clear any backoff so the automatic loop resumes
             // its normal cadence immediately.
@@ -16165,6 +16184,52 @@ final class WorkbenchViewModel: ObservableObject {
                 )
             )
             changed += 1
+        }
+        if changed > 0 {
+            save()
+        }
+    }
+
+    /// F12a gap 3b — escalate any waiting-on-human session the boss DIDN'T already
+    /// triage, so it can't fall silently out of the inbox. A waiting session enters
+    /// the inbox only via a boss decision; if the boss emitted no decisions block
+    /// (or a decision whose entry couldn't be resolved), the session was stranded.
+    /// The pure `WaitingSessionReconciler` finds the uncovered waiting ids against
+    /// the LIVE entries + the open inbox; each is recorded as a synthesized
+    /// `.escalate` via `recordDecisionIfNew` — the prompt+kind dedup that prevents
+    /// re-escalating a still-waiting session every tick (inbox flooding). Saves only
+    /// when something was added, and rides the model's `save()` (which already
+    /// suppresses isLoadingState / isResettingToFirstRun), so a startup reconcile
+    /// can't fire a premature save during a lossy load.
+    func reconcileWaitingSessionsIntoInbox() {
+        let untriaged = WaitingSessionReconciler.untriagedWaitingEntryIds(
+            entries: state.processEntries,
+            openInbox: state.openInbox()
+        )
+        guard !untriaged.isEmpty else {
+            return
+        }
+        var changed = 0
+        for entryId in untriaged {
+            guard let entry = state.processEntries.first(where: { $0.id == entryId }) else {
+                continue
+            }
+            let prompt = String((bossActionLivePrompt(for: entry).isEmpty
+                ? (entry.attentionReason ?? entry.lastSummary ?? "Waiting on you")
+                : bossActionLivePrompt(for: entry)).prefix(2000))
+            let recorded = state.recordDecisionIfNew(
+                BossInboxDecision(
+                    source: "workbench:reconcile",
+                    entryId: entry.id,
+                    sessionName: entry.name,
+                    prompt: prompt,
+                    kind: .escalate,
+                    reasoning: "Waiting on a human with no boss decision yet — surfaced for triage."
+                )
+            )
+            if recorded {
+                changed += 1
+            }
         }
         if changed > 0 {
             save()
@@ -18800,6 +18865,22 @@ final class WorkbenchViewModel: ObservableObject {
                 return "\(entry.name): working directory doesn't exist — \(workingDirectory)"
             }
         }
+        // F12a gap 2 — the OUTER `screen` multiplexer every persistent session is
+        // wrapped in (PersistentTerminalSession.executable). If it's missing or not
+        // runnable the wrapped command exits 127 with a dead-end message; catch that
+        // BEFORE the spawn (the primary fix; markTerminated is the TOCTOU backstop).
+        // GATED on `plan.persistentSessionName != nil`: a direct spawn (cold-start /
+        // provider probe runs `ouro`/`gh` without a screen wrapper) has no
+        // multiplexer to blame, so its 127 must never be misattributed here.
+        if plan.persistentSessionName != nil {
+            let screenHealth = executableHealthChecker.health(for: PersistentTerminalSession.executable)
+            switch screenHealth.status {
+            case .missing, .notExecutable:
+                return "\(entry.name): the terminal multiplexer (screen) is missing or not runnable — \(screenHealth.detail)"
+            case .available:
+                break
+            }
+        }
         // Only validate a command that's an explicit path; bare names and
         // shell-wrapped commands resolve through PATH / the shell at launch in
         // ways the checker can't fully model, so blocking them risks false
@@ -19246,9 +19327,23 @@ final class WorkbenchViewModel: ObservableObject {
             if terminalFocusEntryID == entryId {
                 terminalFocusEntryID = nil
             }
+            // F12a gap 2 — TOCTOU backstop. The preflight catches a missing `screen`
+            // before launch, but it can vanish between preflight and exit; a
+            // screen-wrapped session that exits 127 then renders a dead-end "exited
+            // with code 127". Replace that with the honest TerminalExitDiagnosis.
+            // GATED on the screen wrapper (currentPlan?.persistentSessionName != nil)
+            // so a direct-spawn 127 is never misattributed to a missing multiplexer.
+            let screenDiagnosis: String? = currentPlan?.persistentSessionName != nil
+                ? TerminalExitDiagnosis.screenWrappedExit(
+                    exitCode: status.exitCode,
+                    screenHealth: executableHealthChecker.health(for: PersistentTerminalSession.executable).status
+                )
+                : nil
             updateEntry(entryId) { entry in
                 entry.attention = nextRunStatus == .manualActionNeeded ? .needsBossReview : .idle
-                if nextRunStatus == .manualActionNeeded {
+                if let screenDiagnosis {
+                    entry.lastSummary = "\(entry.name): \(screenDiagnosis)"
+                } else if nextRunStatus == .manualActionNeeded {
                     entry.lastSummary = "\(entry.name) recovery attempt exited with code \(status.exitCode.map(String.init) ?? "unknown")"
                 } else {
                     entry.lastSummary = "\(entry.name) exited with code \(status.exitCode.map(String.init) ?? "unknown")"
@@ -20116,6 +20211,10 @@ final class TerminalSessionController: NSObject, ObservableObject, Identifiable,
     private let onTerminated: (Int32?) -> Void
     private var recorder: TranscriptRecorder?
     private var hasStarted = false
+    /// F12a gap 5 — one-shot guard so a `.sendAfterLaunch` checkpoint prompt is typed
+    /// EXACTLY once, on the first output (the interactive signal), not on every PTY
+    /// chunk.
+    private var hasDeliveredCheckpointPrompt = false
 
     init(
         plan: TerminalCommandPlan,
@@ -20276,7 +20375,30 @@ final class TerminalSessionController: NSObject, ObservableObject, Identifiable,
 
     private func recordOutput(_ bytes: ArraySlice<UInt8>) {
         recorder?.append(bytes)
+        // F12a gap 5 — the first output is the post-start INTERACTIVE signal: the
+        // TUI has painted and is ready for input. Deliver a `.sendAfterLaunch`
+        // checkpoint prompt here (NOT in start()/onStarted — typing before the TUI is
+        // ready loses the prompt). The one-shot guard fires it exactly once.
+        deliverCheckpointPromptIfNeeded()
         onOutput()
+    }
+
+    /// F12a gap 5 — type a Copilot respawn's checkpoint recovery prompt once the TUI
+    /// is interactive. Copilot ignores an argv prompt after `--`, so the planner
+    /// carries the prompt in `plan.checkpointPromptDelivery == .sendAfterLaunch`
+    /// rather than appending it; here we type it (with a trailing newline to submit)
+    /// on the first output. Gated on the one-shot `hasDeliveredCheckpointPrompt` so a
+    /// later output chunk never re-types it. `.positional` plans deliver nothing here
+    /// (the prompt is already in argv — the generic-TUI path is untouched).
+    private func deliverCheckpointPromptIfNeeded() {
+        guard !hasDeliveredCheckpointPrompt else {
+            return
+        }
+        guard case let .sendAfterLaunch(text) = plan.checkpointPromptDelivery else {
+            return
+        }
+        hasDeliveredCheckpointPrompt = true
+        sendInput("\(text)\n")
     }
 
     func sizeChanged(source: LocalProcessTerminalView, newCols: Int, newRows: Int) {}

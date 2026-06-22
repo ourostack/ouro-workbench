@@ -572,6 +572,8 @@ final class CommandPlannerTests: XCTestCase {
         let plan = try WorkbenchCommandPlanner().recoveryPlan(for: entry, latestRun: nil, action: .respawn)
 
         XCTAssertEqual(plan.reason, "respawn Custom Agent with checkpoint recovery prompt")
+        // F12a gap 5 — a custom (non-Copilot) agent keeps the positional path.
+        XCTAssertEqual(plan.checkpointPromptDelivery, .positional)
         XCTAssertTrue(plan.arguments.last?.contains("Recover this Ouro Workbench terminal-agent session") == true)
     }
 
@@ -597,11 +599,18 @@ final class CommandPlannerTests: XCTestCase {
         let plan = try WorkbenchCommandPlanner().recoveryPlan(for: entry, latestRun: run, action: .respawn)
 
         XCTAssertEqual(plan.executable, "gh")
-        XCTAssertEqual(Array(plan.arguments.prefix(3)), ["copilot", "--", "--yolo"])
+        // F12a gap 5 — Copilot's TUI ignores anything after `--`, so the checkpoint
+        // prompt must NOT be appended as a positional. The argv is exactly the
+        // launch flags; the prompt rides checkpointPromptDelivery == .sendAfterLaunch
+        // to be typed once the TUI is interactive.
+        XCTAssertEqual(plan.arguments, ["copilot", "--", "--yolo"])
         XCTAssertEqual(plan.recoveryAction, .respawn)
         XCTAssertEqual(plan.reason, "respawn GitHub Copilot CLI with checkpoint recovery prompt")
-        XCTAssertTrue(plan.arguments.last?.contains("Recover this Ouro Workbench terminal-agent session") == true)
-        XCTAssertTrue(plan.arguments.last?.contains("/tmp/transcript.log") == true)
+        guard case let .sendAfterLaunch(text) = plan.checkpointPromptDelivery else {
+            return XCTFail("Copilot respawn must deliver the prompt via sendAfterLaunch, not a positional argv token")
+        }
+        XCTAssertTrue(text.contains("Recover this Ouro Workbench terminal-agent session"))
+        XCTAssertTrue(text.contains("/tmp/transcript.log"))
     }
 
     func testCheckpointRespawnDetectsShellWrappedCopilot() throws {
@@ -628,7 +637,14 @@ final class CommandPlannerTests: XCTestCase {
         XCTAssertEqual(plan.arguments[0], "-lc")
         XCTAssertEqual(plan.recoveryAction, .respawn)
         XCTAssertEqual(plan.reason, "respawn Copilot Scratch with checkpoint recovery prompt")
-        XCTAssertTrue(plan.arguments.last?.contains("Recover this Ouro Workbench terminal-agent session") == true)
+        // F12a gap 5 — a shell-wrapped Copilot is still detected as Copilot, so the
+        // prompt rides sendAfterLaunch (not the argv, which the TUI would ignore).
+        // The shell argv keeps exactly its two tokens; no prompt is appended.
+        XCTAssertEqual(plan.arguments, ["-lc", "gh copilot -- --yolo"])
+        guard case let .sendAfterLaunch(text) = plan.checkpointPromptDelivery else {
+            return XCTFail("shell-wrapped Copilot respawn must deliver the prompt via sendAfterLaunch")
+        }
+        XCTAssertTrue(text.contains("Recover this Ouro Workbench terminal-agent session"))
     }
 
     func testCheckpointRespawnCoversGenericTerminalAgents() throws {
@@ -655,6 +671,10 @@ final class CommandPlannerTests: XCTestCase {
         XCTAssertEqual(plan.arguments[0], "-lc")
         XCTAssertEqual(plan.recoveryAction, .respawn)
         XCTAssertEqual(plan.reason, "respawn Generic TUI with checkpoint recovery prompt")
+        // F12a gap 5 — a generic argv-reading TUI keeps the positional path (many
+        // custom agents DO read an argv prompt), so the prompt stays the last argv
+        // token AND checkpointPromptDelivery is .positional (nothing typed later).
+        XCTAssertEqual(plan.checkpointPromptDelivery, .positional)
         XCTAssertTrue(plan.arguments.last?.contains("Recover this Ouro Workbench terminal-agent session") == true)
         XCTAssertTrue(plan.arguments.last?.contains("/tmp/generic-transcript.log") == true)
     }

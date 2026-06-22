@@ -425,18 +425,27 @@ final class WorkbenchMCPServer {
             throw MCPToolFailure("Missing requestId")
         }
         let stillQueued: Bool
+        // F12a gap 1 — whether the app already APPLIED this request, read from the
+        // durable F11b `applied/` ledger. When the post-apply `save()` threw, the
+        // log entry was lost but this marker survives, so the classifier can report
+        // the honest `.appliedUnconfirmed` ("ran; outcome unavailable") instead of
+        // the lie `.unknown`. NOT hardcoded — read by id from the live ledger.
+        let isApplied: Bool
         if let uuid = UUID(uuidString: requestId) {
             stillQueued = queue.isPendingOrProcessing(requestId: uuid)
+            isApplied = queue.appliedRequestIds().contains(uuid)
         } else {
-            // A malformed id is never in the queue (whose filenames carry UUIDs);
-            // it resolves to unknown via the log lookup below.
+            // A malformed id is never in the queue or the ledger (both keyed by
+            // UUID); it resolves to unknown via the log lookup below.
             stillQueued = false
+            isApplied = false
         }
         let state = try currentState()
         let logEntry = state.actionLog.first { $0.requestId?.uuidString == requestId }
         let readback = actionResultClassifier.readback(
             requestId: requestId,
             stillQueued: stillQueued,
+            isApplied: isApplied,
             logEntry: logEntry
         )
         return try encodeJSON(readback)
@@ -1104,7 +1113,7 @@ final class WorkbenchMCPServer {
             ],
             [
                 "name": "workbench_action_result",
-                "description": "Read back the outcome of a workbench_request_action by the requestId it returned (#U24). Returns {requestId,state,result?,succeeded?} where state is one of: queued (the app hasn't drained it yet — poll again, never an error), applied (drained and succeeded — `result` carries the confirmation text and `succeeded` is true), failed (drained but skipped/errored — `result` carries the reason and `succeeded` is false), or unknown (no such queued request and no log entry — wrong id, or the entry rolled off the bounded action log). Use this to confirm 'did my recover/sendInput land' instead of re-pulling workbench_status and guessing which log line was yours.",
+                "description": "Read back the outcome of a workbench_request_action by the requestId it returned (#U24). Returns {requestId,state,result?,succeeded?} where state is one of: queued (the app hasn't drained it yet — poll again, never an error), applied (drained and succeeded — `result` carries the confirmation text and `succeeded` is true), failed (drained but skipped/errored — `result` carries the reason and `succeeded` is false), appliedUnconfirmed (the action RAN — `succeeded` is true — but the workbench's state save failed afterward so its detailed outcome text wasn't persisted; treat it as applied, not as a failure or a re-do), or unknown (no such queued request and no log entry — wrong id, or the entry rolled off the bounded action log). Use this to confirm 'did my recover/sendInput land' instead of re-pulling workbench_status and guessing which log line was yours.",
                 "inputSchema": [
                     "type": "object",
                     "properties": [

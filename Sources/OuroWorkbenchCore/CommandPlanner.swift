@@ -25,6 +25,24 @@ public enum TerminalCommandPlanKind: String, Codable, Sendable, CaseIterable {
     case manualReview
 }
 
+/// How a respawn's checkpoint recovery prompt reaches the agent (#F12a gap 5).
+///
+/// The planner used to append the prompt as the last positional argv token. That
+/// works for a generic argv-reading TUI, but Copilot's launch
+/// (`gh copilot -- --yolo "<prompt>"`) ignores anything after `--`, so the TUI
+/// opened with no recovery context. This typed signal lets the session controller
+/// route Copilot's prompt to be typed AFTER the TUI is interactive instead.
+public enum CheckpointPromptDelivery: Equatable, Sendable {
+    /// The prompt is already in `arguments` (appended) — a generic argv-reading TUI
+    /// that consumes an argv prompt. The controller does nothing extra.
+    case positional
+    /// The prompt is NOT in `arguments`; the controller must type it (via
+    /// `sendInput`) once the session reaches its interactive (first-output) state.
+    /// Copilot's TUI ignores an argv prompt after `--`, so this is the only way it
+    /// receives recovery context.
+    case sendAfterLaunch(String)
+}
+
 public struct TerminalCommandPlan: Equatable, Identifiable, Sendable {
     public var id: UUID
     public var entryId: UUID
@@ -39,6 +57,10 @@ public struct TerminalCommandPlan: Equatable, Identifiable, Sendable {
     /// The typed meaning of this plan (U40). Drives the plain operator sentence
     /// shown post-launch; the raw `reason` stays untouched for logs / disclosure.
     public var kind: TerminalCommandPlanKind
+    /// How a respawn's checkpoint recovery prompt is delivered (#F12a gap 5).
+    /// `.positional` (the default) for everything but a Copilot respawn, which uses
+    /// `.sendAfterLaunch` so the prompt is typed after the TUI is interactive.
+    public var checkpointPromptDelivery: CheckpointPromptDelivery
 
     public init(
         id: UUID = UUID(),
@@ -51,7 +73,8 @@ public struct TerminalCommandPlan: Equatable, Identifiable, Sendable {
         recoveryAction: RecoveryAction? = nil,
         persistentSessionName: String? = nil,
         reason: String,
-        kind: TerminalCommandPlanKind = .launch
+        kind: TerminalCommandPlanKind = .launch,
+        checkpointPromptDelivery: CheckpointPromptDelivery = .positional
     ) {
         self.id = id
         self.entryId = entryId
@@ -64,6 +87,7 @@ public struct TerminalCommandPlan: Equatable, Identifiable, Sendable {
         self.persistentSessionName = persistentSessionName
         self.reason = reason
         self.kind = kind
+        self.checkpointPromptDelivery = checkpointPromptDelivery
     }
 
     public var displayCommand: String {
@@ -206,6 +230,29 @@ public enum PersistentTerminalSession: Sendable {
     }
 }
 
+/// Decides how a respawn's checkpoint prompt is delivered, keyed off the detected
+/// agent kind (#F12a gap 5). Pure — no I/O — so the App's session controller and the
+/// planner agree without either reaching for agent-specific logic inline.
+public struct CheckpointPromptDeliveryResolver: Sendable {
+    public init() {}
+
+    /// `.sendAfterLaunch(prompt)` for Copilot (its TUI ignores an argv prompt after
+    /// `--`, so it must be typed once interactive); `.positional` for a generic
+    /// argv-reading TUI (detection nil / `.custom`) that consumes an argv prompt;
+    /// `nil` for the native-resume agents (Claude / Codex) — they never respawn via
+    /// the checkpoint prompt, so no checkpoint delivery applies.
+    public func delivery(for kind: TerminalAgentKind?, prompt: String) -> CheckpointPromptDelivery? {
+        switch kind {
+        case .githubCopilotCLI:
+            return .sendAfterLaunch(prompt)
+        case nil, .custom:
+            return .positional
+        case .claudeCode, .openAICodex:
+            return nil
+        }
+    }
+}
+
 public struct WorkbenchCommandPlanner: Sendable {
     private let paths: WorkbenchPaths?
 
@@ -250,11 +297,25 @@ public struct WorkbenchCommandPlanner: Sendable {
             return try nativeResumePlan(for: entry, latestRun: latestRun, action: action)
         case .respawn:
             var plan = try launchPlan(for: entry)
-            if checkpointRecoveryPromptIsNeeded(for: entry) {
-                plan.arguments.append(checkpointRecoveryPrompt(for: entry, latestRun: latestRun))
+            let needsPrompt = checkpointRecoveryPromptIsNeeded(for: entry)
+            if needsPrompt {
+                let prompt = checkpointRecoveryPrompt(for: entry, latestRun: latestRun)
+                // F12a gap 5 — choose the delivery by detected agent kind. Copilot's
+                // TUI ignores an argv prompt after `--`, so its prompt is carried in
+                // `checkpointPromptDelivery` (.sendAfterLaunch) to be typed once the
+                // TUI is interactive — NOT appended to arguments. A generic
+                // argv-reading TUI keeps the positional path (appended). The resolver
+                // returns nil only for native-resume agents, which never reach here.
+                let detected = TerminalAgentDetector.detect(entry: entry)
+                if case .sendAfterLaunch = CheckpointPromptDeliveryResolver().delivery(for: detected, prompt: prompt) {
+                    plan.checkpointPromptDelivery = .sendAfterLaunch(prompt)
+                } else {
+                    plan.arguments.append(prompt)
+                    plan.checkpointPromptDelivery = .positional
+                }
             }
             plan.recoveryAction = action
-            plan.reason = checkpointRecoveryPromptIsNeeded(for: entry)
+            plan.reason = needsPrompt
                 ? "respawn \(entry.name) with checkpoint recovery prompt"
                 : "respawn \(entry.name) from persisted workbench context"
             plan.kind = .respawn

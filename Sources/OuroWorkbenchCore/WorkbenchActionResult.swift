@@ -13,8 +13,16 @@ public enum WorkbenchActionResultState: String, Codable, Equatable, Sendable {
     case applied
     /// The app applied the request and it failed (skipped / errored).
     case failed
-    /// No request with this id is queued and no action-log entry carries it —
-    /// either the id is wrong, or its log entry rolled off the bounded log.
+    /// The app APPLIED the request (the durable F11b `applied/` ledger marker is
+    /// present) but no action-log entry carries it — the post-apply `save()` threw
+    /// after the side effect ran, so the outcome text was lost. The action RAN
+    /// (succeeded:true); only its detailed outcome is unavailable. A DISTINCT state
+    /// from `.applied` so the boss is never told a confirmed outcome the workbench
+    /// never persisted — degraded-mode honesty (#F12a gap 1).
+    case appliedUnconfirmed
+    /// No request with this id is queued, no action-log entry carries it, and it
+    /// isn't in the applied ledger — either the id is wrong, or its log entry
+    /// rolled off the bounded log.
     case unknown
 }
 
@@ -53,30 +61,52 @@ public struct WorkbenchActionResultReadback: Codable, Equatable, Sendable {
 /// unit-tested in Core and reused by the read-only `workbench_action_result`
 /// tool.
 ///
-/// Precedence: a request still in the queue reads `queued` (not-ready) even if a
-/// stale log entry with the same id somehow exists — the queue is the live
-/// truth that the app hasn't finished. Otherwise the action-log entry stamped
-/// with the requestId resolves it to `applied`/`failed`. Neither present →
-/// `unknown` (wrong id, or the entry rolled off the bounded log).
+/// Precedence (highest → lowest):
+///  1. `stillQueued` → `queued` (not-ready) even if a stale log entry or applied
+///     marker with the same id exists — the queue is the live truth that the app
+///     hasn't finished.
+///  2. the action-log entry stamped with the requestId resolves it to
+///     `applied`/`failed` (the resolved, persisted truth).
+///  3. `isApplied` (the durable F11b `applied/` ledger marker) with NO log entry →
+///     `appliedUnconfirmed`: the side effect ran but the post-apply `save()` threw,
+///     so the outcome text was lost. Honest "ran; outcome unavailable" rather than
+///     the lie `unknown` (#F12a gap 1). Reachable only in the save-fail window —
+///     the steady-state sweep clears the marker once `processing/` is gone.
+///  4. none of the above → `unknown` (wrong id, or the entry rolled off the log).
 public struct WorkbenchActionResultClassifier {
+    /// The honest outcome text for an action that ran but whose detailed outcome
+    /// wasn't persisted (the post-apply `save()` threw). Single source of truth so
+    /// the App can't drift the copy.
+    public static let appliedUnconfirmedResult =
+        "Applied; detailed outcome unavailable (state save failed)."
+
     public init() {}
 
     public func readback(
         requestId: String,
         stillQueued: Bool,
+        isApplied: Bool,
         logEntry: WorkbenchActionLogEntry?
     ) -> WorkbenchActionResultReadback {
         if stillQueued {
             return WorkbenchActionResultReadback(requestId: requestId, state: .queued)
         }
-        guard let logEntry else {
-            return WorkbenchActionResultReadback(requestId: requestId, state: .unknown)
+        if let logEntry {
+            return WorkbenchActionResultReadback(
+                requestId: requestId,
+                state: logEntry.succeeded ? .applied : .failed,
+                result: logEntry.result,
+                succeeded: logEntry.succeeded
+            )
         }
-        return WorkbenchActionResultReadback(
-            requestId: requestId,
-            state: logEntry.succeeded ? .applied : .failed,
-            result: logEntry.result,
-            succeeded: logEntry.succeeded
-        )
+        if isApplied {
+            return WorkbenchActionResultReadback(
+                requestId: requestId,
+                state: .appliedUnconfirmed,
+                result: Self.appliedUnconfirmedResult,
+                succeeded: true
+            )
+        }
+        return WorkbenchActionResultReadback(requestId: requestId, state: .unknown)
     }
 }
