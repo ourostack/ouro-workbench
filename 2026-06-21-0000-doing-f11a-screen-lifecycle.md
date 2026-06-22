@@ -35,3 +35,6 @@ Do NOT touch the action queue / applyBossAction (that is F11b).
 - 2026-06-21 22:26 Unit 3a/3b complete: Defect 1 App wiring (quit on delete/archive, startup reaper, stateLoadSucceeded gate, shared spawnScreenQuit). 8 source-pins green; strict build clean.
 - 2026-06-21 22:34 Unit 4a/4b complete: Defect 2 App wiring (async start consulting StartSequencer; terminatePersistentSessionAwaiting with lock-backed single-shot continuation resumed from terminationHandler+watchdog; launch/recover route through await start; app-exit/terminate(_:) stay non-awaiting). 11 source-pins green.
 - 2026-06-21 22:35 Gates: full strict suite 2314/0; coverage PASS Core 100% (new files 100%, no new allowlist); strict build clean.
+- 2026-06-21 22:46 Review fix (IMPORTANT, adversarial review): async start reopened a same-entry re-entrancy window the synchronous pre-F11a start never had (await between reading and reassigning activeSessions[id] → two -D -RR racing one socket + leaked session on double-start). Added per-entry startingEntryIDs in-flight guard (early-return + defer release); pinned by testStartGuardsAgainstReentrantSameEntryStart. Full suite 2315/0, coverage PASS, build clean.
+
+## Status: done
