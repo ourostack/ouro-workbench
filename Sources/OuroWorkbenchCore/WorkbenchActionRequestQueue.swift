@@ -49,6 +49,15 @@ public final class WorkbenchActionRequestQueue {
     /// crash between drain and apply leaves the request file here, and
     /// `recoverUnconfirmed()` replays it on the next launch.
     public let processingDirectoryURL: URL
+    /// F11b — durable, id-keyed ledger of requests the app has already APPLIED.
+    /// A sibling marker-dir of `processing/` (exactly like it): each applied
+    /// request leaves a zero-byte `<id>.json` marker here. The marker lands AFTER
+    /// the side effect but BEFORE `confirmApplied(_:)` deletes the `processing/`
+    /// file, so a crash in that window leaves BOTH the `processing/` file (so
+    /// `recoverUnconfirmed()` still surfaces the request) AND the applied marker
+    /// (so `ReplayDedupDecider` skips re-applying it). Non-recursive listings in
+    /// `pendingRequestFileURLs` / `drain` skip this subdir just like `processing/`.
+    public let appliedDirectoryURL: URL
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
@@ -56,6 +65,7 @@ public final class WorkbenchActionRequestQueue {
         self.directoryURL = directoryURL
         self.rejectedDirectoryURL = directoryURL.appendingPathComponent("rejected", isDirectory: true)
         self.processingDirectoryURL = directoryURL.appendingPathComponent("processing", isDirectory: true)
+        self.appliedDirectoryURL = directoryURL.appendingPathComponent("applied", isDirectory: true)
         self.encoder = JSONEncoder()
         self.decoder = JSONDecoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -76,7 +86,13 @@ public final class WorkbenchActionRequestQueue {
     /// drain and execute twice.
     public func enqueue(_ request: WorkbenchActionRequest) throws {
         try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
-        if hasPendingDuplicate(of: request) {
+        // Drop an identical-fingerprint twin whether the sibling is still PENDING
+        // (top-level) or already mid-flight in `processing/` (drained, not yet
+        // confirmed). `hasPendingDuplicate` alone scans only the top level, so it
+        // misses a twin that `drain()` already moved into `processing/` — the
+        // empty-retry window where the same effect would otherwise enqueue again
+        // and drain+apply a second time (#F11b).
+        if hasPendingDuplicate(of: request) || hasProcessingDuplicate(of: request) {
             return
         }
         let data = try encoder.encode(request)
@@ -217,6 +233,92 @@ public final class WorkbenchActionRequestQueue {
             return false
         }
         for url in urls {
+            guard
+                let data = try? Data(contentsOf: url),
+                let existing = try? decoder.decode(WorkbenchActionRequest.self, from: data)
+            else {
+                continue
+            }
+            if existing.fingerprint == fingerprint {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// F11b — record that the request identified by `requestId` has been APPLIED,
+    /// by writing a zero-byte `<id>.json` marker into `applied/`. Atomic and
+    /// idempotent: re-marking just rewrites the same empty marker. Best-effort —
+    /// a write failure is swallowed (the `processing/` file + `isNewDecision`
+    /// guard remain as defense-in-depth), but the App calls this on the MAIN
+    /// actor SYNCHRONOUSLY before the off-main confirm so the durable marker lands
+    /// inside the crash window (ORDERING: side-effect → markApplied → confirmApplied
+    /// → clearApplied).
+    public func markApplied(_ requestId: UUID) {
+        do {
+            try FileManager.default.createDirectory(at: appliedDirectoryURL, withIntermediateDirectories: true)
+            try Data().write(to: appliedMarkerURL(for: requestId), options: [.atomic])
+        } catch {
+            // Best-effort: a missing marker only weakens replay dedup back to the
+            // pre-F11b defense-in-depth, it doesn't corrupt the queue.
+        }
+    }
+
+    /// F11b — the set of request ids the app has applied (one per `applied/`
+    /// marker). Best-effort: an absent or unreadable `applied/` reads as the
+    /// empty set, and non-UUID marker names are skipped. This is the durable
+    /// `appliedRequestIds` that `ReplayDedupDecider.decide(...)` consults at apply
+    /// time to skip a crash-recovered replay.
+    public func appliedRequestIds() -> Set<UUID> {
+        guard let urls = try? FileManager.default.contentsOfDirectory(
+            at: appliedDirectoryURL,
+            includingPropertiesForKeys: nil
+        ) else {
+            return []
+        }
+        var ids: Set<UUID> = []
+        for url in urls where url.pathExtension == "json" {
+            if let id = UUID(uuidString: url.deletingPathExtension().lastPathComponent) {
+                ids.insert(id)
+            }
+        }
+        return ids
+    }
+
+    /// F11b — remove the `applied/` marker for `requestId`. Idempotent: a missing
+    /// marker is a no-op. Called inline after `confirmApplied(_:)` to keep the
+    /// applied ledger empty in steady state, and by the startup sweep to clear a
+    /// marker whose `processing/` file is gone (orphaned by a crash AFTER confirm
+    /// but BEFORE clear).
+    public func clearApplied(_ requestId: UUID) {
+        try? FileManager.default.removeItem(at: appliedMarkerURL(for: requestId))
+    }
+
+    private func appliedMarkerURL(for requestId: UUID) -> URL {
+        appliedDirectoryURL.appendingPathComponent("\(requestId.uuidString).json")
+    }
+
+    /// F11b — True when a request file currently in `processing/` (drained but not
+    /// yet confirmed) carries the same action fingerprint as `request`. Ids that
+    /// are already in `applied/` are SKIPPED: an applied-but-not-yet-cleared
+    /// `processing/` file is crash residue the id-keyed ledger already guards, not
+    /// a live mid-flight twin — counting it would false-drop a deliberate
+    /// re-issue. Best-effort: an unreadable `processing/` reads as no-duplicate.
+    func hasProcessingDuplicate(of request: WorkbenchActionRequest) -> Bool {
+        guard let urls = try? FileManager.default.contentsOfDirectory(
+            at: processingDirectoryURL,
+            includingPropertiesForKeys: nil
+        ) else {
+            return false
+        }
+        let fingerprint = request.fingerprint
+        let applied = appliedRequestIds()
+        for url in urls where url.pathExtension == "json" {
+            // Skip processing/ files whose id is already applied (crash residue).
+            if let id = UUID(uuidString: url.deletingPathExtension().lastPathComponent),
+               applied.contains(id) {
+                continue
+            }
             guard
                 let data = try? Data(contentsOf: url),
                 let existing = try? decoder.decode(WorkbenchActionRequest.self, from: data)

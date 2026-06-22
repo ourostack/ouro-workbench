@@ -16254,6 +16254,10 @@ final class WorkbenchViewModel: ObservableObject {
         // app confirms it applied them (at-least-once), so anything still in
         // `processing/` at launch is a crashed-mid-apply action to recover.
         await recoverUnconfirmedExternalActionRequests()
+        // F11b Defect 3 — clear `applied/` markers orphaned by a crash AFTER
+        // confirm-but-BEFORE-clear (their `processing/` file is gone, so recovery
+        // above won't replay them, but the marker would otherwise linger forever).
+        await sweepOrphanedAppliedMarkers()
         while !Task.isCancelled {
             await drainExternalActionRequests()
             try? await Task.sleep(nanoseconds: 2_000_000_000)
@@ -16306,16 +16310,32 @@ final class WorkbenchViewModel: ObservableObject {
         applyExternalActionRequests(requests)
     }
 
-    /// Apply each drained/recovered request on the main actor, surface the
-    /// results in the boss activity feed, then confirm them off-main so their
-    /// `processing/` files are deleted (at-least-once → applied-and-cleared).
+    /// Apply each drained/recovered request on the main actor, mark each APPLIED
+    /// in the durable ledger, surface the results in the boss activity feed, then
+    /// confirm + clear them off-main.
+    ///
+    /// F11b ORDERING CONTRACT (THE key invariant): per request,
+    ///   side-effect (`applyBossAction`) → `markApplied` (durable, main-actor SYNC)
+    ///   → `confirmApplied` (delete `processing/`) → `clearApplied` (delete marker).
+    /// `markApplied` MUST land BEFORE the detached confirm task — that detached
+    /// task opens the crash window (apply done, `processing/` file still present),
+    /// and the durable marker is what lets `ReplayDedupDecider` skip a replay if
+    /// the app crashes before `confirmApplied` deletes the `processing/` file.
+    /// Moving `markApplied` after the confirm — or dropping it — reopens the
+    /// double-execute bug, which is why `ReplayDedupWiringTests` index-pins this.
     private func applyExternalActionRequests(_ requests: [WorkbenchActionRequest]) {
-        let results = requests.map { request in
+        let results = requests.map { request -> String in
             // Stamp the originating requestId onto the action-log entry this
             // apply writes (#U24), so the boss's queued request and the
             // operator's audit entry share one key — and workbench_action_result
             // can resolve the requestId to its applied/failed outcome.
-            "External \(request.source): \(applyBossAction(request.action, source: "external:\(request.source)", requestId: request.id))"
+            let result = applyBossAction(request.action, source: "external:\(request.source)", requestId: request.id)
+            // Land the durable applied marker on the MAIN actor SYNCHRONOUSLY, right
+            // after the side effect and BEFORE the detached confirm opens the crash
+            // window. If we crash now, the `processing/` file remains (recovery
+            // replays it) but the marker makes the decider skip the replay.
+            externalActionQueue.markApplied(request.id)
+            return "External \(request.source): \(result)"
         }
         bossAppliedActions = Array((results + bossAppliedActions).prefix(12))
         let appliedIDs = requests.map(\.id)
@@ -16323,9 +16343,32 @@ final class WorkbenchViewModel: ObservableObject {
         Task.detached(priority: .utility) {
             let queue = WorkbenchActionRequestQueue(directoryURL: directoryURL)
             for id in appliedIDs {
+                // confirm (delete processing/) THEN clear the marker — keeping the
+                // applied ledger empty in steady state. A crash between the two
+                // leaves an orphan marker the startup sweep clears.
                 queue.confirmApplied(id)
+                queue.clearApplied(id)
             }
         }
+    }
+
+    /// F11b Defect 3 — startup sweep for crash-orphaned `applied/` markers. The
+    /// steady-state path clears a marker inline right after `confirmApplied`
+    /// deletes its `processing/` file, so the ledger stays empty. But a crash
+    /// AFTER `confirmApplied` and BEFORE `clearApplied` orphans the marker (its
+    /// `processing/` file is gone, so recovery won't replay it, but the marker
+    /// lingers). Run this once at startup, AFTER
+    /// `recoverUnconfirmedExternalActionRequests` (which re-marks anything it
+    /// replays), and clear every marker whose request is no longer in flight —
+    /// bounding `applied/` growth.
+    private func sweepOrphanedAppliedMarkers() async {
+        let directoryURL = externalActionQueue.directoryURL
+        await Task.detached(priority: .utility) {
+            let queue = WorkbenchActionRequestQueue(directoryURL: directoryURL)
+            for id in queue.appliedRequestIds() where !queue.isPendingOrProcessing(requestId: id) {
+                queue.clearApplied(id)
+            }
+        }.value
     }
 
     /// Refresh the set of live persistent `screen` sessions so recovery can
@@ -17169,6 +17212,31 @@ final class WorkbenchViewModel: ObservableObject {
                 action: action,
                 entry: nil,
                 result: "Skipped \(action.action.rawValue): \(error.localizedDescription)"
+            )
+        }
+
+        // F11b Defect 3 — UNIVERSAL replay guard. The action queue is at-least-once:
+        // `applyExternalActionRequests` runs this apply SYNCHRONOUSLY then confirms
+        // (deletes the `processing/` file) OFF-MAIN in a detached task, so a crash
+        // in that window leaves the `processing/` file and `recoverUnconfirmed()`
+        // replays an ALREADY-applied request. Before any handler runs, consult the
+        // durable `applied/` id-ledger: if this request's id is already applied,
+        // skip it — covering EVERY kind (launch / createSession / createTerminal /
+        // createGroup / sendInput / …), not just the `isNewDecision`-guarded
+        // sendInput. Gated on `requestId != nil`: operator-issued actions carry no
+        // requestId, are never replayed from the queue, and so are never deduped
+        // here. The id-keyed ledger never false-skips a DELIBERATE re-issue: a boss
+        // that repeats the same effect with a NEW requestId gets a fresh id → applies.
+        if let requestId,
+           ReplayDedupDecider().decide(
+               requestId: requestId,
+               appliedRequestIds: externalActionQueue.appliedRequestIds()
+           ) == .skipAlreadyApplied {
+            return finishBossAction(
+                source: source,
+                action: action,
+                entry: nil,
+                result: "Skipped \(action.action.rawValue): already applied (replay)"
             )
         }
 
