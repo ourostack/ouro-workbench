@@ -123,4 +123,26 @@ final class CloneAgentFlowStateTests: XCTestCase {
         )
         XCTAssertEqual(result, .launchFailed)
     }
+
+    func testRunnerReportsTimedOutWhenAWedgedCloneExceedsTheBudget() async throws {
+        // B-1 — the LOAD-BEARING regression: a 120s watchdog kill must surface as `.timedOut`, NOT
+        // as a non-zero `.exited` that the classifier would mis-map to "Check the Git remote". A
+        // watchdog kill and a real git failure BOTH exit non-zero, so the only honest way to tell
+        // them apart is the runner reading `waitUntilExitReportingTimeout` BEFORE `terminationStatus`.
+        // Drive it with a REAL sleeper past a short injected budget (the classifier alone can't prove
+        // the runner actually returns `.timedOut` on a wedge — that's tested HERE, end-to-end).
+        let result = await CloneAgentRunner.runHeadless(
+            plan: OuroAgentInstallPlan(sessionName: "t", commandLine: "sleep 30", notes: "", tokens: ["sleep", "30"]),
+            timeoutSeconds: 0.3
+        )
+        XCTAssertEqual(result, .timedOut)
+        // And classifying that result must NOT be the non-zero-exit ("Git remote") reason.
+        let outcome = CloneOutcomeClassifier.classifyClone(
+            runResult: result,
+            agentJsonPresent: false,
+            checkVerdict: nil
+        )
+        XCTAssertEqual(outcome, .failed(reason: .timedOut))
+        XCTAssertNotEqual(outcome, .failed(reason: .cloneNonZeroExit))
+    }
 }

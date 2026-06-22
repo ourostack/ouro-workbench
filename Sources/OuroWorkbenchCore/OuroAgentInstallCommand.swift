@@ -229,11 +229,14 @@ public enum CloneAgentRunner {
     /// `waitUntilExitReportingTimeout` BEFORE `terminationStatus`, B-1), or `.exited(code:)`.
     /// `executableURL` is injectable ONLY so a test can point at a non-existent binary to exercise
     /// the `.launchFailed` path (with `/usr/bin/env` hardcoded, `run()` never throws via argv);
-    /// production always uses the default `/usr/bin/env`. Mirrors `ColdStartHatchRunner.runHeadless`.
+    /// production always uses the default `/usr/bin/env`. `timeoutSeconds` is injectable ONLY so a
+    /// test can drive the `.timedOut` branch with a real sleeper in well under the 120s production
+    /// budget (B-1); production always uses the default 120s. Mirrors `ColdStartHatchRunner.runHeadless`.
     @Sendable
     public static func runHeadless(
         plan: OuroAgentInstallPlan,
-        executableURL: URL = URL(fileURLWithPath: "/usr/bin/env")
+        executableURL: URL = URL(fileURLWithPath: "/usr/bin/env"),
+        timeoutSeconds: Double = 120
     ) async -> CloneRunResult {
         let process = Process()
         process.executableURL = executableURL
@@ -255,7 +258,7 @@ public enum CloneAgentRunner {
         // not hang forever on a wedged `ouro`/`git` child. Read the watchdog's verdict BEFORE
         // `terminationStatus`: a kill and a real git failure both exit non-zero, so the timeout
         // signal is the ONLY way to tell a 120s wedge apart from a remote failure (gap #3 / B-1).
-        let timedOut = ProcessWatchdog.waitUntilExitReportingTimeout(process, timeoutSeconds: 120)
+        let timedOut = ProcessWatchdog.waitUntilExitReportingTimeout(process, timeoutSeconds: timeoutSeconds)
         if timedOut {
             return .timedOut
         }
