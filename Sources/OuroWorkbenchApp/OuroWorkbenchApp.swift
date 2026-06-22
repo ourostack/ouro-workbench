@@ -2848,6 +2848,8 @@ struct AgentHomeEmptyState: View {
                                     agent: agent,
                                     isBoss: agent.name == model.state.boss.agentName,
                                     isSelected: false,
+                                    verdict: model.agentOutwardVerdicts[agent.name],
+                                    isChecking: model.agentChecksInFlight.contains(agent.name),
                                     select: { model.selectAgent(agent.name) }
                                 )
                                 if let reason = InstalledAgentRowPresentation.reason(
@@ -3022,6 +3024,8 @@ struct WorkbenchSidebarView: View {
                         agent: agent,
                         isBoss: model.state.boss.agentName.caseInsensitiveCompare(agent.name) == .orderedSame,
                         isSelected: model.selectedAgentName?.caseInsensitiveCompare(agent.name) == .orderedSame,
+                        verdict: model.agentOutwardVerdicts[agent.name],
+                        isChecking: model.agentChecksInFlight.contains(agent.name),
                         select: { model.selectAgent(agent.name) }
                     )
                 }
@@ -3286,6 +3290,13 @@ struct SidebarAgentRow: View {
     var agent: OuroAgentRecord
     var isBoss: Bool
     var isSelected: Bool
+    /// The live outward-lane `ouro check` verdict for this agent, or `nil` when no live
+    /// check has produced a verdict yet. Folded with `agent.status` + `isChecking` into an
+    /// honest `LiveReadiness` so the row's dot/tooltip never false-green a config-only
+    /// `.ready` that hasn't been live-confirmed.
+    var verdict: ProviderConnectionVerdict?
+    /// Whether a live outward check is currently in flight for this agent (→ "checking…").
+    var isChecking: Bool
     var select: () -> Void
 
     var body: some View {
@@ -3330,14 +3341,27 @@ struct SidebarAgentRow: View {
             )
         }
         .buttonStyle(.plain)
-        .help(agent.detail)
+        .help(InstalledAgentRowPresentation.help(for: liveReadiness, detail: agent.detail))
     }
 
-    // #U36: route the dot color through the shared Core seam so the sidebar row
-    // and the empty-state "Installed agents" card never disagree about an agent's
-    // health (both are now this same row, but the seam is the single source).
+    /// The honest, LIVE readiness for this row — the scanner's config-only `agent.status`
+    /// folded with the real outward-lane verdict and the in-flight flag. The bug: the row
+    /// used to render the config-only `.ready` as a green "ready" dot/tooltip WITHOUT a live
+    /// check (slugger read "ready" while `ouro check` returned `401 … expired`). This is now
+    /// only `.ready`/green when a live check actually returned `.working`.
+    private var liveReadiness: InstalledAgentRowPresentation.LiveReadiness {
+        InstalledAgentRowPresentation.liveReadiness(
+            status: agent.status,
+            verdict: verdict,
+            isChecking: isChecking
+        )
+    }
+
+    // Route the dot color through the shared Core seam, now LIVE-aware: the sidebar row and
+    // the empty-state "Installed agents" card stay in agreement, and neither shows green
+    // unless the live check confirmed it.
     private var statusColor: SwiftUI.Color {
-        InstalledAgentRowPresentation.dotColor(for: agent.status).swiftUIColor
+        InstalledAgentRowPresentation.dotColor(for: liveReadiness).swiftUIColor
     }
 }
 
@@ -10595,6 +10619,19 @@ final class WorkbenchViewModel: ObservableObject {
     /// the fresh-launch path runs. Non-nil ⇒ the confirmation is presented.
     @Published var pendingStartFresh: ProcessEntry?
     @Published var ouroAgents: [OuroAgentRecord] = []
+    /// Live steady-state readiness overlay for the agent rows. The scanner's `.ready`
+    /// only means "agent.json present & enabled" — a config-only fact that the sidebar /
+    /// "Installed agents" rows used to render as a green "ready" dot WITHOUT any live
+    /// connection check (false green: slugger reads ready while `ouro check` returns
+    /// `failed (401 … expired)`). `refreshAgentOutwardReadiness()` runs a real outward-lane
+    /// `ouro check` per config-ready agent and records the F2-classified verdict here; the
+    /// rows fold it through `InstalledAgentRowPresentation.liveReadiness(...)` so a row is
+    /// only green when a live check actually returned `.working`. Absent key ⇒ no live
+    /// verdict yet (row reads "checking…" while in-flight, else "not verified").
+    @Published var agentOutwardVerdicts: [String: ProviderConnectionVerdict] = [:]
+    /// The set of agent names whose outward `ouro check` is currently in flight, so a row
+    /// can honestly show "checking…" rather than a premature green or a stale "not verified".
+    @Published var agentChecksInFlight: Set<String> = []
     /// F6 — the agent the operator has armed for removal (the destructive remove-agent action sits
     /// behind a confirmation). Non-nil ⇒ the confirmation dialog is presented; `removeAgent` clears it.
     @Published var agentPendingRemoval: OuroAgentRecord?
@@ -12251,6 +12288,10 @@ final class WorkbenchViewModel: ObservableObject {
         ouroAgents = ouroAgentInventory.scan()
         resolveBossFromInventoryIfNeeded()
         refreshWorkbenchMCPRegistration()
+        // Kick off a live outward-lane `ouro check` per config-ready agent so the steady-state
+        // rows show an HONEST dot/label (never a config-only false green). Non-blocking: this
+        // fires on launch AND on the "Refresh Agents" button (both call refreshOuroAgents).
+        refreshAgentOutwardReadiness()
     }
 
     /// When the persisted boss is unresolved (a fresh / factory-reset machine, or
@@ -15106,6 +15147,54 @@ final class WorkbenchViewModel: ObservableObject {
         save()
         refreshOnboardingReadiness()
         onboardingBossSnapshot = nil
+    }
+
+    /// Run a live outward-lane `ouro check` for every config-ready agent with a configured
+    /// outward lane, recording each F2-classified verdict so the steady-state rows can show an
+    /// HONEST dot/label instead of the scanner's config-only false green.
+    ///
+    /// Non-blocking: the per-agent checks run concurrently in a detached `Task` + `TaskGroup`, so
+    /// one slow / wedged agent can't stall the others or the UI. All `@Published` mutations
+    /// (`agentChecksInFlight`, `agentOutwardVerdicts`) happen on the main actor. A `nil` probe
+    /// result (couldn't confirm) leaves no verdict — the row degrades to "not verified", never a
+    /// false green. Called at the end of `refreshOuroAgents()`, so it fires on launch AND on the
+    /// "Refresh Agents" button.
+    func refreshAgentOutwardReadiness() {
+        // Snapshot, on the main actor, the agents worth probing: config-ready bundles whose
+        // OUTWARD (humanFacing) lane is fully configured. A disabled / missing / invalid bundle
+        // can't connect, and an unconfigured outward lane has nothing to check.
+        let targets = ouroAgents.filter { agent in
+            agent.status == .ready
+                && agent.humanFacing?.provider != nil
+                && agent.humanFacing?.model != nil
+        }
+        guard !targets.isEmpty else { return }
+
+        let names = targets.map(\.name)
+        // Mark every target in-flight up front so the rows immediately read "checking…" rather
+        // than flickering through a stale "not verified".
+        agentChecksInFlight.formUnion(names)
+
+        Task { [weak self] in
+            await withTaskGroup(of: (String, ProviderConnectionVerdict?).self) { group in
+                for name in names {
+                    group.addTask { [weak self] in
+                        guard let self else { return (name, nil) }
+                        let verdict = await self.runColdStartProviderCheck(agentName: name, lane: "outward")
+                        return (name, verdict)
+                    }
+                }
+                for await (name, verdict) in group {
+                    guard let self else { continue }
+                    // Store the verdict (or leave it absent on nil → "not verified") and clear the
+                    // in-flight flag, both on the main actor.
+                    if let verdict {
+                        self.agentOutwardVerdicts[name] = verdict
+                    }
+                    self.agentChecksInFlight.remove(name)
+                }
+            }
+        }
     }
 
     /// F1 — the post-hatch credential probe for a freshly cold-started agent. Runs `ouro check`
