@@ -10584,6 +10584,19 @@ final class WorkbenchViewModel: ObservableObject {
     /// Set once `resetToFirstRun()` begins; suppresses all persistence so the
     /// wiped state file isn't rewritten before the relaunch.
     private var isResettingToFirstRun = false
+    /// Set for the duration of `load()`'s body; suppresses `save()` so the
+    /// `@Published` selection/layout assignments load() makes (which each fire a
+    /// `didSet` → `save()`) can't atomically overwrite `stateURL` before the
+    /// deliberate, ordered persistence at the end of load(). This is what makes
+    /// F5's salvage-before-resave ordering actually hold: without it, restoring
+    /// `selectedProjectID` / `selectedEntryID` / the detail layout would re-save
+    /// the survivors-only state OVER the original pre-drop bytes BEFORE
+    /// `writeSalvageCopy()` ever runs, so the salvage would capture post-drop
+    /// bytes and the dropped rows would be lost. The trailing `store.save(state)`
+    /// at the end of load() calls the store DIRECTLY (not via `save()`), so it
+    /// bypasses this guard and the final survivors-only state is still persisted
+    /// — after the salvage.
+    private var isLoadingState = false
     private var isFirstRunSetupForcedOnLaunch = false
     @Published var onboardingCandidates: [RecentSessionCandidate] = []
     @Published var onboardingProposal: WorkbenchImportProposal?
@@ -18606,6 +18619,17 @@ final class WorkbenchViewModel: ObservableObject {
         }
         do {
             let loaded = try store.load()
+            // Suppress the implicit save()s that the selection/layout
+            // assignments below trigger via their `didSet` observers. Without
+            // this, on a lossy load those saves would atomically overwrite
+            // `stateURL` with the survivors-only state BEFORE writeSalvageCopy()
+            // copies the original pre-drop bytes — permanently losing the
+            // dropped rows. Cleared via `defer` so saves resume the moment
+            // load() returns; the trailing `store.save(state)` below calls the
+            // store DIRECTLY (not via save()), so it bypasses this guard and the
+            // final survivors-only state is still persisted — after the salvage.
+            isLoadingState = true
+            defer { isLoadingState = false }
             state = startupRecoveryReconciler.reconcile(bootstrapper.bootstrappedState(from: loaded))
             applyCollapsedChromeMigrationIfNeeded()
             applyAutomaticBossDefaultsMigrationIfNeeded()
@@ -18622,18 +18646,85 @@ final class WorkbenchViewModel: ObservableObject {
             // after `selectedEntryID` is finalized so the one-session-per-pane
             // check resolves against the actual restored primary selection.
             restoreDetailLayout()
+            // F5: lenient decode silently drops rows it can't decode (so one
+            // corrupt row doesn't sink the whole workspace), and the re-save
+            // below would then atomically overwrite the original WITHOUT those
+            // rows — permanently. Read the loaded state's decodeReport (the RAW
+            // `loaded`, before bootstrap/reconcile transforms) and, on a lossy
+            // load, salvage the ORIGINAL pre-drop bytes FIRST.
+            //
+            // ORDERING IS LOAD-BEARING: writeSalvageCopy() copies the live file
+            // (still the pre-drop original at this point), so it must run BEFORE
+            // the trailing store.save(state) that rewrites the file with the
+            // survivors-only state. The `isLoadingState` guard set at the top of
+            // this `do` block neutralizes the OTHER way the original could be
+            // clobbered first: the selection/layout assignments above (and
+            // recordActionLog below) each call save() via their observers, and
+            // without the guard one of those implicit saves would overwrite the
+            // original BEFORE this salvage ever ran. With the guard, the only
+            // write to stateURL during load is the deliberate trailing
+            // store.save(state) — which runs after the salvage.
+            if case let .salvageBeforeResave(reason) = postLoadDecision(for: loaded.decodeReport) {
+                let salvageURL = try? store.writeSalvageCopy()
+                if let salvageURL {
+                    errorMessage = """
+                    Some saved items couldn't be read (\(reason)) and were left out of your \
+                    workspace. The original was copied to:
+                    \(salvageURL.path)
+
+                    Loaded everything else. Recover the skipped items from that copy if you need them.
+                    """
+                    recordActionLog(
+                        source: "store",
+                        action: "loadSalvage",
+                        result: "Skipped \(loaded.decodeReport.skippedRowCount) rows; original copied to \(salvageURL.path)",
+                        succeeded: false
+                    )
+                } else {
+                    // Salvage copy failed — do NOT misreport a recovery file we
+                    // couldn't write. Still surface the loss honestly.
+                    errorMessage = """
+                    Some saved items couldn't be read (\(reason)) and were left out of your workspace. \
+                    A backup copy of the original couldn't be written.
+                    """
+                    recordActionLog(
+                        source: "store",
+                        action: "loadSalvage",
+                        result: "Skipped \(loaded.decodeReport.skippedRowCount) rows; salvage copy failed",
+                        succeeded: false
+                    )
+                }
+            }
             try store.save(state)
         } catch {
-            // The store quarantines an unreadable file before we get here, so
-            // resetting to an empty workspace below no longer destroys the
-            // user's data — point them at where the old copy was saved.
-            if case let WorkbenchStoreError.unreadableState(quarantineURL, reason) = error {
-                errorMessage = """
-                Your workspace couldn't be read (\(reason)) and was set aside at:
-                \(quarantineURL.path)
+            // The store tries to quarantine an unreadable file before we get
+            // here. Whether that move SUCCEEDED is now a checked value, so we
+            // can only reset-to-empty + save when the original was actually
+            // moved aside — otherwise the original is still live at stateURL and
+            // resetting + saving would clobber it.
+            if case let WorkbenchStoreError.unreadableState(preserved, reason) = error {
+                switch preserved {
+                case let .moved(quarantineURL):
+                    errorMessage = """
+                    Your workspace couldn't be read (\(reason)) and was set aside at:
+                    \(quarantineURL.path)
 
-                Starting with a fresh workspace. Your previous data is preserved in that file if you need to recover it.
-                """
+                    Starting with a fresh workspace. Your previous data is preserved in that file if you need to recover it.
+                    """
+                case .moveFailed(_, _):
+                    // The move FAILED: the original is STILL at stateURL. Do NOT
+                    // reset to empty and do NOT save — an atomic overwrite would
+                    // destroy the only surviving copy. Tell the operator exactly
+                    // where their data still is, and bail before any save.
+                    errorMessage = """
+                    Your workspace couldn't be read (\(reason)) and could NOT be set aside. \
+                    Your original data was NOT moved — it remains at:
+                    \(store.stateURL.path)
+
+                    The workbench won't overwrite it. Move or fix that file, then relaunch.
+                    """
+                    return
+                }
             } else {
                 errorMessage = "Couldn't load workspace: \(error.localizedDescription)"
             }
@@ -18753,6 +18844,17 @@ final class WorkbenchViewModel: ObservableObject {
         // quit) would re-create it with the old in-memory state and undo the
         // wipe. Suppress saves for the brief reset-then-relaunch window.
         guard !isResettingToFirstRun else {
+            return
+        }
+        // While load() is restoring state, the selection/layout assignments it
+        // makes each fire a `didSet` → save(). On a LOSSY load that premature,
+        // implicit save would atomically overwrite `stateURL` with the
+        // survivors-only state BEFORE writeSalvageCopy() copies the original —
+        // so the salvage would capture post-drop bytes and the dropped rows
+        // would be lost. Suppress those implicit saves; load()'s own trailing
+        // `store.save(state)` persists the final state directly (bypassing this
+        // guard), AFTER the salvage. See `isLoadingState`.
+        guard !isLoadingState else {
             return
         }
         do {

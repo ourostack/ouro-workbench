@@ -18,18 +18,25 @@ public struct FailableDecodable<Base: Decodable>: Decodable {
 
 public extension KeyedDecodingContainer {
     /// Decode the array at `key` leniently — present-or-empty, with any
-    /// element that fails to decode skipped rather than throwing. The number
-    /// of skipped elements is reported via `skipped` for telemetry/logging.
+    /// element that fails to decode skipped rather than throwing. Genuine drops
+    /// are ATTRIBUTED into `report` under `collection` so the load path can
+    /// surface (and salvage) the loss instead of silently re-saving without the
+    /// dropped rows.
     func decodeLenientArray<T: Decodable>(
         _ type: T.Type,
         forKey key: Key,
-        skipped: inout Int
+        into report: inout DecodeReport,
+        collection: String
     ) throws -> [T] {
         guard let wrappers = try decodeIfPresent([FailableDecodable<T>].self, forKey: key) else {
             return []
         }
         let survivors = wrappers.compactMap(\.base)
-        skipped += wrappers.count - survivors.count
+        let dropped = wrappers.count - survivors.count
+        if dropped > 0 {
+            report.skippedRowCount += dropped
+            report.skippedByCollection[collection, default: 0] += dropped
+        }
         return survivors
     }
 }
