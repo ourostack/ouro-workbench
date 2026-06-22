@@ -10841,6 +10841,16 @@ final class WorkbenchViewModel: ObservableObject {
     private let eventDrivenCheckInCooldown: TimeInterval = 15
     private var didAttemptStartupRecovery = false
     private var didAttemptAutoResumeLaunch = false
+    /// F11a Defect 2 — entries with a `start(_:with:)` currently in flight. Now
+    /// that `start` is `async` (it may `await` a `screen` quit before the
+    /// `-D -RR` relaunch), a second start for the SAME entry could run on the
+    /// main actor during the first's await suspension — both would read the same
+    /// old `activeSessions[id]`, race two `-D -RR` on one socket, and leak the
+    /// first session when the second overwrites it. This in-flight set makes
+    /// `start` re-entrancy-safe per entry: a second concurrent start for an entry
+    /// already starting is dropped. (The synchronous pre-F11a `start` couldn't
+    /// interleave; the await reopened the window.)
+    private var startingEntryIDs = Set<UUID>()
     /// F11a — whether the most recent `load()` succeeded (read a real workspace,
     /// not the empty bootstrap a failed/quarantined load falls back to). The
     /// startup orphan-screen reaper GATES on this: a failed load looks identical
@@ -18752,6 +18762,17 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     private func start(_ entry: ProcessEntry, with plan: TerminalCommandPlan) async {
+        // F11a Defect 2 — re-entrancy guard. `start` now suspends on an awaited
+        // `screen` quit (the `.quitThenAwait` arm below), so a second start for
+        // this same entry could run on the main actor during that suspension —
+        // both reading the same stale `activeSessions[id]`, racing two `-D -RR`
+        // on one socket and leaking the first session. Drop a concurrent start
+        // for an entry already starting; clear on every exit path.
+        guard !startingEntryIDs.contains(entry.id) else {
+            return
+        }
+        startingEntryIDs.insert(entry.id)
+        defer { startingEntryIDs.remove(entry.id) }
         // Validate before we tear down any existing session or spawn a new
         // one, so a misconfigured launch surfaces a clear error instead of a
         // silent dead session or one running in the wrong directory.

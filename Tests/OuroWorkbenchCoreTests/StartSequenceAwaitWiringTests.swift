@@ -73,6 +73,25 @@ final class StartSequenceAwaitWiringTests: XCTestCase {
         )
     }
 
+    func testStartGuardsAgainstReentrantSameEntryStart() throws {
+        // F11a Defect 2 — start now suspends on an awaited quit, so a second
+        // same-entry start could interleave during that suspension (both reading
+        // the same stale activeSessions[id], racing two -D -RR on one socket,
+        // leaking the first session). A per-entry in-flight guard must drop the
+        // concurrent start; without it the await reopens exactly the race
+        // Defect 2 set out to close.
+        let body = try startMethod()
+        XCTAssertTrue(
+            body.contains("startingEntryIDs.contains(entry.id)"),
+            "the guard must early-return when this entry is already starting (the await suspension reopens the window the synchronous start never had)"
+        )
+        XCTAssertTrue(
+            body.contains("startingEntryIDs.insert(entry.id)")
+                && body.contains("startingEntryIDs.remove(entry.id)"),
+            "the guard must mark the entry in-flight and release it on every exit (defer)"
+        )
+    }
+
     // MARK: terminatePersistentSessionAwaiting — single-shot continuation
 
     func testAwaitingQuitUsesCheckedContinuation() throws {
