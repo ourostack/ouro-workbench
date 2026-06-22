@@ -16579,7 +16579,13 @@ final class WorkbenchViewModel: ObservableObject {
         }
         do {
             let plan = try WorkbenchCommandPlanner(paths: paths).launchPlan(for: entry)
-            start(entry, with: plan)
+            // F11a Defect 2 — start is async (it may await a screen quit before
+            // relaunching). Keep launch's sync signature (it's called from many
+            // SwiftUI button closures) by driving the async start on the main
+            // actor; the only suspension is the quit-await on a relaunch.
+            Task { @MainActor in
+                await start(entry, with: plan)
+            }
         } catch {
             errorMessage = String(describing: error)
         }
@@ -17119,7 +17125,14 @@ final class WorkbenchViewModel: ObservableObject {
                 latestRun: latestRun,
                 action: recoveryPlan.action
             )
-            start(entry, with: plan)
+            // F11a Defect 2 — route through the async start (it awaits a screen
+            // quit before relaunching when a session is live). The recovery
+            // reattach path usually has no live local session (activeSessions ==
+            // nil → .launchImmediately, nothing to await); the await only bites
+            // when a relaunch must first quit a still-attached client.
+            Task { @MainActor in
+                await start(entry, with: plan)
+            }
         } catch {
             errorMessage = String(describing: error)
         }
@@ -18738,7 +18751,7 @@ final class WorkbenchViewModel: ObservableObject {
         )
     }
 
-    private func start(_ entry: ProcessEntry, with plan: TerminalCommandPlan) {
+    private func start(_ entry: ProcessEntry, with plan: TerminalCommandPlan) async {
         // Validate before we tear down any existing session or spawn a new
         // one, so a misconfigured launch surfaces a clear error instead of a
         // silent dead session or one running in the wrong directory.
@@ -18759,10 +18772,30 @@ final class WorkbenchViewModel: ObservableObject {
             return
         }
         do {
-            if let existingSession = activeSessions[entry.id] {
-                manuallyTerminatedRunIDs.insert(existingSession.plan.runId)
-                existingSession.terminate()
-                markTerminated(entryId: entry.id, runId: existingSession.plan.runId, rawStatus: nil)
+            // F11a Defect 2 — when a session is already live on this entry's
+            // `screen` socket, the old path fire-and-forget `screen -X quit`'d it
+            // and then SYNCHRONOUSLY launched `screen -D -RR` on the SAME socket:
+            // the reattach got yanked mid-attach, or -RR forked a fresh daemon and
+            // lost scrollback. The pure `StartSequencer` decides the typed step;
+            // on `.quitThenAwait` we AWAIT the quit to completion BEFORE the
+            // relaunch so they never race. `.launchImmediately` (no live session)
+            // has no quit to await.
+            let step = StartSequencer().step(
+                forEntryId: entry.id,
+                hasActiveSessionOnSocket: activeSessions[entry.id] != nil
+            )
+            switch step {
+            case .quitThenAwait:
+                if let existingSession = activeSessions[entry.id] {
+                    manuallyTerminatedRunIDs.insert(existingSession.plan.runId)
+                    // Await the screen quit so the socket is free before -D -RR,
+                    // then tear down the local client and record the manual end.
+                    await existingSession.terminatePersistentSessionAwaiting()
+                    existingSession.terminateLocalClient()
+                    markTerminated(entryId: entry.id, runId: existingSession.plan.runId, rawStatus: nil)
+                }
+            case .launchImmediately:
+                break
             }
             let session = try TerminalSessionController(
                 plan: plan,
@@ -19952,6 +19985,28 @@ final class TerminalHostView: NSView {
     }
 }
 
+/// F11a Defect 2 — a single-shot wrapper around a `CheckedContinuation` so two
+/// racing resume sites (the quit process's `terminationHandler` and the 1.5s
+/// watchdog) resume it EXACTLY once. A checked continuation resumed twice traps;
+/// resumed zero times hangs. The `NSLock` makes the check-and-set atomic across
+/// the two background closures; whichever fires first wins, the loser no-ops.
+private final class SingleShotContinuation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<Void, Never>?
+
+    init(_ continuation: CheckedContinuation<Void, Never>) {
+        self.continuation = continuation
+    }
+
+    func resume() {
+        lock.lock()
+        let pending = continuation
+        continuation = nil
+        lock.unlock()
+        pending?.resume()
+    }
+}
+
 @MainActor
 final class TerminalSessionController: NSObject, ObservableObject, Identifiable, @preconcurrency LocalProcessTerminalViewDelegate {
     let id = UUID()
@@ -20043,6 +20098,15 @@ final class TerminalSessionController: NSObject, ObservableObject, Identifiable,
         terminal.terminate()
     }
 
+    /// Tear down only the local PTY client, leaving the persistent `screen` quit
+    /// to the caller. Used by the F11a Defect 2 await path in
+    /// `WorkbenchViewModel.start(_:with:)`: there the screen quit is awaited
+    /// FIRST (`terminatePersistentSessionAwaiting`) so the socket is free before
+    /// the relaunch, then this finishes off the old local client.
+    func terminateLocalClient() {
+        terminal.terminate()
+    }
+
     private func terminatePersistentSessionIfNeeded() {
         guard let sessionName = plan.persistentSessionName else {
             return
@@ -20061,6 +20125,57 @@ final class TerminalSessionController: NSObject, ObservableObject, Identifiable,
             arguments: PersistentTerminalSession.terminateArguments(sessionName: sessionName),
             environment: environmentValues
         )
+    }
+
+    /// F11a Defect 2 — quit the persistent `screen` and AWAIT it to completion.
+    /// Unlike the fire-and-forget `terminatePersistentSessionIfNeeded`, the
+    /// caller (`start(_:with:)`'s `.quitThenAwait` arm) must know the socket is
+    /// free before launching `screen -D -RR` on it, so the relaunch never races
+    /// the quit.
+    ///
+    /// The continuation is resumed from EITHER the process `terminationHandler`
+    /// (the quit finished) OR a 1.5s watchdog (a wedged `screen` socket — e.g. an
+    /// NFS home dir — that never terminates; we must not hang the launch
+    /// forever). Both paths funnel through a SINGLE-SHOT guard
+    /// (`SingleShotContinuation`): a checked continuation resumed twice traps,
+    /// and resumed zero times hangs — so exactly-once is mandatory. No live
+    /// `screen` (no `persistentSessionName`) resumes immediately.
+    func terminatePersistentSessionAwaiting() async {
+        guard let sessionName = plan.persistentSessionName else {
+            return
+        }
+        let executable = PersistentTerminalSession.executable
+        let arguments = PersistentTerminalSession.terminateArguments(sessionName: sessionName)
+        let environment = environmentValues
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let gate = SingleShotContinuation(continuation)
+            DispatchQueue.global(qos: .userInitiated).async {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: executable)
+                process.arguments = arguments
+                process.environment = environment
+                // Resume the moment the quit process exits.
+                process.terminationHandler = { _ in
+                    gate.resume()
+                }
+                do {
+                    try process.run()
+                } catch {
+                    // The screen / socket is already gone — nothing to await.
+                    gate.resume()
+                    return
+                }
+                // Watchdog: a wedged socket can leave the process never
+                // terminating (so terminationHandler never fires). Resume after
+                // 1.5s and kill the stuck process so the launch can proceed.
+                DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + .milliseconds(1500)) {
+                    if process.isRunning {
+                        process.terminate()
+                    }
+                    gate.resume()
+                }
+            }
+        }
     }
 
     private func recordOutput(_ bytes: ArraySlice<UInt8>) {

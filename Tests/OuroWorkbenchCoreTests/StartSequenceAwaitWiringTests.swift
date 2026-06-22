@@ -99,14 +99,31 @@ final class StartSequenceAwaitWiringTests: XCTestCase {
         let body = try awaitingQuit()
         // A checked continuation resumed twice traps; resumed zero times hangs.
         // The resume must be funneled through a single-shot guard so the
-        // terminationHandler and the watchdog can't both resume it.
-        let guarded = body.contains("os_unfair_lock")
-            || body.contains("OSAllocatedUnfairLock")
-            || body.contains("NSLock")
-            || body.contains("resumeOnce")
+        // terminationHandler and the watchdog can't both resume it — the awaiting
+        // quit wraps the continuation in a SingleShotContinuation gate and both
+        // racing sites call gate.resume().
+        XCTAssertTrue(
+            body.contains("SingleShotContinuation"),
+            "the continuation must be wrapped in a single-shot gate so the two racing resume sites can't double-resume it"
+        )
+        XCTAssertTrue(
+            body.contains(".resume()"),
+            "both the terminationHandler and the watchdog must funnel through the single-shot gate's resume()"
+        )
+        // And the single-shot gate itself must be backed by a real atomic guard
+        // (a lock making the check-and-set across the two background closures
+        // atomic), not a bare bool that could still race.
+        let gate = try sourceSlice(
+            in: try appSource(),
+            from: "private final class SingleShotContinuation",
+            to: "\n@MainActor\nfinal class TerminalSessionController"
+        )
+        let guarded = gate.contains("os_unfair_lock")
+            || gate.contains("OSAllocatedUnfairLock")
+            || gate.contains("NSLock")
         XCTAssertTrue(
             guarded,
-            "the resume must be single-shot (lock/atomic-guarded), so terminationHandler + watchdog resume the continuation EXACTLY once (double-resume crashes, zero-resume hangs)"
+            "the single-shot gate must use a lock so terminationHandler + watchdog resume the continuation EXACTLY once (double-resume crashes, zero-resume hangs)"
         )
     }
 
