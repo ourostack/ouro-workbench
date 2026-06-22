@@ -570,4 +570,77 @@ final class WorkbenchStoreTests: XCTestCase {
         XCTAssertEqual(entry.trust, .untrusted)
         try? FileManager.default.removeItem(at: root)
     }
+
+    // MARK: - F10b Seam A: WorkbenchStoreError is a LocalizedError so the boss
+    // reads an honest, actionable message instead of the Foundation default
+    // ("The operation couldn't be completed. (…WorkbenchStoreError error 0.)").
+
+    func testUnsupportedStateVersionErrorDescriptionNamesVersionAndUpgrade() throws {
+        let error = WorkbenchStoreError.unsupportedStateVersion(2)
+        let message = try XCTUnwrap(error.errorDescription)
+        // Names the schema it found (v2)...
+        XCTAssertTrue(message.contains("v2"), "must name the newer schema version, got: \(message)")
+        // ...the schema this build understands (v1)...
+        XCTAssertTrue(message.contains("v1"), "must name the supported schema version, got: \(message)")
+        // ...tells the boss to upgrade...
+        XCTAssertTrue(
+            message.lowercased().contains("upgrade"),
+            "must instruct the boss to upgrade, got: \(message)"
+        )
+        // ...and reassures that nothing was destroyed.
+        XCTAssertTrue(
+            message.lowercased().contains("intact"),
+            "must reassure the data is intact, got: \(message)"
+        )
+    }
+
+    func testUnsupportedStateVersionErrorReachesThroughLocalizedDescription() throws {
+        // localizedDescription only returns errorDescription when the error
+        // conforms to LocalizedError — this is the property the MCP dispatch
+        // catch reads. Pin that the honest message surfaces through it.
+        let error: Error = WorkbenchStoreError.unsupportedStateVersion(7)
+        XCTAssertTrue(
+            error.localizedDescription.contains("v7"),
+            "the dispatch catch reads error.localizedDescription — it must carry the honest message, got: \(error.localizedDescription)"
+        )
+    }
+
+    func testUnreadableStateMovedErrorDescriptionNamesQuarantineAndEmptyWorkspace() throws {
+        let quarantineURL = URL(fileURLWithPath: "/tmp/workspace.json.corrupt-2026")
+        let error = WorkbenchStoreError.unreadableState(
+            preserved: .moved(quarantineURL: quarantineURL),
+            reason: "decode failed: bad json"
+        )
+        let message = try XCTUnwrap(error.errorDescription)
+        // Names the quarantine filename so the operator can recover...
+        XCTAssertTrue(
+            message.contains("workspace.json.corrupt-2026"),
+            "moved arm must name the quarantine filename, got: \(message)"
+        )
+        // ...names the failure reason...
+        XCTAssertTrue(message.contains("decode failed: bad json"), "must name the reason, got: \(message)")
+        // ...and tells the boss the live workspace is now empty.
+        XCTAssertTrue(
+            message.lowercased().contains("empty workspace"),
+            "moved arm must say the workspace reset to empty, got: \(message)"
+        )
+    }
+
+    func testUnreadableStateMoveFailedErrorDescriptionNamesBothReasonsAndUntouched() throws {
+        let attemptedURL = URL(fileURLWithPath: "/tmp/workspace.json.corrupt-2026")
+        let error = WorkbenchStoreError.unreadableState(
+            preserved: .moveFailed(attemptedURL: attemptedURL, reason: "permission denied"),
+            reason: "decode failed: bad json"
+        )
+        let message = try XCTUnwrap(error.errorDescription)
+        // Names the decode reason...
+        XCTAssertTrue(message.contains("decode failed: bad json"), "must name the load reason, got: \(message)")
+        // ...names the move-failure reason...
+        XCTAssertTrue(message.contains("permission denied"), "must name the move-failure reason, got: \(message)")
+        // ...and tells the boss the original is still in place (not quarantined).
+        XCTAssertTrue(
+            message.lowercased().contains("untouched in place"),
+            "moveFailed arm must say the original is untouched in place, got: \(message)"
+        )
+    }
 }
