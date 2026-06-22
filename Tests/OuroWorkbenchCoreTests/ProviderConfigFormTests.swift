@@ -29,6 +29,24 @@ final class ProviderConfigFormTests: XCTestCase {
         XCTAssertEqual(ids, ["azure", "anthropic", "minimax", "openai-codex", "github-copilot"])
     }
 
+    // MARK: - Resolve a provider from a cloned agent.json lane (F7 / B-4)
+
+    func testProviderRoundTripsFromItsFlagValue() {
+        // F7 — a clone has no operator-entered provider; the needsVaultUnlock path reads the
+        // provider STRING from the cloned agent.json outward lane and must map it back to a
+        // WorkbenchProvider to drive F6's reconnect chain. The mapping must round-trip every case.
+        for provider in WorkbenchProvider.allCases {
+            XCTAssertEqual(WorkbenchProvider(providerFlagValue: provider.providerFlagValue), provider)
+        }
+    }
+
+    func testProviderIsNilForAnUnknownOrAbsentFlagValue() {
+        // An unrecognized / absent lane provider degrades honestly (the App falls back to the
+        // .couldNotConfirm copy rather than guessing a provider).
+        XCTAssertNil(WorkbenchProvider(providerFlagValue: "gemini"))
+        XCTAssertNil(WorkbenchProvider(providerFlagValue: ""))
+    }
+
     func testEachProviderDeclaresItsRequiredCredentialFields() {
         // Field shapes mirror `ouro`'s PROVIDER_CREDENTIALS required[] for the cold-start sink.
         XCTAssertEqual(WorkbenchProvider.anthropic.credentialFields.map(\.key), ["setupToken"])

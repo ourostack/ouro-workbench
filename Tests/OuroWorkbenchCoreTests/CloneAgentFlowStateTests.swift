@@ -96,26 +96,53 @@ final class CloneAgentFlowStateTests: XCTestCase {
         XCTAssertEqual(CloneAgentFlowState.remoteLabel(forRemote: ".ouro"), ".ouro")
     }
 
-    func testRunnerExecutesAFiniteHeadlessCloneCommand() async throws {
-        // Mirrors ColdStartHatchRunner's coverage: a finite headless command that exits 0
-        // completes without throwing (no pane spawned).
-        try await CloneAgentRunner.runHeadless(
+    func testRunnerExecutesAFiniteHeadlessCloneCommandAndReportsCleanExit() async {
+        // F7 — the runner no longer throws; it REPORTS the outcome. A finite command that exits 0
+        // returns `.exited(code: 0)` (no pane spawned). Mirrors ColdStartHatchRunner's coverage.
+        let result = await CloneAgentRunner.runHeadless(
             plan: OuroAgentInstallPlan(sessionName: "t", commandLine: "true", notes: "", tokens: ["true"])
         )
+        XCTAssertEqual(result, .exited(code: 0))
     }
 
-    func testRunnerThrowsCloneFailedOnNonZeroExit() async {
-        // A non-zero clone surfaces as CloneFailedError so the sheet can show the inline
-        // failure state — `false` exits 1.
-        do {
-            try await CloneAgentRunner.runHeadless(
-                plan: OuroAgentInstallPlan(sessionName: "t", commandLine: "false", notes: "", tokens: ["false"])
-            )
-            XCTFail("expected a non-zero exit to throw")
-        } catch let error as CloneAgentRunner.CloneFailedError {
-            XCTAssertEqual(error.exitCode, 1)
-        } catch {
-            XCTFail("expected CloneFailedError, got \(error)")
-        }
+    func testRunnerReportsExitedWithTheCodeOnNonZeroExit() async {
+        // F7 — a non-zero clone returns `.exited(code:)` (NOT a throw, NOT a timeout). The
+        // classifier maps that to `.cloneNonZeroExit`. `false` exits 1.
+        let result = await CloneAgentRunner.runHeadless(
+            plan: OuroAgentInstallPlan(sessionName: "t", commandLine: "false", notes: "", tokens: ["false"])
+        )
+        XCTAssertEqual(result, .exited(code: 1))
+    }
+
+    func testRunnerReportsLaunchFailedWhenTheBinaryCannotStart() async {
+        // F7 — when the process can't even launch, the runner returns `.launchFailed` (distinct
+        // from a non-zero exit: nothing was cloned). Point at a non-existent binary to exercise it.
+        let result = await CloneAgentRunner.runHeadless(
+            plan: OuroAgentInstallPlan(sessionName: "t", commandLine: "x", notes: "", tokens: ["x"]),
+            executableURL: URL(fileURLWithPath: "/nonexistent/definitely-not-a-binary")
+        )
+        XCTAssertEqual(result, .launchFailed)
+    }
+
+    func testRunnerReportsTimedOutWhenAWedgedCloneExceedsTheBudget() async throws {
+        // B-1 — the LOAD-BEARING regression: a 120s watchdog kill must surface as `.timedOut`, NOT
+        // as a non-zero `.exited` that the classifier would mis-map to "Check the Git remote". A
+        // watchdog kill and a real git failure BOTH exit non-zero, so the only honest way to tell
+        // them apart is the runner reading `waitUntilExitReportingTimeout` BEFORE `terminationStatus`.
+        // Drive it with a REAL sleeper past a short injected budget (the classifier alone can't prove
+        // the runner actually returns `.timedOut` on a wedge — that's tested HERE, end-to-end).
+        let result = await CloneAgentRunner.runHeadless(
+            plan: OuroAgentInstallPlan(sessionName: "t", commandLine: "sleep 30", notes: "", tokens: ["sleep", "30"]),
+            timeoutSeconds: 0.3
+        )
+        XCTAssertEqual(result, .timedOut)
+        // And classifying that result must NOT be the non-zero-exit ("Git remote") reason.
+        let outcome = CloneOutcomeClassifier.classifyClone(
+            runResult: result,
+            agentJsonPresent: false,
+            checkVerdict: nil
+        )
+        XCTAssertEqual(outcome, .failed(reason: .timedOut))
+        XCTAssertNotEqual(outcome, .failed(reason: .cloneNonZeroExit))
     }
 }

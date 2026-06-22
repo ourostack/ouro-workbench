@@ -26,6 +26,43 @@ public enum ProcessWatchdog {
         watchdog.cancel()
     }
 
+    /// Wait for `process` to exit, terminating it past `timeoutSeconds`, and REPORT whether the
+    /// watchdog fired. Returns `true` iff the deadline passed and the watchdog terminated a wedged
+    /// child; `false` iff the process exited on its own first.
+    ///
+    /// F7 — the clone runner needs to distinguish a 120s wedge (`.timedOut`) from a real non-zero
+    /// git failure BEFORE it reads `terminationStatus` (a watchdog kill and a genuine git failure
+    /// both produce a non-zero exit — B-1). The void `waitUntilExit` above can't surface that, and
+    /// its F1/F13 callers don't need it, so this is ADDITIVE. The did-fire flag is set inside the
+    /// watchdog closure and read after the wait, both under an `NSLock` so the closure's write
+    /// happens-before the caller's read with no swift-atomics dependency (the closure runs on a
+    /// global queue; the wait unwinds on the caller's thread).
+    public static func waitUntilExitReportingTimeout(_ process: Process, timeoutSeconds: Double) -> Bool {
+        let lock = NSLock()
+        var didFire = false
+        let watchdog = DispatchWorkItem {
+            lock.lock()
+            didFire = true
+            lock.unlock()
+            terminateIfRunning(process)
+        }
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + timeoutSeconds, execute: watchdog)
+        process.waitUntilExit()
+        // The process exited (on its own, or because the watchdog terminated it). Cancel any
+        // still-pending kill, then read the flag under the lock so a kill the closure already
+        // started is observed.
+        // HONEST EDGE (safe): if the child exits naturally in the sub-millisecond window AFTER the
+        // deadline closure has ALREADY begun executing, `cancel()` is a no-op (the closure isn't
+        // pending) and `didFire` is observed `true` — so a clone that just-barely-finished can be
+        // reported `.timedOut`. The outcome is safe (the clone path's `.timedOut` is a retry), and
+        // the window is vanishingly small; we accept it rather than add a fragile race-narrowing.
+        watchdog.cancel()
+        lock.lock()
+        let fired = didFire
+        lock.unlock()
+        return fired
+    }
+
     /// Terminate only if still running. Guards the race where the process exits just as
     /// the watchdog fires: `terminate()` on an already-exited `Process` raises.
     static func terminateIfRunning(_ process: Process) {
