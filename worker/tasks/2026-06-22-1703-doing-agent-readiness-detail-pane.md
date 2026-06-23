@@ -29,7 +29,7 @@ Success glyph (`checkmark.seal.fill`) reachable ONLY from `.ready`. Exhaustive s
 
 ## Units
 
-- ⬜ **Unit 1 (Core):** add `iconSystemName(for:)` + exhaustive tests (100% line+region; allowlist unchanged at 2).
+- ✅ **Unit 1 (Core):** add `iconSystemName(for:)` + exhaustive tests (100% line+region; allowlist unchanged at 2).
 - ⬜ **Unit 2 (App views):** route OuroAgentRowView, AgentTitleStrip, AgentStatusCard through the seam; thread verdicts. Source-pin tests in `AgentDetailReadinessWiringTests.swift`.
 - ⬜ **Unit 3 (App count + menu):** fix `ouroAgentStatusLine` readyCount (live) + `BossSelectorView.menuLabel` honest suffix. Source-pin.
 
@@ -47,3 +47,5 @@ Success glyph (`checkmark.seal.fill`) reachable ONLY from `.ready`. Exhaustive s
   verdicts show warning glyph / "sign-in needed". No inverse false-RED.
 
 ## Progress Log
+
+- 2026-06-22 17:06 Unit 1 complete: `iconSystemName(for:)` added to InstalledAgentRowPresentation.swift; 11 exhaustive tests (success glyph maps from `.ready` alone; pending stays calm). Core 100% line+region, allowlist still 2, 2468 tests pass, strict build clean.
