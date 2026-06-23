@@ -6790,6 +6790,38 @@ private struct FirstRunBootstrapView: View {
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)
                     }
+                    // FIX 1 — the actionable cold-start FAILURE surface. The retry control appears
+                    // ONLY in `.needsAttention` (the pure `showsRetryButton` gate), so the "you can
+                    // try again" copy is no longer dead. The honest copy + the recovery ROUTE both
+                    // come from the carried `attentionReason` (pure Core).
+                    //
+                    // FIX 2 — the route differs per reason: an invalid boss opens the boss-CHOICE
+                    // surface (`presentOnboarding()` → Choose Boss), because the real fix for a
+                    // stale/invalid boss pointer is PICKING A VALID BOSS, not a provider reconnect;
+                    // a failed step re-runs the (re-runnable) bootstrap (`runFirstRunBootstrap()`).
+                    if presentation.mode.showsRetryButton, let reason = presentation.attentionReason {
+                        Text(reason.humanFacingLine)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button {
+                            switch reason.recoveryAction {
+                            case .chooseBoss:
+                                model.presentOnboarding()
+                            case .retry:
+                                model.runFirstRunBootstrap()
+                            }
+                        } label: {
+                            Label(
+                                reason.actionLabel,
+                                systemImage: reason.recoveryAction == .chooseBoss
+                                    ? "person.crop.circle.badge.questionmark"
+                                    : "arrow.clockwise"
+                            )
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                    }
                 }
             }
             .padding(14)
