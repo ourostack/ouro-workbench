@@ -174,4 +174,56 @@ final class WorkspaceModelsTests: XCTestCase {
         XCTAssertEqual(decoded.discoveredHarness, .custom)
         XCTAssertEqual(decoded.discoveredSessionId, "z-9")
     }
+
+    // MARK: - FIX: bossPaneCollapsed missing-key default matches a fresh state
+
+    /// An UPGRADED old state file written before `bossPaneCollapsed` existed has no
+    /// such key. It must decode to the SAME value a FRESH (memberwise-init) state
+    /// uses — otherwise a fresh launch and an upgraded launch disagree about the
+    /// boss pane. The memberwise default is `true`, so the decoder must default a
+    /// missing key to `true` too (was `false` — the bug).
+    func testWorkspaceStateMissingBossPaneCollapsedMatchesMemberwiseDefault() throws {
+        let legacy = """
+        {
+            "schemaVersion": 1,
+            "boss": {"agentName": "", "scope": "machine"},
+            "bossWatchEnabled": true,
+            "projects": [],
+            "processEntries": [],
+            "processRuns": [],
+            "actionLog": [],
+            "decisionLog": [],
+            "updatedAt": 0
+        }
+        """
+
+        let decoded = try JSONDecoder().decode(WorkspaceState.self, from: Data(legacy.utf8))
+        let freshDefault = WorkspaceState().bossPaneCollapsed
+
+        XCTAssertEqual(
+            decoded.bossPaneCollapsed,
+            freshDefault,
+            "an upgraded file without the key must default to the SAME value a fresh state uses"
+        )
+        XCTAssertTrue(
+            decoded.bossPaneCollapsed,
+            "the memberwise default is true, so the missing-key decode default must be true"
+        )
+    }
+
+    /// INVERSE-BUG GUARD: when the key IS present, the decoder must honor it
+    /// verbatim — both true and false round-trip. The fix only changes the
+    /// MISSING-key default, never the behavior of a file that has the key.
+    func testWorkspaceStatePresentBossPaneCollapsedRoundTripsBothValues() throws {
+        for value in [true, false] {
+            let original = WorkspaceState(bossPaneCollapsed: value)
+            let data = try JSONEncoder().encode(original)
+            let decoded = try JSONDecoder().decode(WorkspaceState.self, from: data)
+            XCTAssertEqual(
+                decoded.bossPaneCollapsed,
+                value,
+                "a present bossPaneCollapsed=\(value) must round-trip unchanged"
+            )
+        }
+    }
 }

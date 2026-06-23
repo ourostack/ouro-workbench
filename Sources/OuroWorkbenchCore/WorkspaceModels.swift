@@ -727,7 +727,12 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         self.schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
         self.boss = try container.decode(BossAgentSelection.self, forKey: .boss)
         self.bossWatchEnabled = try container.decodeIfPresent(Bool.self, forKey: .bossWatchEnabled) ?? true
-        self.bossPaneCollapsed = try container.decodeIfPresent(Bool.self, forKey: .bossPaneCollapsed) ?? false
+        // A missing key (an upgraded state file written before this field existed)
+        // must default to the SAME value a FRESH memberwise-init state uses — the
+        // memberwise default is `true` (above) — so a fresh launch and an upgraded
+        // launch agree on the boss pane. Was `?? false`, which collapsed a fresh
+        // state but expanded an upgraded one.
+        self.bossPaneCollapsed = try container.decodeIfPresent(Bool.self, forKey: .bossPaneCollapsed) ?? true
         self.selectedProjectId = try container.decodeIfPresent(UUID.self, forKey: .selectedProjectId)
         self.selectedEntryId = try container.decodeIfPresent(UUID.self, forKey: .selectedEntryId)
         // Decode the collections leniently: a single corrupt or
