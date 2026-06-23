@@ -24,7 +24,7 @@ three pill-presentation surfaces; they switch on status alone.
 
 ## Units
 
-### Unit 1 (Core) — `BossMCPPillPresentation` seam (pure, 100% line+region)
+### Unit 1 (Core) — `BossMCPPillPresentation` seam (pure, 100% line+region) ✅
 New `Sources/OuroWorkbenchCore/BossMCPPillPresentation.swift`:
 - `Tone`: `.verified` | `.unverified` | `.notInjected` | `.needsAttention` | `.notRegistered` | `.error`
 - `tone(status:injection:)` — `.verified` reachable ONLY from `.registered` + `.confirmed(.present)`.
@@ -47,7 +47,7 @@ New `Sources/OuroWorkbenchCore/BossMCPPillPresentation.swift`:
 - `Scripts/check-coverage.sh` (Core 100% line+region; allowlist unchanged at 2)
 
 ## Completion gates
-- [ ] Green (`.verified`) reachable ONLY from `.registered` + `.confirmed(.present)`.
+- [x] Green (`.verified`) reachable ONLY from `.registered` + `.confirmed(.present)`. (Unit 1)
 - [ ] Registered+unverified reads NEUTRAL (pending), never red/error (the #262 inverse-bug watch).
 - [ ] Confirmed-present still reads green at all three surfaces.
 - [ ] All three pills route through `BossMCPPillPresentation` with the injection verdict.
@@ -56,3 +56,4 @@ New `Sources/OuroWorkbenchCore/BossMCPPillPresentation.swift`:
 - [ ] Core 100% line+region; allowlist unchanged at 2; 0 test failures; warnings-as-errors clean.
 
 ## Progress log
+- 2026-06-22 20:26 Unit 1 complete: `BossMCPPillPresentation` seam — tone/color/label, green ONLY from `.registered`+`.confirmed(.present)`, registered+unverified→NEUTRAL (never red). 10 sweep tests green; Core 100% line+region; allowlist unchanged at 2; full suite 2562 pass.
