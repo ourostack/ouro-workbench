@@ -5,29 +5,37 @@ import Foundation
 /// and — when it can't — why. The loudest control in the header used to be gated
 /// only by `bossCheckInIsRunning`, so on a fresh machine with no boss it was fully
 /// clickable and `runBossCheckIn()` returned silently: a dead affordance. This
-/// pure, framework-free seam decides the three states once so every surface agrees
-/// and none of them silently no-ops.
+/// pure, framework-free seam decides the states once so every surface agrees and
+/// none of them silently no-ops.
 ///
-/// - `.ready`     — a usable boss is set and nothing is in flight; the tap runs the
-///                  check-in as it does today.
-/// - `.needsBoss` — no usable boss (no boss chosen yet, or a named boss whose
-///                  bundle isn't installed/ready). The affordance routes the tap to
-///                  the set-up-a-boss flow instead of doing nothing.
-/// - `.running`   — a check-in is already in flight; the affordance is disabled and
-///                  re-entry is blocked.
+/// - `.ready`            — a usable boss is set and nothing is in flight; the tap runs
+///                         the check-in as it does today.
+/// - `.noBoss`           — no boss chosen yet (fresh / factory-reset machine). The
+///                         affordance routes the tap to the full set-up-a-boss
+///                         onboarding pick.
+/// - `.bossUnreachable`  — FIX 4: a boss IS configured but currently un-usable
+///                         (daemon dead / bundle missing). This used to collapse into
+///                         `.needsBoss` and dump the operator into the full onboarding
+///                         pick — as if they'd never set up a boss. It now carries the
+///                         agent's name and routes to a per-agent RECONNECT affordance
+///                         + an honest "X isn't reachable" message, never re-onboarding.
+/// - `.running`          — a check-in is already in flight; the affordance is disabled
+///                         and re-entry is blocked.
 public enum CheckInAvailability: Equatable, Sendable {
     case ready
-    case needsBoss
+    case noBoss
+    case bossUnreachable(name: String)
     case running
 
     /// Resolve the availability from the boss selection and in-flight flag.
     ///
     /// - Parameters:
     ///   - bossAgentName: `state.boss.agentName`; empty/whitespace means "no boss
-    ///     chosen yet".
+    ///     chosen yet" (→ `.noBoss`).
     ///   - bossIsUsable: whether the named boss resolves to an installed, ready
     ///     bundle (`ouroAgent(named:)?.isUsableAsBoss ?? false`). A named-but-
-    ///     unusable boss can't actually answer, so it's treated as needs-boss.
+    ///     unusable boss can't actually answer, so it's `.bossUnreachable` (a
+    ///     reconnect case), NOT no-boss.
     ///   - isRunning: `bossCheckInIsRunning`.
     public static func resolve(
         bossAgentName: String,
@@ -35,14 +43,20 @@ public enum CheckInAvailability: Equatable, Sendable {
         isRunning: Bool
     ) -> CheckInAvailability {
         // An in-flight check-in owns the button regardless of boss state — the
-        // re-entry guard already blocks a second run, and reporting needs-boss
+        // re-entry guard already blocks a second run, and reporting a boss problem
         // mid-run would make the control flicker.
         if isRunning {
             return .running
         }
         let trimmed = bossAgentName.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty || !bossIsUsable {
-            return .needsBoss
+        if trimmed.isEmpty {
+            // No boss chosen yet → the full onboarding pick.
+            return .noBoss
+        }
+        if !bossIsUsable {
+            // A boss IS configured but currently un-usable → reconnect THAT agent,
+            // carrying its name for the honest message. NOT onboarding.
+            return .bossUnreachable(name: trimmed)
         }
         return .ready
     }
@@ -52,10 +66,30 @@ public enum CheckInAvailability: Equatable, Sendable {
         self == .ready
     }
 
-    /// The tap should route to the set-up-a-boss flow instead of running (only in
-    /// `.needsBoss`) — turning a would-be dead click into a guided next step.
+    /// The tap should route to the full set-up-a-boss ONBOARDING pick (only in
+    /// `.noBoss`) — turning a would-be dead click into a guided next step. A
+    /// configured-but-unreachable boss does NOT route here (it reconnects instead).
     public var routesToBossSetup: Bool {
-        self == .needsBoss
+        self == .noBoss
+    }
+
+    /// The tap should route to a per-agent RECONNECT affordance (only in
+    /// `.bossUnreachable`) — bring the already-configured boss back online rather
+    /// than re-onboarding from scratch.
+    public var routesToReconnect: Bool {
+        if case .bossUnreachable = self {
+            return true
+        }
+        return false
+    }
+
+    /// The configured-but-unreachable boss's name, for driving the reconnect /
+    /// the honest "X isn't reachable" message. Nil in every other state.
+    public var unreachableBossName: String? {
+        if case let .bossUnreachable(name) = self {
+            return name
+        }
+        return nil
     }
 
     /// Who the manual check-in asks ("your boss" when no name resolves, otherwise
@@ -78,9 +112,14 @@ public enum CheckInAvailability: Equatable, Sendable {
         case .running:
             return "Asking \(who) what's going on across your sessions now. "
                 + "This is the one-shot ask (⌘I), separate from the automatic Boss Watch loop."
-        case .needsBoss:
+        case .noBoss:
             return "No boss set up yet, so there's no one to check in with. "
                 + "Set up a boss to ask what's going on and let it keep work moving."
+        case let .bossUnreachable(name):
+            // Honest + actionable: the boss exists, it just isn't reachable right
+            // now. Point at reconnecting THAT agent, not setting up a new one.
+            return "Your boss \(name) isn't reachable right now. "
+                + "Reconnect it to check in — no need to set up a new boss."
         }
     }
 }
