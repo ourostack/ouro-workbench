@@ -34,7 +34,7 @@ final class WorkbenchToolsNotInjectedStatusTests: XCTestCase {
     // MARK: - HarnessStatus reachability + text
 
     func testToolsNotInjectedDropsReachabilityAndIsBlocked() {
-        let boss = HarnessBossReachability(agentName: "slugger", bundleIsReady: true, mcpStatus: .toolsNotInjected)
+        let boss = HarnessBossReachability(agentName: "slugger", bundleIsInstalled: true, mcpStatus: .toolsNotInjected)
         XCTAssertFalse(boss.isReachable, "stripped tools means the boss can't drive Workbench")
         XCTAssertEqual(boss.state, .blocked)
         XCTAssertFalse(boss.mcpStatusText.isEmpty)

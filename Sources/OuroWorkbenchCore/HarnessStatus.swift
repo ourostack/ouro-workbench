@@ -243,6 +243,14 @@ public struct HarnessAgentEntry: Equatable, Identifiable, Sendable {
     public var isSelectedBoss: Bool
     /// MCP-registration status for this specific agent, when known.
     public var mcpStatus: BossWorkbenchMCPRegistrationStatus?
+    /// The result of a live outward-lane `ouro check` for this agent, when one
+    /// has run. `nil` means no live verdict yet (config-only). REUSES the same
+    /// verdicts the steady-state rows compute (`agentOutwardVerdicts`); the
+    /// harness sheet does NOT run its own check.
+    public var verdict: ProviderConnectionVerdict?
+    /// Whether a live check is currently in flight for this agent — so the pill
+    /// can read "checking…" rather than flickering through a stale state.
+    public var isChecking: Bool
 
     public var id: String { name }
 
@@ -251,17 +259,67 @@ public struct HarnessAgentEntry: Equatable, Identifiable, Sendable {
         status: OuroAgentBundleStatus,
         detail: String,
         isSelectedBoss: Bool,
-        mcpStatus: BossWorkbenchMCPRegistrationStatus? = nil
+        mcpStatus: BossWorkbenchMCPRegistrationStatus? = nil,
+        verdict: ProviderConnectionVerdict? = nil,
+        isChecking: Bool = false
     ) {
         self.name = name
         self.status = status
         self.detail = detail
         self.isSelectedBoss = isSelectedBoss
         self.mcpStatus = mcpStatus
+        self.verdict = verdict
+        self.isChecking = isChecking
     }
 
+    /// The HONEST live readiness of this agent — the config-only `status` folded
+    /// together with the live `verdict` + in-flight flag through the shared
+    /// presentation seam. The single source of truth the harness pill renders and
+    /// `isReady` keys off, so the diagnostic sheet can never disagree with the
+    /// steady-state sidebar / "Installed agents" rows about an agent's health.
+    public var liveReadiness: InstalledAgentRowPresentation.LiveReadiness {
+        InstalledAgentRowPresentation.liveReadiness(
+            status: status,
+            verdict: verdict,
+            isChecking: isChecking
+        )
+    }
+
+    /// Ready IFF a live outward check confirmed it (`verdict == .working`, which
+    /// is the ONLY producer of `.ready`). A config-only `.ready` — no verdict, or
+    /// an `.unauthorized` / `.unreachable` / in-flight verdict — is NOT ready, so
+    /// the harness headline / readyCount never false-green.
     public var isReady: Bool {
-        status == .ready
+        liveReadiness == .ready
+    }
+
+    /// PENDING — not yet ready, but NOT an alarm either: a live check is in
+    /// flight (`.checking`) or no verdict has confirmed the config-ready bundle
+    /// yet (`.unverified`). The missing middle state between green and red. On
+    /// launch, agents sit here until their check returns, so the rollup must NOT
+    /// treat them as problems (that was the false-RED: every launch flapped to
+    /// attention while perfectly healthy agents were mid-check).
+    public var isPending: Bool {
+        switch liveReadiness {
+        case .checking, .unverified:
+            return true
+        case .ready, .authExpired, .vaultLocked, .unreachable, .disabled, .missingConfig, .invalidConfig:
+            return false
+        }
+    }
+
+    /// PROBLEM — confirmed bad and worth an alarm: a live verdict that came back
+    /// failing (`.authExpired` / `.vaultLocked` / `.unreachable`) or a config
+    /// problem (`.disabled` / `.missingConfig` / `.invalidConfig`). This is the
+    /// honest unready-alarm signal — distinct from merely-pending — that drives
+    /// `hasUnready` → `overallState == .attention`.
+    public var isProblem: Bool {
+        switch liveReadiness {
+        case .authExpired, .vaultLocked, .unreachable, .disabled, .missingConfig, .invalidConfig:
+            return true
+        case .ready, .checking, .unverified:
+            return false
+        }
     }
 }
 
@@ -274,7 +332,12 @@ public struct HarnessAgentInventory: Equatable, Sendable {
 
     public var total: Int { entries.count }
     public var readyCount: Int { entries.filter(\.isReady).count }
-    public var hasUnready: Bool { entries.contains { !$0.isReady } }
+    /// The alarm signal — true when at least one agent is a confirmed PROBLEM
+    /// (failing live verdict or config problem), driving `overallState` to
+    /// `.attention`. Deliberately NOT `!isReady`: a merely-PENDING agent
+    /// (in-flight `.checking` / not-yet-confirmed `.unverified`) is not an
+    /// alarm, so a healthy machine mid-check on launch doesn't flap to attention.
+    public var hasUnready: Bool { entries.contains(where: \.isProblem) }
     public var isEmpty: Bool { entries.isEmpty }
 
     public var summaryLine: String {
@@ -295,30 +358,36 @@ public struct HarnessAgentInventory: Equatable, Sendable {
 
 public struct HarnessBossReachability: Equatable, Sendable {
     public var agentName: String
-    /// Whether the selected boss appears in the local agent inventory as a
-    /// ready bundle. A boss with no installed (or non-ready) bundle is not
-    /// reachable.
-    public var bundleIsReady: Bool
+    /// Whether the selected boss's bundle is CONFIG-INSTALLED on this machine —
+    /// `agent.json` present + enabled (the scanner's `status == .ready`). This is
+    /// the *installed-and-drivable* axis, deliberately DECOUPLED from the boss's
+    /// outward-provider check. A boss with no installed (or disabled / malformed)
+    /// bundle is not reachable; but a config-installed boss whose outward check is
+    /// merely in flight or even confirmed-bad is STILL reachable (drivable). The
+    /// provider health lives on the per-agent pill, never here — routing it
+    /// through reachability was the false-RED bug.
+    public var bundleIsInstalled: Bool
     public var mcpStatus: BossWorkbenchMCPRegistrationStatus?
     public var mcpDetail: String?
 
     public init(
         agentName: String,
-        bundleIsReady: Bool,
+        bundleIsInstalled: Bool,
         mcpStatus: BossWorkbenchMCPRegistrationStatus?,
         mcpDetail: String? = nil
     ) {
         self.agentName = agentName
-        self.bundleIsReady = bundleIsReady
+        self.bundleIsInstalled = bundleIsInstalled
         self.mcpStatus = mcpStatus
         self.mcpDetail = mcpDetail
     }
 
-    /// The boss is reachable when its bundle is installed + ready AND its
-    /// Workbench MCP is registered. Anything less means the boss can't be
-    /// driven hands-off.
+    /// The boss is reachable when its bundle is CONFIG-INSTALLED AND its Workbench
+    /// MCP is registered (daemon-up is handled separately in `overallState`).
+    /// "Reachable" = "the Workbench can DRIVE this boss hands-off" — an
+    /// installed-and-wired axis, independent of the boss's outward-provider check.
     public var isReachable: Bool {
-        bundleIsReady && mcpStatus == .registered
+        bundleIsInstalled && mcpStatus == .registered
     }
 
     /// Whether a one-click "register Workbench MCP" would actually do something
@@ -338,7 +407,7 @@ public struct HarnessBossReachability: Equatable, Sendable {
         case .needsUpdate:
             // Binary present, only a stale bundle entry remains — runtime injection still works
             // today (the flag is passed regardless of the bundle); worth a cleanup nudge.
-            return bundleIsReady ? .attention : .blocked
+            return bundleIsInstalled ? .attention : .blocked
         case .none:
             return .attention
         default:
@@ -372,7 +441,7 @@ public struct HarnessBossReachability: Equatable, Sendable {
     }
 
     public var bundleText: String {
-        bundleIsReady ? "installed and ready" : "missing or not ready"
+        bundleIsInstalled ? "installed and ready" : "missing or not ready"
     }
 }
 
@@ -393,18 +462,28 @@ public struct HarnessStatusBuilder: Sendable {
     ///   - bossRegistration: MCP-registration snapshot for the selected boss.
     ///   - registrationByAgentName: Per-agent MCP-registration snapshots, so
     ///     each inventory row can show its own registration status.
+    ///   - outwardVerdicts: Per-agent live outward-lane `ouro check` verdicts —
+    ///     the SAME map the steady-state rows use (`agentOutwardVerdicts`). The
+    ///     harness sheet REUSES these; it never runs its own check. Absent
+    ///     entries mean no verdict yet (config-only).
+    ///   - checksInFlight: Agent names whose live check is currently in flight,
+    ///     so the pill reads "checking…" instead of a premature green/red.
     public func build(
         boss: BossAgentSelection,
         dashboard: BossDashboardSnapshot?,
         agents: [OuroAgentRecord],
         bossRegistration: BossWorkbenchMCPRegistrationSnapshot?,
-        registrationByAgentName: [String: BossWorkbenchMCPRegistrationSnapshot] = [:]
+        registrationByAgentName: [String: BossWorkbenchMCPRegistrationSnapshot] = [:],
+        outwardVerdicts: [String: ProviderConnectionVerdict] = [:],
+        checksInFlight: Set<String> = []
     ) -> HarnessStatus {
         let daemon = daemonStatus(dashboard: dashboard)
         let inventory = agentInventory(
             boss: boss,
             agents: agents,
-            registrationByAgentName: registrationByAgentName
+            registrationByAgentName: registrationByAgentName,
+            outwardVerdicts: outwardVerdicts,
+            checksInFlight: checksInFlight
         )
         let reachability = bossReachability(
             boss: boss,
@@ -459,7 +538,9 @@ public struct HarnessStatusBuilder: Sendable {
     private func agentInventory(
         boss: BossAgentSelection,
         agents: [OuroAgentRecord],
-        registrationByAgentName: [String: BossWorkbenchMCPRegistrationSnapshot]
+        registrationByAgentName: [String: BossWorkbenchMCPRegistrationSnapshot],
+        outwardVerdicts: [String: ProviderConnectionVerdict],
+        checksInFlight: Set<String>
     ) -> HarnessAgentInventory {
         let entries = agents.map { agent -> HarnessAgentEntry in
             HarnessAgentEntry(
@@ -467,7 +548,9 @@ public struct HarnessStatusBuilder: Sendable {
                 status: agent.status,
                 detail: agent.detail,
                 isSelectedBoss: agent.name.caseInsensitiveCompare(boss.agentName) == .orderedSame,
-                mcpStatus: registrationByAgentName[agent.name]?.status
+                mcpStatus: registrationByAgentName[agent.name]?.status,
+                verdict: outwardVerdicts[agent.name],
+                isChecking: checksInFlight.contains(agent.name)
             )
         }
         return HarnessAgentInventory(entries: entries)
@@ -483,7 +566,11 @@ public struct HarnessStatusBuilder: Sendable {
         }
         return HarnessBossReachability(
             agentName: boss.agentName,
-            bundleIsReady: bossEntry?.isReady ?? false,
+            // Reachability keys on the CONFIG-installed bundle (status == .ready),
+            // NOT the live `isReady` (which requires a `.working` outward verdict).
+            // A config-installed + MCP-registered boss is reachable regardless of
+            // whether its outward check has returned — the false-RED fix.
+            bundleIsInstalled: bossEntry?.status == .ready,
             mcpStatus: bossRegistration?.status,
             mcpDetail: bossRegistration?.detail
         )
