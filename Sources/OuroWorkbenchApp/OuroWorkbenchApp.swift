@@ -1386,7 +1386,14 @@ struct HarnessStatusSheet: View {
             HarnessDetailRow(
                 label: "Workbench MCP",
                 value: status.boss.mcpStatusText,
-                valueColor: status.boss.mcpStatus.harnessTint
+                // Route the detail-row tint through the verdict-aware seam, folding the boss's
+                // live injection verdict (status.boss.toolsInjection) in via mcpPillTone — the
+                // SAME source of truth as the per-agent MCP pills. A registered-but-unverified
+                // boss reads NEUTRAL (.secondary), never the config-only false green; only a
+                // confirmed-present injection earns green. `.secondary` is the calm fallback
+                // when there's no mcpStatus yet (nothing registration-shaped to colour).
+                valueColor: status.boss.mcpPillTone
+                    .map { BossMCPPillPresentation.color(for: $0).swiftUIColor } ?? .secondary
             )
             if let detail = status.boss.mcpDetail, !detail.isEmpty {
                 Text(detail)

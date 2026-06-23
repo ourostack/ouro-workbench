@@ -380,17 +380,30 @@ public struct HarnessBossReachability: Equatable, Sendable {
     public var bundleIsInstalled: Bool
     public var mcpStatus: BossWorkbenchMCPRegistrationStatus?
     public var mcpDetail: String?
+    /// The boss's cached live `tools/list` injection-probe verdict, when one has run.
+    /// `nil` means never probed. DISPLAY-ONLY: it folds with `mcpStatus` through
+    /// `BossMCPPillPresentation` to make the Harness-Status detail row HONEST — the
+    /// "Workbench MCP" value reads the positive "available at runtime" only when a
+    /// CONFIRMED-PRESENT injection backs a `.registered` snapshot; a config-only
+    /// `.registered` with a nil / unconfirmed / confirmed-absent verdict reads a neutral
+    /// "registered — runtime not yet confirmed", not a false green. The reachability /
+    /// rollup axes (`isReachable`, `state`, `HarnessStatus.overallState`) deliberately do
+    /// NOT consult this field — it is presentation only, exactly like
+    /// `HarnessAgentEntry.toolsInjection`.
+    public var toolsInjection: WorkbenchToolsInjectionProbeOutcome?
 
     public init(
         agentName: String,
         bundleIsInstalled: Bool,
         mcpStatus: BossWorkbenchMCPRegistrationStatus?,
-        mcpDetail: String? = nil
+        mcpDetail: String? = nil,
+        toolsInjection: WorkbenchToolsInjectionProbeOutcome? = nil
     ) {
         self.agentName = agentName
         self.bundleIsInstalled = bundleIsInstalled
         self.mcpStatus = mcpStatus
         self.mcpDetail = mcpDetail
+        self.toolsInjection = toolsInjection
     }
 
     /// The boss is reachable when its bundle is CONFIG-INSTALLED AND its Workbench
@@ -426,16 +439,37 @@ public struct HarnessBossReachability: Equatable, Sendable {
         }
     }
 
+    /// The HONEST presentation tone for the detail row's "Workbench MCP" value — the
+    /// registration `mcpStatus` folded with the live injection verdict through the shared
+    /// `BossMCPPillPresentation` seam, the SAME source of truth the per-agent MCP pills use.
+    /// `nil` when there's no `mcpStatus` (nothing registration-shaped to colour). Both the
+    /// detail-row text and tint key off this so the sheet can never disagree with the pills.
+    public var mcpPillTone: BossMCPPillPresentation.Tone? {
+        guard let mcpStatus else { return nil }
+        return BossMCPPillPresentation.tone(status: mcpStatus, injection: toolsInjection)
+    }
+
     /// RUNTIME-INJECTION model: the Workbench tools reach the boss at runtime, so this status
-    /// reflects whether runtime injection is available (binary present + bundle clean), not a
-    /// bundle registration.
+    /// reflects whether runtime injection is available — but HONESTLY. The positive "available
+    /// at runtime" reads only when a live probe CONFIRMED the tools present
+    /// (`.verified`); a `.registered` snapshot whose injection is nil / unconfirmed / the
+    /// not-yet-overlaid confirmed-absent reads the neutral "registered — runtime not yet
+    /// confirmed" (`.unverified`), never a config-only false green. Structural states keep
+    /// their existing wording; the confirmed-ABSENT case is already overlaid to
+    /// `.toolsNotInjected` upstream.
     public var mcpStatusText: String {
         guard let mcpStatus else {
             return "unknown"
         }
         switch mcpStatus {
         case .registered:
-            return "available at runtime"
+            // The one verdict-aware split: confirmed-present is the only positive phrasing.
+            switch mcpPillTone {
+            case .verified:
+                return "available at runtime"
+            default:
+                return "registered — runtime not yet confirmed"
+            }
         case .notRegistered:
             return "tools binary missing"
         case .needsUpdate:
@@ -589,7 +623,11 @@ public struct HarnessStatusBuilder: Sendable {
             // whether its outward check has returned — the false-RED fix.
             bundleIsInstalled: bossEntry?.status == .ready,
             mcpStatus: bossRegistration?.status,
-            mcpDetail: bossRegistration?.detail
+            mcpDetail: bossRegistration?.detail,
+            // DISPLAY-ONLY: ride the injection verdict the boss's inventory entry already
+            // carries (threaded from injectionByAgentName) so the detail row renders the
+            // SAME verdict the pills do — zero new App-side threading.
+            toolsInjection: bossEntry?.toolsInjection
         )
     }
 }
