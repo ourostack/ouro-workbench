@@ -119,6 +119,40 @@ final class NavCheckInWiringTests: XCTestCase {
         )
     }
 
+    // MARK: - FIX 3: cmd-J on an empty attention queue gives feedback (no silent no-op)
+
+    /// "Jump to Next Needing Me" (cmd-J) used to discard the false return when nothing
+    /// needs the operator — a silent no-op. The dispatch must now consume the bool
+    /// and, when the jump didn't move (false), surface a brief transient status via
+    /// the app's existing transient-message channel (`errorMessage`) — no new infra.
+    func testJumpToAttentionSurfacesStatusOnTheEmptyQueuePath() throws {
+        let source = try appSource()
+        let branch = try sourceSlice(
+            in: source,
+            from: "case .jumpToAttention:",
+            to: "\n        case .newTerminal:"
+        )
+        // The discarded `_ =` must be gone — the return is now consumed.
+        XCTAssertFalse(
+            branch.contains("_ = model.jumpToNextAttentionSession()"),
+            "the cmd-J dispatch must no longer discard the jump's bool return"
+        )
+        // The false path must set a transient status (reusing errorMessage) so the
+        // operator gets feedback instead of a dead key.
+        XCTAssertTrue(
+            branch.contains("model.jumpToNextAttentionSession()"),
+            "the dispatch must still call jumpToNextAttentionSession()"
+        )
+        XCTAssertTrue(
+            branch.contains("errorMessage"),
+            "the empty-queue (false) path must surface a transient status via errorMessage (existing infra)"
+        )
+        XCTAssertTrue(
+            branch.contains("Nothing needs you"),
+            "the transient status must read 'Nothing needs you right now' (reusing the inbox-zero phrasing)"
+        )
+    }
+
     // MARK: - Slice helpers
 
     private func activeEntryBranch() throws -> String {

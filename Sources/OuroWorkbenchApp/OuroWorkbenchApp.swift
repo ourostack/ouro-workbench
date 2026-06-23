@@ -258,7 +258,14 @@ struct WorkbenchRootView: View {
             // silently no-opping.
             model.attemptCheckIn()
         case .jumpToAttention:
-            _ = model.jumpToNextAttentionSession()
+            // FIX 3: cmd-J used to discard the false return, so pressing it with an
+            // empty attention queue did nothing — a dead key with no feedback. When
+            // the jump can't move (nothing needs the operator), surface a brief
+            // transient status through the app's existing one-shot message channel
+            // (reusing the inbox-zero phrasing) instead of silently no-opping.
+            if !model.jumpToNextAttentionSession() {
+                model.errorMessage = "Nothing needs you right now."
+            }
         case .newTerminal:
             model.isNewSessionSheetPresented = true
         case .openWorkspace:
