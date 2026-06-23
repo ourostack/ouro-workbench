@@ -19944,13 +19944,32 @@ final class WorkbenchViewModel: ObservableObject {
         return "\(baseName) \(index)"
     }
 
-    private func save() {
+    /// Persist the current state to disk. Returns `true` when the durable write
+    /// succeeded, `false` when it threw (and `errorMessage` was set).
+    ///
+    /// The Bool exists so callers that must report success HONESTLY (the
+    /// workspace-import and onboarding-apply paths) can gate their green
+    /// "Imported N terminals" banner + `succeeded:true` action log on the write
+    /// actually landing — a swallowed write failure used to surface as a false
+    /// green over an in-memory-only import that's lost on quit.
+    ///
+    /// `@discardableResult` keeps the ~30 fire-and-forget callers (the `didSet`
+    /// observers and the implicit selection/layout saves) compiling unchanged —
+    /// they don't care whether the write landed.
+    ///
+    /// The two suppression guards return `true`: they don't represent a write
+    /// FAILURE. The state is in-memory consistent and the durable write is
+    /// deferred to a direct trailing `store.save(state)` (reset/load own their
+    /// persistence). The import paths never trip these guards, so a `false` from
+    /// `save()` always means a real `store.save` throw.
+    @discardableResult
+    private func save() -> Bool {
         // While resetting to first run we've deliberately removed the state
         // file; any save here (including the one in prepareForTermination at
         // quit) would re-create it with the old in-memory state and undo the
         // wipe. Suppress saves for the brief reset-then-relaunch window.
         guard !isResettingToFirstRun else {
-            return
+            return true
         }
         // While load() is restoring state, the selection/layout assignments it
         // makes each fire a `didSet` → save(). On a LOSSY load that premature,
@@ -19961,12 +19980,14 @@ final class WorkbenchViewModel: ObservableObject {
         // `store.save(state)` persists the final state directly (bypassing this
         // guard), AFTER the salvage. See `isLoadingState`.
         guard !isLoadingState else {
-            return
+            return true
         }
         do {
             try store.save(state)
+            return true
         } catch {
             errorMessage = String(describing: error)
+            return false
         }
     }
 
