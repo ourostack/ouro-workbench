@@ -50,6 +50,91 @@ final class WorkspaceExportImportRobustnessWiringTests: XCTestCase {
         )
     }
 
+    // MARK: - FIX 2: "already present" import skips are surfaced, not silently dropped
+
+    /// `WorkbenchImportApplyResult` must carry an `alreadyPresentCount` so the
+    /// import summary can distinguish terminals that were already in the workbench
+    /// (a `(projectId, name)` match — re-import no-op) from genuine error-skips
+    /// (e.g. "couldn't create"). Additive field with a default so existing
+    /// constructions stay valid.
+    func testImportApplyResultCarriesAlreadyPresentCount() throws {
+        let source = try appSource()
+        let slice = try sourceSlice(
+            in: source,
+            from: "struct WorkbenchImportApplyResult: Equatable {",
+            to: "var hasImports: Bool"
+        )
+        XCTAssertTrue(
+            slice.contains("var alreadyPresentCount: Int"),
+            "WorkbenchImportApplyResult must carry an alreadyPresentCount distinct from skippedNames"
+        )
+    }
+
+    /// The import-apply loop must count a `(projectId, name)` match into the
+    /// already-present tally — NOT into `skippedNames` (which is reserved for
+    /// genuine error-skips). And it must STILL skip the matched terminal
+    /// (`continue`) — FIX 2 only surfaces the count; it does NOT start updating
+    /// matched terminals (that's a deferred product decision).
+    func testImportApplyCountsAlreadyPresentSeparatelyFromErrorSkips() throws {
+        let source = try appSource()
+        let body = try sourceSlice(
+            in: source,
+            from: "func openWorkspaceConfig(\n        config: WorkbenchWorkspaceConfig,",
+            to: "return result"
+        )
+        // The already-present branch increments the dedicated tally, not skippedNames.
+        let alreadyPresentBranch = try sourceSlice(
+            in: body,
+            from: "if alreadyPresent {",
+            to: "}"
+        )
+        XCTAssertTrue(
+            alreadyPresentBranch.contains("alreadyPresentCount"),
+            "an already-present (projectId,name) match must increment alreadyPresentCount"
+        )
+        XCTAssertFalse(
+            alreadyPresentBranch.contains("skippedNames.append"),
+            "an already-present match must NOT be lumped into skippedNames (those are error-skips)"
+        )
+        // INVERSE-BUG GUARD: the matched terminal is still skipped (continue) — FIX 2
+        // must NOT begin updating matched terminals (deferred decision).
+        XCTAssertTrue(
+            alreadyPresentBranch.contains("continue"),
+            "a matched terminal must still be skipped (continue) — FIX 2 surfaces the count, it does not update matched terminals"
+        )
+        // The error-skip path (the catch) still appends to skippedNames — genuinely
+        // new terminals that couldn't be created stay distinct from already-present.
+        XCTAssertTrue(
+            body.contains("} catch {\n                skippedNames.append(terminal.name)"),
+            "a couldn't-create error must still append to skippedNames (error-skip, distinct from already-present)"
+        )
+        // The constructed result threads the already-present tally through.
+        XCTAssertTrue(
+            body.contains("alreadyPresentCount: alreadyPresentCount"),
+            "the import result must thread the already-present tally into alreadyPresentCount:"
+        )
+    }
+
+    /// The summary `detail` must surface the already-present count as human text
+    /// (e.g. "N already present") so a re-import no-op is VISIBLE instead of a
+    /// silent drop.
+    func testImportSummaryDetailSurfacesAlreadyPresent() throws {
+        let source = try appSource()
+        let detail = try sourceSlice(
+            in: source,
+            from: "var detail: String? {",
+            to: "@MainActor"
+        )
+        XCTAssertTrue(
+            detail.contains("alreadyPresentCount"),
+            "the import detail must reference alreadyPresentCount"
+        )
+        XCTAssertTrue(
+            detail.contains("already present"),
+            "the import detail must surface the already-present count as human text (e.g. \"N already present\")"
+        )
+    }
+
     // MARK: - Helpers (mirror ImportPersistenceHonestyWiringTests)
 
     private func appSource() throws -> String {
