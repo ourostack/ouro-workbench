@@ -21,7 +21,7 @@ with `succeeded:false`) STILL render orange — pending never swallows a real fa
 
 ## Units
 
-### Unit 1 — Core presentation seam ⬜
+### Unit 1 — Core presentation seam ✅
 `Sources/OuroWorkbenchCore/WorkbenchActionOutcomePresentation.swift`:
 `Tone {.pending,.succeeded,.failed}` + `tone(isInFlight:succeeded:)` (pending
 dominates) + `iconSystemName(for:)` + `SemanticColor {.neutral,.green,.orange}` +
@@ -56,7 +56,7 @@ green check / `.green` ONLY for `.succeeded`, produced ONLY when
   -strict-concurrency=complete` green; coverage 100%; old-JSON decode test green.
 
 ## Completion Criteria
-- [ ] Unit 1 Core seam shipped, 100% line+region, allowlist at 2
+- [x] Unit 1 Core seam shipped, 100% line+region, allowlist at 2
 - [ ] Unit 2 wiring shipped; 6 handlers marked in-flight; render routed through seam
 - [ ] Old persisted `actionLog` JSON (no `isInFlight`) still decodes → false
 - [ ] Real failures (guard-skip, `complete*` succeeded:false) still render orange
