@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+eval "$("$ROOT_DIR/scripts/read-workbench-release.sh")"
 RUN_DEEP="false"
 SWIFT_STRICT_FLAGS=(-Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete)
 
@@ -66,7 +67,7 @@ scripts/smoke-verify-app-timeout.sh
 scripts/package-app.sh
 scripts/verify-app-bundle.sh
 rm -rf .build/support-diagnostics-preflight
-"dist/Ouro Workbench.app/Contents/Resources/collect-support-diagnostics.sh" \
+"dist/$WORKBENCH_APP_NAME.app/Contents/Resources/collect-support-diagnostics.sh" \
   --out .build/support-diagnostics-preflight >/dev/null
 find .build/support-diagnostics-preflight -name 'ouro-workbench-diagnostics-*.zip' -type f | grep -q .
 scripts/smoke-mcp-action-validation.sh

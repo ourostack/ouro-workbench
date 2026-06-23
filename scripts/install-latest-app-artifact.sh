@@ -2,13 +2,14 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+eval "$("$ROOT_DIR/scripts/read-workbench-release.sh")"
 BRANCH="main"
 RUN_ID=""
 INSTALL_DIR=""
 OPEN_AFTER_INSTALL="false"
 
 usage() {
-  cat <<'USAGE'
+  cat <<USAGE
 Usage: install-latest-app-artifact.sh [options]
 
 Download, verify, and install the app artifact from a successful GitHub Actions
@@ -18,7 +19,7 @@ Options:
   --branch NAME       Branch to inspect when --run-id is omitted (default: main)
   --run-id ID         Specific GitHub Actions run id to download
   --install-dir PATH  Install destination directory
-  --open              Reopen Ouro Workbench after installing
+  --open              Reopen $WORKBENCH_APP_NAME after installing
   -h, --help          Show this help
 USAGE
 }
@@ -107,7 +108,7 @@ manifest_count=0
 while IFS= read -r candidate; do
   manifest="$candidate"
   manifest_count=$((manifest_count + 1))
-done < <(find "$download_root" -name 'OuroWorkbench-*.manifest.json' -type f -print)
+done < <(find "$download_root" -name "$WORKBENCH_ARTIFACT_NAME_PREFIX*.manifest.json" -type f -print)
 
 if [[ "$manifest_count" -ne 1 ]]; then
   printf 'Expected exactly one app artifact manifest in %s, found %s\n' "$download_root" "$manifest_count" >&2

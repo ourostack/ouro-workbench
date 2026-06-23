@@ -23,7 +23,15 @@ public struct ReleaseUpdateConfiguration: Equatable, Sendable {
         self.repository = repository
         self.currentVersion = currentVersion
         self.currentBuild = currentBuild
-        self.releasesURL = releasesURL ?? URL(string: "https://api.github.com/repos/\(repository)/releases?per_page=10")!
+        let identity = AppShellIdentity(
+            appName: WorkbenchRelease.appName,
+            bundleIdentifier: WorkbenchRelease.bundleIdentifier,
+            repository: repository,
+            version: currentVersion,
+            build: currentBuild,
+            userAgent: WorkbenchRelease.userAgent(version: currentVersion)
+        )
+        self.releasesURL = releasesURL ?? identity.releasesAPIURL
     }
 
     public static func defaultCurrentBuild() -> String? {
@@ -37,14 +45,14 @@ public struct ReleaseUpdateConfiguration: Equatable, Sendable {
             repository: repository,
             version: currentVersion,
             build: currentBuild,
-            userAgent: "OuroWorkbench/\(WorkbenchRelease.version)"
+            userAgent: WorkbenchRelease.userAgent(version: currentVersion)
         )
     }
 
     var appShellConfiguration: OuroAppShellCore.ReleaseUpdateConfiguration {
         OuroAppShellCore.ReleaseUpdateConfiguration(
             identity: appShellIdentity,
-            releasePolicy: .workbench(),
+            releasePolicy: .workbench(namePrefix: WorkbenchRelease.artifactNamePrefix),
             releasesURL: releasesURL
         )
     }
@@ -99,7 +107,7 @@ public struct ReleaseUpdateChecker: Sendable {
             from: data,
             currentVersion: currentVersion,
             currentBuild: currentBuild,
-            assetNamingPolicy: .workbench(),
+            assetNamingPolicy: .workbench(namePrefix: WorkbenchRelease.artifactNamePrefix),
             includePrereleases: true
         )
     }
@@ -123,7 +131,7 @@ public struct ReleaseUpdateChecker: Sendable {
     private static func request(url: URL) -> URLRequest {
         var request = URLRequest(url: url)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        request.setValue("OuroWorkbench/\(WorkbenchRelease.version)", forHTTPHeaderField: "User-Agent")
+        request.setValue(WorkbenchRelease.userAgent(), forHTTPHeaderField: "User-Agent")
         request.timeoutInterval = 10
         return request
     }

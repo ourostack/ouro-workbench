@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 #
-# Coverage gate for OuroWorkbenchCore.
+# Coverage gate for pure Workbench logic targets.
 #
 # OuroWorkbenchCore is the pure, framework-free logic of the workbench (the GUI
-# shell lives in OuroWorkbenchApp and is not gated here). Because the product is
-# agentically authored, every file under Sources/OuroWorkbenchCore/ must be 100%
-# line AND region covered. This script fails if any file is below 100%.
+# shell lives in OuroWorkbenchApp and is not gated here). The shell adapter target
+# is also pure presenter logic, so it is held to the same bar. Because the product
+# is agentically authored, every file under these source roots must be 100% line
+# AND region covered. This script fails if any file is below 100%.
 #
 # Region, not branch: Swift's --enable-code-coverage emits no llvm branch counters
 # (llvm-cov's Branch column is always empty for Swift). Region coverage is the
@@ -15,7 +16,10 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-CORE_DIR="Sources/OuroWorkbenchCore"
+COVERAGE_DIRS=(
+  "Sources/OuroWorkbenchCore"
+  "Sources/OuroWorkbenchShellAdapter"
+)
 
 if [ -d /Applications ]; then
   latest="$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1 || true)"
@@ -35,18 +39,21 @@ if [ -z "$bin" ] || [ -z "$prof" ]; then
   exit 1
 fi
 
-xcrun llvm-cov export "$bin" -instr-profile "$prof" -summary-only "$CORE_DIR" > .build/wb-coverage.json
+xcrun llvm-cov export "$bin" -instr-profile "$prof" -summary-only "${COVERAGE_DIRS[@]}" > .build/wb-coverage.json
 
-python3 - "$CORE_DIR" <<'PY'
+python3 - "${COVERAGE_DIRS[@]}" <<'PY'
 import json, os, sys
 
-core_dir = sys.argv[1]
+coverage_dirs = sys.argv[1:]
 with open('.build/wb-coverage.json') as fh:
     data = json.load(fh)
 
-files = [f for f in data['data'][0]['files'] if f'/{core_dir}/' in f['filename']]
+def is_covered_source(filename):
+    return any(f'/{source_dir}/' in filename for source_dir in coverage_dirs)
+
+files = [f for f in data['data'][0]['files'] if is_covered_source(f['filename'])]
 if not files:
-    print(f'error: no {core_dir} files in coverage data', file=sys.stderr)
+    print(f'error: no covered source files in coverage data: {coverage_dirs}', file=sys.stderr)
     sys.exit(1)
 
 # Allowlist of intentionally-uncovered code that no test can reach (structurally
@@ -80,7 +87,8 @@ for f in files:
 
 total_files = len(files)
 fully = total_files - len(below) - len(exempt)
-print(f'\nOuroWorkbenchCore: {fully}/{total_files} files at 100% line+region'
+label = ', '.join(coverage_dirs)
+print(f'\n{label}: {fully}/{total_files} files at 100% line+region'
       + (f' ({len(exempt)} with allowlisted structural exclusions)' if exempt else ''))
 for name, ul, ur in sorted(exempt):
     print(f'  allow {name:44} ({ul} line, {ur} region exempt — see coverage-allowlist.txt)')
@@ -112,8 +120,8 @@ if [ -s .build/wb-below.txt ]; then
       | grep -B1 -E '^\s+\^0([^0-9]|$)' | grep -vE '^\s+\^0|^--' | sed 's/^/    /' | head -40 || true
   done < .build/wb-below.txt
   echo ""
-  echo "FAIL: OuroWorkbenchCore must be 100% line + region covered (minus the documented allowlist)."
+  echo "FAIL: pure Workbench logic targets must be 100% line + region covered (minus the documented allowlist)."
   exit 1
 fi
 echo ""
-echo "PASS: OuroWorkbenchCore is 100% line + region covered (documented structural exclusions aside)."
+echo "PASS: pure Workbench logic targets are 100% line + region covered (documented structural exclusions aside)."

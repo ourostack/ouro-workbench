@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+eval "$("$ROOT_DIR/scripts/read-workbench-release.sh")"
 ARTIFACTS_DIR="$ROOT_DIR/artifacts"
 TEMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/ouro-workbench-artifact-smoke.XXXXXX")"
 
@@ -11,7 +12,7 @@ cleanup() {
 
 trap cleanup EXIT
 
-latest_manifest="$(find "$ARTIFACTS_DIR" -name 'OuroWorkbench-*.manifest.json' -type f -print | sort | tail -n 1)"
+latest_manifest="$(find "$ARTIFACTS_DIR" -name "$WORKBENCH_ARTIFACT_NAME_PREFIX*.manifest.json" -type f -print | sort | tail -n 1)"
 if [[ -z "$latest_manifest" ]]; then
   printf 'App artifact smoke failed: no manifest found in %s\n' "$ARTIFACTS_DIR" >&2
   exit 1
