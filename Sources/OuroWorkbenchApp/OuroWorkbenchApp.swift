@@ -6090,6 +6090,15 @@ struct ProviderConfigSheet: View {
             values = [:]
             message = nil
             model.providerConfigColdStartMessage = nil
+            // BUG 1 — if the previous provider's cold-start landed in `.needsVaultSetup`, the primary
+            // button reads "Finish setup" and runs `beginVaultOnboarding()` against the STASHED
+            // provider. Switching providers must drop that stale affordance: reset the flag (so the
+            // button returns to "Create Agent"/"Connect" for the newly-picked provider) and clear the
+            // stashed provider the vault chain would otherwise name. A normal (non-switch) session
+            // still sets these in the `.needsVaultSetup` arm, so the legitimate Finish-setup flow is
+            // unaffected.
+            model.providerConfigNeedsVaultSetup = false
+            model.providerConfigColdStartProvider = nil
         }
     }
 
