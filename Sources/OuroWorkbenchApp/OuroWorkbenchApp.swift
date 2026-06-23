@@ -16630,7 +16630,19 @@ final class WorkbenchViewModel: ObservableObject {
         // above won't replay them, but the marker would otherwise linger forever).
         await sweepOrphanedAppliedMarkers()
         while !Task.isCancelled {
-            await drainExternalActionRequests()
+            // FIX1 — "Pause Boss Watch" is a TRUE kill-switch. While paused the pump
+            // must NOT drain+apply queued requests: gate the drain on the switch
+            // BEFORE calling it. `drainExternalActionRequests` MOVES request files
+            // into `processing/`, so skipping the drain (rather than draining then
+            // discarding) is what keeps the queued requests HELD on disk, lossless,
+            // until the watch resumes. An apply already mid-execution finishes — we
+            // only refuse to start NEW applies while paused. Re-enabling resumes the
+            // drain on the next tick and the held queue is applied. (Boss Watch ON →
+            // applies as before; manual one-shot Check-In is a separate path,
+            // unaffected.)
+            if BossAutonomyGating.shouldApplyQueuedActions(bossWatchEnabled: bossWatchIsEnabled) {
+                await drainExternalActionRequests()
+            }
             try? await Task.sleep(nanoseconds: 2_000_000_000)
         }
     }
