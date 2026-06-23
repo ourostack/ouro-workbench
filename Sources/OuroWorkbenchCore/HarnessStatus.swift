@@ -243,6 +243,15 @@ public struct HarnessAgentEntry: Equatable, Identifiable, Sendable {
     public var isSelectedBoss: Bool
     /// MCP-registration status for this specific agent, when known.
     public var mcpStatus: BossWorkbenchMCPRegistrationStatus?
+    /// The cached live `tools/list` injection-probe verdict for this agent, when
+    /// one has run. `nil` means never probed. The harness MCP pill folds this with
+    /// `mcpStatus` through `BossMCPPillPresentation` so the pill reads GREEN only
+    /// when a CONFIRMED-PRESENT injection backs an on-disk `.registered` snapshot —
+    /// a config-only `.registered` with no (or an unconfirmed / confirmed-absent)
+    /// verdict reads NEUTRAL, not a false "registered" green. PRESENTATION only:
+    /// the reachability/rollup axes deliberately keep their existing status-based
+    /// logic and do NOT consult this verdict.
+    public var toolsInjection: WorkbenchToolsInjectionProbeOutcome?
     /// The result of a live outward-lane `ouro check` for this agent, when one
     /// has run. `nil` means no live verdict yet (config-only). REUSES the same
     /// verdicts the steady-state rows compute (`agentOutwardVerdicts`); the
@@ -260,6 +269,7 @@ public struct HarnessAgentEntry: Equatable, Identifiable, Sendable {
         detail: String,
         isSelectedBoss: Bool,
         mcpStatus: BossWorkbenchMCPRegistrationStatus? = nil,
+        toolsInjection: WorkbenchToolsInjectionProbeOutcome? = nil,
         verdict: ProviderConnectionVerdict? = nil,
         isChecking: Bool = false
     ) {
@@ -268,6 +278,7 @@ public struct HarnessAgentEntry: Equatable, Identifiable, Sendable {
         self.detail = detail
         self.isSelectedBoss = isSelectedBoss
         self.mcpStatus = mcpStatus
+        self.toolsInjection = toolsInjection
         self.verdict = verdict
         self.isChecking = isChecking
     }
@@ -369,17 +380,30 @@ public struct HarnessBossReachability: Equatable, Sendable {
     public var bundleIsInstalled: Bool
     public var mcpStatus: BossWorkbenchMCPRegistrationStatus?
     public var mcpDetail: String?
+    /// The boss's cached live `tools/list` injection-probe verdict, when one has run.
+    /// `nil` means never probed. DISPLAY-ONLY: it folds with `mcpStatus` through
+    /// `BossMCPPillPresentation` to make the Harness-Status detail row HONEST — the
+    /// "Workbench MCP" value reads the positive "available at runtime" only when a
+    /// CONFIRMED-PRESENT injection backs a `.registered` snapshot; a config-only
+    /// `.registered` with a nil / unconfirmed / confirmed-absent verdict reads a neutral
+    /// "registered — runtime not yet confirmed", not a false green. The reachability /
+    /// rollup axes (`isReachable`, `state`, `HarnessStatus.overallState`) deliberately do
+    /// NOT consult this field — it is presentation only, exactly like
+    /// `HarnessAgentEntry.toolsInjection`.
+    public var toolsInjection: WorkbenchToolsInjectionProbeOutcome?
 
     public init(
         agentName: String,
         bundleIsInstalled: Bool,
         mcpStatus: BossWorkbenchMCPRegistrationStatus?,
-        mcpDetail: String? = nil
+        mcpDetail: String? = nil,
+        toolsInjection: WorkbenchToolsInjectionProbeOutcome? = nil
     ) {
         self.agentName = agentName
         self.bundleIsInstalled = bundleIsInstalled
         self.mcpStatus = mcpStatus
         self.mcpDetail = mcpDetail
+        self.toolsInjection = toolsInjection
     }
 
     /// The boss is reachable when its bundle is CONFIG-INSTALLED AND its Workbench
@@ -415,16 +439,37 @@ public struct HarnessBossReachability: Equatable, Sendable {
         }
     }
 
+    /// The HONEST presentation tone for the detail row's "Workbench MCP" value — the
+    /// registration `mcpStatus` folded with the live injection verdict through the shared
+    /// `BossMCPPillPresentation` seam, the SAME source of truth the per-agent MCP pills use.
+    /// `nil` when there's no `mcpStatus` (nothing registration-shaped to colour). Both the
+    /// detail-row text and tint key off this so the sheet can never disagree with the pills.
+    public var mcpPillTone: BossMCPPillPresentation.Tone? {
+        guard let mcpStatus else { return nil }
+        return BossMCPPillPresentation.tone(status: mcpStatus, injection: toolsInjection)
+    }
+
     /// RUNTIME-INJECTION model: the Workbench tools reach the boss at runtime, so this status
-    /// reflects whether runtime injection is available (binary present + bundle clean), not a
-    /// bundle registration.
+    /// reflects whether runtime injection is available — but HONESTLY. The positive "available
+    /// at runtime" reads only when a live probe CONFIRMED the tools present
+    /// (`.verified`); a `.registered` snapshot whose injection is nil / unconfirmed / the
+    /// not-yet-overlaid confirmed-absent reads the neutral "registered — runtime not yet
+    /// confirmed" (`.unverified`), never a config-only false green. Structural states keep
+    /// their existing wording; the confirmed-ABSENT case is already overlaid to
+    /// `.toolsNotInjected` upstream.
     public var mcpStatusText: String {
         guard let mcpStatus else {
             return "unknown"
         }
         switch mcpStatus {
         case .registered:
-            return "available at runtime"
+            // The one verdict-aware split: confirmed-present is the only positive phrasing.
+            switch mcpPillTone {
+            case .verified:
+                return "available at runtime"
+            default:
+                return "registered — runtime not yet confirmed"
+            }
         case .notRegistered:
             return "tools binary missing"
         case .needsUpdate:
@@ -474,6 +519,7 @@ public struct HarnessStatusBuilder: Sendable {
         agents: [OuroAgentRecord],
         bossRegistration: BossWorkbenchMCPRegistrationSnapshot?,
         registrationByAgentName: [String: BossWorkbenchMCPRegistrationSnapshot] = [:],
+        injectionByAgentName: [String: WorkbenchToolsInjectionProbeOutcome] = [:],
         outwardVerdicts: [String: ProviderConnectionVerdict] = [:],
         checksInFlight: Set<String> = []
     ) -> HarnessStatus {
@@ -482,6 +528,7 @@ public struct HarnessStatusBuilder: Sendable {
             boss: boss,
             agents: agents,
             registrationByAgentName: registrationByAgentName,
+            injectionByAgentName: injectionByAgentName,
             outwardVerdicts: outwardVerdicts,
             checksInFlight: checksInFlight
         )
@@ -539,6 +586,7 @@ public struct HarnessStatusBuilder: Sendable {
         boss: BossAgentSelection,
         agents: [OuroAgentRecord],
         registrationByAgentName: [String: BossWorkbenchMCPRegistrationSnapshot],
+        injectionByAgentName: [String: WorkbenchToolsInjectionProbeOutcome],
         outwardVerdicts: [String: ProviderConnectionVerdict],
         checksInFlight: Set<String>
     ) -> HarnessAgentInventory {
@@ -549,6 +597,9 @@ public struct HarnessStatusBuilder: Sendable {
                 detail: agent.detail,
                 isSelectedBoss: agent.name.caseInsensitiveCompare(boss.agentName) == .orderedSame,
                 mcpStatus: registrationByAgentName[agent.name]?.status,
+                // A missing key = "not probed" (nil verdict → unverified pill, never
+                // green); a present value is the cached `tools/list` verdict.
+                toolsInjection: injectionByAgentName[agent.name],
                 verdict: outwardVerdicts[agent.name],
                 isChecking: checksInFlight.contains(agent.name)
             )
@@ -572,7 +623,11 @@ public struct HarnessStatusBuilder: Sendable {
             // whether its outward check has returned — the false-RED fix.
             bundleIsInstalled: bossEntry?.status == .ready,
             mcpStatus: bossRegistration?.status,
-            mcpDetail: bossRegistration?.detail
+            mcpDetail: bossRegistration?.detail,
+            // DISPLAY-ONLY: ride the injection verdict the boss's inventory entry already
+            // carries (threaded from injectionByAgentName) so the detail row renders the
+            // SAME verdict the pills do — zero new App-side threading.
+            toolsInjection: bossEntry?.toolsInjection
         )
     }
 }
