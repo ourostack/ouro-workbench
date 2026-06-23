@@ -166,6 +166,22 @@ final class ProcessIOBoxTests: XCTestCase {
         func reap(_ pid: pid_t) { lock.lock(); pids.append(pid); lock.unlock() }
     }
 
+    /// Thread-safe box for the error a background reader thread caught, read after it signals.
+    private final class ErrorBox: @unchecked Sendable {
+        private let lock = NSLock()
+        private var stored: Error?
+        func set(_ error: Error?) { lock.lock(); stored = error; lock.unlock() }
+        var value: Error? { lock.lock(); defer { lock.unlock() }; return stored }
+    }
+
+    /// Thread-safe call counter for injected seams driven from the read loop.
+    private final class AtomicCounter: @unchecked Sendable {
+        private let lock = NSLock()
+        private var count = 0
+        @discardableResult func increment() -> Int { lock.lock(); defer { lock.unlock() }; count += 1; return count }
+        var value: Int { lock.lock(); defer { lock.unlock() }; return count }
+    }
+
     func testStopReapsTheChildViaTheInjectedReaper() {
         // The reaper seam must be invoked for the box's pid on stop() — the per-turn reap that
         // prevents the zombie leak. Driven with fakes (no real child) so the seam call is covered
@@ -206,6 +222,297 @@ final class ProcessIOBoxTests: XCTestCase {
             log.events, ["killpg", "reap"],
             "a still-alive own-group child must be killpg'd, THEN reaped — never reaped while alive (would hang)"
         )
+    }
+
+    // MARK: - FIX 1 — the stdout/stderr READ handles are closed (fd-leak fix)
+
+    /// True iff `fd` is a still-open file descriptor in THIS process.
+    private func fdIsOpen(_ fd: Int32) -> Bool {
+        fcntl(fd, F_GETFD) != -1
+    }
+
+    func testStopClosesTheStdoutAndStderrReadHandles() {
+        // FIX 1: over hours of boss-watch polling (a spawn per tick), the per-turn stdout/stderr
+        // READ pipe handles the box holds were never closed → fd leak until RLIMIT_NOFILE. stop()
+        // must close them (idempotently, AFTER the reap so the response read has completed).
+        let out = Pipe(); let err = Pipe()
+        let outFD = out.fileHandleForReading.fileDescriptor
+        let errFD = err.fileHandleForReading.fileDescriptor
+        XCTAssertTrue(fdIsOpen(outFD), "precondition: stdout read fd is open before stop()")
+        XCTAssertTrue(fdIsOpen(errFD), "precondition: stderr read fd is open before stop()")
+
+        let box = ProcessIOBox(
+            pid: 4321,
+            stdout: out.fileHandleForReading,
+            stderr: err.fileHandleForReading,
+            childInOwnGroup: true,
+            isAlive: { _ in false }, // already exited → stop() goes straight to reap + close
+            processKiller: { _, _ in 0 },
+            groupKiller: { _, _ in 0 },
+            reaper: { _ in }
+        )
+        box.stop()
+
+        XCTAssertFalse(fdIsOpen(outFD), "stop() must close the stdout read fd (no leak)")
+        XCTAssertFalse(fdIsOpen(errFD), "stop() must close the stderr read fd (no leak)")
+    }
+
+    // MARK: - FIX 2 — the read honors a deadline and does NOT park on a write end SIGKILL can't close
+
+    func testReadResponseHonorsDeadlineWhenAnEscapedGrandchildHoldsStdoutOpen() throws {
+        // FIX 2 (deterministic seam proof): a child forks a GRANDCHILD that moves into its OWN group
+        // (`setpgid(0,0)`, escaping the child's group) and holds the inherited stdout WRITE end open
+        // while writing nothing. The child then exits. `killpg(childGroup, SIGKILL)` therefore CANNOT
+        // close that write end (the holder escaped), so a naive blocking `availableData` read would
+        // PARK forever even after the watchdog's SIGKILL. The read now carries its own poll deadline,
+        // so it abandons with `.timeout` at the deadline instead of parking. We drive it directly (no
+        // race): wait until the grandchild is provably established, then `readResponse(id:deadline:)`
+        // and assert it returns `.timeout` within a bounded budget.
+        let tmpDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ProcessIOBoxFix2-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+        let readyMarker = tmpDir.appendingPathComponent("gc-ready")
+        let script = tmpDir.appendingPathComponent("hold-stdout.sh")
+        // The grandchild escapes the group, signals ready, then holds stdout forever (writes nothing).
+        // The shell exits immediately after backgrounding it, so the ONLY stdout-write holder is the
+        // escaped grandchild.
+        try """
+        #!/bin/sh
+        python3 -c 'import os,time
+        os.setpgid(0,0)
+        open("\(readyMarker.path)","w").close()
+        while True: time.sleep(30)' &
+        exit 0
+        """.write(to: script, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
+        let devNull = open("/dev/null", O_RDWR)
+        defer { close(devNull) }
+        let spawned = try SpawnInOwnGroup.spawn(
+            executablePath: "/bin/sh",
+            arguments: ["sh", script.path],
+            environment: [:],
+            stdio: SpawnInOwnGroup.StdioFDs(
+                stdin: devNull,
+                stdout: stdoutPipe.fileHandleForWriting.fileDescriptor,
+                stderr: stderrPipe.fileHandleForWriting.fileDescriptor
+            )
+        )
+        // Close OUR copies of the write ends (mirror spawnMCPServe). The escaped grandchild keeps ITS
+        // dup'd copy of stdout, so the read end won't EOF when the shell exits.
+        try? stdoutPipe.fileHandleForWriting.close()
+        try? stderrPipe.fileHandleForWriting.close()
+
+        // Wait until the grandchild is provably established (marker present → escaped + holding stdout).
+        let readyDeadline = Date().addingTimeInterval(10)
+        while !FileManager.default.fileExists(atPath: readyMarker.path), Date() < readyDeadline {
+            usleep(20_000)
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: readyMarker.path), "grandchild never signalled ready")
+
+        let box = ProcessIOBox(
+            pid: spawned.pid,
+            stdout: stdoutPipe.fileHandleForReading,
+            stderr: stderrPipe.fileHandleForReading,
+            childInOwnGroup: true
+        )
+
+        // SIGKILL the child group first (mirrors the watchdog). The escaped grandchild survives and
+        // keeps stdout open, so without the deadline the read would park here forever.
+        box.terminate()
+        box.forceKill()
+
+        // Run the bounded read on a background thread with a short deadline; assert it returns
+        // `.timeout` (not parks) well within budget.
+        let readReturned = DispatchSemaphore(value: 0)
+        let caught = ErrorBox()
+        let reader = Thread {
+            do {
+                _ = try box.readResponse(id: 2, deadline: .now() + .milliseconds(300))
+                caught.set(nil) // unexpected: a value with no output
+            } catch {
+                caught.set(error)
+            }
+            readReturned.signal()
+        }
+        reader.stackSize = 256 * 1024
+        let start = Date()
+        reader.start()
+
+        XCTAssertEqual(
+            readReturned.wait(timeout: .now() + 3.0), .success,
+            "the read must abandon at its deadline, not park past the watchdog"
+        )
+        XCTAssertLessThan(Date().timeIntervalSince(start), 2.0, "the read must return near its 300ms deadline")
+        XCTAssertEqual(
+            caught.value as? BossAgentMCPClientError, .timeout,
+            "a no-output hang must surface as .timeout once the poll deadline passes"
+        )
+
+        // FIX 1 cleanup still applies: closing the read handles is safe now (read no longer parked).
+        box.closeReadHandles()
+
+        // Clean up the escaped grandchild (it left the group, so it survives the killpg above).
+        let pkill = Process()
+        pkill.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
+        pkill.arguments = ["-f", readyMarker.path]
+        try? pkill.run()
+        pkill.waitUntilExit()
+    }
+
+    func testPollReadableReturnsReadableImmediatelyWhenDataIsPresent() throws {
+        // Happy-path pin: when the pipe already has data, `pollReadable` returns `.readable` at once
+        // (so `availableData` runs exactly as before — happy path unchanged). Exercises the real poll.
+        let pipe = Pipe()
+        defer { try? pipe.fileHandleForReading.close(); try? pipe.fileHandleForWriting.close() }
+        pipe.fileHandleForWriting.write(Data("hi\n".utf8))
+        let box = ProcessIOBox(
+            pid: 1, stdout: pipe.fileHandleForReading, stderr: Pipe().fileHandleForReading,
+            childInOwnGroup: false)
+        let result = box.pollReadable(fd: pipe.fileHandleForReading.fileDescriptor, deadline: .now() + .seconds(5))
+        XCTAssertEqual(result, .readable)
+    }
+
+    func testPollReadableTimesOutWhenNoDataAndDeadlinePasses() throws {
+        // The deadline arm via the real poll: a silent pipe with the write end held open →
+        // `pollReadable` returns `.timedOut` once the deadline elapses, with no park.
+        let pipe = Pipe()
+        defer { try? pipe.fileHandleForReading.close(); try? pipe.fileHandleForWriting.close() }
+        let box = ProcessIOBox(
+            pid: 1, stdout: pipe.fileHandleForReading, stderr: Pipe().fileHandleForReading,
+            childInOwnGroup: false)
+        let result = box.pollReadable(fd: pipe.fileHandleForReading.fileDescriptor, deadline: .now() + .milliseconds(50))
+        XCTAssertEqual(result, .timedOut)
+    }
+
+    func testPollReadableReturnsReadableOnEOFSoTheReadLoopCanFinish() throws {
+        // EOF must read as `.readable` (POLLHUP), not `.timedOut`, so the existing EOF/closed path in
+        // the read loop runs promptly on a clean child exit. Exercises the real poll.
+        let pipe = Pipe()
+        try? pipe.fileHandleForWriting.close() // immediate EOF on the read end
+        defer { try? pipe.fileHandleForReading.close() }
+        let box = ProcessIOBox(
+            pid: 1, stdout: pipe.fileHandleForReading, stderr: Pipe().fileHandleForReading,
+            childInOwnGroup: false)
+        let result = box.pollReadable(fd: pipe.fileHandleForReading.fileDescriptor, deadline: .now() + .seconds(5))
+        XCTAssertEqual(result, .readable, "EOF must surface as readable so the loop hits its EOF branch")
+    }
+
+    // MARK: - FIX 2 — pure poll seams (pollTimeoutMillis / pollOutcome) + pollReadable classification
+
+    func testPollTimeoutMillisCoversAllArms() {
+        // nil deadline → block indefinitely (-1).
+        XCTAssertEqual(ProcessIOBox.pollTimeoutMillis(deadlineUptimeNanos: nil, nowUptimeNanos: 100), -1)
+        // already-past deadline (remaining <= 0) → non-blocking poll (0).
+        XCTAssertEqual(ProcessIOBox.pollTimeoutMillis(deadlineUptimeNanos: 100, nowUptimeNanos: 100), 0)
+        XCTAssertEqual(ProcessIOBox.pollTimeoutMillis(deadlineUptimeNanos: 50, nowUptimeNanos: 100), 0)
+        // 1ns remaining → rounds UP to 1ms (so a sub-ms remainder still gets one poll pass).
+        XCTAssertEqual(ProcessIOBox.pollTimeoutMillis(deadlineUptimeNanos: 1, nowUptimeNanos: 0), 1)
+        // exactly 2ms remaining → 2ms.
+        XCTAssertEqual(ProcessIOBox.pollTimeoutMillis(deadlineUptimeNanos: 2_000_000, nowUptimeNanos: 0), 2)
+        // enormous remaining → clamped to Int32.max.
+        XCTAssertEqual(
+            ProcessIOBox.pollTimeoutMillis(deadlineUptimeNanos: UInt64(Int64.max), nowUptimeNanos: 0),
+            Int32.max
+        )
+    }
+
+    func testPollOutcomeClassifiesEveryReturn() {
+        // rc > 0 → readable (data, or POLLHUP/POLLERR/POLLNVAL — availableData returns at once).
+        XCTAssertEqual(ProcessIOBox.pollOutcome(rc: 1, errnoValue: 0), .readable)
+        // rc == 0 → the timeout elapsed.
+        XCTAssertEqual(ProcessIOBox.pollOutcome(rc: 0, errnoValue: 0), .timedOut)
+        // rc < 0 with EINTR → retry.
+        XCTAssertEqual(ProcessIOBox.pollOutcome(rc: -1, errnoValue: EINTR), .retry)
+        // rc < 0 with any other errno → readable (let the availableData/EOF path classify it).
+        XCTAssertEqual(ProcessIOBox.pollOutcome(rc: -1, errnoValue: EBADF), .readable)
+    }
+
+    func testPollReadableReturnsRetryOnEINTRViaInjectedPoll() {
+        // `pollReadable` is a single poll pass: an injected EINTR maps to `.retry` (the caller's read
+        // loop re-polls without consuming a chunk). The injected clock keeps it deterministic.
+        let box = ProcessIOBox(
+            pid: 1, stdout: Pipe().fileHandleForReading, stderr: Pipe().fileHandleForReading,
+            childInOwnGroup: false)
+        let result = box.pollReadable(
+            fd: 7, deadline: .now() + .seconds(10), now: { 0 }, pollOnce: { _, _ in (-1, EINTR) })
+        XCTAssertEqual(result, .retry)
+    }
+
+    func testPollReadableTimesOutViaInjectedPoll() {
+        // The `.timedOut` arm via an injected `rc == 0`, deterministically (no real poll wait).
+        let box = ProcessIOBox(
+            pid: 1, stdout: Pipe().fileHandleForReading, stderr: Pipe().fileHandleForReading,
+            childInOwnGroup: false)
+        let result = box.pollReadable(
+            fd: 7, deadline: .now() + .seconds(1), now: { 0 }, pollOnce: { _, _ in (0, 0) })
+        XCTAssertEqual(result, .timedOut)
+    }
+
+    func testReadLoopRetriesPollOnEINTRThenReadsTheResponse() throws {
+        // Cover the read loop's `.retry` → `continue` arm: a box whose poll seam returns EINTR on the
+        // FIRST pass and the REAL poll thereafter. The pipe already holds a full id-2 line, so after
+        // the one EINTR re-poll the loop reads it and returns the decoded text — proving an EINTR does
+        // NOT consume a chunk or abort the read.
+        let pipe = Pipe()
+        let line = #"{"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":"after eintr"}],"isError":false}}"# + "\n"
+        pipe.fileHandleForWriting.write(Data(line.utf8))
+        try? pipe.fileHandleForWriting.close() // EOF after the line so the loop can't park
+        defer { try? pipe.fileHandleForReading.close() }
+
+        let pollCalls = AtomicCounter()
+        let box = ProcessIOBox(
+            pid: 1,
+            stdout: pipe.fileHandleForReading,
+            stderr: Pipe().fileHandleForReading,
+            childInOwnGroup: false,
+            pollProvider: { fd, timeoutMillis in
+                if pollCalls.increment() == 1 {
+                    return (-1, EINTR) // first poll: interrupted → loop must `.retry` (re-poll)
+                }
+                return ProcessIOBox.realPoll(fd, timeoutMillis) // thereafter: real poll (data ready)
+            }
+        )
+        let text = try box.readResponse(id: 2, deadline: .now() + .seconds(5))
+        XCTAssertEqual(text, "after eintr")
+        XCTAssertGreaterThanOrEqual(pollCalls.value, 2, "the EINTR pass must have re-polled before reading")
+    }
+
+    func testPollReadableNilDeadlineUsesBlockingTimeoutAndReadsAvailableData() {
+        // `nil` deadline → `pollTimeoutMillis` returns -1 (block). With data present the injected poll
+        // is unnecessary; use the real poll to confirm the nil-deadline path reaches `.readable`.
+        let pipe = Pipe()
+        defer { try? pipe.fileHandleForReading.close(); try? pipe.fileHandleForWriting.close() }
+        pipe.fileHandleForWriting.write(Data("x\n".utf8))
+        let box = ProcessIOBox(
+            pid: 1, stdout: pipe.fileHandleForReading, stderr: Pipe().fileHandleForReading,
+            childInOwnGroup: false)
+        XCTAssertEqual(box.pollReadable(fd: pipe.fileHandleForReading.fileDescriptor, deadline: nil), .readable)
+    }
+
+    func testCloseReadHandlesIsIdempotent() {
+        // The watchdog (FIX 2) closes the read handle to unblock a parked read; stop() (FIX 1)
+        // also closes it on the normal path. Both can run for one turn, so closeReadHandles() must
+        // be safe to call more than once (double-close throws, swallowed by `try?`).
+        let out = Pipe(); let err = Pipe()
+        let outFD = out.fileHandleForReading.fileDescriptor
+        let box = ProcessIOBox(
+            pid: 22,
+            stdout: out.fileHandleForReading,
+            stderr: err.fileHandleForReading,
+            childInOwnGroup: false,
+            isAlive: { _ in false },
+            processKiller: { _, _ in 0 },
+            groupKiller: { _, _ in 0 },
+            reaper: { _ in }
+        )
+        box.closeReadHandles()
+        box.closeReadHandles() // must not crash / must stay closed
+        box.stop()             // stop() also closes — still no crash
+        XCTAssertFalse(fdIsOpen(outFD), "the read fd stays closed across repeated closeReadHandles()/stop()")
     }
 
     // MARK: - Default reaper against a real short-lived child (the inverse-of-the-leak proof)

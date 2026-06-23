@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 import XCTest
 @testable import OuroWorkbenchCore
 
@@ -386,6 +387,76 @@ final class BossAgentMCPClientTests: XCTestCase {
         }
     }
 
+    // MARK: - FIX 2 — a no-output child whose stdout-holder escapes the kill does NOT park past the watchdog
+
+    func testNoOutputChildWhoseGrandchildEscapesTheGroupDoesNotParkPastWatchdog() async throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OuroWorkbenchMCPClientTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        // Pathological mock: read the two requests, then fork a GRANDCHILD that moves itself into
+        // its OWN process group (`setpgid(0,0)`) so the client's own-group `killpg` of the shell's
+        // group does NOT reap it, and that grandchild holds the inherited stdout WRITE end open
+        // forever (it prints nothing). The shell then sleeps. After SIGKILL of the shell's group the
+        // stdout write end is STILL open (held by the escaped grandchild) → a blocking
+        // `availableData` read would PARK indefinitely even past the watchdog's terminate+SIGKILL.
+        // Only the watchdog closing the PARENT's READ handle (FIX 2) unblocks the read so the call
+        // returns `.timeout` instead of parking the worker. The grandchild writes a marker file once
+        // it is established so the wall-clock budget below is measured from a known-ready state.
+        let readyMarker = temporaryDirectory.appendingPathComponent("gc-ready")
+        let mockOuro = temporaryDirectory.appendingPathComponent("ouro")
+        // The shell BLOCKS until the grandchild signals ready (marker file), so by the time the
+        // shell finishes reading the requests + the grandchild is escaped and holding stdout, the
+        // read is provably parked on a held write end BEFORE the watchdog can fire — no race.
+        let script = """
+        #!/bin/sh
+        read initialize
+        read tool_call
+        python3 -c 'import os,time
+        os.setpgid(0,0)
+        open("\(readyMarker.path)","w").close()
+        while True: time.sleep(30)' &
+        while [ ! -f "\(readyMarker.path)" ]; do sleep 0.02; done
+        sleep 30
+        """
+        try script.write(to: mockOuro, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: mockOuro.path)
+        let oldPath = getenv("PATH").map { String(cString: $0) }
+        setenv("PATH", "\(temporaryDirectory.path):\(oldPath ?? "")", 1)
+        defer {
+            if let oldPath { setenv("PATH", oldPath, 1) } else { unsetenv("PATH") }
+        }
+
+        // Client timeout long enough (700ms) that the escaped grandchild is firmly established and
+        // holding stdout BEFORE the watchdog fires — so the read is genuinely parked on a held write
+        // end at SIGKILL time (the exact FIX-2 scenario), not racing the grandchild's startup.
+        let client = BossAgentMCPClient(timeoutNanoseconds: 700_000_000)
+        let start = Date()
+        do {
+            _ = try await client.status(agentName: "slugger")
+            XCTFail("expected a timeout, got a successful response")
+        } catch {
+            XCTAssertEqual(
+                error as? BossAgentMCPClientError, .timeout,
+                "a no-output hang must surface as .timeout once the watchdog unblocks the read"
+            )
+        }
+        let elapsed = Date().timeIntervalSince(start)
+        // WITHOUT FIX 2 the read parks on the escaped grandchild's held write end and never returns
+        // (the call hangs forever → CI times out). WITH FIX 2 the watchdog closes the read handle and
+        // the call returns just after the 700ms timeout. Bound generously (3s) so spawn/close jitter
+        // never flakes, while still proving "does not park indefinitely".
+        XCTAssertLessThan(elapsed, 3.0, "the call must not park past the watchdog (FIX 2): elapsed \(elapsed)s")
+
+        // Best-effort cleanup of the escaped grandchild so the test process doesn't leak it.
+        let pkill = Process()
+        pkill.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
+        pkill.arguments = ["-f", readyMarker.path]
+        try? pkill.run()
+        pkill.waitUntilExit()
+    }
+
     // MARK: - listToolNames (#F9 tools/list injection probe)
 
     /// Source-pin: the `tools/list` request body is the JSON-RPC the spawn writes as id 2,
@@ -603,6 +674,62 @@ final class BossAgentMCPClientTests: XCTestCase {
         } catch let error as BossAgentMCPClientError {
             XCTAssertEqual(error, .processNotAvailable("agent bundle slugger is locked"))
         }
+    }
+
+    // MARK: - FIX 1 — fd-leak: repeated callTool turns do not grow this process's open-fd count
+
+    /// Count this process's open file descriptors by probing each slot up to a bounded cap with
+    /// `fcntl(fd, F_GETFD)`. A leaked pipe read handle shows up as a steadily rising count.
+    private func openFDCount() -> Int {
+        var limit = rlimit()
+        getrlimit(RLIMIT_NOFILE, &limit)
+        let cap = Int(min(limit.rlim_cur, 4096))
+        var count = 0
+        for fd in 0..<cap where fcntl(Int32(fd), F_GETFD) != -1 {
+            count += 1
+        }
+        return count
+    }
+
+    func testRepeatedCallsDoNotLeakPipeFileDescriptors() async throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OuroWorkbenchMCPClientTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let mockOuro = temporaryDirectory.appendingPathComponent("ouro")
+        let script = """
+        #!/bin/sh
+        read initialize
+        read tool_call
+        echo '{"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":"ok"}],"isError":false}}'
+        """
+        try script.write(to: mockOuro, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: mockOuro.path)
+        let oldPath = getenv("PATH").map { String(cString: $0) }
+        setenv("PATH", "\(temporaryDirectory.path):\(oldPath ?? "")", 1)
+        defer {
+            if let oldPath { setenv("PATH", oldPath, 1) } else { unsetenv("PATH") }
+        }
+
+        let client = BossAgentMCPClient(timeoutNanoseconds: 2_000_000_000)
+        // Warm up so one-time allocations don't inflate the baseline fd count.
+        _ = try await client.status(agentName: "slugger")
+        _ = try await client.status(agentName: "slugger")
+
+        let baseline = openFDCount()
+        for _ in 0..<25 {
+            _ = try await client.status(agentName: "slugger")
+        }
+        let after = openFDCount()
+
+        // Each turn opens 3 pipes (6 read+write fds). Pre-fix, the 2 stdout/stderr READ handles per
+        // turn leak → +~50 across 25 turns. Post-fix the count is flat (allow a tiny slack for
+        // runtime jitter, well under one turn's worth of leak).
+        XCTAssertLessThanOrEqual(
+            after - baseline, 4,
+            "callTool must not leak pipe fds across turns (baseline \(baseline) → after \(after))"
+        )
     }
 
     // MARK: - retryingOnEmpty

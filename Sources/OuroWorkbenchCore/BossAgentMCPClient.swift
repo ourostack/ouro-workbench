@@ -110,11 +110,23 @@ public final class BossAgentMCPClient: @unchecked Sendable {
         try? stdoutPipe.fileHandleForWriting.close()
         try? stderrPipe.fileHandleForWriting.close()
 
+        // Give the box its OWN read fds, distinct from the `Pipe`'s, so closing is unambiguous:
+        // `dup` the pipe read fds into box-owned descriptors and close the originals. The box then
+        // owns exactly two read fds and is their SOLE closer (once, via `closeReadHandles()` — FIX 1
+        // for the leak, FIX 2 for the parked-read unblock). The box's handles are `closeOnDealloc:
+        // false`, and the originals are closed here, so no fd is ever closed twice (which, after the
+        // box's raw close, could clobber a recycled fd number). This only governs the PARENT's
+        // read-side fd lifecycle — the child already holds its own dup'd stdio copies, so the
+        // marshalling handed to the child is unchanged.
+        let stdoutReadFD = dup(stdoutPipe.fileHandleForReading.fileDescriptor)
+        let stderrReadFD = dup(stderrPipe.fileHandleForReading.fileDescriptor)
+        try? stdoutPipe.fileHandleForReading.close()
+        try? stderrPipe.fileHandleForReading.close()
         let box = Self.makeProcessBox(
             spawnedPID: spawned.pid,
             actualPGID: getpgid(spawned.pid),
-            stdout: stdoutPipe.fileHandleForReading,
-            stderr: stderrPipe.fileHandleForReading
+            stdout: FileHandle(fileDescriptor: stdoutReadFD, closeOnDealloc: false),
+            stderr: FileHandle(fileDescriptor: stderrReadFD, closeOnDealloc: false)
         )
         return SpawnedMCPServe(stdinWrite: stdinPipe.fileHandleForWriting, box: box)
     }
@@ -293,14 +305,20 @@ public final class BossAgentMCPClient: @unchecked Sendable {
     }
 
     private func readResponse(_ processBox: ProcessIOBox, id: Int, timeoutNanoseconds: UInt64) async throws -> String {
-        try await withThrowingTaskGroup(of: String.self) { group in
+        // FIX 2 (no-park): the read carries its OWN poll deadline so it can never park past the
+        // timeout even when the SIGKILL fails to close stdout (a grandchild escaped the killpg'd
+        // group still holds it). A small margin past the watchdog keeps the watchdog (which kills
+        // the child → EOF → the read returns naturally) the normal winner; the read's deadline is
+        // the backstop only for the genuinely-wedged case.
+        let readDeadline = DispatchTime.now() + .nanoseconds(Int(min(timeoutNanoseconds + 250_000_000, UInt64(Int.max))))
+        return try await withThrowingTaskGroup(of: String.self) { group in
             // Cancel the sibling on every exit path, including the timeout
             // rethrow. The timeout task force-kills the subprocess so the
             // *uncancellable* blocking read always unwinds (EOF on closed stdout)
             // — terminate() alone deadlocks the group when the child ignores SIGTERM.
             defer { group.cancelAll() }
             group.addTask {
-                try processBox.readResponse(id: id)
+                try processBox.readResponse(id: id, deadline: readDeadline)
             }
             group.addTask {
                 try await Task.sleep(nanoseconds: timeoutNanoseconds)
@@ -316,10 +334,12 @@ public final class BossAgentMCPClient: @unchecked Sendable {
     /// decode), for `tools/list` — whose `result.tools` shape the private `MCPResponse`
     /// decoders don't model. The pure seam parses the raw line.
     private func readResponseLine(_ processBox: ProcessIOBox, id: Int, timeoutNanoseconds: UInt64) async throws -> String {
-        try await withThrowingTaskGroup(of: String.self) { group in
+        // FIX 2 (no-park): same own-deadline backstop as `readResponse` (see there).
+        let readDeadline = DispatchTime.now() + .nanoseconds(Int(min(timeoutNanoseconds + 250_000_000, UInt64(Int.max))))
+        return try await withThrowingTaskGroup(of: String.self) { group in
             defer { group.cancelAll() }
             group.addTask {
-                try processBox.readRawLine(id: id)
+                try processBox.readRawLine(id: id, deadline: readDeadline)
             }
             group.addTask {
                 try await Task.sleep(nanoseconds: timeoutNanoseconds)
@@ -463,6 +483,9 @@ final class ProcessIOBox: @unchecked Sendable {
     /// accumulating unbounded until `posix_spawn` fails `EAGAIN`. `stop()` reaps the child through
     /// this seam on every lifecycle end. Default is a blocking `waitpid`; a fake records the call.
     private let reaper: @Sendable (pid_t) -> Void
+    /// The poll seam used by `readMatchingLine`/`pollReadable` (FIX 2). Default is one real `poll(2)`
+    /// (`realPoll`); a fake lets a test drive the read loop's EINTR `.retry` arm deterministically.
+    private let pollProvider: @Sendable (Int32, Int32) -> (rc: Int32, errnoValue: Int32)
 
     init(
         pid: pid_t,
@@ -473,7 +496,8 @@ final class ProcessIOBox: @unchecked Sendable {
         isAlive: @escaping @Sendable (pid_t) -> Bool = { kill($0, 0) == 0 },
         processKiller: @escaping @Sendable (pid_t, Int32) -> Int32 = { kill($0, $1) },
         groupKiller: @escaping @Sendable (pid_t, Int32) -> Int32 = { killpg($0, $1) },
-        reaper: @escaping @Sendable (pid_t) -> Void = { var status: Int32 = 0; waitpid($0, &status, 0) }
+        reaper: @escaping @Sendable (pid_t) -> Void = { var status: Int32 = 0; waitpid($0, &status, 0) },
+        pollProvider: @escaping @Sendable (Int32, Int32) -> (rc: Int32, errnoValue: Int32) = ProcessIOBox.realPoll
     ) {
         self.pid = pid
         self.stdout = stdout
@@ -484,19 +508,22 @@ final class ProcessIOBox: @unchecked Sendable {
         self.processKiller = processKiller
         self.groupKiller = groupKiller
         self.reaper = reaper
+        self.pollProvider = pollProvider
     }
 
-    /// Decode the tool-call text from the matching id line (`tools/call`).
-    func readResponse(id: Int) throws -> String {
-        try readMatchingLine { line in
+    /// Decode the tool-call text from the matching id line (`tools/call`). `deadline` is the wall
+    /// clock past which the read abandons (FIX 2) instead of parking; `nil` reads with no deadline
+    /// (the original blocking behaviour, kept for tests that drive the loop directly).
+    func readResponse(id: Int, deadline: DispatchTime? = nil) throws -> String {
+        try readMatchingLine(deadline: deadline) { line in
             try BossAgentMCPClient.extractTextIfMatching(line: line, id: id)
         }
     }
 
     /// Return the matching id line VERBATIM (for `tools/list`, whose `result.tools` shape the
     /// tool-call decoders don't model). Same EOF / stderr / closed semantics as `readResponse`.
-    func readRawLine(id: Int) throws -> String {
-        try readMatchingLine { line in
+    func readRawLine(id: Int, deadline: DispatchTime? = nil) throws -> String {
+        try readMatchingLine(deadline: deadline) { line in
             BossAgentMCPClient.rawLineIfMatching(line: line, id: id)
         }
     }
@@ -506,9 +533,29 @@ final class ProcessIOBox: @unchecked Sendable {
     /// surfaces stderr as `.processNotAvailable`, and reports `.closed` on a clean EOF with no
     /// match. Both `readResponse` (decode tool text) and `readRawLine` (keep the line) flow
     /// through here so there's a single read loop.
-    private func readMatchingLine(_ transform: (String) throws -> String?) throws -> String {
+    ///
+    /// FIX 2 (no-park): each blocking `availableData` is gated by `waitReadable`, a `poll(2)` on the
+    /// stdout fd with the time remaining until `deadline`. A WELL-BEHAVED child is readable
+    /// immediately, so `poll` returns at once and `availableData` runs exactly as before (happy path
+    /// byte-identical). A PATHOLOGICAL child that writes nothing and never closes its write end (e.g.
+    /// a grandchild that escaped the watchdog's killpg'd group still holds stdout) would otherwise
+    /// park `availableData` forever PAST the SIGKILL — `poll` instead returns `.timedOut` at the
+    /// deadline and we throw `.timeout`, so the worker is never parked. We deliberately do NOT close
+    /// the fd to unblock: `FileHandle.availableData` raises `NSFileHandleOperationException`
+    /// (aborting the process) when its fd is closed mid-read, so a bounded `poll` deadline is the
+    /// safe unblock. `availableData` is only ever called after `poll` reports the fd readable (real
+    /// data or EOF), never on a closed fd.
+    private func readMatchingLine(deadline: DispatchTime?, _ transform: (String) throws -> String?) throws -> String {
         var buffer = Data()
         while true {
+            switch pollReadable(fd: stdout.fileDescriptor, deadline: deadline) {
+            case .timedOut:
+                throw BossAgentMCPClientError.timeout
+            case .retry:
+                continue // EINTR before the deadline — re-poll WITHOUT consuming a chunk
+            case .readable:
+                break
+            }
             let chunk = stdout.availableData
             if chunk.isEmpty {
                 if !buffer.isEmpty {
@@ -533,6 +580,76 @@ final class ProcessIOBox: @unchecked Sendable {
                 }
             }
         }
+    }
+
+    /// PURE: the per-`poll` millisecond timeout for a `deadline` and the current time, both in
+    /// `DispatchTime.uptimeNanoseconds`. `nil` deadline → `-1` (block indefinitely). An already-past
+    /// deadline → `0` (a non-blocking poll). Otherwise the remaining budget rounded UP to the next
+    /// millisecond (so a sub-ms remainder still gets one poll pass), clamped to `Int32.max`.
+    static func pollTimeoutMillis(deadlineUptimeNanos: UInt64?, nowUptimeNanos: UInt64) -> Int32 {
+        guard let deadlineUptimeNanos else {
+            return -1
+        }
+        let remainingNanos = Int64(bitPattern: deadlineUptimeNanos) - Int64(bitPattern: nowUptimeNanos)
+        if remainingNanos <= 0 {
+            return 0
+        }
+        // Convert to whole milliseconds, rounding UP (so a sub-ms remainder still gets one poll
+        // pass), clamped to `Int32.max`. Compute as ms-floor + a round-up bump to avoid overflowing
+        // `Int64` when `remainingNanos` is near `Int64.max` (which `+ 999_999` would trap on).
+        let wholeMillis = remainingNanos / 1_000_000
+        let roundedUp = wholeMillis + (remainingNanos % 1_000_000 == 0 ? 0 : 1)
+        return Int32(min(roundedUp, Int64(Int32.max)))
+    }
+
+    /// PURE: classify one `poll(2)` return. `rc > 0` → readable (`POLLIN`, or `POLLHUP`/`POLLERR`/
+    /// `POLLNVAL` — `availableData` then returns at once via EOF/error, never parks). `rc == 0` →
+    /// the timeout elapsed → `.timedOut`. `rc < 0` with `EINTR` → `.retry` (interrupted before the
+    /// deadline; loop again with the recomputed budget). Any OTHER `rc < 0` errno (should not happen
+    /// for a valid pipe fd) → `.readable`, so the existing `availableData`/EOF path classifies it
+    /// rather than spinning here.
+    enum PollOutcome: Equatable { case readable, timedOut, retry }
+    static func pollOutcome(rc: Int32, errnoValue: Int32) -> PollOutcome {
+        if rc > 0 {
+            return .readable
+        }
+        if rc == 0 {
+            return .timedOut
+        }
+        if errnoValue == EINTR {
+            return .retry
+        }
+        return .readable
+    }
+
+    /// ONE `poll(2)` pass for the time remaining until `deadline`, classified to a `PollOutcome`.
+    /// `.retry` (EINTR before the deadline) is handled by the caller's existing read loop, which
+    /// `continue`s WITHOUT consuming a chunk — so there is no second `while true` here (and thus no
+    /// extra structurally-unreachable closing brace). A `nil` deadline blocks indefinitely (the
+    /// original behaviour). All branching is delegated to the pure `pollTimeoutMillis` /
+    /// `pollOutcome` seams (100%-tested by value); only the raw `poll(2)` and clock are impure and
+    /// are injectable so this is deterministically coverable.
+    func pollReadable(
+        fd: Int32,
+        deadline: DispatchTime?,
+        now: () -> UInt64 = { DispatchTime.now().uptimeNanoseconds },
+        pollOnce: ((Int32, Int32) -> (rc: Int32, errnoValue: Int32))? = nil
+    ) -> PollOutcome {
+        let timeoutMillis = Self.pollTimeoutMillis(
+            deadlineUptimeNanos: deadline?.uptimeNanoseconds,
+            nowUptimeNanos: now()
+        )
+        // Use the explicit `pollOnce` override when a unit test passes one; otherwise the box's
+        // injected `pollProvider` (real `poll(2)` in production, a fake in the read-loop EINTR test).
+        let result = (pollOnce ?? pollProvider)(fd, timeoutMillis)
+        return Self.pollOutcome(rc: result.rc, errnoValue: result.errnoValue)
+    }
+
+    /// The single impure seam: one real `poll(2)` on `fd` for `timeoutMillis`, returning `(rc, errno)`.
+    static let realPoll: @Sendable (Int32, Int32) -> (rc: Int32, errnoValue: Int32) = { fd, timeoutMillis in
+        var pollFD = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
+        let rc = poll(&pollFD, 1, timeoutMillis)
+        return (rc, errno)
     }
 
     /// SIGTERM the child (the polite first ask). Skipped if the child already exited, so a
@@ -581,6 +698,49 @@ final class ProcessIOBox: @unchecked Sendable {
     func stop() {
         forceKill()
         reaper(pid)
+        // FIX 1 (fd-leak): close the stdout/stderr READ pipe handles. The parent kept these read
+        // ends for the whole turn (the read loop drains stdout; the EOF path drains stderr); nothing
+        // closed them, so each callTool/listToolNames turn leaked two fds — over hours of
+        // boss-watch polling that exhausts RLIMIT_NOFILE and the app can no longer spawn or open
+        // pipes. Closed here, AFTER the read has completed (stop() runs once the read loop has
+        // returned/thrown) and after the reap, on EVERY lifecycle end (success, timeout, error).
+        closeReadHandles()
+    }
+
+    /// Whether `closeReadHandles()` has already run (so it fires AT MOST once — both the watchdog
+    /// and `stop()` may call it for one turn). Guarded by `readCloseLock`.
+    private let readCloseLock = NSLock()
+    private var didCloseReadHandles = false
+
+    /// Close the stdout/stderr READ pipe handles this box owns, exactly once.
+    ///
+    /// Two callers, two reasons:
+    ///   - `stop()` (FIX 1, fd-leak): on every normal lifecycle end, release the two read fds the
+    ///     box held for the whole turn so they don't accumulate to RLIMIT_NOFILE.
+    ///   - the watchdog (FIX 2, no-park): when the response read is PARKED on `availableData` and the
+    ///     SIGKILL can't close the write end (a grandchild escaped the killpg'd group still holds it),
+    ///     closing the parent's READ fd is the only thing that unblocks the read so the worker isn't
+    ///     parked past the watchdog deadline.
+    ///
+    /// IMPLEMENTATION: the unblock uses a RAW `Darwin.close(fileDescriptor)` — NOT `FileHandle.close()`.
+    /// `FileHandle.close()` raises `NSFileHandleOperationException` (aborting the process) when called
+    /// on a handle whose `availableData` is parked mid-read; the raw `close(2)` makes the in-flight
+    /// `read(2)` return EOF cleanly with no exception (verified). The box's read handles are
+    /// `closeOnDealloc: false` and own these exact fds (dup'd from the pipes at spawn), so this single
+    /// raw close is the one-and-only close — no deinit double-close, no recycled-fd clobber. The
+    /// idempotent flag makes repeated calls a no-op, so `stop()` after the watchdog already closed
+    /// (or vice versa) is harmless.
+    func closeReadHandles() {
+        readCloseLock.lock()
+        if didCloseReadHandles {
+            readCloseLock.unlock()
+            return
+        }
+        didCloseReadHandles = true
+        readCloseLock.unlock()
+
+        _ = Darwin.close(stdout.fileDescriptor)
+        _ = Darwin.close(stderr.fileDescriptor)
     }
 
     private func readStderrText() -> String {
