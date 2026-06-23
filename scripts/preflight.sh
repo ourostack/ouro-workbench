@@ -48,6 +48,9 @@ git diff --exit-code -- docs/workbench-5000-scenario-matrix.tsv docs/workbench-5
 run_step "Run Swift tests"
 swift test "${SWIFT_STRICT_FLAGS[@]}"
 
+run_step "Run native UI surface probe"
+swift run "${SWIFT_STRICT_FLAGS[@]}" OuroWorkbench --uisurfacetest
+
 run_step "Run required native scenario verifier"
 swift run "${SWIFT_STRICT_FLAGS[@]}" OuroWorkbenchScenarioVerifier \
   --out .build/workbench-scenario-verifier-preflight \

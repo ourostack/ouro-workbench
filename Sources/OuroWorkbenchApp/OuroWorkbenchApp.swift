@@ -1,5 +1,6 @@
 #if os(macOS)
 import AppKit
+import OuroAppShellUI
 import OuroWorkbenchCore
 import SwiftTerm
 import SwiftUI
@@ -1898,7 +1899,7 @@ struct SettingsSheet: View {
     @ViewBuilder
     private var updatesSection: some View {
         SettingsSection(title: "Software Updates", systemImage: "arrow.down.app") {
-            ReleaseUpdateControls(model: model, showTitle: false)
+            WorkbenchReleaseUpdateControls(model: model, showTitle: false)
             Toggle(isOn: Binding(
                 get: { model.autoUpdateEnabled },
                 set: { model.setAutoUpdateEnabled($0) }
@@ -2048,7 +2049,6 @@ struct ImportSummaryBanner: View {
 struct AboutSheet: View {
     @ObservedObject var model: WorkbenchViewModel
     @Environment(\.dismiss) private var dismiss
-    @State private var copiedFeedback = false
 
     private var buildHash: String {
         // Bundle CFBundleVersion holds the build number / git short hash
@@ -2058,63 +2058,41 @@ struct AboutSheet: View {
     }
 
     private var versionLine: String {
-        "\(WorkbenchRelease.version) (build \(buildHash))"
+        "Version \(WorkbenchRelease.version) - Build \(buildHash)"
     }
 
     var body: some View {
-        VStack(spacing: 18) {
-            Image(systemName: "infinity")
-                .font(.system(size: 56, weight: .semibold))
-                .foregroundColor(.accentColor)
-                .padding(.top, 16)
-            VStack(spacing: 6) {
-                Text(WorkbenchRelease.appName)
-                    .font(.title2.weight(.semibold))
-                Text(versionLine)
-                    .font(.subheadline)
-                    .monospacedDigit()
-                    .foregroundColor(.secondary)
-                    .textSelection(.enabled)
-            }
-            Text("Terminal-first orchestrator for autonomous Ouro agents.")
-                .font(.callout)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 28)
-            HStack(spacing: 10) {
-                Button {
-                    if let url = URL(string: "https://github.com/ourostack/ouro-workbench") {
-                        NSWorkspace.shared.open(url)
-                    }
-                } label: {
-                    Label("Open Repo", systemImage: "arrow.up.right.square")
-                }
-                Button {
-                    let pasteboard = NSPasteboard.general
-                    pasteboard.clearContents()
-                    pasteboard.setString(versionLine, forType: .string)
-                    copiedFeedback = true
-                    Task {
-                        try? await Task.sleep(nanoseconds: 1_500_000_000)
-                        copiedFeedback = false
-                    }
-                } label: {
-                    Label(
-                        copiedFeedback ? "Copied" : "Copy Version",
-                        systemImage: copiedFeedback ? "checkmark" : "doc.on.doc"
-                    )
-                }
-            }
-            ReleaseUpdateControls(model: model, showTitle: false)
-            Spacer(minLength: 0)
-            HStack {
-                Spacer()
-                Button("Done") { dismiss() }
-                    .keyboardShortcut(.defaultAction)
-            }
-        }
-        .padding(20)
-        .frame(width: 460, height: 380)
+        OuroAppShellUI.AppShellAboutView(
+            model: aboutModel,
+            updateState: model.appShellUpdateState,
+            updateActions: model.appShellUpdateActions,
+            aboutActions: AppShellAboutActions(
+                openRepository: { NSWorkspace.shared.open(repositoryURL) },
+                copyVersion: copyVersion,
+                dismiss: { dismiss() }
+            )
+        )
+        .frame(width: 520, height: 500)
+    }
+
+    private var repositoryURL: URL {
+        URL(string: "https://github.com/\(WorkbenchRelease.repository)")!
+    }
+
+    private var aboutModel: AppShellAboutModel {
+        AppShellAboutModel(
+            appName: WorkbenchRelease.appName,
+            versionLine: versionLine,
+            subtitle: "Terminal-first orchestrator for autonomous Ouro agents.",
+            repositoryURL: repositoryURL,
+            iconSystemName: "infinity"
+        )
+    }
+
+    private func copyVersion() {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(versionLine, forType: .string)
     }
 }
 
@@ -10036,118 +10014,29 @@ struct ReleaseUpdateView: View {
     @ObservedObject var model: WorkbenchViewModel
 
     var body: some View {
-        ReleaseUpdateControls(model: model, showTitle: true)
+        WorkbenchReleaseUpdateControls(model: model, showTitle: true)
     }
 }
 
-struct ReleaseUpdateControls: View {
+struct WorkbenchReleaseUpdateControls: View {
     @ObservedObject var model: WorkbenchViewModel
     var showTitle: Bool
 
     var body: some View {
-        VStack(alignment: .center, spacing: 6) {
-            if showTitle {
-                HStack(spacing: 12) {
-                    DashboardRowLabel(title: "Release Updates", systemImage: "arrow.down.app")
-                    updateStatus
-                    updateProgress
-                }
-                HStack(spacing: 8) {
-                    updateButtons
-                }
-            } else {
-                HStack(spacing: 8) {
-                    updateStatus
-                    updateProgress
-                }
-                HStack(spacing: 8) {
-                    updateButtons
-                }
-            }
-            if let status = model.releaseUpdateInstallStatus, model.releaseUpdateIsInstalling {
-                Text(status)
-                    .font(.caption)
-                    .foregroundStyle(SwiftUI.Color.secondary)
-            }
-            if let error = model.releaseUpdateInstallError {
-                Text(error)
-                    .font(.caption)
-                    .foregroundStyle(SwiftUI.Color.orange)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if let snapshot = model.releaseUpdateSnapshot, snapshot.status == .updateAvailable {
-                Text(snapshot.hasInstallableAssets ? "Verified against the release's SHA-256 manifest + code signature before installing. Your running terminals keep running across the update." : "Release is published, but installable app assets were not found.")
-                    .font(.caption)
-                    .foregroundStyle(snapshot.hasInstallableAssets ? SwiftUI.Color.secondary : SwiftUI.Color.orange)
-                    .multilineTextAlignment(.center)
-            }
-        }
-        // Span the full row width so `alignment: .center` actually centers each line.
-        // Without this the VStack shrinks to its widest child and hugs the leading
-        // edge, leaving the "… is current" line visually left-aligned.
-        .frame(maxWidth: .infinity)
-    }
-
-    private var updateStatus: some View {
-        DashboardStatusLine(
-            text: model.releaseUpdateStatusLine,
-            color: model.releaseUpdateStatusColor,
-            // Dashboard row (with title) keeps the status beside its label (leading);
-            // the standalone About/update panel centers it under the centered button.
-            alignment: showTitle ? .leading : .center
+        OuroAppShellUI.ReleaseUpdateControls(
+            state: model.appShellUpdateState,
+            actions: model.appShellUpdateActions,
+            labels: ReleaseUpdateActionLabels(
+                check: "Check for Updates...",
+                review: "Review Update",
+                install: "Install & Relaunch",
+                openRelease: "View Release Notes"
+            ),
+            showTitle: showTitle,
+            centered: !showTitle
         )
-    }
-
-    @ViewBuilder
-    private var updateProgress: some View {
-        if model.releaseUpdateIsChecking || model.releaseUpdateIsInstalling {
-            ProgressView()
-                .controlSize(.small)
-                .fixedSize()
-        }
-    }
-
-    @ViewBuilder
-    private var updateButtons: some View {
-        Button {
-            Task {
-                await model.checkForUpdatesAndPromptInstall()
-            }
-        } label: {
-            Label("Check for Updates…", systemImage: "arrow.clockwise")
-        }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
-        .disabled(model.releaseUpdateIsChecking)
-        .fixedSize()
-
-        if let snapshot = model.releaseUpdateSnapshot,
-           snapshot.status == .updateAvailable,
-           snapshot.hasInstallableAssets {
-            Button {
-                Task { await model.installReleaseUpdate() }
-            } label: {
-                Label("Install & Relaunch", systemImage: "arrow.down.app.fill")
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
-            .disabled(model.releaseUpdateIsInstalling)
-            .fixedSize()
-        }
-
-        // Only offer the release page when there's actually a newer release to look
-        // at — surfacing "Open Release" while you're already current is noise.
-        if model.releaseUpdateURL != nil,
-           model.releaseUpdateSnapshot?.status == .updateAvailable {
-            Button {
-                model.openReleaseUpdate()
-            } label: {
-                Label("View Release Notes", systemImage: "safari")
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .fixedSize()
-        }
+        // Span the full row width so centered settings/about rows stay visually balanced.
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -11565,6 +11454,88 @@ final class WorkbenchViewModel: ObservableObject {
             return nil
         }
         return URL(string: htmlURL)
+    }
+
+    var appShellUpdateState: ReleaseUpdateViewState {
+        ReleaseUpdateViewState(
+            kind: appShellUpdateKind,
+            statusLine: releaseUpdateStatusLine,
+            metadata: appShellUpdateMetadata,
+            detail: appShellUpdateDetail,
+            warning: appShellUpdateWarning,
+            canReviewUpdate: !releaseUpdateIsChecking && updateBadgeText != nil,
+            canInstallUpdate: canInstallReleaseUpdateFromShell,
+            canOpenReleasePage: !releaseUpdateIsChecking && releaseUpdateURL != nil && releaseUpdateSnapshot?.status == .updateAvailable
+        )
+    }
+
+    var appShellUpdateActions: ReleaseUpdateActions {
+        ReleaseUpdateActions(
+            checkForUpdates: { Task { await self.checkForUpdatesAndPromptInstall() } },
+            reviewUpdate: { self.presentUpdatePrompt() },
+            installAndRelaunch: { Task { await self.installReleaseUpdate() } },
+            openReleasePage: { self.openReleaseUpdate() }
+        )
+    }
+
+    private var appShellUpdateKind: ReleaseUpdateStateKind {
+        if releaseUpdateIsChecking { return .checking }
+        if releaseUpdateIsInstalling { return .installing }
+        if releaseUpdateInstallError != nil { return .failed }
+        if stagedUpdateVersion != nil { return .readyToRelaunch }
+        guard let status = releaseUpdateSnapshot?.status else {
+            return .notChecked
+        }
+        switch status {
+        case .current: return .current
+        case .updateAvailable: return .updateAvailable
+        case .unavailable: return .unavailable
+        }
+    }
+
+    private var appShellUpdateMetadata: [ReleaseUpdateMetadataItem] {
+        var items: [ReleaseUpdateMetadataItem] = []
+        if let latest = releaseUpdateSnapshot?.latestReleaseLabelForPrompt ?? stagedUpdateVersion {
+            items.append(ReleaseUpdateMetadataItem(id: "latest", label: "Latest", value: latest))
+        }
+        if let current = releaseUpdateSnapshot?.currentReleaseLabelForPrompt {
+            items.append(ReleaseUpdateMetadataItem(id: "current", label: "Current", value: current))
+        }
+        items.append(ReleaseUpdateMetadataItem(id: "channel", label: "Channel", value: "Direct download"))
+        return items
+    }
+
+    private var appShellUpdateDetail: String? {
+        if releaseUpdateIsChecking {
+            return nil
+        }
+        if releaseUpdateIsInstalling {
+            return releaseUpdateInstallStatus
+        }
+        guard let snapshot = releaseUpdateSnapshot, snapshot.status == .updateAvailable, snapshot.hasInstallableAssets else {
+            return nil
+        }
+        return "Verified against the release's SHA-256 manifest and code signature before installing. Your running terminals keep running across the update."
+    }
+
+    private var appShellUpdateWarning: String? {
+        if releaseUpdateIsChecking {
+            return nil
+        }
+        if let releaseUpdateInstallError {
+            return releaseUpdateInstallError
+        }
+        guard let snapshot = releaseUpdateSnapshot, snapshot.status == .updateAvailable, !snapshot.hasInstallableAssets else {
+            return nil
+        }
+        return "Release is published, but installable app assets were not found."
+    }
+
+    private var canInstallReleaseUpdateFromShell: Bool {
+        if releaseUpdateIsChecking || releaseUpdateIsInstalling { return false }
+        if stagedUpdateVersion != nil { return true }
+        return releaseUpdateSnapshot?.status == .updateAvailable
+            && releaseUpdateSnapshot?.hasInstallableAssets == true
     }
 
     var supportDiagnosticsStatusLine: String {
@@ -14344,6 +14315,7 @@ final class WorkbenchViewModel: ObservableObject {
         guard !releaseUpdateIsChecking else {
             return
         }
+        releaseUpdateInstallError = nil
         releaseUpdateIsChecking = true
         defer {
             releaseUpdateIsChecking = false

@@ -28,6 +28,7 @@ let package = Package(
             name: "OuroWorkbenchApp",
             dependencies: [
                 "OuroWorkbenchCore",
+                .product(name: "OuroAppShellUI", package: "ouro-native-apple-app-shell"),
                 .product(name: "SwiftTerm", package: "SwiftTerm")
             ]
         ),
