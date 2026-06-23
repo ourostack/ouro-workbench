@@ -3,7 +3,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VERSION_FILE="$ROOT_DIR/VERSION"
-RELEASE_SOURCE="$ROOT_DIR/Sources/OuroWorkbenchCore/WorkbenchRelease.swift"
+PACKAGE_SOURCE="$ROOT_DIR/Package.swift"
+eval "$("$ROOT_DIR/scripts/read-workbench-release.sh")"
 
 fail() {
   printf 'Version contract verification failed: %s\n' "$1" >&2
@@ -14,7 +15,20 @@ fail() {
 version="$(tr -d '[:space:]' < "$VERSION_FILE")"
 [[ "$version" =~ ^[0-9]+[.][0-9]+[.][0-9]+([-.][0-9A-Za-z.]+)?$ ]] || fail "VERSION is not semver-like: $version"
 
-source_version="$(sed -n 's/^[[:space:]]*public static let version = "\(.*\)"[[:space:]]*$/\1/p' "$RELEASE_SOURCE" | head -n 1)"
-[[ "$source_version" == "$version" ]] || fail "WorkbenchRelease.version is $source_version, expected $version"
+[[ "$WORKBENCH_VERSION" == "$version" ]] || fail "WorkbenchRelease.version is $WORKBENCH_VERSION, expected $version"
+[[ "$WORKBENCH_BUNDLE_IDENTIFIER" =~ ^[A-Za-z0-9][A-Za-z0-9.-]+$ ]] || fail "bundle identifier is not identifier-like: $WORKBENCH_BUNDLE_IDENTIFIER"
+[[ "$WORKBENCH_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || fail "repository is not owner/repo: $WORKBENCH_REPOSITORY"
+[[ "$WORKBENCH_ARTIFACT_NAME_PREFIX" == "$WORKBENCH_BUNDLE_EXECUTABLE-" ]] || fail "artifact prefix does not derive from bundle executable"
+[[ "$WORKBENCH_MINIMUM_MACOS_VERSION" =~ ^[0-9]+[.][0-9]+$ ]] || fail "minimum macOS version is not major.minor: $WORKBENCH_MINIMUM_MACOS_VERSION"
 
-printf 'Verified version contract: %s\n' "$version"
+grep -F ".executable(name: \"$WORKBENCH_BUNDLE_EXECUTABLE\"" "$PACKAGE_SOURCE" >/dev/null \
+  || fail "Package.swift does not expose executable $WORKBENCH_BUNDLE_EXECUTABLE"
+grep -F ".executable(name: \"$WORKBENCH_MCP_EXECUTABLE\"" "$PACKAGE_SOURCE" >/dev/null \
+  || fail "Package.swift does not expose executable $WORKBENCH_MCP_EXECUTABLE"
+
+if [[ -f "$ROOT_DIR/web/workbench-install.sh" ]]; then
+  grep -F "OURO_WB_REPO:-$WORKBENCH_REPOSITORY" "$ROOT_DIR/web/workbench-install.sh" >/dev/null \
+    || fail "web installer default repository does not match WorkbenchRelease.repository"
+fi
+
+printf 'Verified Workbench release contract: %s (%s, %s)\n' "$version" "$WORKBENCH_BUNDLE_IDENTIFIER" "$WORKBENCH_REPOSITORY"

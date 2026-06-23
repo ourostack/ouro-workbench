@@ -3,7 +3,47 @@ import XCTest
 @testable import OuroWorkbenchCore
 
 final class ReleaseUpdateTests: XCTestCase {
-    func testSnapshotReportsUpdateAvailableFromLatestPublishedRelease() throws {
+    func testDefaultConfigurationBuildsWorkbenchShellConfiguration() {
+        let defaultChecker = ReleaseUpdateChecker()
+        let configuration = ReleaseUpdateConfiguration(currentBuild: "123")
+        let identity = configuration.appShellIdentity
+        let shellConfiguration = configuration.appShellConfiguration
+
+        XCTAssertEqual(defaultChecker.configuration.currentVersion, WorkbenchRelease.version)
+        XCTAssertEqual(identity.appName, WorkbenchRelease.appName)
+        XCTAssertEqual(identity.bundleIdentifier, WorkbenchRelease.bundleIdentifier)
+        XCTAssertEqual(identity.repository, WorkbenchRelease.repository)
+        XCTAssertEqual(identity.version, WorkbenchRelease.version)
+        XCTAssertEqual(identity.build, "123")
+        XCTAssertEqual(identity.userAgent, WorkbenchRelease.userAgent(version: WorkbenchRelease.version))
+        XCTAssertEqual(configuration.releasesURL, identity.releasesAPIURL)
+        XCTAssertEqual(shellConfiguration.identity, identity)
+        XCTAssertEqual(shellConfiguration.releasePolicy, .workbench(namePrefix: WorkbenchRelease.artifactNamePrefix))
+        XCTAssertEqual(shellConfiguration.releasesURL, identity.releasesAPIURL)
+        XCTAssertTrue(shellConfiguration.includePrereleases)
+    }
+
+    func testCustomConfigurationFlowsIntoWorkbenchIdentityAndReleaseURL() {
+        let releasesURL = URL(string: "https://updates.example.test/workbench/releases")!
+        let configuration = ReleaseUpdateConfiguration(
+            repository: "example/workbench",
+            currentVersion: "9.8.7",
+            currentBuild: "456",
+            releasesURL: releasesURL
+        )
+
+        XCTAssertEqual(configuration.appShellIdentity.repository, "example/workbench")
+        XCTAssertEqual(configuration.appShellIdentity.version, "9.8.7")
+        XCTAssertEqual(configuration.appShellIdentity.build, "456")
+        XCTAssertEqual(configuration.appShellIdentity.userAgent, "OuroWorkbench/9.8.7")
+        XCTAssertEqual(configuration.appShellConfiguration.repository, "example/workbench")
+        XCTAssertEqual(configuration.appShellConfiguration.currentVersion, "9.8.7")
+        XCTAssertEqual(configuration.appShellConfiguration.currentBuild, "456")
+        XCTAssertEqual(configuration.appShellConfiguration.releasesURL, releasesURL)
+        XCTAssertEqual(ReleaseUpdateChecker(configuration: configuration).configuration, configuration)
+    }
+
+    func testSnapshotHelpersUseWorkbenchPolicyIncludingPrereleasesAndBuildAssets() throws {
         let data = Data("""
         [
           {
@@ -15,290 +55,116 @@ final class ReleaseUpdateTests: XCTestCase {
               {"name": "OuroWorkbench-0.2.0-build.120-abcdef0.zip", "browser_download_url": "https://example.test/app.zip", "size": 100},
               {"name": "OuroWorkbench-0.2.0-build.120-abcdef0.manifest.json", "browser_download_url": "https://example.test/manifest.json", "size": 50}
             ]
-          }
-        ]
-        """.utf8)
-
-        let snapshot = try ReleaseUpdateChecker.snapshot(from: data, currentVersion: "0.1.0")
-
-        XCTAssertEqual(snapshot.status, .updateAvailable)
-        XCTAssertEqual(snapshot.latestVersion, "0.2.0")
-        XCTAssertEqual(snapshot.tagName, "v0.2.0")
-        XCTAssertTrue(snapshot.hasInstallableAssets)
-    }
-
-    func testSnapshotReportsCurrentWhenLatestIsNotNewer() throws {
-        let data = Data("""
-        [
+          },
           {
-            "tag_name": "v0.1.0",
-            "html_url": "https://github.com/ourostack/ouro-workbench/releases/tag/v0.1.0",
+            "tag_name": "v0.1.9",
+            "html_url": "https://github.com/ourostack/ouro-workbench/releases/tag/v0.1.9",
             "draft": false,
-            "prerelease": true,
-            "assets": []
-          }
-        ]
-        """.utf8)
-
-        let snapshot = try ReleaseUpdateChecker.snapshot(from: data, currentVersion: "0.1.0")
-
-        XCTAssertEqual(snapshot.status, .current)
-        XCTAssertEqual(snapshot.detail, "Version 0.1.0 is current.")
-    }
-
-    func testSnapshotReportsUpdateAvailableWhenSameVersionHasNewerBuild() throws {
-        let data = Data("""
-        [
-          {
-            "tag_name": "v0.1.155",
-            "html_url": "https://github.com/ourostack/ouro-workbench/releases/tag/v0.1.155",
-            "draft": false,
-            "prerelease": true,
-            "assets": [
-              {"name": "OuroWorkbench-0.1.155-build.340-cdf1190.zip", "browser_download_url": "https://example.test/app.zip", "size": 100},
-              {"name": "OuroWorkbench-0.1.155-build.340-cdf1190.manifest.json", "browser_download_url": "https://example.test/manifest.json", "size": 50}
-            ]
-          }
-        ]
-        """.utf8)
-
-        let snapshot = try ReleaseUpdateChecker.snapshot(from: data, currentVersion: "0.1.155", currentBuild: "238")
-
-        XCTAssertEqual(snapshot.status, .updateAvailable)
-        XCTAssertEqual(snapshot.latestVersion, "0.1.155")
-        XCTAssertEqual(snapshot.latestBuild, "340")
-        XCTAssertEqual(snapshot.detail, "Version 0.1.155 (build 340) is available.")
-        XCTAssertEqual(snapshot.currentReleaseLabel, "Version 0.1.155 (build 238)")
-        XCTAssertEqual(snapshot.currentReleaseLabelForPrompt, "0.1.155 (build 238)")
-        XCTAssertEqual(snapshot.latestReleaseLabel, "Version 0.1.155 (build 340)")
-        XCTAssertEqual(snapshot.latestReleaseLabelForPrompt, "0.1.155 (build 340)")
-    }
-
-    func testSnapshotLabelsAndAssetsWhenNoLatestReleaseExists() {
-        let snapshot = ReleaseUpdateSnapshot(
-            status: .unavailable,
-            currentVersion: "0.1.155",
-            currentBuild: nil,
-            latestVersion: nil,
-            latestBuild: nil,
-            tagName: nil,
-            htmlURL: nil,
-            assets: [
-                ReleaseUpdateAsset(name: "OuroWorkbench-0.1.155-build.238-app.zip", downloadURL: "https://example.test/app.zip", size: 10)
-            ],
-            detail: "No release"
-        )
-
-        XCTAssertEqual(snapshot.installableAssets, [])
-        XCTAssertFalse(snapshot.hasInstallableAssets)
-        XCTAssertEqual(snapshot.currentReleaseLabel, "Version 0.1.155")
-        XCTAssertEqual(snapshot.currentReleaseLabelForPrompt, "0.1.155")
-        XCTAssertNil(snapshot.latestReleaseLabel)
-        XCTAssertNil(snapshot.latestReleaseLabelForPrompt)
-    }
-
-    func testLatestBuildIgnoresNonBuildReleaseAssets() throws {
-        let data = Data("""
-        [
-          {
-            "tag_name": "v0.1.155",
-            "html_url": "https://github.com/ourostack/ouro-workbench/releases/tag/v0.1.155",
-            "draft": false,
-            "prerelease": true,
-            "assets": [
-              {"name": "README.txt", "browser_download_url": "https://example.test/readme.txt", "size": 1},
-              {"name": "OtherWorkbench-0.1.155-build.999.zip", "browser_download_url": "https://example.test/other.zip", "size": 1},
-              {"name": "OuroWorkbench-0.1.155-build.-bad.zip", "browser_download_url": "https://example.test/bad.zip", "size": 1}
-            ]
-          }
-        ]
-        """.utf8)
-
-        let snapshot = try ReleaseUpdateChecker.snapshot(from: data, currentVersion: "0.1.154")
-
-        XCTAssertEqual(snapshot.status, .updateAvailable)
-        XCTAssertNil(snapshot.latestBuild)
-        XCTAssertFalse(snapshot.hasInstallableAssets)
-    }
-
-    func testSnapshotReportsCurrentWhenSameVersionBuildIsNotNewer() throws {
-        let data = Data("""
-        [
-          {
-            "tag_name": "v0.1.155",
-            "html_url": "https://github.com/ourostack/ouro-workbench/releases/tag/v0.1.155",
-            "draft": false,
-            "prerelease": true,
-            "assets": [
-              {"name": "OuroWorkbench-0.1.155-build.238-8488f1c.zip", "browser_download_url": "https://example.test/app.zip", "size": 100},
-              {"name": "OuroWorkbench-0.1.155-build.238-8488f1c.manifest.json", "browser_download_url": "https://example.test/manifest.json", "size": 50}
-            ]
-          }
-        ]
-        """.utf8)
-
-        let snapshot = try ReleaseUpdateChecker.snapshot(from: data, currentVersion: "0.1.155", currentBuild: "238")
-
-        XCTAssertEqual(snapshot.status, .current)
-        XCTAssertEqual(snapshot.latestBuild, "238")
-        XCTAssertEqual(snapshot.detail, "Version 0.1.155 (build 238) is current.")
-    }
-
-    func testSnapshotIgnoresBuildsFromAssetsForOtherVersions() throws {
-        let data = Data("""
-        [
-          {
-            "tag_name": "v0.1.155",
-            "html_url": "https://github.com/ourostack/ouro-workbench/releases/tag/v0.1.155",
-            "draft": false,
-            "prerelease": true,
-            "assets": [
-              {"name": "OuroWorkbench-0.1.154-build.999-deadbee.zip", "browser_download_url": "https://example.test/old.zip", "size": 100},
-              {"name": "OuroWorkbench-0.1.155-build.238-8488f1c.zip", "browser_download_url": "https://example.test/app.zip", "size": 100},
-              {"name": "OuroWorkbench-0.1.155-build.238-8488f1c.manifest.json", "browser_download_url": "https://example.test/manifest.json", "size": 50}
-            ]
-          }
-        ]
-        """.utf8)
-
-        let snapshot = try ReleaseUpdateChecker.snapshot(from: data, currentVersion: "0.1.155", currentBuild: "238")
-
-        XCTAssertEqual(snapshot.status, .current)
-        XCTAssertEqual(snapshot.latestBuild, "238")
-    }
-
-    func testSnapshotIgnoresDraftsAndReportsNoPublishedRelease() throws {
-        let data = Data("""
-        [
-          {
-            "tag_name": "v1.0.0",
-            "html_url": "https://github.com/ourostack/ouro-workbench/releases/tag/v1.0.0",
-            "draft": true,
             "prerelease": false,
             "assets": []
           }
         ]
         """.utf8)
+        let configuration = ReleaseUpdateConfiguration(currentVersion: "0.1.0", currentBuild: "1")
 
-        let snapshot = try ReleaseUpdateChecker.snapshot(from: data, currentVersion: "0.1.0")
+        let configuredSnapshot = try ReleaseUpdateChecker.snapshot(from: data, configuration: configuration)
+        let convenienceSnapshot = try ReleaseUpdateChecker.snapshot(from: data, currentVersion: "0.1.0", currentBuild: "1")
 
-        XCTAssertEqual(snapshot.status, .unavailable)
-        XCTAssertNil(snapshot.latestVersion)
-        XCTAssertEqual(snapshot.detail, "No published release found.")
+        for snapshot in [configuredSnapshot, convenienceSnapshot] {
+            XCTAssertEqual(snapshot.tagName, "v0.2.0")
+            XCTAssertEqual(snapshot.latestBuild, "120")
+            XCTAssertTrue(snapshot.hasInstallableAssets)
+            XCTAssertEqual(snapshot.installableAssets.map(\.name), [
+                "OuroWorkbench-0.2.0-build.120-abcdef0.zip",
+                "OuroWorkbench-0.2.0-build.120-abcdef0.manifest.json"
+            ])
+        }
     }
 
-    func testAsyncCheckReturnsUnavailableSnapshotOnNetworkFailure() async {
-        let checker = ReleaseUpdateChecker { _ in
-            throw ReleaseUpdateError.badResponse
+    func testCheckUsesConfiguredReleaseURLAndFailureKeepsWorkbenchPolicy() async {
+        let releasesURL = URL(string: "https://updates.example.test/workbench/releases")!
+        let configuration = ReleaseUpdateConfiguration(
+            repository: "example/workbench",
+            currentVersion: "0.1.0",
+            currentBuild: "5",
+            releasesURL: releasesURL
+        )
+        let checker = ReleaseUpdateChecker(configuration: configuration) { url in
+            XCTAssertEqual(url, releasesURL)
+            return Data("""
+            [
+              {
+                "tag_name": "v0.2.0",
+                "html_url": "https://github.com/ourostack/ouro-workbench/releases/tag/v0.2.0",
+                "draft": false,
+                "prerelease": true,
+                "assets": []
+              }
+            ]
+            """.utf8)
         }
 
         let snapshot = await checker.check()
 
-        XCTAssertEqual(snapshot.status, .unavailable)
-        XCTAssertEqual(snapshot.currentVersion, WorkbenchRelease.version)
-        XCTAssertTrue(snapshot.detail.contains("Release update check failed"))
+        XCTAssertEqual(snapshot.currentVersion, "0.1.0")
+        XCTAssertEqual(snapshot.latestVersion, "0.2.0")
+
+        let failureChecker = ReleaseUpdateChecker(configuration: configuration) { _ in
+            throw ReleaseUpdateError.badResponse
+        }
+        let failure = await failureChecker.check()
+
+        XCTAssertEqual(failure.status, .unavailable)
+        XCTAssertEqual(failure.currentVersion, "0.1.0")
+        XCTAssertEqual(failure.currentBuild, "5")
+        XCTAssertTrue(failure.detail.contains("Release update check failed"))
+        XCTAssertEqual(
+            failure.assetNamingPolicy.isInstallableAssetName(
+                "OuroWorkbench-0.2.0-build.120-abcdef0.zip",
+                version: "0.2.0",
+                build: "120"
+            ),
+            true
+        )
     }
 
-    func testAsyncCheckUsesConfiguredVersionAndLoadedReleaseData() async throws {
-        let defaultChecker = ReleaseUpdateChecker()
-        XCTAssertEqual(defaultChecker.configuration.currentVersion, WorkbenchRelease.version)
-        let releasesURL = URL(string: "https://coverage-batch-2.test/releases")!
-        let configuredDefaultLoader = ReleaseUpdateChecker(
-            configuration: ReleaseUpdateConfiguration(
-                repository: "example/repo",
-                currentVersion: "0.1.0",
-                releasesURL: releasesURL
-            )
-        )
-        XCTAssertEqual(configuredDefaultLoader.configuration.releasesURL, releasesURL)
+    func testDefaultDataLoaderAddsWorkbenchHeadersAndMapsBadStatus() async throws {
         URLProtocol.registerClass(CoverageBatch2URLProtocol.self)
         defer {
             CoverageBatch2URLProtocol.reset()
             URLProtocol.unregisterClass(CoverageBatch2URLProtocol.self)
         }
-        CoverageBatch2URLProtocol.handler = { request in
-            XCTAssertEqual(request.url, releasesURL)
-            return (
-                HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
-                Data("""
-                [
-                  {
-                    "tag_name": "v0.2.0",
-                    "html_url": "https://github.com/ourostack/ouro-workbench/releases/tag/v0.2.0",
-                    "draft": false,
-                    "prerelease": false,
-                    "assets": []
-                  }
-                ]
-                """.utf8)
-            )
-        }
-        let configuredDefaultSnapshot = await configuredDefaultLoader.check()
-        XCTAssertEqual(configuredDefaultSnapshot.status, .updateAvailable)
-
-        let checker = ReleaseUpdateChecker(
-            configuration: ReleaseUpdateConfiguration(
-                repository: "example/repo",
-                currentVersion: "0.1.0",
-                releasesURL: releasesURL
-            ),
-            dataLoader: { url in
-                XCTAssertEqual(url, releasesURL)
-                return Data("""
-                [
-                  {"tag_name":"v0.1.1","html_url":"https://example.test/v0.1.1","draft":false,"prerelease":false,"assets":[]}
-                ]
-                """.utf8)
-            }
-        )
-
-        let snapshot = await checker.check()
-
-        XCTAssertEqual(snapshot.status, .updateAvailable)
-        XCTAssertEqual(snapshot.currentVersion, "0.1.0")
-        XCTAssertEqual(snapshot.latestVersion, "0.1.1")
-    }
-
-    func testSnapshotReportsUnavailableWhenVersionCannotBeCompared() throws {
-        let data = Data("""
+        let releaseData = Data("""
         [
-          {"tag_name":"release-candidate","html_url":"https://example.test/rc","draft":false,"prerelease":true,"assets":[]}
+          {
+            "tag_name": "v9.9.9",
+            "html_url": "https://github.com/ourostack/ouro-workbench/releases/tag/v9.9.9",
+            "draft": false,
+            "prerelease": true,
+            "assets": []
+          }
         ]
         """.utf8)
 
-        let snapshot = try ReleaseUpdateChecker.snapshot(from: data, currentVersion: "0.1.0")
-
-        XCTAssertEqual(snapshot.status, .unavailable)
-        XCTAssertEqual(snapshot.latestVersion, "release-candidate")
-        XCTAssertEqual(snapshot.detail, "Latest release release-candidate could not be compared to 0.1.0.")
-    }
-
-    func testSemanticVersionComparisonCoversMajorMinorAndPatch() {
-        XCTAssertLessThan(SemanticVersion("2.0.0")!, SemanticVersion("3.0.0")!)
-        XCTAssertLessThan(SemanticVersion("2.1.0")!, SemanticVersion("2.2.0")!)
-        XCTAssertLessThan(SemanticVersion("2.1.0-build.1")!, SemanticVersion("2.1.1")!)
-        XCTAssertNil(SemanticVersion("not-semver"))
-        XCTAssertNil(SemanticVersion(""))
-    }
-
-    func testDefaultDataLoaderReturnsDataAndMapsBadStatus() async throws {
-        URLProtocol.registerClass(CoverageBatch2URLProtocol.self)
-        defer {
-            CoverageBatch2URLProtocol.reset()
-            URLProtocol.unregisterClass(CoverageBatch2URLProtocol.self)
-        }
-
         CoverageBatch2URLProtocol.handler = { request in
+            XCTAssertEqual(request.url, URL(string: "https://coverage-batch-2.test/releases")!)
             XCTAssertEqual(request.value(forHTTPHeaderField: "Accept"), "application/vnd.github+json")
             XCTAssertEqual(request.value(forHTTPHeaderField: "User-Agent"), "OuroWorkbench/\(WorkbenchRelease.version)")
             return (
                 HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!,
-                Data("[]".utf8)
+                releaseData
             )
         }
 
+        let checker = ReleaseUpdateChecker(
+            configuration: ReleaseUpdateConfiguration(releasesURL: URL(string: "https://coverage-batch-2.test/releases")!)
+        )
+        let snapshot = await checker.check()
+        XCTAssertEqual(snapshot.status, .updateAvailable)
+        XCTAssertEqual(snapshot.latestVersion, "9.9.9")
+
         let data = try await ReleaseUpdateChecker.defaultDataLoader(url: URL(string: "https://coverage-batch-2.test/releases")!)
-        XCTAssertEqual(String(decoding: data, as: UTF8.self), "[]")
+        XCTAssertEqual(data, releaseData)
 
         CoverageBatch2URLProtocol.handler = { request in
             (HTTPURLResponse(url: request.url!, statusCode: 500, httpVersion: nil, headerFields: nil)!, Data())

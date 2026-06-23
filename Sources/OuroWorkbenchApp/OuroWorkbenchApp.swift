@@ -2,6 +2,7 @@
 import AppKit
 import OuroAppShellUI
 import OuroWorkbenchCore
+import OuroWorkbenchShellAdapter
 import SwiftTerm
 import SwiftUI
 import UniformTypeIdentifiers
@@ -2145,8 +2146,8 @@ struct AboutSheet: View {
         Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "dev"
     }
 
-    private var versionLine: String {
-        "Version \(WorkbenchRelease.version) - Build \(buildHash)"
+    private var aboutPresentation: WorkbenchShellAboutPresentation {
+        WorkbenchShellAboutPresentation(buildHash: buildHash)
     }
 
     var body: some View {
@@ -2155,7 +2156,7 @@ struct AboutSheet: View {
             updateState: model.appShellUpdateState,
             updateActions: model.appShellUpdateActions,
             aboutActions: AppShellAboutActions(
-                openRepository: { NSWorkspace.shared.open(repositoryURL) },
+                openRepository: { NSWorkspace.shared.open(aboutPresentation.repositoryURL) },
                 copyVersion: copyVersion,
                 dismiss: { dismiss() }
             )
@@ -2163,24 +2164,14 @@ struct AboutSheet: View {
         .frame(width: 520, height: 500)
     }
 
-    private var repositoryURL: URL {
-        URL(string: "https://github.com/\(WorkbenchRelease.repository)")!
-    }
-
     private var aboutModel: AppShellAboutModel {
-        AppShellAboutModel(
-            appName: WorkbenchRelease.appName,
-            versionLine: versionLine,
-            subtitle: "Terminal-first orchestrator for autonomous Ouro agents.",
-            repositoryURL: repositoryURL,
-            iconSystemName: "infinity"
-        )
+        aboutPresentation.model
     }
 
     private func copyVersion() {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.setString(versionLine, forType: .string)
+        pasteboard.setString(aboutPresentation.versionLine, forType: .string)
     }
 }
 
@@ -11579,23 +11570,11 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     var releaseUpdateURL: URL? {
-        guard let htmlURL = releaseUpdateSnapshot?.htmlURL else {
-            return nil
-        }
-        return URL(string: htmlURL)
+        appShellUpdatePresentation.releaseURL
     }
 
     var appShellUpdateState: ReleaseUpdateViewState {
-        ReleaseUpdateViewState(
-            kind: appShellUpdateKind,
-            statusLine: releaseUpdateStatusLine,
-            metadata: appShellUpdateMetadata,
-            detail: appShellUpdateDetail,
-            warning: appShellUpdateWarning,
-            canReviewUpdate: !releaseUpdateIsChecking && updateBadgeText != nil,
-            canInstallUpdate: canInstallReleaseUpdateFromShell,
-            canOpenReleasePage: !releaseUpdateIsChecking && releaseUpdateURL != nil && releaseUpdateSnapshot?.status == .updateAvailable
-        )
+        appShellUpdatePresentation.state
     }
 
     var appShellUpdateActions: ReleaseUpdateActions {
@@ -11607,64 +11586,15 @@ final class WorkbenchViewModel: ObservableObject {
         )
     }
 
-    private var appShellUpdateKind: ReleaseUpdateStateKind {
-        if releaseUpdateIsChecking { return .checking }
-        if releaseUpdateIsInstalling { return .installing }
-        if releaseUpdateInstallError != nil { return .failed }
-        if stagedUpdateVersion != nil { return .readyToRelaunch }
-        guard let status = releaseUpdateSnapshot?.status else {
-            return .notChecked
-        }
-        switch status {
-        case .current: return .current
-        case .updateAvailable: return .updateAvailable
-        case .unavailable: return .unavailable
-        }
-    }
-
-    private var appShellUpdateMetadata: [ReleaseUpdateMetadataItem] {
-        var items: [ReleaseUpdateMetadataItem] = []
-        if let latest = releaseUpdateSnapshot?.latestReleaseLabelForPrompt ?? stagedUpdateVersion {
-            items.append(ReleaseUpdateMetadataItem(id: "latest", label: "Latest", value: latest))
-        }
-        if let current = releaseUpdateSnapshot?.currentReleaseLabelForPrompt {
-            items.append(ReleaseUpdateMetadataItem(id: "current", label: "Current", value: current))
-        }
-        items.append(ReleaseUpdateMetadataItem(id: "channel", label: "Channel", value: "Direct download"))
-        return items
-    }
-
-    private var appShellUpdateDetail: String? {
-        if releaseUpdateIsChecking {
-            return nil
-        }
-        if releaseUpdateIsInstalling {
-            return releaseUpdateInstallStatus
-        }
-        guard let snapshot = releaseUpdateSnapshot, snapshot.status == .updateAvailable, snapshot.hasInstallableAssets else {
-            return nil
-        }
-        return "Verified against the release's SHA-256 manifest and code signature before installing. Your running terminals keep running across the update."
-    }
-
-    private var appShellUpdateWarning: String? {
-        if releaseUpdateIsChecking {
-            return nil
-        }
-        if let releaseUpdateInstallError {
-            return releaseUpdateInstallError
-        }
-        guard let snapshot = releaseUpdateSnapshot, snapshot.status == .updateAvailable, !snapshot.hasInstallableAssets else {
-            return nil
-        }
-        return "Release is published, but installable app assets were not found."
-    }
-
-    private var canInstallReleaseUpdateFromShell: Bool {
-        if releaseUpdateIsChecking || releaseUpdateIsInstalling { return false }
-        if stagedUpdateVersion != nil { return true }
-        return releaseUpdateSnapshot?.status == .updateAvailable
-            && releaseUpdateSnapshot?.hasInstallableAssets == true
+    private var appShellUpdatePresentation: WorkbenchShellUpdatePresentation {
+        WorkbenchShellUpdatePresenter.presentation(
+            snapshot: releaseUpdateSnapshot,
+            isChecking: releaseUpdateIsChecking,
+            isInstalling: releaseUpdateIsInstalling,
+            installStatus: releaseUpdateInstallStatus,
+            installError: releaseUpdateInstallError,
+            stagedUpdateVersion: stagedUpdateVersion
+        )
     }
 
     var supportDiagnosticsStatusLine: String {
@@ -14595,26 +14525,12 @@ final class WorkbenchViewModel: ObservableObject {
     /// Prefers a fully-staged version (ready to install instantly) but also
     /// shows as soon as an installable update is merely *known*.
     var updateBadgeText: String? {
-        if let version = stagedUpdateVersion {
-            return "Update \(version)"
-        }
-        if let snapshot = releaseUpdateSnapshot,
-           snapshot.status == .updateAvailable,
-           snapshot.hasInstallableAssets,
-           let release = snapshot.latestReleaseLabelForPrompt {
-            return "Update \(release)"
-        }
-        return nil
+        appShellUpdatePresentation.badgeText
     }
 
     /// Badge tap / "review update" → reuse the Software Update dialog.
     func presentUpdatePrompt() {
-        if let version = stagedUpdateVersion {
-            updatePrompt = .installable(release: version)
-        } else if let snapshot = releaseUpdateSnapshot,
-                  snapshot.status == .updateAvailable,
-                  snapshot.hasInstallableAssets,
-                  let release = snapshot.latestReleaseLabelForPrompt {
+        if let release = appShellUpdatePresentation.promptRelease {
             updatePrompt = .installable(release: release)
         }
     }

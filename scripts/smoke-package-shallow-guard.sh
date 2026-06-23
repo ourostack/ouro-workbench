@@ -7,13 +7,15 @@ trap 'rm -rf "$TEMP_ROOT"' EXIT
 
 SOURCE_REPO="$TEMP_ROOT/source"
 SHALLOW_REPO="$TEMP_ROOT/shallow"
-mkdir -p "$SOURCE_REPO/scripts"
+mkdir -p "$SOURCE_REPO/scripts" "$SOURCE_REPO/Sources/OuroWorkbenchCore"
 
 cp "$ROOT_DIR/scripts/package-app.sh" "$SOURCE_REPO/scripts/package-app.sh"
+cp "$ROOT_DIR/scripts/read-workbench-release.sh" "$SOURCE_REPO/scripts/read-workbench-release.sh"
+cp "$ROOT_DIR/Sources/OuroWorkbenchCore/WorkbenchRelease.swift" "$SOURCE_REPO/Sources/OuroWorkbenchCore/WorkbenchRelease.swift"
 cp "$ROOT_DIR/VERSION" "$SOURCE_REPO/VERSION"
 
 git -C "$SOURCE_REPO" init --quiet
-git -C "$SOURCE_REPO" add VERSION scripts/package-app.sh
+git -C "$SOURCE_REPO" add VERSION scripts/package-app.sh scripts/read-workbench-release.sh Sources/OuroWorkbenchCore/WorkbenchRelease.swift
 git -C "$SOURCE_REPO" \
   -c user.name="Ouro Workbench CI" \
   -c user.email="workbench@example.invalid" \

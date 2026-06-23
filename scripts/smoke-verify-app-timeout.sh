@@ -2,10 +2,11 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+eval "$("$ROOT_DIR/scripts/read-workbench-release.sh")"
 TEMP_ROOT="$(mktemp -d)"
 trap 'rm -rf "$TEMP_ROOT"' EXIT
 
-APP_DIR="$TEMP_ROOT/Ouro Workbench.app"
+APP_DIR="$TEMP_ROOT/$WORKBENCH_APP_NAME.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
@@ -18,11 +19,11 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
 <plist version="1.0">
 <dict>
   <key>CFBundleExecutable</key>
-  <string>OuroWorkbench</string>
+  <string>$WORKBENCH_BUNDLE_EXECUTABLE</string>
   <key>CFBundleIdentifier</key>
-  <string>com.ourostack.workbench</string>
+  <string>$WORKBENCH_BUNDLE_IDENTIFIER</string>
   <key>CFBundleIconFile</key>
-  <string>OuroWorkbench</string>
+  <string>$WORKBENCH_BUNDLE_EXECUTABLE</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
@@ -30,14 +31,14 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
   <key>CFBundleVersion</key>
   <string>1</string>
   <key>LSMinimumSystemVersion</key>
-  <string>14.0</string>
+  <string>$WORKBENCH_MINIMUM_MACOS_VERSION</string>
 </dict>
 </plist>
 PLIST
 
-printf 'fake icon for timeout smoke\n' > "$RESOURCES_DIR/OuroWorkbench.icns"
+printf 'fake icon for timeout smoke\n' > "$RESOURCES_DIR/$WORKBENCH_BUNDLE_EXECUTABLE.icns"
 
-cat > "$MACOS_DIR/OuroWorkbench" <<'SH'
+cat > "$MACOS_DIR/$WORKBENCH_BUNDLE_EXECUTABLE" <<'SH'
 #!/usr/bin/env bash
 if [[ "${1:-}" == "--smoke-launch" ]]; then
   trap 'exit 0' TERM
@@ -48,10 +49,10 @@ fi
 exit 1
 SH
 
-cat > "$MACOS_DIR/OuroWorkbenchMCP" <<SH
+cat > "$MACOS_DIR/$WORKBENCH_MCP_EXECUTABLE" <<SH
 #!/usr/bin/env bash
 cat >/dev/null
-printf '%s\n' '{"jsonrpc":"2.0","id":1,"result":{"serverInfo":{"name":"ouro-workbench","version":"$version"}}}'
+printf '%s\n' '{"jsonrpc":"2.0","id":1,"result":{"serverInfo":{"name":"$WORKBENCH_MCP_SERVER_NAME","version":"$version"}}}'
 SH
 
 cat > "$MACOS_DIR/Tools/screen" <<'SH'
@@ -59,7 +60,7 @@ cat > "$MACOS_DIR/Tools/screen" <<'SH'
 exit 0
 SH
 
-chmod +x "$MACOS_DIR/OuroWorkbench" "$MACOS_DIR/OuroWorkbenchMCP" "$MACOS_DIR/Tools/screen"
+chmod +x "$MACOS_DIR/$WORKBENCH_BUNDLE_EXECUTABLE" "$MACOS_DIR/$WORKBENCH_MCP_EXECUTABLE" "$MACOS_DIR/Tools/screen"
 
 cat > "$RESOURCES_DIR/collect-support-diagnostics.sh" <<'SH'
 #!/usr/bin/env bash

@@ -2,7 +2,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_NAME="Ouro Workbench.app"
+eval "$("$ROOT_DIR/scripts/read-workbench-release.sh")"
+APP_NAME="$WORKBENCH_APP_NAME.app"
 TEMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/ouro-workbench-install-rollback.XXXXXX")"
 INSTALL_DIR="$TEMP_ROOT/Applications"
 COUNT_FILE="$TEMP_ROOT/verify-count"
