@@ -10319,6 +10319,16 @@ struct WorkbenchImportApplyResult: Equatable {
     var createdCount: Int
     var groupNames: [String]
     var skippedNames: [String]
+    /// Terminals skipped because a `(projectId, name)` match was ALREADY in the
+    /// workbench (a re-import no-op) — counted SEPARATELY from `skippedNames`
+    /// (which is reserved for genuine error-skips like "couldn't create"). Surfaced
+    /// in `detail` as "N already present" so a re-import of an edited
+    /// `.workbench.json` doesn't SILENTLY drop the already-present terminals; the
+    /// operator sees they were recognized, not lost. (Whether a matched terminal's
+    /// changed command/cwd/trust should be UPDATED is a deferred product decision —
+    /// this only makes the skip visible.) Additive default keeps existing
+    /// constructions valid.
+    var alreadyPresentCount: Int = 0
     var firstSelectedEntryID: UUID?
     /// Whether the durable `store.save(state)` that backs this import actually
     /// landed. The import-apply paths thread the view-model `save()`'s Bool here
@@ -10351,6 +10361,11 @@ struct WorkbenchImportApplyResult: Equatable {
         }
         if !skippedNames.isEmpty {
             parts.append("Skipped: \(skippedNames.joined(separator: ", "))")
+        }
+        // Surface re-import no-ops so an already-present terminal whose entry in the
+        // file changed isn't a SILENT drop — the operator sees it was recognized.
+        if alreadyPresentCount > 0 {
+            parts.append("\(alreadyPresentCount) already present")
         }
         if hasImports {
             parts.append(WorkbenchOnboardingNarrative.duplicateCleanup)
@@ -13330,6 +13345,10 @@ final class WorkbenchViewModel: ObservableObject {
 
         var createdEntries: [ProcessEntry] = []
         var skippedNames: [String] = []
+        // Re-import no-ops (a (projectId,name) match already in the workbench) are
+        // tallied here, distinct from `skippedNames` error-skips, so the summary can
+        // say "N already present" instead of silently dropping them.
+        var alreadyPresentCount = 0
         for terminal in config.terminals {
             let workingDirectory = loader.resolvedWorkingDirectory(for: terminal, rootPath: rootPath)
             let trust: ProcessTrust = (terminal.trust ?? "").lowercased() == "trusted"
@@ -13340,7 +13359,11 @@ final class WorkbenchViewModel: ObservableObject {
                 existing.projectId == project.id && existing.name == terminal.name
             }
             if alreadyPresent {
-                skippedNames.append(terminal.name)
+                // Already in the workbench — count it (surfaced as "N already
+                // present") and skip. We do NOT update the existing entry from the
+                // file's (possibly edited) command/cwd/trust/autoResume: whether a
+                // matched terminal should be updated is a deferred product decision.
+                alreadyPresentCount += 1
                 continue
             }
             let draft = CustomTerminalSessionDraft(
@@ -13381,16 +13404,20 @@ final class WorkbenchViewModel: ObservableObject {
             createdCount: createdEntries.count,
             groupNames: createdEntries.isEmpty ? [] : [groupName],
             skippedNames: skippedNames,
+            alreadyPresentCount: alreadyPresentCount,
             firstSelectedEntryID: createdEntries.first?.id,
             persisted: persisted
         )
         lastImportSummary = result
         let saveNote = persisted ? "" : " (not saved to disk — will be lost on quit)"
+        let alreadyPresentNote = alreadyPresentCount > 0
+            ? ", \(alreadyPresentCount) already present"
+            : ""
         recordActionLog(
             source: "native",
             action: "openWorkspaceConfig",
             targetName: groupName,
-            result: "Workspace \(groupName) created \(createdEntries.count) terminals (skipped \(skippedNames.count))\(saveNote)",
+            result: "Workspace \(groupName) created \(createdEntries.count) terminals (skipped \(skippedNames.count)\(alreadyPresentNote))\(saveNote)",
             succeeded: persisted
         )
         return result
@@ -13424,20 +13451,31 @@ final class WorkbenchViewModel: ObservableObject {
         let config: WorkbenchWorkspaceConfig
         do {
             config = try loader.load(directoryPath: directoryPath)
-        } catch WorkbenchWorkspaceConfigError.configFileMissing(let path) {
-            errorMessage = "No .workbench.json found at \(path)"
-            // The user opened a recent that's no longer valid — drop it from
-            // the recent list so the menu doesn't keep showing a dead path.
-            forgetRecentWorkspace(path: directoryPath)
-            return nil
-        } catch WorkbenchWorkspaceConfigError.malformedJSON(let detail) {
-            errorMessage = "Couldn't parse .workbench.json: \(detail)"
-            return nil
-        } catch WorkbenchWorkspaceConfigError.noTerminals {
-            errorMessage = ".workbench.json must declare at least one terminal"
+        } catch let configError as WorkbenchWorkspaceConfigError {
+            switch configError {
+            case .configFileMissing(let path):
+                errorMessage = "No .workbench.json found at \(path)"
+            case .malformedJSON(let detail):
+                errorMessage = "Couldn't parse .workbench.json: \(detail)"
+            case .noTerminals:
+                errorMessage = ".workbench.json must declare at least one terminal"
+            }
+            // FIX 3: a recent that failed to load STRUCTURALLY (gone / malformed /
+            // unreadable / empty) is dead and re-errors on every click — drop it so
+            // the menu stays honest. The prune-or-keep choice is the pure Core
+            // decision, exhaustively tested in WorkbenchRecentWorkspacePruningTests.
+            // Previously only `configFileMissing` pruned; malformed/empty stayed.
+            if WorkbenchRecentWorkspacePruning.shouldForget(
+                after: WorkbenchRecentWorkspacePruning.classify(configError)
+            ) {
+                forgetRecentWorkspace(path: directoryPath)
+            }
             return nil
         } catch {
             errorMessage = "Couldn't open workspace: \(error.localizedDescription)"
+            // A transient / unknown failure may clear on retry — KEEP the recent
+            // (classified `.transient`, which the pure decision keeps). Deliberately
+            // no prune here: we must not silently drop a recent on a blip.
             return nil
         }
         let result = openWorkspaceConfig(config: config, configDirectory: directoryPath, loader: loader)
@@ -13511,7 +13549,12 @@ final class WorkbenchViewModel: ObservableObject {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
             let data = try encoder.encode(config)
-            try data.write(to: url)
+            // Atomic so an interrupted overwrite (crash / disk-full / kill) never
+            // truncates the operator's PRIOR `.workbench.json` — the atomic write
+            // lands in a temp file and renames into place, so a partial write can't
+            // clobber the existing file and break the next "Open Workspace…".
+            // Matches the durable `WorkbenchStore.save` writer, which is already atomic.
+            try data.write(to: url, options: [.atomic])
             // Save target is the directory containing the .workbench.json so
             // the recent workspaces menu reopens the directory, matching the
             // Open Workspace… flow.
