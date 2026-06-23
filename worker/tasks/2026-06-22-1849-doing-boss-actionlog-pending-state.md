@@ -1,6 +1,6 @@
 # Doing: Boss action-log pending state (false-success / unverified green checkmark)
 
-- **Status:** in progress
+- **Status:** done
 - **Execution Mode:** direct
 - **Branch:** `fix/boss-actionlog-pending-state` (off `main` @ c7d6d63)
 - **Artifacts:** `./2026-06-22-1849-doing-boss-actionlog-pending-state/`
@@ -32,7 +32,7 @@ green check / `.green` ONLY for `.succeeded`, produced ONLY when
 - **Acceptance:** tests cover all (isInFlight × succeeded) combos + all Tone arms;
   honesty invariant asserted; `swift test` green; `Scripts/check-coverage.sh` 100%.
 
-### Unit 2 — App wiring + render through the seam ⬜
+### Unit 2 — App wiring + render through the seam ✅
 1. `WorkbenchActionLogEntry` (Core): add `var isInFlight: Bool` default false +
    backward-compatible decode (custom `init(from:)` w/ `decodeIfPresent ?? false`,
    since synthesized Codable throws on a missing non-optional key).
@@ -57,11 +57,13 @@ green check / `.green` ONLY for `.succeeded`, produced ONLY when
 
 ## Completion Criteria
 - [x] Unit 1 Core seam shipped, 100% line+region, allowlist at 2
-- [ ] Unit 2 wiring shipped; 6 handlers marked in-flight; render routed through seam
-- [ ] Old persisted `actionLog` JSON (no `isInFlight`) still decodes → false
-- [ ] Real failures (guard-skip, `complete*` succeeded:false) still render orange
-- [ ] Full `swift test` green, warnings-as-errors + strict-concurrency clean
-- [ ] Committed per unit + pushed; NOT merged/PR'd
+- [x] Unit 2 wiring shipped; 6 handlers marked in-flight; render routed through seam
+- [x] Old persisted `actionLog` JSON (no `isInFlight`) still decodes → false
+- [x] Real failures (guard-skip, `complete*` succeeded:false) still render orange
+- [x] Full `swift test` green, warnings-as-errors + strict-concurrency clean
+- [x] Committed per unit + pushed; NOT merged/PR'd
 
 ## Progress log
 - 2026-06-22 19:03 Unit 1 complete: WorkbenchActionOutcomePresentation seam shipped; 16 tests; Core 100% line+region; allowlist still 2; full suite 2517 pass.
+- 2026-06-22 19:11 Unit 2 complete: isInFlight threaded through WorkbenchActionLogEntry (backward-compatible decode), recordActionLog/finishBossAction, 6 async start handlers marked in-flight; actionLogEntryRow routed through the seam. swift build clean (warnings-as-errors + strict-concurrency=complete); full suite 2529 pass / 0 fail; Core 100% line+region; allowlist still 2.
+- 2026-06-22 19:11 All units complete; all gates passed (impl-coverage, build clean w/ strict flags, PR review). Status → done. NOT merged/PR'd per mandate. Notes: openProviderConfig + startReportBug deliberately NOT in-flight (synchronous / no verified follow-up row). HarnessActionResultBanner (~1571) NOT touched — it renders HarnessActionResult (a settled synchronous outcome, no in-flight state), so the spec's 1571 anchor was stale. Residual follow-up (out of spec scope): BossActionReceiptSummary.okCount still counts an in-flight ack as "ok" — the pending entry is superseded seconds later by the verified complete* row, so the "N ok" count can briefly double-count; a future change could exclude isInFlight from okCount.
