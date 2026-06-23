@@ -10439,15 +10439,24 @@ final class WorkbenchViewModel: ObservableObject {
     static let checkInActionLabel = "Check In"
 
     /// Drive a manual Check In from any surface (button, ⌘I, menubar, palette,
-    /// popover). When a usable boss is set this runs the check-in; when none is set
-    /// it routes to the set-up-a-boss flow so the tap is never a dead click. A tap
-    /// while a check-in is already running is a no-op (the in-flight guard owns it).
+    /// popover). When a usable boss is set this runs the check-in. When NO boss is
+    /// set it routes to the set-up-a-boss onboarding so the tap is never a dead
+    /// click. FIX 4: when a boss IS configured but currently un-usable (daemon dead
+    /// / bundle missing) it routes to the Harness Status sheet — which states "Boss
+    /// X is not reachable" honestly and offers the repair/reconnect control — instead
+    /// of dumping the operator into the full onboarding pick as if they'd never set
+    /// up a boss. A tap while a check-in is already running is a no-op (the in-flight
+    /// guard owns it).
     func attemptCheckIn() {
         switch checkInAvailability {
         case .ready:
             Task { await runBossCheckIn() }
-        case .needsBoss:
+        case .noBoss:
             presentOnboarding()
+        case .bossUnreachable:
+            // The boss exists, it just isn't reachable. Surface the honest
+            // reconnect/repair affordance (Harness Status), never re-onboarding.
+            isHarnessStatusPresented = true
         case .running:
             break
         }

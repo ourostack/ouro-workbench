@@ -153,6 +153,72 @@ final class NavCheckInWiringTests: XCTestCase {
         )
     }
 
+    // MARK: - FIX 4: Check-In routes .bossUnreachable to reconnect, not onboarding
+
+    /// `attemptCheckIn` must route each availability case distinctly: `.noBoss` →
+    /// onboarding (as before), `.bossUnreachable` → the Harness Status reconnect /
+    /// repair affordance (NOT onboarding). The old single `.needsBoss → onboarding`
+    /// collapse — which dumped a configured-but-unreachable boss into the full
+    /// boss-pick — must be gone.
+    func testAttemptCheckInRoutesNoBossAndUnreachableDistinctly() throws {
+        let source = try appSource()
+        let branch = try sourceSlice(
+            in: source,
+            from: "func attemptCheckIn() {",
+            to: "\n    @Published var bossWatchIsEnabled"
+        )
+        // The old collapsed case must be gone.
+        XCTAssertFalse(
+            branch.contains("case .needsBoss:"),
+            "attemptCheckIn must no longer have a single collapsed .needsBoss case"
+        )
+        // No-boss still routes to onboarding.
+        guard let noBossRange = branch.range(of: "case .noBoss:") else {
+            return XCTFail("attemptCheckIn must have an explicit .noBoss case")
+        }
+        let afterNoBoss = String(branch[noBossRange.lowerBound...])
+        XCTAssertTrue(
+            afterNoBoss.contains("presentOnboarding()"),
+            "the .noBoss case must route to the full onboarding pick"
+        )
+        // Unreachable routes to the reconnect/repair affordance (Harness Status),
+        // NOT onboarding.
+        guard let unreachableRange = branch.range(of: "case .bossUnreachable:") else {
+            return XCTFail("attemptCheckIn must have an explicit .bossUnreachable case")
+        }
+        let afterUnreachable = String(branch[unreachableRange.lowerBound...])
+        // Inspect only the .bossUnreachable arm (up to the next case).
+        let unreachableArm = afterUnreachable.components(separatedBy: "case .running:").first ?? afterUnreachable
+        XCTAssertTrue(
+            unreachableArm.contains("isHarnessStatusPresented = true"),
+            "the .bossUnreachable case must route to the Harness Status reconnect/repair affordance"
+        )
+        XCTAssertFalse(
+            unreachableArm.contains("presentOnboarding()"),
+            "the .bossUnreachable case must NOT route to the full onboarding pick"
+        )
+    }
+
+    /// The model's `checkInAvailability` must still derive from the pure
+    /// `CheckInAvailability.resolve` seam (now producing the split), feeding it the
+    /// boss usability so the configured-but-unreachable distinction is live.
+    func testCheckInAvailabilityResolvesViaTheSeamWithUsability() throws {
+        let source = try appSource()
+        let branch = try sourceSlice(
+            in: source,
+            from: "var checkInAvailability: CheckInAvailability {",
+            to: "\n    var checkInHelpText: String {"
+        )
+        XCTAssertTrue(
+            branch.contains("CheckInAvailability.resolve("),
+            "checkInAvailability must derive from CheckInAvailability.resolve"
+        )
+        XCTAssertTrue(
+            branch.contains("bossIsUsable: currentBossIsUsable"),
+            "resolve must be fed the boss usability so .bossUnreachable can be distinguished"
+        )
+    }
+
     // MARK: - Slice helpers
 
     private func activeEntryBranch() throws -> String {
