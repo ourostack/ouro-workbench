@@ -13374,20 +13374,31 @@ final class WorkbenchViewModel: ObservableObject {
         let config: WorkbenchWorkspaceConfig
         do {
             config = try loader.load(directoryPath: directoryPath)
-        } catch WorkbenchWorkspaceConfigError.configFileMissing(let path) {
-            errorMessage = "No .workbench.json found at \(path)"
-            // The user opened a recent that's no longer valid — drop it from
-            // the recent list so the menu doesn't keep showing a dead path.
-            forgetRecentWorkspace(path: directoryPath)
-            return nil
-        } catch WorkbenchWorkspaceConfigError.malformedJSON(let detail) {
-            errorMessage = "Couldn't parse .workbench.json: \(detail)"
-            return nil
-        } catch WorkbenchWorkspaceConfigError.noTerminals {
-            errorMessage = ".workbench.json must declare at least one terminal"
+        } catch let configError as WorkbenchWorkspaceConfigError {
+            switch configError {
+            case .configFileMissing(let path):
+                errorMessage = "No .workbench.json found at \(path)"
+            case .malformedJSON(let detail):
+                errorMessage = "Couldn't parse .workbench.json: \(detail)"
+            case .noTerminals:
+                errorMessage = ".workbench.json must declare at least one terminal"
+            }
+            // FIX 3: a recent that failed to load STRUCTURALLY (gone / malformed /
+            // unreadable / empty) is dead and re-errors on every click — drop it so
+            // the menu stays honest. The prune-or-keep choice is the pure Core
+            // decision, exhaustively tested in WorkbenchRecentWorkspacePruningTests.
+            // Previously only `configFileMissing` pruned; malformed/empty stayed.
+            if WorkbenchRecentWorkspacePruning.shouldForget(
+                after: WorkbenchRecentWorkspacePruning.classify(configError)
+            ) {
+                forgetRecentWorkspace(path: directoryPath)
+            }
             return nil
         } catch {
             errorMessage = "Couldn't open workspace: \(error.localizedDescription)"
+            // A transient / unknown failure may clear on retry — KEEP the recent
+            // (classified `.transient`, which the pure decision keeps). Deliberately
+            // no prune here: we must not silently drop a recent on a blip.
             return nil
         }
         let result = openWorkspaceConfig(config: config, configDirectory: directoryPath, loader: loader)
