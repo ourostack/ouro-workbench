@@ -174,6 +174,34 @@ public enum InstalledAgentRowPresentation {
         }
     }
 
+    /// The SF Symbol name for a live readiness — the SHARED-SEAM icon decision so the
+    /// agent detail pane (`AgentStatusCard.statusIcon`) and the empty-state row
+    /// (`OuroAgentRowView.agentStatusImage`) pick the SAME glyph, and pick it off the
+    /// LIVE readiness rather than raw config `agent.status`.
+    ///
+    /// HONESTY INVARIANT: the SUCCESS glyph (`checkmark.seal.fill`) is reachable ONLY
+    /// from `.ready` (the sole state a `.working` live verdict produces) — an
+    /// expired-token agent (config-`.ready`, live `.authExpired`) never wears the seal.
+    /// CALM-NOT-LOUD: pending states (`.checking`, `.unverified`) get neutral glyphs
+    /// (`ellipsis.circle` / `questionmark.circle`), never the warning triangle — only
+    /// CONFIRMED-bad verdicts (`.authExpired` / `.vaultLocked` / `.unreachable`) do.
+    public static func iconSystemName(for readiness: LiveReadiness) -> String {
+        switch readiness {
+        case .ready:
+            return "checkmark.seal.fill"
+        case .checking:
+            return "ellipsis.circle"
+        case .unverified:
+            return "questionmark.circle"
+        case .authExpired, .vaultLocked, .unreachable:
+            return "exclamationmark.triangle.fill"
+        case .disabled:
+            return "pause.circle.fill"
+        case .missingConfig, .invalidConfig:
+            return "xmark.octagon.fill"
+        }
+    }
+
     /// A fuller tooltip for a live readiness. `detail` is the scanner's raw per-status
     /// detail; the `.invalidConfig` tooltip embeds it so the operator can see exactly
     /// what's malformed.
