@@ -30,7 +30,7 @@ Success glyph (`checkmark.seal.fill`) reachable ONLY from `.ready`. Exhaustive s
 ## Units
 
 - ✅ **Unit 1 (Core):** add `iconSystemName(for:)` + exhaustive tests (100% line+region; allowlist unchanged at 2).
-- ⬜ **Unit 2 (App views):** route OuroAgentRowView, AgentTitleStrip, AgentStatusCard through the seam; thread verdicts. Source-pin tests in `AgentDetailReadinessWiringTests.swift`.
+- ✅ **Unit 2 (App views):** route OuroAgentRowView, AgentTitleStrip, AgentStatusCard through the seam; thread verdicts. Source-pin tests in `AgentDetailReadinessWiringTests.swift`.
 - ⬜ **Unit 3 (App count + menu):** fix `ouroAgentStatusLine` readyCount (live) + `BossSelectorView.menuLabel` honest suffix. Source-pin.
 
 ## Verify (each unit)
@@ -49,3 +49,4 @@ Success glyph (`checkmark.seal.fill`) reachable ONLY from `.ready`. Exhaustive s
 ## Progress Log
 
 - 2026-06-22 17:06 Unit 1 complete: `iconSystemName(for:)` added to InstalledAgentRowPresentation.swift; 11 exhaustive tests (success glyph maps from `.ready` alone; pending stays calm). Core 100% line+region, allowlist still 2, 2468 tests pass, strict build clean.
+- 2026-06-22 17:14 Unit 2 complete: OuroAgentRowView, AgentTitleStrip, AgentStatusCard each resolve a live `liveReadiness` (folding `model.agentOutwardVerdicts[agent.name]` + `agentChecksInFlight`) and derive color/icon/pill/help from the seam; config-only `bundleStatusPillText` removed. 10 source-pin tests in AgentDetailReadinessWiringTests pass. Strict build clean, Core 100%, allowlist 2.
