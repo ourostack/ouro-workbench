@@ -504,21 +504,21 @@ public extension WorkspaceState {
     /// queue ⌘J walks and the Inbox view renders — typically 1–2 items even with
     /// ~10 mostly-dormant sessions, never the full 200-row log.
     ///
-    /// De-duplicated per session (newest open decision per `entryId` wins) so a
-    /// session that ticked several escalations shows once; decisions with no
-    /// `entryId` are each kept (they can't be collapsed safely).
+    /// De-duplicated per `dedupGroupKey` (newest open decision per key wins) so a
+    /// session that ticked several escalations shows once. A nil-`entryId` decision
+    /// — the boss referenced a session that couldn't be uniquely resolved — keys by
+    /// its stable `(sessionName, prompt, kind)` pseudo-key, so repeated ticks of the
+    /// SAME unresolved decision collapse to one instead of piling up, while a
+    /// different prompt / kind / target stays a distinct row.
     func openInbox(now: Date = Date()) -> [BossInboxDecision] {
-        var seenEntryIDs = Set<UUID>()
+        var seenKeys = Set<String>()
         // decisionLog is already newest-first, so the first open decision we see
-        // for an entry is its newest — keep that one, drop older same-entry ones.
+        // for a key is its newest — keep that one, drop older same-key ones.
         let candidates = decisionLog.filter { decision in
             guard Self.needsHuman(decision), decision.isOpenForTriage(at: now) else {
                 return false
             }
-            guard let entryId = decision.entryId else {
-                return true
-            }
-            return seenEntryIDs.insert(entryId).inserted
+            return seenKeys.insert(decision.dedupGroupKey).inserted
         }
         // Stable sort by severity desc, then recency desc. `enumerated` index is
         // the tie-breaker so equal (severity, occurredAt) keeps newest-first

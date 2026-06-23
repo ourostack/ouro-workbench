@@ -579,6 +579,52 @@ final class BossInboxDecisionTests: XCTestCase {
         XCTAssertEqual(Set(state.openInbox(now: now).map(\.id)), [a.id, b.id], "entry-less decisions aren't collapsed together")
     }
 
+    // MARK: - FIX 3: nil-entry decisions collapse by a stable pseudo-key
+
+    func testOpenInboxCollapsesIdenticalNilEntryDecisions() {
+        // The boss kept referencing a session that can't be uniquely resolved
+        // (ambiguous/duplicate name, deleted session). Each tick recorded a
+        // nil-entryId decision; the old `guard let entryId else { return true }`
+        // kept EVERY one, stacking N identical open items. They must collapse to
+        // one, keeping the newest.
+        let now = Date()
+        var state = WorkspaceState()
+        func tick(at: Date) -> BossInboxDecision {
+            BossInboxDecision(occurredAt: at, source: "b", entryId: nil, sessionName: "ambiguous", prompt: "Proceed? (y/N)", kind: .escalate, reasoning: "r")
+        }
+        let t1 = tick(at: now.addingTimeInterval(-200))
+        let t2 = tick(at: now.addingTimeInterval(-100))
+        let t3 = tick(at: now)
+        state.recordDecision(t1)
+        state.recordDecision(t2)
+        state.recordDecision(t3)
+
+        let inbox = state.openInbox(now: now)
+        XCTAssertEqual(inbox.map(\.id), [t3.id], "identical nil-entry decisions collapse to one — the newest")
+    }
+
+    func testOpenInboxKeepsDistinctNilEntryDecisionsSeparate() {
+        // Inverse-bug guard: different prompt OR kind OR target must NOT be
+        // collapsed together — only genuine repeats merge.
+        let now = Date()
+        var state = WorkspaceState()
+        let samePromptDiffTarget = BossInboxDecision(occurredAt: now, source: "b", entryId: nil, sessionName: "alpha", prompt: "Proceed? (y/N)", kind: .escalate, reasoning: "r")
+        let diffPrompt = BossInboxDecision(occurredAt: now, source: "b", entryId: nil, sessionName: "alpha", prompt: "Different? (y/N)", kind: .escalate, reasoning: "r")
+        let diffKind = BossInboxDecision(occurredAt: now, source: "b", entryId: nil, sessionName: "alpha", prompt: "Proceed? (y/N)", kind: .hold, reasoning: "r")
+        let sameAsFirstButOtherTarget = BossInboxDecision(occurredAt: now, source: "b", entryId: nil, sessionName: "beta", prompt: "Proceed? (y/N)", kind: .escalate, reasoning: "r")
+        state.recordDecision(samePromptDiffTarget)
+        state.recordDecision(diffPrompt)
+        state.recordDecision(diffKind)
+        state.recordDecision(sameAsFirstButOtherTarget)
+
+        let ids = Set(state.openInbox(now: now).map(\.id))
+        XCTAssertEqual(
+            ids,
+            [samePromptDiffTarget.id, diffPrompt.id, diffKind.id, sameAsFirstButOtherTarget.id],
+            "different prompt / kind / target each stay a distinct open row"
+        )
+    }
+
     func testOpenInboxGroupsAndCount() {
         let now = Date()
         var state = WorkspaceState()
