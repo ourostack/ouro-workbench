@@ -41,7 +41,7 @@ Pure Core logic gets exhaustive unit tests + 100% line/region. Allowlist stays a
 - **Impl (Xb):** add `options: [.atomic]`.
 - **Acceptance:** test red → green; `swift build`/`swift test` clean.
 
-### ⬜ U2 — FIX 2: surface "already present" import skips (LOW)
+### ✅ U2 — FIX 2: surface "already present" import skips (LOW)
 - **What:** Distinguish "already present (unchanged)" from genuine error-skips in
   the import-apply path. Add additive `alreadyPresentCount` to
   `WorkbenchImportApplyResult`; count `(projectId,name)` matches separately from
@@ -78,7 +78,7 @@ Pure Core logic gets exhaustive unit tests + 100% line/region. Allowlist stays a
 
 ## Completion Criteria
 - [x] U1: both/all export writes atomic (confirmed via grep + source-pin). Repo-wide grep confirms exactly ONE workspace-export write (`presentSaveWorkspacePanel`); now `.write(to: url, options: [.atomic])`.
-- [ ] U2: already-present count surfaced distinctly from error-skips; matched terminals NOT updated.
+- [x] U2: already-present count surfaced distinctly from error-skips; matched terminals NOT updated. Added `WorkbenchImportApplyResult.alreadyPresentCount` (additive); `detail` shows "N already present"; loop increments tally + still `continue`s matched terminals.
 - [ ] U3: recents pruned on missing/malformed/noTerminals; kept on transient; pure decision + exhaustive test.
 - [ ] Coverage 100% line+region on new Core logic; allowlist unchanged at 2.
 - [ ] 3 commits (one per fix), pushed. No merge/PR.
@@ -86,3 +86,4 @@ Pure Core logic gets exhaustive unit tests + 100% line/region. Allowlist stays a
 ## Progress log
 
 - 2026-06-23 09:53 U1 (FIX 1) complete: source-pin red→green, added `options: [.atomic]` to the lone export write in `presentSaveWorkspacePanel()`. Build clean under `-warnings-as-errors -strict-concurrency=complete`. Commits: f6cdd03 (test), e8ed00f (impl).
+- 2026-06-23 09:58 U2 (FIX 2) complete: 3 source-pins red→green (verified red with impl stashed). Added additive `alreadyPresentCount`, tallied `(projectId,name)` matches separately from error-skips, surfaced "N already present" in `detail` + action-log; matched terminals still `continue` (inverse-bug guard pinned). Build clean. Commits: f2711cd (test), e8eedee (impl).
