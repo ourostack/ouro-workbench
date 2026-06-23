@@ -112,6 +112,96 @@ final class BossInboxDecisionTests: XCTestCase {
         XCTAssertEqual(state.decisionLog.count, 2)
     }
 
+    // MARK: - FIX 2: dedup scans a window, not just the latest row
+
+    func testInterleavedPromptsDoNotRefireAnEarlierDecision() {
+        // A→B→A on the SAME entry. Once A is decided and then B becomes the entry's
+        // newest decision, A reappearing must NOT be treated as new — otherwise the
+        // boss re-sends input to a prompt it already advanced. The old `.first`-only
+        // compare matched B (the latest row), saw A≠B, and wrongly re-fired A.
+        let entryId = UUID()
+        func d(_ prompt: String, _ kind: BossDecisionKind = .autoAdvance) -> BossInboxDecision {
+            BossInboxDecision(source: "boss", entryId: entryId, prompt: prompt, kind: kind, reasoning: "r")
+        }
+        var state = WorkspaceState()
+        XCTAssertTrue(state.recordDecisionIfNew(d("Prompt A? (y/N)")), "A is new")
+        XCTAssertTrue(state.recordDecisionIfNew(d("Prompt B? (y/N)")), "B is a different prompt — new")
+        XCTAssertFalse(
+            state.isNewDecision(entryId: entryId, prompt: "Prompt A? (y/N)", kind: .autoAdvance),
+            "A is in the recent window for this entry — NOT new, so the boss won't re-send"
+        )
+        XCTAssertFalse(state.recordDecisionIfNew(d("Prompt A? (y/N)")), "re-recording A is a no-op")
+        XCTAssertEqual(state.decisionLog.count, 2, "only A and B exist — A did not duplicate")
+    }
+
+    func testDedupDistinguishesPromptAndKindWithinWindow() {
+        // Inverse-bug guard: the window must NOT over-dedupe genuinely-distinct
+        // decisions. Same entry, but a different prompt OR a different kind is new.
+        let entryId = UUID()
+        func d(_ prompt: String, _ kind: BossDecisionKind) -> BossInboxDecision {
+            BossInboxDecision(source: "boss", entryId: entryId, prompt: prompt, kind: kind, reasoning: "r")
+        }
+        var state = WorkspaceState()
+        XCTAssertTrue(state.recordDecisionIfNew(d("Prompt A? (y/N)", .autoAdvance)))
+        XCTAssertTrue(state.isNewDecision(entryId: entryId, prompt: "Different? (y/N)", kind: .autoAdvance), "different prompt is new")
+        XCTAssertTrue(state.isNewDecision(entryId: entryId, prompt: "Prompt A? (y/N)", kind: .escalate), "same prompt, different kind is new")
+        XCTAssertTrue(state.isNewDecision(entryId: UUID(), prompt: "Prompt A? (y/N)", kind: .autoAdvance), "different entry is new")
+    }
+
+    func testIsNewDecisionDedupesNilEntryByStablePseudoKey() {
+        // A nil-entry decision (the boss referenced a session that couldn't be
+        // uniquely resolved) still dedupes — by the stable (sessionName, prompt,
+        // kind) pseudo-key — so a repeated tick isn't re-recorded. Different prompt
+        // OR target stays new (inverse-bug guard).
+        var state = WorkspaceState()
+        let d = BossInboxDecision(source: "boss", entryId: nil, sessionName: "ambiguous", prompt: "Proceed? (y/N)", kind: .escalate, reasoning: "r")
+        state.recordDecision(d)
+        XCTAssertFalse(
+            state.isNewDecision(entryId: nil, prompt: "Proceed? (y/N)", kind: .escalate, sessionName: "ambiguous"),
+            "an identical nil-entry decision is not new"
+        )
+        XCTAssertTrue(
+            state.isNewDecision(entryId: nil, prompt: "Different? (y/N)", kind: .escalate, sessionName: "ambiguous"),
+            "a different prompt for the same nil target is new"
+        )
+        XCTAssertTrue(
+            state.isNewDecision(entryId: nil, prompt: "Proceed? (y/N)", kind: .escalate, sessionName: "other"),
+            "the same prompt for a different nil target is new"
+        )
+        // The real App path passes sessionName == nil for an unresolved entry; the
+        // pseudo-key still collapses identical repeats by (prompt, kind).
+        var s2 = WorkspaceState()
+        s2.recordDecision(BossInboxDecision(source: "boss", entryId: nil, sessionName: nil, prompt: "Unresolved? (y/N)", kind: .escalate, reasoning: "r"))
+        XCTAssertFalse(
+            s2.isNewDecision(entryId: nil, prompt: "Unresolved? (y/N)", kind: .escalate, sessionName: nil),
+            "an identical nil-entry, nil-name decision is not new"
+        )
+    }
+
+    func testDedupWindowIsBoundedSoAVeryOldMatchFallsOutOfScope() {
+        // The window is bounded (dedupScanWindow). A matching decision pushed far
+        // enough back by newer SAME-entry rows is outside the scan and reads as new
+        // again — that's the intended bound (re-surfacing a long-stale prompt is
+        // acceptable; flooding from a 1-row compare was not).
+        let entryId = UUID()
+        var state = WorkspaceState()
+        let ancient = BossInboxDecision(source: "boss", entryId: entryId, prompt: "Ancient? (y/N)", kind: .autoAdvance, reasoning: "r")
+        state.recordDecision(ancient)
+        // Push `ancient` past the window with newer same-entry rows.
+        for i in 0..<WorkspaceState.dedupScanWindow {
+            state.recordDecision(BossInboxDecision(source: "boss", entryId: entryId, prompt: "filler-\(i)? (y/N)", kind: .autoAdvance, reasoning: "r"))
+        }
+        XCTAssertTrue(
+            state.isNewDecision(entryId: entryId, prompt: "Ancient? (y/N)", kind: .autoAdvance),
+            "a match beyond the bounded window is treated as new again"
+        )
+        // …but a match INSIDE the window is still caught.
+        XCTAssertFalse(
+            state.isNewDecision(entryId: entryId, prompt: "filler-0? (y/N)", kind: .autoAdvance),
+            "the most recent filler is within the window — not new"
+        )
+    }
+
     // MARK: - Cross-channel double-send unification (P0)
 
     /// A boss reply often emits BOTH a `sendInput` action AND an `autoAdvance`

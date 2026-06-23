@@ -266,6 +266,15 @@ public struct BossInboxDecision: Codable, Equatable, Identifiable, Sendable {
     public func isOpenForTriage(at now: Date) -> Bool {
         triage?.isOpen(at: now) ?? true
     }
+
+    /// This decision's stable dedup grouping key — `entryId` when present, else a
+    /// stable pseudo-key derived from `(sessionName, prompt, kind)`. Shared by the
+    /// `isNewDecision` window scan (FIX 2) and `openInbox`'s collapse (FIX 3) so a
+    /// nil-entry decision dedupes by the same identity in both. See
+    /// `WorkspaceState.dedupGroupKey`.
+    var dedupGroupKey: String {
+        WorkspaceState.dedupGroupKey(entryId: entryId, sessionName: sessionName, prompt: prompt, kind: kind)
+    }
 }
 
 /// A decision as emitted by the boss in an `ouro-workbench-decisions` block,
@@ -340,6 +349,13 @@ public extension WorkspaceState {
     /// Newest-first cap for the decision log, matching the action log.
     static let decisionLogCap = 200
 
+    /// How many of the most-recent decisions `isNewDecision` scans for a
+    /// `(prompt, kind)` match before treating a decision as new. Bounded so the
+    /// dedup never walks the full 200-row log, yet wide enough that interleaved
+    /// prompts (A→B→A) still find the earlier A. Ample for the 1–2 live prompts a
+    /// session cycles through between boss ticks.
+    static let dedupScanWindow = 50
+
     /// Record a boss decision newest-first, trimming to the cap. Pure mutation
     /// (no persistence) so the model layer controls when to save — mirrors how
     /// the action log is appended.
@@ -395,14 +411,46 @@ public extension WorkspaceState {
         return true
     }
 
+    /// Stable dedup grouping key for a decision identity, shared by `isNewDecision`
+    /// (FIX 2 window scan) and `openInbox`'s collapse (FIX 3). A real entry keys by
+    /// its `entryId` (so all of that session's prompts share a group and the inner
+    /// `(prompt, kind)` compare distinguishes them). A nil entry — the boss
+    /// referenced a session that couldn't be uniquely resolved (ambiguous/duplicate
+    /// name, deleted session) — gets a STABLE pseudo-key from `(sessionName, prompt,
+    /// kind)` so repeats collapse instead of piling up, while a different prompt OR
+    /// kind OR target stays a distinct group. Pure so both call sites agree.
+    static func dedupGroupKey(entryId: UUID?, sessionName: String?, prompt: String, kind: BossDecisionKind) -> String {
+        if let entryId {
+            return "id:\(entryId.uuidString)"
+        }
+        // Unit separator (U+001F) can't appear in a prompt/name, so the join is
+        // unambiguous without escaping.
+        let sep = "\u{1F}"
+        return "nil:\(sessionName ?? "")\(sep)\(prompt)\(sep)\(kind.rawValue)"
+    }
+
     /// True when no recent decision for this session already matches the same
     /// prompt + kind. Used to gate execution *before* acting, so the boss never
     /// re-sends input for a prompt it already advanced (idempotency).
-    func isNewDecision(entryId: UUID?, prompt: String, kind: BossDecisionKind) -> Bool {
-        guard let recent = decisionLog.first(where: { $0.entryId == entryId }) else {
-            return true
+    ///
+    /// Scans the most-recent `dedupScanWindow` decisions in the SAME dedup group —
+    /// not just the single latest row — so an interleaved A→B→A doesn't re-fire A:
+    /// when A is decided, B becomes the newest row, then A reappears; a `.first`-only
+    /// compare matched B (A≠B) and wrongly treated A as new. The windowed scan finds
+    /// A's earlier row and reports it as not-new. Bounded by the window so the dedup
+    /// never walks the full log; a match pushed past the window re-surfaces as new
+    /// (the accepted bound).
+    func isNewDecision(entryId: UUID?, prompt: String, kind: BossDecisionKind, sessionName: String? = nil) -> Bool {
+        let group = Self.dedupGroupKey(entryId: entryId, sessionName: sessionName, prompt: prompt, kind: kind)
+        var scanned = 0
+        for decision in decisionLog where decision.dedupGroupKey == group {
+            if decision.prompt == prompt && decision.kind == kind {
+                return false
+            }
+            scanned += 1
+            if scanned >= Self.dedupScanWindow { break }
         }
-        return !(recent.kind == kind && recent.prompt == prompt)
+        return true
     }
 
     // MARK: - Human triage
