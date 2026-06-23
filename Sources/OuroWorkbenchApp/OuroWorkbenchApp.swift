@@ -7518,9 +7518,17 @@ struct ActionLogView: View {
     }
 
     private func actionLogEntryRow(_ entry: WorkbenchActionLogEntry) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: entry.succeeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                .foregroundStyle(entry.succeeded ? .green : .orange)
+        // Route the icon + color through the honest presentation seam: an in-flight
+        // optimistic ack is PENDING (neutral ellipsis), never a green check. A green
+        // check / .green appears ONLY for a verified success; a settled failure is
+        // orange. See WorkbenchActionOutcomePresentation.
+        let tone = WorkbenchActionOutcomePresentation.tone(
+            isInFlight: entry.isInFlight,
+            succeeded: entry.succeeded
+        )
+        return HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: WorkbenchActionOutcomePresentation.iconSystemName(for: tone))
+                .foregroundStyle(Self.swiftUIColor(for: WorkbenchActionOutcomePresentation.color(for: tone)))
                 .fixedSize()
             Text(entry.occurredAt.formatted(date: .omitted, time: .standard))
                 .font(.caption.monospacedDigit())
@@ -7552,6 +7560,20 @@ struct ActionLogView: View {
     private func actionLogEntryHelp(_ entry: WorkbenchActionLogEntry) -> String {
         let target = entry.targetName.map { " \($0)" } ?? ""
         return "\(entry.source) \(entry.action)\(target): \(entry.result)"
+    }
+
+    /// Map the framework-free `SemanticColor` the presentation seam returns to a
+    /// SwiftUI `Color`: `.neutral → .secondary` (pending), `.green` (verified
+    /// success), `.orange` (failure).
+    static func swiftUIColor(for color: WorkbenchActionOutcomePresentation.SemanticColor) -> SwiftUI.Color {
+        switch color {
+        case .neutral:
+            return .secondary
+        case .green:
+            return .green
+        case .orange:
+            return .orange
+        }
     }
 }
 
@@ -18250,12 +18272,14 @@ final class WorkbenchViewModel: ObservableObject {
             }
         }
 
-        // Immediate, seam-free ack. Recovery truth follows asynchronously.
+        // Immediate, seam-free ack. Recovery truth follows asynchronously via
+        // completeRepairAgent — so this ack is in-flight (pending), not a green check.
         return finishBossAction(
             source: source,
             action: action,
             entry: nil,
-            result: "Working on getting \(agentName) ready…"
+            result: "Working on getting \(agentName) ready…",
+            isInFlight: true
         )
     }
 
@@ -18705,9 +18729,11 @@ final class WorkbenchViewModel: ObservableObject {
                 )
             }
         }
+        // In-flight ack — the verified outcome lands later via completeOnboardingAction.
         return finishBossAction(
             source: source, action: action, entry: nil,
-            result: "Checking \(agentName)'s provider connection…"
+            result: "Checking \(agentName)'s provider connection…",
+            isInFlight: true
         )
     }
 
@@ -18733,9 +18759,11 @@ final class WorkbenchViewModel: ObservableObject {
                 )
             }
         }
+        // In-flight ack — the verified outcome lands later via completeOnboardingAction.
         return finishBossAction(
             source: source, action: action, entry: nil,
-            result: "Refreshing \(agentName)'s connection…"
+            result: "Refreshing \(agentName)'s connection…",
+            isInFlight: true
         )
     }
 
@@ -18765,9 +18793,11 @@ final class WorkbenchViewModel: ObservableObject {
                 )
             }
         }
+        // In-flight ack — the verified outcome lands later via completeOnboardingAction.
         return finishBossAction(
             source: source, action: action, entry: nil,
-            result: "Setting up \(agentName) with \(provider)…"
+            result: "Setting up \(agentName) with \(provider)…",
+            isInFlight: true
         )
     }
 
@@ -18805,9 +18835,11 @@ final class WorkbenchViewModel: ObservableObject {
                 )
             }
         }
+        // In-flight ack — the verified outcome lands later via completeOnboardingAction.
         return finishBossAction(
             source: source, action: action, entry: nil,
-            result: "Connecting \(agentName) to Workbench…"
+            result: "Connecting \(agentName) to Workbench…",
+            isInFlight: true
         )
     }
 
@@ -18829,9 +18861,11 @@ final class WorkbenchViewModel: ObservableObject {
                 )
             }
         }
+        // In-flight ack — the verified outcome lands later via completeOnboardingAction.
         return finishBossAction(
             source: source, action: action, entry: nil,
-            result: "Bringing your agent's connection online…"
+            result: "Bringing your agent's connection online…",
+            isInFlight: true
         )
     }
 
@@ -18914,11 +18948,17 @@ final class WorkbenchViewModel: ObservableObject {
         }
     }
 
+    /// `isInFlight: true` ONLY for an async "start" handler's optimistic ack — the
+    /// background work has been kicked off but its VERIFIED outcome (recorded later
+    /// by the matching `complete*` handler) isn't known yet. Such an ack renders
+    /// neutral/pending, never a green check. A synchronous guard-skip or a final
+    /// result stays `false` so its `succeeded` flag drives green/orange honestly.
     private func finishBossAction(
         source: String,
         action: BossWorkbenchAction,
         entry: ProcessEntry?,
-        result: String
+        result: String,
+        isInFlight: Bool = false
     ) -> String {
         recordActionLog(
             source: source,
@@ -18926,7 +18966,8 @@ final class WorkbenchViewModel: ObservableObject {
             targetEntryId: entry?.id,
             targetName: entry?.name ?? action.entry ?? action.name ?? action.group,
             result: result,
-            succeeded: !result.hasPrefix("Skipped") && !result.hasPrefix("Failed")
+            succeeded: !result.hasPrefix("Skipped") && !result.hasPrefix("Failed"),
+            isInFlight: isInFlight
         )
         return result
     }
@@ -18937,7 +18978,8 @@ final class WorkbenchViewModel: ObservableObject {
         targetEntryId: UUID? = nil,
         targetName: String? = nil,
         result: String,
-        succeeded: Bool
+        succeeded: Bool,
+        isInFlight: Bool = false
     ) {
         state.actionLog.insert(
             WorkbenchActionLogEntry(
@@ -18947,7 +18989,8 @@ final class WorkbenchViewModel: ObservableObject {
                 targetName: targetName,
                 result: result,
                 succeeded: succeeded,
-                requestId: currentBossActionRequestId
+                requestId: currentBossActionRequestId,
+                isInFlight: isInFlight
             ),
             at: 0
         )
