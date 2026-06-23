@@ -97,7 +97,7 @@ final class BossMCPPillVerdictWiringTests: XCTestCase {
             agents: [agent],
             bossRegistration: registration,
             registrationByAgentName: ["boss": registration],
-            injectionByAgentName: ["boss": nil] // unverified
+            injectionByAgentName: [:] // not probed → unverified
         )
         XCTAssertTrue(
             status.boss.isReachable,
@@ -146,16 +146,23 @@ final class BossMCPPillVerdictWiringTests: XCTestCase {
     }
 
     func testHarnessDiagnosticPillRoutesThroughSeamWithVerdict() throws {
-        let source = try appSource()
+        let body = try sourceSlice(
+            from: "private struct HarnessAgentRow: View {",
+            to: "private struct HarnessActionRow: View {"
+        )
         // The harness-diagnostic pill (entry.mcpStatus / entry.toolsInjection) must route
         // through the seam — no longer the status-only harnessShortLabel / harnessTint pair.
         XCTAssertTrue(
-            source.contains("BossMCPPillPresentation.tone(status:"),
+            body.contains("BossMCPPillPresentation.tone("),
             "the harness-diagnostic pill must compute its tone via BossMCPPillPresentation"
         )
         XCTAssertTrue(
-            source.contains("entry.toolsInjection"),
+            body.contains("entry.toolsInjection"),
             "the harness-diagnostic pill must read entry.toolsInjection (the threaded verdict)"
+        )
+        XCTAssertFalse(
+            body.contains("mcpStatus.harnessShortLabel"),
+            "the status-only harnessShortLabel must no longer drive the harness pill text"
         )
     }
 

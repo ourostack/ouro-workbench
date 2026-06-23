@@ -243,6 +243,15 @@ public struct HarnessAgentEntry: Equatable, Identifiable, Sendable {
     public var isSelectedBoss: Bool
     /// MCP-registration status for this specific agent, when known.
     public var mcpStatus: BossWorkbenchMCPRegistrationStatus?
+    /// The cached live `tools/list` injection-probe verdict for this agent, when
+    /// one has run. `nil` means never probed. The harness MCP pill folds this with
+    /// `mcpStatus` through `BossMCPPillPresentation` so the pill reads GREEN only
+    /// when a CONFIRMED-PRESENT injection backs an on-disk `.registered` snapshot —
+    /// a config-only `.registered` with no (or an unconfirmed / confirmed-absent)
+    /// verdict reads NEUTRAL, not a false "registered" green. PRESENTATION only:
+    /// the reachability/rollup axes deliberately keep their existing status-based
+    /// logic and do NOT consult this verdict.
+    public var toolsInjection: WorkbenchToolsInjectionProbeOutcome?
     /// The result of a live outward-lane `ouro check` for this agent, when one
     /// has run. `nil` means no live verdict yet (config-only). REUSES the same
     /// verdicts the steady-state rows compute (`agentOutwardVerdicts`); the
@@ -260,6 +269,7 @@ public struct HarnessAgentEntry: Equatable, Identifiable, Sendable {
         detail: String,
         isSelectedBoss: Bool,
         mcpStatus: BossWorkbenchMCPRegistrationStatus? = nil,
+        toolsInjection: WorkbenchToolsInjectionProbeOutcome? = nil,
         verdict: ProviderConnectionVerdict? = nil,
         isChecking: Bool = false
     ) {
@@ -268,6 +278,7 @@ public struct HarnessAgentEntry: Equatable, Identifiable, Sendable {
         self.detail = detail
         self.isSelectedBoss = isSelectedBoss
         self.mcpStatus = mcpStatus
+        self.toolsInjection = toolsInjection
         self.verdict = verdict
         self.isChecking = isChecking
     }
@@ -474,6 +485,7 @@ public struct HarnessStatusBuilder: Sendable {
         agents: [OuroAgentRecord],
         bossRegistration: BossWorkbenchMCPRegistrationSnapshot?,
         registrationByAgentName: [String: BossWorkbenchMCPRegistrationSnapshot] = [:],
+        injectionByAgentName: [String: WorkbenchToolsInjectionProbeOutcome] = [:],
         outwardVerdicts: [String: ProviderConnectionVerdict] = [:],
         checksInFlight: Set<String> = []
     ) -> HarnessStatus {
@@ -482,6 +494,7 @@ public struct HarnessStatusBuilder: Sendable {
             boss: boss,
             agents: agents,
             registrationByAgentName: registrationByAgentName,
+            injectionByAgentName: injectionByAgentName,
             outwardVerdicts: outwardVerdicts,
             checksInFlight: checksInFlight
         )
@@ -539,6 +552,7 @@ public struct HarnessStatusBuilder: Sendable {
         boss: BossAgentSelection,
         agents: [OuroAgentRecord],
         registrationByAgentName: [String: BossWorkbenchMCPRegistrationSnapshot],
+        injectionByAgentName: [String: WorkbenchToolsInjectionProbeOutcome],
         outwardVerdicts: [String: ProviderConnectionVerdict],
         checksInFlight: Set<String>
     ) -> HarnessAgentInventory {
@@ -549,6 +563,9 @@ public struct HarnessStatusBuilder: Sendable {
                 detail: agent.detail,
                 isSelectedBoss: agent.name.caseInsensitiveCompare(boss.agentName) == .orderedSame,
                 mcpStatus: registrationByAgentName[agent.name]?.status,
+                // A missing key = "not probed" (nil verdict → unverified pill, never
+                // green); a present value is the cached `tools/list` verdict.
+                toolsInjection: injectionByAgentName[agent.name],
                 verdict: outwardVerdicts[agent.name],
                 isChecking: checksInFlight.contains(agent.name)
             )

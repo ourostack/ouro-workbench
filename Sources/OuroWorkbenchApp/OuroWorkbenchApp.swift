@@ -1510,10 +1510,43 @@ private struct HarnessAgentRow: View {
             Spacer()
             StatusPill(text: InstalledAgentRowPresentation.label(for: readiness), color: tint)
             if let mcpStatus = entry.mcpStatus {
-                StatusPill(text: "mcp \(mcpStatus.harnessShortLabel)", color: mcpStatus.harnessTint)
+                // Fold the on-disk registration STATUS with the live injection VERDICT through
+                // the shared seam: GREEN "on" is reachable ONLY when a confirmed-present
+                // `tools/list` probe backs a `.registered` snapshot. A config-only `.registered`
+                // with no (or an unconfirmed / confirmed-absent) verdict reads NEUTRAL — never a
+                // false green that says the tools inject at runtime when they were never probed.
+                let mcpTone = BossMCPPillPresentation.tone(
+                    status: mcpStatus,
+                    injection: entry.toolsInjection
+                )
+                StatusPill(
+                    text: "mcp \(harnessShortLabel(for: mcpTone))",
+                    color: BossMCPPillPresentation.color(for: mcpTone).swiftUIColor
+                )
             }
         }
         .help(InstalledAgentRowPresentation.help(for: readiness, detail: entry.detail))
+    }
+
+    /// Compact diagnostic-row wording for each verdict-aware MCP pill tone. Keeps the
+    /// terse harness style ("on"/"off"/"stale") while the GREEN "on" stays gated on a
+    /// confirmed-present injection (`.verified`); a registered-but-unverified pill reads
+    /// the calm "unverified", never a false "on".
+    private func harnessShortLabel(for tone: BossMCPPillPresentation.Tone) -> String {
+        switch tone {
+        case .verified:
+            return "on"
+        case .unverified:
+            return "unverified"
+        case .notInjected:
+            return "old ouro"
+        case .needsAttention:
+            return "stale"
+        case .notRegistered:
+            return "off"
+        case .error:
+            return "error"
+        }
     }
 }
 
@@ -1658,25 +1691,6 @@ private extension BossWorkbenchMCPRegistrationStatus {
             // Binary missing (`.notRegistered`) / structural failure / a too-old runtime that
             // stripped the tools (`.toolsNotInjected`) — needs a reinstall / ouro update.
             return .red
-        }
-    }
-
-    var harnessShortLabel: String {
-        switch self {
-        case .registered:
-            return "on"
-        case .notRegistered:
-            return "off"
-        case .needsUpdate:
-            return "stale"
-        case .agentMissing:
-            return "no agent"
-        case .executableMissing:
-            return "no app"
-        case .invalidConfig:
-            return "bad cfg"
-        case .toolsNotInjected:
-            return "old ouro"
         }
     }
 }
@@ -3398,6 +3412,24 @@ private extension InstalledAgentRowPresentation.DotColor {
         switch self {
         case .green:
             return .green
+        case .orange:
+            return .orange
+        case .red:
+            return .red
+        }
+    }
+}
+
+private extension BossMCPPillPresentation.SemanticColor {
+    /// Map the framework-free pill colour class to SwiftUI. `.neutral` reads
+    /// `.secondary` — the calm tone for a registered-but-runtime-unverified pill,
+    /// distinct from both the confirmed green and the structural red.
+    var swiftUIColor: SwiftUI.Color {
+        switch self {
+        case .green:
+            return .green
+        case .neutral:
+            return .secondary
         case .orange:
             return .orange
         case .red:
@@ -5803,8 +5835,18 @@ struct OuroAgentRowView: View {
                             .fixedSize()
                     }
                     if let registration {
-                        StatusPill(text: registrationPillText(registration.status), color: registrationTint(registration.status))
-                            .fixedSize()
+                        // Fold the on-disk registration STATUS with the live injection
+                        // VERDICT through the shared seam — GREEN only on a confirmed-present
+                        // probe; a config-only `.registered` reads NEUTRAL, not a false green.
+                        let mcpTone = BossMCPPillPresentation.tone(
+                            status: registration.status,
+                            injection: model.bossWorkbenchToolsInjectionByAgentName[agent.name]
+                        )
+                        StatusPill(
+                            text: BossMCPPillPresentation.label(for: mcpTone),
+                            color: BossMCPPillPresentation.color(for: mcpTone).swiftUIColor
+                        )
+                        .fixedSize()
                     }
                 }
                 Text(agent.summaryLine)
@@ -5925,35 +5967,6 @@ struct OuroAgentRowView: View {
         InstalledAgentRowPresentation.dotColor(for: liveReadiness).swiftUIColor
     }
 
-    private func registrationPillText(_ status: BossWorkbenchMCPRegistrationStatus) -> String {
-        switch status {
-        case .registered:
-            return "mcp"
-        case .notRegistered:
-            return "no mcp"
-        case .needsUpdate:
-            return "mcp update"
-        case .agentMissing:
-            return "missing"
-        case .executableMissing:
-            return "app missing"
-        case .invalidConfig:
-            return "config"
-        case .toolsNotInjected:
-            return "old ouro"
-        }
-    }
-
-    private func registrationTint(_ status: BossWorkbenchMCPRegistrationStatus) -> SwiftUI.Color {
-        switch status {
-        case .registered:
-            return .green
-        case .notRegistered, .needsUpdate:
-            return .orange
-        case .agentMissing, .executableMissing, .invalidConfig, .toolsNotInjected:
-            return .red
-        }
-    }
 }
 
 /// The native provider-config form — the ONE human touchpoint of the cold-start bootstrap.
@@ -8101,9 +8114,19 @@ private struct AgentStatusCard: View {
                     color: statusColor
                 )
                 if let registration {
+                    // Fold the on-disk registration STATUS with the live injection
+                    // VERDICT through the shared seam: the pill reads GREEN "registered"
+                    // ONLY when a confirmed-present `tools/list` probe backs a
+                    // `.registered` snapshot. A config-only `.registered` with no (or an
+                    // unconfirmed / confirmed-absent) verdict reads NEUTRAL "registered
+                    // (unverified)" — never a false runtime-ready green.
+                    let mcpTone = BossMCPPillPresentation.tone(
+                        status: registration.status,
+                        injection: model.bossWorkbenchToolsInjectionByAgentName[agent.name]
+                    )
                     StatusPill(
-                        text: "mcp \(mcpPillText(registration.status))",
-                        color: mcpPillColor(registration.status)
+                        text: "mcp \(BossMCPPillPresentation.label(for: mcpTone))",
+                        color: BossMCPPillPresentation.color(for: mcpTone).swiftUIColor
                     )
                 }
                 if !agent.isUsableAsBoss {
@@ -8157,35 +8180,6 @@ private struct AgentStatusCard: View {
         InstalledAgentRowPresentation.headline(for: liveReadiness, detail: agent.detail)
     }
 
-    private func mcpPillText(_ status: BossWorkbenchMCPRegistrationStatus) -> String {
-        switch status {
-        case .registered:
-            return "tools ready"
-        case .notRegistered:
-            return "tools missing"
-        case .needsUpdate:
-            return "needs cleanup"
-        case .agentMissing:
-            return "agent missing"
-        case .executableMissing:
-            return "app missing"
-        case .invalidConfig:
-            return "config"
-        case .toolsNotInjected:
-            return "old ouro"
-        }
-    }
-
-    private func mcpPillColor(_ status: BossWorkbenchMCPRegistrationStatus) -> SwiftUI.Color {
-        switch status {
-        case .registered:
-            return .green
-        case .notRegistered, .needsUpdate:
-            return .orange
-        case .agentMissing, .executableMissing, .invalidConfig, .toolsNotInjected:
-            return .red
-        }
-    }
 }
 
 private struct AgentLanesCard: View {
@@ -11411,6 +11405,12 @@ final class WorkbenchViewModel: ObservableObject {
             agents: ouroAgents,
             bossRegistration: bossWorkbenchMCPRegistration,
             registrationByAgentName: bossWorkbenchMCPRegistrationByAgentName,
+            // Thread the live `tools/list` injection verdicts so the harness MCP pill
+            // reads GREEN only on a confirmed-present probe — the SAME verdict map the
+            // steady-state agent rows fold in. A missing key = not-probed = unverified
+            // (neutral), never a config-only false green. PRESENTATION only: the
+            // reachability/rollup axes deliberately ignore this map.
+            injectionByAgentName: bossWorkbenchToolsInjectionByAgentName,
             // Reuse the SAME live outward-lane verdicts / in-flight set the
             // steady-state rows compute (`refreshAgentOutwardReadiness`, kicked
             // off by `refreshOuroAgents` → driven by `refreshHarnessStatus`) so

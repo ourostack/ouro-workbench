@@ -157,10 +157,13 @@ final class AgentDetailReadinessWiringTests: XCTestCase {
         )
         // Locate the statusHeadline computed property and prove it no longer switches on
         // agent.status and no longer hardcodes the "Bundle ready" title off raw config.
+        // `statusHeadline` is now the last member of AgentStatusCard (the verdict-aware
+        // MCP-pill fix removed the trailing `mcpPillText`/`mcpPillColor` helpers that this
+        // slice used to anchor on), so end the slice at the struct's closing brace.
         let headlineDecl = try sourceSlice(
             in: body,
             from: "private var statusHeadline: String {",
-            to: "\n    private func mcpPillText"
+            to: "\n}"
         )
         XCTAssertFalse(
             headlineDecl.contains("switch agent.status"),
