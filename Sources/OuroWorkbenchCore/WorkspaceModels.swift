@@ -631,10 +631,12 @@ public func postLoadDecision(for report: DecodeReport) -> PostLoadDecision {
 
 public struct WorkspaceState: Codable, Equatable, Sendable {
     /// The state-file schema version this build reads and writes. The single
-    /// source of truth for the version check — `WorkbenchStore.load` rejects any
-    /// file whose `schemaVersion` differs, and `degradedReadReason` reports it as
-    /// the "supported" version when a newer file is found. Bump in lockstep with
-    /// a breaking schema change.
+    /// source of truth for the version check — `WorkbenchStore.load` reads any
+    /// file whose `schemaVersion` is `<= currentSchemaVersion` (older files
+    /// decode via the lenient per-field decoders) and rejects ONLY a file written
+    /// by a FUTURE build (`> currentSchemaVersion`), which `degradedReadReason`
+    /// reports with this as the "supported" version. Bump in lockstep with a
+    /// breaking schema change.
     public static let currentSchemaVersion = 1
     public var schemaVersion: Int
     public var boss: BossAgentSelection
