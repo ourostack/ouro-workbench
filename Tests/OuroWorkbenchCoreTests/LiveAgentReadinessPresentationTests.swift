@@ -195,6 +195,64 @@ final class LiveAgentReadinessPresentationTests: XCTestCase {
         XCTAssertTrue(help.lowercased().contains("config") || help.lowercased().contains("invalid"), "got: \(help)")
     }
 
+    // MARK: - headline: the PROMINENT card title (AgentStatusCard.statusHeadline)
+
+    /// The residual the detail-pane sweep missed: `AgentStatusCard.statusHeadline`
+    /// switched on raw config `agent.status` and returned the prominent title
+    /// "Bundle ready" for a config-`.ready` agent EVEN WHEN its live verdict was
+    /// `.authExpired` — so an expired-token agent read "Bundle ready" next to an
+    /// honest "sign-in needed" pill. The headline now routes through this seam off
+    /// the LIVE readiness, so the word "ready"/"Bundle ready" is reachable ONLY from
+    /// `.ready` (the sole state a `.working` live verdict produces).
+
+    /// HONESTY INVARIANT: "Bundle ready" (and any headline containing the word
+    /// "ready") is reachable ONLY from `.ready`.
+    func testHeadlineSaysBundleReadyOnlyForReady() {
+        XCTAssertEqual(P.headline(for: .ready, detail: "ready"), "Bundle ready")
+        for r in [R.checking, .authExpired, .vaultLocked, .unreachable, .unverified, .disabled, .missingConfig, .invalidConfig] {
+            let h = P.headline(for: r, detail: "x").lowercased()
+            XCTAssertFalse(
+                h.contains("ready"),
+                "only .ready may headline with the word 'ready'; \(r) headlined \"\(P.headline(for: r, detail: "x"))\""
+            )
+        }
+    }
+
+    /// Every non-ready live state gets an honest, distinct headline that never says "ready".
+    func testHeadlineForEachLiveState() {
+        XCTAssertEqual(P.headline(for: .ready, detail: "ready"), "Bundle ready")
+        XCTAssertEqual(P.headline(for: .checking, detail: "x"), "Checking connection…")
+        XCTAssertEqual(P.headline(for: .unverified, detail: "x"), "Not verified yet")
+        XCTAssertEqual(P.headline(for: .authExpired, detail: "x"), "Sign-in needed")
+        XCTAssertEqual(P.headline(for: .vaultLocked, detail: "x"), "Credentials locked")
+        XCTAssertEqual(P.headline(for: .unreachable, detail: "x"), "Provider unreachable")
+        XCTAssertEqual(P.headline(for: .disabled, detail: "x"), "Bundle disabled in agent.json")
+        XCTAssertEqual(P.headline(for: .missingConfig, detail: "x"), "Bundle missing agent.json")
+    }
+
+    /// Config-problem headlines keep the existing bundle-config wording (those ARE
+    /// config truths); `.invalidConfig` embeds the raw scanner detail like `help`/`reason`.
+    func testHeadlineForInvalidConfigEmbedsDetail() {
+        let detail = "The data couldn’t be read because it isn’t in the correct format."
+        let h = P.headline(for: .invalidConfig, detail: detail)
+        XCTAssertTrue(h.contains("isn’t in the correct format"), "invalidConfig headline must embed the raw detail; got: \(h)")
+        XCTAssertFalse(h.lowercased().contains("ready"))
+    }
+
+    func testHeadlineForInvalidConfigWithEmptyDetailStillReads() {
+        let h = P.headline(for: .invalidConfig, detail: "")
+        XCTAssertFalse(h.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        XCTAssertTrue(h.lowercased().contains("config") || h.lowercased().contains("invalid"), "got: \(h)")
+    }
+
+    /// Every state's headline is distinct (when fed the same detail) — no two live
+    /// states collapse to the same prominent title.
+    func testHeadlinesAreAllDistinct() {
+        let headlines = [R.ready, .checking, .authExpired, .vaultLocked, .unreachable, .unverified, .disabled, .missingConfig, .invalidConfig]
+            .map { P.headline(for: $0, detail: "the same detail") }
+        XCTAssertEqual(Set(headlines).count, headlines.count, "every state needs a distinct headline")
+    }
+
     // MARK: - Equatable / Sendable surface (compile-time + cheap runtime check)
 
     func testLiveReadinessIsEquatable() {

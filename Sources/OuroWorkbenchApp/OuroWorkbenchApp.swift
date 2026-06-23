@@ -8080,17 +8080,14 @@ private struct AgentStatusCard: View {
         InstalledAgentRowPresentation.dotColor(for: liveReadiness).swiftUIColor
     }
 
+    // Route the PROMINENT card title through the shared Core seam off the LIVE readiness
+    // (the same `liveReadiness` the icon / color / pill already use), so "Bundle ready"
+    // is reachable ONLY when a live check returned `.working`. The bug this replaces: the
+    // headline switched on raw config `agent.status` and read "Bundle ready" for a
+    // config-`.ready` agent even when its live verdict was `.authExpired` — "Bundle ready"
+    // next to an honest "sign-in needed" pill.
     private var statusHeadline: String {
-        switch agent.status {
-        case .ready:
-            return "Bundle ready"
-        case .disabled:
-            return "Bundle disabled in agent.json"
-        case .missingConfig:
-            return "Bundle missing agent.json"
-        case .invalidConfig:
-            return "Bundle config could not be read"
-        }
+        InstalledAgentRowPresentation.headline(for: liveReadiness, detail: agent.detail)
     }
 
     private func mcpPillText(_ status: BossWorkbenchMCPRegistrationStatus) -> String {

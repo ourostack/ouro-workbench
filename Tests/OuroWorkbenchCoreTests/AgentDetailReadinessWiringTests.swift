@@ -146,6 +146,32 @@ final class AgentDetailReadinessWiringTests: XCTestCase {
         )
     }
 
+    func testAgentStatusCardHeadlineRoutesThroughTheLiveSeam() throws {
+        let body = try agentStatusCardDecl()
+        // The headline must derive from the live readiness via the Core seam, not from a
+        // raw config-status switch — the residual the #261/#262 sweep missed: a config-`.ready`
+        // agent with a live `.authExpired` verdict still read the prominent title "Bundle ready".
+        XCTAssertTrue(
+            body.contains("InstalledAgentRowPresentation.headline(for: liveReadiness"),
+            "AgentStatusCard's statusHeadline must come from the live-aware headline(for:detail:) seam"
+        )
+        // Locate the statusHeadline computed property and prove it no longer switches on
+        // agent.status and no longer hardcodes the "Bundle ready" title off raw config.
+        let headlineDecl = try sourceSlice(
+            in: body,
+            from: "private var statusHeadline: String {",
+            to: "\n    private func mcpPillText"
+        )
+        XCTAssertFalse(
+            headlineDecl.contains("switch agent.status"),
+            "statusHeadline must NOT switch on the config-only agent.status (that was the residual false 'ready')"
+        )
+        XCTAssertFalse(
+            headlineDecl.contains("\"Bundle ready\""),
+            "statusHeadline must NOT return the prominent \"Bundle ready\" title off a raw agent.status switch independent of the live verdict"
+        )
+    }
+
     // MARK: - Helpers (mirror AgentReadinessOverlayWiringTests)
 
     private func ouroAgentRowDecl() throws -> String {
