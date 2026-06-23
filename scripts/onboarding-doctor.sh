@@ -14,15 +14,17 @@
 # Usage:  scripts/onboarding-doctor.sh [agent]      (default agent: ouroboros)
 set -euo pipefail
 
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+eval "$("$ROOT_DIR/scripts/read-workbench-release.sh")"
 AGENT="${1:-ouroboros}"
 
 # Prefer the installed app (the real Finder-launched binary); fall back to a local debug build.
-APP="$HOME/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbench"
+APP="$HOME/Applications/$WORKBENCH_APP_NAME.app/Contents/MacOS/$WORKBENCH_BUNDLE_EXECUTABLE"
 if [ ! -x "$APP" ]; then
-    APP="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.build/debug/OuroWorkbench"
+    APP="$ROOT_DIR/.build/debug/$WORKBENCH_BUNDLE_EXECUTABLE"
 fi
 if [ ! -x "$APP" ]; then
-    echo "error: no OuroWorkbench binary found (install the app, or 'swift build' first)" >&2
+    echo "error: no $WORKBENCH_BUNDLE_EXECUTABLE binary found (install the app, or 'swift build' first)" >&2
     exit 1
 fi
 

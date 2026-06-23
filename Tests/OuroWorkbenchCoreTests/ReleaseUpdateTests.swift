@@ -259,6 +259,27 @@ final class ReleaseUpdateTests: XCTestCase {
         XCTAssertEqual(snapshot.latestVersion, "0.1.1")
     }
 
+    func testDefaultConfigurationBuildsShellIdentityFromWorkbenchRelease() {
+        let configuration = ReleaseUpdateConfiguration(currentBuild: "123")
+        let identity = configuration.appShellIdentity
+
+        XCTAssertEqual(identity.appName, WorkbenchRelease.appName)
+        XCTAssertEqual(identity.bundleIdentifier, WorkbenchRelease.bundleIdentifier)
+        XCTAssertEqual(identity.repository, WorkbenchRelease.repository)
+        XCTAssertEqual(identity.version, WorkbenchRelease.version)
+        XCTAssertEqual(identity.build, "123")
+        XCTAssertEqual(identity.userAgent, WorkbenchRelease.userAgent(version: WorkbenchRelease.version))
+        XCTAssertEqual(configuration.appShellConfiguration.releasePolicy, .workbench(namePrefix: WorkbenchRelease.artifactNamePrefix))
+        XCTAssertEqual(configuration.releasesURL, identity.releasesAPIURL)
+    }
+
+    func testConfiguredVersionFlowsIntoShellIdentityUserAgent() {
+        let configuration = ReleaseUpdateConfiguration(currentVersion: "9.8.7")
+
+        XCTAssertEqual(configuration.appShellIdentity.version, "9.8.7")
+        XCTAssertEqual(configuration.appShellIdentity.userAgent, "OuroWorkbench/9.8.7")
+    }
+
     func testSnapshotReportsUnavailableWhenVersionCannotBeCompared() throws {
         let data = Data("""
         [

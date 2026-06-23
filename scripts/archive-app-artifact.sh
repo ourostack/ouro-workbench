@@ -2,7 +2,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_DIR="$ROOT_DIR/dist/Ouro Workbench.app"
+eval "$("$ROOT_DIR/scripts/read-workbench-release.sh")"
+APP_DIR="$ROOT_DIR/dist/$WORKBENCH_APP_NAME.app"
 OUT_DIR="$ROOT_DIR/artifacts"
 
 usage() {
@@ -59,8 +60,8 @@ if git -C "$ROOT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     dirty_suffix="-dirty"
   fi
 fi
-archive_name="OuroWorkbench-${version}-build.${build}-${short_sha}${dirty_suffix}.zip"
-manifest_name="OuroWorkbench-${version}-build.${build}-${short_sha}${dirty_suffix}.manifest.json"
+archive_name="$WORKBENCH_ARTIFACT_NAME_PREFIX${version}-build.${build}-${short_sha}${dirty_suffix}.zip"
+manifest_name="$WORKBENCH_ARTIFACT_NAME_PREFIX${version}-build.${build}-${short_sha}${dirty_suffix}.manifest.json"
 archive_path="$OUT_DIR/$archive_name"
 manifest_path="$OUT_DIR/$manifest_name"
 
@@ -73,7 +74,7 @@ bytes="$(stat -f %z "$archive_path")"
 created_at="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
 printf '{\n' > "$manifest_path"
-printf '  "appName": "Ouro Workbench",\n' >> "$manifest_path"
+printf '  "appName": "%s",\n' "$WORKBENCH_APP_NAME" >> "$manifest_path"
 printf '  "bundleIdentifier": "%s",\n' "$bundle_id" >> "$manifest_path"
 printf '  "version": "%s",\n' "$version" >> "$manifest_path"
 printf '  "build": "%s",\n' "$build" >> "$manifest_path"

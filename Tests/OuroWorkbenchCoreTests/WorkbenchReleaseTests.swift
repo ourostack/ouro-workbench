@@ -16,6 +16,11 @@ final class WorkbenchReleaseTests: XCTestCase {
         XCTAssertEqual(WorkbenchRelease.bundleExecutable, "OuroWorkbench")
         XCTAssertEqual(WorkbenchRelease.mcpExecutable, "OuroWorkbenchMCP")
         XCTAssertEqual(WorkbenchRelease.mcpServerName, "ouro-workbench")
+        XCTAssertEqual(WorkbenchRelease.artifactNamePrefix, "\(WorkbenchRelease.bundleExecutable)-")
+        XCTAssertEqual(WorkbenchRelease.repository, "ourostack/ouro-workbench")
+        XCTAssertEqual(WorkbenchRelease.issueRepo, WorkbenchRelease.repository)
+        XCTAssertEqual(WorkbenchRelease.userAgent(), "OuroWorkbench/\(WorkbenchRelease.version)")
+        XCTAssertEqual(WorkbenchRelease.userAgent(version: "9.8.7"), "OuroWorkbench/9.8.7")
         XCTAssertEqual(WorkbenchRelease.minimumMacOSVersion, "14.0")
         XCTAssertTrue(WorkbenchRelease.version.range(of: #"^\d+\.\d+\.\d+([-.][0-9A-Za-z.]+)?$"#, options: .regularExpression) != nil)
     }

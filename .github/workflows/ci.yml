@@ -137,8 +137,8 @@ jobs:
         with:
           name: ouro-workbench-app-${{ github.sha }}
           path: |
-            artifacts/OuroWorkbench-*.zip
-            artifacts/OuroWorkbench-*.manifest.json
+            artifacts/*.zip
+            artifacts/*.manifest.json
           if-no-files-found: error
           retention-days: 7
 

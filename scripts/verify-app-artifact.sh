@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+eval "$("$ROOT_DIR/scripts/read-workbench-release.sh")"
 MANIFEST_PATH=""
 ARCHIVE_PATH=""
 TEMP_ROOT=""
@@ -40,6 +41,7 @@ manifest_value() {
 }
 
 archive_name="$(manifest_value archive)"
+expected_app_name="$(manifest_value appName)"
 expected_sha256="$(manifest_value sha256)"
 expected_bytes="$(manifest_value bytes)"
 expected_bundle_id="$(manifest_value bundleIdentifier)"
@@ -53,6 +55,7 @@ fi
 
 [[ -f "$ARCHIVE_PATH" ]] || fail "missing archive $ARCHIVE_PATH"
 [[ "$(basename "$ARCHIVE_PATH")" == "$archive_name" ]] || fail "archive name does not match manifest"
+[[ "$expected_app_name" == "$WORKBENCH_APP_NAME" ]] || fail "manifest app name does not match WorkbenchRelease"
 [[ "$expected_sha256" =~ ^[0-9a-f]{64}$ ]] || fail "manifest sha256 is not valid"
 [[ "$expected_bytes" =~ ^[0-9]+$ ]] || fail "manifest byte count is not numeric"
 [[ "$expected_build" =~ ^[0-9]+$ ]] || fail "manifest build is not numeric"
@@ -67,8 +70,8 @@ actual_bytes="$(stat -f %z "$ARCHIVE_PATH")"
 
 TEMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/ouro-workbench-artifact.XXXXXX")"
 ditto -x -k "$ARCHIVE_PATH" "$TEMP_ROOT"
-EXTRACTED_APP="$TEMP_ROOT/Ouro Workbench.app"
-[[ -d "$EXTRACTED_APP" ]] || fail "archive does not expand to Ouro Workbench.app"
+EXTRACTED_APP="$TEMP_ROOT/$expected_app_name.app"
+[[ -d "$EXTRACTED_APP" ]] || fail "archive does not expand to $expected_app_name.app"
 
 "$ROOT_DIR/scripts/verify-app-bundle.sh" "$EXTRACTED_APP" --expected-version "$expected_version" >/dev/null
 

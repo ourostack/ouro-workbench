@@ -11,7 +11,9 @@
 # Uses the debug build (swift build), so it runs without packaging the app.
 set -euo pipefail
 
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+eval "$("$ROOT_DIR/scripts/read-workbench-release.sh")"
+cd "$ROOT_DIR"
 
 GUIDE="Sources/OuroWorkbenchCore/WorkbenchGuide.swift"
 
@@ -37,10 +39,10 @@ if [ -z "$expected" ]; then
   exit 1
 fi
 
-echo "==> swift build --product OuroWorkbenchMCP"
-swift build --product OuroWorkbenchMCP >/dev/null
+echo "==> swift build --product $WORKBENCH_MCP_EXECUTABLE"
+swift build --product "$WORKBENCH_MCP_EXECUTABLE" >/dev/null
 
-bin="$(swift build --product OuroWorkbenchMCP --show-bin-path)/OuroWorkbenchMCP"
+bin="$(swift build --product "$WORKBENCH_MCP_EXECUTABLE" --show-bin-path)/$WORKBENCH_MCP_EXECUTABLE"
 if [ ! -x "$bin" ]; then
   echo "error: MCP binary not found at $bin" >&2
   exit 1

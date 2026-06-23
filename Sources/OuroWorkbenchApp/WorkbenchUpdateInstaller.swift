@@ -18,7 +18,7 @@ enum WorkbenchUpdatePrompt: Equatable {
     var message: String {
         switch self {
         case let .installable(release):
-            return "Ouro Workbench \(release) is available. Install it now and relaunch? Your running terminals keep running across the update."
+            return "\(WorkbenchRelease.appName) \(release) is available. Install it now and relaunch? Your running terminals keep running across the update."
         case let .upToDate(release):
             return "You're on the latest release (\(release))."
         case let .failed(detail):
@@ -68,7 +68,7 @@ struct WorkbenchUpdateInstaller: Sendable {
             case let .unzipFailed(message):
                 return "Could not expand the downloaded archive: \(message)"
             case .missingStagedApp:
-                return "The downloaded archive did not contain Ouro Workbench.app."
+                return "The downloaded archive did not contain \(WorkbenchRelease.appName).app."
             case let .stagedIdentityMismatch(message):
                 return "The downloaded app failed its identity check: \(message)"
             case let .codesignFailed(message):
@@ -123,7 +123,7 @@ struct WorkbenchUpdateInstaller: Sendable {
         guard unzip.status == 0 else {
             throw InstallError.unzipFailed(unzip.stderr.isEmpty ? "ditto exited \(unzip.status)" : unzip.stderr)
         }
-        let appURL = extractRoot.appendingPathComponent("Ouro Workbench.app")
+        let appURL = extractRoot.appendingPathComponent("\(WorkbenchRelease.appName).app")
         guard fileManager.fileExists(atPath: appURL.path) else {
             throw InstallError.missingStagedApp
         }
@@ -209,7 +209,7 @@ struct WorkbenchUpdateInstaller: Sendable {
 
     private func data(from url: URL) async throws -> Data {
         var request = URLRequest(url: url)
-        request.setValue("OuroWorkbench/\(currentVersion)", forHTTPHeaderField: "User-Agent")
+        request.setValue(WorkbenchRelease.userAgent(version: currentVersion), forHTTPHeaderField: "User-Agent")
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
