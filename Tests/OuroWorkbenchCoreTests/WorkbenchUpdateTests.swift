@@ -128,6 +128,27 @@ final class WorkbenchUpdateTests: XCTestCase {
         XCTAssertEqual(WorkbenchUpdatePlanError.badAssetURL.errorDescription, "The release asset download URL was not valid.")
     }
 
+    func testPlanFailsWhenAssetURLIsPlainHTTP() {
+        let assets = [
+            ReleaseUpdateAsset(
+                name: "OuroWorkbench-0.1.122-build.199-779ed85.zip",
+                downloadURL: "http://example.com/OuroWorkbench-0.1.122-build.199-779ed85.zip",
+                size: 10
+            ),
+            ReleaseUpdateAsset(
+                name: "OuroWorkbench-0.1.122-build.199-779ed85.manifest.json",
+                downloadURL: "https://example.com/OuroWorkbench-0.1.122-build.199-779ed85.manifest.json",
+                size: 10
+            ),
+        ]
+
+        let result = WorkbenchUpdatePlanner.plan(
+            from: snapshot(status: .updateAvailable, latest: "0.1.122", assets: assets)
+        )
+
+        XCTAssertEqual(result, .failure(.badAssetURL))
+    }
+
     // MARK: - Verification
 
     private func manifest(

@@ -14,11 +14,15 @@ let package = Package(
         .executable(name: "OuroWorkbenchScenarioVerifier", targets: ["OuroWorkbenchScenarioVerifier"])
     ],
     dependencies: [
+        .package(url: "https://github.com/ourostack/ouro-native-apple-app-shell.git", branch: "main"),
         .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", from: "1.13.0")
     ],
     targets: [
         .target(
-            name: "OuroWorkbenchCore"
+            name: "OuroWorkbenchCore",
+            dependencies: [
+                .product(name: "OuroAppShellCore", package: "ouro-native-apple-app-shell")
+            ]
         ),
         .executableTarget(
             name: "OuroWorkbenchApp",
