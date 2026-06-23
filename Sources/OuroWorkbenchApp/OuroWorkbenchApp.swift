@@ -20222,7 +20222,8 @@ final class WorkbenchViewModel: ObservableObject {
     /// `save()` so the action-log rows and their decision/inbox rows persist
     /// atomically. The depth counter is restored before the flush (so the flush's
     /// own `save()` isn't suppressed), and on any throw the depth is still restored
-    /// via `defer`. The trailing `save()` honors the existing reset/load
+    /// (the catch decrements before rethrowing) — so a throwing body can't leave the
+    /// batch wedged-suppressed. The trailing `save()` honors the existing reset/load
     /// suppression guards exactly as a normal save would.
     @discardableResult
     private func withBatchedSave<T>(_ body: () throws -> T) rethrows -> T {
