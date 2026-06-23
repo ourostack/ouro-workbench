@@ -410,6 +410,12 @@ public struct DaemonManager: Sendable {
     /// So we REAP the short-lived child — but via a DETACHED `waitpid` (the `reap` seam runs the
     /// blocking wait off this task) so `detachedStart` still returns at once and never blocks on
     /// the long-lived daemon. The detached wait reaps the launcher whenever it exits.
+    ///
+    /// PROCESS-RELIABILITY NOTE: this is the tracked + explicitly-reaped form. The spawn returns the
+    /// launcher pid (`SpawnInOwnGroup.spawn`) and `reap` waits on exactly that pid, so the
+    /// short-lived `env ouro up` child is never left as an untracked fire-and-forget process — it is
+    /// always reaped (no `<defunct>` accumulation), while the independent daemon grandchild is
+    /// deliberately left to launchd. No behaviour change is needed for the daemon-bringup path.
     @Sendable
     public static func detachedStart() async throws {
         try detachedStartSync(spawn: defaultSpawn, reap: defaultReap)
