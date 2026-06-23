@@ -96,19 +96,14 @@ final class DaemonChipAvailabilityWiringTests: XCTestCase {
     /// `dashboard.daemonStatus` through `MetricValuePresentation.resolve(text:...)`
     /// gated on `availability.machineAvailable` — exactly like its sibling metrics.
     func testDaemonStatusChipRoutesThroughMetricStateChipGatedOnMachineAvailable() throws {
-        let body = try sourceSlice(
-            from: "struct DashboardMetricsStrip: View {",
-            to: "struct MetricStateChip: View {"
-        )
+        let body = try strippedStrip()
         XCTAssertFalse(
-            body.contains("MetricChip(label: \"daemon\""),
+            body.contains("MetricChip( label: \"daemon\"") || body.contains("MetricChip(label: \"daemon\""),
             "the daemon chip must NOT render via the inert MetricChip — that's the stale-signal bug"
         )
-        let daemonChip = try slice(
-            in: body,
-            label: "\"daemon\"",
-            endingBefore: "MetricStateChip(\n                    label: \"needs me\""
-        )
+        // The chunk owning the daemon chip: from its constructor up to the next chip
+        // (`label: "needs me"`) — so a SIBLING chip's wiring can't satisfy it.
+        let daemonChip = try chipChunk(in: body, label: "\"daemon\"", nextLabel: "\"needs me\"")
         XCTAssertTrue(
             daemonChip.contains("MetricStateChip("),
             "the daemon chip must render via MetricStateChip like its siblings"
@@ -126,19 +121,13 @@ final class DaemonChipAvailabilityWiringTests: XCTestCase {
     /// Source-pin: the `mode` chip must likewise render via `MetricStateChip` gated on
     /// `availability.machineAvailable`, folding `dashboard.daemonMode`.
     func testDaemonModeChipRoutesThroughMetricStateChipGatedOnMachineAvailable() throws {
-        let body = try sourceSlice(
-            from: "struct DashboardMetricsStrip: View {",
-            to: "struct MetricStateChip: View {"
-        )
+        let body = try strippedStrip()
         XCTAssertFalse(
-            body.contains("MetricChip(label: \"mode\""),
+            body.contains("MetricChip( label: \"mode\"") || body.contains("MetricChip(label: \"mode\""),
             "the mode chip must NOT render via the inert MetricChip — that's the stale-signal bug"
         )
-        let modeChip = try slice(
-            in: body,
-            label: "\"mode\"",
-            endingBefore: nil
-        )
+        // The mode chip is the last in the strip — from its constructor to the end.
+        let modeChip = try chipChunk(in: body, label: "\"mode\"", nextLabel: nil)
         XCTAssertTrue(
             modeChip.contains("MetricStateChip("),
             "the mode chip must render via MetricStateChip like its siblings"
@@ -157,11 +146,8 @@ final class DaemonChipAvailabilityWiringTests: XCTestCase {
     /// `MetricValuePresentation.resolve(text:` — the daemon values are strings, not the
     /// integer counts the sibling chips use.
     func testDaemonChipsUseTheStringPresentationResolver() throws {
-        let body = try sourceSlice(
-            from: "struct DashboardMetricsStrip: View {",
-            to: "struct MetricStateChip: View {"
-        )
-        let resolverCount = body.components(separatedBy: "MetricValuePresentation.resolve(\n                        text:").count - 1
+        let body = try strippedStrip()
+        let resolverCount = body.components(separatedBy: "MetricValuePresentation.resolve( text:").count - 1
         XCTAssertGreaterThanOrEqual(
             resolverCount, 2,
             "both daemon chips must fold their string value through MetricValuePresentation.resolve(text:...)"
@@ -192,15 +178,41 @@ final class DaemonChipAvailabilityWiringTests: XCTestCase {
         return String(source[start..<end])
     }
 
-    /// Narrow `body` to the chunk that renders a single labelled chip — from the chip's
-    /// label up to the next chip (or the end of the strip). Keeps each chip's assertion
-    /// from being satisfied by a SIBLING chip's wiring.
-    private func slice(in body: String, label: String, endingBefore endMarker: String?) throws -> String {
-        let start = try XCTUnwrap(body.range(of: label)?.lowerBound, "chip label \(label) not found")
-        guard let endMarker,
-              let end = body.range(of: endMarker, range: start..<body.endIndex)?.lowerBound else {
-            return String(body[start..<body.endIndex])
+    /// The `DashboardMetricsStrip` body with runs of whitespace collapsed to single
+    /// spaces, so the assertions are robust to the concurrent-session reformatting of
+    /// `OuroWorkbenchApp.swift` (indentation / line-break churn) the task warns about.
+    private func strippedStrip() throws -> String {
+        let body = try sourceSlice(
+            from: "struct DashboardMetricsStrip: View {",
+            to: "struct MetricStateChip: View {"
+        )
+        return body
+            .components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+    }
+
+    /// Narrow the (whitespace-normalized) strip to the chunk that renders a single
+    /// labelled chip — from the chip-constructor call (`*Chip(`) that immediately
+    /// precedes the chip's `label: "<x>"`, up to the next chip's label (or the end of
+    /// the strip). Anchoring at the preceding constructor (not the label) means the
+    /// chunk OWNS its own `MetricStateChip(` opening, so the assertion can't be
+    /// satisfied by a SIBLING chip's constructor.
+    private func chipChunk(in body: String, label: String, nextLabel: String?) throws -> String {
+        let labelStart = try XCTUnwrap(body.range(of: label)?.lowerBound, "chip label \(label) not found")
+        // Walk back to the nearest chip-constructor opening before this label. Prefer
+        // the longest match (`MetricStateChip(`) so the chunk owns its full constructor
+        // name, falling back to the inert `MetricChip(` when that's what's wired.
+        let stateCtor = body.range(of: "MetricStateChip(", options: .backwards, range: body.startIndex..<labelStart)?.lowerBound
+        let inertCtor = body.range(of: "MetricChip(", options: .backwards, range: body.startIndex..<labelStart)?.lowerBound
+        let ctorStart = try XCTUnwrap(
+            [stateCtor, inertCtor].compactMap { $0 }.max(),
+            "no chip constructor precedes label \(label)"
+        )
+        guard let nextLabel,
+              let end = body.range(of: nextLabel, range: labelStart..<body.endIndex)?.lowerBound else {
+            return String(body[ctorStart..<body.endIndex])
         }
-        return String(body[start..<end])
+        return String(body[ctorStart..<end])
     }
 }
