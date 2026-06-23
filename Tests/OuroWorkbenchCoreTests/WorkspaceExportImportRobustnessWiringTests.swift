@@ -174,6 +174,32 @@ final class WorkspaceExportImportRobustnessWiringTests: XCTestCase {
         )
     }
 
+    /// FIX: a FILE-READ failure (`.fileUnreadable` — file momentarily locked /
+    /// EACCES / network-volume blip / EIO) is recoverable, so it must be handled in
+    /// the typed catch (an honest error message) but classify as `.transient` →
+    /// KEEP the recent. The typed switch must include a `.fileUnreadable` arm so it
+    /// compiles exhaustively AND surfaces the read failure honestly; the single
+    /// decision-gated prune (`shouldForget(after: classify(configError))`) then maps
+    /// the read failure to keep, so the recent survives a blip.
+    func testOpenRecentHandlesReadFailureArmHonestly() throws {
+        let source = try appSource()
+        let structuralCatch = try sourceSlice(
+            in: source,
+            from: "catch let configError as WorkbenchWorkspaceConfigError {",
+            to: "} catch {"
+        )
+        XCTAssertTrue(
+            structuralCatch.contains("case .fileUnreadable"),
+            "the typed catch must handle .fileUnreadable so a read blip surfaces an honest message"
+        )
+        // The read failure must NOT carry its own forget — pruning stays gated on
+        // the single shared decision, which classifies .fileUnreadable as keep.
+        XCTAssertTrue(
+            structuralCatch.contains("WorkbenchRecentWorkspacePruning.classify(configError)"),
+            "the read failure must route through the shared classify(...) decision, not a bespoke prune"
+        )
+    }
+
     /// INVERSE-BUG GUARD: the generic `catch` (a transient / unknown error a retry
     /// might clear) must NOT prune the recent — only structural failures do.
     func testOpenRecentDoesNotPruneOnTransientError() throws {
