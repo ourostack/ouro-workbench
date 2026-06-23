@@ -13,8 +13,8 @@
 
 ## Completion Criteria
 - [x] FIX1: pump gates drain+apply on `bossWatchIsEnabled`; queued requests HELD on disk when paused, applied on resume; ON-path unchanged
-- [ ] FIX2: screen terminators SIGKILL after the timeout+terminate() at each call site
-- [ ] FIX3: a single check-in applies actions + records decisions then save()s ONCE; suppression guards respected
+- [x] FIX2: screen terminators SIGKILL after the timeout+terminate() at each call site
+- [x] FIX3: a single check-in applies actions + records decisions then save()s ONCE; suppression guards respected
 - [ ] FIX4: boss-watch loop doesn't wake-spin every 60s while Watch is OFF (start/stop driven by setBossWatchEnabled)
 - [ ] New Core seam logic 100% line+region; allowlist unchanged at 2
 - [ ] `swift build` + `swift test` strict flags clean (0 failures, 0 warnings)
@@ -39,7 +39,7 @@
 **Output:** Pure seam + gated pump. Queued requests HELD on disk while paused.
 **Acceptance:** Paused → no apply, queue intact on disk. Resumed → held queue applies. ON → unchanged. Manual one-shot Check-In unaffected (separate path).
 
-## Unit 2 — FIX2 (MED): screen-terminate SIGKILL backstop ⬜
+## Unit 2 — FIX2 (MED): screen-terminate SIGKILL backstop ✅
 
 **What:** After each screen terminator's `waitUntilExit` timeout fires + `process.terminate()`, add `kill(process.processIdentifier, SIGKILL)` (mirror BossAgentMCPClient forceKill / WorkbenchVisibility pattern).
 
@@ -52,7 +52,7 @@
 **Output:** SIGKILL backstop at each call site.
 **Acceptance:** A SIGTERM-ignoring screen process is force-killed.
 
-## Unit 3 — FIX3 (MED): single check-in → save() once ⬜
+## Unit 3 — FIX3 (MED): single check-in → save() once ✅
 
 **What:** Restructure so one check-in applies actions + records decisions, then `save()` ONCE at the end. Add a batched-save suppression seam so the per-action `recordActionLog` saves + `recordBossDecisions` save fold into a single trailing save. Respect `isLoadingState`/`isResettingToFirstRun` guards.
 
@@ -85,3 +85,5 @@
 ## Progress Log
 - 2026-06-23 10:46 Doc created; worktree + branch set up off origin/main (a6516ec); all anchors re-verified by grep.
 - 2026-06-23 11:35 Unit 1 (FIX1) complete: `BossAutonomyGating.shouldApplyQueuedActions` seam (Core) + pump loop gates `drainExternalActionRequests()` on `bossWatchIsEnabled` BEFORE draining, so paused requests stay HELD in queue dir (drain moves to processing/; skipping the drain is what holds them). 4 FIX1 tests green; strict build clean. Commit b7ba4d5.
+- 2026-06-23 11:38 Unit 2 (FIX2) complete: SIGKILL backstop `kill(process.processIdentifier, SIGKILL)` after the timeout `terminate()` at all 3 screen terminators (spawnScreenQuit, listLiveScreenSessionNames, persistentSessionIsListed). 2 FIX2 tests green; strict build clean. Commit 6b57a36.
+- 2026-06-23 11:42 Unit 3 (FIX3) complete: `withBatchedSave` scope wraps `applyBossActions` + `recordBossDecisions` in `runBossCheckIn`; per-step saves suppressed via `bossCheckInSaveBatchDepth` guard in model `save()`; one trailing save() persists action-log + decision/inbox rows atomically; dropped `recordBossDecisions`'s inline `if changed>0 { save() }`. Existing reset/load guards preserved. 2 FIX3 tests green; all 443 prior tests pass (only 3 unimplemented FIX4 tests red); strict build clean. Commit 34d61c1.
