@@ -15,7 +15,7 @@
 - **Acceptance:** focus on B while A is sidebar-selected → active == B. Focus OFF → active stays sidebar selection (inverse-bug guard). Secondary-pane path preserved when focus OFF.
 - **Tests:** `ActiveEntryResolverTests` (exhaustive pure) + source-pin in `NavCheckInWiringTests`.
 
-### ⬜ Unit 2 — FIX 2 (MED): manual Check-In failure falsely promises a retry
+### ✅ Unit 2 — FIX 2 (MED): manual Check-In failure falsely promises a retry — DONE @ 3aee47b
 - **What:** With Boss Watch OFF, a failed manual Check In shows "Workbench will try again shortly" / "keeps trying…" but nothing retries (only `runBossWatchLoop`, gated on `bossWatchIsEnabled`, retries).
 - **Approach:** pure Core seam `BossCheckInFailureCopy.copy(failureCount:bossWatchIsEnabled:)` → returns honest copy. Watch OFF → "Check-In didn't go through. Press Check In to try again." Watch ON → existing "will try again"/"keeps trying" copy.
 - **Output:** new copy seam in Core (alongside `BossWatchBackoff`); catch-path `bossCheckInAnswer` + the persistent banner (≥2 failures) wired through it.
@@ -38,7 +38,7 @@
 
 ## Completion Criteria
 - [x] FIX 1: pure resolver + focus-mode-wins; normal case unchanged
-- [ ] FIX 2: honest copy when watch OFF; truthful copy when ON
+- [x] FIX 2: honest copy when watch OFF; truthful copy when ON
 - [ ] FIX 3: ⌘J empty-queue sets transient status (reused infra)
 - [ ] FIX 4: `.noBoss` vs `.bossUnreachable` split, wired
 - [ ] `swift build` + `swift test` clean (warnings-as-errors, strict concurrency)
@@ -48,3 +48,4 @@
 ## Progress Log
 - 2026-06-23 09:36 doing doc created; branch off main @ dd852d5; baseline build clean. Symbols re-located (line numbers were stale).
 - 2026-06-23 09:53 Unit 1 (FIX 1) complete @ 8dbec6d: ActiveEntryResolver pure seam (approach b — focus-mode wins authoritatively); activeEntry folds through it; 9 resolver tests + 4 wiring pins; coverage 100% (allowlist still 2); build clean (warnings-as-errors + strict concurrency).
+- 2026-06-23 09:59 Unit 2 (FIX 2) complete @ 3aee47b: BossCheckInFailureCopy seam (failureLine + persistentBanner, branched on bossWatchIsEnabled); catch-path transient line + persistent banner wired through it. Note: persistent banner is watch-gated (bossWatchLastError only set when watch ON) — wired the seam defensively anyway. 8 copy tests + 6 wiring pins; coverage 100% (allowlist 2).
