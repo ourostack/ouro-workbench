@@ -30,7 +30,7 @@ Pure Core logic gets exhaustive unit tests + 100% line/region. Allowlist stays a
 
 ## Units
 
-### ⬜ U1 — FIX 1: atomic workspace export write (MED, data loss)
+### ✅ U1 — FIX 1: atomic workspace export write (MED, data loss)
 - **What:** Add `options: [.atomic]` to the export `write(to:)` in
   `presentSaveWorkspacePanel()`. Atomic write goes to a temp file + renames, so a
   partial/interrupted write never clobbers the operator's prior workspace file.
@@ -77,10 +77,12 @@ Pure Core logic gets exhaustive unit tests + 100% line/region. Allowlist stays a
 - `Scripts/check-coverage.sh` — pure Workbench logic 100% line+region; allowlist at 2.
 
 ## Completion Criteria
-- [ ] U1: both/all export writes atomic (confirmed via grep + source-pin).
+- [x] U1: both/all export writes atomic (confirmed via grep + source-pin). Repo-wide grep confirms exactly ONE workspace-export write (`presentSaveWorkspacePanel`); now `.write(to: url, options: [.atomic])`.
 - [ ] U2: already-present count surfaced distinctly from error-skips; matched terminals NOT updated.
 - [ ] U3: recents pruned on missing/malformed/noTerminals; kept on transient; pure decision + exhaustive test.
 - [ ] Coverage 100% line+region on new Core logic; allowlist unchanged at 2.
 - [ ] 3 commits (one per fix), pushed. No merge/PR.
 
 ## Progress log
+
+- 2026-06-23 09:53 U1 (FIX 1) complete: source-pin red→green, added `options: [.atomic]` to the lone export write in `presentSaveWorkspacePanel()`. Build clean under `-warnings-as-errors -strict-concurrency=complete`. Commits: f6cdd03 (test), e8ed00f (impl).
