@@ -2008,15 +2008,46 @@ struct ImportSummaryBanner: View {
     @ObservedObject var model: WorkbenchViewModel
     @State private var dismissTask: Task<Void, Never>?
 
+    /// Resolve the honest banner tone via the pure Core seam: green ONLY when the
+    /// import's durable write landed; an orange warning when it didn't. A
+    /// persisted import (the common case, including a partial import with skips)
+    /// still reads as the normal green success.
+    private func tone(for summary: WorkbenchImportApplyResult) -> WorkbenchImportSummaryPresentation.Tone {
+        WorkbenchImportSummaryPresentation.tone(
+            persisted: summary.persisted,
+            createdCount: summary.createdCount
+        )
+    }
+
+    /// Map the framework-free `SemanticColor` the seam returns to a SwiftUI
+    /// `Color` (`.green → .green`, `.orange → .orange`).
+    private func swiftUIColor(for color: WorkbenchImportSummaryPresentation.SemanticColor) -> SwiftUI.Color {
+        switch color {
+        case .green:
+            return .green
+        case .orange:
+            return .orange
+        }
+    }
+
     var body: some View {
         Group {
             if let summary = model.lastImportSummary {
+                let tone = tone(for: summary)
+                let accent = swiftUIColor(for: WorkbenchImportSummaryPresentation.color(for: tone))
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Image(systemName: summary.hasImports ? "checkmark.seal.fill" : "info.circle.fill")
-                        .foregroundStyle(summary.hasImports ? Color.accentColor : Color.secondary)
+                    Image(systemName: WorkbenchImportSummaryPresentation.iconSystemName(for: tone))
+                        .foregroundStyle(accent)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(summary.headline)
                             .font(.subheadline.weight(.semibold))
+                        if !summary.persisted {
+                            Text(WorkbenchImportSummaryPresentation.notPersistedNote)
+                                .font(.caption)
+                                .foregroundStyle(accent)
+                                .lineLimit(2)
+                                .truncationMode(.tail)
+                        }
                         if let detail = summary.detail {
                             Text(detail)
                                 .font(.caption)
@@ -2047,7 +2078,7 @@ struct ImportSummaryBanner: View {
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(Color.accentColor.opacity(0.25), lineWidth: 1)
+                        .strokeBorder(accent.opacity(0.25), lineWidth: 1)
                 )
                 .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 2)
                 .padding(.top, 12)
@@ -10213,6 +10244,12 @@ struct WorkbenchImportApplyResult: Equatable {
     var groupNames: [String]
     var skippedNames: [String]
     var firstSelectedEntryID: UUID?
+    /// Whether the durable `store.save(state)` that backs this import actually
+    /// landed. The import-apply paths thread the view-model `save()`'s Bool here
+    /// so the banner can render HONESTLY: green only when persisted, an orange
+    /// "lost on quit" warning when the write failed. Defaults to `true` so this
+    /// stays additive for any construction that doesn't gate on persistence.
+    var persisted: Bool = true
 
     var hasImports: Bool { createdCount > 0 }
 
@@ -13276,7 +13313,10 @@ final class WorkbenchViewModel: ObservableObject {
             }
         }
 
-        save()
+        // Capture whether the durable write landed; the green banner + the
+        // succeeded:true action log gate on this. A swallowed write failure used
+        // to surface as a false green over an in-memory-only import.
+        let persisted = save()
         refreshExecutableHealth()
         // Auto-resume the entries the config explicitly marked autoResume so
         // the workspace boots up the way the file promised.
@@ -13288,15 +13328,17 @@ final class WorkbenchViewModel: ObservableObject {
             createdCount: createdEntries.count,
             groupNames: createdEntries.isEmpty ? [] : [groupName],
             skippedNames: skippedNames,
-            firstSelectedEntryID: createdEntries.first?.id
+            firstSelectedEntryID: createdEntries.first?.id,
+            persisted: persisted
         )
         lastImportSummary = result
+        let saveNote = persisted ? "" : " (not saved to disk — will be lost on quit)"
         recordActionLog(
             source: "native",
             action: "openWorkspaceConfig",
             targetName: groupName,
-            result: "Workspace \(groupName) created \(createdEntries.count) terminals (skipped \(skippedNames.count))",
-            succeeded: true
+            result: "Workspace \(groupName) created \(createdEntries.count) terminals (skipped \(skippedNames.count))\(saveNote)",
+            succeeded: persisted
         )
         return result
     }
@@ -15585,22 +15627,27 @@ final class WorkbenchViewModel: ObservableObject {
 
         selectedProjectID = firstImportedProjectID ?? state.projects.first?.id
         selectedEntryID = createdEntries.first?.id ?? selectedEntryID
-        save()
+        // Gate the green success on the durable write actually landing — a
+        // swallowed write failure used to surface as a false-green onboarding
+        // import that's lost on quit.
+        let persisted = save()
         refreshExecutableHealth()
         for entry in createdEntries {
             launch(entry)
         }
+        let saveNote = persisted ? "" : " (not saved to disk — will be lost on quit)"
         recordActionLog(
             source: "native",
             action: "applyOnboardingProposal",
-            result: "Created \(createdEntries.count) terminals",
-            succeeded: true
+            result: "Created \(createdEntries.count) terminals\(saveNote)",
+            succeeded: persisted
         )
         let result = WorkbenchImportApplyResult(
             createdCount: createdEntries.count,
             groupNames: importedGroupNames,
             skippedNames: skipped,
-            firstSelectedEntryID: createdEntries.first?.id
+            firstSelectedEntryID: createdEntries.first?.id,
+            persisted: persisted
         )
         onboardingImportSummaryHasImports = result.hasImports
         lastImportSummary = result
