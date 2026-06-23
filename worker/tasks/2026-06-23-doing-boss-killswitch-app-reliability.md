@@ -9,17 +9,17 @@
 - **Constraints:** strict TDD; commit per fix; push branch; DO NOT merge/PR. No Co-Authored-By / AI attribution. No `SerpentGuide.ouro/` staged. Allowlist unchanged at 2.
 - **Verify:** `swift build`/`swift test` with `-Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete`; `Scripts/check-coverage.sh` (100%, allowlist unchanged at 2). 0 failures.
 
-## Status: in progress
+## Status: done
 
 ## Completion Criteria
 - [x] FIX1: pump gates drain+apply on `bossWatchIsEnabled`; queued requests HELD on disk when paused, applied on resume; ON-path unchanged
 - [x] FIX2: screen terminators SIGKILL after the timeout+terminate() at each call site
 - [x] FIX3: a single check-in applies actions + records decisions then save()s ONCE; suppression guards respected
-- [ ] FIX4: boss-watch loop doesn't wake-spin every 60s while Watch is OFF (start/stop driven by setBossWatchEnabled)
-- [ ] New Core seam logic 100% line+region; allowlist unchanged at 2
-- [ ] `swift build` + `swift test` strict flags clean (0 failures, 0 warnings)
-- [ ] `Scripts/check-coverage.sh` passes
-- [ ] One commit per fix (4), pushed; no PR/merge
+- [x] FIX4: boss-watch loop doesn't wake-spin every 60s while Watch is OFF (start/stop driven by setBossWatchEnabled)
+- [x] New Core seam logic 100% line+region; allowlist unchanged at 2
+- [x] `swift build` + `swift test` strict flags clean (0 failures, 0 warnings)
+- [x] `Scripts/check-coverage.sh` passes
+- [x] One commit per fix (4), pushed; no PR/merge
 
 ---
 
@@ -67,7 +67,7 @@
 **Output:** Atomic action-log + decision/inbox persistence per check-in.
 **Acceptance:** Executed actions + their decision rows persist in the SAME save(); zero-change batch still saves the action rows.
 
-## Unit 4 — FIX4 (LOW): boss-watch loop doesn't wake-spin while OFF ⬜
+## Unit 4 — FIX4 (LOW): boss-watch loop doesn't wake-spin while OFF ✅
 
 **What:** Drive the loop start/stop from `setBossWatchEnabled` (start on enable, cancel on disable) so the loop doesn't wake every 60s just to `continue` while OFF.
 
@@ -87,3 +87,6 @@
 - 2026-06-23 11:35 Unit 1 (FIX1) complete: `BossAutonomyGating.shouldApplyQueuedActions` seam (Core) + pump loop gates `drainExternalActionRequests()` on `bossWatchIsEnabled` BEFORE draining, so paused requests stay HELD in queue dir (drain moves to processing/; skipping the drain is what holds them). 4 FIX1 tests green; strict build clean. Commit b7ba4d5.
 - 2026-06-23 11:38 Unit 2 (FIX2) complete: SIGKILL backstop `kill(process.processIdentifier, SIGKILL)` after the timeout `terminate()` at all 3 screen terminators (spawnScreenQuit, listLiveScreenSessionNames, persistentSessionIsListed). 2 FIX2 tests green; strict build clean. Commit 6b57a36.
 - 2026-06-23 11:42 Unit 3 (FIX3) complete: `withBatchedSave` scope wraps `applyBossActions` + `recordBossDecisions` in `runBossCheckIn`; per-step saves suppressed via `bossCheckInSaveBatchDepth` guard in model `save()`; one trailing save() persists action-log + decision/inbox rows atomically; dropped `recordBossDecisions`'s inline `if changed>0 { save() }`. Existing reset/load guards preserved. 2 FIX3 tests green; all 443 prior tests pass (only 3 unimplemented FIX4 tests red); strict build clean. Commit 34d61c1.
+- 2026-06-23 11:46 Unit 4 (FIX4) complete: boss-watch poll loop lifetime owned by enable toggle — `bossWatchLoopTask` started in `setBossWatchEnabled(true)` (+ `startBossWatchLoopIfEnabled()` at launch for persisted-on), cancelled in `setBossWatchEnabled(false)`; removed unconditional `.task { runBossWatchLoop() }`; loop body drops the wake-then-`continue`-while-off busy pattern (returns on cancel/disable). 4 FIX4 tests green. Commit 46bbf43.
+- 2026-06-23 11:47 Full suite: 2678 tests, 0 failures, 1 pre-existing skip. Strict build clean (-warnings-as-errors -strict-concurrency=complete).
+- 2026-06-23 11:50 Coverage gate PASS: 146/148 Core/ShellAdapter files at 100% line+region; allowlist unchanged at exactly 2 (BossAgentMCPClient, SessionActivityReader). New `BossAutonomyGating.swift` fully covered.
