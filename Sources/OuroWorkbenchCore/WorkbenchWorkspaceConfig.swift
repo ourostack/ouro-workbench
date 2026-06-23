@@ -72,6 +72,16 @@ public struct WorkbenchWorkspaceConfig: Codable, Equatable, Sendable {
 
 public enum WorkbenchWorkspaceConfigError: Error, Equatable, Sendable {
     case configFileMissing(String)
+    /// The `.workbench.json` exists but its BYTES could not be read off disk:
+    /// `Data(contentsOf:)` threw before any JSON parse (file momentarily locked,
+    /// EACCES permission hiccup, network-volume blip, EIO). This is RECOVERABLE —
+    /// a retry may clear it — so it is kept DISTINCT from a genuine parse failure.
+    /// Carries the underlying error's description for an honest message. Crucially,
+    /// the recents-pruning decision maps this to KEEP (not prune), so a transient
+    /// read blip never drops a good workspace from the menu.
+    case fileUnreadable(String)
+    /// The bytes read fine but did not parse as the expected JSON shape — a genuine
+    /// structural failure (a retry won't fix bad JSON), so the recent is pruned.
     case malformedJSON(String)
     case noTerminals
 }
@@ -94,7 +104,11 @@ public struct WorkbenchWorkspaceConfigLoader: Sendable {
         do {
             data = try Data(contentsOf: URL(fileURLWithPath: configPath))
         } catch {
-            throw WorkbenchWorkspaceConfigError.malformedJSON(error.localizedDescription)
+            // A FILE-READ failure (not a parse failure): the file exists but its
+            // bytes couldn't be read — momentary lock, EACCES, network-volume blip,
+            // EIO. Recoverable, so it gets its own case (mapped to KEEP-the-recent),
+            // never lumped into `.malformedJSON` (which prunes).
+            throw WorkbenchWorkspaceConfigError.fileUnreadable(error.localizedDescription)
         }
         let decoder = JSONDecoder()
         let decoded: WorkbenchWorkspaceConfig

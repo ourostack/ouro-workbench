@@ -78,6 +78,44 @@ final class WorkbenchWorkspaceConfigTests: XCTestCase {
         }
     }
 
+    /// A FILE-READ failure (the bytes can't be read off disk at all) is distinct
+    /// from a JSON-parse failure: a directory where the config file is expected
+    /// "exists" but `Data(contentsOf:)` throws before any decode. It must surface
+    /// as `.fileUnreadable` (recoverable → recent kept), NOT `.malformedJSON`.
+    func testLoadFailsOnUnreadableFileWithFileUnreadable() throws {
+        // A *directory* at the config path: `fileExists` passes, `Data(contentsOf:)`
+        // throws — a read failure, not a parse failure.
+        let configPath = temporaryDirectory.appendingPathComponent(WorkbenchWorkspaceConfigLoader.configFileName)
+        try FileManager.default.createDirectory(at: configPath, withIntermediateDirectories: true)
+        let loader = WorkbenchWorkspaceConfigLoader()
+        do {
+            _ = try loader.load(directoryPath: temporaryDirectory.path)
+            XCTFail("Should have thrown fileUnreadable")
+        } catch WorkbenchWorkspaceConfigError.fileUnreadable {
+            // expected
+        } catch {
+            XCTFail("Wrong error: \(error)")
+        }
+    }
+
+    /// INVERSE-BUG GUARD: genuine bad JSON (the bytes read fine but don't parse)
+    /// must STILL be `.malformedJSON` — only the file-READ failure becomes the new
+    /// keep-the-recent case. A malformed config is structurally dead → prune.
+    func testLoadStillFailsOnBadJSONWithMalformedJSON() throws {
+        try writeConfig("{ this is not json")
+        let loader = WorkbenchWorkspaceConfigLoader()
+        do {
+            _ = try loader.load(directoryPath: temporaryDirectory.path)
+            XCTFail("Should have thrown malformedJSON")
+        } catch WorkbenchWorkspaceConfigError.fileUnreadable {
+            XCTFail("bad JSON must be .malformedJSON, not .fileUnreadable")
+        } catch WorkbenchWorkspaceConfigError.malformedJSON {
+            // expected — readable bytes, unparseable JSON
+        } catch {
+            XCTFail("Wrong error: \(error)")
+        }
+    }
+
     func testLoadFailsWhenTerminalsEmpty() throws {
         try writeConfig(#"{"terminals": []}"#)
         let loader = WorkbenchWorkspaceConfigLoader()

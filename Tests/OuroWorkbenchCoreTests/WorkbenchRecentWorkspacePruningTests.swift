@@ -62,20 +62,41 @@ final class WorkbenchRecentWorkspacePruningTests: XCTestCase {
         XCTAssertTrue(WorkbenchRecentWorkspacePruning.shouldForget(after: failure))
     }
 
-    /// Every typed config error maps to a STRUCTURAL (prune) classification — none
-    /// is transient. (The transient/keep arm is reachable only from the generic
-    /// catch, which the App maps to `.transient` directly.)
-    func testEveryTypedConfigErrorIsStructural() {
-        let errors: [WorkbenchWorkspaceConfigError] = [
+    // MARK: - The read-failure case is TRANSIENT (keep, do NOT prune)
+
+    /// A `Data(contentsOf:)` failure (file momentarily locked, EACCES hiccup,
+    /// network-volume blip, EIO) is RECOVERABLE — a retry may clear it. It must
+    /// classify as `.transient` so the recent is KEPT, not dropped. Confusing it
+    /// with genuine bad JSON would wrongly prune a good workspace from the menu.
+    func testClassifiesFileUnreadableAsTransientKeep() {
+        let failure = WorkbenchRecentWorkspacePruning.classify(.fileUnreadable("EIO"))
+        XCTAssertEqual(failure, .transient)
+        XCTAssertFalse(
+            WorkbenchRecentWorkspacePruning.shouldForget(after: failure),
+            "a recoverable file-read failure must KEEP the recent (a retry may clear it)"
+        )
+    }
+
+    /// The STRUCTURAL typed config errors map to prune; the file-READ failure maps
+    /// to keep. This pins the split: only a genuine structural failure (missing /
+    /// bad JSON / empty) drops the recent — a read blip never does.
+    func testStructuralErrorsPruneButReadFailureKeeps() {
+        let structural: [WorkbenchWorkspaceConfigError] = [
             .configFileMissing("/x/.workbench.json"),
             .malformedJSON("bad"),
             .noTerminals
         ]
-        for error in errors {
+        for error in structural {
             XCTAssertTrue(
                 WorkbenchRecentWorkspacePruning.shouldForget(after: WorkbenchRecentWorkspacePruning.classify(error)),
-                "every typed config error is a structural prune: \(error)"
+                "structural config error is a prune: \(error)"
             )
         }
+        XCTAssertFalse(
+            WorkbenchRecentWorkspacePruning.shouldForget(
+                after: WorkbenchRecentWorkspacePruning.classify(.fileUnreadable("locked"))
+            ),
+            "the file-read failure is the lone typed error that KEEPS the recent"
+        )
     }
 }

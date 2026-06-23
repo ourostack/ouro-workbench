@@ -13455,16 +13455,24 @@ final class WorkbenchViewModel: ObservableObject {
             switch configError {
             case .configFileMissing(let path):
                 errorMessage = "No .workbench.json found at \(path)"
+            case .fileUnreadable(let detail):
+                // A file-READ blip (lock / EACCES / volume hiccup / EIO): surface an
+                // honest message but do NOT prune — a retry may clear it (the Core
+                // decision classifies this `.transient`, so the gated prune keeps it).
+                errorMessage = "Couldn't read .workbench.json (try again): \(detail)"
             case .malformedJSON(let detail):
                 errorMessage = "Couldn't parse .workbench.json: \(detail)"
             case .noTerminals:
                 errorMessage = ".workbench.json must declare at least one terminal"
             }
             // FIX 3: a recent that failed to load STRUCTURALLY (gone / malformed /
-            // unreadable / empty) is dead and re-errors on every click — drop it so
-            // the menu stays honest. The prune-or-keep choice is the pure Core
-            // decision, exhaustively tested in WorkbenchRecentWorkspacePruningTests.
-            // Previously only `configFileMissing` pruned; malformed/empty stayed.
+            // empty) is dead and re-errors on every click — drop it so the menu
+            // stays honest. A file-READ blip (`.fileUnreadable`) is recoverable, so
+            // the pure Core decision classifies it `.transient` and KEEPS the recent
+            // — only structural failures forget. The decision is exhaustively tested
+            // in WorkbenchRecentWorkspacePruningTests; previously only
+            // `configFileMissing` pruned, and a read blip was wrongly lumped with
+            // malformed JSON (pruning a good workspace on a transient hiccup).
             if WorkbenchRecentWorkspacePruning.shouldForget(
                 after: WorkbenchRecentWorkspacePruning.classify(configError)
             ) {

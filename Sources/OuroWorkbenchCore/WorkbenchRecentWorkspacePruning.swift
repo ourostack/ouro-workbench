@@ -14,13 +14,17 @@
 public enum WorkbenchRecentWorkspaceLoadFailure: Equatable, Sendable {
     /// `.workbench.json` no longer exists at the recent path.
     case configMissing
-    /// `.workbench.json` couldn't be read or parsed (the loader maps both an
-    /// unreadable file and invalid JSON to this — structurally dead either way).
+    /// `.workbench.json` parsed-as-bytes but was invalid JSON — a genuine
+    /// structural failure (a retry won't fix bad JSON). Maps from the loader's
+    /// `.malformedJSON`. A FILE-READ failure is NO LONGER lumped here: the loader
+    /// emits a distinct `.fileUnreadable`, which classifies as `.transient` (kept).
     case malformed
     /// `.workbench.json` parsed but declared no terminals (structurally useless).
     case empty
-    /// An unexpected / non-structural failure (the generic catch). May clear on a
-    /// retry, so the recent is KEPT.
+    /// A RECOVERABLE failure that a retry may clear: a file-READ blip
+    /// (`.fileUnreadable` — momentary lock, EACCES, network-volume hiccup, EIO)
+    /// OR the App's generic catch (an unexpected / non-structural error). The
+    /// recent is KEPT — we must never silently drop a good workspace on a blip.
     case transient
 }
 
@@ -36,13 +40,17 @@ public enum WorkbenchRecentWorkspacePruning {
         }
     }
 
-    /// Classify a typed `WorkbenchWorkspaceConfigError` into a load-failure. Every
-    /// typed config error is STRUCTURAL (the transient arm is reachable only from
-    /// the App's generic catch, which maps to `.transient` directly).
+    /// Classify a typed `WorkbenchWorkspaceConfigError` into a load-failure. The
+    /// STRUCTURAL typed errors (missing / bad JSON / empty) map to prune; the lone
+    /// recoverable typed error — `.fileUnreadable`, a file-READ blip — maps to
+    /// `.transient` (KEEP), so a momentary read failure never drops a good
+    /// workspace. (The App's generic catch also maps to `.transient` directly.)
     public static func classify(_ error: WorkbenchWorkspaceConfigError) -> WorkbenchRecentWorkspaceLoadFailure {
         switch error {
         case .configFileMissing:
             return .configMissing
+        case .fileUnreadable:
+            return .transient
         case .malformedJSON:
             return .malformed
         case .noTerminals:
