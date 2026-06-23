@@ -215,12 +215,14 @@ final class BossAutonomyKillSwitchWiringTests: XCTestCase {
         return String(tail[tail.startIndex..<end])
     }
 
-    /// Extract a function body by matching `func <name>(` and reading to the next
-    /// top-level `func `/`private func `/`nonisolated` boundary. Good enough for a
-    /// source-pin (we only assert on tokens within the body).
+    /// Extract a function body by matching `func <name>(` (or the generic
+    /// `func <name><…>(`) and reading to the next top-level
+    /// `func `/`private func `/`nonisolated` boundary. Good enough for a source-pin
+    /// (we only assert on tokens within the body).
     private func functionBody(named name: String, in source: String) throws -> String {
         let start = try XCTUnwrap(
-            source.range(of: "func \(name)(")?.upperBound,
+            source.range(of: "func \(name)(")?.upperBound
+                ?? source.range(of: "func \(name)<")?.upperBound,
             "could not find func \(name)( in the App source"
         )
         let tail = source[start...]

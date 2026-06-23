@@ -10844,6 +10844,15 @@ final class WorkbenchViewModel: ObservableObject {
     /// bypasses this guard and the final survivors-only state is still persisted
     /// — after the salvage.
     private var isLoadingState = false
+    /// FIX3 — non-zero while a single boss check-in is applying actions + recording
+    /// decisions inside `withBatchedSave`. During that window the per-step `save()`
+    /// calls (`recordActionLog`'s trailing save, `recordBossDecisions`'s save) are
+    /// suppressed so the action-log rows and their decision/inbox rows persist
+    /// ATOMICALLY in one trailing `save()` — a crash mid-check-in (or a zero-change
+    /// decisions batch) can no longer leave executed actions without their audit
+    /// rows. A counter (not a Bool) so nested batched scopes compose. `save()`'s
+    /// existing reset/load suppression guards still win.
+    private var bossCheckInSaveBatchDepth = 0
     private var isFirstRunSetupForcedOnLaunch = false
     @Published var onboardingCandidates: [RecentSessionCandidate] = []
     @Published var onboardingProposal: WorkbenchImportProposal?
@@ -16362,8 +16371,18 @@ final class WorkbenchViewModel: ObservableObject {
                 state.recordProse(BossProseEntry(source: "boss:\(requestedBoss)", text: answer))
                 save()
             }
-            applyBossActions(from: answer)
-            recordBossDecisions(from: answer)
+            // FIX3 — a single check-in applies actions + records decisions, then
+            // save()s ONCE. `applyBossActions` (per action → recordActionLog) and
+            // `recordBossDecisions` each used to save() independently, so a crash
+            // mid-check-in (or a zero-change decisions batch) could leave executed
+            // actions WITHOUT their decision/audit rows. Wrapping both in
+            // `withBatchedSave` suppresses the per-step saves and flushes one
+            // trailing save() so the action-log rows + decision/inbox rows persist
+            // atomically together.
+            withBatchedSave {
+                applyBossActions(from: answer)
+                recordBossDecisions(from: answer)
+            }
             // F12a gap 3b — after recording the boss's own decisions, escalate any
             // waiting session the boss DIDN'T decide on, so it can't fall silently
             // out of triage.
@@ -16414,7 +16433,6 @@ final class WorkbenchViewModel: ObservableObject {
             return
         }
         let machineOwner = SessionFriend.machineOwner()
-        var changed = 0
         for input in inputs {
             let entry = input.entry.flatMap { processEntry(matching: $0) }
             let friend = entry.flatMap { state.effectiveFriend(for: $0, fallback: machineOwner) }
@@ -16489,11 +16507,13 @@ final class WorkbenchViewModel: ObservableObject {
                     status: status
                 )
             )
-            changed += 1
         }
-        if changed > 0 {
-            save()
-        }
+        // FIX3 — no inline save() here anymore. This runs INSIDE the single
+        // check-in's `withBatchedSave` scope (the only caller), which performs one
+        // trailing save() so these decision/inbox rows persist atomically with the
+        // action-log rows `applyBossActions` just wrote. (The decisions are recorded
+        // into in-memory state via `recordDecision`; the batch flush is what makes
+        // them durable — together with the actions, never apart.)
     }
 
     /// F12a gap 3b — escalate any waiting-on-human session the boss DIDN'T already
@@ -20141,6 +20161,14 @@ final class WorkbenchViewModel: ObservableObject {
         guard !isLoadingState else {
             return true
         }
+        // FIX3 — inside a single check-in's `withBatchedSave` scope, suppress the
+        // per-step saves (recordActionLog's trailing save, recordBossDecisions's
+        // save) so the apply + record rows land in ONE trailing store.save(). The
+        // batch's flush clears this depth BEFORE its own save(), so that final
+        // write goes through here normally (and still honors the guards above).
+        guard bossCheckInSaveBatchDepth == 0 else {
+            return true
+        }
         do {
             try store.save(state)
             return true
@@ -20148,6 +20176,28 @@ final class WorkbenchViewModel: ObservableObject {
             errorMessage = String(describing: error)
             return false
         }
+    }
+
+    /// FIX3 — run `body` (a single check-in's apply-actions + record-decisions) with
+    /// the per-step `save()` calls suppressed, then perform exactly ONE trailing
+    /// `save()` so the action-log rows and their decision/inbox rows persist
+    /// atomically. The depth counter is restored before the flush (so the flush's
+    /// own `save()` isn't suppressed), and on any throw the depth is still restored
+    /// via `defer`. The trailing `save()` honors the existing reset/load
+    /// suppression guards exactly as a normal save would.
+    @discardableResult
+    private func withBatchedSave<T>(_ body: () throws -> T) rethrows -> T {
+        bossCheckInSaveBatchDepth += 1
+        let result: T
+        do {
+            result = try body()
+        } catch {
+            bossCheckInSaveBatchDepth -= 1
+            throw error
+        }
+        bossCheckInSaveBatchDepth -= 1
+        save()
+        return result
     }
 
     private func fetchResult<T: Decodable & Sendable>(
