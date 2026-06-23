@@ -43,13 +43,13 @@ we still evict resolved-first and never grow by unbounded *non-open* churn).
 
 ## Units
 
-- ⬜ **Unit 1 (FIX 1):** cap never evicts an open escalation. Pure `trimmedToCap`; tests at the boundary (open+resolved mix, all-open). Commit.
+- ✅ **Unit 1 (FIX 1):** cap never evicts an open escalation. Pure `trimmedToCap`; tests at the boundary (open+resolved mix, all-open). Commit.
 - ⬜ **Unit 2 (FIX 2):** windowed dedup. `dedupKey` + windowed `isNewDecision`; interleaved A→B→A test. Commit.
 - ⬜ **Unit 3 (FIX 3):** nil-entry stable-key collapse in `openInbox`. Tests: identical nil collapse to one; distinct nil stay separate. Commit.
 
 ## Completion Criteria
 
-- [ ] FIX 1: open escalation never evicted by cap; resolved evicted first; cap bounded.
+- [x] FIX 1: open escalation never evicted by cap; resolved evicted first; cap bounded.
 - [ ] FIX 2: interleaved A→B→A does NOT re-fire A; distinct (prompt/kind) still new.
 - [ ] FIX 3: identical nil-entry decisions collapse to one; distinct nil-entry stay separate.
 - [ ] `swift build` + `swift test` with `-Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete`, 0 failures.
