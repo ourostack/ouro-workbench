@@ -345,9 +345,41 @@ public extension WorkspaceState {
     /// the action log is appended.
     mutating func recordDecision(_ decision: BossInboxDecision) {
         decisionLog.insert(decision, at: 0)
-        if decisionLog.count > Self.decisionLogCap {
-            decisionLog.removeLast(decisionLog.count - Self.decisionLogCap)
+        decisionLog = Self.trimmedToCap(decisionLog, cap: Self.decisionLogCap)
+    }
+
+    /// Whether a decision still needs the human at `now` — the same predicate the
+    /// open inbox surfaces (`needsHuman` ∧ not resolved/acknowledged/active-snooze).
+    /// The cap-trim treats exactly these as "open" and refuses to evict them, so a
+    /// waiting session is never silently dropped. (The per-entry collapse in
+    /// `openInbox` is a display concern and doesn't change retention.)
+    static func isOpenEscalation(_ decision: BossInboxDecision, now: Date) -> Bool {
+        needsHuman(decision) && decision.isOpenForTriage(at: now)
+    }
+
+    /// Pure cap-trim for a **newest-first** decision log. Open escalations (the
+    /// ones `openInbox` surfaces) are NEVER evicted by the cap — only RESOLVED /
+    /// acknowledged / audit-only rows are shed, oldest-first, until the log is at
+    /// the cap. If every remaining row is open and the log is still over the cap
+    /// (the all-open boundary), the open rows are kept and the log is allowed to
+    /// exceed the cap. That ceiling is bounded in practice by the number of live
+    /// waiting sessions (each contributes at most one open escalation per prompt),
+    /// so the log never grows by unbounded *non-open* churn — the inverse-bug guard:
+    /// we still shed resolved-first and stay bounded, we just refuse to drop a
+    /// waiting session to do it. Stable: preserves newest-first order of survivors.
+    static func trimmedToCap(_ log: [BossInboxDecision], cap: Int, now: Date = Date()) -> [BossInboxDecision] {
+        guard log.count > cap else { return log }
+        let overage = log.count - cap
+        // Indices of evictable (non-open) rows, oldest-first. Newest-first log →
+        // higher index == older, so walk from the tail.
+        var evictable: [Int] = []
+        for index in stride(from: log.count - 1, through: 0, by: -1) where !isOpenEscalation(log[index], now: now) {
+            evictable.append(index)
+            if evictable.count == overage { break }
         }
+        guard !evictable.isEmpty else { return log }
+        let drop = Set(evictable)
+        return log.enumerated().filter { !drop.contains($0.offset) }.map(\.element)
     }
 
     /// Record a decision unless the most recent decision for the same session

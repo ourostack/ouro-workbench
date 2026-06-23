@@ -16,9 +16,14 @@ final class BossInboxDecisionTests: XCTestCase {
     }
 
     func testRecordDecisionTrimsToCap() {
+        // RESOLVED decisions are audit-only (out of the open queue), so the cap is
+        // free to shed the oldest — the bounded behavior. (An OPEN escalation is
+        // never evicted; that invariant is covered by the FIX-1 cap tests below.)
         var state = WorkspaceState()
         for i in 0..<(WorkspaceState.decisionLogCap + 25) {
-            state.recordDecision(decision(.hold, reasoning: "d\(i)"))
+            var d = decision(.hold, reasoning: "d\(i)")
+            d.triage = .resolved(at: Date())
+            state.recordDecision(d)
         }
         XCTAssertEqual(state.decisionLog.count, WorkspaceState.decisionLogCap)
         // The most recent survives; the oldest are trimmed.
@@ -595,5 +600,92 @@ final class BossInboxDecisionTests: XCTestCase {
         """
         let decoded = try JSONDecoder().decode(BossInboxDecision.self, from: Data(json.utf8))
         XCTAssertFalse(decoded.isOpenForTriage(at: Date()), "an unknown triage state is treated as out-of-queue, not a crash")
+    }
+
+    // MARK: - FIX 1: cap never evicts an open escalation
+
+    /// Build a RESOLVED (out-of-queue) escalation that the cap is free to drop.
+    private func resolvedEscalation(prompt: String, at: Date) -> BossInboxDecision {
+        BossInboxDecision(
+            occurredAt: at, source: "boss", entryId: UUID(), sessionName: "s",
+            prompt: prompt, kind: .escalate, reasoning: "r", triage: .resolved(at: at)
+        )
+    }
+
+    /// An OPEN escalation (no triage) — the kind `openInbox` surfaces and the
+    /// cap must never silently drop.
+    private func openEscalation(prompt: String, at: Date) -> BossInboxDecision {
+        BossInboxDecision(
+            occurredAt: at, source: "boss", entryId: UUID(), sessionName: "s",
+            prompt: prompt, kind: .escalate, reasoning: "r"
+        )
+    }
+
+    func testCapEvictsResolvedBeforeOpenEscalation() {
+        let now = Date()
+        var state = WorkspaceState()
+        // Fill PAST the cap entirely with resolved rows, then bury a single open
+        // escalation older than the cap's worth of newer resolved rows. The
+        // unconditional removeLast would evict the buried open one; the fix must
+        // keep it and shed resolved rows instead.
+        let open = openEscalation(prompt: "Needs you? (y/N)", at: now.addingTimeInterval(-10_000))
+        state.recordDecision(open)
+        for i in 0..<(WorkspaceState.decisionLogCap + 50) {
+            state.recordDecision(resolvedEscalation(prompt: "old-\(i)", at: now.addingTimeInterval(Double(i))))
+        }
+        XCTAssertEqual(state.decisionLog.count, WorkspaceState.decisionLogCap, "still bounded to the cap")
+        XCTAssertTrue(
+            state.decisionLog.contains(where: { $0.id == open.id }),
+            "an open escalation is never evicted by the cap; resolved rows are shed first"
+        )
+        XCTAssertTrue(
+            state.openInbox(now: now).contains(where: { $0.id == open.id }),
+            "the surviving open escalation still surfaces in the inbox"
+        )
+    }
+
+    func testCapKeepsAllOpenEscalationsWhenEveryEntryIsOpen() {
+        let now = Date()
+        var state = WorkspaceState()
+        // Boundary: every row is an OPEN escalation. None may be evicted, so the
+        // log is allowed to exceed the cap (bounded by live sessions in practice)
+        // rather than silently drop a waiting session.
+        var ids: [UUID] = []
+        for i in 0..<(WorkspaceState.decisionLogCap + 10) {
+            let d = openEscalation(prompt: "open-\(i)? (y/N)", at: now.addingTimeInterval(Double(i)))
+            ids.append(d.id)
+            state.recordDecision(d)
+        }
+        XCTAssertEqual(state.decisionLog.count, WorkspaceState.decisionLogCap + 10, "open items are retained beyond the cap rather than dropped")
+        XCTAssertEqual(Set(state.decisionLog.map(\.id)), Set(ids), "no open escalation was evicted")
+    }
+
+    func testCapEvictsOldestResolvedFirstWhenOverByOne() {
+        let now = Date()
+        var state = WorkspaceState()
+        // Exactly cap resolved rows, then one more resolved → the single OLDEST
+        // resolved is evicted (oldest-first), newest preserved.
+        var ordered: [BossInboxDecision] = []
+        for i in 0..<(WorkspaceState.decisionLogCap + 1) {
+            let d = resolvedEscalation(prompt: "r-\(i)", at: now.addingTimeInterval(Double(i)))
+            ordered.append(d)
+            state.recordDecision(d)
+        }
+        XCTAssertEqual(state.decisionLog.count, WorkspaceState.decisionLogCap)
+        XCTAssertFalse(state.decisionLog.contains(where: { $0.id == ordered.first?.id }), "the single oldest resolved row is shed")
+        XCTAssertEqual(state.decisionLog.first?.id, ordered.last?.id, "newest is preserved at the head")
+    }
+
+    func testTrimmedToCapIsPureAndPrefersEvictingResolved() {
+        let now = Date()
+        // Pure-function contract: given an over-cap log with a mix, evict resolved
+        // oldest-first and keep every open entry, capped only when all are open.
+        let openOld = openEscalation(prompt: "open-old? (y/N)", at: now.addingTimeInterval(-100))
+        let resolvedMid = resolvedEscalation(prompt: "res-mid", at: now.addingTimeInterval(-50))
+        let openNew = openEscalation(prompt: "open-new? (y/N)", at: now)
+        // Newest-first log of 3 with cap 2: must drop the lone resolved, keep both open.
+        let log = [openNew, resolvedMid, openOld]
+        let trimmed = WorkspaceState.trimmedToCap(log, cap: 2, now: now)
+        XCTAssertEqual(trimmed.map(\.id), [openNew.id, openOld.id], "resolved evicted; both open kept even though that holds at the cap")
     }
 }
