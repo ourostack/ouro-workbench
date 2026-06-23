@@ -90,3 +90,11 @@
 - 2026-06-23 11:46 Unit 4 (FIX4) complete: boss-watch poll loop lifetime owned by enable toggle — `bossWatchLoopTask` started in `setBossWatchEnabled(true)` (+ `startBossWatchLoopIfEnabled()` at launch for persisted-on), cancelled in `setBossWatchEnabled(false)`; removed unconditional `.task { runBossWatchLoop() }`; loop body drops the wake-then-`continue`-while-off busy pattern (returns on cancel/disable). 4 FIX4 tests green. Commit 46bbf43.
 - 2026-06-23 11:47 Full suite: 2678 tests, 0 failures, 1 pre-existing skip. Strict build clean (-warnings-as-errors -strict-concurrency=complete).
 - 2026-06-23 11:50 Coverage gate PASS: 146/148 Core/ShellAdapter files at 100% line+region; allowlist unchanged at exactly 2 (BossAgentMCPClient, SessionActivityReader). New `BossAutonomyGating.swift` fully covered.
+- 2026-06-23 11:52 Gates passed (impl-coverage: 4 fixes present in source [FIX1 gate ×1, FIX2 SIGKILL ×3, FIX3 batch, FIX4 loop-task, old unconditional .task gone]; build clean; design-match vs locked decisions OK). Branch `fix/boss-killswitch-app-reliability` pushed to origin (HEAD d2e2b3f). NOT merged/PR'd per constraints. Status: done.
+
+## Per-fix commit SHAs
+- FIX1 (kill-switch): `b7ba4d5`
+- FIX2 (SIGKILL backstop): `6b57a36`
+- FIX3 (single save): `34d61c1` (+ doc clarity `d2e2b3f`)
+- FIX4 (loop lifetime): `46bbf43`
+- Tests (all 4): `c659f85`
