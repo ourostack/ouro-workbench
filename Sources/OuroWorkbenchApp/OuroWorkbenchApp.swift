@@ -16793,7 +16793,12 @@ final class WorkbenchViewModel: ObservableObject {
                 finished.signal()
             }
             if finished.wait(timeout: .now() + .milliseconds(1500)) == .timedOut {
+                // FIX2 — SIGTERM, then escalate to SIGKILL. A `screen` that ignores
+                // SIGTERM (wedged socket / NFS home) would otherwise survive the
+                // terminate() forever; mirror the BossAgentMCPClient terminate+forceKill
+                // backstop so the quit can't leak a SIGTERM-deaf process.
                 process.terminate()
+                kill(process.processIdentifier, SIGKILL)
             }
         }
     }
@@ -16907,7 +16912,10 @@ final class WorkbenchViewModel: ObservableObject {
             finished.signal()
         }
         if finished.wait(timeout: .now() + .milliseconds(1500)) == .timedOut {
+            // FIX2 — SIGTERM, then escalate to SIGKILL so a SIGTERM-ignoring
+            // `screen -ls` (wedged socket) can't survive past the watchdog.
             process.terminate()
+            kill(process.processIdentifier, SIGKILL)
             return []
         }
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
@@ -19813,7 +19821,10 @@ final class WorkbenchViewModel: ObservableObject {
             finished.signal()
         }
         if finished.wait(timeout: .now() + .milliseconds(1500)) == .timedOut {
+            // FIX2 — SIGTERM, then escalate to SIGKILL so a SIGTERM-ignoring
+            // `screen -ls` (wedged socket) can't survive past the watchdog.
             process.terminate()
+            kill(process.processIdentifier, SIGKILL)
             return false
         }
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
