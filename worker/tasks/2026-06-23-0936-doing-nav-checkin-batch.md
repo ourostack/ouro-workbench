@@ -22,7 +22,7 @@
 - **Acceptance:** watch OFF → no false "will try again" promise. watch ON → truthful "will try again" preserved (inverse-bug guard).
 - **Tests:** copy-selector pure tests + source-pin.
 
-### ⬜ Unit 3 — FIX 3 (LOW): ⌘J on empty attention queue silently no-ops
+### ✅ Unit 3 — FIX 3 (LOW): ⌘J on empty attention queue silently no-ops — DONE @ 5f71845
 - **What:** `case .jumpToAttention: _ = model.jumpToNextAttentionSession()` discards the `false` return; nothing happens, no feedback.
 - **Approach:** when the jump returns `false`, surface a brief transient status via the app's existing transient mechanism (no new infra). Copy reuses the existing inbox-zero phrasing "Nothing needs you right now."
 - **Output:** the ⌘J dispatch handles the `false` path.
@@ -39,7 +39,7 @@
 ## Completion Criteria
 - [x] FIX 1: pure resolver + focus-mode-wins; normal case unchanged
 - [x] FIX 2: honest copy when watch OFF; truthful copy when ON
-- [ ] FIX 3: ⌘J empty-queue sets transient status (reused infra)
+- [x] FIX 3: ⌘J empty-queue sets transient status (reused infra)
 - [ ] FIX 4: `.noBoss` vs `.bossUnreachable` split, wired
 - [ ] `swift build` + `swift test` clean (warnings-as-errors, strict concurrency)
 - [ ] `Scripts/check-coverage.sh` 100% line+region; allowlist still 2
@@ -49,3 +49,4 @@
 - 2026-06-23 09:36 doing doc created; branch off main @ dd852d5; baseline build clean. Symbols re-located (line numbers were stale).
 - 2026-06-23 09:53 Unit 1 (FIX 1) complete @ 8dbec6d: ActiveEntryResolver pure seam (approach b — focus-mode wins authoritatively); activeEntry folds through it; 9 resolver tests + 4 wiring pins; coverage 100% (allowlist still 2); build clean (warnings-as-errors + strict concurrency).
 - 2026-06-23 09:59 Unit 2 (FIX 2) complete @ 3aee47b: BossCheckInFailureCopy seam (failureLine + persistentBanner, branched on bossWatchIsEnabled); catch-path transient line + persistent banner wired through it. Note: persistent banner is watch-gated (bossWatchLastError only set when watch ON) — wired the seam defensively anyway. 8 copy tests + 6 wiring pins; coverage 100% (allowlist 2).
+- 2026-06-23 10:05 Unit 3 (FIX 3) complete @ 5f71845: ⌘J dispatch consumes the bool; false (empty-queue) path sets errorMessage = "Nothing needs you right now." (reused existing one-shot message channel — precedent: "X is not running" no-op feedback). Empty-queue decision already pure in jumpToNextAttentionSession; App-side wiring pin added. No Core coverage delta; gate still PASS.
