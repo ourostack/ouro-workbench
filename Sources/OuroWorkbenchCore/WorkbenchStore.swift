@@ -112,7 +112,20 @@ public final class WorkbenchStore {
 
         do {
             let state = try decoder.decode(WorkspaceState.self, from: data)
-            guard state.schemaVersion == WorkspaceState.currentSchemaVersion else {
+            // The JSON above ALREADY decoded into `state` with every project /
+            // terminal / row present — the per-field decoders are lenient
+            // (`decodeIfPresent` + defaults), so an OLDER, backward-compatible file
+            // decodes cleanly. The version check below is a SEPARATE gate AFTER a
+            // successful decode, not the decode itself.
+            //
+            // Accept OLDER or EQUAL (`<= current`): the lenient decoders have
+            // already produced a usable state, so there's nothing to reject. Treat
+            // as unreadable ONLY a file written by a FUTURE build
+            // (`> current`) — its shape may mean something this build can't safely
+            // interpret. An equality gate here was a silent-data-wipe bug: it
+            // quarantined fully-readable older files and reset the workspace to
+            // empty on upgrade.
+            guard state.schemaVersion <= WorkspaceState.currentSchemaVersion else {
                 if quarantineCorruptFile {
                     throw quarantine(reason: "unsupported schema version \(state.schemaVersion)")
                 }
