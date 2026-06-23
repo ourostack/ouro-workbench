@@ -64,3 +64,4 @@ green check / `.green` ONLY for `.succeeded`, produced ONLY when
 - [ ] Committed per unit + pushed; NOT merged/PR'd
 
 ## Progress log
+- 2026-06-22 19:03 Unit 1 complete: WorkbenchActionOutcomePresentation seam shipped; 16 tests; Core 100% line+region; allowlist still 2; full suite 2517 pass.
