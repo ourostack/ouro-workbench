@@ -11368,14 +11368,37 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     /// The entry that "selected-session" commands (Stop, Redraw, Find) act on.
-    /// When a split is active and the secondary pane is focused, that's the
-    /// secondary pane's entry; otherwise it's the sidebar selection (the
-    /// pre-split behavior, so single-pane is unchanged).
+    ///
+    /// FIX 1 (HIGH, destructive): full-screen FOCUS MODE authoritatively defines the
+    /// active terminal. macOS menu key-equivalents (⌘. Stop, ⌘L Redraw, ⌘F Find) win
+    /// over the focus view's inline buttons, so whatever this returns is what ⌘.
+    /// KILLS — it MUST be the terminal on screen. Entering focus mode (a row's Focus
+    /// button or `jumpToAttentionPrompt`) used to set only `terminalFocusEntryID`,
+    /// leaving this reading the sidebar selection / secondary pane — so ⌘. could stop
+    /// a DIFFERENT agent than the one the operator was watching. A live focus session
+    /// now wins over both. When focus mode is OFF the pre-fix priority is unchanged:
+    /// a focused secondary pane, else the sidebar selection (single-pane untouched).
+    ///
+    /// The priority order lives in the pure `ActiveEntryResolver` seam so it's
+    /// exhaustively unit-tested; this only feeds it the model's resolved inputs and
+    /// maps the chosen id back to its entry.
     var activeEntry: ProcessEntry? {
-        if detailSplit != nil, activePaneID == .secondary, let entry = secondaryPaneEntry {
-            return entry
-        }
-        return selectedEntry
+        let resolvedID = ActiveEntryResolver.resolve(
+            selectedEntryID: selectedEntry?.id,
+            terminalFocusEntryID: terminalFocusEntryID,
+            focusEntryResolves: terminalFocusEntry != nil,
+            splitIsActive: detailSplit != nil,
+            secondaryPaneIsFocused: activePaneID == .secondary,
+            secondaryPaneEntryID: secondaryPaneEntry?.id
+        )
+        guard let resolvedID else { return nil }
+        // The resolver returns exactly one of the three already-resolved entries'
+        // ids (focus / secondary / sidebar); return whichever it picked. Falls back
+        // to a roster lookup so the result is never a stale id.
+        if let focus = terminalFocusEntry, focus.id == resolvedID { return focus }
+        if let secondary = secondaryPaneEntry, secondary.id == resolvedID { return secondary }
+        if let selected = selectedEntry, selected.id == resolvedID { return selected }
+        return allSessionEntries.first { $0.id == resolvedID }
     }
 
     var summary: WorkspaceSummary {
