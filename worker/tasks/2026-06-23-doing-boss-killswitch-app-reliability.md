@@ -12,7 +12,7 @@
 ## Status: in progress
 
 ## Completion Criteria
-- [ ] FIX1: pump gates drain+apply on `bossWatchIsEnabled`; queued requests HELD on disk when paused, applied on resume; ON-path unchanged
+- [x] FIX1: pump gates drain+apply on `bossWatchIsEnabled`; queued requests HELD on disk when paused, applied on resume; ON-path unchanged
 - [ ] FIX2: screen terminators SIGKILL after the timeout+terminate() at each call site
 - [ ] FIX3: a single check-in applies actions + records decisions then save()s ONCE; suppression guards respected
 - [ ] FIX4: boss-watch loop doesn't wake-spin every 60s while Watch is OFF (start/stop driven by setBossWatchEnabled)
@@ -23,7 +23,7 @@
 
 ---
 
-## Unit 1 — FIX1 (HIGH): "Pause Boss Watch" true kill-switch ⬜
+## Unit 1 — FIX1 (HIGH): "Pause Boss Watch" true kill-switch ✅
 
 **What:** Gate `runExternalActionPump()`'s drain+apply step on `bossWatchIsEnabled`. While paused, the pump must NOT drain+apply queued actions (held on disk, not lost). Resuming applies the held queue. Extract a pure `shouldApplyQueuedActions(bossWatchEnabled:)` seam in Core.
 
@@ -84,3 +84,4 @@
 
 ## Progress Log
 - 2026-06-23 10:46 Doc created; worktree + branch set up off origin/main (a6516ec); all anchors re-verified by grep.
+- 2026-06-23 11:35 Unit 1 (FIX1) complete: `BossAutonomyGating.shouldApplyQueuedActions` seam (Core) + pump loop gates `drainExternalActionRequests()` on `bossWatchIsEnabled` BEFORE draining, so paused requests stay HELD in queue dir (drain moves to processing/; skipping the drain is what holds them). 4 FIX1 tests green; strict build clean. Commit b7ba4d5.
