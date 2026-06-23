@@ -483,6 +483,9 @@ final class ProcessIOBox: @unchecked Sendable {
     /// accumulating unbounded until `posix_spawn` fails `EAGAIN`. `stop()` reaps the child through
     /// this seam on every lifecycle end. Default is a blocking `waitpid`; a fake records the call.
     private let reaper: @Sendable (pid_t) -> Void
+    /// The poll seam used by `readMatchingLine`/`pollReadable` (FIX 2). Default is one real `poll(2)`
+    /// (`realPoll`); a fake lets a test drive the read loop's EINTR `.retry` arm deterministically.
+    private let pollProvider: @Sendable (Int32, Int32) -> (rc: Int32, errnoValue: Int32)
 
     init(
         pid: pid_t,
@@ -493,7 +496,8 @@ final class ProcessIOBox: @unchecked Sendable {
         isAlive: @escaping @Sendable (pid_t) -> Bool = { kill($0, 0) == 0 },
         processKiller: @escaping @Sendable (pid_t, Int32) -> Int32 = { kill($0, $1) },
         groupKiller: @escaping @Sendable (pid_t, Int32) -> Int32 = { killpg($0, $1) },
-        reaper: @escaping @Sendable (pid_t) -> Void = { var status: Int32 = 0; waitpid($0, &status, 0) }
+        reaper: @escaping @Sendable (pid_t) -> Void = { var status: Int32 = 0; waitpid($0, &status, 0) },
+        pollProvider: @escaping @Sendable (Int32, Int32) -> (rc: Int32, errnoValue: Int32) = ProcessIOBox.realPoll
     ) {
         self.pid = pid
         self.stdout = stdout
@@ -504,6 +508,7 @@ final class ProcessIOBox: @unchecked Sendable {
         self.processKiller = processKiller
         self.groupKiller = groupKiller
         self.reaper = reaper
+        self.pollProvider = pollProvider
     }
 
     /// Decode the tool-call text from the matching id line (`tools/call`). `deadline` is the wall
@@ -543,9 +548,11 @@ final class ProcessIOBox: @unchecked Sendable {
     private func readMatchingLine(deadline: DispatchTime?, _ transform: (String) throws -> String?) throws -> String {
         var buffer = Data()
         while true {
-            switch waitReadable(fd: stdout.fileDescriptor, deadline: deadline) {
+            switch pollReadable(fd: stdout.fileDescriptor, deadline: deadline) {
             case .timedOut:
                 throw BossAgentMCPClientError.timeout
+            case .retry:
+                continue // EINTR before the deadline — re-poll WITHOUT consuming a chunk
             case .readable:
                 break
             }
@@ -575,41 +582,74 @@ final class ProcessIOBox: @unchecked Sendable {
         }
     }
 
-    enum ReadableWait: Equatable { case readable, timedOut }
+    /// PURE: the per-`poll` millisecond timeout for a `deadline` and the current time, both in
+    /// `DispatchTime.uptimeNanoseconds`. `nil` deadline → `-1` (block indefinitely). An already-past
+    /// deadline → `0` (a non-blocking poll). Otherwise the remaining budget rounded UP to the next
+    /// millisecond (so a sub-ms remainder still gets one poll pass), clamped to `Int32.max`.
+    static func pollTimeoutMillis(deadlineUptimeNanos: UInt64?, nowUptimeNanos: UInt64) -> Int32 {
+        guard let deadlineUptimeNanos else {
+            return -1
+        }
+        let remainingNanos = Int64(bitPattern: deadlineUptimeNanos) - Int64(bitPattern: nowUptimeNanos)
+        if remainingNanos <= 0 {
+            return 0
+        }
+        // Convert to whole milliseconds, rounding UP (so a sub-ms remainder still gets one poll
+        // pass), clamped to `Int32.max`. Compute as ms-floor + a round-up bump to avoid overflowing
+        // `Int64` when `remainingNanos` is near `Int64.max` (which `+ 999_999` would trap on).
+        let wholeMillis = remainingNanos / 1_000_000
+        let roundedUp = wholeMillis + (remainingNanos % 1_000_000 == 0 ? 0 : 1)
+        return Int32(min(roundedUp, Int64(Int32.max)))
+    }
 
-    /// Block until `fd` is readable (data available OR EOF/error → `availableData` will then return
-    /// promptly without parking) or `deadline` passes. A `nil` deadline blocks indefinitely (the
-    /// original behaviour). `poll(2)` reports `POLLIN`/`POLLHUP`/`POLLERR`/`POLLNVAL` as readable so
-    /// a closed or EOF'd pipe never parks here; only a child that is silent AND holds its write end
-    /// open consumes the full deadline. `EINTR` retries with the recomputed remaining budget.
-    func waitReadable(fd: Int32, deadline: DispatchTime?) -> ReadableWait {
-        while true {
-            let timeoutMillis: Int32
-            if let deadline {
-                let remainingNanos = Int64(deadline.uptimeNanoseconds) - Int64(DispatchTime.now().uptimeNanoseconds)
-                if remainingNanos <= 0 {
-                    return .timedOut
-                }
-                // Round up to the next millisecond so a sub-ms remainder still gets one poll pass.
-                timeoutMillis = Int32(min((remainingNanos + 999_999) / 1_000_000, Int64(Int32.max)))
-            } else {
-                timeoutMillis = -1 // block indefinitely
-            }
-            var pollFD = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
-            let rc = poll(&pollFD, 1, timeoutMillis)
-            if rc > 0 {
-                return .readable // POLLIN or POLLHUP/POLLERR/POLLNVAL — availableData returns at once
-            }
-            if rc == 0 {
-                return .timedOut
-            }
-            if errno == EINTR {
-                continue // interrupted before the deadline — retry with the recomputed remaining budget
-            }
-            // Any other poll error (should not happen for a valid pipe fd): treat as readable so the
-            // existing `availableData`/EOF path classifies it, rather than spinning here.
+    /// PURE: classify one `poll(2)` return. `rc > 0` → readable (`POLLIN`, or `POLLHUP`/`POLLERR`/
+    /// `POLLNVAL` — `availableData` then returns at once via EOF/error, never parks). `rc == 0` →
+    /// the timeout elapsed → `.timedOut`. `rc < 0` with `EINTR` → `.retry` (interrupted before the
+    /// deadline; loop again with the recomputed budget). Any OTHER `rc < 0` errno (should not happen
+    /// for a valid pipe fd) → `.readable`, so the existing `availableData`/EOF path classifies it
+    /// rather than spinning here.
+    enum PollOutcome: Equatable { case readable, timedOut, retry }
+    static func pollOutcome(rc: Int32, errnoValue: Int32) -> PollOutcome {
+        if rc > 0 {
             return .readable
         }
+        if rc == 0 {
+            return .timedOut
+        }
+        if errnoValue == EINTR {
+            return .retry
+        }
+        return .readable
+    }
+
+    /// ONE `poll(2)` pass for the time remaining until `deadline`, classified to a `PollOutcome`.
+    /// `.retry` (EINTR before the deadline) is handled by the caller's existing read loop, which
+    /// `continue`s WITHOUT consuming a chunk — so there is no second `while true` here (and thus no
+    /// extra structurally-unreachable closing brace). A `nil` deadline blocks indefinitely (the
+    /// original behaviour). All branching is delegated to the pure `pollTimeoutMillis` /
+    /// `pollOutcome` seams (100%-tested by value); only the raw `poll(2)` and clock are impure and
+    /// are injectable so this is deterministically coverable.
+    func pollReadable(
+        fd: Int32,
+        deadline: DispatchTime?,
+        now: () -> UInt64 = { DispatchTime.now().uptimeNanoseconds },
+        pollOnce: ((Int32, Int32) -> (rc: Int32, errnoValue: Int32))? = nil
+    ) -> PollOutcome {
+        let timeoutMillis = Self.pollTimeoutMillis(
+            deadlineUptimeNanos: deadline?.uptimeNanoseconds,
+            nowUptimeNanos: now()
+        )
+        // Use the explicit `pollOnce` override when a unit test passes one; otherwise the box's
+        // injected `pollProvider` (real `poll(2)` in production, a fake in the read-loop EINTR test).
+        let result = (pollOnce ?? pollProvider)(fd, timeoutMillis)
+        return Self.pollOutcome(rc: result.rc, errnoValue: result.errnoValue)
+    }
+
+    /// The single impure seam: one real `poll(2)` on `fd` for `timeoutMillis`, returning `(rc, errno)`.
+    static let realPoll: @Sendable (Int32, Int32) -> (rc: Int32, errnoValue: Int32) = { fd, timeoutMillis in
+        var pollFD = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
+        let rc = poll(&pollFD, 1, timeoutMillis)
+        return (rc, errno)
     }
 
     /// SIGTERM the child (the polite first ask). Skipped if the child already exited, so a
