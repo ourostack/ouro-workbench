@@ -5091,22 +5091,28 @@ struct BossDashboardView: View {
                 }
                 if model.bossWatchLastError != nil, model.bossWatchConsecutiveFailures >= 2 {
                     // Surface the boss being down prominently (out of the
-                    // buried watch-status line), with the backoff state so the
-                    // user knows it'll keep retrying — not spamming.
+                    // buried watch-status line). FIX 2: the retry copy is honest —
+                    // when Boss Watch is ON it says it keeps trying (true); when OFF
+                    // it tells the operator to press Check In (no false promise).
+                    // Copy comes from the pure BossCheckInFailureCopy seam.
+                    let banner = BossCheckInFailureCopy.persistentBanner(
+                        failureCount: model.bossWatchConsecutiveFailures,
+                        bossWatchIsEnabled: model.bossWatchIsEnabled
+                    )
                     HStack(alignment: .top, spacing: 10) {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(.orange)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Your agent isn't answering yet")
+                            Text(banner.title)
                                 .font(.callout.weight(.semibold))
                             // Never interpolate the raw error here — `bossWatchLastError` carries a
                             // daemon-jargon audit line / raw transport error. Fixed, seam-free copy;
                             // the raw detail stays in the audit log.
-                            Text("Your agent didn't answer the last \(model.bossWatchConsecutiveFailures) times. Workbench is still trying.")
+                            Text(banner.detail)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(2)
-                            Text("Workbench keeps trying, a little less often each time — press Check In to try now.")
+                            Text(banner.guidance)
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
@@ -16262,7 +16268,14 @@ final class WorkbenchViewModel: ObservableObject {
         } catch {
             // Product voice only — never leak the raw transport/CLI error to the human.
             // The precise detail stays in the audit/debug surface (`bossWatchLastError`).
-            bossCheckInAnswer = "Your agent didn't answer just now. Workbench will try again shortly."
+            // FIX 2: the failure line must not promise an auto-retry that won't happen.
+            // With Boss Watch OFF nothing retries (the only retry driver is
+            // runBossWatchLoop), so the copy tells the operator to press Check In; with
+            // Watch ON the truthful "will try again" copy is kept. Pure seam.
+            bossCheckInAnswer = BossCheckInFailureCopy.failureLine(
+                failureCount: bossWatchConsecutiveFailures,
+                bossWatchIsEnabled: bossWatchIsEnabled
+            )
             bossAppliedActions = []
             // F8 — route through the SAME shared helper as the daemon-down early-return so the
             // backoff bump (count + nextRetryAt) is computed in exactly one place and can't drift.

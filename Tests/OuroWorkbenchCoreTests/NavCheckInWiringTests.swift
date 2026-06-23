@@ -71,6 +71,54 @@ final class NavCheckInWiringTests: XCTestCase {
         )
     }
 
+    // MARK: - FIX 2: the check-in failure copy branches on bossWatchIsEnabled
+
+    /// The transient product-voice line set after a failed ask must come from the
+    /// pure `BossCheckInFailureCopy.failureLine` seam (branched on watch state), NOT
+    /// the old hardcoded "Workbench will try again shortly" that lied when watch was
+    /// off.
+    func testCatchPathFailureLineRoutesThroughTheSeamBranchedOnWatchState() throws {
+        let source = try appSource()
+        // The old false-promise literal must be GONE from the App (it now lives in
+        // the seam's watch-ON arm only).
+        XCTAssertFalse(
+            source.contains("bossCheckInAnswer = \"Your agent didn't answer just now. Workbench will try again shortly.\""),
+            "the hardcoded always-on retry promise must be replaced by the seam"
+        )
+        XCTAssertTrue(
+            source.contains("bossCheckInAnswer = BossCheckInFailureCopy.failureLine("),
+            "the catch path must set bossCheckInAnswer from BossCheckInFailureCopy.failureLine"
+        )
+        XCTAssertTrue(
+            source.contains("bossWatchIsEnabled: bossWatchIsEnabled"),
+            "the failure-line call must branch on bossWatchIsEnabled"
+        )
+    }
+
+    /// The persistent "agent isn't answering" banner (>= 2 failures) must render its
+    /// copy from the seam's `persistentBanner`, branched on watch state — so it can't
+    /// promise "keeps trying" when nothing is retrying.
+    func testPersistentBannerRendersFromTheSeamBranchedOnWatchState() throws {
+        let source = try appSource()
+        XCTAssertTrue(
+            source.contains("BossCheckInFailureCopy.persistentBanner("),
+            "the persistent failure banner must render from BossCheckInFailureCopy.persistentBanner"
+        )
+        // The old hardcoded body strings must be gone from the banner.
+        XCTAssertFalse(
+            source.contains("Workbench keeps trying, a little less often each time — press Check In to try now."),
+            "the hardcoded 'keeps trying' guidance must be replaced by the seam"
+        )
+        XCTAssertFalse(
+            source.contains("times. Workbench is still trying."),
+            "the hardcoded 'still trying' detail must be replaced by the seam"
+        )
+        XCTAssertTrue(
+            source.contains("bossWatchIsEnabled: model.bossWatchIsEnabled"),
+            "the persistent-banner call must branch on bossWatchIsEnabled"
+        )
+    }
+
     // MARK: - Slice helpers
 
     private func activeEntryBranch() throws -> String {
