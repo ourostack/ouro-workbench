@@ -5723,7 +5723,7 @@ struct OuroAgentRowView: View {
             Image(systemName: agentStatusImage)
                 .foregroundStyle(agentStatusColor)
                 .frame(width: 16)
-                .help(agent.detail)
+                .help(InstalledAgentRowPresentation.help(for: liveReadiness, detail: agent.detail))
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {
                     Text(agent.name)
@@ -5833,28 +5833,29 @@ struct OuroAgentRowView: View {
         )
     }
 
-    private var agentStatusImage: String {
-        switch agent.status {
-        case .ready:
-            return "checkmark.circle.fill"
-        case .disabled:
-            return "pause.circle.fill"
-        case .missingConfig:
-            return "exclamationmark.triangle.fill"
-        case .invalidConfig:
-            return "xmark.octagon.fill"
-        }
+    /// The honest, LIVE readiness for this row — the scanner's config-only `agent.status`
+    /// folded with the real outward-lane verdict and the in-flight flag (the same maps the
+    /// sidebar #261 fix computes). The bug this replaces: this empty-state row rendered the
+    /// config-only `.ready` as a green checkmark + "ready" tooltip WITHOUT a live check, so an
+    /// expired-token agent read green. Only `.ready`/green when a live check returned `.working`.
+    private var liveReadiness: InstalledAgentRowPresentation.LiveReadiness {
+        InstalledAgentRowPresentation.liveReadiness(
+            status: agent.status,
+            verdict: model.agentOutwardVerdicts[agent.name],
+            isChecking: model.agentChecksInFlight.contains(agent.name)
+        )
     }
 
+    // Route the icon through the shared Core seam so the success glyph is reachable ONLY from
+    // a live `.ready` (never config-only). Pending stays calm; only confirmed-bad warns.
+    private var agentStatusImage: String {
+        InstalledAgentRowPresentation.iconSystemName(for: liveReadiness)
+    }
+
+    // Route the dot/icon color through the shared Core seam, live-aware: never green unless the
+    // live check confirmed it. Matches the sidebar row + detail-pane title strip.
     private var agentStatusColor: SwiftUI.Color {
-        switch agent.status {
-        case .ready:
-            return .green
-        case .disabled, .missingConfig:
-            return .orange
-        case .invalidConfig:
-            return .red
-        }
+        InstalledAgentRowPresentation.dotColor(for: liveReadiness).swiftUIColor
     }
 
     private func registrationPillText(_ status: BossWorkbenchMCPRegistrationStatus) -> String {
@@ -7895,15 +7896,19 @@ private struct AgentTitleStrip: View {
         .frame(minHeight: 38)
     }
 
+    /// The honest, LIVE readiness for the detail-pane title dot — `agent.status` folded with
+    /// the live outward verdict + in-flight flag (the maps #261 computes). Never green unless a
+    /// live check returned `.working`; an expired-token agent no longer shows a green title dot.
+    private var liveReadiness: InstalledAgentRowPresentation.LiveReadiness {
+        InstalledAgentRowPresentation.liveReadiness(
+            status: agent.status,
+            verdict: model.agentOutwardVerdicts[agent.name],
+            isChecking: model.agentChecksInFlight.contains(agent.name)
+        )
+    }
+
     private var statusColor: SwiftUI.Color {
-        switch agent.status {
-        case .ready:
-            return .green
-        case .disabled, .missingConfig:
-            return .orange
-        case .invalidConfig:
-            return .red
-        }
+        InstalledAgentRowPresentation.dotColor(for: liveReadiness).swiftUIColor
     }
 }
 
@@ -8003,7 +8008,7 @@ private struct AgentStatusCard: View {
             }
             HStack(spacing: 6) {
                 StatusPill(
-                    text: bundleStatusPillText,
+                    text: InstalledAgentRowPresentation.label(for: liveReadiness),
                     color: statusColor
                 )
                 if let registration {
@@ -8030,28 +8035,27 @@ private struct AgentStatusCard: View {
         )
     }
 
+    /// The honest, LIVE readiness for the detail-pane status card — `agent.status` folded with
+    /// the live outward verdict + in-flight flag (the maps #261 computes). The bug this replaces:
+    /// the card showed `checkmark.seal.fill` + green + a "ready" pill off config-only `.ready`, so
+    /// an expired-token agent read as a confirmed-ready bundle. Now the icon's success seal, the
+    /// green color, and the "ready" pill are reachable ONLY when a live check returned `.working`.
+    private var liveReadiness: InstalledAgentRowPresentation.LiveReadiness {
+        InstalledAgentRowPresentation.liveReadiness(
+            status: agent.status,
+            verdict: model.agentOutwardVerdicts[agent.name],
+            isChecking: model.agentChecksInFlight.contains(agent.name)
+        )
+    }
+
+    // Route the icon through the shared Core seam: the success seal is reachable ONLY from a live
+    // `.ready`; pending stays calm (clock/question), only confirmed-bad verdicts warn.
     private var statusIcon: String {
-        switch agent.status {
-        case .ready:
-            return "checkmark.seal.fill"
-        case .disabled:
-            return "pause.circle.fill"
-        case .missingConfig:
-            return "exclamationmark.triangle.fill"
-        case .invalidConfig:
-            return "xmark.octagon.fill"
-        }
+        InstalledAgentRowPresentation.iconSystemName(for: liveReadiness)
     }
 
     private var statusColor: SwiftUI.Color {
-        switch agent.status {
-        case .ready:
-            return .green
-        case .disabled, .missingConfig:
-            return .orange
-        case .invalidConfig:
-            return .red
-        }
+        InstalledAgentRowPresentation.dotColor(for: liveReadiness).swiftUIColor
     }
 
     private var statusHeadline: String {
@@ -8064,19 +8068,6 @@ private struct AgentStatusCard: View {
             return "Bundle missing agent.json"
         case .invalidConfig:
             return "Bundle config could not be read"
-        }
-    }
-
-    private var bundleStatusPillText: String {
-        switch agent.status {
-        case .ready:
-            return "ready"
-        case .disabled:
-            return "disabled"
-        case .missingConfig:
-            return "no config"
-        case .invalidConfig:
-            return "invalid"
         }
     }
 
