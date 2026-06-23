@@ -135,6 +135,85 @@ final class WorkspaceExportImportRobustnessWiringTests: XCTestCase {
         )
     }
 
+    // MARK: - FIX 3: broken recents are pruned on all structural load errors
+
+    /// `openWorkspaceConfig(at:)` must forget the recent on ALL structural load
+    /// failures — `configFileMissing` (already), PLUS `malformedJSON` and
+    /// `noTerminals` — routed through the pure Core decision. Before the fix, only
+    /// `configFileMissing` pruned; a malformed/empty recent stayed clickable and
+    /// re-errored on every click. The typed errors are handled in one
+    /// `catch let configError as WorkbenchWorkspaceConfigError` whose switch covers
+    /// every structural case, then a single decision-gated prune.
+    func testOpenRecentPrunesOnAllStructuralErrors() throws {
+        let source = try appSource()
+        // The typed structural catch — from the typed catch to the prune+return —
+        // routes EVERY structural case through the Core decision and forgets.
+        let structuralCatch = try sourceSlice(
+            in: source,
+            from: "catch let configError as WorkbenchWorkspaceConfigError {",
+            to: "} catch {"
+        )
+        // Every structural error case is handled in the switch (so each one reaches
+        // the shared decision-gated prune — not just configFileMissing).
+        for arm in ["case .configFileMissing", "case .malformedJSON", "case .noTerminals"] {
+            XCTAssertTrue(
+                structuralCatch.contains(arm),
+                "the structural catch must handle \(arm) so it reaches the prune decision"
+            )
+        }
+        // The prune is gated on the pure decision, classified from the typed error,
+        // and forgets the recent so it stops re-erroring.
+        XCTAssertTrue(
+            structuralCatch.contains("WorkbenchRecentWorkspacePruning.shouldForget(")
+                && structuralCatch.contains("WorkbenchRecentWorkspacePruning.classify(configError)"),
+            "the structural prune must be gated on shouldForget(after: classify(configError))"
+        )
+        XCTAssertTrue(
+            structuralCatch.contains("forgetRecentWorkspace(path: directoryPath)"),
+            "a structural failure must prune the dead recent so it stops re-erroring"
+        )
+    }
+
+    /// INVERSE-BUG GUARD: the generic `catch` (a transient / unknown error a retry
+    /// might clear) must NOT prune the recent — only structural failures do.
+    func testOpenRecentDoesNotPruneOnTransientError() throws {
+        let source = try appSource()
+        // The generic catch is the LAST arm: from the bare `} catch {` (no typed
+        // pattern) following the structural catch, to the apply call after the do.
+        let genericCatch = try sourceSlice(
+            in: source,
+            from: "} catch {\n            errorMessage = \"Couldn't open workspace:",
+            to: "let result = openWorkspaceConfig(config: config"
+        )
+        XCTAssertFalse(
+            genericCatch.contains("forgetRecentWorkspace"),
+            "the generic (transient/unknown) catch must NOT prune the recent — only structural failures do"
+        )
+    }
+
+    /// The structural decision must NOT silently delegate pruning to the loader or
+    /// invent a new transient prune — the App must classify the typed error and the
+    /// Core decision must gate the forget. (Pins that pruning is decision-gated.)
+    func testStructuralPruneIsDecisionGated() throws {
+        let source = try appSource()
+        let body = try sourceSlice(
+            in: source,
+            from: "func openWorkspaceConfig(at directoryPath: String) -> WorkbenchImportApplyResult? {",
+            to: "func exportWorkspaceConfig"
+        )
+        XCTAssertTrue(
+            body.contains("WorkbenchRecentWorkspacePruning.shouldForget("),
+            "the structural prune must be gated on WorkbenchRecentWorkspacePruning.shouldForget(...)"
+        )
+        // Exactly ONE forget call survives in the open-recent function (the
+        // decision-gated structural prune) — the generic catch adds none.
+        XCTAssertEqual(
+            occurrences(of: "forgetRecentWorkspace(path: directoryPath)", in: body),
+            1,
+            "open-recent must prune in exactly one place — the decision-gated structural arm"
+        )
+    }
+
     // MARK: - Helpers (mirror ImportPersistenceHonestyWiringTests)
 
     private func appSource() throws -> String {
