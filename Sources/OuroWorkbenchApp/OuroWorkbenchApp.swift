@@ -258,7 +258,14 @@ struct WorkbenchRootView: View {
             // silently no-opping.
             model.attemptCheckIn()
         case .jumpToAttention:
-            _ = model.jumpToNextAttentionSession()
+            // FIX 3: cmd-J used to discard the false return, so pressing it with an
+            // empty attention queue did nothing — a dead key with no feedback. When
+            // the jump can't move (nothing needs the operator), surface a brief
+            // transient status through the app's existing one-shot message channel
+            // (reusing the inbox-zero phrasing) instead of silently no-opping.
+            if !model.jumpToNextAttentionSession() {
+                model.errorMessage = "Nothing needs you right now."
+            }
         case .newTerminal:
             model.isNewSessionSheetPresented = true
         case .openWorkspace:
@@ -5091,22 +5098,28 @@ struct BossDashboardView: View {
                 }
                 if model.bossWatchLastError != nil, model.bossWatchConsecutiveFailures >= 2 {
                     // Surface the boss being down prominently (out of the
-                    // buried watch-status line), with the backoff state so the
-                    // user knows it'll keep retrying — not spamming.
+                    // buried watch-status line). FIX 2: the retry copy is honest —
+                    // when Boss Watch is ON it says it keeps trying (true); when OFF
+                    // it tells the operator to press Check In (no false promise).
+                    // Copy comes from the pure BossCheckInFailureCopy seam.
+                    let banner = BossCheckInFailureCopy.persistentBanner(
+                        failureCount: model.bossWatchConsecutiveFailures,
+                        bossWatchIsEnabled: model.bossWatchIsEnabled
+                    )
                     HStack(alignment: .top, spacing: 10) {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(.orange)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Your agent isn't answering yet")
+                            Text(banner.title)
                                 .font(.callout.weight(.semibold))
                             // Never interpolate the raw error here — `bossWatchLastError` carries a
                             // daemon-jargon audit line / raw transport error. Fixed, seam-free copy;
                             // the raw detail stays in the audit log.
-                            Text("Your agent didn't answer the last \(model.bossWatchConsecutiveFailures) times. Workbench is still trying.")
+                            Text(banner.detail)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(2)
-                            Text("Workbench keeps trying, a little less often each time — press Check In to try now.")
+                            Text(banner.guidance)
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
@@ -10490,15 +10503,24 @@ final class WorkbenchViewModel: ObservableObject {
     static let checkInActionLabel = "Check In"
 
     /// Drive a manual Check In from any surface (button, ⌘I, menubar, palette,
-    /// popover). When a usable boss is set this runs the check-in; when none is set
-    /// it routes to the set-up-a-boss flow so the tap is never a dead click. A tap
-    /// while a check-in is already running is a no-op (the in-flight guard owns it).
+    /// popover). When a usable boss is set this runs the check-in. When NO boss is
+    /// set it routes to the set-up-a-boss onboarding so the tap is never a dead
+    /// click. FIX 4: when a boss IS configured but currently un-usable (daemon dead
+    /// / bundle missing) it routes to the Harness Status sheet — which states "Boss
+    /// X is not reachable" honestly and offers the repair/reconnect control — instead
+    /// of dumping the operator into the full onboarding pick as if they'd never set
+    /// up a boss. A tap while a check-in is already running is a no-op (the in-flight
+    /// guard owns it).
     func attemptCheckIn() {
         switch checkInAvailability {
         case .ready:
             Task { await runBossCheckIn() }
-        case .needsBoss:
+        case .noBoss:
             presentOnboarding()
+        case .bossUnreachable:
+            // The boss exists, it just isn't reachable. Surface the honest
+            // reconnect/repair affordance (Harness Status), never re-onboarding.
+            isHarnessStatusPresented = true
         case .running:
             break
         }
@@ -11432,14 +11454,37 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     /// The entry that "selected-session" commands (Stop, Redraw, Find) act on.
-    /// When a split is active and the secondary pane is focused, that's the
-    /// secondary pane's entry; otherwise it's the sidebar selection (the
-    /// pre-split behavior, so single-pane is unchanged).
+    ///
+    /// FIX 1 (HIGH, destructive): full-screen FOCUS MODE authoritatively defines the
+    /// active terminal. macOS menu key-equivalents (⌘. Stop, ⌘L Redraw, ⌘F Find) win
+    /// over the focus view's inline buttons, so whatever this returns is what ⌘.
+    /// KILLS — it MUST be the terminal on screen. Entering focus mode (a row's Focus
+    /// button or `jumpToAttentionPrompt`) used to set only `terminalFocusEntryID`,
+    /// leaving this reading the sidebar selection / secondary pane — so ⌘. could stop
+    /// a DIFFERENT agent than the one the operator was watching. A live focus session
+    /// now wins over both. When focus mode is OFF the pre-fix priority is unchanged:
+    /// a focused secondary pane, else the sidebar selection (single-pane untouched).
+    ///
+    /// The priority order lives in the pure `ActiveEntryResolver` seam so it's
+    /// exhaustively unit-tested; this only feeds it the model's resolved inputs and
+    /// maps the chosen id back to its entry.
     var activeEntry: ProcessEntry? {
-        if detailSplit != nil, activePaneID == .secondary, let entry = secondaryPaneEntry {
-            return entry
-        }
-        return selectedEntry
+        let resolvedID = ActiveEntryResolver.resolve(
+            selectedEntryID: selectedEntry?.id,
+            terminalFocusEntryID: terminalFocusEntryID,
+            focusEntryResolves: terminalFocusEntry != nil,
+            splitIsActive: detailSplit != nil,
+            secondaryPaneIsFocused: activePaneID == .secondary,
+            secondaryPaneEntryID: secondaryPaneEntry?.id
+        )
+        guard let resolvedID else { return nil }
+        // The resolver returns exactly one of the three already-resolved entries'
+        // ids (focus / secondary / sidebar); return whichever it picked. Falls back
+        // to a roster lookup so the result is never a stale id.
+        if let focus = terminalFocusEntry, focus.id == resolvedID { return focus }
+        if let secondary = secondaryPaneEntry, secondary.id == resolvedID { return secondary }
+        if let selected = selectedEntry, selected.id == resolvedID { return selected }
+        return allSessionEntries.first { $0.id == resolvedID }
     }
 
     var summary: WorkspaceSummary {
@@ -16331,7 +16376,14 @@ final class WorkbenchViewModel: ObservableObject {
         } catch {
             // Product voice only — never leak the raw transport/CLI error to the human.
             // The precise detail stays in the audit/debug surface (`bossWatchLastError`).
-            bossCheckInAnswer = "Your agent didn't answer just now. Workbench will try again shortly."
+            // FIX 2: the failure line must not promise an auto-retry that won't happen.
+            // With Boss Watch OFF nothing retries (the only retry driver is
+            // runBossWatchLoop), so the copy tells the operator to press Check In; with
+            // Watch ON the truthful "will try again" copy is kept. Pure seam.
+            bossCheckInAnswer = BossCheckInFailureCopy.failureLine(
+                failureCount: bossWatchConsecutiveFailures,
+                bossWatchIsEnabled: bossWatchIsEnabled
+            )
             bossAppliedActions = []
             // F8 — route through the SAME shared helper as the daemon-down early-return so the
             // backoff bump (count + nextRetryAt) is computed in exactly one place and can't drift.
