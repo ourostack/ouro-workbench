@@ -5454,7 +5454,21 @@ struct DashboardMetricsStrip: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                MetricChip(label: "daemon", value: dashboard.daemonStatus)
+                // The daemon's status/mode come from `/api/machine`'s self-report,
+                // gated by the same `availability.machineAvailable` flag the sibling
+                // metrics use. Routing through `MetricStateChip` (not the inert
+                // `MetricChip`) means a failed/stale machine read collapses to the
+                // honest not-a-value state instead of showing the last-known string —
+                // a running daemon still shows its real status.
+                MetricStateChip(
+                    label: "daemon",
+                    presentation: MetricValuePresentation.resolve(
+                        text: dashboard.daemonStatus,
+                        isAvailable: availability.machineAvailable,
+                        issue: issue(prefix: "machine:")
+                    ),
+                    onRetry: onRetry
+                )
                 MetricStateChip(
                     label: "needs me",
                     presentation: MetricValuePresentation.resolve(
@@ -5491,7 +5505,15 @@ struct DashboardMetricsStrip: View {
                     ),
                     onRetry: onRetry
                 )
-                MetricChip(label: "mode", value: dashboard.daemonMode)
+                MetricStateChip(
+                    label: "mode",
+                    presentation: MetricValuePresentation.resolve(
+                        text: dashboard.daemonMode,
+                        isAvailable: availability.machineAvailable,
+                        issue: issue(prefix: "machine:")
+                    ),
+                    onRetry: onRetry
+                )
             }
         }
     }
