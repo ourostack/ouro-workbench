@@ -4208,20 +4208,42 @@ struct BossSelectorView: View {
     /// Render menu rows with a status suffix so users can see at a glance
     /// which choices are installed and which are remote-only hints. Names
     /// that don't resolve to a bundle pick up "(missing)".
+    ///
+    /// The config suffixes (disabled / no agent.json / invalid config) survive — they
+    /// were already honest. What's NEW: a config-`.ready` agent whose LIVE outward check
+    /// CONFIRMED a problem gets an honest "— sign-in needed" (auth-expired) or "— offline"
+    /// (unreachable) suffix, so a dead-token boss doesn't read as a bare, pickable name.
+    /// CALM: a pending/unverified/ready agent stays a bare name — the Connect step still
+    /// verifies on actual selection, so we don't pre-alarm an unconfirmed choice.
     private func menuLabel(for agentName: String) -> String {
-        if let agent = model.ouroAgent(named: agentName) {
-            switch agent.status {
-            case .ready:
-                return agentName
-            case .disabled:
-                return "\(agentName) — disabled"
-            case .missingConfig:
-                return "\(agentName) — no agent.json"
-            case .invalidConfig:
-                return "\(agentName) — invalid config"
-            }
+        guard let agent = model.ouroAgent(named: agentName) else {
+            return "\(agentName) — missing"
         }
-        return "\(agentName) — missing"
+        switch agent.status {
+        case .ready:
+            let readiness = InstalledAgentRowPresentation.liveReadiness(
+                status: agent.status,
+                verdict: model.agentOutwardVerdicts[agentName],
+                isChecking: model.agentChecksInFlight.contains(agentName)
+            )
+            switch readiness {
+            case .authExpired:
+                return "\(agentName) — sign-in needed"
+            case .unreachable:
+                return "\(agentName) — offline"
+            case .ready, .checking, .unverified, .vaultLocked,
+                 .disabled, .missingConfig, .invalidConfig:
+                // Calm: ready/pending stay bare; the config-derived states can't occur
+                // for a config-`.ready` agent and are handled by the outer switch anyway.
+                return agentName
+            }
+        case .disabled:
+            return "\(agentName) — disabled"
+        case .missingConfig:
+            return "\(agentName) — no agent.json"
+        case .invalidConfig:
+            return "\(agentName) — invalid config"
+        }
     }
 }
 
@@ -12253,7 +12275,18 @@ final class WorkbenchViewModel: ObservableObject {
         guard !ouroAgents.isEmpty else {
             return "no local agents"
         }
-        let readyCount = ouroAgents.filter { $0.status == .ready }.count
+        // Count LIVE readiness, not config-only `.ready`: an expired-token agent
+        // (config-`.ready`, live `.authExpired`) used to inflate the "ready" tally
+        // even though no live check confirmed it. Fold each agent's config status
+        // with its live outward verdict + in-flight flag — `.ready` (green) only when
+        // a `ouro check` returned `.working`, matching the harness #262 readyCount.
+        let readyCount = ouroAgents.filter { agent in
+            InstalledAgentRowPresentation.liveReadiness(
+                status: agent.status,
+                verdict: agentOutwardVerdicts[agent.name],
+                isChecking: agentChecksInFlight.contains(agent.name)
+            ) == .ready
+        }.count
         return "\(ouroAgents.count) local, \(readyCount) ready; boss \(state.boss.agentName)"
     }
 
