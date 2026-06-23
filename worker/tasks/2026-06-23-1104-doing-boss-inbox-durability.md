@@ -44,16 +44,19 @@ we still evict resolved-first and never grow by unbounded *non-open* churn).
 ## Units
 
 - ✅ **Unit 1 (FIX 1):** cap never evicts an open escalation. Pure `trimmedToCap`; tests at the boundary (open+resolved mix, all-open). Commit.
-- ⬜ **Unit 2 (FIX 2):** windowed dedup. `dedupKey` + windowed `isNewDecision`; interleaved A→B→A test. Commit.
+- ✅ **Unit 2 (FIX 2):** windowed dedup. `dedupGroupKey` + windowed `isNewDecision`; interleaved A→B→A test. Commit.
 - ⬜ **Unit 3 (FIX 3):** nil-entry stable-key collapse in `openInbox`. Tests: identical nil collapse to one; distinct nil stay separate. Commit.
 
 ## Completion Criteria
 
 - [x] FIX 1: open escalation never evicted by cap; resolved evicted first; cap bounded.
-- [ ] FIX 2: interleaved A→B→A does NOT re-fire A; distinct (prompt/kind) still new.
+- [x] FIX 2: interleaved A→B→A does NOT re-fire A; distinct (prompt/kind) still new.
 - [ ] FIX 3: identical nil-entry decisions collapse to one; distinct nil-entry stay separate.
 - [ ] `swift build` + `swift test` with `-Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete`, 0 failures.
 - [ ] `Scripts/check-coverage.sh` Core 100% line+region; allowlist unchanged at 2.
 - [ ] 3 commits (one per fix), pushed; NOT merged/PR'd.
 
 ## Progress Log
+
+- 2026-06-23 11:11 Unit 1 (FIX 1) complete @933a57d: pure `trimmedToCap` evicts resolved/audit-only oldest-first, never an open escalation; at the all-open boundary the log exceeds the cap rather than drop a waiting session. 4 new cap tests + updated `testRecordDecisionTrimsToCap` (now resolved-row based). Strict build clean, coverage 100%, allowlist at 2. Pushed.
+- 2026-06-23 11:23 Unit 2 (FIX 2) complete @f1572f1: windowed `isNewDecision` scans the recent `dedupScanWindow` (50) in the same `dedupGroupKey` group; interleaved A→B→A no longer re-fires A. Shared pure `dedupGroupKey` (real entryId, else stable (sessionName,prompt,kind) pseudo-key) introduced for FIX 2 + FIX 3. Red proven by reverting to `.first` (3 failures), then restored. 5 new dedup tests (incl. nil-name path). Full suite 2603 pass; coverage 100%; allowlist at 2.
