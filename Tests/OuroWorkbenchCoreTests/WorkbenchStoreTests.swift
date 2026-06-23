@@ -261,7 +261,11 @@ final class WorkbenchStoreTests: XCTestCase {
         // Absent bossWatchEnabled defaults on (automate-first posture); the
         // one-time migration also turns it on for existing state.
         XCTAssertEqual(loaded.bossWatchEnabled, true)
-        XCTAssertEqual(loaded.bossPaneCollapsed, false)
+        // Absent bossPaneCollapsed defaults to the SAME value a fresh memberwise
+        // state uses (`true`) — an upgraded old file and a fresh launch must agree
+        // on the boss pane (was the buggy `false`, which expanded an upgraded file
+        // while collapsing a fresh one).
+        XCTAssertEqual(loaded.bossPaneCollapsed, true)
         XCTAssertNil(loaded.selectedProjectId)
         XCTAssertNil(loaded.selectedEntryId)
         try? FileManager.default.removeItem(at: root)

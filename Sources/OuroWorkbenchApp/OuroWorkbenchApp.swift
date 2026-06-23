@@ -258,7 +258,14 @@ struct WorkbenchRootView: View {
             // silently no-opping.
             model.attemptCheckIn()
         case .jumpToAttention:
-            _ = model.jumpToNextAttentionSession()
+            // FIX 3: cmd-J used to discard the false return, so pressing it with an
+            // empty attention queue did nothing — a dead key with no feedback. When
+            // the jump can't move (nothing needs the operator), surface a brief
+            // transient status through the app's existing one-shot message channel
+            // (reusing the inbox-zero phrasing) instead of silently no-opping.
+            if !model.jumpToNextAttentionSession() {
+                model.errorMessage = "Nothing needs you right now."
+            }
         case .newTerminal:
             model.isNewSessionSheetPresented = true
         case .openWorkspace:
@@ -634,7 +641,10 @@ struct WorkbenchRootView: View {
             await model.runExternalActionPump()
         }
         .task {
-            await model.runBossWatchLoop()
+            // FIX4 — start the Boss Watch poll loop ONLY if Watch was persisted on.
+            // The loop's lifetime is otherwise owned by the enable toggle
+            // (`setBossWatchEnabled`), so it no longer wakes every 60s while OFF.
+            model.startBossWatchLoopIfEnabled()
         }
         .task {
             await model.runAutoUpdateCheckIfDue()
@@ -5091,22 +5101,28 @@ struct BossDashboardView: View {
                 }
                 if model.bossWatchLastError != nil, model.bossWatchConsecutiveFailures >= 2 {
                     // Surface the boss being down prominently (out of the
-                    // buried watch-status line), with the backoff state so the
-                    // user knows it'll keep retrying — not spamming.
+                    // buried watch-status line). FIX 2: the retry copy is honest —
+                    // when Boss Watch is ON it says it keeps trying (true); when OFF
+                    // it tells the operator to press Check In (no false promise).
+                    // Copy comes from the pure BossCheckInFailureCopy seam.
+                    let banner = BossCheckInFailureCopy.persistentBanner(
+                        failureCount: model.bossWatchConsecutiveFailures,
+                        bossWatchIsEnabled: model.bossWatchIsEnabled
+                    )
                     HStack(alignment: .top, spacing: 10) {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .foregroundStyle(.orange)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Your agent isn't answering yet")
+                            Text(banner.title)
                                 .font(.callout.weight(.semibold))
                             // Never interpolate the raw error here — `bossWatchLastError` carries a
                             // daemon-jargon audit line / raw transport error. Fixed, seam-free copy;
                             // the raw detail stays in the audit log.
-                            Text("Your agent didn't answer the last \(model.bossWatchConsecutiveFailures) times. Workbench is still trying.")
+                            Text(banner.detail)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(2)
-                            Text("Workbench keeps trying, a little less often each time — press Check In to try now.")
+                            Text(banner.guidance)
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
@@ -6023,7 +6039,15 @@ struct ProviderConfigSheet: View {
                     TextField("Agent name", text: $newAgentName)
                 }
                 Picker("Provider", selection: $provider) {
-                    ForEach(WorkbenchProvider.allCases) { provider in
+                    // BUG 2 — offer ONLY providers a brand-new agent can actually be cold-started for.
+                    // `coldStartProviders` filters out the hatch-incapable ones (GitHub Copilot has no
+                    // `ouro hatch` argv sink), so picking one + Create Agent can't dead-end in
+                    // `.unsupportedColdStartSink`. Copilot stays selectable on the reconnect / existing-
+                    // agent path (which routes through `presentProviderConfigForm`, not this set), so a
+                    // configured github-copilot agent like ouroboros is unaffected.
+                    ForEach(model.providerConfigIsNewAgent
+                            ? WorkbenchProvider.coldStartProviders
+                            : WorkbenchProvider.allCases) { provider in
                         Text(provider.displayName).tag(provider)
                     }
                 }
@@ -6095,6 +6119,15 @@ struct ProviderConfigSheet: View {
             values = [:]
             message = nil
             model.providerConfigColdStartMessage = nil
+            // BUG 1 — if the previous provider's cold-start landed in `.needsVaultSetup`, the primary
+            // button reads "Finish setup" and runs `beginVaultOnboarding()` against the STASHED
+            // provider. Switching providers must drop that stale affordance: reset the flag (so the
+            // button returns to "Create Agent"/"Connect" for the newly-picked provider) and clear the
+            // stashed provider the vault chain would otherwise name. A normal (non-switch) session
+            // still sets these in the `.needsVaultSetup` arm, so the legitimate Finish-setup flow is
+            // unaffected.
+            model.providerConfigNeedsVaultSetup = false
+            model.providerConfigColdStartProvider = nil
         }
     }
 
@@ -6769,6 +6802,38 @@ private struct FirstRunBootstrapView: View {
                             )
                         } label: {
                             Label("Connect a provider", systemImage: "link")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                    }
+                    // FIX 1 — the actionable cold-start FAILURE surface. The retry control appears
+                    // ONLY in `.needsAttention` (the pure `showsRetryButton` gate), so the "you can
+                    // try again" copy is no longer dead. The honest copy + the recovery ROUTE both
+                    // come from the carried `attentionReason` (pure Core).
+                    //
+                    // FIX 2 — the route differs per reason: an invalid boss opens the boss-CHOICE
+                    // surface (`presentOnboarding()` → Choose Boss), because the real fix for a
+                    // stale/invalid boss pointer is PICKING A VALID BOSS, not a provider reconnect;
+                    // a failed step re-runs the (re-runnable) bootstrap (`runFirstRunBootstrap()`).
+                    if presentation.mode.showsRetryButton, let reason = presentation.attentionReason {
+                        Text(reason.humanFacingLine)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button {
+                            switch reason.recoveryAction {
+                            case .chooseBoss:
+                                model.presentOnboarding()
+                            case .retry:
+                                model.runFirstRunBootstrap()
+                            }
+                        } label: {
+                            Label(
+                                reason.actionLabel,
+                                systemImage: reason.recoveryAction == .chooseBoss
+                                    ? "person.crop.circle.badge.questionmark"
+                                    : "arrow.clockwise"
+                            )
                         }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)
@@ -10257,6 +10322,16 @@ struct WorkbenchImportApplyResult: Equatable {
     var createdCount: Int
     var groupNames: [String]
     var skippedNames: [String]
+    /// Terminals skipped because a `(projectId, name)` match was ALREADY in the
+    /// workbench (a re-import no-op) — counted SEPARATELY from `skippedNames`
+    /// (which is reserved for genuine error-skips like "couldn't create"). Surfaced
+    /// in `detail` as "N already present" so a re-import of an edited
+    /// `.workbench.json` doesn't SILENTLY drop the already-present terminals; the
+    /// operator sees they were recognized, not lost. (Whether a matched terminal's
+    /// changed command/cwd/trust should be UPDATED is a deferred product decision —
+    /// this only makes the skip visible.) Additive default keeps existing
+    /// constructions valid.
+    var alreadyPresentCount: Int = 0
     var firstSelectedEntryID: UUID?
     /// Whether the durable `store.save(state)` that backs this import actually
     /// landed. The import-apply paths thread the view-model `save()`'s Bool here
@@ -10289,6 +10364,11 @@ struct WorkbenchImportApplyResult: Equatable {
         }
         if !skippedNames.isEmpty {
             parts.append("Skipped: \(skippedNames.joined(separator: ", "))")
+        }
+        // Surface re-import no-ops so an already-present terminal whose entry in the
+        // file changed isn't a SILENT drop — the operator sees it was recognized.
+        if alreadyPresentCount > 0 {
+            parts.append("\(alreadyPresentCount) already present")
         }
         if hasImports {
             parts.append(WorkbenchOnboardingNarrative.duplicateCleanup)
@@ -10426,15 +10506,24 @@ final class WorkbenchViewModel: ObservableObject {
     static let checkInActionLabel = "Check In"
 
     /// Drive a manual Check In from any surface (button, ⌘I, menubar, palette,
-    /// popover). When a usable boss is set this runs the check-in; when none is set
-    /// it routes to the set-up-a-boss flow so the tap is never a dead click. A tap
-    /// while a check-in is already running is a no-op (the in-flight guard owns it).
+    /// popover). When a usable boss is set this runs the check-in. When NO boss is
+    /// set it routes to the set-up-a-boss onboarding so the tap is never a dead
+    /// click. FIX 4: when a boss IS configured but currently un-usable (daemon dead
+    /// / bundle missing) it routes to the Harness Status sheet — which states "Boss
+    /// X is not reachable" honestly and offers the repair/reconnect control — instead
+    /// of dumping the operator into the full onboarding pick as if they'd never set
+    /// up a boss. A tap while a check-in is already running is a no-op (the in-flight
+    /// guard owns it).
     func attemptCheckIn() {
         switch checkInAvailability {
         case .ready:
             Task { await runBossCheckIn() }
-        case .needsBoss:
+        case .noBoss:
             presentOnboarding()
+        case .bossUnreachable:
+            // The boss exists, it just isn't reachable. Surface the honest
+            // reconnect/repair affordance (Harness Status), never re-onboarding.
+            isHarnessStatusPresented = true
         case .running:
             break
         }
@@ -10758,6 +10847,15 @@ final class WorkbenchViewModel: ObservableObject {
     /// bypasses this guard and the final survivors-only state is still persisted
     /// — after the salvage.
     private var isLoadingState = false
+    /// FIX3 — non-zero while a single boss check-in is applying actions + recording
+    /// decisions inside `withBatchedSave`. During that window the per-step `save()`
+    /// calls (`recordActionLog`'s trailing save, `recordBossDecisions`'s save) are
+    /// suppressed so the action-log rows and their decision/inbox rows persist
+    /// ATOMICALLY in one trailing `save()` — a crash mid-check-in (or a zero-change
+    /// decisions batch) can no longer leave executed actions without their audit
+    /// rows. A counter (not a Bool) so nested batched scopes compose. `save()`'s
+    /// existing reset/load suppression guards still win.
+    private var bossCheckInSaveBatchDepth = 0
     private var isFirstRunSetupForcedOnLaunch = false
     @Published var onboardingCandidates: [RecentSessionCandidate] = []
     @Published var onboardingProposal: WorkbenchImportProposal?
@@ -10885,6 +10983,12 @@ final class WorkbenchViewModel: ObservableObject {
     private var vaultOnboardingFlavor: VaultOnboardingFlavor = .onboarding
     private var bossWatchBaselineState: WorkspaceState?
     private var bossWatchTickIsRunning = false
+    /// FIX4 — the periodic Boss Watch poll loop's lifetime is now owned by the
+    /// enable toggle, not an unconditional `.task`. It runs ONLY while Watch is on:
+    /// `setBossWatchEnabled(true)` (and `startBossWatchLoopIfEnabled` at launch when
+    /// Watch was persisted on) start it; `setBossWatchEnabled(false)` cancels it. So
+    /// the loop no longer wakes every 60s just to `continue` while Watch is OFF.
+    private var bossWatchLoopTask: Task<Void, Never>?
     private var bossWatchLastPromptAt: Date?
     /// When a session newly needs attention, the boss responds right then
     /// (event-driven) instead of waiting up to a full poll interval. This caps
@@ -11368,14 +11472,37 @@ final class WorkbenchViewModel: ObservableObject {
     }
 
     /// The entry that "selected-session" commands (Stop, Redraw, Find) act on.
-    /// When a split is active and the secondary pane is focused, that's the
-    /// secondary pane's entry; otherwise it's the sidebar selection (the
-    /// pre-split behavior, so single-pane is unchanged).
+    ///
+    /// FIX 1 (HIGH, destructive): full-screen FOCUS MODE authoritatively defines the
+    /// active terminal. macOS menu key-equivalents (⌘. Stop, ⌘L Redraw, ⌘F Find) win
+    /// over the focus view's inline buttons, so whatever this returns is what ⌘.
+    /// KILLS — it MUST be the terminal on screen. Entering focus mode (a row's Focus
+    /// button or `jumpToAttentionPrompt`) used to set only `terminalFocusEntryID`,
+    /// leaving this reading the sidebar selection / secondary pane — so ⌘. could stop
+    /// a DIFFERENT agent than the one the operator was watching. A live focus session
+    /// now wins over both. When focus mode is OFF the pre-fix priority is unchanged:
+    /// a focused secondary pane, else the sidebar selection (single-pane untouched).
+    ///
+    /// The priority order lives in the pure `ActiveEntryResolver` seam so it's
+    /// exhaustively unit-tested; this only feeds it the model's resolved inputs and
+    /// maps the chosen id back to its entry.
     var activeEntry: ProcessEntry? {
-        if detailSplit != nil, activePaneID == .secondary, let entry = secondaryPaneEntry {
-            return entry
-        }
-        return selectedEntry
+        let resolvedID = ActiveEntryResolver.resolve(
+            selectedEntryID: selectedEntry?.id,
+            terminalFocusEntryID: terminalFocusEntryID,
+            focusEntryResolves: terminalFocusEntry != nil,
+            splitIsActive: detailSplit != nil,
+            secondaryPaneIsFocused: activePaneID == .secondary,
+            secondaryPaneEntryID: secondaryPaneEntry?.id
+        )
+        guard let resolvedID else { return nil }
+        // The resolver returns exactly one of the three already-resolved entries'
+        // ids (focus / secondary / sidebar); return whichever it picked. Falls back
+        // to a roster lookup so the result is never a stale id.
+        if let focus = terminalFocusEntry, focus.id == resolvedID { return focus }
+        if let secondary = secondaryPaneEntry, secondary.id == resolvedID { return secondary }
+        if let selected = selectedEntry, selected.id == resolvedID { return selected }
+        return allSessionEntries.first { $0.id == resolvedID }
     }
 
     var summary: WorkspaceSummary {
@@ -13236,6 +13363,10 @@ final class WorkbenchViewModel: ObservableObject {
 
         var createdEntries: [ProcessEntry] = []
         var skippedNames: [String] = []
+        // Re-import no-ops (a (projectId,name) match already in the workbench) are
+        // tallied here, distinct from `skippedNames` error-skips, so the summary can
+        // say "N already present" instead of silently dropping them.
+        var alreadyPresentCount = 0
         for terminal in config.terminals {
             let workingDirectory = loader.resolvedWorkingDirectory(for: terminal, rootPath: rootPath)
             let trust: ProcessTrust = (terminal.trust ?? "").lowercased() == "trusted"
@@ -13246,7 +13377,11 @@ final class WorkbenchViewModel: ObservableObject {
                 existing.projectId == project.id && existing.name == terminal.name
             }
             if alreadyPresent {
-                skippedNames.append(terminal.name)
+                // Already in the workbench — count it (surfaced as "N already
+                // present") and skip. We do NOT update the existing entry from the
+                // file's (possibly edited) command/cwd/trust/autoResume: whether a
+                // matched terminal should be updated is a deferred product decision.
+                alreadyPresentCount += 1
                 continue
             }
             let draft = CustomTerminalSessionDraft(
@@ -13287,16 +13422,20 @@ final class WorkbenchViewModel: ObservableObject {
             createdCount: createdEntries.count,
             groupNames: createdEntries.isEmpty ? [] : [groupName],
             skippedNames: skippedNames,
+            alreadyPresentCount: alreadyPresentCount,
             firstSelectedEntryID: createdEntries.first?.id,
             persisted: persisted
         )
         lastImportSummary = result
         let saveNote = persisted ? "" : " (not saved to disk — will be lost on quit)"
+        let alreadyPresentNote = alreadyPresentCount > 0
+            ? ", \(alreadyPresentCount) already present"
+            : ""
         recordActionLog(
             source: "native",
             action: "openWorkspaceConfig",
             targetName: groupName,
-            result: "Workspace \(groupName) created \(createdEntries.count) terminals (skipped \(skippedNames.count))\(saveNote)",
+            result: "Workspace \(groupName) created \(createdEntries.count) terminals (skipped \(skippedNames.count)\(alreadyPresentNote))\(saveNote)",
             succeeded: persisted
         )
         return result
@@ -13330,20 +13469,39 @@ final class WorkbenchViewModel: ObservableObject {
         let config: WorkbenchWorkspaceConfig
         do {
             config = try loader.load(directoryPath: directoryPath)
-        } catch WorkbenchWorkspaceConfigError.configFileMissing(let path) {
-            errorMessage = "No .workbench.json found at \(path)"
-            // The user opened a recent that's no longer valid — drop it from
-            // the recent list so the menu doesn't keep showing a dead path.
-            forgetRecentWorkspace(path: directoryPath)
-            return nil
-        } catch WorkbenchWorkspaceConfigError.malformedJSON(let detail) {
-            errorMessage = "Couldn't parse .workbench.json: \(detail)"
-            return nil
-        } catch WorkbenchWorkspaceConfigError.noTerminals {
-            errorMessage = ".workbench.json must declare at least one terminal"
+        } catch let configError as WorkbenchWorkspaceConfigError {
+            switch configError {
+            case .configFileMissing(let path):
+                errorMessage = "No .workbench.json found at \(path)"
+            case .fileUnreadable(let detail):
+                // A file-READ blip (lock / EACCES / volume hiccup / EIO): surface an
+                // honest message but do NOT prune — a retry may clear it (the Core
+                // decision classifies this `.transient`, so the gated prune keeps it).
+                errorMessage = "Couldn't read .workbench.json (try again): \(detail)"
+            case .malformedJSON(let detail):
+                errorMessage = "Couldn't parse .workbench.json: \(detail)"
+            case .noTerminals:
+                errorMessage = ".workbench.json must declare at least one terminal"
+            }
+            // FIX 3: a recent that failed to load STRUCTURALLY (gone / malformed /
+            // empty) is dead and re-errors on every click — drop it so the menu
+            // stays honest. A file-READ blip (`.fileUnreadable`) is recoverable, so
+            // the pure Core decision classifies it `.transient` and KEEPS the recent
+            // — only structural failures forget. The decision is exhaustively tested
+            // in WorkbenchRecentWorkspacePruningTests; previously only
+            // `configFileMissing` pruned, and a read blip was wrongly lumped with
+            // malformed JSON (pruning a good workspace on a transient hiccup).
+            if WorkbenchRecentWorkspacePruning.shouldForget(
+                after: WorkbenchRecentWorkspacePruning.classify(configError)
+            ) {
+                forgetRecentWorkspace(path: directoryPath)
+            }
             return nil
         } catch {
             errorMessage = "Couldn't open workspace: \(error.localizedDescription)"
+            // A transient / unknown failure may clear on retry — KEEP the recent
+            // (classified `.transient`, which the pure decision keeps). Deliberately
+            // no prune here: we must not silently drop a recent on a blip.
             return nil
         }
         let result = openWorkspaceConfig(config: config, configDirectory: directoryPath, loader: loader)
@@ -13417,7 +13575,12 @@ final class WorkbenchViewModel: ObservableObject {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
             let data = try encoder.encode(config)
-            try data.write(to: url)
+            // Atomic so an interrupted overwrite (crash / disk-full / kill) never
+            // truncates the operator's PRIOR `.workbench.json` — the atomic write
+            // lands in a temp file and renames into place, so a partial write can't
+            // clobber the existing file and break the next "Open Workspace…".
+            // Matches the durable `WorkbenchStore.save` writer, which is already atomic.
+            try data.write(to: url, options: [.atomic])
             // Save target is the directory containing the .workbench.json so
             // the recent workspaces menu reopens the directory, matching the
             // Open Workspace… flow.
@@ -13610,20 +13773,50 @@ final class WorkbenchViewModel: ObservableObject {
             Task {
                 await runBossWatchTick(force: true)
             }
+            // FIX4 — start the periodic poll loop on enable. Cancel any prior handle
+            // first so a rapid off→on can't leak a second loop. The loop itself only
+            // exists while Watch is on, so it no longer wakes every 60s while OFF.
+            bossWatchLoopTask?.cancel()
+            bossWatchLoopTask = Task {
+                await runBossWatchLoop()
+            }
         } else {
             bossWatchBaselineState = nil
             bossWatchChangeSummaries = []
             bossWatchLastRunAt = nil
             bossWatchLastPromptAt = nil
+            // FIX4 — cancel the poll loop on disable so it stops waking entirely
+            // (the true "no idle wakeups while OFF" guarantee).
+            bossWatchLoopTask?.cancel()
+            bossWatchLoopTask = nil
             save()
         }
     }
 
+    /// FIX4 — launch-time entry: start the poll loop only if Boss Watch was
+    /// persisted ON (state restored by `load()` sets `bossWatchIsEnabled` directly,
+    /// bypassing `setBossWatchEnabled`, so the loop must be (re)started here). When
+    /// Watch is OFF at launch this is a no-op — no loop, no idle wakeups. Replaces
+    /// the old unconditional `.task { runBossWatchLoop() }` at the view root.
+    func startBossWatchLoopIfEnabled() {
+        guard bossWatchIsEnabled, bossWatchLoopTask == nil else {
+            return
+        }
+        bossWatchLoopTask = Task {
+            await runBossWatchLoop()
+        }
+    }
+
+    /// The periodic Boss Watch poll. FIX4 — this loop is now created ONLY while
+    /// Watch is on (by `setBossWatchEnabled` / `startBossWatchLoopIfEnabled`) and
+    /// cancelled on disable, so it no longer wakes every interval just to `continue`
+    /// while OFF. It still re-checks `bossWatchIsEnabled` before a tick as a cheap
+    /// race guard (a cancel mid-sleep also breaks the loop via `Task.isCancelled`).
     func runBossWatchLoop() async {
         while !Task.isCancelled {
             try? await Task.sleep(nanoseconds: bossWatchIntervalNanoseconds)
-            guard bossWatchIsEnabled else {
-                continue
+            if Task.isCancelled || !bossWatchIsEnabled {
+                return
             }
             await runBossWatchTick(force: false)
         }
@@ -16225,8 +16418,18 @@ final class WorkbenchViewModel: ObservableObject {
                 state.recordProse(BossProseEntry(source: "boss:\(requestedBoss)", text: answer))
                 save()
             }
-            applyBossActions(from: answer)
-            recordBossDecisions(from: answer)
+            // FIX3 — a single check-in applies actions + records decisions, then
+            // save()s ONCE. `applyBossActions` (per action → recordActionLog) and
+            // `recordBossDecisions` each used to save() independently, so a crash
+            // mid-check-in (or a zero-change decisions batch) could leave executed
+            // actions WITHOUT their decision/audit rows. Wrapping both in
+            // `withBatchedSave` suppresses the per-step saves and flushes one
+            // trailing save() so the action-log rows + decision/inbox rows persist
+            // atomically together.
+            withBatchedSave {
+                applyBossActions(from: answer)
+                recordBossDecisions(from: answer)
+            }
             // F12a gap 3b — after recording the boss's own decisions, escalate any
             // waiting session the boss DIDN'T decide on, so it can't fall silently
             // out of triage.
@@ -16239,7 +16442,14 @@ final class WorkbenchViewModel: ObservableObject {
         } catch {
             // Product voice only — never leak the raw transport/CLI error to the human.
             // The precise detail stays in the audit/debug surface (`bossWatchLastError`).
-            bossCheckInAnswer = "Your agent didn't answer just now. Workbench will try again shortly."
+            // FIX 2: the failure line must not promise an auto-retry that won't happen.
+            // With Boss Watch OFF nothing retries (the only retry driver is
+            // runBossWatchLoop), so the copy tells the operator to press Check In; with
+            // Watch ON the truthful "will try again" copy is kept. Pure seam.
+            bossCheckInAnswer = BossCheckInFailureCopy.failureLine(
+                failureCount: bossWatchConsecutiveFailures,
+                bossWatchIsEnabled: bossWatchIsEnabled
+            )
             bossAppliedActions = []
             // F8 — route through the SAME shared helper as the daemon-down early-return so the
             // backoff bump (count + nextRetryAt) is computed in exactly one place and can't drift.
@@ -16270,7 +16480,6 @@ final class WorkbenchViewModel: ObservableObject {
             return
         }
         let machineOwner = SessionFriend.machineOwner()
-        var changed = 0
         for input in inputs {
             let entry = input.entry.flatMap { processEntry(matching: $0) }
             let friend = entry.flatMap { state.effectiveFriend(for: $0, fallback: machineOwner) }
@@ -16345,11 +16554,13 @@ final class WorkbenchViewModel: ObservableObject {
                     status: status
                 )
             )
-            changed += 1
         }
-        if changed > 0 {
-            save()
-        }
+        // FIX3 — no inline save() here anymore. This runs INSIDE the single
+        // check-in's `withBatchedSave` scope (the only caller), which performs one
+        // trailing save() so these decision/inbox rows persist atomically with the
+        // action-log rows `applyBossActions` just wrote. (The decisions are recorded
+        // into in-memory state via `recordDecision`; the batch flush is what makes
+        // them durable — together with the actions, never apart.)
     }
 
     /// F12a gap 3b — escalate any waiting-on-human session the boss DIDN'T already
@@ -16486,7 +16697,19 @@ final class WorkbenchViewModel: ObservableObject {
         // above won't replay them, but the marker would otherwise linger forever).
         await sweepOrphanedAppliedMarkers()
         while !Task.isCancelled {
-            await drainExternalActionRequests()
+            // FIX1 — "Pause Boss Watch" is a TRUE kill-switch. While paused the pump
+            // must NOT drain+apply queued requests: gate the drain on the switch
+            // BEFORE calling it. `drainExternalActionRequests` MOVES request files
+            // into `processing/`, so skipping the drain (rather than draining then
+            // discarding) is what keeps the queued requests HELD on disk, lossless,
+            // until the watch resumes. An apply already mid-execution finishes — we
+            // only refuse to start NEW applies while paused. Re-enabling resumes the
+            // drain on the next tick and the held queue is applied. (Boss Watch ON →
+            // applies as before; manual one-shot Check-In is a separate path,
+            // unaffected.)
+            if BossAutonomyGating.shouldApplyQueuedActions(bossWatchEnabled: bossWatchIsEnabled) {
+                await drainExternalActionRequests()
+            }
             try? await Task.sleep(nanoseconds: 2_000_000_000)
         }
     }
@@ -16637,7 +16860,12 @@ final class WorkbenchViewModel: ObservableObject {
                 finished.signal()
             }
             if finished.wait(timeout: .now() + .milliseconds(1500)) == .timedOut {
+                // FIX2 — SIGTERM, then escalate to SIGKILL. A `screen` that ignores
+                // SIGTERM (wedged socket / NFS home) would otherwise survive the
+                // terminate() forever; mirror the BossAgentMCPClient terminate+forceKill
+                // backstop so the quit can't leak a SIGTERM-deaf process.
                 process.terminate()
+                kill(process.processIdentifier, SIGKILL)
             }
         }
     }
@@ -16751,7 +16979,10 @@ final class WorkbenchViewModel: ObservableObject {
             finished.signal()
         }
         if finished.wait(timeout: .now() + .milliseconds(1500)) == .timedOut {
+            // FIX2 — SIGTERM, then escalate to SIGKILL so a SIGTERM-ignoring
+            // `screen -ls` (wedged socket) can't survive past the watchdog.
             process.terminate()
+            kill(process.processIdentifier, SIGKILL)
             return []
         }
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
@@ -19657,7 +19888,10 @@ final class WorkbenchViewModel: ObservableObject {
             finished.signal()
         }
         if finished.wait(timeout: .now() + .milliseconds(1500)) == .timedOut {
+            // FIX2 — SIGTERM, then escalate to SIGKILL so a SIGTERM-ignoring
+            // `screen -ls` (wedged socket) can't survive past the watchdog.
             process.terminate()
+            kill(process.processIdentifier, SIGKILL)
             return false
         }
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
@@ -19974,6 +20208,14 @@ final class WorkbenchViewModel: ObservableObject {
         guard !isLoadingState else {
             return true
         }
+        // FIX3 — inside a single check-in's `withBatchedSave` scope, suppress the
+        // per-step saves (recordActionLog's trailing save, recordBossDecisions's
+        // save) so the apply + record rows land in ONE trailing store.save(). The
+        // batch's flush clears this depth BEFORE its own save(), so that final
+        // write goes through here normally (and still honors the guards above).
+        guard bossCheckInSaveBatchDepth == 0 else {
+            return true
+        }
         do {
             try store.save(state)
             return true
@@ -19981,6 +20223,29 @@ final class WorkbenchViewModel: ObservableObject {
             errorMessage = String(describing: error)
             return false
         }
+    }
+
+    /// FIX3 — run `body` (a single check-in's apply-actions + record-decisions) with
+    /// the per-step `save()` calls suppressed, then perform exactly ONE trailing
+    /// `save()` so the action-log rows and their decision/inbox rows persist
+    /// atomically. The depth counter is restored before the flush (so the flush's
+    /// own `save()` isn't suppressed), and on any throw the depth is still restored
+    /// (the catch decrements before rethrowing) — so a throwing body can't leave the
+    /// batch wedged-suppressed. The trailing `save()` honors the existing reset/load
+    /// suppression guards exactly as a normal save would.
+    @discardableResult
+    private func withBatchedSave<T>(_ body: () throws -> T) rethrows -> T {
+        bossCheckInSaveBatchDepth += 1
+        let result: T
+        do {
+            result = try body()
+        } catch {
+            bossCheckInSaveBatchDepth -= 1
+            throw error
+        }
+        bossCheckInSaveBatchDepth -= 1
+        save()
+        return result
     }
 
     private func fetchResult<T: Decodable & Sendable>(

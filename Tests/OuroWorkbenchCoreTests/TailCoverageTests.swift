@@ -80,8 +80,11 @@ final class TailCoverageTests: XCTestCase {
     }
 
     // WorkbenchWorkspaceConfigLoader: an unreadable existing path (a directory
-    // where the config file should be) surfaces as malformedJSON, not a crash.
-    func testWorkspaceConfigLoaderUnreadablePathIsMalformedJSON() throws {
+    // where the config file should be) is a FILE-READ failure — `Data(contentsOf:)`
+    // throws before any JSON parse — so it surfaces as `.fileUnreadable`, NOT
+    // `.malformedJSON`. (FIX: a read blip must not be confused with genuine bad
+    // JSON; the recent is kept, not pruned. See WorkbenchRecentWorkspacePruning.)
+    func testWorkspaceConfigLoaderUnreadablePathIsFileUnreadable() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("wsc-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: dir) }
@@ -90,8 +93,8 @@ final class TailCoverageTests: XCTestCase {
         try FileManager.default.createDirectory(at: configPath, withIntermediateDirectories: true)
 
         XCTAssertThrowsError(try WorkbenchWorkspaceConfigLoader().load(directoryPath: dir.path)) { error in
-            guard case WorkbenchWorkspaceConfigError.malformedJSON = error else {
-                return XCTFail("expected .malformedJSON, got \(error)")
+            guard case WorkbenchWorkspaceConfigError.fileUnreadable = error else {
+                return XCTFail("expected .fileUnreadable, got \(error)")
             }
         }
     }

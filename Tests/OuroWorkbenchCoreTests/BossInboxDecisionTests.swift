@@ -16,9 +16,14 @@ final class BossInboxDecisionTests: XCTestCase {
     }
 
     func testRecordDecisionTrimsToCap() {
+        // RESOLVED decisions are audit-only (out of the open queue), so the cap is
+        // free to shed the oldest — the bounded behavior. (An OPEN escalation is
+        // never evicted; that invariant is covered by the FIX-1 cap tests below.)
         var state = WorkspaceState()
         for i in 0..<(WorkspaceState.decisionLogCap + 25) {
-            state.recordDecision(decision(.hold, reasoning: "d\(i)"))
+            var d = decision(.hold, reasoning: "d\(i)")
+            d.triage = .resolved(at: Date())
+            state.recordDecision(d)
         }
         XCTAssertEqual(state.decisionLog.count, WorkspaceState.decisionLogCap)
         // The most recent survives; the oldest are trimmed.
@@ -105,6 +110,96 @@ final class BossInboxDecisionTests: XCTestCase {
         // A different kind for the same prompt is a real change — record it.
         XCTAssertTrue(state.recordDecisionIfNew(d(.escalate)))
         XCTAssertEqual(state.decisionLog.count, 2)
+    }
+
+    // MARK: - FIX 2: dedup scans a window, not just the latest row
+
+    func testInterleavedPromptsDoNotRefireAnEarlierDecision() {
+        // A→B→A on the SAME entry. Once A is decided and then B becomes the entry's
+        // newest decision, A reappearing must NOT be treated as new — otherwise the
+        // boss re-sends input to a prompt it already advanced. The old `.first`-only
+        // compare matched B (the latest row), saw A≠B, and wrongly re-fired A.
+        let entryId = UUID()
+        func d(_ prompt: String, _ kind: BossDecisionKind = .autoAdvance) -> BossInboxDecision {
+            BossInboxDecision(source: "boss", entryId: entryId, prompt: prompt, kind: kind, reasoning: "r")
+        }
+        var state = WorkspaceState()
+        XCTAssertTrue(state.recordDecisionIfNew(d("Prompt A? (y/N)")), "A is new")
+        XCTAssertTrue(state.recordDecisionIfNew(d("Prompt B? (y/N)")), "B is a different prompt — new")
+        XCTAssertFalse(
+            state.isNewDecision(entryId: entryId, prompt: "Prompt A? (y/N)", kind: .autoAdvance),
+            "A is in the recent window for this entry — NOT new, so the boss won't re-send"
+        )
+        XCTAssertFalse(state.recordDecisionIfNew(d("Prompt A? (y/N)")), "re-recording A is a no-op")
+        XCTAssertEqual(state.decisionLog.count, 2, "only A and B exist — A did not duplicate")
+    }
+
+    func testDedupDistinguishesPromptAndKindWithinWindow() {
+        // Inverse-bug guard: the window must NOT over-dedupe genuinely-distinct
+        // decisions. Same entry, but a different prompt OR a different kind is new.
+        let entryId = UUID()
+        func d(_ prompt: String, _ kind: BossDecisionKind) -> BossInboxDecision {
+            BossInboxDecision(source: "boss", entryId: entryId, prompt: prompt, kind: kind, reasoning: "r")
+        }
+        var state = WorkspaceState()
+        XCTAssertTrue(state.recordDecisionIfNew(d("Prompt A? (y/N)", .autoAdvance)))
+        XCTAssertTrue(state.isNewDecision(entryId: entryId, prompt: "Different? (y/N)", kind: .autoAdvance), "different prompt is new")
+        XCTAssertTrue(state.isNewDecision(entryId: entryId, prompt: "Prompt A? (y/N)", kind: .escalate), "same prompt, different kind is new")
+        XCTAssertTrue(state.isNewDecision(entryId: UUID(), prompt: "Prompt A? (y/N)", kind: .autoAdvance), "different entry is new")
+    }
+
+    func testIsNewDecisionDedupesNilEntryByStablePseudoKey() {
+        // A nil-entry decision (the boss referenced a session that couldn't be
+        // uniquely resolved) still dedupes — by the stable (sessionName, prompt,
+        // kind) pseudo-key — so a repeated tick isn't re-recorded. Different prompt
+        // OR target stays new (inverse-bug guard).
+        var state = WorkspaceState()
+        let d = BossInboxDecision(source: "boss", entryId: nil, sessionName: "ambiguous", prompt: "Proceed? (y/N)", kind: .escalate, reasoning: "r")
+        state.recordDecision(d)
+        XCTAssertFalse(
+            state.isNewDecision(entryId: nil, prompt: "Proceed? (y/N)", kind: .escalate, sessionName: "ambiguous"),
+            "an identical nil-entry decision is not new"
+        )
+        XCTAssertTrue(
+            state.isNewDecision(entryId: nil, prompt: "Different? (y/N)", kind: .escalate, sessionName: "ambiguous"),
+            "a different prompt for the same nil target is new"
+        )
+        XCTAssertTrue(
+            state.isNewDecision(entryId: nil, prompt: "Proceed? (y/N)", kind: .escalate, sessionName: "other"),
+            "the same prompt for a different nil target is new"
+        )
+        // The real App path passes sessionName == nil for an unresolved entry; the
+        // pseudo-key still collapses identical repeats by (prompt, kind).
+        var s2 = WorkspaceState()
+        s2.recordDecision(BossInboxDecision(source: "boss", entryId: nil, sessionName: nil, prompt: "Unresolved? (y/N)", kind: .escalate, reasoning: "r"))
+        XCTAssertFalse(
+            s2.isNewDecision(entryId: nil, prompt: "Unresolved? (y/N)", kind: .escalate, sessionName: nil),
+            "an identical nil-entry, nil-name decision is not new"
+        )
+    }
+
+    func testDedupWindowIsBoundedSoAVeryOldMatchFallsOutOfScope() {
+        // The window is bounded (dedupScanWindow). A matching decision pushed far
+        // enough back by newer SAME-entry rows is outside the scan and reads as new
+        // again — that's the intended bound (re-surfacing a long-stale prompt is
+        // acceptable; flooding from a 1-row compare was not).
+        let entryId = UUID()
+        var state = WorkspaceState()
+        let ancient = BossInboxDecision(source: "boss", entryId: entryId, prompt: "Ancient? (y/N)", kind: .autoAdvance, reasoning: "r")
+        state.recordDecision(ancient)
+        // Push `ancient` past the window with newer same-entry rows.
+        for i in 0..<WorkspaceState.dedupScanWindow {
+            state.recordDecision(BossInboxDecision(source: "boss", entryId: entryId, prompt: "filler-\(i)? (y/N)", kind: .autoAdvance, reasoning: "r"))
+        }
+        XCTAssertTrue(
+            state.isNewDecision(entryId: entryId, prompt: "Ancient? (y/N)", kind: .autoAdvance),
+            "a match beyond the bounded window is treated as new again"
+        )
+        // …but a match INSIDE the window is still caught.
+        XCTAssertFalse(
+            state.isNewDecision(entryId: entryId, prompt: "filler-0? (y/N)", kind: .autoAdvance),
+            "the most recent filler is within the window — not new"
+        )
     }
 
     // MARK: - Cross-channel double-send unification (P0)
@@ -484,6 +579,52 @@ final class BossInboxDecisionTests: XCTestCase {
         XCTAssertEqual(Set(state.openInbox(now: now).map(\.id)), [a.id, b.id], "entry-less decisions aren't collapsed together")
     }
 
+    // MARK: - FIX 3: nil-entry decisions collapse by a stable pseudo-key
+
+    func testOpenInboxCollapsesIdenticalNilEntryDecisions() {
+        // The boss kept referencing a session that can't be uniquely resolved
+        // (ambiguous/duplicate name, deleted session). Each tick recorded a
+        // nil-entryId decision; the old `guard let entryId else { return true }`
+        // kept EVERY one, stacking N identical open items. They must collapse to
+        // one, keeping the newest.
+        let now = Date()
+        var state = WorkspaceState()
+        func tick(at: Date) -> BossInboxDecision {
+            BossInboxDecision(occurredAt: at, source: "b", entryId: nil, sessionName: "ambiguous", prompt: "Proceed? (y/N)", kind: .escalate, reasoning: "r")
+        }
+        let t1 = tick(at: now.addingTimeInterval(-200))
+        let t2 = tick(at: now.addingTimeInterval(-100))
+        let t3 = tick(at: now)
+        state.recordDecision(t1)
+        state.recordDecision(t2)
+        state.recordDecision(t3)
+
+        let inbox = state.openInbox(now: now)
+        XCTAssertEqual(inbox.map(\.id), [t3.id], "identical nil-entry decisions collapse to one — the newest")
+    }
+
+    func testOpenInboxKeepsDistinctNilEntryDecisionsSeparate() {
+        // Inverse-bug guard: different prompt OR kind OR target must NOT be
+        // collapsed together — only genuine repeats merge.
+        let now = Date()
+        var state = WorkspaceState()
+        let samePromptDiffTarget = BossInboxDecision(occurredAt: now, source: "b", entryId: nil, sessionName: "alpha", prompt: "Proceed? (y/N)", kind: .escalate, reasoning: "r")
+        let diffPrompt = BossInboxDecision(occurredAt: now, source: "b", entryId: nil, sessionName: "alpha", prompt: "Different? (y/N)", kind: .escalate, reasoning: "r")
+        let diffKind = BossInboxDecision(occurredAt: now, source: "b", entryId: nil, sessionName: "alpha", prompt: "Proceed? (y/N)", kind: .hold, reasoning: "r")
+        let sameAsFirstButOtherTarget = BossInboxDecision(occurredAt: now, source: "b", entryId: nil, sessionName: "beta", prompt: "Proceed? (y/N)", kind: .escalate, reasoning: "r")
+        state.recordDecision(samePromptDiffTarget)
+        state.recordDecision(diffPrompt)
+        state.recordDecision(diffKind)
+        state.recordDecision(sameAsFirstButOtherTarget)
+
+        let ids = Set(state.openInbox(now: now).map(\.id))
+        XCTAssertEqual(
+            ids,
+            [samePromptDiffTarget.id, diffPrompt.id, diffKind.id, sameAsFirstButOtherTarget.id],
+            "different prompt / kind / target each stay a distinct open row"
+        )
+    }
+
     func testOpenInboxGroupsAndCount() {
         let now = Date()
         var state = WorkspaceState()
@@ -595,5 +736,92 @@ final class BossInboxDecisionTests: XCTestCase {
         """
         let decoded = try JSONDecoder().decode(BossInboxDecision.self, from: Data(json.utf8))
         XCTAssertFalse(decoded.isOpenForTriage(at: Date()), "an unknown triage state is treated as out-of-queue, not a crash")
+    }
+
+    // MARK: - FIX 1: cap never evicts an open escalation
+
+    /// Build a RESOLVED (out-of-queue) escalation that the cap is free to drop.
+    private func resolvedEscalation(prompt: String, at: Date) -> BossInboxDecision {
+        BossInboxDecision(
+            occurredAt: at, source: "boss", entryId: UUID(), sessionName: "s",
+            prompt: prompt, kind: .escalate, reasoning: "r", triage: .resolved(at: at)
+        )
+    }
+
+    /// An OPEN escalation (no triage) — the kind `openInbox` surfaces and the
+    /// cap must never silently drop.
+    private func openEscalation(prompt: String, at: Date) -> BossInboxDecision {
+        BossInboxDecision(
+            occurredAt: at, source: "boss", entryId: UUID(), sessionName: "s",
+            prompt: prompt, kind: .escalate, reasoning: "r"
+        )
+    }
+
+    func testCapEvictsResolvedBeforeOpenEscalation() {
+        let now = Date()
+        var state = WorkspaceState()
+        // Fill PAST the cap entirely with resolved rows, then bury a single open
+        // escalation older than the cap's worth of newer resolved rows. The
+        // unconditional removeLast would evict the buried open one; the fix must
+        // keep it and shed resolved rows instead.
+        let open = openEscalation(prompt: "Needs you? (y/N)", at: now.addingTimeInterval(-10_000))
+        state.recordDecision(open)
+        for i in 0..<(WorkspaceState.decisionLogCap + 50) {
+            state.recordDecision(resolvedEscalation(prompt: "old-\(i)", at: now.addingTimeInterval(Double(i))))
+        }
+        XCTAssertEqual(state.decisionLog.count, WorkspaceState.decisionLogCap, "still bounded to the cap")
+        XCTAssertTrue(
+            state.decisionLog.contains(where: { $0.id == open.id }),
+            "an open escalation is never evicted by the cap; resolved rows are shed first"
+        )
+        XCTAssertTrue(
+            state.openInbox(now: now).contains(where: { $0.id == open.id }),
+            "the surviving open escalation still surfaces in the inbox"
+        )
+    }
+
+    func testCapKeepsAllOpenEscalationsWhenEveryEntryIsOpen() {
+        let now = Date()
+        var state = WorkspaceState()
+        // Boundary: every row is an OPEN escalation. None may be evicted, so the
+        // log is allowed to exceed the cap (bounded by live sessions in practice)
+        // rather than silently drop a waiting session.
+        var ids: [UUID] = []
+        for i in 0..<(WorkspaceState.decisionLogCap + 10) {
+            let d = openEscalation(prompt: "open-\(i)? (y/N)", at: now.addingTimeInterval(Double(i)))
+            ids.append(d.id)
+            state.recordDecision(d)
+        }
+        XCTAssertEqual(state.decisionLog.count, WorkspaceState.decisionLogCap + 10, "open items are retained beyond the cap rather than dropped")
+        XCTAssertEqual(Set(state.decisionLog.map(\.id)), Set(ids), "no open escalation was evicted")
+    }
+
+    func testCapEvictsOldestResolvedFirstWhenOverByOne() {
+        let now = Date()
+        var state = WorkspaceState()
+        // Exactly cap resolved rows, then one more resolved → the single OLDEST
+        // resolved is evicted (oldest-first), newest preserved.
+        var ordered: [BossInboxDecision] = []
+        for i in 0..<(WorkspaceState.decisionLogCap + 1) {
+            let d = resolvedEscalation(prompt: "r-\(i)", at: now.addingTimeInterval(Double(i)))
+            ordered.append(d)
+            state.recordDecision(d)
+        }
+        XCTAssertEqual(state.decisionLog.count, WorkspaceState.decisionLogCap)
+        XCTAssertFalse(state.decisionLog.contains(where: { $0.id == ordered.first?.id }), "the single oldest resolved row is shed")
+        XCTAssertEqual(state.decisionLog.first?.id, ordered.last?.id, "newest is preserved at the head")
+    }
+
+    func testTrimmedToCapIsPureAndPrefersEvictingResolved() {
+        let now = Date()
+        // Pure-function contract: given an over-cap log with a mix, evict resolved
+        // oldest-first and keep every open entry, capped only when all are open.
+        let openOld = openEscalation(prompt: "open-old? (y/N)", at: now.addingTimeInterval(-100))
+        let resolvedMid = resolvedEscalation(prompt: "res-mid", at: now.addingTimeInterval(-50))
+        let openNew = openEscalation(prompt: "open-new? (y/N)", at: now)
+        // Newest-first log of 3 with cap 2: must drop the lone resolved, keep both open.
+        let log = [openNew, resolvedMid, openOld]
+        let trimmed = WorkspaceState.trimmedToCap(log, cap: 2, now: now)
+        XCTAssertEqual(trimmed.map(\.id), [openNew.id, openOld.id], "resolved evicted; both open kept even though that holds at the cap")
     }
 }
