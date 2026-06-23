@@ -370,6 +370,61 @@ final class BossAgentPromptBuilderTests: XCTestCase {
         XCTAssertTrue(prompt.contains("skipped, source=operator, action=recover, target=none, result=not trusted"))
     }
 
+    /// FIX 3: the action-log summary the boss reads must label an in-flight ack
+    /// honestly ("in progress"), not "ok". An in-flight ack has succeeded == true,
+    /// so the old `succeeded ? "ok" : "skipped"` reported a false success TO the boss.
+    /// A settled success stays "ok"; a settled failure stays "skipped".
+    func testCheckInPromptLabelsInFlightActionAsPendingNotOk() {
+        let (state, summary) = makeFixture()
+        var mutated = state
+        mutated.actionLog = [
+            WorkbenchActionLogEntry(
+                occurredAt: Date(timeIntervalSince1970: 300),
+                source: "boss",
+                action: "connect",
+                result: "Connecting Bossy to Workbench…",
+                succeeded: true,
+                isInFlight: true
+            ),
+            WorkbenchActionLogEntry(
+                occurredAt: Date(timeIntervalSince1970: 200),
+                source: "boss",
+                action: "sendInput",
+                targetName: "Primary",
+                result: "sent continue",
+                succeeded: true
+            ),
+            WorkbenchActionLogEntry(
+                occurredAt: Date(timeIntervalSince1970: 100),
+                source: "operator",
+                action: "recover",
+                result: "not trusted",
+                succeeded: false
+            )
+        ]
+        let prompt = BossAgentPromptBuilder().checkInPrompt(
+            question: "q",
+            state: mutated,
+            summary: summary,
+            executableHealth: [:],
+            gitStatus: [:],
+            machineFriend: SessionFriend.machineOwner(),
+            waitingPrompts: [:]
+        )
+        // The in-flight ack reports an honest pending status, never "ok".
+        XCTAssertTrue(
+            prompt.contains("in progress, source=boss, action=connect"),
+            "an in-flight ack must be labeled 'in progress' to the boss, not 'ok'"
+        )
+        XCTAssertFalse(
+            prompt.contains("ok, source=boss, action=connect"),
+            "an in-flight ack must NOT report outcome=ok to the boss"
+        )
+        // The settled success still reads "ok"; the settled failure still "skipped".
+        XCTAssertTrue(prompt.contains("ok, source=boss, action=sendInput"))
+        XCTAssertTrue(prompt.contains("skipped, source=operator, action=recover"))
+    }
+
     func testCheckInPromptRendersUnavailableAndEmptyMailboxVariants() {
         let dashboard = BossDashboardSnapshot(
             agentName: "Boss",

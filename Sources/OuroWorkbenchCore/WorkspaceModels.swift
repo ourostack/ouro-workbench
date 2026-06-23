@@ -425,6 +425,21 @@ public struct WorkbenchActionLogEntry: Codable, Equatable, Identifiable, Sendabl
     /// Codable decodes the absent key as nil so old logs load unchanged.
     public var requestId: UUID?
 
+    /// Whether this entry is an IN-FLIGHT optimistic ack — the async "start"
+    /// handlers (`startRepairAgent`, `startVerifyProvider`, …) kick off background
+    /// work and immediately log a "working on it…" line whose `succeeded` flag is
+    /// meaningless until the matching `complete*` handler records the VERIFIED
+    /// outcome as a separate row. While `isInFlight`, the entry renders neutral
+    /// (pending) — never a green check (`WorkbenchActionOutcomePresentation`). A
+    /// settled entry (guard-skip, or a `complete*` outcome) is `false`, so its
+    /// `succeeded` flag drives green/orange honestly.
+    ///
+    /// `false` for every entry the operator took directly and for every pre-fix
+    /// persisted entry: this is a NON-OPTIONAL `Bool`, so the absent key would make
+    /// synthesized Codable THROW — `init(from:)` below `decodeIfPresent ?? false`
+    /// it so old `actionLog` JSON (without the key) still loads, defaulted to false.
+    public var isInFlight: Bool
+
     public init(
         id: UUID = UUID(),
         occurredAt: Date = Date(),
@@ -434,7 +449,8 @@ public struct WorkbenchActionLogEntry: Codable, Equatable, Identifiable, Sendabl
         targetName: String? = nil,
         result: String,
         succeeded: Bool,
-        requestId: UUID? = nil
+        requestId: UUID? = nil,
+        isInFlight: Bool = false
     ) {
         self.id = id
         self.occurredAt = occurredAt
@@ -445,6 +461,29 @@ public struct WorkbenchActionLogEntry: Codable, Equatable, Identifiable, Sendabl
         self.result = result
         self.succeeded = succeeded
         self.requestId = requestId
+        self.isInFlight = isInFlight
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, occurredAt, source, action, targetEntryId, targetName, result, succeeded, requestId, isInFlight
+    }
+
+    // Custom decode so a pre-fix persisted entry (no `isInFlight` key) loads with
+    // the field defaulted to false. `isInFlight` is a non-optional `Bool`, so the
+    // synthesized decoder would throw on the absent key; `decodeIfPresent ?? false`
+    // keeps old `actionLog` JSON backward-compatible. (Encode stays synthesized.)
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decode(UUID.self, forKey: .id)
+        self.occurredAt = try container.decode(Date.self, forKey: .occurredAt)
+        self.source = try container.decode(String.self, forKey: .source)
+        self.action = try container.decode(String.self, forKey: .action)
+        self.targetEntryId = try container.decodeIfPresent(UUID.self, forKey: .targetEntryId)
+        self.targetName = try container.decodeIfPresent(String.self, forKey: .targetName)
+        self.result = try container.decode(String.self, forKey: .result)
+        self.succeeded = try container.decode(Bool.self, forKey: .succeeded)
+        self.requestId = try container.decodeIfPresent(UUID.self, forKey: .requestId)
+        self.isInFlight = try container.decodeIfPresent(Bool.self, forKey: .isInFlight) ?? false
     }
 }
 

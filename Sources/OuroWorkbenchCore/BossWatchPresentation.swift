@@ -88,9 +88,16 @@ public struct BossActionReceiptSummary: Equatable, Sendable {
     ) -> BossActionReceiptSummary {
         let newestFirst = entries.sorted { $0.occurredAt > $1.occurredAt }
         let considered = window.map { Array(newestFirst.prefix(max(0, $0))) } ?? newestFirst
-        let failed = considered.filter { !$0.succeeded }
+        // An in-flight ack has `succeeded == true` (the "Working on…" copy passes the
+        // prefix check) but has NOT settled — counting it as "ok" is the same
+        // false-success this fix is about, one level up at the count. Exclude pending
+        // from the DENOMINATOR so it lands in NEITHER bucket: ok is only a settled
+        // success, failed is only a settled failure. (Do NOT just add `!isInFlight` to
+        // the failed filter — that would push pending into the ok bucket.)
+        let settled = considered.filter { !$0.isInFlight }
+        let failed = settled.filter { !$0.succeeded }
         return BossActionReceiptSummary(
-            okCount: considered.count - failed.count,
+            okCount: settled.count - failed.count,
             failedCount: failed.count,
             failedReceipts: failed
         )

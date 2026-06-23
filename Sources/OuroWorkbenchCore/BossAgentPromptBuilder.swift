@@ -171,7 +171,12 @@ public struct BossAgentPromptBuilder: Sendable {
             lines.append("")
             lines.append("Recent action log:")
             for entry in state.actionLog.sorted(by: { $0.occurredAt > $1.occurredAt }).prefix(8) {
-                let outcome = entry.succeeded ? "ok" : "skipped"
+                // An in-flight optimistic ack has `succeeded == true` but has NOT
+                // settled — labeling it "ok" reports a false success TO the boss. Give
+                // it an honest pending word; "ok" stays reserved for a settled success,
+                // a settled failure stays "skipped". (The `result` text already reads
+                // "Working on…", so this is purely additive honesty.)
+                let outcome = entry.isInFlight ? "in progress" : (entry.succeeded ? "ok" : "skipped")
                 let target = entry.targetName ?? "none"
                 lines.append("- \(entry.occurredAt.ISO8601Format()): \(outcome), source=\(entry.source), action=\(entry.action), target=\(target), result=\(entry.result)")
             }
