@@ -641,7 +641,10 @@ struct WorkbenchRootView: View {
             await model.runExternalActionPump()
         }
         .task {
-            await model.runBossWatchLoop()
+            // FIX4 — start the Boss Watch poll loop ONLY if Watch was persisted on.
+            // The loop's lifetime is otherwise owned by the enable toggle
+            // (`setBossWatchEnabled`), so it no longer wakes every 60s while OFF.
+            model.startBossWatchLoopIfEnabled()
         }
         .task {
             await model.runAutoUpdateCheckIfDue()
@@ -10844,6 +10847,15 @@ final class WorkbenchViewModel: ObservableObject {
     /// bypasses this guard and the final survivors-only state is still persisted
     /// — after the salvage.
     private var isLoadingState = false
+    /// FIX3 — non-zero while a single boss check-in is applying actions + recording
+    /// decisions inside `withBatchedSave`. During that window the per-step `save()`
+    /// calls (`recordActionLog`'s trailing save, `recordBossDecisions`'s save) are
+    /// suppressed so the action-log rows and their decision/inbox rows persist
+    /// ATOMICALLY in one trailing `save()` — a crash mid-check-in (or a zero-change
+    /// decisions batch) can no longer leave executed actions without their audit
+    /// rows. A counter (not a Bool) so nested batched scopes compose. `save()`'s
+    /// existing reset/load suppression guards still win.
+    private var bossCheckInSaveBatchDepth = 0
     private var isFirstRunSetupForcedOnLaunch = false
     @Published var onboardingCandidates: [RecentSessionCandidate] = []
     @Published var onboardingProposal: WorkbenchImportProposal?
@@ -10971,6 +10983,12 @@ final class WorkbenchViewModel: ObservableObject {
     private var vaultOnboardingFlavor: VaultOnboardingFlavor = .onboarding
     private var bossWatchBaselineState: WorkspaceState?
     private var bossWatchTickIsRunning = false
+    /// FIX4 — the periodic Boss Watch poll loop's lifetime is now owned by the
+    /// enable toggle, not an unconditional `.task`. It runs ONLY while Watch is on:
+    /// `setBossWatchEnabled(true)` (and `startBossWatchLoopIfEnabled` at launch when
+    /// Watch was persisted on) start it; `setBossWatchEnabled(false)` cancels it. So
+    /// the loop no longer wakes every 60s just to `continue` while Watch is OFF.
+    private var bossWatchLoopTask: Task<Void, Never>?
     private var bossWatchLastPromptAt: Date?
     /// When a session newly needs attention, the boss responds right then
     /// (event-driven) instead of waiting up to a full poll interval. This caps
@@ -13755,20 +13773,50 @@ final class WorkbenchViewModel: ObservableObject {
             Task {
                 await runBossWatchTick(force: true)
             }
+            // FIX4 — start the periodic poll loop on enable. Cancel any prior handle
+            // first so a rapid off→on can't leak a second loop. The loop itself only
+            // exists while Watch is on, so it no longer wakes every 60s while OFF.
+            bossWatchLoopTask?.cancel()
+            bossWatchLoopTask = Task {
+                await runBossWatchLoop()
+            }
         } else {
             bossWatchBaselineState = nil
             bossWatchChangeSummaries = []
             bossWatchLastRunAt = nil
             bossWatchLastPromptAt = nil
+            // FIX4 — cancel the poll loop on disable so it stops waking entirely
+            // (the true "no idle wakeups while OFF" guarantee).
+            bossWatchLoopTask?.cancel()
+            bossWatchLoopTask = nil
             save()
         }
     }
 
+    /// FIX4 — launch-time entry: start the poll loop only if Boss Watch was
+    /// persisted ON (state restored by `load()` sets `bossWatchIsEnabled` directly,
+    /// bypassing `setBossWatchEnabled`, so the loop must be (re)started here). When
+    /// Watch is OFF at launch this is a no-op — no loop, no idle wakeups. Replaces
+    /// the old unconditional `.task { runBossWatchLoop() }` at the view root.
+    func startBossWatchLoopIfEnabled() {
+        guard bossWatchIsEnabled, bossWatchLoopTask == nil else {
+            return
+        }
+        bossWatchLoopTask = Task {
+            await runBossWatchLoop()
+        }
+    }
+
+    /// The periodic Boss Watch poll. FIX4 — this loop is now created ONLY while
+    /// Watch is on (by `setBossWatchEnabled` / `startBossWatchLoopIfEnabled`) and
+    /// cancelled on disable, so it no longer wakes every interval just to `continue`
+    /// while OFF. It still re-checks `bossWatchIsEnabled` before a tick as a cheap
+    /// race guard (a cancel mid-sleep also breaks the loop via `Task.isCancelled`).
     func runBossWatchLoop() async {
         while !Task.isCancelled {
             try? await Task.sleep(nanoseconds: bossWatchIntervalNanoseconds)
-            guard bossWatchIsEnabled else {
-                continue
+            if Task.isCancelled || !bossWatchIsEnabled {
+                return
             }
             await runBossWatchTick(force: false)
         }
@@ -16370,8 +16418,18 @@ final class WorkbenchViewModel: ObservableObject {
                 state.recordProse(BossProseEntry(source: "boss:\(requestedBoss)", text: answer))
                 save()
             }
-            applyBossActions(from: answer)
-            recordBossDecisions(from: answer)
+            // FIX3 — a single check-in applies actions + records decisions, then
+            // save()s ONCE. `applyBossActions` (per action → recordActionLog) and
+            // `recordBossDecisions` each used to save() independently, so a crash
+            // mid-check-in (or a zero-change decisions batch) could leave executed
+            // actions WITHOUT their decision/audit rows. Wrapping both in
+            // `withBatchedSave` suppresses the per-step saves and flushes one
+            // trailing save() so the action-log rows + decision/inbox rows persist
+            // atomically together.
+            withBatchedSave {
+                applyBossActions(from: answer)
+                recordBossDecisions(from: answer)
+            }
             // F12a gap 3b — after recording the boss's own decisions, escalate any
             // waiting session the boss DIDN'T decide on, so it can't fall silently
             // out of triage.
@@ -16422,7 +16480,6 @@ final class WorkbenchViewModel: ObservableObject {
             return
         }
         let machineOwner = SessionFriend.machineOwner()
-        var changed = 0
         for input in inputs {
             let entry = input.entry.flatMap { processEntry(matching: $0) }
             let friend = entry.flatMap { state.effectiveFriend(for: $0, fallback: machineOwner) }
@@ -16497,11 +16554,13 @@ final class WorkbenchViewModel: ObservableObject {
                     status: status
                 )
             )
-            changed += 1
         }
-        if changed > 0 {
-            save()
-        }
+        // FIX3 — no inline save() here anymore. This runs INSIDE the single
+        // check-in's `withBatchedSave` scope (the only caller), which performs one
+        // trailing save() so these decision/inbox rows persist atomically with the
+        // action-log rows `applyBossActions` just wrote. (The decisions are recorded
+        // into in-memory state via `recordDecision`; the batch flush is what makes
+        // them durable — together with the actions, never apart.)
     }
 
     /// F12a gap 3b — escalate any waiting-on-human session the boss DIDN'T already
@@ -16638,7 +16697,19 @@ final class WorkbenchViewModel: ObservableObject {
         // above won't replay them, but the marker would otherwise linger forever).
         await sweepOrphanedAppliedMarkers()
         while !Task.isCancelled {
-            await drainExternalActionRequests()
+            // FIX1 — "Pause Boss Watch" is a TRUE kill-switch. While paused the pump
+            // must NOT drain+apply queued requests: gate the drain on the switch
+            // BEFORE calling it. `drainExternalActionRequests` MOVES request files
+            // into `processing/`, so skipping the drain (rather than draining then
+            // discarding) is what keeps the queued requests HELD on disk, lossless,
+            // until the watch resumes. An apply already mid-execution finishes — we
+            // only refuse to start NEW applies while paused. Re-enabling resumes the
+            // drain on the next tick and the held queue is applied. (Boss Watch ON →
+            // applies as before; manual one-shot Check-In is a separate path,
+            // unaffected.)
+            if BossAutonomyGating.shouldApplyQueuedActions(bossWatchEnabled: bossWatchIsEnabled) {
+                await drainExternalActionRequests()
+            }
             try? await Task.sleep(nanoseconds: 2_000_000_000)
         }
     }
@@ -16789,7 +16860,12 @@ final class WorkbenchViewModel: ObservableObject {
                 finished.signal()
             }
             if finished.wait(timeout: .now() + .milliseconds(1500)) == .timedOut {
+                // FIX2 — SIGTERM, then escalate to SIGKILL. A `screen` that ignores
+                // SIGTERM (wedged socket / NFS home) would otherwise survive the
+                // terminate() forever; mirror the BossAgentMCPClient terminate+forceKill
+                // backstop so the quit can't leak a SIGTERM-deaf process.
                 process.terminate()
+                kill(process.processIdentifier, SIGKILL)
             }
         }
     }
@@ -16903,7 +16979,10 @@ final class WorkbenchViewModel: ObservableObject {
             finished.signal()
         }
         if finished.wait(timeout: .now() + .milliseconds(1500)) == .timedOut {
+            // FIX2 — SIGTERM, then escalate to SIGKILL so a SIGTERM-ignoring
+            // `screen -ls` (wedged socket) can't survive past the watchdog.
             process.terminate()
+            kill(process.processIdentifier, SIGKILL)
             return []
         }
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
@@ -19809,7 +19888,10 @@ final class WorkbenchViewModel: ObservableObject {
             finished.signal()
         }
         if finished.wait(timeout: .now() + .milliseconds(1500)) == .timedOut {
+            // FIX2 — SIGTERM, then escalate to SIGKILL so a SIGTERM-ignoring
+            // `screen -ls` (wedged socket) can't survive past the watchdog.
             process.terminate()
+            kill(process.processIdentifier, SIGKILL)
             return false
         }
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
@@ -20126,6 +20208,14 @@ final class WorkbenchViewModel: ObservableObject {
         guard !isLoadingState else {
             return true
         }
+        // FIX3 — inside a single check-in's `withBatchedSave` scope, suppress the
+        // per-step saves (recordActionLog's trailing save, recordBossDecisions's
+        // save) so the apply + record rows land in ONE trailing store.save(). The
+        // batch's flush clears this depth BEFORE its own save(), so that final
+        // write goes through here normally (and still honors the guards above).
+        guard bossCheckInSaveBatchDepth == 0 else {
+            return true
+        }
         do {
             try store.save(state)
             return true
@@ -20133,6 +20223,29 @@ final class WorkbenchViewModel: ObservableObject {
             errorMessage = String(describing: error)
             return false
         }
+    }
+
+    /// FIX3 — run `body` (a single check-in's apply-actions + record-decisions) with
+    /// the per-step `save()` calls suppressed, then perform exactly ONE trailing
+    /// `save()` so the action-log rows and their decision/inbox rows persist
+    /// atomically. The depth counter is restored before the flush (so the flush's
+    /// own `save()` isn't suppressed), and on any throw the depth is still restored
+    /// (the catch decrements before rethrowing) — so a throwing body can't leave the
+    /// batch wedged-suppressed. The trailing `save()` honors the existing reset/load
+    /// suppression guards exactly as a normal save would.
+    @discardableResult
+    private func withBatchedSave<T>(_ body: () throws -> T) rethrows -> T {
+        bossCheckInSaveBatchDepth += 1
+        let result: T
+        do {
+            result = try body()
+        } catch {
+            bossCheckInSaveBatchDepth -= 1
+            throw error
+        }
+        bossCheckInSaveBatchDepth -= 1
+        save()
+        return result
     }
 
     private func fetchResult<T: Decodable & Sendable>(
