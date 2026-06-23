@@ -1,4 +1,4 @@
-# Intentionally-uncovered code in OuroWorkbenchCore that no test can reach.
+# Intentionally-uncovered pure Workbench logic code that no test can reach.
 # The gate tolerates ONLY these exact counts; any new gap fails, and if one is
 # fixed the count must be lowered here. Keep this list as close to empty as
 # possible — every entry needs a real structural justification.

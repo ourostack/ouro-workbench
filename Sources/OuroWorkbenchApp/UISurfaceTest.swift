@@ -89,7 +89,7 @@ final class WorkbenchUISurfaceTester {
             tagName: "v\(WorkbenchRelease.version)",
             htmlURL: "https://github.com/\(WorkbenchRelease.repository)/releases/latest",
             assets: [],
-            assetNamingPolicy: .workbench(),
+            assetNamingPolicy: .workbench(namePrefix: WorkbenchRelease.artifactNamePrefix),
             detail: "Ouro Workbench is current."
         )
     }
@@ -105,17 +105,17 @@ final class WorkbenchUISurfaceTester {
             htmlURL: "https://github.com/\(WorkbenchRelease.repository)/releases/latest",
             assets: [
                 ReleaseUpdateAsset(
-                    name: "OuroWorkbench-0.1.999-build.267-abcdef0.zip",
-                    downloadURL: "https://example.test/OuroWorkbench-0.1.999-build.267-abcdef0.zip",
+                    name: "\(WorkbenchRelease.artifactNamePrefix)0.1.999-build.267-abcdef0.zip",
+                    downloadURL: "https://example.test/\(WorkbenchRelease.artifactNamePrefix)0.1.999-build.267-abcdef0.zip",
                     size: 1_000
                 ),
                 ReleaseUpdateAsset(
-                    name: "OuroWorkbench-0.1.999-build.267-abcdef0.manifest.json",
-                    downloadURL: "https://example.test/OuroWorkbench-0.1.999-build.267-abcdef0.manifest.json",
+                    name: "\(WorkbenchRelease.artifactNamePrefix)0.1.999-build.267-abcdef0.manifest.json",
+                    downloadURL: "https://example.test/\(WorkbenchRelease.artifactNamePrefix)0.1.999-build.267-abcdef0.manifest.json",
                     size: 500
                 )
             ],
-            assetNamingPolicy: .workbench(),
+            assetNamingPolicy: .workbench(namePrefix: WorkbenchRelease.artifactNamePrefix),
             detail: "Ouro Workbench 0.1.999 is available."
         )
     }

@@ -2,8 +2,9 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+eval "$("$ROOT_DIR/scripts/read-workbench-release.sh")"
 VERSION_FILE="$ROOT_DIR/VERSION"
-APP_DIR="$ROOT_DIR/dist/Ouro Workbench.app"
+APP_DIR="$ROOT_DIR/dist/$WORKBENCH_APP_NAME.app"
 EXPECTED_VERSION=""
 GUI_SMOKE_TIMEOUT_SECONDS="10"
 
@@ -48,11 +49,11 @@ CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 INFO_PLIST="$CONTENTS_DIR/Info.plist"
-APP_EXECUTABLE="$MACOS_DIR/OuroWorkbench"
-MCP_EXECUTABLE="$MACOS_DIR/OuroWorkbenchMCP"
+APP_EXECUTABLE="$MACOS_DIR/$WORKBENCH_BUNDLE_EXECUTABLE"
+MCP_EXECUTABLE="$MACOS_DIR/$WORKBENCH_MCP_EXECUTABLE"
 SCREEN_EXECUTABLE="$MACOS_DIR/Tools/screen"
 SUPPORT_DIAGNOSTICS_SCRIPT="$RESOURCES_DIR/collect-support-diagnostics.sh"
-APP_ICON="$RESOURCES_DIR/OuroWorkbench.icns"
+APP_ICON="$RESOURCES_DIR/$WORKBENCH_BUNDLE_EXECUTABLE.icns"
 SWIFTTERM_BUNDLE="$RESOURCES_DIR/SwiftTerm_SwiftTerm.bundle"
 
 fail() {
@@ -114,14 +115,16 @@ plist_value() {
 [[ -f "$INFO_PLIST" ]] || fail "missing Info.plist"
 plutil -lint "$INFO_PLIST" >/dev/null
 
-[[ "$(plist_value CFBundleIdentifier)" == "com.ourostack.workbench" ]] || fail "unexpected bundle identifier"
-[[ "$(plist_value CFBundleExecutable)" == "OuroWorkbench" ]] || fail "unexpected bundle executable"
-[[ "$(plist_value CFBundleIconFile)" == "OuroWorkbench" ]] || fail "unexpected bundle icon"
+[[ "$(plist_value CFBundleIdentifier)" == "$WORKBENCH_BUNDLE_IDENTIFIER" ]] || fail "unexpected bundle identifier"
+[[ "$(plist_value CFBundleExecutable)" == "$WORKBENCH_BUNDLE_EXECUTABLE" ]] || fail "unexpected bundle executable"
+[[ "$(plist_value CFBundleIconFile)" == "$WORKBENCH_BUNDLE_EXECUTABLE" ]] || fail "unexpected bundle icon"
 [[ "$(plist_value CFBundlePackageType)" == "APPL" ]] || fail "unexpected bundle package type"
-expected_version="${EXPECTED_VERSION:-$(tr -d '[:space:]' < "$VERSION_FILE")}"
+source_version="$(tr -d '[:space:]' < "$VERSION_FILE")"
+[[ "$source_version" == "$WORKBENCH_VERSION" ]] || fail "VERSION does not match WorkbenchRelease.version"
+expected_version="${EXPECTED_VERSION:-$WORKBENCH_VERSION}"
 [[ "$(plist_value CFBundleShortVersionString)" == "$expected_version" ]] || fail "unexpected bundle version"
 [[ "$(plist_value CFBundleVersion)" =~ ^[0-9]+$ ]] || fail "bundle build number is not numeric"
-[[ "$(plist_value LSMinimumSystemVersion)" == "14.0" ]] || fail "unexpected minimum macOS version"
+[[ "$(plist_value LSMinimumSystemVersion)" == "$WORKBENCH_MINIMUM_MACOS_VERSION" ]] || fail "unexpected minimum macOS version"
 
 require_executable "$APP_EXECUTABLE"
 require_executable "$MCP_EXECUTABLE"
@@ -141,8 +144,8 @@ if ! codesign --verify --deep --strict --verbose=2 "$APP_DIR" >/dev/null 2>&1; t
 fi
 
 mcp_initialize="$(printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}' | "$MCP_EXECUTABLE")"
-if ! grep -F "\"name\":\"ouro-workbench\"" <<<"$mcp_initialize" >/dev/null; then
-  fail "MCP initialize does not report ouro-workbench server name"
+if ! grep -F "\"name\":\"$WORKBENCH_MCP_SERVER_NAME\"" <<<"$mcp_initialize" >/dev/null; then
+  fail "MCP initialize does not report $WORKBENCH_MCP_SERVER_NAME server name"
 fi
 if ! grep -F "\"version\":\"$expected_version\"" <<<"$mcp_initialize" >/dev/null; then
   fail "MCP initialize does not report version $expected_version"

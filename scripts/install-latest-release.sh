@@ -2,22 +2,23 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-REPO="ourostack/ouro-workbench"
+eval "$("$ROOT_DIR/scripts/read-workbench-release.sh")"
+REPO="$WORKBENCH_REPOSITORY"
 TAG=""
 INSTALL_DIR=""
 OPEN_AFTER_INSTALL="false"
 
 usage() {
-  cat <<'USAGE'
+  cat <<USAGE
 Usage: install-latest-release.sh [options]
 
 Download, verify, and install the app artifact from a GitHub Release.
 
 Options:
-  --repo OWNER/REPO   GitHub repository (default: ourostack/ouro-workbench)
+  --repo OWNER/REPO   GitHub repository (default: $REPO)
   --tag TAG           Release tag to install; defaults to latest release
   --install-dir PATH  Install destination directory
-  --open              Reopen Ouro Workbench after installing
+  --open              Reopen $WORKBENCH_APP_NAME after installing
   -h, --help          Show this help
 USAGE
 }
@@ -81,8 +82,8 @@ trap 'rm -rf "$download_root"' EXIT
 
 gh release download "$TAG" \
   --repo "$REPO" \
-  --pattern 'OuroWorkbench-*.zip' \
-  --pattern 'OuroWorkbench-*.manifest.json' \
+  --pattern "$WORKBENCH_ARTIFACT_NAME_PREFIX*.zip" \
+  --pattern "$WORKBENCH_ARTIFACT_NAME_PREFIX*.manifest.json" \
   --dir "$download_root" >/dev/null
 
 manifest=""
@@ -90,7 +91,7 @@ manifest_count=0
 while IFS= read -r candidate; do
   manifest="$candidate"
   manifest_count=$((manifest_count + 1))
-done < <(find "$download_root" -name 'OuroWorkbench-*.manifest.json' -type f -print)
+done < <(find "$download_root" -name "$WORKBENCH_ARTIFACT_NAME_PREFIX*.manifest.json" -type f -print)
 
 if [[ "$manifest_count" -ne 1 ]]; then
   printf 'Expected exactly one app artifact manifest in release %s, found %s\n' "$TAG" "$manifest_count" >&2
