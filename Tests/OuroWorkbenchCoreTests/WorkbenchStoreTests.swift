@@ -643,4 +643,206 @@ final class WorkbenchStoreTests: XCTestCase {
             "moveFailed arm must say the original is untouched in place, got: \(message)"
         )
     }
+
+    // MARK: - Schema back-compat: OLDER/equal loads, only NEWER rejects
+    //
+    // The decode of `WorkspaceState` succeeds BEFORE the version gate is even
+    // consulted (the JSON is fully decoded into `state`, then the gate runs as a
+    // separate check). An OLDER, backward-compatible file decodes cleanly because
+    // the per-field decoders are lenient (`decodeIfPresent`/defaults). The bug was
+    // an EQUALITY gate treating any non-current version — including a fully
+    // readable older one — as unreadable, wiping the workspace to empty and
+    // quarantining the file. The fix accepts `<= currentSchemaVersion` and
+    // rejects ONLY `> currentSchemaVersion` (a future build's file we can't safely
+    // interpret).
+
+    func testOlderSchemaVersionLoadsWithAllRowsIntactAndIsNotQuarantined() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let stateURL = root.appendingPathComponent("workspace.json")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let projectId = UUID()
+        let entryId = UUID()
+        // schemaVersion ONE BELOW current: an older, fully-decodable file carrying
+        // a real project + terminal. Every row must survive; nothing wiped, nothing
+        // quarantined.
+        let older = WorkspaceState.currentSchemaVersion - 1
+        let json = """
+        {
+          "boss": { "agentName": "slugger", "scope": "machine" },
+          "processEntries": [
+            {
+              "agentKind": "openAICodex",
+              "arguments": ["--yolo"],
+              "autoResume": true,
+              "executable": "codex",
+              "id": "\(entryId.uuidString)",
+              "kind": "terminalAgent",
+              "name": "OpenAI Codex",
+              "projectId": "\(projectId.uuidString)",
+              "trust": "trusted",
+              "workingDirectory": "/tmp/project"
+            }
+          ],
+          "processRuns": [],
+          "projects": [
+            {
+              "boss": { "agentName": "slugger", "scope": "machine" },
+              "id": "\(projectId.uuidString)",
+              "name": "Project",
+              "rootPath": "/tmp/project"
+            }
+          ],
+          "schemaVersion": \(older),
+          "updatedAt": "2026-05-23T00:00:00Z"
+        }
+        """
+        try Data(json.utf8).write(to: stateURL)
+
+        let loaded = try WorkbenchStore(stateURL: stateURL).load()
+
+        // All rows intact — NOT wiped to empty.
+        XCTAssertEqual(loaded.projects.count, 1)
+        XCTAssertEqual(loaded.projects.first?.id, projectId)
+        XCTAssertEqual(loaded.projects.first?.name, "Project")
+        XCTAssertEqual(loaded.processEntries.count, 1)
+        XCTAssertEqual(loaded.processEntries.first?.id, entryId)
+        XCTAssertEqual(loaded.processEntries.first?.name, "OpenAI Codex")
+        // The older version is preserved as-loaded (not silently rewritten here).
+        XCTAssertEqual(loaded.schemaVersion, older)
+        // Live file still in place; NO `.corrupt-` sibling was created.
+        XCTAssertTrue(FileManager.default.fileExists(atPath: stateURL.path))
+        let siblings = try FileManager.default
+            .contentsOfDirectory(atPath: root.path)
+        XCTAssertFalse(
+            siblings.contains { $0.contains(".corrupt-") },
+            "older readable file must not be quarantined, found: \(siblings)"
+        )
+    }
+
+    func testEqualSchemaVersionLoadsWithRowsIntact() throws {
+        // Regression: a current-version file must continue to load fully.
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let stateURL = root.appendingPathComponent("workspace.json")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let projectId = UUID()
+        let json = """
+        {
+          "boss": { "agentName": "slugger", "scope": "machine" },
+          "processEntries": [],
+          "processRuns": [],
+          "projects": [
+            {
+              "boss": { "agentName": "slugger", "scope": "machine" },
+              "id": "\(projectId.uuidString)",
+              "name": "Current",
+              "rootPath": "/tmp/current"
+            }
+          ],
+          "schemaVersion": \(WorkspaceState.currentSchemaVersion),
+          "updatedAt": "2026-05-23T00:00:00Z"
+        }
+        """
+        try Data(json.utf8).write(to: stateURL)
+
+        let loaded = try WorkbenchStore(stateURL: stateURL).load()
+
+        XCTAssertEqual(loaded.schemaVersion, WorkspaceState.currentSchemaVersion)
+        XCTAssertEqual(loaded.projects.count, 1)
+        XCTAssertEqual(loaded.projects.first?.id, projectId)
+        let siblings = try FileManager.default
+            .contentsOfDirectory(atPath: root.path)
+        XCTAssertFalse(siblings.contains { $0.contains(".corrupt-") })
+    }
+
+    func testNewerSchemaVersionIsStillQuarantinedByOwningStore() throws {
+        // Forward-incompat preserved: a file ONE ABOVE current was written by a
+        // FUTURE build whose shape we can't safely interpret. It must still be
+        // rejected — quarantined by the owning store, surfaced as
+        // `unsupportedStateVersion` for the read-only consumer.
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let stateURL = root.appendingPathComponent("workspace.json")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let newer = WorkspaceState.currentSchemaVersion + 1
+        let json = """
+        {
+          "boss": { "agentName": "slugger", "scope": "machine" },
+          "processEntries": [],
+          "processRuns": [],
+          "projects": [],
+          "schemaVersion": \(newer),
+          "updatedAt": "2026-05-23T00:00:00Z"
+        }
+        """
+        try Data(json.utf8).write(to: stateURL)
+
+        // Owning store quarantines the future file (data-preserving move aside).
+        XCTAssertThrowsError(try WorkbenchStore(stateURL: stateURL).load()) { error in
+            guard case let WorkbenchStoreError.unreadableState(preserved, reason) = error else {
+                return XCTFail("Unexpected error \(error)")
+            }
+            guard case let .moved(quarantineURL) = preserved else {
+                return XCTFail("Expected .moved outcome, got \(preserved)")
+            }
+            XCTAssertTrue(quarantineURL.lastPathComponent.hasPrefix("workspace.json.corrupt-"))
+            XCTAssertTrue(reason.contains("unsupported schema version \(newer)"))
+            XCTAssertTrue(FileManager.default.fileExists(atPath: quarantineURL.path))
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: stateURL.path))
+
+        // Read-only consumer: future file rejected as unsupportedStateVersion,
+        // file left untouched in place.
+        let stateURL2 = root.appendingPathComponent("workspace2.json")
+        try Data(json.utf8).write(to: stateURL2)
+        XCTAssertThrowsError(
+            try WorkbenchStore(stateURL: stateURL2).load(quarantineCorruptFile: false)
+        ) { error in
+            XCTAssertEqual(error as? WorkbenchStoreError, .unsupportedStateVersion(newer))
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: stateURL2.path))
+    }
+
+    func testSchemaVersionZeroIsTreatedAsOldestReadableAndLoads() throws {
+        // The lower boundary of the accept range: an explicit oldest version (0)
+        // is `< current`, so it must load (lenient decoders fill defaults) rather
+        // than be wiped/quarantined.
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let stateURL = root.appendingPathComponent("workspace.json")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let projectId = UUID()
+        let json = """
+        {
+          "boss": { "agentName": "slugger", "scope": "machine" },
+          "processEntries": [],
+          "processRuns": [],
+          "projects": [
+            {
+              "boss": { "agentName": "slugger", "scope": "machine" },
+              "id": "\(projectId.uuidString)",
+              "name": "Oldest",
+              "rootPath": "/tmp/oldest"
+            }
+          ],
+          "schemaVersion": 0,
+          "updatedAt": "2026-05-23T00:00:00Z"
+        }
+        """
+        try Data(json.utf8).write(to: stateURL)
+
+        let loaded = try WorkbenchStore(stateURL: stateURL).load()
+
+        XCTAssertEqual(loaded.schemaVersion, 0)
+        XCTAssertEqual(loaded.projects.count, 1)
+        XCTAssertEqual(loaded.projects.first?.name, "Oldest")
+        let siblings = try FileManager.default
+            .contentsOfDirectory(atPath: root.path)
+        XCTAssertFalse(siblings.contains { $0.contains(".corrupt-") })
+    }
 }
