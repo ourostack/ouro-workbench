@@ -44,7 +44,7 @@ Add both, debounced so they never hammer or double-fire.
 
 ## Units
 
-### ⬜ Unit 1 — Core debounce policy (pure, 100% line+region)
+### ✅ Unit 1 — Core debounce policy (pure, 100% line+region)
 - **1a (test):** `Tests/OuroWorkbenchCoreTests/AgentReadinessRefreshPolicyTests.swift` —
   nil→true; fresh (elapsed < staleAfter)→false; exactly staleAfter→true; well past→true;
   negative/clock-skew (now < lastCheckedAt)→false. Must FAIL (red).
@@ -62,7 +62,7 @@ Add both, debounced so they never hammer or double-fire.
 
 ## Completion Criteria
 
-- [ ] Unit 1: pure policy with the 5 specified cases, 100% line+region, allowlist still 2.
+- [x] Unit 1: pure policy with the 5 specified cases, 100% line+region, allowlist still 2.
 - [ ] Unit 2: viewmodel timestamp + IfStale method + root-view scene-phase + periodic wiring.
 - [ ] Source-pin test asserts all four wiring facts.
 - [ ] `swift build` + `swift test` clean with `-warnings-as-errors -strict-concurrency=complete`.
@@ -73,3 +73,6 @@ Add both, debounced so they never hammer or double-fire.
 ## Progress Log
 
 - 2026-06-22 18:00 Doc created. Branch `fix/readiness-staleness-recheck` off main (4cafba1).
+- 2026-06-22 18:16 Unit 1 complete (1a test `1d97ff0`→red, 1b impl `afc23a4`→green): pure
+  `AgentReadinessRefreshPolicy.shouldRefresh`, 5 cases (nil/fresh/boundary/well-past/skew).
+  Full suite 2496 tests 0 failures; coverage Core 100% line+region, allowlist still 2.
