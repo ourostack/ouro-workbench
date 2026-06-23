@@ -581,6 +581,22 @@ final class ProcessIOBox: @unchecked Sendable {
     func stop() {
         forceKill()
         reaper(pid)
+        // FIX 1 (fd-leak): close the stdout/stderr READ pipe handles. The parent kept these read
+        // ends for the whole turn (the read loop drains stdout; the EOF path drains stderr); nothing
+        // closed them, so each callTool/listToolNames turn leaked two fds — over hours of
+        // boss-watch polling that exhausts RLIMIT_NOFILE and the app can no longer spawn or open
+        // pipes. Closed here, AFTER the read has completed (stop() runs once the read loop has
+        // returned/thrown) and after the reap, on EVERY lifecycle end (success, timeout, error).
+        closeReadHandles()
+    }
+
+    /// Close the stdout/stderr READ pipe handles this box owns. Idempotent: a double close (e.g.
+    /// the watchdog closes to unblock a parked read, then `stop()` closes again on the way out)
+    /// throws on the second call, swallowed by `try?`. Closing the read fd also unblocks a parked
+    /// `availableData` in `readMatchingLine`, which the watchdog relies on (FIX 2).
+    func closeReadHandles() {
+        try? stdout.close()
+        try? stderr.close()
     }
 
     private func readStderrText() -> String {
