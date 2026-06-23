@@ -13434,7 +13434,12 @@ final class WorkbenchViewModel: ObservableObject {
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
             let data = try encoder.encode(config)
-            try data.write(to: url)
+            // Atomic so an interrupted overwrite (crash / disk-full / kill) never
+            // truncates the operator's PRIOR `.workbench.json` — the atomic write
+            // lands in a temp file and renames into place, so a partial write can't
+            // clobber the existing file and break the next "Open Workspace…".
+            // Matches the durable `WorkbenchStore.save` writer, which is already atomic.
+            try data.write(to: url, options: [.atomic])
             // Save target is the directory containing the .workbench.json so
             // the recent workspaces menu reopens the directory, matching the
             // Open Workspace… flow.
