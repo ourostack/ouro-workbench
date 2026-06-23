@@ -32,6 +32,12 @@ if CommandLine.arguments.contains("--smoke-launch") {
     Darwin.exit(0)
 }
 
+if CommandLine.arguments.contains("--uisurfacetest") {
+    MainActor.assumeIsolated {
+        WorkbenchUISurfaceTester().run()
+    }
+}
+
 if workbenchLaunchDiagnostics.action == .factoryResetForE2E {
     let paths = WorkbenchPaths(rootURL: workbenchLaunchDiagnostics.appSupportRoot!)
     let defaultsDomain = "com.ourostack.workbench.e2e"
