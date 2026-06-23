@@ -75,6 +75,9 @@ final class HarnessStatusTests: XCTestCase {
             ],
             // A config-only `.ready` is no longer counted as ready without a live
             // verdict; a `.working` outward check is what earns the green.
+            // A CONFIRMED-PRESENT injection is what earns the boss's "available at
+            // runtime" detail-row phrasing — a healthy machine has a verified runtime.
+            injectionByAgentName: ["slugger": .confirmed(.present)],
             outwardVerdicts: ["slugger": .working, "boss-b": .working]
         )
 
@@ -91,8 +94,10 @@ final class HarnessStatusTests: XCTestCase {
         XCTAssertEqual(status.agents.selectedBoss?.mcpStatus, .registered)
         XCTAssertFalse(status.agents.hasUnready)
 
-        // Boss reachability
+        // Boss reachability — the CONFIRMED-PRESENT injection earns the positive
+        // runtime phrasing; the detail row is now verdict-aware.
         XCTAssertTrue(status.boss.isReachable)
+        XCTAssertEqual(status.boss.toolsInjection, .confirmed(.present))
         XCTAssertEqual(status.boss.mcpStatusText, "available at runtime")
         XCTAssertEqual(status.boss.bundleText, "installed and ready")
 
