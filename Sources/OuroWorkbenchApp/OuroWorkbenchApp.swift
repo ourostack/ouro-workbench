@@ -218,6 +218,9 @@ struct WorkbenchRootView: View {
     /// visibility so ⌃⌘B can flip between "show only the terminal" and
     /// "show the sidebar." Matches VSCode's chrome-toggle binding.
     @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
+    /// The app's scene phase. Drives a readiness re-check when the app regains focus,
+    /// catching a provider token that expired while the app sat idle in the background.
+    @Environment(\.scenePhase) private var scenePhase
 
     init(diagnostics: WorkbenchLaunchDiagnostics) {
         let paths = WorkbenchPaths(rootURL: diagnostics.appSupportRoot ?? WorkbenchPaths.defaultPaths().rootURL)
@@ -309,6 +312,38 @@ struct WorkbenchRootView: View {
         }
     }
 
+    /// The two idle-driver readiness re-check triggers, factored into a `ViewModifier`
+    /// so the root `body` modifier chain stays under the SwiftUI type-checker's
+    /// complexity ceiling. Both route through `model.refreshOutwardReadinessIfStale`,
+    /// whose `AgentReadinessRefreshPolicy` guard shares one debounce window between them.
+    private struct ReadinessStalenessRefresh: ViewModifier {
+        @ObservedObject var model: WorkbenchViewModel
+        let scenePhase: ScenePhase
+
+        func body(content: Content) -> some View {
+            content
+                .onChange(of: scenePhase) { _, newPhase in
+                    // Snappy re-check when the app regains focus — catches a provider token
+                    // that expired while the app sat idle in the background. Debounced to 60s
+                    // (via the IfStale guard) so rapid app-switching can't spam checks.
+                    if newPhase == .active {
+                        model.refreshOutwardReadinessIfStale(staleAfter: 60)
+                    }
+                }
+                .task {
+                    // Periodic backstop for the daily-driver-left-open case: while this view is
+                    // alive, re-check readiness every 5 min so a token that expires mid-session
+                    // doesn't leave a stale "ready" pill until the next manual navigation. SwiftUI
+                    // cancels this task when the view disappears. The IfStale guard (300s) means
+                    // this never double-fires with the scene-phase path above.
+                    while !Task.isCancelled {
+                        try? await Task.sleep(nanoseconds: 300_000_000_000)
+                        model.refreshOutwardReadinessIfStale(staleAfter: 300)
+                    }
+                }
+        }
+    }
+
     var body: some View {
         Group {
             if let entry = model.terminalFocusEntry,
@@ -383,6 +418,7 @@ struct WorkbenchRootView: View {
                 ? "\(model.activeSessions.count)"
                 : ""
         }
+        .modifier(ReadinessStalenessRefresh(model: model, scenePhase: scenePhase))
         .alert("Workbench Error", isPresented: model.errorIsPresented) {
             Button("OK", role: .cancel) {
                 model.errorMessage = nil
@@ -10622,6 +10658,11 @@ final class WorkbenchViewModel: ObservableObject {
     /// only green when a live check actually returned `.working`. Absent key ⇒ no live
     /// verdict yet (row reads "checking…" while in-flight, else "not verified").
     @Published var agentOutwardVerdicts: [String: ProviderConnectionVerdict] = [:]
+    /// When the outward-readiness overlay was last (re)checked. Set at the START of
+    /// `refreshAgentOutwardReadiness()`, so it records freshness AND debounces concurrent
+    /// triggers: a refresh already in flight has already stamped this, so the staleness
+    /// guard (`refreshOutwardReadinessIfStale`) won't re-fire it. `nil` ⇒ never checked yet.
+    @Published private(set) var lastOutwardReadinessCheckAt: Date?
     /// The set of agent names whose outward `ouro check` is currently in flight, so a row
     /// can honestly show "checking…" rather than a premature green or a stale "not verified".
     @Published var agentChecksInFlight: Set<String> = []
@@ -15170,7 +15211,27 @@ final class WorkbenchViewModel: ObservableObject {
     /// result (couldn't confirm) leaves no verdict — the row degrades to "not verified", never a
     /// false green. Called at the end of `refreshOuroAgents()`, so it fires on launch AND on the
     /// "Refresh Agents" button.
+    /// Re-run the outward-readiness overlay ONLY if it has gone stale, per the pure
+    /// `AgentReadinessRefreshPolicy`. Both new idle-driver triggers — the scene-phase
+    /// "became active" re-check (60s) and the periodic backstop (300s) — route through here
+    /// so they share one debounce: a check that ran within `staleAfter` (or one already in
+    /// flight, which stamped `lastOutwardReadinessCheckAt` at its start) is left alone, so the
+    /// two paths can't double-fire and rapid app-switching can't hammer the daemon.
+    func refreshOutwardReadinessIfStale(now: Date = Date(), staleAfter: TimeInterval) {
+        guard AgentReadinessRefreshPolicy.shouldRefresh(
+            lastCheckedAt: lastOutwardReadinessCheckAt,
+            now: now,
+            staleAfter: staleAfter
+        ) else { return }
+        refreshAgentOutwardReadiness()
+    }
+
     func refreshAgentOutwardReadiness() {
+        // Record freshness up front — BEFORE the target snapshot/guard and the TaskGroup. This
+        // both timestamps this check (so the staleness guard knows when we last ran) AND debounces
+        // concurrent triggers: a refresh already in flight has stamped this, so a near-simultaneous
+        // scene-phase + periodic IfStale check sees it as fresh and won't duplicate the work.
+        lastOutwardReadinessCheckAt = Date()
         // Snapshot, on the main actor, the agents worth probing: config-ready bundles whose
         // OUTWARD (humanFacing) lane is fully configured. A disabled / missing / invalid bundle
         // can't connect, and an unconfigured outward lane has nothing to check.
