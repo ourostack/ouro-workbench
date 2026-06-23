@@ -154,6 +154,15 @@ public enum FirstRunMode: String, CaseIterable, Codable, Equatable, Sendable {
     /// True only for the parked mode — the single mode that surfaces the native provider gate.
     public var opensProviderGate: Bool { self == .parkedAwaitingProvider }
 
+    /// True ONLY for the actionable cold-start failure mode (`.needsAttention`) — the one mode whose
+    /// copy tells the human "you can try again". The view reads this to render the Try-again control
+    /// so a row that says "try again" actually HAS a way to (the FIX-1 bug was dead retry copy).
+    ///
+    /// INVERSE-BUG WATCH: deliberately false for a healthy/handed-off run, the in-flight bootstrap,
+    /// and the provider gate (`.parkedAwaitingProvider` has its OWN "Connect a provider" affordance,
+    /// not a generic retry). The retry control must appear ONLY in the actionable failure mode.
+    public var showsRetryButton: Bool { self == .needsAttention }
+
     /// The seam-free product headline for this mode.
     public var headline: String {
         switch self {
@@ -169,6 +178,82 @@ public enum FirstRunMode: String, CaseIterable, Codable, Equatable, Sendable {
     }
 }
 
+// MARK: - Needs-attention recovery route + reason
+
+/// The recovery ROUTE the actionable cold-start failure surface offers. The two failure phases
+/// settle into the SAME `.needsAttention` mode but need DIFFERENT remedies, so the route is its
+/// own pure axis the view branches on:
+///   - `.retry` re-runs the bootstrap drive (a transient step snag clears on a re-run / a
+///     provider reconnect), and
+///   - `.chooseBoss` opens the boss-CHOICE surface (the only real fix for a stale/invalid boss
+///     pointer is PICKING A VALID BOSS — not reconnecting a provider).
+public enum FirstRunRecoveryAction: String, CaseIterable, Codable, Equatable, Sendable {
+    /// Re-run the cold-start bootstrap drive (the `.failedStep` remedy).
+    case retry
+    /// Open the boss-choice onboarding surface (the `.failedInvalidAgent` remedy).
+    case chooseBoss
+}
+
+/// Why the cold-start surface is in `.needsAttention`, and the honest copy + route per reason.
+///
+/// FIX 2: `.failedStep` and `.failedInvalidAgent` both map to the `.needsAttention` MODE, but a
+/// failed step and an invalid boss have DIFFERENT honest fixes. Collapsing both into one generic
+/// "reconnect your provider" line (and offering no choose-boss affordance) was the bug. This reason
+/// is the pure seam that keeps the two distinct: a failed step keeps its provider-reconnect/retry
+/// remedy; an invalid boss gets its own honest "choose a boss" copy + a choose-boss route.
+public enum FirstRunAttentionReason: String, CaseIterable, Codable, Equatable, Sendable {
+    /// A step's post-effect verify did not pass — a transient snag; retry / reconnect the provider.
+    case failedStep
+    /// The boss pointer was stale/invalid (no step ran) — the fix is choosing a valid boss.
+    case invalidBoss
+
+    /// The attention reason for a settled phase — `nil` for any non-attention phase (only the two
+    /// failure phases are needs-attention).
+    public init?(phase: BootstrapPhase) {
+        switch phase {
+        case .failedStep:
+            self = .failedStep
+        case .failedInvalidAgent:
+            self = .invalidBoss
+        case .parkedAwaitingProviderConfig, .awaitingHandoff, .handedOff:
+            return nil
+        }
+    }
+
+    /// The recovery route this reason offers — a failed step retries; an invalid boss chooses a boss.
+    public var recoveryAction: FirstRunRecoveryAction {
+        switch self {
+        case .failedStep:
+            return .retry
+        case .invalidBoss:
+            return .chooseBoss
+        }
+    }
+
+    /// The honest, seam-free product copy for this reason. A failed step KEEPS its provider-reconnect
+    /// remedy; an invalid boss points at choosing a boss and NEVER mentions a provider (the misdirect
+    /// that was FIX 2's bug).
+    public var humanFacingLine: String {
+        switch self {
+        case .failedStep:
+            return "Workbench couldn't finish bringing your agent online. You can try again — and if it keeps happening, reconnecting your provider usually clears it up."
+        case .invalidBoss:
+            return "Workbench couldn't identify your boss — choose one to continue."
+        }
+    }
+
+    /// The action-button label that matches the route — "Try again" for a retry, "Choose a boss"
+    /// for the choose-boss route.
+    public var actionLabel: String {
+        switch self {
+        case .failedStep:
+            return "Try again"
+        case .invalidBoss:
+            return "Choose a boss"
+        }
+    }
+}
+
 // MARK: - The drive presenter
 
 /// The aggregate first-run presentation: the ordered step rows + the UI mode + the headline.
@@ -176,11 +261,21 @@ public struct FirstRunBootstrapPresentation: Equatable, Sendable {
     public let mode: FirstRunMode
     public let rows: [BootstrapStepProgress]
     public let headline: String
+    /// Why the surface is in `.needsAttention` (and thus the honest copy + recovery route) — `nil`
+    /// for every non-attention mode. The view branches on this to route invalid-boss to choose-boss
+    /// and a failed step to retry.
+    public let attentionReason: FirstRunAttentionReason?
 
-    public init(mode: FirstRunMode, rows: [BootstrapStepProgress], headline: String) {
+    public init(
+        mode: FirstRunMode,
+        rows: [BootstrapStepProgress],
+        headline: String,
+        attentionReason: FirstRunAttentionReason? = nil
+    ) {
         self.mode = mode
         self.rows = rows
         self.headline = headline
+        self.attentionReason = attentionReason
     }
 
     /// True when the UI should surface the native provider form (the one human gate).
@@ -266,6 +361,14 @@ public struct FirstRunBootstrapDrive: Sendable {
             return BootstrapStepProgress(step: step, state: .pending)
         }
 
-        return FirstRunBootstrapPresentation(mode: mode, rows: rows, headline: mode.headline)
+        // Carry the needs-attention reason (nil for non-attention phases) so the view can route
+        // invalid-boss to choose-boss and a failed step to retry — distinct honest remedies.
+        let attentionReason = FirstRunAttentionReason(phase: result.phase)
+        return FirstRunBootstrapPresentation(
+            mode: mode,
+            rows: rows,
+            headline: mode.headline,
+            attentionReason: attentionReason
+        )
     }
 }

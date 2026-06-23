@@ -268,6 +268,28 @@ final class ProviderConfigFormTests: XCTestCase {
         XCTAssertFalse(WorkbenchProvider.githubCopilot.supportsColdStartHatch)
     }
 
+    func testColdStartProvidersExcludesHatchIncapableProviders() {
+        // BUG 2: the Create-Agent / cold-start picker must offer ONLY providers a brand-new agent
+        // can actually be hatched for. GitHub Copilot has no `ouro hatch` argv sink
+        // (`supportsColdStartHatch == false`), so offering it as a cold-start option is a guaranteed
+        // dead end — `submit()` returns `.unsupportedColdStartSink`. The cold-start set is exactly
+        // `allCases` filtered on `supportsColdStartHatch`.
+        let coldStart = WorkbenchProvider.coldStartProviders
+
+        // Copilot — the one hatch-incapable provider — must be absent from the cold-start set.
+        XCTAssertFalse(coldStart.contains(.githubCopilot))
+        // Every hatch-capable provider must remain offered (an API-key one + the rest).
+        XCTAssertTrue(coldStart.contains(.minimax))
+        XCTAssertTrue(coldStart.contains(.anthropic))
+        XCTAssertTrue(coldStart.contains(.openaiCodex))
+        XCTAssertTrue(coldStart.contains(.azure))
+        // The set is precisely allCases minus the hatch-incapable providers (order preserved).
+        XCTAssertEqual(coldStart, WorkbenchProvider.allCases.filter(\.supportsColdStartHatch))
+        // Copilot is NOT removed globally — it stays a valid WorkbenchProvider for the reconnect /
+        // existing-agent path (ouroboros is a github-copilot agent). Only the cold-start set drops it.
+        XCTAssertTrue(WorkbenchProvider.allCases.contains(.githubCopilot))
+    }
+
     // NOTE (F6): the former `testExistingAgentRefreshMessageIsHonestAndSeamFree` is gone with the
     // `existingAgentRefreshUnavailableMessage` it covered — an existing agent's Connect now drives a
     // real credential rotation (see `CredentialRotationTests` for the rotation command + flavored

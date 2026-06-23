@@ -6036,7 +6036,15 @@ struct ProviderConfigSheet: View {
                     TextField("Agent name", text: $newAgentName)
                 }
                 Picker("Provider", selection: $provider) {
-                    ForEach(WorkbenchProvider.allCases) { provider in
+                    // BUG 2 — offer ONLY providers a brand-new agent can actually be cold-started for.
+                    // `coldStartProviders` filters out the hatch-incapable ones (GitHub Copilot has no
+                    // `ouro hatch` argv sink), so picking one + Create Agent can't dead-end in
+                    // `.unsupportedColdStartSink`. Copilot stays selectable on the reconnect / existing-
+                    // agent path (which routes through `presentProviderConfigForm`, not this set), so a
+                    // configured github-copilot agent like ouroboros is unaffected.
+                    ForEach(model.providerConfigIsNewAgent
+                            ? WorkbenchProvider.coldStartProviders
+                            : WorkbenchProvider.allCases) { provider in
                         Text(provider.displayName).tag(provider)
                     }
                 }
@@ -6108,6 +6116,15 @@ struct ProviderConfigSheet: View {
             values = [:]
             message = nil
             model.providerConfigColdStartMessage = nil
+            // BUG 1 — if the previous provider's cold-start landed in `.needsVaultSetup`, the primary
+            // button reads "Finish setup" and runs `beginVaultOnboarding()` against the STASHED
+            // provider. Switching providers must drop that stale affordance: reset the flag (so the
+            // button returns to "Create Agent"/"Connect" for the newly-picked provider) and clear the
+            // stashed provider the vault chain would otherwise name. A normal (non-switch) session
+            // still sets these in the `.needsVaultSetup` arm, so the legitimate Finish-setup flow is
+            // unaffected.
+            model.providerConfigNeedsVaultSetup = false
+            model.providerConfigColdStartProvider = nil
         }
     }
 
@@ -6782,6 +6799,38 @@ private struct FirstRunBootstrapView: View {
                             )
                         } label: {
                             Label("Connect a provider", systemImage: "link")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                    }
+                    // FIX 1 — the actionable cold-start FAILURE surface. The retry control appears
+                    // ONLY in `.needsAttention` (the pure `showsRetryButton` gate), so the "you can
+                    // try again" copy is no longer dead. The honest copy + the recovery ROUTE both
+                    // come from the carried `attentionReason` (pure Core).
+                    //
+                    // FIX 2 — the route differs per reason: an invalid boss opens the boss-CHOICE
+                    // surface (`presentOnboarding()` → Choose Boss), because the real fix for a
+                    // stale/invalid boss pointer is PICKING A VALID BOSS, not a provider reconnect;
+                    // a failed step re-runs the (re-runnable) bootstrap (`runFirstRunBootstrap()`).
+                    if presentation.mode.showsRetryButton, let reason = presentation.attentionReason {
+                        Text(reason.humanFacingLine)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Button {
+                            switch reason.recoveryAction {
+                            case .chooseBoss:
+                                model.presentOnboarding()
+                            case .retry:
+                                model.runFirstRunBootstrap()
+                            }
+                        } label: {
+                            Label(
+                                reason.actionLabel,
+                                systemImage: reason.recoveryAction == .chooseBoss
+                                    ? "person.crop.circle.badge.questionmark"
+                                    : "arrow.clockwise"
+                            )
                         }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)

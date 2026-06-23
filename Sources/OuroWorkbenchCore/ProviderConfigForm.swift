@@ -84,6 +84,18 @@ public enum WorkbenchProvider: String, CaseIterable, Identifiable, Equatable, Se
         self != .githubCopilot
     }
 
+    /// The providers a brand-new agent can be cold-started for through the native Create-Agent
+    /// form — exactly `allCases` filtered on `supportsColdStartHatch`. The cold-start provider
+    /// picker MUST render this set, not raw `allCases`: offering a hatch-incapable provider (GitHub
+    /// Copilot, which has no `ouro hatch` argv sink) as a cold-start option is a guaranteed dead end
+    /// (`submit()` returns `.unsupportedColdStartSink`), and if it's the user's only provider they're
+    /// hard-stuck with no in-app path to a boss. Copilot stays a valid `WorkbenchProvider` everywhere
+    /// else (the reconnect / existing-agent path — ouroboros is a github-copilot agent); it is only
+    /// dropped from this cold-start set.
+    public static var coldStartProviders: [WorkbenchProvider] {
+        allCases.filter(\.supportsColdStartHatch)
+    }
+
     /// Build the cold-start hatch credential from this provider's collected field values.
     ///
     /// Returns `nil` for a provider with no argv cold-start sink (GitHub Copilot). All values
