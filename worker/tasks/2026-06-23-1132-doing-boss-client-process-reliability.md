@@ -33,7 +33,7 @@ by symbol/grep at HEAD:
 
 ## Completion Criteria
 
-- [ ] FIX 1: stdout/stderr READ handles closed on BOTH success + error/timeout paths, AFTER the
+- [x] FIX 1: stdout/stderr READ handles closed on BOTH success + error/timeout paths, AFTER the
       response read completes; closing happens via an idempotent seam on `ProcessIOBox`.
 - [ ] FIX 2: on watchdog fire, the read is unblocked (read handle closed after SIGKILL) so a
       no-output-hang child does not park the worker past the timeout budget.
@@ -49,7 +49,7 @@ by symbol/grep at HEAD:
 
 ## Units
 
-### Unit 1a — FIX 1 tests (RED): read handles closed on success + error paths ⬜
+### Unit 1a — FIX 1 tests (RED): read handles closed on success + error paths ✅
 - **What:** Add a `closeReadHandles()` seam to `ProcessIOBox` (to be implemented in 1b) and tests
   that pin: after `stop()`, the stdout/stderr read fds are closed (no leak); and an integration
   test that spawns N children through the client path and asserts the process's open-fd count does
@@ -57,7 +57,7 @@ by symbol/grep at HEAD:
 - **Output:** failing tests in `ProcessIOBoxTests.swift` + `BossAgentMCPClientTests.swift`.
 - **Acceptance:** tests compile and FAIL (no `closeReadHandles` / fds still open) before 1b.
 
-### Unit 1b — FIX 1 impl (GREEN): close read handles ⬜
+### Unit 1b — FIX 1 impl (GREEN): close read handles ✅
 - **What:** Add idempotent `closeReadHandles()` to `ProcessIOBox`; call it from `stop()` AFTER the
   reap (read is already complete by then). `callTool`/`listToolNames` already call `stop()` on both
   success and error paths, so this covers both.
