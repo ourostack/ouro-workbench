@@ -18,9 +18,14 @@ final class BossActionLogPendingWiringTests: XCTestCase {
     // The 6 handlers that defer to an async `Task { … complete*(…) }` and then
     // return an optimistic in-flight ack. `openProviderConfig` is deliberately
     // EXCLUDED: it's synchronous (presents the form, no async Task, no `complete*`),
-    // so its ack is final/verified, not in-flight. `startReportBug` is EXCLUDED for
-    // the same honesty reason: its `Task` writes a bundle but records no `complete*`
-    // verified-outcome row, so marking it pending would never resolve.
+    // so its ack is final/verified, not in-flight.
+    //
+    // `startReportBug` is NOT in this list only because its async kickoff lives in a
+    // DIFFERENT method (`submitBugReport`, which owns the `Task {`), so it can't be
+    // pinned via the post-`Task{}` span helper. It IS genuinely in-flight, though —
+    // `submitBugReport`'s `recordActionLog(action: "submitBugReport", …)` is the
+    // settled-truth row that lands later. It has its own pin below
+    // (`testStartReportBugMarksItsOptimisticAckInFlight`).
     private let inFlightHandlers = [
         "startRepairAgent",
         "startVerifyProvider",
@@ -79,14 +84,40 @@ final class BossActionLogPendingWiringTests: XCTestCase {
         )
     }
 
-    // MARK: - startReportBug has no complete*, so it stays not-in-flight
+    // MARK: - startReportBug's optimistic ack is in-flight (its settled row lands later)
 
-    func testStartReportBugIsNotMarkedInFlight() throws {
+    func testStartReportBugMarksItsOptimisticAckInFlight() throws {
         let source = try appSource()
         let body = try handlerBody(named: "startReportBug", in: source)
+        // The async kickoff lives inside `submitBugReport(...)`, which logs the
+        // VERIFIED outcome later under `action: "submitBugReport"`. The post-call
+        // optimistic ack ("Writing an anonymized bug report…") sits AFTER the
+        // `submitBugReport(` call and must be pending — otherwise a failed write
+        // leaves a green "Writing…" row standing next to the orange "Failed" row.
+        let callRange = try XCTUnwrap(
+            body.range(of: "submitBugReport("),
+            "startReportBug was expected to delegate the async write to submitBugReport(…)"
+        )
+        let postCall = String(body[callRange.lowerBound...])
+        XCTAssertTrue(
+            postCall.contains("isInFlight: true"),
+            "startReportBug's post-call optimistic ack must pass isInFlight: true — its settled truth lands later via submitBugReport's recordActionLog row"
+        )
+    }
+
+    // The synchronous guard ack ("Skipped reportBug: missing note") sits BEFORE the
+    // submitBugReport(…) call and is a settled skip — it must NOT be in-flight.
+    func testStartReportBugGuardAckIsNotInFlight() throws {
+        let source = try appSource()
+        let body = try handlerBody(named: "startReportBug", in: source)
+        let callRange = try XCTUnwrap(
+            body.range(of: "submitBugReport("),
+            "startReportBug was expected to delegate the async write to submitBugReport(…)"
+        )
+        let preCall = String(body[body.startIndex..<callRange.lowerBound])
         XCTAssertFalse(
-            body.contains("isInFlight: true"),
-            "startReportBug records no complete* verified row, so pending would never resolve — keep it not-in-flight"
+            preCall.contains("isInFlight: true"),
+            "startReportBug's synchronous guard-failure ack must NOT be marked in-flight (it's a real skip → orange)"
         )
     }
 

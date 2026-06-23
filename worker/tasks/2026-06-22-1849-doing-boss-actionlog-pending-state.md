@@ -41,9 +41,14 @@ green check / `.green` ONLY for `.succeeded`, produced ONLY when
    `startRepairAgent`, `startVerifyProvider`, `startRefreshProvider`,
    `startSelectLane`, `startRegisterWorkbenchMCP`, `startEnsureDaemon`.
    `openProviderConfig` stays false (synchronous — `presentProviderConfigForm` is
-   final, no async Task, no `complete*`). `startReportBug` stays false (its `Task`
-   has NO `complete*` verified-outcome row, so pending would never resolve). Guard
-   skips + `complete*` calls stay false.
+   final, no async Task, no `complete*`). `startReportBug` IS in-flight (cold-review
+   correction): it delegates to the async `submitBugReport(…)`, which writes the
+   bundle off-main and records the VERIFIED outcome later via
+   `recordActionLog(action: "submitBugReport", …)`. That settled row logs under a
+   different `action` than the optimistic ack, so on failure both rows persist — a
+   green "Writing…" beside the orange "Failed". Marking the optimistic ack
+   `isInFlight: true` makes the later `submitBugReport` row the settled truth.
+   Guard skips + `complete*` calls stay false.
 4. `actionLogEntryRow` (~7522-7523): route icon+color through the seam. (The
    `HarnessActionResultBanner` at ~1571 renders a *different* type,
    `HarnessActionResult` — always a settled/verified outcome, never in-flight — so
@@ -67,3 +72,4 @@ green check / `.green` ONLY for `.succeeded`, produced ONLY when
 - 2026-06-22 19:03 Unit 1 complete: WorkbenchActionOutcomePresentation seam shipped; 16 tests; Core 100% line+region; allowlist still 2; full suite 2517 pass.
 - 2026-06-22 19:11 Unit 2 complete: isInFlight threaded through WorkbenchActionLogEntry (backward-compatible decode), recordActionLog/finishBossAction, 6 async start handlers marked in-flight; actionLogEntryRow routed through the seam. swift build clean (warnings-as-errors + strict-concurrency=complete); full suite 2529 pass / 0 fail; Core 100% line+region; allowlist still 2.
 - 2026-06-22 19:11 All units complete; all gates passed (impl-coverage, build clean w/ strict flags, PR review). Status → done. NOT merged/PR'd per mandate. Notes: openProviderConfig + startReportBug deliberately NOT in-flight (synchronous / no verified follow-up row). HarnessActionResultBanner (~1571) NOT touched — it renders HarnessActionResult (a settled synchronous outcome, no in-flight state), so the spec's 1571 anchor was stale. Residual follow-up (out of spec scope): BossActionReceiptSummary.okCount still counts an in-flight ack as "ok" — the pending entry is superseded seconds later by the verified complete* row, so the "N ok" count can briefly double-count; a future change could exclude isInFlight from okCount.
+- 2026-06-22 19:34 Cold-review corrections (3 residual false-greens of the same class). (1) BUG: startReportBug WAS a residual false-green — its prior "deliberately NOT in-flight" rationale was wrong. submitBugReport is async and records the verified outcome later under action="submitBugReport", a DIFFERENT action than the optimistic ack, so on failure both a green "Writing…" and an orange "Failed" row persist. Marked the post-call ack isInFlight: true; flipped the source-pin test (now asserts startReportBug's optimistic ack IS in-flight, its guard ack is NOT). (2) BUG: BossActionReceiptSummary.okCount counted in-flight acks as "ok" (the residual flagged above). Fixed by excluding in-flight from the DENOMINATOR (settled = considered.filter{!isInFlight}; ok/failed derived from settled) — NOT by adding !isInFlight to the failed filter (which would push pending into the ok bucket). (3) FOLDED IN: BossAgentPromptBuilder labeled every succeeded entry "ok" to the boss, so an in-flight ack reported outcome=ok — now labeled "in progress"; settled success stays "ok", settled failure stays "skipped". +7 Core tests. swift build + full suite (2536 pass / 1 skip / 0 fail) clean w/ -warnings-as-errors -strict-concurrency=complete; Core 100% line+region; allowlist still 2. New commit(s) on fix/boss-actionlog-pending-state; NOT merged/PR'd.

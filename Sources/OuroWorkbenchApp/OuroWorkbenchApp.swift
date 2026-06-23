@@ -18885,9 +18885,15 @@ final class WorkbenchViewModel: ObservableObject {
             )
         }
         submitBugReport(note: note, source: source)
+        // In-flight ack — `submitBugReport` writes the bundle off-main and records the
+        // VERIFIED outcome later via `recordActionLog(action: "submitBugReport", …)`.
+        // That settled row logs under a different `action` than this optimistic ack,
+        // so the two never supersede each other: marking this pending keeps a failed
+        // write from leaving a green "Writing…" row standing beside the orange "Failed".
         return finishBossAction(
             source: source, action: action, entry: nil,
-            result: "Writing an anonymized bug report for \"\(note)\"…"
+            result: "Writing an anonymized bug report for \"\(note)\"…",
+            isInFlight: true
         )
     }
 

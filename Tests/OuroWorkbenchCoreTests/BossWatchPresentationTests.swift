@@ -77,6 +77,19 @@ final class BossWatchPresentationTests: XCTestCase {
         )
     }
 
+    /// An in-flight optimistic ack: `succeeded: true` (the "Working on…" copy passes
+    /// the prefix check) but `isInFlight: true` — it has NOT settled yet.
+    private func inFlightAction(action: String = "connect", at: TimeInterval = 0) -> WorkbenchActionLogEntry {
+        WorkbenchActionLogEntry(
+            occurredAt: Date(timeIntervalSince1970: at),
+            source: "boss:slugger",
+            action: action,
+            result: "Working on it…",
+            succeeded: true,
+            isInFlight: true
+        )
+    }
+
     func testReceiptSummaryCountsOkAndFailed() {
         let entries = [action(true), action(true), action(false), action(true)]
         let s = BossActionReceiptSummary.summarize(entries)
@@ -140,5 +153,70 @@ final class BossWatchPresentationTests: XCTestCase {
         ]
         let s = BossActionReceiptSummary.summarize(entries)
         XCTAssertEqual(s.failedReceipts.map(\.action), ["recover", "sendInput"], "failures newest-first, successes excluded")
+    }
+
+    // MARK: - In-flight acks must NOT inflate okCount (false-success at the count level)
+
+    func testInFlightAckDoesNotInflateOkCount() {
+        // An in-flight ack has succeeded == true, but it has NOT settled — it must
+        // count as neither ok nor failed. Excluding it from the denominator (not
+        // pushing it into the ok bucket) is the whole point.
+        let s = BossActionReceiptSummary.summarize([inFlightAction()])
+        XCTAssertEqual(s.okCount, 0, "an in-flight ack is not a verified success — it must not count as ok")
+        XCTAssertEqual(s.failedCount, 0, "an in-flight ack is not a failure either")
+        XCTAssertEqual(s.totalCount, 0, "in-flight is excluded from both buckets, so the total is empty")
+        XCTAssertTrue(s.isEmpty)
+        XCTAssertEqual(s.label, "No actions yet", "a log of only in-flight acks reports nothing settled yet")
+    }
+
+    func testSettledSuccessStillCountsAsOk() {
+        // The honesty invariant's positive direction: a settled (!isInFlight)
+        // succeeded entry still counts as ok.
+        let s = BossActionReceiptSummary.summarize([action(true)])
+        XCTAssertEqual(s.okCount, 1)
+        XCTAssertEqual(s.failedCount, 0)
+    }
+
+    func testSettledFailureStillCountsAsFailed() {
+        // The honesty invariant's failure direction: a settled failure must NOT be
+        // swallowed by the pending exclusion — it still counts as failed.
+        let s = BossActionReceiptSummary.summarize([action(false)])
+        XCTAssertEqual(s.okCount, 0)
+        XCTAssertEqual(s.failedCount, 1)
+        XCTAssertEqual(s.failedReceipts.count, 1)
+    }
+
+    func testInFlightExcludedFromBothBucketsAlongsideSettledEntries() {
+        // A mixed log: one settled success, one settled failure, one in-flight ack.
+        // The in-flight ack is excluded from BOTH buckets; only the two settled
+        // entries are counted.
+        let entries = [
+            action(true, at: 30),
+            inFlightAction(at: 20),
+            action(false, at: 10)
+        ]
+        let s = BossActionReceiptSummary.summarize(entries)
+        XCTAssertEqual(s.okCount, 1, "only the settled success counts as ok; the in-flight ack does not")
+        XCTAssertEqual(s.failedCount, 1, "only the settled failure counts as failed")
+        XCTAssertEqual(s.totalCount, 2, "the in-flight ack is in neither bucket")
+        XCTAssertEqual(s.failedReceipts.map(\.action), ["recover"], "only the settled failure is a failed receipt")
+        XCTAssertEqual(s.label, "1 ok · 1 failed")
+    }
+
+    func testInFlightExcludedWithinWindow() {
+        // The window is applied first (newest-first), then in-flight is excluded —
+        // an in-flight ack inside the window still doesn't inflate okCount.
+        let entries = [
+            inFlightAction(at: 50),
+            action(true, at: 40),
+            action(false, at: 30),
+            action(true, at: 20),
+            action(true, at: 10)
+        ]
+        let s = BossActionReceiptSummary.summarize(entries, window: 3)
+        // Newest 3 = [in-flight@50, ok@40, failed@30] → settled = 1 ok + 1 failed.
+        XCTAssertEqual(s.okCount, 1)
+        XCTAssertEqual(s.failedCount, 1)
+        XCTAssertEqual(s.totalCount, 2, "the in-flight ack inside the window is excluded from both buckets")
     }
 }
