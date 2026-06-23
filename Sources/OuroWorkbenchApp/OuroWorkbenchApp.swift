@@ -641,7 +641,10 @@ struct WorkbenchRootView: View {
             await model.runExternalActionPump()
         }
         .task {
-            await model.runBossWatchLoop()
+            // FIX4 — start the Boss Watch poll loop ONLY if Watch was persisted on.
+            // The loop's lifetime is otherwise owned by the enable toggle
+            // (`setBossWatchEnabled`), so it no longer wakes every 60s while OFF.
+            model.startBossWatchLoopIfEnabled()
         }
         .task {
             await model.runAutoUpdateCheckIfDue()
@@ -10980,6 +10983,12 @@ final class WorkbenchViewModel: ObservableObject {
     private var vaultOnboardingFlavor: VaultOnboardingFlavor = .onboarding
     private var bossWatchBaselineState: WorkspaceState?
     private var bossWatchTickIsRunning = false
+    /// FIX4 — the periodic Boss Watch poll loop's lifetime is now owned by the
+    /// enable toggle, not an unconditional `.task`. It runs ONLY while Watch is on:
+    /// `setBossWatchEnabled(true)` (and `startBossWatchLoopIfEnabled` at launch when
+    /// Watch was persisted on) start it; `setBossWatchEnabled(false)` cancels it. So
+    /// the loop no longer wakes every 60s just to `continue` while Watch is OFF.
+    private var bossWatchLoopTask: Task<Void, Never>?
     private var bossWatchLastPromptAt: Date?
     /// When a session newly needs attention, the boss responds right then
     /// (event-driven) instead of waiting up to a full poll interval. This caps
@@ -13756,20 +13765,50 @@ final class WorkbenchViewModel: ObservableObject {
             Task {
                 await runBossWatchTick(force: true)
             }
+            // FIX4 — start the periodic poll loop on enable. Cancel any prior handle
+            // first so a rapid off→on can't leak a second loop. The loop itself only
+            // exists while Watch is on, so it no longer wakes every 60s while OFF.
+            bossWatchLoopTask?.cancel()
+            bossWatchLoopTask = Task {
+                await runBossWatchLoop()
+            }
         } else {
             bossWatchBaselineState = nil
             bossWatchChangeSummaries = []
             bossWatchLastRunAt = nil
             bossWatchLastPromptAt = nil
+            // FIX4 — cancel the poll loop on disable so it stops waking entirely
+            // (the true "no idle wakeups while OFF" guarantee).
+            bossWatchLoopTask?.cancel()
+            bossWatchLoopTask = nil
             save()
         }
     }
 
+    /// FIX4 — launch-time entry: start the poll loop only if Boss Watch was
+    /// persisted ON (state restored by `load()` sets `bossWatchIsEnabled` directly,
+    /// bypassing `setBossWatchEnabled`, so the loop must be (re)started here). When
+    /// Watch is OFF at launch this is a no-op — no loop, no idle wakeups. Replaces
+    /// the old unconditional `.task { runBossWatchLoop() }` at the view root.
+    func startBossWatchLoopIfEnabled() {
+        guard bossWatchIsEnabled, bossWatchLoopTask == nil else {
+            return
+        }
+        bossWatchLoopTask = Task {
+            await runBossWatchLoop()
+        }
+    }
+
+    /// The periodic Boss Watch poll. FIX4 — this loop is now created ONLY while
+    /// Watch is on (by `setBossWatchEnabled` / `startBossWatchLoopIfEnabled`) and
+    /// cancelled on disable, so it no longer wakes every interval just to `continue`
+    /// while OFF. It still re-checks `bossWatchIsEnabled` before a tick as a cheap
+    /// race guard (a cancel mid-sleep also breaks the loop via `Task.isCancelled`).
     func runBossWatchLoop() async {
         while !Task.isCancelled {
             try? await Task.sleep(nanoseconds: bossWatchIntervalNanoseconds)
-            guard bossWatchIsEnabled else {
-                continue
+            if Task.isCancelled || !bossWatchIsEnabled {
+                return
             }
             await runBossWatchTick(force: false)
         }
