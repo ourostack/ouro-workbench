@@ -208,6 +208,61 @@ final class ProcessIOBoxTests: XCTestCase {
         )
     }
 
+    // MARK: - FIX 1 — the stdout/stderr READ handles are closed (fd-leak fix)
+
+    /// True iff `fd` is a still-open file descriptor in THIS process.
+    private func fdIsOpen(_ fd: Int32) -> Bool {
+        fcntl(fd, F_GETFD) != -1
+    }
+
+    func testStopClosesTheStdoutAndStderrReadHandles() {
+        // FIX 1: over hours of boss-watch polling (a spawn per tick), the per-turn stdout/stderr
+        // READ pipe handles the box holds were never closed → fd leak until RLIMIT_NOFILE. stop()
+        // must close them (idempotently, AFTER the reap so the response read has completed).
+        let out = Pipe(); let err = Pipe()
+        let outFD = out.fileHandleForReading.fileDescriptor
+        let errFD = err.fileHandleForReading.fileDescriptor
+        XCTAssertTrue(fdIsOpen(outFD), "precondition: stdout read fd is open before stop()")
+        XCTAssertTrue(fdIsOpen(errFD), "precondition: stderr read fd is open before stop()")
+
+        let box = ProcessIOBox(
+            pid: 4321,
+            stdout: out.fileHandleForReading,
+            stderr: err.fileHandleForReading,
+            childInOwnGroup: true,
+            isAlive: { _ in false }, // already exited → stop() goes straight to reap + close
+            processKiller: { _, _ in 0 },
+            groupKiller: { _, _ in 0 },
+            reaper: { _ in }
+        )
+        box.stop()
+
+        XCTAssertFalse(fdIsOpen(outFD), "stop() must close the stdout read fd (no leak)")
+        XCTAssertFalse(fdIsOpen(errFD), "stop() must close the stderr read fd (no leak)")
+    }
+
+    func testCloseReadHandlesIsIdempotent() {
+        // The watchdog (FIX 2) closes the read handle to unblock a parked read; stop() (FIX 1)
+        // also closes it on the normal path. Both can run for one turn, so closeReadHandles() must
+        // be safe to call more than once (double-close throws, swallowed by `try?`).
+        let out = Pipe(); let err = Pipe()
+        let outFD = out.fileHandleForReading.fileDescriptor
+        let box = ProcessIOBox(
+            pid: 22,
+            stdout: out.fileHandleForReading,
+            stderr: err.fileHandleForReading,
+            childInOwnGroup: false,
+            isAlive: { _ in false },
+            processKiller: { _, _ in 0 },
+            groupKiller: { _, _ in 0 },
+            reaper: { _ in }
+        )
+        box.closeReadHandles()
+        box.closeReadHandles() // must not crash / must stay closed
+        box.stop()             // stop() also closes — still no crash
+        XCTAssertFalse(fdIsOpen(outFD), "the read fd stays closed across repeated closeReadHandles()/stop()")
+    }
+
     // MARK: - Default reaper against a real short-lived child (the inverse-of-the-leak proof)
 
     func testStopReapsARealChildOnTheNormalPath() throws {
