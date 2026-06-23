@@ -4208,20 +4208,42 @@ struct BossSelectorView: View {
     /// Render menu rows with a status suffix so users can see at a glance
     /// which choices are installed and which are remote-only hints. Names
     /// that don't resolve to a bundle pick up "(missing)".
+    ///
+    /// The config suffixes (disabled / no agent.json / invalid config) survive — they
+    /// were already honest. What's NEW: a config-`.ready` agent whose LIVE outward check
+    /// CONFIRMED a problem gets an honest "— sign-in needed" (auth-expired) or "— offline"
+    /// (unreachable) suffix, so a dead-token boss doesn't read as a bare, pickable name.
+    /// CALM: a pending/unverified/ready agent stays a bare name — the Connect step still
+    /// verifies on actual selection, so we don't pre-alarm an unconfirmed choice.
     private func menuLabel(for agentName: String) -> String {
-        if let agent = model.ouroAgent(named: agentName) {
-            switch agent.status {
-            case .ready:
-                return agentName
-            case .disabled:
-                return "\(agentName) — disabled"
-            case .missingConfig:
-                return "\(agentName) — no agent.json"
-            case .invalidConfig:
-                return "\(agentName) — invalid config"
-            }
+        guard let agent = model.ouroAgent(named: agentName) else {
+            return "\(agentName) — missing"
         }
-        return "\(agentName) — missing"
+        switch agent.status {
+        case .ready:
+            let readiness = InstalledAgentRowPresentation.liveReadiness(
+                status: agent.status,
+                verdict: model.agentOutwardVerdicts[agentName],
+                isChecking: model.agentChecksInFlight.contains(agentName)
+            )
+            switch readiness {
+            case .authExpired:
+                return "\(agentName) — sign-in needed"
+            case .unreachable:
+                return "\(agentName) — offline"
+            case .ready, .checking, .unverified, .vaultLocked,
+                 .disabled, .missingConfig, .invalidConfig:
+                // Calm: ready/pending stay bare; the config-derived states can't occur
+                // for a config-`.ready` agent and are handled by the outer switch anyway.
+                return agentName
+            }
+        case .disabled:
+            return "\(agentName) — disabled"
+        case .missingConfig:
+            return "\(agentName) — no agent.json"
+        case .invalidConfig:
+            return "\(agentName) — invalid config"
+        }
     }
 }
 
@@ -5723,7 +5745,7 @@ struct OuroAgentRowView: View {
             Image(systemName: agentStatusImage)
                 .foregroundStyle(agentStatusColor)
                 .frame(width: 16)
-                .help(agent.detail)
+                .help(InstalledAgentRowPresentation.help(for: liveReadiness, detail: agent.detail))
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 6) {
                     Text(agent.name)
@@ -5833,28 +5855,29 @@ struct OuroAgentRowView: View {
         )
     }
 
-    private var agentStatusImage: String {
-        switch agent.status {
-        case .ready:
-            return "checkmark.circle.fill"
-        case .disabled:
-            return "pause.circle.fill"
-        case .missingConfig:
-            return "exclamationmark.triangle.fill"
-        case .invalidConfig:
-            return "xmark.octagon.fill"
-        }
+    /// The honest, LIVE readiness for this row — the scanner's config-only `agent.status`
+    /// folded with the real outward-lane verdict and the in-flight flag (the same maps the
+    /// sidebar #261 fix computes). The bug this replaces: this empty-state row rendered the
+    /// config-only `.ready` as a green checkmark + "ready" tooltip WITHOUT a live check, so an
+    /// expired-token agent read green. Only `.ready`/green when a live check returned `.working`.
+    private var liveReadiness: InstalledAgentRowPresentation.LiveReadiness {
+        InstalledAgentRowPresentation.liveReadiness(
+            status: agent.status,
+            verdict: model.agentOutwardVerdicts[agent.name],
+            isChecking: model.agentChecksInFlight.contains(agent.name)
+        )
     }
 
+    // Route the icon through the shared Core seam so the success glyph is reachable ONLY from
+    // a live `.ready` (never config-only). Pending stays calm; only confirmed-bad warns.
+    private var agentStatusImage: String {
+        InstalledAgentRowPresentation.iconSystemName(for: liveReadiness)
+    }
+
+    // Route the dot/icon color through the shared Core seam, live-aware: never green unless the
+    // live check confirmed it. Matches the sidebar row + detail-pane title strip.
     private var agentStatusColor: SwiftUI.Color {
-        switch agent.status {
-        case .ready:
-            return .green
-        case .disabled, .missingConfig:
-            return .orange
-        case .invalidConfig:
-            return .red
-        }
+        InstalledAgentRowPresentation.dotColor(for: liveReadiness).swiftUIColor
     }
 
     private func registrationPillText(_ status: BossWorkbenchMCPRegistrationStatus) -> String {
@@ -7895,15 +7918,19 @@ private struct AgentTitleStrip: View {
         .frame(minHeight: 38)
     }
 
+    /// The honest, LIVE readiness for the detail-pane title dot — `agent.status` folded with
+    /// the live outward verdict + in-flight flag (the maps #261 computes). Never green unless a
+    /// live check returned `.working`; an expired-token agent no longer shows a green title dot.
+    private var liveReadiness: InstalledAgentRowPresentation.LiveReadiness {
+        InstalledAgentRowPresentation.liveReadiness(
+            status: agent.status,
+            verdict: model.agentOutwardVerdicts[agent.name],
+            isChecking: model.agentChecksInFlight.contains(agent.name)
+        )
+    }
+
     private var statusColor: SwiftUI.Color {
-        switch agent.status {
-        case .ready:
-            return .green
-        case .disabled, .missingConfig:
-            return .orange
-        case .invalidConfig:
-            return .red
-        }
+        InstalledAgentRowPresentation.dotColor(for: liveReadiness).swiftUIColor
     }
 }
 
@@ -8003,7 +8030,7 @@ private struct AgentStatusCard: View {
             }
             HStack(spacing: 6) {
                 StatusPill(
-                    text: bundleStatusPillText,
+                    text: InstalledAgentRowPresentation.label(for: liveReadiness),
                     color: statusColor
                 )
                 if let registration {
@@ -8030,54 +8057,37 @@ private struct AgentStatusCard: View {
         )
     }
 
+    /// The honest, LIVE readiness for the detail-pane status card — `agent.status` folded with
+    /// the live outward verdict + in-flight flag (the maps #261 computes). The bug this replaces:
+    /// the card showed `checkmark.seal.fill` + green + a "ready" pill off config-only `.ready`, so
+    /// an expired-token agent read as a confirmed-ready bundle. Now the icon's success seal, the
+    /// green color, and the "ready" pill are reachable ONLY when a live check returned `.working`.
+    private var liveReadiness: InstalledAgentRowPresentation.LiveReadiness {
+        InstalledAgentRowPresentation.liveReadiness(
+            status: agent.status,
+            verdict: model.agentOutwardVerdicts[agent.name],
+            isChecking: model.agentChecksInFlight.contains(agent.name)
+        )
+    }
+
+    // Route the icon through the shared Core seam: the success seal is reachable ONLY from a live
+    // `.ready`; pending stays calm (clock/question), only confirmed-bad verdicts warn.
     private var statusIcon: String {
-        switch agent.status {
-        case .ready:
-            return "checkmark.seal.fill"
-        case .disabled:
-            return "pause.circle.fill"
-        case .missingConfig:
-            return "exclamationmark.triangle.fill"
-        case .invalidConfig:
-            return "xmark.octagon.fill"
-        }
+        InstalledAgentRowPresentation.iconSystemName(for: liveReadiness)
     }
 
     private var statusColor: SwiftUI.Color {
-        switch agent.status {
-        case .ready:
-            return .green
-        case .disabled, .missingConfig:
-            return .orange
-        case .invalidConfig:
-            return .red
-        }
+        InstalledAgentRowPresentation.dotColor(for: liveReadiness).swiftUIColor
     }
 
+    // Route the PROMINENT card title through the shared Core seam off the LIVE readiness
+    // (the same `liveReadiness` the icon / color / pill already use), so "Bundle ready"
+    // is reachable ONLY when a live check returned `.working`. The bug this replaces: the
+    // headline switched on raw config `agent.status` and read "Bundle ready" for a
+    // config-`.ready` agent even when its live verdict was `.authExpired` — "Bundle ready"
+    // next to an honest "sign-in needed" pill.
     private var statusHeadline: String {
-        switch agent.status {
-        case .ready:
-            return "Bundle ready"
-        case .disabled:
-            return "Bundle disabled in agent.json"
-        case .missingConfig:
-            return "Bundle missing agent.json"
-        case .invalidConfig:
-            return "Bundle config could not be read"
-        }
-    }
-
-    private var bundleStatusPillText: String {
-        switch agent.status {
-        case .ready:
-            return "ready"
-        case .disabled:
-            return "disabled"
-        case .missingConfig:
-            return "no config"
-        case .invalidConfig:
-            return "invalid"
-        }
+        InstalledAgentRowPresentation.headline(for: liveReadiness, detail: agent.detail)
     }
 
     private func mcpPillText(_ status: BossWorkbenchMCPRegistrationStatus) -> String {
@@ -12262,7 +12272,18 @@ final class WorkbenchViewModel: ObservableObject {
         guard !ouroAgents.isEmpty else {
             return "no local agents"
         }
-        let readyCount = ouroAgents.filter { $0.status == .ready }.count
+        // Count LIVE readiness, not config-only `.ready`: an expired-token agent
+        // (config-`.ready`, live `.authExpired`) used to inflate the "ready" tally
+        // even though no live check confirmed it. Fold each agent's config status
+        // with its live outward verdict + in-flight flag — `.ready` (green) only when
+        // a `ouro check` returned `.working`, matching the harness #262 readyCount.
+        let readyCount = ouroAgents.filter { agent in
+            InstalledAgentRowPresentation.liveReadiness(
+                status: agent.status,
+                verdict: agentOutwardVerdicts[agent.name],
+                isChecking: agentChecksInFlight.contains(agent.name)
+            ) == .ready
+        }.count
         return "\(ouroAgents.count) local, \(readyCount) ready; boss \(state.boss.agentName)"
     }
 

@@ -174,6 +174,68 @@ public enum InstalledAgentRowPresentation {
         }
     }
 
+    /// The SF Symbol name for a live readiness — the SHARED-SEAM icon decision so the
+    /// agent detail pane (`AgentStatusCard.statusIcon`) and the empty-state row
+    /// (`OuroAgentRowView.agentStatusImage`) pick the SAME glyph, and pick it off the
+    /// LIVE readiness rather than raw config `agent.status`.
+    ///
+    /// HONESTY INVARIANT: the SUCCESS glyph (`checkmark.seal.fill`) is reachable ONLY
+    /// from `.ready` (the sole state a `.working` live verdict produces) — an
+    /// expired-token agent (config-`.ready`, live `.authExpired`) never wears the seal.
+    /// CALM-NOT-LOUD: pending states (`.checking`, `.unverified`) get neutral glyphs
+    /// (`ellipsis.circle` / `questionmark.circle`), never the warning triangle — only
+    /// CONFIRMED-bad verdicts (`.authExpired` / `.vaultLocked` / `.unreachable`) do.
+    public static func iconSystemName(for readiness: LiveReadiness) -> String {
+        switch readiness {
+        case .ready:
+            return "checkmark.seal.fill"
+        case .checking:
+            return "ellipsis.circle"
+        case .unverified:
+            return "questionmark.circle"
+        case .authExpired, .vaultLocked, .unreachable:
+            return "exclamationmark.triangle.fill"
+        case .disabled:
+            return "pause.circle.fill"
+        case .missingConfig, .invalidConfig:
+            return "xmark.octagon.fill"
+        }
+    }
+
+    /// The PROMINENT card title for the agent detail pane (`AgentStatusCard.statusHeadline`).
+    ///
+    /// HONESTY INVARIANT: the word "ready" (and the title "Bundle ready") is reachable
+    /// ONLY from `.ready` — the sole state a `.working` live verdict produces. The bug
+    /// this replaces: the card headline switched on raw config `agent.status` and read
+    /// "Bundle ready" for a config-`.ready` agent even when its live verdict was
+    /// `.authExpired`, so an expired-token agent's title said "Bundle ready" next to an
+    /// honest "sign-in needed" pill. Live states get an honest title; the config-problem
+    /// states (`.disabled` / `.missingConfig` / `.invalidConfig`) keep the bundle-config
+    /// wording — those ARE config truths — and `.invalidConfig` embeds the raw `detail`.
+    public static func headline(for readiness: LiveReadiness, detail: String) -> String {
+        switch readiness {
+        case .ready:
+            return "Bundle ready"
+        case .checking:
+            return "Checking connection…"
+        case .unverified:
+            return "Not verified yet"
+        case .authExpired:
+            return "Sign-in needed"
+        case .vaultLocked:
+            return "Credentials locked"
+        case .unreachable:
+            return "Provider unreachable"
+        case .disabled:
+            return "Bundle disabled in agent.json"
+        case .missingConfig:
+            return "Bundle missing agent.json"
+        case .invalidConfig:
+            let trimmed = detail.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? "Bundle config could not be read" : "Bundle config could not be read — \(trimmed)"
+        }
+    }
+
     /// A fuller tooltip for a live readiness. `detail` is the scanner's raw per-status
     /// detail; the `.invalidConfig` tooltip embeds it so the operator can see exactly
     /// what's malformed.
