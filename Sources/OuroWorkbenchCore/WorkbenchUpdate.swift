@@ -9,7 +9,7 @@ public typealias WorkbenchAutoUpdatePolicy = AutoUpdatePolicy
 public enum WorkbenchUpdatePlanner {
     public static func plan(from snapshot: ReleaseUpdateSnapshot) -> Result<WorkbenchUpdatePlan, WorkbenchUpdatePlanError> {
         var workbenchSnapshot = snapshot
-        workbenchSnapshot.assetNamingPolicy = .workbench()
+        workbenchSnapshot.assetNamingPolicy = .workbench(namePrefix: WorkbenchRelease.artifactNamePrefix)
         return AppUpdatePlanner.plan(from: workbenchSnapshot)
     }
 }

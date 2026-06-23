@@ -2,7 +2,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-MCP_EXECUTABLE="$ROOT_DIR/dist/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP"
+eval "$("$ROOT_DIR/scripts/read-workbench-release.sh")"
+MCP_EXECUTABLE="$ROOT_DIR/dist/$WORKBENCH_APP_NAME.app/Contents/MacOS/$WORKBENCH_MCP_EXECUTABLE"
 
 if [[ ! -x "$MCP_EXECUTABLE" ]]; then
   printf 'MCP action validation smoke failed: missing executable at %s\n' "$MCP_EXECUTABLE" >&2

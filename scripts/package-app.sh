@@ -2,9 +2,12 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_NAME="Ouro Workbench"
-PRODUCT_NAME="OuroWorkbench"
-MCP_PRODUCT_NAME="OuroWorkbenchMCP"
+eval "$("$ROOT_DIR/scripts/read-workbench-release.sh")"
+APP_NAME="$WORKBENCH_APP_NAME"
+PRODUCT_NAME="$WORKBENCH_BUNDLE_EXECUTABLE"
+MCP_PRODUCT_NAME="$WORKBENCH_MCP_EXECUTABLE"
+BUNDLE_ID="$WORKBENCH_BUNDLE_IDENTIFIER"
+MINIMUM_MACOS_VERSION="$WORKBENCH_MINIMUM_MACOS_VERSION"
 VERSION_FILE="$ROOT_DIR/VERSION"
 DIST_DIR="$ROOT_DIR/dist"
 APP_DIR="$DIST_DIR/$APP_NAME.app"
@@ -14,7 +17,7 @@ RESOURCES_DIR="$CONTENTS_DIR/Resources"
 TOOLS_DIR="$MACOS_DIR/Tools"
 SCREEN_SOURCE="/usr/bin/screen"
 SWIFTTERM_BUNDLE_NAME="SwiftTerm_SwiftTerm.bundle"
-APP_ICON_NAME="OuroWorkbench.icns"
+APP_ICON_NAME="$PRODUCT_NAME.icns"
 SWIFT_STRICT_FLAGS=(-Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete)
 
 cd "$ROOT_DIR"
@@ -57,6 +60,10 @@ patch_swiftterm_resource_lookup() {
 VERSION="$(tr -d '[:space:]' < "$VERSION_FILE")"
 if [[ ! "$VERSION" =~ ^[0-9]+[.][0-9]+[.][0-9]+([-.][0-9A-Za-z.]+)?$ ]]; then
   printf 'Invalid app version in %s: %s\n' "$VERSION_FILE" "$VERSION" >&2
+  exit 1
+fi
+if [[ "$VERSION" != "$WORKBENCH_VERSION" ]]; then
+  printf 'VERSION (%s) does not match WorkbenchRelease.version (%s)\n' "$VERSION" "$WORKBENCH_VERSION" >&2
   exit 1
 fi
 BUILD_NUMBER="1"
@@ -113,15 +120,15 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
   <key>CFBundleDevelopmentRegion</key>
   <string>en</string>
   <key>CFBundleExecutable</key>
-  <string>OuroWorkbench</string>
+  <string>$PRODUCT_NAME</string>
   <key>CFBundleIdentifier</key>
-  <string>com.ourostack.workbench</string>
+  <string>$BUNDLE_ID</string>
   <key>CFBundleIconFile</key>
-  <string>OuroWorkbench</string>
+  <string>$PRODUCT_NAME</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
-  <string>Ouro Workbench</string>
+  <string>$APP_NAME</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
@@ -129,7 +136,7 @@ cat > "$CONTENTS_DIR/Info.plist" <<PLIST
   <key>CFBundleVersion</key>
   <string>$BUILD_NUMBER</string>
   <key>LSMinimumSystemVersion</key>
-  <string>14.0</string>
+  <string>$MINIMUM_MACOS_VERSION</string>
   <key>NSHighResolutionCapable</key>
   <true/>
   <key>NSSupportsAutomaticTermination</key>

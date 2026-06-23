@@ -2,10 +2,15 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+eval "$("$ROOT_DIR/scripts/read-workbench-release.sh")"
 VERSION="$(tr -d '[:space:]' < "$ROOT_DIR/VERSION")"
+[[ "$VERSION" == "$WORKBENCH_VERSION" ]] || {
+  printf 'VERSION does not match WorkbenchRelease.version\n' >&2
+  exit 1
+}
 
 cat <<NOTES
-# Ouro Workbench $VERSION
+# $WORKBENCH_APP_NAME $VERSION
 
 Ouro Workbench is a native macOS workbench for terminal agents. It wraps Claude
 Code, OpenAI Codex, GitHub Copilot CLI, local shells, and arbitrary terminal/TUI
@@ -29,14 +34,14 @@ work moving.
 
 Download both release assets:
 
-- \`OuroWorkbench-$VERSION-build.<build>-<sha>.zip\`
-- \`OuroWorkbench-$VERSION-build.<build>-<sha>.manifest.json\`
+- \`$WORKBENCH_ARTIFACT_NAME_PREFIX$VERSION-build.<build>-<sha>.zip\`
+- \`$WORKBENCH_ARTIFACT_NAME_PREFIX$VERSION-build.<build>-<sha>.manifest.json\`
 
 Then verify and install from a repo checkout:
 
 \`\`\`bash
-scripts/verify-app-artifact.sh artifacts/OuroWorkbench-$VERSION-build.<build>-<sha>.manifest.json
-scripts/install-app.sh --artifact-manifest artifacts/OuroWorkbench-$VERSION-build.<build>-<sha>.manifest.json --open
+scripts/verify-app-artifact.sh artifacts/$WORKBENCH_ARTIFACT_NAME_PREFIX$VERSION-build.<build>-<sha>.manifest.json
+scripts/install-app.sh --artifact-manifest artifacts/$WORKBENCH_ARTIFACT_NAME_PREFIX$VERSION-build.<build>-<sha>.manifest.json --open
 \`\`\`
 
 To install the latest published release directly with GitHub CLI:

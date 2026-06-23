@@ -2,7 +2,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_NAME="Ouro Workbench.app"
+eval "$("$ROOT_DIR/scripts/read-workbench-release.sh")"
+APP_NAME="$WORKBENCH_APP_NAME.app"
 INSTALL_DIR="$HOME/Applications"
 OPEN_AFTER_INSTALL="false"
 VERIFY_SCRIPT="$ROOT_DIR/scripts/verify-app-bundle.sh"
@@ -64,10 +65,10 @@ DESTINATION_REPLACED="false"
 running_workbench_pids_for_destination() {
   local pid
   local command
-  for pid in $(pgrep -x "OuroWorkbench" 2>/dev/null || true); do
+  for pid in $(pgrep -x "$WORKBENCH_BUNDLE_EXECUTABLE" 2>/dev/null || true); do
     command="$(ps -p "$pid" -o command= 2>/dev/null || true)"
     case "$command" in
-      "$APP_DEST/Contents/MacOS/OuroWorkbench"*)
+      "$APP_DEST/Contents/MacOS/$WORKBENCH_BUNDLE_EXECUTABLE"*)
         printf '%s\n' "$pid"
         ;;
     esac
@@ -93,8 +94,8 @@ stop_running_workbench() {
     return
   fi
 
-  printf 'Stopping running Ouro Workbench before install...\n' >&2
-  osascript -e 'tell application id "com.ourostack.workbench" to quit' >/dev/null 2>&1 || true
+  printf 'Stopping running %s before install...\n' "$WORKBENCH_APP_NAME" >&2
+  osascript -e "tell application id \"$WORKBENCH_BUNDLE_IDENTIFIER\" to quit" >/dev/null 2>&1 || true
   if wait_until_workbench_stops; then
     return
   fi
@@ -107,7 +108,7 @@ stop_running_workbench() {
     return
   fi
 
-  printf 'Unable to stop running Ouro Workbench before install.\n' >&2
+  printf 'Unable to stop running %s before install.\n' "$WORKBENCH_APP_NAME" >&2
   exit 1
 }
 
@@ -216,6 +217,6 @@ if [[ "$OPEN_AFTER_INSTALL" == "true" ]]; then
     sleep 0.25
   done
 
-  printf 'Installed Ouro Workbench did not launch from %s\n' "$APP_DEST" >&2
+  printf 'Installed %s did not launch from %s\n' "$WORKBENCH_APP_NAME" "$APP_DEST" >&2
   exit 1
 fi
