@@ -6010,7 +6010,15 @@ struct ProviderConfigSheet: View {
                     TextField("Agent name", text: $newAgentName)
                 }
                 Picker("Provider", selection: $provider) {
-                    ForEach(WorkbenchProvider.allCases) { provider in
+                    // BUG 2 — offer ONLY providers a brand-new agent can actually be cold-started for.
+                    // `coldStartProviders` filters out the hatch-incapable ones (GitHub Copilot has no
+                    // `ouro hatch` argv sink), so picking one + Create Agent can't dead-end in
+                    // `.unsupportedColdStartSink`. Copilot stays selectable on the reconnect / existing-
+                    // agent path (which routes through `presentProviderConfigForm`, not this set), so a
+                    // configured github-copilot agent like ouroboros is unaffected.
+                    ForEach(model.providerConfigIsNewAgent
+                            ? WorkbenchProvider.coldStartProviders
+                            : WorkbenchProvider.allCases) { provider in
                         Text(provider.displayName).tag(provider)
                     }
                 }
