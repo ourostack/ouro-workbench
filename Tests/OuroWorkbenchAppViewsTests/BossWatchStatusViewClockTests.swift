@@ -35,10 +35,19 @@ import OuroWorkbenchCore
 final class BossWatchStatusViewClockTests: XCTestCase {
 
     /// A single canonical fixed epoch — 2026-01-02 03:04:05 UTC. The view formats it under
-    /// the injected `.gmt` zone (see `view(enabled:summaries:)`), so
-    /// `workbenchTimeText(date:.omitted, time:.standard, timeZone: .gmt)` renders
-    /// `03:04:05` byte-identically on any runner. (Captured in the recorded reference.)
+    /// the injected `.gmt` zone + `en_GB` locale (see `view(enabled:summaries:)`), so
+    /// `workbenchTimeText(date:.omitted, time:.standard, timeZone:.gmt, locale: en_GB)`
+    /// renders `3:04:05` byte-identically on any runner. (Captured in the recorded ref.)
     private static let fixedDate = Date(timeIntervalSince1970: 1_767_323_045)
+
+    /// The locale the view formats the timestamp under (injected). `en_GB` is chosen as
+    /// the stable, runner-independent CLOCK locale: under it `.standard` time renders a
+    /// clean ASCII-only `3:04:05` (24-hour, `:`-separated, NO AM/PM and — critically — NO
+    /// narrow-no-break-space). `en_US_POSIX` would render `3:04:05\u{202F}AM`, whose
+    /// U+202F separator is an ICU-version landmine across runners; `en_GB` sidesteps it
+    /// entirely (verified byte-stable across forced env locales). The recorded ref
+    /// captures exactly `3:04:05`.
+    private static let clockLocale = Locale(identifier: "en_GB")
 
     private func makeVM() throws -> WorkbenchViewModel {
         let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
@@ -76,11 +85,14 @@ final class BossWatchStatusViewClockTests: XCTestCase {
         model.bossWatchLastError = nil
         model.bossWatchLastRunAt = nil      // → status line "watching"/"paused" (clock-free)
         model.bossWatchChangeSummaries = summaries
-        // Inject `.gmt` so the change-row timestamp renders runner-zone-independently
-        // (C0 recipe). Production defaults to `.autoupdatingCurrent` (operator-local,
-        // unchanged) — the explicit seam is what makes the snapshot deterministic
-        // regardless of the CI runner's TimeZone, independent of any global host pin.
-        return BossWatchStatusView(model: model, timeZone: .gmt)
+        // Inject `.gmt` + `en_GB` so the change-row timestamp renders byte-identically
+        // regardless of the CI runner's TimeZone AND locale (C0 recipe; `.standard` time
+        // is sharply locale-sensitive — `en_US`→`3:04:05\u{202F}AM`, a 24-h
+        // `.current`→`03:04:05`, `en_GB`→a clean ASCII `3:04:05`). Production defaults to
+        // `.autoupdatingCurrent` for both (operator-local, unchanged) — the explicit seam
+        // is what makes the snapshot deterministic, independent of any global host pin,
+        // test ordering, runner zone, or runner locale.
+        return BossWatchStatusView(model: model, timeZone: .gmt, locale: Self.clockLocale)
     }
 
     // MARK: - Enumerated state-set

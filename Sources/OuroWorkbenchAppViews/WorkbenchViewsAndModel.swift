@@ -11,30 +11,38 @@ import UserNotifications
 
 extension Date {
     /// Render an absolute timestamp through `Date.FormatStyle` with an **explicit,
-    /// injectable** `TimeZone` — the shared seam every body-evaluated timestamp row
-    /// uses (C0 recipe; reused by C10/C11 timestamp surfaces).
+    /// injectable** `TimeZone` *and* `Locale` — the shared seam every body-evaluated
+    /// timestamp row uses (C0 recipe; reused by C10/C11 timestamp surfaces).
     ///
-    /// **Why a seam, not the host's read-time TZ pin (C0 root cause).** A view body
-    /// that calls `Text(date.formatted(date:time:))` formats the date to a `String`
-    /// at body-evaluation time. The snapshot host's process-wide UTC pin
+    /// **Why a seam, not the host's read-time pins (C0 root cause).** A view body that
+    /// calls `Text(date.formatted(date:time:))` formats the date to a `String` at
+    /// body-evaluation time, using the `FormatStyle`'s OWN `timeZone` AND `locale`
+    /// (both default `.autoupdatingCurrent`). The snapshot host's pins cannot reach it:
+    /// (a) the process-wide UTC `TimeZone` pin
     /// (`setenv("TZ")`+`tzset()`+`resetSystemTimeZone()`) is a *global, lazily-run,
-    /// ordering-sensitive* mutation of `TimeZone.current`; under the full CI suite it
-    /// is not reliably effective for this read (the failing
-    /// `BossWatchStatusViewClockTests.testWatch_withChanges`). An explicit per-call
-    /// `TimeZone` makes the rendered string deterministic **independent of any global
-    /// pin or test ordering** — the strongest, reusable guarantee.
+    /// ordering-sensitive* `TimeZone.current` mutation, not reliably effective under
+    /// the full CI suite; (b) the host's `string(locale: en_US_POSIX)` pins how
+    /// ViewInspector READS a `Text`, but the date here was already baked into a plain
+    /// `String` under the FormatStyle's `.autoupdatingCurrent` LOCALE — and `.standard`
+    /// time is sharply locale-sensitive (`en_GB`→`3:04:05`, `en_US`→`3:04:05 AM` with a
+    /// narrow-no-break-space, a 24-h `.current`→`03:04:05`). So a ref recorded on one
+    /// runner mismatches another's zone OR locale. An explicit per-call `TimeZone` +
+    /// `Locale` makes the rendered string deterministic **independent of any global pin,
+    /// test ordering, runner zone, or runner locale** — the strongest, reusable guarantee.
     ///
-    /// **Production is byte-identical to today.** The default `.autoupdatingCurrent`
-    /// is exactly the zone `Date.formatted(date:time:)` already uses, so prod keeps
-    /// showing the operator's LOCAL time (verified byte-identical under PDT/EDT). The
-    /// clock tests inject `.gmt` for a runner-zone-independent reference.
+    /// **Production is byte-identical to today.** Both defaults are `.autoupdatingCurrent`
+    /// — exactly what `Date.formatted(date:time:)` already uses — so prod keeps showing
+    /// the operator's LOCAL time in their LOCAL locale (verified byte-identical). The
+    /// clock tests inject `.gmt` + `en_US_POSIX` for a runner-independent reference.
     func workbenchTimeText(
         date: Date.FormatStyle.DateStyle,
         time: Date.FormatStyle.TimeStyle,
-        timeZone: TimeZone = .autoupdatingCurrent
+        timeZone: TimeZone = .autoupdatingCurrent,
+        locale: Locale = .autoupdatingCurrent
     ) -> String {
         var style = Date.FormatStyle(date: date, time: time)
         style.timeZone = timeZone
+        style.locale = locale
         return formatted(style)
     }
 }
@@ -7882,10 +7890,13 @@ struct BossActionReceiptStrip: View {
 
 struct BossWatchStatusView: View {
     @ObservedObject var model: WorkbenchViewModel
-    /// The zone the change-row timestamp renders in. Defaults to the operator's local
-    /// zone (`.autoupdatingCurrent`) so production is unchanged; the clock test injects
-    /// `.gmt` for a runner-zone-independent snapshot (C0 recipe).
+    /// The zone + locale the change-row timestamp renders in. Both default to the
+    /// operator's local values (`.autoupdatingCurrent`) so production is unchanged; the
+    /// clock test injects `.gmt` + `en_US_POSIX` for a snapshot that is byte-identical
+    /// across CI runner zones AND locales (C0 recipe — `.standard` time is both
+    /// zone- and locale-sensitive).
     var timeZone: TimeZone = .autoupdatingCurrent
+    var locale: Locale = .autoupdatingCurrent
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -7905,7 +7916,7 @@ struct BossWatchStatusView: View {
             if !model.bossWatchChangeSummaries.isEmpty {
                 ForEach(model.bossWatchChangeSummaries.prefix(5)) { change in
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(change.occurredAt.workbenchTimeText(date: .omitted, time: .standard, timeZone: timeZone))
+                        Text(change.occurredAt.workbenchTimeText(date: .omitted, time: .standard, timeZone: timeZone, locale: locale))
                             .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)
                             .fixedSize()
