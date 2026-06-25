@@ -2,6 +2,7 @@
 import AppKit
 import Darwin
 import OuroAppShellUI
+import OuroWorkbenchAppViews
 import OuroWorkbenchCore
 import SwiftUI
 
