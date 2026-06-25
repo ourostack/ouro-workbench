@@ -1,0 +1,2 @@
+Text kind=static text="1"
+Text kind=static text="1" label="1 active terminals"
