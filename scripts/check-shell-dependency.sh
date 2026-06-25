@@ -37,16 +37,19 @@ if not pattern.search(text):
 PY
 
 pin="$(
-  python3 - "$resolved" "$identity" <<'PY'
+  python3 - "$resolved" "$identity" "$shell_url" <<'PY'
 import json
 import sys
 
-resolved, identity = sys.argv[1:]
+resolved, identity, shell_url = sys.argv[1:]
 with open(resolved, encoding="utf-8") as fh:
     data = json.load(fh)
 
 for pin in data.get("pins", []):
     if pin.get("identity") == identity:
+        location = pin.get("location") or ""
+        if location != shell_url:
+            raise SystemExit(f"{identity} pin location mismatch: {location or '<none>'}, expected {shell_url}")
         state = pin.get("state", {})
         branch = state.get("branch") or ""
         revision = state.get("revision") or ""
