@@ -1,0 +1,126 @@
+name: Shell Dependency Watch
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types:
+      - ouro-native-apple-app-shell-main-updated
+  schedule:
+    - cron: '47 11 * * *'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: shell-dependency-watch
+  cancel-in-progress: false
+
+jobs:
+  refresh-shell-dependency:
+    if: github.repository == 'ourostack/ouro-workbench'
+    runs-on: macos-14
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Verify pinned macOS runner policy
+        run: python3 .github/scripts/check-macos-runner-policy.py
+
+      - name: Select newest Xcode
+        run: |
+          latest="$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)"
+          [ -n "$latest" ] || latest="$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+          sudo xcode-select -s "$latest/Contents/Developer"
+          swift --version
+          xcodebuild -version
+
+      - name: Check shared shell freshness
+        id: freshness
+        run: |
+          set +e
+          output="$(./scripts/check-shell-dependency.sh 2>&1)"
+          status=$?
+          set -e
+          printf '%s\n' "$output"
+          if [ "$status" -eq 0 ]; then
+            echo "stale=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if printf '%s\n' "$output" | grep -Eq 'is stale in Package.resolved|pin location mismatch'; then
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          exit "$status"
+
+      - name: Refresh shared shell dependency
+        if: steps.freshness.outputs.stale == 'true'
+        run: ./scripts/refresh-shell-dependency.sh
+
+      - name: Validate refresh diff
+        if: steps.freshness.outputs.stale == 'true'
+        run: |
+          git diff --check
+          ./scripts/verify-version-contract.sh
+          ./scripts/check-shell-dependency.sh
+          ./scripts/selftest-shell-dependency-watch.sh
+          ./scripts/generate-release-notes.sh >/dev/null
+
+      - name: Open or update refresh PR
+        if: steps.freshness.outputs.stale == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          branch="automation/ouro-workbench-refresh-shell-dependency"
+          title="Refresh shared shell dependency"
+          version="$(tr -d '[:space:]' < VERSION)"
+          shell_revision="$(python3 -c 'import json; data=json.load(open("Package.resolved", encoding="utf-8")); print(next(pin.get("state", {}).get("revision", "") for pin in data.get("pins", []) if pin.get("identity") == "ouro-native-apple-app-shell"))')"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          have_remote_branch=false
+          if git fetch origin "${branch}:refs/remotes/origin/${branch}"; then
+            have_remote_branch=true
+          fi
+          git checkout -B "$branch"
+          git add Package.resolved VERSION Sources/OuroWorkbenchCore/WorkbenchRelease.swift
+          if git diff --cached --quiet; then
+            echo "No refresh diff remains after validation."
+            exit 0
+          fi
+          git commit -m "Refresh shared shell dependency"
+
+          body="$RUNNER_TEMP/ouro-workbench-shell-refresh-pr.md"
+          {
+            echo "## Summary"
+            echo "- refresh \`ouro-native-apple-app-shell\` to \`${shell_revision}\`"
+            echo "- bump Ouro Workbench to \`${version}\` for release/update freshness"
+            echo
+            echo "## Validation"
+            echo "- \`./scripts/refresh-shell-dependency.sh\`"
+            echo "- \`git diff --check\`"
+            echo "- \`./scripts/verify-version-contract.sh\`"
+            echo "- \`./scripts/check-shell-dependency.sh\`"
+            echo "- \`./scripts/selftest-shell-dependency-watch.sh\`"
+            echo "- \`./scripts/generate-release-notes.sh >/dev/null\`"
+          } > "$body"
+
+          existing="$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // ""')"
+          if [ "$have_remote_branch" = "true" ] && [ "$(git rev-parse HEAD^{tree})" = "$(git rev-parse "origin/$branch^{tree}")" ]; then
+            if [ -n "$existing" ]; then
+              echo "Existing refresh PR #${existing} already has the desired tree; leaving it untouched."
+              exit 0
+            fi
+            echo "Existing refresh branch already has the desired tree, but no open PR was found; creating one."
+          else
+            git push --force-with-lease origin "$branch"
+          fi
+
+          if [ -n "$existing" ]; then
+            gh pr edit "$existing" --title "$title" --body-file "$body"
+            gh pr comment "$existing" --body "Updated by Shell Dependency Watch for \`ouro-native-apple-app-shell@${shell_revision}\`."
+          else
+            gh pr create --base main --head "$branch" --title "$title" --body-file "$body"
+          fi

@@ -34,6 +34,9 @@ jobs:
       - name: Verify shared shell dependency freshness
         run: scripts/check-shell-dependency.sh
 
+      - name: Verify shell dependency watch automation
+        run: scripts/selftest-shell-dependency-watch.sh
+
       - name: Verify generated scenario matrix
         run: |
           scripts/generate-workbench-5000-matrix.rb

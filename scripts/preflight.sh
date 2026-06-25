@@ -38,6 +38,7 @@ scripts/verify-version-contract.sh
 
 run_step "Verify shared shell dependency freshness"
 scripts/check-shell-dependency.sh
+scripts/selftest-shell-dependency-watch.sh
 scripts/smoke-package-shallow-guard.sh
 scripts/install-latest-app-artifact.sh --help >/dev/null
 scripts/install-latest-release.sh --help >/dev/null
