@@ -69,3 +69,6 @@ Chokepoints: U0, U4. Fan-out: U2/U3 (and U5 after U0).
 ## Iteration log
 
 - 2026-06-24 — Baseline measured; rubric instantiated; campaign doc created; branch `feat/anneal-views-lib-extract` off main @ 8c2adce. Next: plan U0 (incremental views-lib extraction).
+- 2026-06-25 00:2x — U0 planned (READY_FOR_EXECUTION): 7 units → ~9 serial PRs. Planner caught the infeasible exe-boundary (`TerminalPane` can't stay in exe → forbidden lib→exe edge) and corrected it (VM + 4 coupled types move INTO the lib, allowlisted); review gate caught the `sourceSlice` declaration-order CRITICAL (resolved via adjacency-preserving union concat). Safety valve not tripped.
+- 2026-06-25 ~01:0x — **PR1 (Units 0-2) MERGED → #288 @ 24c5d26.** Importability seam live: first-ever `@testable import` of an App view (`DashboardRowLabel`); `appSource()` union-reader keeps all ~257 guards executing+passing; vacuity proven absent via reviewer negative-controls. No behavior change; coverage unchanged (lib not gated yet → U4). Energy unchanged (still building the system; nothing to anneal until snapshots exist).
+- 2026-06-25 ~01:4x — Starting **Unit 3** (the VM + 4 coupled exe-types + ~12 support types move; the one unavoidably-larger mechanical PR; ≥2 adversarial reviewers) on `feat/anneal-u3-viewmodel-move` off main @ 24c5d26.
