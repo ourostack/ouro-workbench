@@ -1,0 +1,15 @@
+Building for debugging...
+[0/3] Write swift-version--58304C5D6DBC2206.txt
+Build of product 'OuroWorkbench' complete! (0.17s)
+migrated workspace sizes: sidebar 202x80, strip 153x34
+②d editing sizes: sidebar(edit) 202x80, strip(edit) 204x63
+about fitting size: 520.0x500.0 ok
+settings update fitting size: 438.0x94.0
+dashboard update fitting size: 438.0x94.0
+current update state: ok
+available update state: ok
+failed update state: ok
+failed then checking state: ok
+about shared semantics: ok
+migrated workspace render: ok
+②d editing affordances: ok

@@ -1,0 +1,60 @@
+current update state: ok
+available update state: ok
+failed update state: ok
+failed then checking state: ok
+about shared semantics: ok
+migrated workspace render: ok
+②d editing affordances: ok
+
+==> Run required native scenario verifier
+Building for debugging...
+[0/3] Write swift-version--58304C5D6DBC2206.txt
+Build of product 'OuroWorkbenchScenarioVerifier' complete! (0.16s)
+Workbench native scenario verifier:
+rows verified: 5000
+matrix rows: 5000
+deep generated rows: 0
+render passes: 25000
+viewports: standard, short-window, compact-terminal, tall-workspace, wide-workspace
+coverage digest: 89292786bde2e133
+sample files: 0
+failures: 0
+
+==> Package and verify native app bundle
+app bundle GUI smoke timeout guard ok
+[0/1] Planning build
+Building for production...
+[0/5] Write sources
+[4/7] Write swift-version--58304C5D6DBC2206.txt
+[6/9] Compiling OuroAppShellUI AppShellAboutModel.swift
+[7/9] Compiling OuroWorkbenchCore ActiveEntryResolver.swift
+[8/10] Compiling OuroWorkbenchShellAdapter WorkbenchShellPresentation.swift
+[9/11] Compiling OuroWorkbenchApp OuroWorkbenchApp.swift
+[9/11] Write Objects.LinkFileList
+[10/11] Linking OuroWorkbench
+Build of product 'OuroWorkbench' complete! (102.11s)
+[0/1] Planning build
+Building for production...
+[0/4] Write sources
+[1/4] Write swift-version--58304C5D6DBC2206.txt
+[3/5] Compiling OuroWorkbenchMCP OuroWorkbenchMCPMain.swift
+[3/5] Write Objects.LinkFileList
+[4/5] Linking OuroWorkbenchMCP
+Build of product 'OuroWorkbenchMCP' complete! (4.97s)
+/Users/microsoft/code/ouro-workbench/dist/Ouro Workbench.app: replacing existing signature
+/Users/microsoft/code/ouro-workbench/dist/Ouro Workbench.app
+Verified app bundle: /Users/microsoft/code/ouro-workbench/dist/Ouro Workbench.app
+MCP action validation smoke passed
+
+==> Archive native app artifact
+Archived app artifact: /Users/microsoft/code/ouro-workbench/artifacts/OuroWorkbench-0.1.161-build.302-c5d076f-dirty.zip
+Wrote app artifact manifest: /Users/microsoft/code/ouro-workbench/artifacts/OuroWorkbench-0.1.161-build.302-c5d076f-dirty.manifest.json
+App artifact verifier smoke passed
+Install-from-artifact smoke passed
+
+==> Smoke install rollback
+/Users/microsoft/code/ouro-workbench/dist/Ouro Workbench.app: replacing existing signature
+/var/folders/nh/3z0zcc3j0xs16ys7lkh3x80c0000gp/T//ouro-workbench-install-rollback.FHNUIs/Applications/Ouro Workbench.app: replacing existing signature
+Install rollback smoke passed
+
+==> Preflight complete

@@ -1,0 +1,3 @@
+warning: .build/arm64-apple-macosx/debug/OuroWorkbenchPackageTests.xctest/Contents/MacOS/OuroWorkbenchPackageTests: profile data may be out of date - object is newer
+error: failed to load coverage: '.build/arm64-apple-macosx/debug/OuroWorkbenchPackageTests.xctest/Contents/MacOS/OuroWorkbenchPackageTests': no coverage data found
+error: could not load coverage information

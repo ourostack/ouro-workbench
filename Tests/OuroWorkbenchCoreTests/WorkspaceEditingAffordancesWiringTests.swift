@@ -167,6 +167,84 @@ final class WorkspaceEditingAffordancesWiringTests: XCTestCase {
         )
     }
 
+    // MARK: - Unit 6: inline rename editors + caption + commit routing
+
+    func testWorkspaceRowShowsInlineEditorWhenEditing() throws {
+        let source = try appSource()
+        XCTAssertTrue(
+            source.contains("model.inlineRename.isEditing(.workspace(row.id))"),
+            "the workspace row must swap its label for the editor while that workspace is being renamed"
+        )
+    }
+
+    func testTabButtonShowsInlineEditorWhenEditing() throws {
+        let source = try appSource()
+        XCTAssertTrue(
+            source.contains("model.inlineRename.isEditing(.tab(tab.id))"),
+            "the tab button must swap its label for the editor while that tab is being renamed"
+        )
+    }
+
+    func testInlineEditorBindsDraftAndCommitsOnSubmit() throws {
+        let source = try appSource()
+        // The editor's TextField is bound to the inline-rename draft …
+        XCTAssertTrue(
+            source.contains("$model.inlineRename.draft"),
+            "the inline editor TextField must bind to the inline-rename draft"
+        )
+        // … Enter commits …
+        XCTAssertTrue(
+            source.contains(".onSubmit { model.commitRename() }"),
+            "Enter (.onSubmit) must commit the rename"
+        )
+    }
+
+    func testInlineEditorCancelsOnExitCommand() throws {
+        let source = try appSource()
+        // Review note 3 — ONE Escape mechanism, asserted EXACTLY (not a vacuous
+        // any-of-three). We use `.onExitCommand` (the AppKit Escape hook).
+        XCTAssertTrue(
+            source.contains(".onExitCommand { model.cancelRename() }"),
+            "Escape (.onExitCommand) must cancel the rename"
+        )
+    }
+
+    func testInlineEditorShowsHelperCaption() throws {
+        let source = try appSource()
+        XCTAssertTrue(
+            source.contains("Press Enter to rename, Escape to cancel."),
+            "the inline editor must show the cmux helper caption"
+        )
+    }
+
+    func testCommitRenameDispatchesPerActiveTarget() throws {
+        let source = try appSource()
+        // commitRename pulls the pending commit from InlineRenameState and dispatches to
+        // the per-target wrapper (which itself routes through WorkspaceRenameCommit; D2d-1).
+        let commitFn = try sourceSlice(
+            in: source,
+            from: "func commitRename()",
+            to: "func cancelRename()"
+        )
+        XCTAssertTrue(
+            commitFn.contains("inlineRename.commit()"),
+            "commitRename must pull the pending commit from InlineRenameState"
+        )
+        XCTAssertTrue(
+            commitFn.contains("renameWorkspace(") && commitFn.contains("renameTab("),
+            "commitRename must dispatch to renameWorkspace / renameTab per the active target"
+        )
+        let cancelFn = try sourceSlice(
+            in: source,
+            from: "func cancelRename()",
+            to: "}"
+        )
+        XCTAssertTrue(
+            cancelFn.contains("inlineRename.cancel()"),
+            "cancelRename must cancel the InlineRenameState"
+        )
+    }
+
     // MARK: - Source-guard helpers (copied verbatim from WorkspaceSidebarWiringTests)
 
     private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {

@@ -3175,6 +3175,17 @@ struct WorkspaceSidebarRow: View {
     @ObservedObject var model: WorkbenchViewModel
 
     var body: some View {
+        // Slice ②d — swap the row label for an inline rename editor while THIS workspace
+        // is being renamed (D2d-3 inline editor, not a sheet); else render the normal row.
+        if model.inlineRename.isEditing(.workspace(row.id)) {
+            InlineRenameEditor(model: model)
+                .padding(.vertical, 1)
+        } else {
+            rowButton
+        }
+    }
+
+    private var rowButton: some View {
         Button {
             model.selectedWorkspaceID = row.id
         } label: {
@@ -3252,6 +3263,30 @@ struct WorkspaceRowContextMenu: View {
                 }
             }
         }
+    }
+}
+
+/// Slice ②d — the inline rename editor shared by the workspace row and the tab button
+/// (D2d-3). A `TextField` bound to `model.inlineRename.draft`, prefilled by `beginRename`;
+/// Enter (`.onSubmit`) commits via `model.commitRename()`, Escape (`.onExitCommand`)
+/// cancels via `model.cancelRename()`, and a caption matches the cmux affordance. The
+/// empty/whitespace/unchanged guard lives in `WorkspaceRenameCommit` (D2d-1) behind
+/// `commitRename`, so a blank commit just closes the editor without changing the name.
+struct InlineRenameEditor: View {
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            TextField("Name", text: $model.inlineRename.draft)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit { model.commitRename() }
+                .onExitCommand { model.cancelRename() }
+            Text("Press Enter to rename, Escape to cancel.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Rename")
     }
 }
 
@@ -3362,36 +3397,44 @@ struct WorkspaceTabStrip: View {
     @ViewBuilder
     private func tabButton(_ tab: ResolvedTab) -> some View {
         let isSelected = model.selectedEntryID == tab.id
-        Button {
-            select(tab)
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: tab.attention.healthSymbol)
-                    .font(.caption2)
-                    .foregroundStyle(tab.attention.healthColor)
-                Text(tab.effectiveTabName)
-                    .font(.callout)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .fontWeight(isSelected ? .semibold : .regular)
+        // Slice ②d — swap the tab label for the inline rename editor while THIS tab is
+        // being renamed (D2d-3); else render the normal tab button.
+        if model.inlineRename.isEditing(.tab(tab.id)) {
+            InlineRenameEditor(model: model)
+                .frame(width: 180)
+                .padding(.horizontal, 4)
+        } else {
+            Button {
+                select(tab)
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: tab.attention.healthSymbol)
+                        .font(.caption2)
+                        .foregroundStyle(tab.attention.healthColor)
+                    Text(tab.effectiveTabName)
+                        .font(.callout)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .fontWeight(isSelected ? .semibold : .regular)
+                }
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.08))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(isSelected ? Color.accentColor : Color.clear, lineWidth: 1)
+                )
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 9)
-            .padding(.vertical, 4)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.08))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                    .strokeBorder(isSelected ? Color.accentColor : Color.clear, lineWidth: 1)
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help(tab.attention.healthLabel)
-        .accessibilityLabel("\(tab.effectiveTabName), \(tab.attention.healthLabel)\(isSelected ? ", selected" : "")")
-        .contextMenu {
-            WorkspaceTabContextMenu(tab: tab, model: model)
+            .buttonStyle(.plain)
+            .help(tab.attention.healthLabel)
+            .accessibilityLabel("\(tab.effectiveTabName), \(tab.attention.healthLabel)\(isSelected ? ", selected" : "")")
+            .contextMenu {
+                WorkspaceTabContextMenu(tab: tab, model: model)
+            }
         }
     }
 }
@@ -11579,6 +11622,27 @@ final class WorkbenchViewModel: ObservableObject {
             return
         }
         beginRename(.tab(id), prefill: entry.effectiveTabName)
+    }
+
+    /// ②d — Enter in the inline editor: pull the pending commit from `InlineRenameState`
+    /// (which goes inactive) and dispatch to the per-target wrapper. Each wrapper routes
+    /// the raw draft through `WorkspaceRenameCommit` (D2d-1), so an empty/whitespace or
+    /// unchanged draft is a no-op (the editor still closes via the `commit()` above).
+    func commitRename() {
+        guard let pending = inlineRename.commit() else {
+            return
+        }
+        switch pending.target {
+        case let .workspace(id):
+            renameWorkspace(id, to: pending.input)
+        case let .tab(id):
+            renameTab(id, to: pending.input)
+        }
+    }
+
+    /// ②d — Escape in the inline editor: close it without committing (draft discarded).
+    func cancelRename() {
+        inlineRename.cancel()
     }
 
     /// Slice ②b (DB10, supersedes DB7) — the Archived section is GLOBAL, not scoped to
