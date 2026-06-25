@@ -519,9 +519,6 @@ struct WorkbenchRootView: View {
         .sheet(isPresented: $model.isNewSessionSheetPresented) {
             NewTerminalSessionSheet(model: model)
         }
-        .sheet(isPresented: $model.isNewGroupSheetPresented) {
-            NewTerminalGroupSheet(model: model)
-        }
         .sheet(item: $model.editingGroup) { project in
             EditTerminalGroupSheet(model: model, project: project)
         }
@@ -6720,7 +6717,7 @@ private struct OnboardingBossChoiceRow: View {
         // keyboard-focusable (Tab) and VoiceOver-actionable — selecting a boss is the
         // gateway to the whole autonomy feature and must not be mouse-only. SwiftUI does
         // NOT surface an onTapGesture as an accessibility action, which is the bug this
-        // fixes. Every other selectable row in the app (e.g. SidebarProjectRow) is a
+        // fixes. Every other selectable row in the app (e.g. WorkspaceSidebarRow) is a
         // Button, so this matches the app's convention. `.buttonStyle(.plain)` keeps the
         // custom radio/name/pills/detail visual exactly as before.
         Button {
@@ -10603,7 +10600,6 @@ final class WorkbenchViewModel: ObservableObject {
     @Published var firstRunAgentDrivenNarration: String?
     @Published var mailboxError: String?
     @Published var isNewSessionSheetPresented = false
-    @Published var isNewGroupSheetPresented = false
     @Published var isCommandPalettePresented = false
     @Published var isShortcutHelpPresented = false
     @Published var isRecoverySheetPresented = false

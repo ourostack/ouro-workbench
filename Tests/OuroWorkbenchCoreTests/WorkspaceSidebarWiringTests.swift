@@ -130,6 +130,20 @@ final class WorkspaceSidebarWiringTests: XCTestCase {
         )
     }
 
+    // MARK: - FIX PASS (FP6): dead "New Workspace" group sheet + flag removed
+
+    func testDeadNewGroupSheetAndFlagAreRemoved() throws {
+        // DB8 removed the "New Workspace" trigger, so `isNewGroupSheetPresented` + its
+        // `.sheet` became unreachable. Remove the orphaned sheet presentation + flag.
+        // (The `NewTerminalGroupSheet` struct itself stays — still guarded by
+        // WorkspaceNameDerivationTests and internal, so no unused-symbol warning.)
+        let source = try appSource()
+        XCTAssertFalse(
+            source.contains("isNewGroupSheetPresented"),
+            "the unreachable isNewGroupSheetPresented flag + its .sheet must be removed (DB8 left no trigger)"
+        )
+    }
+
     // MARK: - KEEP present: Archived + Recovery sections preserved through the rewire
 
     func testArchivedAndRecoverySectionsArePreserved() throws {
