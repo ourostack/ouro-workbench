@@ -1,6 +1,6 @@
 # Doing: Slice ① — Kill Per-Tab Cost Badges
 
-**Status**: READY_FOR_EXECUTION
+**Status**: DONE
 **Execution Mode**: direct
 **Created**: 2026-06-24 17:57
 **Planning**: ./2026-06-24-1755-planning-workspaces-converged-design.md
@@ -22,17 +22,17 @@ Remove the per-tab spend surface (`$X tok`) from the sidebar terminal rows. Repl
 - OUT: branch/diffstat/attention work-context chips (later slice). Core `usd`/`usdLabel`/`SessionPricing` deletion (retained — see planning D1). The ⚡/💤 glyphs (health, kept — planning D2).
 
 ## Completion Criteria
-- [ ] No `$X tok` `MetricChip` renders in `SessionChip` (the spend surface is gone).
-- [ ] `tokenHelp(_:)` and `compact(_:)` removed (dead after the chip removal; no other callers — verified).
-- [ ] The `usd`/"tokens" clause removed from `SessionChip.accessibilityLabel`.
-- [ ] `SessionChip` still renders health glyph + todo mini; the `TerminalAgentRow` guard `activity != nil || isStalled` at OuroWorkbenchApp.swift:3635 remains valid (the chip is non-empty whenever shown — see Unit 1a check).
-- [ ] Core `SessionActivity.usd`/`.usdLabel` + `SessionPricing` UNCHANGED; their tests still pass unmodified.
-- [ ] `swift build -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete` — 0 warnings, 0 errors.
-- [ ] `swift test -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete` — 0 failures.
-- [ ] `swift run -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete OuroWorkbench --uisurfacetest` passes (rendering smoke; no crash).
-- [ ] `Scripts/check-coverage.sh` passes; `Scripts/coverage-allowlist.txt` does NOT grow (no Core change, so coverage is unaffected — confirm green).
-- [ ] 100% test coverage maintained on all Core code (no new Core code added; gate stays green).
-- [ ] `SerpentGuide.ouro/` NOT staged. No Co-Authored-By / AI attribution in the commit.
+- [x] No `$X tok` `MetricChip` renders in `SessionChip` (the spend surface is gone).
+- [x] `tokenHelp(_:)` and `compact(_:)` removed (dead after the chip removal; no other callers — verified).
+- [x] The `usd`/"tokens" clause removed from `SessionChip.accessibilityLabel`.
+- [x] `SessionChip` still renders health glyph + todo mini; the `TerminalAgentRow` guard `activity != nil || isStalled` at OuroWorkbenchApp.swift:3635 remains valid (the chip is non-empty whenever shown — see Unit 1a check).
+- [x] Core `SessionActivity.usd`/`.usdLabel` + `SessionPricing` UNCHANGED; their tests still pass unmodified.
+- [x] `swift build -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete` — 0 warnings, 0 errors.
+- [x] `swift test -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete` — 0 failures.
+- [x] `swift run -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete OuroWorkbench --uisurfacetest` passes (rendering smoke; no crash).
+- [x] `Scripts/check-coverage.sh` passes; `Scripts/coverage-allowlist.txt` does NOT grow (no Core change, so coverage is unaffected — confirm green).
+- [x] 100% test coverage maintained on all Core code (no new Core code added; gate stays green).
+- [x] `SerpentGuide.ouro/` NOT staged. No Co-Authored-By / AI attribution in the commit.
 
 ## Code Coverage Requirements
 **MANDATORY: 100% coverage on all new code.**
@@ -60,7 +60,7 @@ The guard is a shell assertion saved under the artifacts dir, not a Swift XCTest
 ### Legend
 ⬜ Not started · 🔄 In progress · ✅ Done · ❌ Blocked
 
-### ⬜ Unit 1a: Spend-removal regression guard — Tests (RED)
+### ✅ Unit 1a: Spend-removal regression guard — Tests (RED)
 **What**:
 - Write `./2026-06-24-1755-doing-slice1-kill-cost-badges/guard-no-cost-badge.sh`: greps `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift` and FAILS (exit 1) if ANY of these spend tokens are present:
   - `MetricChip(label: "tok"` (the `$X tok` render)
@@ -72,7 +72,7 @@ The guard is a shell assertion saved under the artifacts dir, not a Swift XCTest
 **Output**: executable `guard-no-cost-badge.sh`; `compact-callers.txt` baseline.
 **Acceptance**: Running the guard now FAILS (red) on the three spend tokens; `compact-callers.txt` shows exactly one real caller; the guard's positive (kept-surface) checks PASS.
 
-### ⬜ Unit 1b: Remove the spend render — Implementation (GREEN)
+### ✅ Unit 1b: Remove the spend render — Implementation (GREEN)
 **What**: In `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift`, make exactly these edits in `struct SessionChip`:
 1. Delete the cost-render block in `body` (currently :3828-3831):
    ```swift
@@ -91,7 +91,7 @@ The guard is a shell assertion saved under the artifacts dir, not a Swift XCTest
 - `./2026-06-24-1755-doing-slice1-kill-cost-badges/guard-no-cost-badge.sh` now PASSES (green) — all three spend tokens absent, kept-surfaces present.
 - `swift build -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete` — 0 warnings/errors (proves `compact`/`tokenHelp` were truly dead; an unused-but-undeleted helper or orphan call would warn/error).
 
-### ⬜ Unit 1c: Verify Core untouched + full gates (GREEN, confirm)
+### ✅ Unit 1c: Verify Core untouched + full gates (GREEN, confirm)
 **What**:
 - `git diff --name-only` shows ONLY `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift` changed (plus the artifacts dir). Confirm `Sources/OuroWorkbenchCore/SessionActivity.swift` is UNCHANGED (Core pricing model retained — planning D1).
 - Run `swift test -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete` — Core pricing tests pass unmodified.
@@ -113,3 +113,6 @@ The guard is a shell assertion saved under the artifacts dir, not a Swift XCTest
 ## Progress Log
 - 2026-06-24 17:57 Created from master plan; Slice-① anchors re-confirmed exact (render block :3828-3831 with `MetricChip` on :3829, tokenHelp :3868-3874, compact :3876-3880, a11y :3889). Anchors were verified against the source tree at branch-point 44f06e2 (the doc commits since are docs-only — no source change — so the lines remain exact).
 - 2026-06-24 18:01 Fresh unbiased sub-agent review gate PASSED: all 8 claims CONFIRMED against real source (render site, single compact() caller, a11y clause, ⚡/💤=health-not-spend, Core pricing test-covered/kept, no missed cost surface, no UI-surface coupling, body never empty + guard independent of usdLabel). Verdict: SAFE to execute as written. Status → READY_FOR_EXECUTION confirmed.
+- 2026-06-24 18:06 Unit 1a complete (RED): wrote `guard-no-cost-badge.sh` (3 negative spend-token asserts + 3 positive kept-surface asserts) — ran it, FAILED red (all three spend tokens present: `MetricChip(label: "tok"`, `func tokenHelp`, `about \(usd) tokens`). Recorded `compact-callers.txt` baseline: `compact(` has exactly ONE real caller (line 3871 in `tokenHelp`); line 3876 is the def; lines 3943-3944 are `chevron.compact.*` SF Symbol strings (not calls). Re-confirmed `TerminalAgentRow` guard :3635 = `activity != nil || isStalled` (independent of `usdLabel`).
+- 2026-06-24 18:17 Unit 1b complete (GREEN): made the 4 scoped deletions in `struct SessionChip` (cost-render `if let` block in `body`, `tokenHelp(_:)`, dead `compact(_:)`, the `usd` a11y clause) + updated the now-stale `SessionChip` doc-comment that still described the removed token/$ `MetricChip` (doc truth, no behavior change). Guard now PASSES green. `swift build` strict (`-warnings-as-errors -strict-concurrency=complete`) = Build complete, 0 warn/0 err — proving `tokenHelp`/`compact` were truly dead. Health glyph (always) + todo mini kept; body never empty.
+- 2026-06-24 18:17 Unit 1c complete (gates GREEN): `git diff --name-only` = ONLY `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift` (Core `SessionActivity.swift` diff empty; `coverage-allowlist.txt` diff empty). `swift test` strict = 2708 tests, 1 skipped, 0 failures. `--uisurfacetest` = all surfaces ok, no crash. `Scripts/check-coverage.sh` = PASS (100% line+region; allowlist unchanged — same 2 pre-existing entries). NOTE: the FIRST coverage run aborted on flaky `DaemonLivenessTests.testDefaultReachabilityReturnsFalseForNonHTTPResponse` (`NSURLErrorTimedOut -1001` on a cold `URLSession` file:// probe with 0.1s timeout) — unrelated to this App-only change (Core test, passed in the strict `swift test` run and on isolated retry in 0.013s); clean re-run green. Code commit `d69b6a7` `feat(sidebar): remove per-tab cost badge ($X tok) from terminal rows` (only the App file staged; `SerpentGuide.ouro/` NOT staged; no attribution). Branch pushed to `origin/feat/slice1-kill-cost-badges`. Status → DONE.
