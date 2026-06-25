@@ -1,3 +1,6 @@
-warning: .build/arm64-apple-macosx/debug/OuroWorkbenchPackageTests.xctest/Contents/MacOS/OuroWorkbenchPackageTests: profile data may be out of date - object is newer
-error: failed to load coverage: '.build/arm64-apple-macosx/debug/OuroWorkbenchPackageTests.xctest/Contents/MacOS/OuroWorkbenchPackageTests': no coverage data found
-error: could not load coverage information
+
+Sources/OuroWorkbenchCore, Sources/OuroWorkbenchShellAdapter: 149/151 files at 100% line+region (2 with allowlisted structural exclusions)
+  allow BossAgentMCPClient.swift                     (1 line, 2 region exempt — see coverage-allowlist.txt)
+  allow SessionActivityReader.swift                  (0 line, 1 region exempt — see coverage-allowlist.txt)
+
+PASS: pure Workbench logic targets are 100% line + region covered (documented structural exclusions aside).
