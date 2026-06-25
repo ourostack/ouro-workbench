@@ -7,3 +7,8 @@ artifacts/
 *.xcuserstate
 .DS_Store
 state/
+# View-snapshot compare debris (AN-005): a failing `assertViewSnapshot` writes
+# `<name>.actual.txt` next to the doc/test for eyeballing the mismatch. It is a
+# throwaway diff artifact — never a committed reference — so ignore it everywhere
+# to keep it out of `git add` by accident.
+*.actual.txt
