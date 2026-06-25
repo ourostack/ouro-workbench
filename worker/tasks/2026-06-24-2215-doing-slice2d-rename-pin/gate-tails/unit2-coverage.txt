@@ -1,0 +1,6 @@
+
+Sources/OuroWorkbenchCore, Sources/OuroWorkbenchShellAdapter: 148/150 files at 100% line+region (2 with allowlisted structural exclusions)
+  allow BossAgentMCPClient.swift                     (1 line, 2 region exempt — see coverage-allowlist.txt)
+  allow SessionActivityReader.swift                  (0 line, 1 region exempt — see coverage-allowlist.txt)
+
+PASS: pure Workbench logic targets are 100% line + region covered (documented structural exclusions aside).
