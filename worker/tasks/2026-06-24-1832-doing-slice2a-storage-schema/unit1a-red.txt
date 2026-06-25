@@ -1,0 +1,31 @@
+=== Unit 1a RED tail (Workspace type undefined; compile failure = correct red reason) ===
+[6/8] Compiling OuroWorkbenchCoreTests WorkspaceStructureTests.swift
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceStructureTests.swift:16:18: error: cannot find 'Workspace' in scope
+    |                  `- error: cannot find 'Workspace' in scope
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceStructureTests.swift:21:9: error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+    |         |- error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceStructureTests.swift:28:18: error: cannot find 'Workspace' in scope
+    |                  `- error: cannot find 'Workspace' in scope
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceStructureTests.swift:42:18: error: cannot find 'Workspace' in scope
+    |                  `- error: cannot find 'Workspace' in scope
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceStructureTests.swift:47:18: error: cannot find 'Workspace' in scope
+    |                  `- error: cannot find 'Workspace' in scope
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceStructureTests.swift:47:72: error: 'nil' requires a contextual type
+    |                                                                        `- error: 'nil' requires a contextual type
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceStructureTests.swift:54:18: error: cannot find 'Workspace' in scope
+    |                  `- error: cannot find 'Workspace' in scope
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceStructureTests.swift:60:18: error: cannot find 'Workspace' in scope
+    |                  `- error: cannot find 'Workspace' in scope
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceStructureTests.swift:68:48: error: cannot find 'Workspace' in scope
+    |                                                `- error: cannot find 'Workspace' in scope
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceStructureTests.swift:68:41: error: failed to produce diagnostic for expression; please submit a bug report (https://swift.org/contributing/#reporting-bugs)
+    |                                         `- error: failed to produce diagnostic for expression; please submit a bug report (https://swift.org/contributing/#reporting-bugs)
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceStructureTests.swift:79:48: error: cannot find 'Workspace' in scope
+    |                                                `- error: cannot find 'Workspace' in scope
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceStructureTests.swift:79:41: error: failed to produce diagnostic for expression; please submit a bug report (https://swift.org/contributing/#reporting-bugs)
+    |                                         `- error: failed to produce diagnostic for expression; please submit a bug report (https://swift.org/contributing/#reporting-bugs)
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceStructureTests.swift:84:9: error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+    |         |- error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceStructureTests.swift:98:48: error: cannot find 'Workspace' in scope
+    |                                                `- error: cannot find 'Workspace' in scope
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceStructureTests.swift:98:41: error: failed to produce diagnostic for expression; please submit a bug report (https://swift.org/contributing/#reporting-bugs)

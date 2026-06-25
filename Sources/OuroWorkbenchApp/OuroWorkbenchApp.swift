@@ -19942,6 +19942,11 @@ final class WorkbenchViewModel: ObservableObject {
             state = startupRecoveryReconciler.reconcile(bootstrapper.bootstrappedState(from: loaded))
             applyCollapsedChromeMigrationIfNeeded()
             applyAutomaticBossDefaultsMigrationIfNeeded()
+            // Slice ②a: non-destructively map the flat processEntries into the durable
+            // workspace structure (single "Restored workspace" for a pre-②a file).
+            // Idempotent (DA3) — converges on every load, so NO run-once gate (unlike
+            // the boss-defaults trust flip above). Mutates only `state.workspaces`.
+            state.migrateToWorkspaceStructure()
             bossWatchIsEnabled = state.bossWatchEnabled
             bossWatchBaselineState = bossWatchIsEnabled ? state : nil
             selectedProjectID = state.selectedProjectId.flatMap { id in

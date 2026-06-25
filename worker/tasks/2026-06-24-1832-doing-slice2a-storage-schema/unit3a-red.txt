@@ -1,0 +1,25 @@
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceStructureTests.swift:200:9: error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+    |         |- error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceStructureTests.swift:200:30: error: value of type 'WorkspaceState' has no member 'workspaces'
+    |                              `- error: value of type 'WorkspaceState' has no member 'workspaces'
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceStructureTests.swift:221:9: error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+    |         |- error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceStructureTests.swift:221:30: error: value of type 'WorkspaceState' has no member 'workspaces'
+    |                              `- error: value of type 'WorkspaceState' has no member 'workspaces'
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceStructureTests.swift:227:48: error: extra argument 'workspaces' in call
+    |                                                `- error: extra argument 'workspaces' in call
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceStructureTests.swift:237:47: error: cannot infer key path type from context; consider explicitly specifying a root type
+    |                                               `- error: cannot infer key path type from context; consider explicitly specifying a root type
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceStructureTests.swift:238:47: error: cannot infer key path type from context; consider explicitly specifying a root type
+    |                                               `- error: cannot infer key path type from context; consider explicitly specifying a root type
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceStructureTests.swift:250:51: error: extra argument 'workspaces' in call
+    |                                                   `- error: extra argument 'workspaces' in call
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceStructureTests.swift:261:31: error: value of type 'WorkspaceState' has no member 'workspaces'
+    |                               `- error: value of type 'WorkspaceState' has no member 'workspaces'
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceStructureTests.swift:292:31: error: value of type 'WorkspaceState' has no member 'workspaces'
+    |                               `- error: value of type 'WorkspaceState' has no member 'workspaces'
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceStructureTests.swift:292:46: error: cannot infer key path type from context; consider explicitly specifying a root type
+    |                                              `- error: cannot infer key path type from context; consider explicitly specifying a root type
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceStructureTests.swift:293:31: error: value of type 'WorkspaceState' has no member 'workspaces'
+    |                               `- error: value of type 'WorkspaceState' has no member 'workspaces'
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceStructureTests.swift:311:9: error: type 'Any' cannot conform to 'Equatable' [#ProtocolTypeNonConformance]

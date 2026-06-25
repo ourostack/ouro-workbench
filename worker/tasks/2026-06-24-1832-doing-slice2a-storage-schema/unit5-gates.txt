@@ -1,0 +1,52 @@
+[248/251] Write Objects.LinkFileList
+[249/251] Linking OuroWorkbench
+[250/251] Applying OuroWorkbench
+Build complete! (59.60s)
+BUILD_EXIT=
+=== GATE 2: strict swift test ===
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.019 (0.021) seconds
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.052 (0.053) seconds
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.001 (0.002) seconds
+	 Executed 30 tests, with 0 failures (0 unexpected) in 0.018 (0.020) seconds
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.007 (0.008) seconds
+Test Suite 'All tests' passed at 2026-06-24 19:27:31.423.
+TEST_EXIT=
+=== GATE 3: uisurfacetest ===
+[0/1] Planning build
+Building for debugging...
+[0/3] Write swift-version--58304C5D6DBC2206.txt
+Build of product 'OuroWorkbench' complete! (0.49s)
+about fitting size: 520.0x500.0 ok
+settings update fitting size: 438.0x94.0
+dashboard update fitting size: 438.0x94.0
+current update state: ok
+available update state: ok
+failed update state: ok
+failed then checking state: ok
+about shared semantics: ok
+UISURFACE_EXIT=
+=== GATE 4: coverage ===
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
+
+Sources/OuroWorkbenchCore, Sources/OuroWorkbenchShellAdapter: 146/148 files at 100% line+region (2 with allowlisted structural exclusions)
+  allow BossAgentMCPClient.swift                     (1 line, 2 region exempt — see coverage-allowlist.txt)
+  allow SessionActivityReader.swift                  (0 line, 1 region exempt — see coverage-allowlist.txt)
+
+PASS: pure Workbench logic targets are 100% line + region covered (documented structural exclusions aside).
+COVERAGE_EXIT=
+=== GATE 5: scope guard ===
+--- allowlist diff vs origin/main branch-point (must be empty) ---
+--- all SOURCE/TEST files changed since branch-point 40eb132 (excluding worker/tasks) ---
+Sources/OuroWorkbenchCore/WorkspaceModels.swift
+Tests/OuroWorkbenchCoreTests/DegradedReadTests.swift
+Tests/OuroWorkbenchCoreTests/WorkbenchStoreTests.swift
+Tests/OuroWorkbenchCoreTests/WorkspaceStructureTests.swift
+--- PaneLayoutStateTests must NOT appear above ---
+--- working tree status (SerpentGuide must be untracked, never staged) ---
+ M Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift
+ M Tests/OuroWorkbenchCoreTests/WorkspaceStructureTests.swift
+?? SerpentGuide.ouro/
+?? worker/tasks/2026-06-24-1832-doing-slice2a-storage-schema/unit5-gates.txt

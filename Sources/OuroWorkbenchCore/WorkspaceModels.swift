@@ -252,6 +252,14 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
     /// launched from a discovered session" (the common operator-typed case).
     public var discoveredHarness: AgentHarness?
     public var discoveredSessionId: String?
+    /// Slice ②a — the operator's REVERTIBLE custom name for this tab (a tab IS
+    /// this entry; DA1). `name` is the auto/derived tab name; `tabNameOverride`
+    /// is the custom override. `effectiveTabName == tabNameOverride ?? name`.
+    /// Mirrors `Workspace.nameOverride`: Rename Tab (⌘R, ②d) sets it; revert
+    /// clears it to `nil` (an empty string is honored, NOT a revert — DA4).
+    /// Additive + OPTIONAL, decoded if-present, so every pre-②a state file (which
+    /// lacks this key, incl. the v1 "Resume …" rows) loads with it `nil`.
+    public var tabNameOverride: String?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -274,6 +282,7 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         case owner
         case discoveredHarness
         case discoveredSessionId
+        case tabNameOverride
     }
 
     public init(
@@ -296,7 +305,8 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         friend: SessionFriend? = nil,
         owner: SessionOwner = .human,
         discoveredHarness: AgentHarness? = nil,
-        discoveredSessionId: String? = nil
+        discoveredSessionId: String? = nil,
+        tabNameOverride: String? = nil
     ) {
         self.id = id
         self.projectId = projectId
@@ -318,7 +328,13 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         self.owner = owner
         self.discoveredHarness = discoveredHarness
         self.discoveredSessionId = discoveredSessionId
+        self.tabNameOverride = tabNameOverride
     }
+
+    /// The operator-visible tab name: the custom override when set, else the
+    /// auto/derived `name`. An empty override is honored (DA4); `nil` reverts to
+    /// `name`. Mirrors `Workspace.effectiveName`.
+    public var effectiveTabName: String { tabNameOverride ?? name }
 
     public var trimmedNotes: String? {
         guard let notes else {
@@ -353,6 +369,10 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         // value to `.custom`, so a record from a newer build still loads.
         self.discoveredHarness = try container.decodeIfPresent(AgentHarness.self, forKey: .discoveredHarness)
         self.discoveredSessionId = try container.decodeIfPresent(String.self, forKey: .discoveredSessionId)
+        // Slice ②a: absent in every pre-②a state file → nil (no schema bump on
+        // ProcessEntry; the bump is on WorkspaceState for the new `workspaces`
+        // collection). Custom tab name overrides; nil means "use the derived name".
+        self.tabNameOverride = try container.decodeIfPresent(String.self, forKey: .tabNameOverride)
     }
 }
 
@@ -629,6 +649,85 @@ public func postLoadDecision(for report: DecodeReport) -> PostLoadDecision {
     return .salvageBeforeResave(reason: "decode dropped \(report.skippedRowCount) row(s)")
 }
 
+/// Durable workspace STRUCTURE (Slice ②a). A named, ordered collection of tabs —
+/// where a "tab" IS the agent-session terminal already modeled as `ProcessEntry`
+/// (DA1). `tabIds` references `ProcessEntry.id`s in tab order; the entry remains
+/// the carrier of `workingDirectory`/`agentKind`/resume metadata, so this type
+/// never forks that source of truth.
+///
+/// PERSISTENCE-BOUNDARY RULE (DA2): a `Workspace` is a PURE STRUCTURAL value —
+/// id, names, pinned flag, ordered tab ids. It carries **no** live-process state:
+/// NO `pid`, NO `ProcessRun`, NO `status`, NO `startedAt`/`transcriptPath`. Live
+/// runtime lives on `ProcessRun` and is reconstructed at launch. A unit-tested
+/// `Mirror` invariant pins this so a future field-add can't smuggle runtime in.
+///
+/// A workspace spans ≥1 directory (cmux fact): it does NOT carry a single
+/// `rootPath`. Its directory set is *derived* from its tabs' `workingDirectory`
+/// values, never stored as identity. The same repo can back many workspaces; a
+/// workspace can span repos. (Deliberate departure from dir-anchored
+/// `WorkbenchProject`.)
+///
+/// NAME MODEL: `effectiveName == nameOverride ?? autoName`. `autoName` is the
+/// boss/heuristic-derived seed (⑤ improves derivation); `nameOverride` is the
+/// operator's revertible custom name. Revert ("Remove Custom Workspace Name",
+/// ②d) sets `nameOverride = nil`. An EMPTY override string is HONORED, not a
+/// revert (DA4).
+///
+/// Grouped with the other durable-structure fields so ②c can lift the structure
+/// into its own git-init-able store as a block (DA7), without a second migration.
+public struct Workspace: Codable, Equatable, Identifiable, Sendable {
+    /// Stable identity. Persisted; never re-derived.
+    public var id: UUID
+    /// Boss/heuristic-derived seed name (②a seeds a safe default; ⑤ improves it).
+    public var autoName: String
+    /// Operator's revertible custom name. `nil` ⇒ use `autoName`. An empty string
+    /// is a deliberate value, NOT a revert (DA4 — revert is unambiguously `nil`).
+    public var nameOverride: String?
+    /// Pin Workspace affordance (②d). Modeled now, no UI in ②a.
+    public var isPinned: Bool
+    /// ORDERED tab membership → `ProcessEntry.id`s in tab order (DA1).
+    public var tabIds: [UUID]
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case autoName
+        case nameOverride
+        case isPinned
+        case tabIds
+    }
+
+    public init(
+        id: UUID = UUID(),
+        autoName: String,
+        nameOverride: String? = nil,
+        isPinned: Bool = false,
+        tabIds: [UUID] = []
+    ) {
+        self.id = id
+        self.autoName = autoName
+        self.nameOverride = nameOverride
+        self.isPinned = isPinned
+        self.tabIds = tabIds
+    }
+
+    /// Lenient/forward-compatible decode: the optional/defaulted fields decode
+    /// if-present (a workspace JSON missing `nameOverride`/`isPinned`/`tabIds`
+    /// loads with the documented defaults and never throws), and an unknown extra
+    /// key is ignored. Mirrors the file's additive-decode posture.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decode(UUID.self, forKey: .id)
+        self.autoName = try container.decode(String.self, forKey: .autoName)
+        self.nameOverride = try container.decodeIfPresent(String.self, forKey: .nameOverride)
+        self.isPinned = try container.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
+        self.tabIds = try container.decodeIfPresent([UUID].self, forKey: .tabIds) ?? []
+    }
+
+    /// The operator-visible name: the custom override when set, else the seed.
+    /// An empty override is honored (DA4); `nil` reverts to `autoName`.
+    public var effectiveName: String { nameOverride ?? autoName }
+}
+
 public struct WorkspaceState: Codable, Equatable, Sendable {
     /// The state-file schema version this build reads and writes. The single
     /// source of truth for the version check — `WorkbenchStore.load` reads any
@@ -637,7 +736,12 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
     /// by a FUTURE build (`> currentSchemaVersion`), which `degradedReadReason`
     /// reports with this as the "supported" version. Bump in lockstep with a
     /// breaking schema change.
-    public static let currentSchemaVersion = 1
+    ///
+    /// v1 → v2 (Slice ②a): ADDS the durable `workspaces` structure collection
+    /// (and the additive `ProcessEntry.tabNameOverride`). Purely additive +
+    /// lenient-decoded, so the `<=`-current load gate keeps every v1 file
+    /// decodable (never wiped); only a future v3+ file is quarantined.
+    public static let currentSchemaVersion = 2
     public var schemaVersion: Int
     public var boss: BossAgentSelection
     public var bossWatchEnabled: Bool
@@ -646,6 +750,16 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
     public var selectedEntryId: UUID?
     public var projects: [WorkbenchProject]
     public var processEntries: [ProcessEntry]
+    /// Durable workspace STRUCTURE collection (Slice ②a): named, ordered groups
+    /// of tabs (a tab = a `ProcessEntry`, referenced by id via `Workspace.tabIds`;
+    /// DA1). Additive + lenient-decoded (`decodeLenientArray`) + present-or-empty,
+    /// so every pre-②a file loads with `workspaces == []`, then
+    /// `migrateToWorkspaceStructure()` populates it non-destructively.
+    ///
+    /// Grouped here with the other durable-structure fields (`projects`,
+    /// `processEntries`) and deliberately SEPARABLE: ②c lifts this structure into
+    /// its own git-init-able store as a block, without a second migration (DA7).
+    public var workspaces: [Workspace]
     public var processRuns: [ProcessRun]
     public var actionLog: [WorkbenchActionLogEntry]
     /// Durable, newest-first audit of boss decisions about waiting sessions —
@@ -680,6 +794,7 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         case selectedEntryId
         case projects
         case processEntries
+        case workspaces
         case processRuns
         case actionLog
         case decisionLog
@@ -697,6 +812,7 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         selectedEntryId: UUID? = nil,
         projects: [WorkbenchProject] = [],
         processEntries: [ProcessEntry] = [],
+        workspaces: [Workspace] = [],
         processRuns: [ProcessRun] = [],
         actionLog: [WorkbenchActionLogEntry] = [],
         decisionLog: [BossInboxDecision] = [],
@@ -713,6 +829,7 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         self.selectedEntryId = selectedEntryId
         self.projects = projects
         self.processEntries = processEntries
+        self.workspaces = workspaces
         self.processRuns = processRuns
         self.actionLog = actionLog
         self.decisionLog = decisionLog
@@ -747,6 +864,13 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         )
         self.processEntries = try container.decodeLenientArray(
             ProcessEntry.self, forKey: .processEntries, into: &report, collection: "processEntries"
+        )
+        // Slice ②a: additive durable structure. Absent in every pre-②a file → []
+        // (present-or-empty). Decoded leniently so one corrupt workspace element is
+        // dropped (attributed into decodeReport) rather than sinking the whole load,
+        // mirroring `projects`/`processEntries`.
+        self.workspaces = try container.decodeLenientArray(
+            Workspace.self, forKey: .workspaces, into: &report, collection: "workspaces"
         )
         self.processRuns = try container.decodeLenientArray(
             ProcessRun.self, forKey: .processRuns, into: &report, collection: "processRuns"
@@ -808,5 +932,55 @@ public extension WorkspaceState {
             processEntries[index].trust = .trusted
         }
         bossWatchEnabled = true
+    }
+
+    /// Deterministic seed name for the single workspace created when a flat
+    /// (pre-②a) state is migrated. A neutral, honest, non-directory string —
+    /// directory-naming is the anti-pattern the design calls out. Slice ⑤ improves
+    /// `autoName` derivation later; ②a only needs a safe seed. (Open fork #1.)
+    static let migratedWorkspaceSeedName = "Restored workspace"
+
+    /// Slice ②a — NON-DESTRUCTIVE, IDEMPOTENT migration of the flat `processEntries`
+    /// into the durable workspace STRUCTURE. Mirrors the mutating-migration shape of
+    /// `applyAutomaticBossDefaults`/`pruneProcessRuns`.
+    ///
+    /// Guarantees:
+    /// - **Non-destructive (P0):** mutates ONLY `workspaces`. `processEntries`,
+    ///   `projects`, `processRuns`, `actionLog`, and every other field are left
+    ///   byte-for-byte intact — no entry deleted, no malformed "Resume …" row
+    ///   dropped (auditability/recovery truth; ②b/④ decide their fate with operator
+    ///   visibility).
+    /// - **Idempotent (DA3):** ids already covered by any existing
+    ///   `workspaces[*].tabIds` are skipped, so re-running adds nothing and converges.
+    ///   Safe to run on every load with no run-once gate.
+    /// - **Membership rule:** every UNMAPPED, NON-ARCHIVED entry (DA6 — archived
+    ///   entries are excluded from auto-membership but preserved in `processEntries`)
+    ///   is mapped, in `processEntries` order, into exactly one default workspace
+    ///   (`autoName == migratedWorkspaceSeedName`): appended to it if it already
+    ///   exists, else a new one is created. If there are no unmapped active entries
+    ///   (empty machine, or all entries already mapped / archived — DA5), nothing is
+    ///   minted.
+    mutating func migrateToWorkspaceStructure() {
+        // Ids already covered by any existing workspace — skip them (idempotence).
+        var mappedIds = Set<UUID>()
+        for workspace in workspaces {
+            mappedIds.formUnion(workspace.tabIds)
+        }
+        // Unmapped, non-archived entries, preserving processEntries order.
+        let unmappedActiveIds = processEntries
+            .filter { !$0.isArchived && !mappedIds.contains($0.id) }
+            .map(\.id)
+        guard !unmappedActiveIds.isEmpty else {
+            // Nothing to restore (empty / all-archived / already-mapped) — no-op.
+            return
+        }
+        // Append to the existing default workspace if present, else create one.
+        if let defaultIndex = workspaces.firstIndex(where: { $0.autoName == WorkspaceState.migratedWorkspaceSeedName }) {
+            workspaces[defaultIndex].tabIds.append(contentsOf: unmappedActiveIds)
+        } else {
+            workspaces.append(
+                Workspace(autoName: WorkspaceState.migratedWorkspaceSeedName, tabIds: unmappedActiveIds)
+            )
+        }
     }
 }
