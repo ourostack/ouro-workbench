@@ -71,3 +71,47 @@ nodes defeat a control).
 
 **GO.** Recipe sound; C1 reuses `GitSessionStatus.parse`-porcelain → chip-leaf for
 `GitBranchChip` + the same porcelain-producer seam where the row accepts `gitStatus:`.
+
+---
+
+## Recipe 2 — standalone menu → `TerminalRowContextMenu` (home cluster C1) ✅ GO
+
+**The risk it de-risks:** edge-case playbook #5 — ViewInspector's synchronous `findAll`
+does NOT descend a parent's `.contextMenu { }` content, so a context-menu view can never
+be reached by snapshotting its host row. All five named menu/popover views are top-level
+`View` structs (verified first-hand), so they're snapshotted STANDALONE via their own
+initializer.
+
+**Proven seam (P2):** the menu's `entry` + `model` are provenance-built via the REAL store
+seam (`WorkbenchStore.save(state)` → fresh `WorkbenchViewModel.load()`), the same
+`SidebarSurfaceStateSetTests.makeVM` dual-injection (AN-001: temp `agentBundlesURL` into
+BOTH the registrar AND the inventory). The menu is then instantiated standalone with the
+LOADED entry (re-read through `model.state.processEntries`).
+
+```swift
+let model = try makeVM(state: state(entry: entry(kind: .shell)))   // real store seam
+let loaded = model.state.processEntries.first!                     // loaded provenance
+TerminalRowContextMenu(entry: loaded, model: model)                // standalone leaf
+```
+
+**Enumerated state-set + recorded references** (`__Snapshots__/TerminalRowContextMenu.*`):
+| state | distinguishing nodes |
+|---|---|
+| `inactiveCustom` (`.shell`, not archived, no live session) | "Launch" · full custom block · ends "Archive Session" |
+| `archivedCustom` (`.shell`, archived) | custom block with "**Restore**" (not Archive) |
+| `nonCustom` (`.command`) | **NO custom block** — stops at "Open Working Directory" |
+
+(`activeSession == nil` in a fresh VM → "Launch" not "Restart"; the single loaded project
+"Home" appears in the Move-to-Workspace submenu — deterministic.)
+
+**Determinism (P3):** fixed entry/project/workspace ids + fixed `/tmp/u4` working dir +
+fixed boss name "boss"; no clock; byte-identical twice; `!contains("/Users/")`.
+
+**Mutation-verify (P2):** swapped the `if entry.isArchived` "Restore" label →
+"Archive Session" (collapsing the archive/restore branch) → **`archivedCustom` snapshot +
+the negative control went RED** → reverted byte-identically → green. **CAUGHT.**
+
+**a11y-id:** none needed (every label string is distinct).
+
+**GO.** Recipe sound; C1/C3 reuse standalone instantiation for
+`WorkspaceRowContextMenu`/`WorkspaceTabContextMenu`/`AutonomyStatusPopover`/`BossAgentNamePopover`.
