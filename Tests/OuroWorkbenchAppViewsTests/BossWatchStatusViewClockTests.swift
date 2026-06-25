@@ -6,14 +6,17 @@ import OuroWorkbenchCore
 @testable import OuroWorkbenchAppViews
 
 /// C0 SU-4 — the **fixed-timestamp clock** recipe (edge-case playbook #4).
-/// `BossWatchStatusView` renders `Text(change.occurredAt.formatted(date: .omitted,
-/// time: .standard))` (`:7875`) — an absolute `Date` baked into a STRING at view
-/// construction. Unlike the `TimelineView` clock (which carries an injectable `now:`,
-/// U2), this one has no injection seam — so a `Date()`-built change summary would render
-/// a wall-clock-dependent string (non-deterministic). **The fixture pins the clock:** a
-/// single CANONICAL FIXED `Date` epoch constant fed to the change-summary producer, so
-/// every formatted string is byte-identical. The host's UTC-TimeZone pin makes the
-/// `.formatted(...)` read deterministic regardless of the CI runner's zone (P3).
+/// `BossWatchStatusView` renders the change-row timestamp via the shared
+/// `Date.workbenchTimeText(date:time:timeZone:)` seam — an absolute `Date` formatted to
+/// a STRING at body-evaluation time. The string's zone is an **injected** `TimeZone`:
+/// production defaults to `.autoupdatingCurrent` (operator-local, unchanged), the test
+/// injects `.gmt`. **The fixture also pins the clock:** a single CANONICAL FIXED `Date`
+/// epoch constant fed to the change-summary producer, so every formatted string is
+/// byte-identical. The injected `.gmt` zone makes the `.formatted(...)` render
+/// deterministic regardless of the CI runner's zone (P3) — independent of any global
+/// host TimeZone pin or cross-test ordering (the C0 root cause: that read-time process
+/// pin was not reliably effective for a body-evaluated `.formatted()` under the full
+/// CI suite).
 ///
 /// **Provenance (P2).** The change summaries are produced by the REAL Core producer
 /// `WorkspaceChangeSummarizer.summarize(previous:current:occurredAt:)` — fed two real
@@ -31,9 +34,10 @@ import OuroWorkbenchCore
 @MainActor
 final class BossWatchStatusViewClockTests: XCTestCase {
 
-    /// A single canonical fixed epoch — 2026-01-02 03:04:05 UTC. The host forces TZ=UTC,
-    /// so `.formatted(date:.omitted, time:.standard)` renders this byte-identically on any
-    /// runner. (The exact rendered string is captured in the recorded reference.)
+    /// A single canonical fixed epoch — 2026-01-02 03:04:05 UTC. The view formats it under
+    /// the injected `.gmt` zone (see `view(enabled:summaries:)`), so
+    /// `workbenchTimeText(date:.omitted, time:.standard, timeZone: .gmt)` renders
+    /// `03:04:05` byte-identically on any runner. (Captured in the recorded reference.)
     private static let fixedDate = Date(timeIntervalSince1970: 1_767_323_045)
 
     private func makeVM() throws -> WorkbenchViewModel {
@@ -72,7 +76,11 @@ final class BossWatchStatusViewClockTests: XCTestCase {
         model.bossWatchLastError = nil
         model.bossWatchLastRunAt = nil      // → status line "watching"/"paused" (clock-free)
         model.bossWatchChangeSummaries = summaries
-        return BossWatchStatusView(model: model)
+        // Inject `.gmt` so the change-row timestamp renders runner-zone-independently
+        // (C0 recipe). Production defaults to `.autoupdatingCurrent` (operator-local,
+        // unchanged) — the explicit seam is what makes the snapshot deterministic
+        // regardless of the CI runner's TimeZone, independent of any global host pin.
+        return BossWatchStatusView(model: model, timeZone: .gmt)
     }
 
     // MARK: - Enumerated state-set

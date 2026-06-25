@@ -9,6 +9,36 @@ import SwiftUI
 import UniformTypeIdentifiers
 import UserNotifications
 
+extension Date {
+    /// Render an absolute timestamp through `Date.FormatStyle` with an **explicit,
+    /// injectable** `TimeZone` — the shared seam every body-evaluated timestamp row
+    /// uses (C0 recipe; reused by C10/C11 timestamp surfaces).
+    ///
+    /// **Why a seam, not the host's read-time TZ pin (C0 root cause).** A view body
+    /// that calls `Text(date.formatted(date:time:))` formats the date to a `String`
+    /// at body-evaluation time. The snapshot host's process-wide UTC pin
+    /// (`setenv("TZ")`+`tzset()`+`resetSystemTimeZone()`) is a *global, lazily-run,
+    /// ordering-sensitive* mutation of `TimeZone.current`; under the full CI suite it
+    /// is not reliably effective for this read (the failing
+    /// `BossWatchStatusViewClockTests.testWatch_withChanges`). An explicit per-call
+    /// `TimeZone` makes the rendered string deterministic **independent of any global
+    /// pin or test ordering** — the strongest, reusable guarantee.
+    ///
+    /// **Production is byte-identical to today.** The default `.autoupdatingCurrent`
+    /// is exactly the zone `Date.formatted(date:time:)` already uses, so prod keeps
+    /// showing the operator's LOCAL time (verified byte-identical under PDT/EDT). The
+    /// clock tests inject `.gmt` for a runner-zone-independent reference.
+    func workbenchTimeText(
+        date: Date.FormatStyle.DateStyle,
+        time: Date.FormatStyle.TimeStyle,
+        timeZone: TimeZone = .autoupdatingCurrent
+    ) -> String {
+        var style = Date.FormatStyle(date: date, time: time)
+        style.timeZone = timeZone
+        return formatted(style)
+    }
+}
+
 /// A global/navigation command issued from the menu bar. Posted via
 /// `.workbenchMenuCommand` and dispatched by the root view to the model — this
 /// keeps the shortcut as a real menu key equivalent (which beats the focused
@@ -7852,6 +7882,10 @@ struct BossActionReceiptStrip: View {
 
 struct BossWatchStatusView: View {
     @ObservedObject var model: WorkbenchViewModel
+    /// The zone the change-row timestamp renders in. Defaults to the operator's local
+    /// zone (`.autoupdatingCurrent`) so production is unchanged; the clock test injects
+    /// `.gmt` for a runner-zone-independent snapshot (C0 recipe).
+    var timeZone: TimeZone = .autoupdatingCurrent
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -7871,7 +7905,7 @@ struct BossWatchStatusView: View {
             if !model.bossWatchChangeSummaries.isEmpty {
                 ForEach(model.bossWatchChangeSummaries.prefix(5)) { change in
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(change.occurredAt.formatted(date: .omitted, time: .standard))
+                        Text(change.occurredAt.workbenchTimeText(date: .omitted, time: .standard, timeZone: timeZone))
                             .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)
                             .fixedSize()
