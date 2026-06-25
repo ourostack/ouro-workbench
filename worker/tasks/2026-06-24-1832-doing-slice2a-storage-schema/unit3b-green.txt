@@ -1,0 +1,38 @@
+Test Suite 'DegradedReadTests' started at 2026-06-24 19:09:57.681.
+Test Suite 'DegradedReadTests' passed at 2026-06-24 19:09:57.689.
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.006 (0.007) seconds
+Test Suite 'PaneLayoutStateTests' started at 2026-06-24 19:09:57.689.
+Test Suite 'PaneLayoutStateTests' passed at 2026-06-24 19:09:57.696.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.006 (0.007) seconds
+Test Suite 'WorkbenchStoreTests' started at 2026-06-24 19:09:57.696.
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkbenchStoreTests.swift:588: error: -[OuroWorkbenchCoreTests.WorkbenchStoreTests testUnsupportedStateVersionErrorDescriptionNamesVersionAndUpgrade] : XCTAssertTrue failed - must name the supported schema version, got: This Workbench state was written by a newer Workbench (state schema v2; this build understands v2). Upgrade Workbench to read it. Your data is intact and untouched.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchStoreTests testUnsupportedStateVersionErrorDescriptionNamesVersionAndUpgrade]' failed (0.258 seconds).
+Test Suite 'WorkbenchStoreTests' failed at 2026-06-24 19:09:58.016.
+	 Executed 28 tests, with 1 failure (0 unexpected) in 0.318 (0.320) seconds
+Test Suite 'WorkspaceStructureTests' started at 2026-06-24 19:09:58.016.
+Test Suite 'WorkspaceStructureTests' passed at 2026-06-24 19:09:58.029.
+	 Executed 21 tests, with 0 failures (0 unexpected) in 0.011 (0.013) seconds
+Test Suite 'OuroWorkbenchPackageTests.xctest' failed at 2026-06-24 19:09:58.029.
+	 Executed 69 tests, with 1 failure (0 unexpected) in 0.342 (0.348) seconds
+Test Suite 'Selected tests' failed at 2026-06-24 19:09:58.029.
+	 Executed 69 tests, with 1 failure (0 unexpected) in 0.342 (0.350) seconds
+	 Executed 12 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
+	 Executed 12 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
+	 Executed 28 tests, with 0 failures (0 unexpected) in 0.069 (0.072) seconds
+	 Executed 21 tests, with 0 failures (0 unexpected) in 0.351 (0.353) seconds
+	 Executed 19 tests, with 0 failures (0 unexpected) in 0.003 (0.004) seconds
+	 Executed 6 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+	 Executed 24 tests, with 0 failures (0 unexpected) in 0.118 (0.121) seconds
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.000 (0.001) seconds
+	 Executed 9 tests, with 0 failures (0 unexpected) in 2.450 (2.451) seconds
+	 Executed 11 tests, with 0 failures (0 unexpected) in 0.018 (0.020) seconds
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.160 (0.161) seconds
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.040 (0.040) seconds
+	 Executed 12 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.017 (0.018) seconds
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.049 (0.051) seconds
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.001 (0.002) seconds
+	 Executed 21 tests, with 0 failures (0 unexpected) in 0.015 (0.017) seconds
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.005 (0.006) seconds
+Test Suite 'All tests' passed at 2026-06-24 19:13:54.919.
