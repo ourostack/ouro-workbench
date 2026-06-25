@@ -72,6 +72,9 @@ enum WorkbenchAppSource {
         // so it is not part of any cross-declaration slice; the VM (now in the lib) depends on it.
         // Byte-identical relocation; position here is immaterial to every slice.
         "WorkbenchUpdateInstaller.swift",
+        // Native menu shortcut + accessibility contract catalog. It depends on the menu-command
+        // declarations above and is not part of any cross-declaration source-slice adjacency.
+        "WorkbenchKeyboardAccessibilityContract.swift",
     ]
 
     /// The UNION source: the old exe file followed by the lib files in declaration order.

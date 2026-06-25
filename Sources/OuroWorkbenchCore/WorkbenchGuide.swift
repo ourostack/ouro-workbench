@@ -72,7 +72,11 @@ public enum WorkbenchGuide {
                 Shortcut(keys: "⌘]", summary: "Next terminal (wraps)"),
                 Shortcut(keys: "⇧⌘[", summary: "Previous group"),
                 Shortcut(keys: "⇧⌘]", summary: "Next group"),
-                Shortcut(keys: "⇧⌘F", summary: "Full-screen the focused terminal (and back)")
+                Shortcut(keys: "⇧⌘F", summary: "Full-screen the focused terminal (and back)"),
+                Shortcut(keys: "⌥⌘→", summary: "Split the focused terminal to the right"),
+                Shortcut(keys: "⌥⌘↓", summary: "Split the focused terminal downward"),
+                Shortcut(keys: "⌥⌘]", summary: "Focus the other split pane"),
+                Shortcut(keys: "⌥⌘W", summary: "Close the focused split pane")
             ]
         ),
         ShortcutCategory(
@@ -98,6 +102,8 @@ public enum WorkbenchGuide {
                 Shortcut(keys: "⌘.", summary: "Stop the selected terminal"),
                 Shortcut(keys: "⌘F", summary: "Find in the focused terminal"),
                 Shortcut(keys: "⌘G / ⇧⌘G", summary: "Next / previous match in the search bar"),
+                Shortcut(keys: "⌘R", summary: "Rename the selected tab"),
+                Shortcut(keys: "⇧⌘R", summary: "Rename the active group"),
                 Shortcut(keys: "⌘+ / ⌘=", summary: "Increase terminal font size"),
                 Shortcut(keys: "⌘-", summary: "Decrease terminal font size"),
                 Shortcut(keys: "⌘0", summary: "Reset terminal font size")
@@ -109,6 +115,9 @@ public enum WorkbenchGuide {
             systemImage: "wand.and.stars",
             shortcuts: [
                 Shortcut(keys: "⌘N", summary: "New terminal"),
+                Shortcut(keys: "⌘T", summary: "New terminal tab"),
+                Shortcut(keys: "⌘O", summary: "Open a workspace file"),
+                Shortcut(keys: "⇧⌘S", summary: "Save the current workspace as a file"),
                 Shortcut(keys: "⌃⌘B", summary: "Toggle sidebar visibility"),
                 Shortcut(keys: "⌘,", summary: "Open Settings"),
                 Shortcut(keys: "⇧⌘B", summary: "Report a bug (bundles a screenshot, diagnostics, and recent activity)"),

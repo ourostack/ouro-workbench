@@ -114,6 +114,9 @@ jobs:
       - name: Run native UI surface probe
         run: swift run -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete OuroWorkbench --uisurfacetest
 
+      - name: Run keyboard and accessibility contract probe
+        run: swift run -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete OuroWorkbench --keyboarda11ycontract
+
       - name: Verify GUI smoke timeout guard
         run: scripts/smoke-verify-app-timeout.sh
 
