@@ -84,8 +84,11 @@ final class BossWorkbenchInstallOverlayWiringTests: XCTestCase {
     /// top-level `private struct` / `struct` boundary — spans the Register button branch.
     private func onboardingRepairStepRowBody() throws -> String {
         let source = try WorkbenchAppSource.appSource()
+        // Access-level-agnostic anchor: U3 widened this view from `private struct` to
+        // `struct` (so the view-snapshot tests can instantiate it). `struct …: View {` is a
+        // substring of both forms, so this slice helper keeps working either way.
         let start = try XCTUnwrap(
-            source.range(of: "private struct OnboardingRepairStepRow: View {")?.upperBound,
+            source.range(of: "struct OnboardingRepairStepRow: View {")?.upperBound,
             "could not find OnboardingRepairStepRow in the App source"
         )
         let tail = source[start...]
