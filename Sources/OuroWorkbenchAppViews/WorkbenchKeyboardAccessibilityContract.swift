@@ -120,6 +120,73 @@ public enum WorkbenchNativeMenuCatalog {
     }
 }
 
+extension WorkbenchMenuCommand {
+    var nativeMenuMountToken: String? {
+        switch self {
+        case .about, .checkForUpdates:
+            nil
+        case .commandPalette:
+            "nativeMenuCommand(.commandPalette)"
+        case .bossCheckIn:
+            "nativeMenuCommand(.bossCheckIn)"
+        case .jumpToAttention:
+            "nativeMenuCommand(.jumpToAttention)"
+        case .newTerminal:
+            "nativeMenuCommand(.newTerminal)"
+        case .newTerminalTab:
+            "nativeMenuCommand(.newTerminalTab)"
+        case .openWorkspace:
+            "nativeMenuCommand(.openWorkspace)"
+        case .saveWorkspace:
+            "nativeMenuCommand(.saveWorkspace)"
+        case .toggleSidebar:
+            "nativeMenuCommand(.toggleSidebar)"
+        case .toggleFocus:
+            "nativeMenuCommand(.toggleFocus)"
+        case .fontIncrease:
+            "nativeMenuCommand(.fontIncrease)"
+        case .fontDecrease:
+            "nativeMenuCommand(.fontDecrease)"
+        case .fontReset:
+            "nativeMenuCommand(.fontReset)"
+        case .prevTerminal:
+            "nativeMenuCommand(.prevTerminal)"
+        case .nextTerminal:
+            "nativeMenuCommand(.nextTerminal)"
+        case .prevGroup:
+            "nativeMenuCommand(.prevGroup)"
+        case .nextGroup:
+            "nativeMenuCommand(.nextGroup)"
+        case .findInTerminal:
+            "nativeMenuCommand(.findInTerminal)"
+        case .redraw:
+            "nativeMenuCommand(.redraw)"
+        case .stopSelected:
+            "nativeMenuCommand(.stopSelected)"
+        case .settings:
+            "nativeMenuCommand(.settings)"
+        case .shortcutsHelp:
+            "nativeMenuCommand(.shortcutsHelp)"
+        case .reportBug:
+            "nativeMenuCommand(.reportBug)"
+        case .selectTerminal:
+            "nativeMenuCommand(.selectTerminal(index))"
+        case .splitRight:
+            "nativeMenuCommand(.splitRight)"
+        case .splitDown:
+            "nativeMenuCommand(.splitDown)"
+        case .closePane:
+            "nativeMenuCommand(.closePane)"
+        case .focusOtherPane:
+            "nativeMenuCommand(.focusOtherPane)"
+        case .renameWorkspace:
+            "nativeMenuCommand(.renameWorkspace)"
+        case .renameTab:
+            "nativeMenuCommand(.renameTab)"
+        }
+    }
+}
+
 public enum WorkbenchScopedShortcutScope: String, Hashable, Sendable {
     case selectedTerminalDetail
     case terminalSearchBar
@@ -210,6 +277,21 @@ public enum WorkbenchKeyboardAccessibilityContract {
             .appendingPathComponent("OuroWorkbenchApp", isDirectory: true)
             .appendingPathComponent("OuroWorkbenchApp.swift")
         if let appSource = try? String(contentsOf: appSourceURL, encoding: .utf8) {
+            let requiredMounts = Dictionary(grouping: WorkbenchNativeMenuCatalog.allShortcuts) { shortcut in
+                shortcut.command.nativeMenuMountToken
+            }
+            for token in requiredMounts.keys.compactMap(\.self).sorted() where !appSource.contains(token) {
+                let titles = requiredMounts[token, default: []]
+                    .map(\.title)
+                    .sorted()
+                    .joined(separator: ", ")
+                failures.append("Native menu shortcut(s) \(titles) are in WorkbenchNativeMenuCatalog but not mounted by OuroWorkbenchApp.commands via \(token)")
+            }
+            if appSource.contains("nativeMenuCommand(.selectTerminal(index))")
+                && !appSource.contains("ForEach(1...9, id: \\.self)")
+            {
+                failures.append("Select Terminal native menu shortcuts must mount the full ForEach(1...9) command loop")
+            }
             if !appSource.contains("nativeMenuCommand(.reportBug)") {
                 failures.append("Report Bug must be a WorkbenchMenuCommand-backed native menu shortcut")
             }

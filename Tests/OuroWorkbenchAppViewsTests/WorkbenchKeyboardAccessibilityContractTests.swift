@@ -37,6 +37,27 @@ final class WorkbenchKeyboardAccessibilityContractTests: XCTestCase {
         XCTAssertEqual(chords.count, Set(chords).count, "native menu shortcuts must not collide")
     }
 
+    func testNativeMenuCatalogEntriesAreMountedInAppCommands() throws {
+        let appSource = try String(
+            contentsOf: repoRoot()
+                .appendingPathComponent("Sources", isDirectory: true)
+                .appendingPathComponent("OuroWorkbenchApp", isDirectory: true)
+                .appendingPathComponent("OuroWorkbenchApp.swift"),
+            encoding: .utf8
+        )
+        for shortcut in WorkbenchNativeMenuCatalog.allShortcuts {
+            guard let token = shortcut.command.nativeMenuMountToken else {
+                XCTFail("\(shortcut.title) has no native menu mount token")
+                continue
+            }
+            XCTAssertTrue(
+                appSource.contains(token),
+                "\(shortcut.title) is cataloged but not mounted by OuroWorkbenchApp.commands via \(token)"
+            )
+        }
+        XCTAssertTrue(appSource.contains("ForEach(1...9, id: \\.self)"))
+    }
+
     func testCIAndPreflightRunKeyboardAccessibilityContractProbe() throws {
         let root = repoRoot()
         let ci = try String(
