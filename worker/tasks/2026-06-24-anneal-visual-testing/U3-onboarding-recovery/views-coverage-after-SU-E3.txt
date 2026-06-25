@@ -1,0 +1,36 @@
+Running views-lib coverage AFTER SU-E3 (boss-choice — OnboardingBossChoiceView/Row choice
+states) landed. Third E sub-unit (fifth U3 surface overall). Includes the SU-E0 provenance
+spike (verdict: ./U3-onboarding-recovery/onboarding-provenance-spike.md; throwaway deleted).
+
+Branch: feat/anneal-u3-su-e-onboarding (off main @ 9228a2c, the #296 SU-C+SU-D merge)
+Captured: 2026-06-25
+
+SCOPE NOTE (D-U3-5 carried forward): the views lib is NOT gated this unit — COVERAGE_DIRS
+stays {OuroWorkbenchCore, OuroWorkbenchShellAdapter} and the allowlist is UNCHANGED. This
+number is PROGRESS toward the U4 coverage gate; it does NOT gate SU-E3.
+
+Measured via: ./scripts/check-coverage.sh (full suite, 2983 tests, 1 skipped, 0 failures —
+was 2976 after SU-E2), then `xcrun llvm-cov report <PackageTests.xctest bin>
+-instr-profile default.profdata Sources/OuroWorkbenchAppViews/`.
+
+Per-file (views lib):
+
+  File                            Regions  Missed  Cover    Lines  Missed  Cover
+  TOTAL                            2678     2264   15.46%   5823    5103   12.36%
+
+Running views-lib coverage AFTER SU-E3: 15.46% region / 12.36% line.
+
+Progression (region): U2 7.70% → SU-C 8.33% → SU-D 9.99% → SU-E1 13.67% → SU-E2 14.23% → SU-E3 15.46%.
+Progression (line):   U2 6.94% → SU-C 7.45% → SU-D 10.33% → SU-E1 10.60% → SU-E2 11.45% → SU-E3 12.36%.
+
+The SU-E3 references exercise OnboardingBossChoiceView (the empty-state branch + the
+ForEach of OnboardingBossChoiceRow) + OnboardingBossChoiceRow (the selected/unselected radio,
+the "selected" pill, the statusLabel pill, the detail, .disabled(!isUsable)) + the
+onboardingBossChoices / bossAgentChoices VM derivations + the OnboardingBossChoice computed
+seams (isUsable / statusLabel / statusColor) + OnboardingBossChoiceCopy.
+
+Provenance (Q3 default): direct `model.ouroAgents = [fixed OuroAgentRecord]` injection (the
+same @Published the live refreshOuroAgents() scanner writes) + `model.state.boss.agentName`
+for the selected/empty seams — NO live home scan (AN-001 temp agentBundlesURL injected into
+BOTH the registrar AND the inventory). The boss-choice surface renders NO bundlePath/configPath,
+so the ignored fixture paths cannot leak (verified: no `/agent-bundles/` in any E3 ref).
