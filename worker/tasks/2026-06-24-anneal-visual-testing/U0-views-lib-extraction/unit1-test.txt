@@ -1,0 +1,8 @@
+=== Unit 1: FULL strict swift test @ 00:45:48 ===
+[1/1] Compiling plugin GenerateManual
+... (per-test lines elided — 2842 tests incl. the new ImportabilityProofTests) ...
+Test Suite 'ImportabilityProofTests' passed at 2026-06-25 00:46:05.087.
+	 Executed 2842 tests, with 1 test skipped and 0 failures (0 unexpected) in 66.810 (67.051) seconds
+Test Suite 'All tests' passed at 2026-06-25 00:46:56.068.
+	 Executed 2842 tests, with 1 test skipped and 0 failures (0 unexpected) in 66.810 (67.052) seconds
+TEST_EXIT=0

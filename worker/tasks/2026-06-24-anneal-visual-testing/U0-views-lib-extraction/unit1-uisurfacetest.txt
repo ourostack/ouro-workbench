@@ -1,0 +1,10 @@
+=== Unit 1: --uisurfacetest @ 00:45:55 ===
+... (build lines elided) ...
+current update state: ok
+available update state: ok
+failed update state: ok
+failed then checking state: ok
+about shared semantics: ok
+migrated workspace render: ok
+②d editing affordances: ok
+UISURFACE_EXIT=0

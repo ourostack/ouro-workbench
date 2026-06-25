@@ -1,6 +1,7 @@
 #if os(macOS)
 import AppKit
 import OuroAppShellUI
+import OuroWorkbenchAppViews
 import OuroWorkbenchCore
 import OuroWorkbenchShellAdapter
 import SwiftTerm
@@ -4924,19 +4925,6 @@ struct StatusPill: View {
             .padding(.vertical, 3)
             .background(color.opacity(0.14), in: Capsule())
             .foregroundStyle(color)
-    }
-}
-
-private struct DashboardRowLabel: View {
-    var title: String
-    var systemImage: String
-
-    var body: some View {
-        Label(title, systemImage: systemImage)
-            .font(.caption.weight(.semibold))
-            .lineLimit(1)
-            .frame(width: 132, alignment: .leading)
-            .fixedSize(horizontal: true, vertical: false)
     }
 }
 
