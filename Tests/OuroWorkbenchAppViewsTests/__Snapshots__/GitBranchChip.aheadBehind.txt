@@ -1,0 +1,3 @@
+Image image="arrow.triangle.branch"
+Text kind=static text="main"
+Text kind=static text="↑2↓1"
