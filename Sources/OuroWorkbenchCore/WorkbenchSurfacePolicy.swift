@@ -48,19 +48,6 @@ public enum WorkbenchSurfacePolicy {
         "Workspace no longer exists: \(name)"
     }
 
-    /// U32: the terminals section header. Instead of repeating the selected
-    /// workspace's bare name (so the sidebar read the same string twice — worst case
-    /// "Unsorted Sessions" verbatim), name the RELATIONSHIP: "Terminals in <name>".
-    /// With no workspace selected there's nothing to relate to, so fall back to the
-    /// bare "Terminals" label.
-    public static func terminalsSectionTitle(workspaceName: String?) -> String {
-        guard let name = workspaceName?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !name.isEmpty else {
-            return "Terminals"
-        }
-        return "Terminals in \(name)"
-    }
-
     public static func moveOrDeleteTerminalsBeforeDeletingMessage(name: String) -> String {
         "Move or delete terminals before deleting \(name)"
     }

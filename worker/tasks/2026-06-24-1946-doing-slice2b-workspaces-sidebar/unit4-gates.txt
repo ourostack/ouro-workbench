@@ -1,0 +1,204 @@
+=== Unit 4: strict build ===
+/Users/microsoft/code/ouro-workbench/.build/checkouts/SwiftTerm/Sources/SwiftTermFuzz/main.swift:23:38: error: main actor-isolated var 'queue' can not be referenced from a nonisolated context
+   |                                      `- error: main actor-isolated var 'queue' can not be referenced from a nonisolated context
+error: cancelled
+error: cancelled
+=== Unit 4: strict build of OUR PRODUCTS (SwiftTermFuzz is a 3rd-party dep target, not ours) ===
+--- building OuroWorkbench ---
+--- building OuroWorkbenchMCP ---
+--- building OuroWorkbenchScenarioVerifier ---
+
+NOTE on `swift build` (no product): the whole-graph build under strict-concurrency hits a
+PRE-EXISTING error in the third-party dependency target SwiftTerm/Sources/SwiftTermFuzz/main.swift
+("main actor-isolated var 'queue' can not be referenced from a nonisolated context"). This target
+is NOT one of our products (OuroWorkbench / OuroWorkbenchMCP / OuroWorkbenchScenarioVerifier /
+OuroWorkbenchCore) and is NOT in our tracked sources (0 files). Verified it fails identically at the
+committed baseline HEAD with my changes stashed, so it is NOT a ②b regression. Our products build
+clean (exit 0 each) under the strict flags; `swift test` + `swift run OuroWorkbench` (the real gates)
+do not build the fuzz target. Recorded as an environmental/dependency quirk, not a slice defect.
+
+=== Unit 4: FULL strict test suite ===
+	 Executed 30 tests, with 0 failures (0 unexpected) in 0.017 (0.019) seconds
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.005 (0.006) seconds
+	 Executed 2778 tests, with 1 test skipped and 0 failures (0 unexpected) in 60.284 (60.521) seconds
+	 Executed 2778 tests, with 1 test skipped and 0 failures (0 unexpected) in 60.284 (60.524) seconds
+
+=== Unit 4: --uisurfacetest (incl. migrated workspace render smoke) ===
+[0/3] Write swift-version--58304C5D6DBC2206.txt
+Build of product 'OuroWorkbench' complete! (0.54s)
+migrated workspace smoke: active workspace fallback wrong
+about fitting size: 520.0x500.0 ok
+settings update fitting size: 438.0x94.0
+dashboard update fitting size: 438.0x94.0
+current update state: ok
+available update state: ok
+failed update state: ok
+failed then checking state: ok
+about shared semantics: ok
+migrated workspace render: FAIL
+[6/7] Applying OuroWorkbench
+Build of product 'OuroWorkbench' complete! (2.41s)
+migrated workspace sizes: sidebar 202x80, strip 153x34
+about fitting size: 520.0x500.0 ok
+settings update fitting size: 438.0x94.0
+dashboard update fitting size: 438.0x94.0
+current update state: ok
+available update state: ok
+failed update state: ok
+failed then checking state: ok
+about shared semantics: ok
+migrated workspace render: ok
+[smoke note] The first smoke run FAILED ("active workspace fallback wrong") — a real, useful catch:
+load() restores selectedEntryID, and the click-to-activate wiring (selectedEntryID.didSet →
+selectWorkspaceContaining) correctly makes the restored selection's workspace active, so the active
+workspace was "Restored workspace", not the pinned fallback. The seam + wiring were CORRECT; the
+smoke assertion was over-strict. Fixed the smoke to assert the real invariant (one active workspace
+that contains the selected tab; pure nil-selection fallback = the pinned workspace). Now: ok.
+
+=== Unit 4: Scripts/check-coverage.sh ===
+[220/241] Compiling OuroWorkbenchCore WorkbenchSurfacePolicy.swift
+[229/241] Compiling OuroWorkbenchCore WorkspaceSidebarPresentation.swift
+[450/476] Compiling OuroWorkbenchCoreTests WorkbenchSurfacePolicyTests.swift
+[462/476] Compiling OuroWorkbenchCoreTests WorkspaceSidebarPresentationTests.swift
+Test Suite 'WorkbenchSurfacePolicyTests' started at 2026-06-24 20:54:41.051.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testAppWorkspaceCopyIsWiredThroughSurfacePolicy]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testAppWorkspaceCopyIsWiredThroughSurfacePolicy]' passed (0.239 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testArchivedSessionShowsNoPrimaryOrAdvancedActions]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testArchivedSessionShowsNoPrimaryOrAdvancedActions]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testBossStatusLabelsStayCompact]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testBossStatusLabelsStayCompact]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testEmptyStateLeadsTerminalsFirstWithBossAsOptIn]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testEmptyStateLeadsTerminalsFirstWithBossAsOptIn]' passed (0.006 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testParseSidebarSessionControlsFixtureAction]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testParseSidebarSessionControlsFixtureAction]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testParseSidebarSessionControlsFixtureRequiresPath]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testParseSidebarSessionControlsFixtureRequiresPath]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testRecoverableSessionShowsRecoverAsPrimaryAction]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testRecoverableSessionShowsRecoverAsPrimaryAction]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testRecoverySectionIsHiddenWhenThereIsNothingActionable]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testRecoverySectionIsHiddenWhenThereIsNothingActionable]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testRecoverySectionIsShownWhenActionable]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testRecoverySectionIsShownWhenActionable]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testRunningSessionShowsOnlyStopAsPrimaryAction]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testRunningSessionShowsOnlyStopAsPrimaryAction]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testSetupWorkspaceNameIsNeutralHomeNotUnsortedOrThisMac]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testSetupWorkspaceNameIsNeutralHomeNotUnsortedOrThisMac]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testSidebarPrimaryLabelsUseWorkbenchStoryNouns]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testSidebarPrimaryLabelsUseWorkbenchStoryNouns]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testStopCallSitesRouteThroughTheConfirmationGate]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testStopCallSitesRouteThroughTheConfirmationGate]' passed (0.090 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testStopConfirmationButtonNamesTheSession]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testStopConfirmationButtonNamesTheSession]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testStopConfirmationCopyNamesTheSessionAndStatesTheConsequence]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testStopConfirmationCopyNamesTheSessionAndStatesTheConsequence]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testStopDoesNotConfirmForABareIdleLiveShell]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testStopDoesNotConfirmForABareIdleLiveShell]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testStopDoesNotConfirmWhenNoLiveProcess]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testStopDoesNotConfirmWhenNoLiveProcess]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testStopNeedsConfirmationForALiveHoldingAgent]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testStopNeedsConfirmationForALiveHoldingAgent]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testStoppedSessionShowsLaunchAsPrimaryAction]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testStoppedSessionShowsLaunchAsPrimaryAction]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testTitleStripUsesSessionControlPolicyWithoutPrimaryRestartLeak]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testTitleStripUsesSessionControlPolicyWithoutPrimaryRestartLeak]' passed (0.047 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testWorkspaceManagementCopyUsesWorkspaceNouns]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testWorkspaceManagementCopyUsesWorkspaceNouns]' passed (0.000 seconds).
+Test Suite 'WorkbenchSurfacePolicyTests' passed at 2026-06-24 20:54:41.438.
+Test Suite 'WorkspaceSidebarPresentationTests' started at 2026-06-24 20:54:44.260.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testActiveSelectionNilFallsBackToFirstAfterPinnedFirst]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testActiveSelectionNilFallsBackToFirstAfterPinnedFirst]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testActiveSelectionNilWithNoPinnedUsesFirstStored]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testActiveSelectionNilWithNoPinnedUsesFirstStored]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testActiveSelectionStaleIdFallsBackToFirstAfterPinnedFirst]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testActiveSelectionStaleIdFallsBackToFirstAfterPinnedFirst]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testActiveSelectionValidIdPicksThatWorkspace]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testActiveSelectionValidIdPicksThatWorkspace]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAllArchivedTabsYieldEmptyActivePartition]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAllArchivedTabsYieldEmptyActivePartition]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAllDanglingTabIdsYieldEmptyRowWithDropCount]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAllDanglingTabIdsYieldEmptyRowWithDropCount]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAttentionSummaryActiveBeatsIdleButNotNeedsAttention]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAttentionSummaryActiveBeatsIdleButNotNeedsAttention]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAttentionSummaryAllIdleIsIdleNoAttention]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAttentionSummaryAllIdleIsIdleNoAttention]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAttentionSummaryBlockedBeatsActiveAndIdle]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAttentionSummaryBlockedBeatsActiveAndIdle]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAttentionSummaryHighestSeverityWins]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAttentionSummaryHighestSeverityWins]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAttentionSummaryIgnoresArchivedTabs]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAttentionSummaryIgnoresArchivedTabs]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAttentionSummaryNeedsAttentionWhenAnyActiveTabNeedsHuman]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAttentionSummaryNeedsAttentionWhenAnyActiveTabNeedsHuman]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAttentionSummaryWaitingOnHumanArm]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAttentionSummaryWaitingOnHumanArm]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testDanglingTabIdIsDroppedAndAttributed]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testDanglingTabIdIsDroppedAndAttributed]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testDuplicateEntryIdsResolveToTheFirstOccurrenceNotCrash]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testDuplicateEntryIdsResolveToTheFirstOccurrenceNotCrash]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testEmptyWorkspaceHasNilAttentionSummary]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testEmptyWorkspaceHasNilAttentionSummary]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testEmptyWorkspacesListYieldsNoRowsAndNilActive]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testEmptyWorkspacesListYieldsNoRowsAndNilActive]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testEmptyWorkspaceYieldsEmptyMarkerNotHidden]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testEmptyWorkspaceYieldsEmptyMarkerNotHidden]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testManyTabWorkspaceResolves]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testManyTabWorkspaceResolves]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testMigratedUIFixtureDecodesAndResolves]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testMigratedUIFixtureDecodesAndResolves]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testNoArchivedTabsYieldsEmptyArchivedPartition]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testNoArchivedTabsYieldsEmptyArchivedPartition]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testNoDangsYieldZeroDropCount]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testNoDangsYieldZeroDropCount]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testResolvedTabCarriesAttention]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testResolvedTabCarriesAttention]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testResolvedTabExposesOnlyStructureAndWorkContextNoCostNoRuntime]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testResolvedTabExposesOnlyStructureAndWorkContextNoCostNoRuntime]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testRowContextExposesOnlyAttentionSummaryNoCost]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testRowContextExposesOnlyAttentionSummaryNoCost]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testRowEffectiveNameUsesOverride]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testRowEffectiveNameUsesOverride]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testRowsAllPinnedPreserveStoredOrder]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testRowsAllPinnedPreserveStoredOrder]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testRowsAllUnpinnedPreserveStoredOrder]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testRowsAllUnpinnedPreserveStoredOrder]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testRowsArePinnedFirstThenStoredOrderStable]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testRowsArePinnedFirstThenStoredOrderStable]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testSingleTabWorkspaceResolves]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testSingleTabWorkspaceResolves]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testTabsPartitionIntoActiveAndArchivedPreservingOrder]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testTabsPartitionIntoActiveAndArchivedPreservingOrder]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testTabsResolveInTabIdsOrderWithEffectiveTabName]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testTabsResolveInTabIdsOrderWithEffectiveTabName]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testWorkspaceRowExposesOnlyStructureNoCostNoRuntime]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testWorkspaceRowExposesOnlyStructureNoCostNoRuntime]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testWorkspaceWithOnlyArchivedTabsIsNotEmpty]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testWorkspaceWithOnlyArchivedTabsIsNotEmpty]' passed (0.000 seconds).
+Test Suite 'WorkspaceSidebarPresentationTests' passed at 2026-06-24 20:54:44.269.
+Sources/OuroWorkbenchCore, Sources/OuroWorkbenchShellAdapter: 147/149 files at 100% line+region (2 with allowlisted structural exclusions)
+  allow BossAgentMCPClient.swift                     (1 line, 2 region exempt — see coverage-allowlist.txt)
+  allow SessionActivityReader.swift                  (0 line, 1 region exempt — see coverage-allowlist.txt)
+PASS: pure Workbench logic targets are 100% line + region covered (documented structural exclusions aside).
+ALLOWLIST: identical to baseline (did NOT grow)
+=== Unit 4 working-tree changes (this commit's scope) ===
+ M Sources/OuroWorkbenchApp/UISurfaceTest.swift
+ M Sources/OuroWorkbenchCore/WorkbenchSurfacePolicy.swift
+ M Tests/OuroWorkbenchCoreTests/WorkspaceHomeNamingTests.swift
+=== ALL files changed across the whole slice (origin/main..working) ===
+Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift
+Sources/OuroWorkbenchApp/UISurfaceTest.swift
+Sources/OuroWorkbenchCore/WorkbenchSurfacePolicy.swift
+Sources/OuroWorkbenchCore/WorkspaceSidebarPresentation.swift
+Tests/OuroWorkbenchCoreTests/OnboardingBossChoiceRowAccessibilityWiringTests.swift
+Tests/OuroWorkbenchCoreTests/WorkbenchSurfacePolicyTests.swift
+Tests/OuroWorkbenchCoreTests/WorkspaceHomeNamingTests.swift
+Tests/OuroWorkbenchCoreTests/WorkspaceSidebarPresentationTests.swift
+Tests/OuroWorkbenchCoreTests/WorkspaceSidebarWiringTests.swift
+
+=== Unit 4 GATE SUMMARY ===
+- our products (OuroWorkbench/MCP/ScenarioVerifier + Core lib) strict build: GREEN (exit 0 each).
+  [whole-graph `swift build` hits a pre-existing 3rd-party SwiftTermFuzz error — NOT ours, NOT a ②b regression.]
+- swift test strict: GREEN (2778 tests, 0 failures, 1 skipped).
+- swift run OuroWorkbench --uisurfacetest: GREEN (exit 0) — incl. "migrated workspace render: ok".
+- Scripts/check-coverage.sh: PASS (147/149 100% line+region; 2 allowlisted; allowlist did NOT grow).
+- terminalsSectionTitle deleted (no remaining caller) + its 2 value-tests removed; WorkbenchSurfacePolicy 100%.
+- scope: only the expected slice files changed; WorkbenchBootstrapperTests unchanged; SerpentGuide untracked.
