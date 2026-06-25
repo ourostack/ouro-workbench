@@ -27,7 +27,10 @@ final class WorkbenchSurfacePolicyTests: XCTestCase {
 
         XCTAssertTrue(source.contains("Section(WorkbenchSurfacePolicy.bossSectionTitle)"))
         XCTAssertTrue(source.contains("Section(WorkbenchSurfacePolicy.workspaceSectionTitle)"))
-        XCTAssertTrue(source.contains("SidebarActionRow(title: WorkbenchSurfacePolicy.newWorkspaceTitle"))
+        // Slice ②b (DB8): the sidebar "New Workspace" action row is removed — it created
+        // a WorkbenchProject (a model mismatch once rows are Workspaces); manual create is
+        // ②d, and workspaces are seeded by onboarding ③ / bring-back ④.
+        XCTAssertFalse(source.contains("SidebarActionRow(title: WorkbenchSurfacePolicy.newWorkspaceTitle"))
         XCTAssertTrue(source.contains("WorkbenchSurfacePolicy.shouldShowRecovery(recoverableCount: model.recoveryDigest.actionableCount)"))
         XCTAssertFalse(source.contains("New Terminal Group"))
         XCTAssertFalse(source.contains("Edit Terminal Group"))

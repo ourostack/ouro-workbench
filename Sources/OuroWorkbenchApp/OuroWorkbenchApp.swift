@@ -3095,70 +3095,51 @@ struct WorkbenchSidebarView: View {
                     }
                 }
             }
+            // Slice ②b — the sidebar renders the persisted `state.workspaces` as named
+            // rows (the design's visible truth), via the pure
+            // `WorkspaceSidebarPresentation` seam. Each workspace row shows its
+            // `effectiveName` + a lean attention summary (NO PWD dump, NO cost); its
+            // active tabs render beneath it by `effectiveTabName`, navigable here while
+            // the cmux tab-strip surfaces the ACTIVE workspace's tabs across the top
+            // (Unit 3). The old projects-as-workspaces surface + the "Terminals in
+            // <name>" framing are gone (DB1 render swap; the WorkbenchProject backing
+            // model stays, just invisible). DB8: no in-app "New Workspace" row (②d).
             Section(WorkbenchSurfacePolicy.workspaceSectionTitle) {
-                ForEach(model.state.projects) { project in
-                    SidebarProjectRow(
-                        project: project,
-                        activeTerminalCount: model.terminalCount(in: project),
-                        totalTerminalCount: model.totalTerminalCount(in: project),
-                        isSelected: model.selectedProject?.id == project.id,
-                        canDelete: model.totalTerminalCount(in: project) == 0 && model.state.projects.count > 1,
-                        select: {
-                            model.selectProject(project.id)
-                        },
-                        rename: {
-                            model.beginEditingGroup(project)
-                        },
-                        delete: {
-                            model.requestDeleteGroup(project)
-                        },
-                        setColorTag: { tag in
-                            model.setGroupColorTag(tag, for: project)
-                        }
-                    )
-                }
-                .onMove { offsets, destination in
-                    // Drag-to-reorder groups. Goes through the same
-                    // WorkbenchEntryReorder helper as terminal reordering;
-                    // group ordering is the simpler case where visible
-                    // equals global.
-                    model.moveGroups(fromOffsets: offsets, toOffset: destination)
-                }
-                SidebarActionRow(title: WorkbenchSurfacePolicy.newWorkspaceTitle, systemImage: "folder.badge.plus") {
-                    model.isNewGroupSheetPresented = true
-                }
-            }
-            Section(WorkbenchSurfacePolicy.terminalsSectionTitle(workspaceName: model.selectedProject?.name)) {
-                ForEach(model.sessionEntries) { entry in
-                    TerminalAgentRow(
-                        entry: entry,
-                        isSelected: model.selectedEntryID == entry.id,
-                        cliName: model.cliName(for: entry),
-                        health: model.executableHealth(for: entry),
-                        gitStatus: model.gitStatus(for: entry),
-                        runningSince: model.runningStartDate(for: entry),
-                        isPinned: entry.isPinned,
-                        activity: model.sessionActivity(for: entry),
-                        isStalled: model.isStalled(entry)
-                    )
-                        .tag(entry.id)
-                        .contextMenu {
-                            TerminalRowContextMenu(entry: entry, model: model)
-                        }
-                }
-                .onMove { offsets, destination in
-                    // Drag-to-reorder within the current group. Persists
-                    // through the WorkbenchStore so the order survives a
-                    // relaunch and is honored by every list view that
-                    // sources from state.processEntries.
-                    model.moveSessionEntries(fromOffsets: offsets, toOffset: destination)
+                // Render the persisted `model.state.workspaces` (resolved + ordered by
+                // the seam). `workspaceSidebarModel.rows` is empty when there are no
+                // workspaces, so the section collapses to just the New Terminal row.
+                ForEach(model.workspaceSidebarModel.rows) { row in
+                    WorkspaceSidebarRow(row: row, model: model)
+                    ForEach(model.workspaceTabRows(for: row)) { tab in
+                        let entry = tab.entry
+                        TerminalAgentRow(
+                            entry: entry,
+                            isSelected: model.selectedEntryID == entry.id,
+                            displayName: tab.resolved.effectiveTabName,
+                            cliName: model.cliName(for: entry),
+                            health: model.executableHealth(for: entry),
+                            gitStatus: model.gitStatus(for: entry),
+                            runningSince: model.runningStartDate(for: entry),
+                            isPinned: entry.isPinned,
+                            activity: model.sessionActivity(for: entry),
+                            isStalled: model.isStalled(entry)
+                        )
+                            .tag(entry.id)
+                            .contextMenu {
+                                TerminalRowContextMenu(entry: entry, model: model)
+                            }
+                    }
+                    if row.isEmpty {
+                        // FORK #3 / DB5 — an empty workspace renders its row + an inline
+                        // "no tabs yet" marker, never blank pixels (onboarding ③ seeds
+                        // legitimately-empty workspaces).
+                        SidebarWorkspaceEmptyRow()
+                    }
                 }
                 // U19(b): a non-empty filter that hides every row gets an explicit,
                 // quoted "No sessions match …" state with a one-click Clear — distinct
-                // from a genuinely-empty workspace (which shows no such row). Without
-                // this the section rendered only "New Terminal", identical pixels to an
-                // empty workspace, so an empty filtered result read as "nothing waiting."
-                if model.sidebarFilterIsActive && model.sessionEntries.isEmpty {
+                // from a genuinely-empty workspace.
+                if model.sidebarFilterIsActive && model.workspaceSidebarModel.rows.allSatisfy(\.tabs.isEmpty) {
                     SidebarFilterEmptyStateRow(model: model)
                 }
                 SidebarActionRow(title: "New Terminal", systemImage: "plus") {
@@ -3215,95 +3196,66 @@ struct WorkbenchSidebarView: View {
     }
 }
 
-struct SidebarProjectRow: View {
-    var project: WorkbenchProject
-    var activeTerminalCount: Int
-    var totalTerminalCount: Int
-    var isSelected: Bool
-    var canDelete: Bool
-    var select: () -> Void
-    var rename: () -> Void
-    var delete: () -> Void
-    var setColorTag: (String?) -> Void
-
-    /// The group's resolved accent color, or nil when untagged.
-    private var tagColor: SwiftUI.Color? {
-        WorkbenchGroupColor.from(tag: project.colorTag).map(\.swiftUIColor)
-    }
+/// Slice ②b — a LEAN named-workspace header row: the workspace's `effectiveName` + a
+/// glanceable attention summary glyph (from the pure `WorkspaceSidebarPresentation`
+/// seam's `WorkspaceRowContext`). Selecting it makes the workspace active (its tabs
+/// surface in the cmux tab-strip). NO PWD dump, NO cost — the only work-context shown
+/// is the already-available attention summary (the design's lean-row rule).
+struct WorkspaceSidebarRow: View {
+    var row: WorkspaceRow
+    @ObservedObject var model: WorkbenchViewModel
 
     var body: some View {
-        HStack(spacing: 7) {
-            Button(action: select) {
-                HStack(spacing: 6) {
-                    Image(systemName: isSelected ? "folder.fill" : "folder")
-                        // Tagged groups tint their folder icon; untagged keep
-                        // the accent/secondary convention.
-                        .foregroundStyle(tagColor ?? (isSelected ? Color.accentColor : Color.secondary))
-                        .frame(width: 16)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(project.name)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                            .fontWeight(isSelected ? .semibold : .regular)
-                        Text(project.rootPath)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
+        Button {
+            model.selectedWorkspaceID = row.id
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: row.isPinned ? "pin.fill" : (row.isActive ? "square.stack.3d.up.fill" : "square.stack.3d.up"))
+                    .foregroundStyle(row.isActive ? Color.accentColor : Color.secondary)
+                    .frame(width: 16)
+                Text(row.effectiveName)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .fontWeight(row.isActive ? .semibold : .regular)
                     .layoutPriority(1)
+                Spacer(minLength: 4)
+                if let summary = row.context.summary, summary != .idle {
+                    Image(systemName: summary.healthSymbol)
+                        .font(.caption2)
+                        .foregroundStyle(summary.healthColor)
+                        .help(row.context.needsAttention ? "\(summary.healthLabel) — needs you" : summary.healthLabel)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
-            .layoutPriority(1)
-
-            SidebarCountBadge(count: activeTerminalCount)
-
-            Menu {
-                Button(action: rename) {
-                    Label("Rename Workspace", systemImage: "pencil")
-                }
-                Menu {
-                    Button {
-                        setColor(nil)
-                    } label: {
-                        Label("None", systemImage: project.colorTag == nil ? "checkmark" : "circle")
-                    }
-                    ForEach(WorkbenchGroupColor.allCases) { color in
-                        Button {
-                            setColor(color)
-                        } label: {
-                            Label(
-                                color.label,
-                                systemImage: project.colorTag == color.rawValue ? "checkmark.circle.fill" : "circle.fill"
-                            )
-                        }
-                    }
-                } label: {
-                    Label("Color Tag", systemImage: "paintpalette")
-                }
-                Button(role: .destructive, action: delete) {
-                    Label("Delete Empty Workspace", systemImage: "trash")
-                }
-                .disabled(!canDelete)
-            } label: {
-                Label("Workspace Actions", systemImage: "ellipsis.circle")
-            }
-            .labelStyle(.iconOnly)
-            .menuStyle(.borderlessButton)
-            .help("Workspace actions")
-            .fixedSize()
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
         .padding(.vertical, 1)
-        .help(project.rootPath)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(project.name), \(activeTerminalCount) active terminals, \(totalTerminalCount) total terminals, root \(project.rootPath)")
+        .accessibilityLabel(accessibilityLabel)
     }
 
-    private func setColor(_ color: WorkbenchGroupColor?) {
-        setColorTag(color?.rawValue)
+    private var accessibilityLabel: String {
+        var pieces = [row.effectiveName]
+        pieces.append(row.isActive ? "active workspace" : "workspace")
+        if row.isPinned { pieces.append("pinned") }
+        pieces.append("\(row.tabs.count) tabs")
+        if let summary = row.context.summary, summary != .idle {
+            pieces.append(row.context.needsAttention ? "\(summary.healthLabel), needs you" : summary.healthLabel)
+        }
+        return pieces.joined(separator: ", ")
+    }
+}
+
+/// Slice ②b (FORK #3 / DB5) — the inline "no tabs yet" marker shown UNDER an empty
+/// workspace's header so a just-created/seeded workspace is honest and never blank.
+struct SidebarWorkspaceEmptyRow: View {
+    var body: some View {
+        Text("No tabs yet")
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .padding(.leading, 22)
+            .padding(.vertical, 1)
+            .accessibilityLabel("No tabs yet")
     }
 }
 
@@ -3568,6 +3520,10 @@ struct TerminalRowContextMenu: View {
 struct TerminalAgentRow: View {
     var entry: ProcessEntry
     var isSelected: Bool
+    /// Slice ②b — the operator-visible tab name. Defaults to `entry.name`; the
+    /// workspace sidebar/tab-strip pass `entry.effectiveTabName` so a revertible
+    /// `tabNameOverride` (②a) shows here without the row re-deriving it.
+    var displayName: String? = nil
     var cliName: String?
     var health: ExecutableHealth?
     /// Git status of the session's working directory, when it's a repo. Drives
@@ -3596,7 +3552,7 @@ struct TerminalAgentRow: View {
                 // distinguishing detail is at the start, not the middle.
                 Label {
                     HStack(spacing: 4) {
-                        Text(entry.name)
+                        Text(displayName ?? entry.name)
                             .lineLimit(1)
                             .truncationMode(.tail)
                         if isPinned {
@@ -3660,7 +3616,7 @@ struct TerminalAgentRow: View {
     }
 
     private var accessibilityLabel: String {
-        var pieces = [entry.name]
+        var pieces = [displayName ?? entry.name]
         if let badge = entry.owner.sidebarBadge {
             pieces.append("owned by \(badge.label)")
         }
@@ -10405,9 +10361,25 @@ final class WorkbenchViewModel: ObservableObject {
                 activePaneID = .primary
             }
             state.selectedEntryId = selectedEntryID
+            // Slice ②b — clicking a tab surfaces its workspace in the sidebar/strip
+            // (DB2 selection on click). Resolves to a no-op for an entry not in any
+            // workspace. Done after the selection settles so the active workspace
+            // tracks the chosen tab.
+            if let selectedEntryID {
+                selectWorkspaceContaining(entryID: selectedEntryID)
+            }
             save()
         }
     }
+    /// Slice ②b — which named workspace is active in the sidebar / tab-strip. Mirrors
+    /// `selectedProjectID` (which stays as the DB1 backing-model selection), but is NOT
+    /// persisted: ②b doesn't move state to a dedicated store (②c), so there is no
+    /// `WorkspaceState.selectedWorkspaceId` field to bump. The pure
+    /// `WorkspaceSidebarPresentation` seam supplies the deterministic fallback (DB2:
+    /// nil/stale → first after pinned-first ordering) on every render, so a fresh launch
+    /// has a defined active workspace with no extra selection step. Clicking a tab sets
+    /// this to the tab's workspace (see `selectWorkspaceContaining`).
+    @Published var selectedWorkspaceID: UUID?
     /// Currently focused Ouro agent for the Agents sidebar / detail pane.
     /// Mutually exclusive with `selectedEntryID`: setting either clears the other.
     /// Not persisted — the sidebar restores the natural session selection on
@@ -11382,12 +11354,86 @@ final class WorkbenchViewModel: ObservableObject {
         state.processEntries.first(where: { $0.id == entry.id })?.isPinned ?? entry.isPinned
     }
 
+    /// Slice ②b (DB7) — the Archived section is scoped to the ACTIVE WORKSPACE's tabs,
+    /// not the old `selectedProjectID`: the sidebar now selects WORKSPACES, so the
+    /// Archived list stays coherent with the selected unit (the seam already partitions
+    /// each workspace's resolved tabs into active vs archived). The section hides when
+    /// the active workspace has no archived tabs (the existing `!isEmpty` guard). The
+    /// sidebar filter still applies so structured/free-text queries narrow the list.
     var archivedSessionEntries: [ProcessEntry] {
-        applySidebarFilter(projectSessionEntries.filter(\.isArchived), archived: true)
+        let archivedIds = Set(activeWorkspaceRow?.archivedTabs.map(\.id) ?? [])
+        let archived = allSessionEntries.filter { archivedIds.contains($0.id) }
+        return applySidebarFilter(archived, archived: true)
     }
 
     private var allSessionEntries: [ProcessEntry] {
         state.processEntries.filter { $0.kind == .terminalAgent || $0.kind == .shell }
+    }
+
+    /// DB9 (Slice ②b) — the entry set the `WorkspaceSidebarPresentation` seam resolves
+    /// a workspace's `tabIds` against. `allSessionEntries` is `private` and the sidebar
+    /// lives in a separate struct (`WorkbenchSidebarView`), so this non-private accessor
+    /// exposes exactly the entries the seam needs (terminal + shell sessions) without
+    /// widening any other view-model internals. The seam stays pure — it takes the
+    /// entries as a parameter.
+    var workspaceTabEntries: [ProcessEntry] { allSessionEntries }
+
+    /// Slice ②b — the ordered, resolved sidebar/tab-strip view-model derived from the
+    /// persisted `state.workspaces` via the pure `WorkspaceSidebarPresentation` seam.
+    /// The sidebar rows AND the cmux tab-strip both read THIS, so they can never
+    /// disagree about ordering / active workspace / which tabs belong where.
+    var workspaceSidebarModel: WorkspaceSidebarModel {
+        WorkspaceSidebarPresentation.resolve(
+            workspaces: state.workspaces,
+            entries: workspaceTabEntries,
+            selectedWorkspaceId: selectedWorkspaceID
+        )
+    }
+
+    /// The currently-active workspace row (the one whose tabs render in the top strip),
+    /// per the seam's active-workspace rule (DB2). `nil` only when there are no
+    /// workspaces (empty machine before any session exists).
+    var activeWorkspaceRow: WorkspaceRow? {
+        workspaceSidebarModel.rows.first { $0.isActive }
+    }
+
+    /// Make the workspace that owns `entryID` the active one (DB2 selection on click):
+    /// clicking a tab selects its entry AND surfaces its workspace in the strip. A no-op
+    /// for an entry not in any workspace (it stays under whatever workspace is active).
+    func selectWorkspaceContaining(entryID: UUID) {
+        guard let owning = state.workspaces.first(where: { $0.tabIds.contains(entryID) }) else {
+            return
+        }
+        if selectedWorkspaceID != owning.id {
+            selectedWorkspaceID = owning.id
+        }
+    }
+
+    /// A workspace's active tab paired with its backing `ProcessEntry`, for the
+    /// sidebar/tab-strip render. Identifiable by entry id so SwiftUI `ForEach` is stable.
+    struct WorkspaceTabRow: Identifiable {
+        let resolved: ResolvedTab
+        let entry: ProcessEntry
+        var id: UUID { resolved.id }
+    }
+
+    /// Resolve a workspace row's ACTIVE tabs (the seam already dropped dangling ids and
+    /// the archived partition) back to their `ProcessEntry`s, honoring the sidebar
+    /// filter. The seam keeps tab order; the filter narrows by name/owner/status.
+    func workspaceTabRows(for row: WorkspaceRow) -> [WorkspaceTabRow] {
+        let byId = Dictionary(workspaceTabEntries.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let resolved = row.tabs.compactMap { tab -> WorkspaceTabRow? in
+            guard let entry = byId[tab.id] else { return nil }
+            return WorkspaceTabRow(resolved: tab, entry: entry)
+        }
+        let query = sidebarFilter.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            return resolved
+        }
+        let filter = SidebarSessionFilter()
+        return resolved.filter {
+            filter.matches($0.entry, groupName: row.effectiveName, query: query)
+        }
     }
 
     private var projectSessionEntries: [ProcessEntry] {

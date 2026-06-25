@@ -1,0 +1,43 @@
+=== Unit 2b: strict build ===
+
+=== Unit 2b: wiring guards (expect GREEN) ===
+	 Executed 21 tests, with 0 failures (0 unexpected) in 0.309 (0.311) seconds
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.064 (0.064) seconds
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.195 (0.196) seconds
+	 Executed 31 tests, with 0 failures (0 unexpected) in 0.568 (0.571) seconds
+	 Executed 31 tests, with 0 failures (0 unexpected) in 0.568 (0.572) seconds
+
+=== Unit 2b: FULL strict test suite ===
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.001 (0.002) seconds
+	 Executed 30 tests, with 0 failures (0 unexpected) in 0.014 (0.016) seconds
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.005 (0.006) seconds
+
+=== Unit 2b: --uisurfacetest sanity (no crash) ===
+[0/3] Write swift-version--58304C5D6DBC2206.txt
+Build of product 'OuroWorkbench' complete! (0.45s)
+about fitting size: 520.0x500.0 ok
+settings update fitting size: 438.0x94.0
+dashboard update fitting size: 438.0x94.0
+current update state: ok
+available update state: ok
+failed update state: ok
+failed then checking state: ok
+about shared semantics: ok
+
+=== Unit 2b summary ===
+GREEN. Rewired the sidebar in OuroWorkbenchApp.swift:
+- Replaced the projects "Workspaces" section + "Terminals in <name>" section with a single
+  Workspaces section rendering state.workspaces via WorkspaceSidebarPresentation.resolve(...).
+  Each workspace → WorkspaceSidebarRow (lean: effectiveName + attention-summary glyph, NO rootPath,
+  NO cost) followed by its active tabs as TerminalAgentRow(displayName: effectiveTabName). Empty
+  workspace → SidebarWorkspaceEmptyRow ("No tabs yet", FORK#3/DB5). Kept New Terminal + ⌘N.
+- Added VM: workspaceTabEntries (DB9 non-private accessor), selectedWorkspaceID (non-persisted),
+  workspaceSidebarModel (seam call), activeWorkspaceRow, selectWorkspaceContaining, workspaceTabRows.
+- selectedEntryID.didSet now calls selectWorkspaceContaining (click a tab → its workspace active).
+- archivedSessionEntries scoped to the ACTIVE WORKSPACE's archived tabs (DB7).
+- TerminalAgentRow gained an optional displayName (defaults to entry.name) for effectiveTabName.
+- Deleted struct SidebarProjectRow (dead after removal — proven by warnings-as-errors clean build).
+- selectedProjectID + its didSet-save KEPT intact (DB1; PersistenceSalvageWiringTests stays green).
+- Updated cosmetic comment ref in OnboardingBossChoiceRowAccessibilityWiringTests (SidebarProjectRow → WorkspaceSidebarRow).
+Gates: strict build 0 warn/err; wiring guards 31 GREEN; FULL strict suite 2777 tests / 0 fail / 1 skip;
+--uisurfacetest exit 0. WorkbenchBootstrapperTests unchanged (no scope leak). SerpentGuide not staged.
