@@ -2,6 +2,23 @@
 
 Re-verify at execution start (line numbers drift); these were confirmed during conversion.
 
+## Unit 0 execution-time re-verification (HEAD 1f831a9 on feat/slice2d-rename-pin)
+All anchors below RE-CONFIRMED at execution start. Drift / clarifications recorded:
+- `WorkspaceSidebarRow` struct @ :3158 (body Button @ :3163, `Text(row.effectiveName)` @ :3170). ✔
+- Instantiation @ :3091 (`WorkspaceSidebarRow(row: row, model: model)`). ✔
+- `WorkspaceTabStrip` @ :3223; `tabButton(_:)` @ :3308 (`Text(tab.effectiveTabName)` @ :3317). ✔
+- `TerminalRowContextMenu` @ :3497 (mirror `.contextMenu { Button { … } label: { Label(…) } }`). ✔
+- `togglePin(for:)` @ :11421 / `isPinned(_:)` @ :11431 — NOTE: `togglePin` persists via `try store.save(state)` DIRECTLY (catch → errorMessage), it does NOT call the `save()` wrapper. The `②d` thin wrappers will call the canonical `save()` @ :20309 (`@discardableResult private func save() -> Bool`) per D2d-7 (cleaner + batched-save-aware). The source-guard for ②d wrappers asserts the Core mutator + `save()` (not `store.save`).
+- Canonical persistence: `WorkbenchViewModel.save()` @ :20309. (A second unrelated `save()` @ :10071 is inside an edit-sheet view — ignore.)
+- `WorkbenchViewModel` @ :10397; `@Published var selectedEntryID` @ :10412; `selectedWorkspaceID` @ :10461; `activeWorkspaceRow` @ :11481; `workspaceSidebarModel` @ :11470.
+- Chord dispatcher: `WorkbenchMenuCommand` enum @ :128; `handleMenuCommand` switch @ :251; `.commands { CommandMenu("Terminal") { … } }` @ :41-107; `menuCommand(_:_:_:_:)` helper @ :110. ②d adds `.renameWorkspace`/`.renameTab` cases + `menuCommand("Rename Workspace…", .renameWorkspace, "r", [.command, .shift])` / `menuCommand("Rename Tab…", .renameTab, "r")` + switch arms targeting active workspace / selected tab (D2d-8).
+- `import OuroWorkbenchCore` (plain) @ :4 → new Core seams MUST be public (D2d-6). ✔
+- No `.keyboardShortcut("r"` anywhere (D2d-5 free). ✔
+- Core model: `Workspace` @ :678 (`autoName` :682, `nameOverride` :685, `isPinned` :687, `effectiveName` :728); `ProcessEntry.tabNameOverride` @ :262, `effectiveTabName` @ :337. `public extension WorkspaceState` @ :898 (precedent `applyAutomaticBossDefaults` @ :930). ✔
+- `WorkspaceSidebarPresentation.resolve` @ :119; pinned-first @ :126; `WorkspaceRow` @ :70 — has `effectiveName`/`isPinned`, **lacks `nameOverride`** → Unit 4b additive field CONFIRMED needed; `resolve` maps the row @ :164-173.
+- Test helpers: `appSource()` @ :232 + `repoRoot()` @ :240 in WorkspaceSidebarWiringTests.swift (copy verbatim). Chord-targets-active example NavCheckInWiringTests.swift @ :62-72. UISurfaceTest `fittingSize`+assert-seam @ :96-241.
+- Coverage allowlist (`Scripts/coverage-allowlist.txt`): only `BossAgentMCPClient.swift 1 2` + `SessionActivityReader.swift 0 1`. MUST NOT grow.
+
 ## Render sites (App SwiftUI — attach menus/editors here)
 - `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:3158` — `struct WorkspaceSidebarRow: View` (workspace context menu + inline editor host). Its `Button { model.selectedWorkspaceID = row.id } label: { HStack … Text(row.effectiveName) … }` body is where the `.contextMenu` attaches and where the label↔editor swap happens.
 - `Sources/OuroWorkbenchApp/OuroWorkbenchApp.swift:3091` — render site where `WorkspaceSidebarRow(row: row, model: model)` is instantiated (a `.contextMenu { }` can attach here OR inside the struct).

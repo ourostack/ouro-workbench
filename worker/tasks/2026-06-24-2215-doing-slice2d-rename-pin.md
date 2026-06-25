@@ -109,7 +109,7 @@ Each Core mutator gets a thin `WorkbenchViewModel` wrapper (e.g. `renameWorkspac
 
 **Every unit header starts with a status emoji.**
 
-### ⬜ Unit 0: Setup / Anchor re-verification
+### ✅ Unit 0: Setup / Anchor re-verification
 **What**: At current HEAD on `feat/slice2d-rename-pin`, re-confirm the anchors this slice attaches to (they were verified during conversion but re-verify before editing, since line numbers drift):
 - `WorkspaceSidebarRow` struct + its `Button { … } label: { … }` body (workspace context-menu + editor host).
 - `WorkspaceTabStrip.tabButton(_:)` (tab context-menu + editor host).
@@ -255,3 +255,4 @@ Then run the FULL gate: `swift build`/`swift test` strict, `Scripts/check-covera
 - 2026-06-24 22:15 Validation pass: confirmed WorkspaceRow lacks `nameOverride` (Unit 4b additive need real); confirmed mutators must be public (App uses plain import) → D2d-6/D2d-8 refined.
 - 2026-06-24 22:15 Fresh unbiased sub-agent review gate spawned on the doing doc (autonomous signoff, no human gate).
 - 2026-06-24 22:15 Review gate returned PASS (all claims independently verified; 3 MINOR notes). Notes 2 & 3 hardened into Units 4a/6a (RED/GREEN token lockstep; single Escape mechanism). Verdict saved to artifacts/review-gate.md. Status → READY_FOR_EXECUTION.
+- Unit 0 complete: all anchors re-verified at execution-start HEAD; recorded one clarification (`togglePin` persists via `store.save` directly; ②d wrappers use the canonical `save()` @ :20309) + confirmed `WorkspaceRow` lacks `nameOverride` (4b additive need real) + chord-dispatcher plan for ⌘R/⇧⌘R. anchors.md updated.
