@@ -1,0 +1,16 @@
+Test Suite 'WorkspaceStructureTests' started at 2026-06-24 18:58:08.633.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testEffectiveNameFallsBackToAutoNameWhenOverrideNil]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testEffectiveNameHonorsEmptyStringOverride]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testEffectiveNameUsesOverrideWhenPresent]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testWorkspaceCodableRoundTripsEqual]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testWorkspaceDecodesMissingOptionalFieldsToDefaults]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testWorkspaceIgnoresUnknownExtraKey]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testWorkspaceMemberwiseInitDefaults]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testWorkspaceMemberwiseInitExplicitValues]' passed (0.000 seconds).
+Test Suite 'WorkspaceStructureTests' passed at 2026-06-24 18:58:08.636.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
+Test Suite 'OuroWorkbenchPackageTests.xctest' passed at 2026-06-24 18:58:08.636.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds
+Test Suite 'Selected tests' passed at 2026-06-24 18:58:08.636.
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.002 (0.004) seconds
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

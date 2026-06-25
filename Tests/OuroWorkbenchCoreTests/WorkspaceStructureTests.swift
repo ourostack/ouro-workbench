@@ -102,4 +102,35 @@ final class WorkspaceStructureTests: XCTestCase {
         XCTAssertFalse(decoded.isPinned)
         XCTAssertEqual(decoded.tabIds, [])
     }
+
+    // MARK: - Unit 1c: persistence-boundary invariant (DA2)
+
+    func testWorkspaceExposesOnlyStructureFieldsNoRuntime() {
+        // DA2: a Workspace is a PURE structural value. Pin its stored property set
+        // via Mirror so a later field-add can't smuggle a pid/run/live-status into
+        // the durable type without this test failing. The set must be EXACTLY the
+        // structure fields — and must contain none of the runtime field names that
+        // live on ProcessRun.
+        let ws = Workspace(
+            id: UUID(),
+            autoName: "auto",
+            nameOverride: "x",
+            isPinned: true,
+            tabIds: [UUID()]
+        )
+        let labels = Set(Mirror(reflecting: ws).children.compactMap(\.label))
+        XCTAssertEqual(labels, ["id", "autoName", "nameOverride", "isPinned", "tabIds"])
+
+        // Explicit negative pins: none of these runtime/live-process field names
+        // may appear on the structure type.
+        let forbiddenRuntimeFields: Set<String> = [
+            "pid", "status", "run", "processRun", "startedAt", "endedAt",
+            "exitCode", "rawExitStatus", "terminalSessionId", "transcriptPath",
+            "lastOutputAt", "attention",
+        ]
+        XCTAssertTrue(
+            labels.isDisjoint(with: forbiddenRuntimeFields),
+            "Workspace must carry no runtime field; found \(labels.intersection(forbiddenRuntimeFields))"
+        )
+    }
 }
