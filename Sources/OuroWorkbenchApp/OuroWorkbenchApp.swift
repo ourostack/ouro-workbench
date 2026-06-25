@@ -3018,37 +3018,6 @@ struct SidebarFilterField: View {
     ]
 }
 
-/// U19(b): the explained zero-match row for the sidebar's terminals section. Mirrors the
-/// `ContentUnavailableView` pattern the Recovery sheet and command palette already use, so
-/// a filter that hides every row never looks like an empty workspace. Copy comes from
-/// `SidebarFilterPresentation` (pinned in Core); the Clear reuses the existing clear action.
-struct SidebarFilterEmptyStateRow: View {
-    @ObservedObject var model: WorkbenchViewModel
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Label(
-                SidebarFilterPresentation.emptyStateTitle(query: model.sidebarFilter),
-                systemImage: "line.3.horizontal.decrease.circle"
-            )
-            .font(.callout.weight(.medium))
-            Text(SidebarFilterPresentation.emptyStateDescription(isGlobal: model.sidebarFilterIsGlobal))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            Button {
-                model.sidebarFilter = ""
-            } label: {
-                Label("Clear filter", systemImage: "xmark.circle")
-            }
-            .buttonStyle(.borderless)
-            .controlSize(.small)
-        }
-        .padding(.vertical, 6)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
 struct WorkbenchSidebarView: View {
     @ObservedObject var model: WorkbenchViewModel
 
@@ -3112,42 +3081,23 @@ struct WorkbenchSidebarView: View {
             // <name>" framing are gone (DB1 render swap; the WorkbenchProject backing
             // model stays, just invisible). DB8: no in-app "New Workspace" row (②d).
             Section(WorkbenchSurfacePolicy.workspaceSectionTitle) {
-                // Render the persisted `model.state.workspaces` (resolved + ordered by
-                // the seam). `workspaceSidebarModel.rows` is empty when there are no
-                // workspaces, so the section collapses to just the New Terminal row.
+                // FIX PASS (FP5) — LEAN-CMUX layout: the sidebar shows ONLY lean
+                // workspace rows (name + attention summary; + the "no tabs yet" marker
+                // for an empty workspace). Tabs live SOLELY in the top strip
+                // (`WorkspaceTabStrip`), which renders the active workspace's tabs with
+                // the active filter applied (the nested per-tab `TerminalAgentRow`s that
+                // used to live here are gone — they duplicated the strip and re-derived
+                // the filter against the wrong list). `workspaceSidebarModel.rows` is
+                // empty when there are no workspaces, so the section collapses to just
+                // the New Terminal row.
                 ForEach(model.workspaceSidebarModel.rows) { row in
                     WorkspaceSidebarRow(row: row, model: model)
-                    ForEach(model.workspaceTabRows(for: row)) { tab in
-                        let entry = tab.entry
-                        TerminalAgentRow(
-                            entry: entry,
-                            isSelected: model.selectedEntryID == entry.id,
-                            displayName: tab.resolved.effectiveTabName,
-                            cliName: model.cliName(for: entry),
-                            health: model.executableHealth(for: entry),
-                            gitStatus: model.gitStatus(for: entry),
-                            runningSince: model.runningStartDate(for: entry),
-                            isPinned: entry.isPinned,
-                            activity: model.sessionActivity(for: entry),
-                            isStalled: model.isStalled(entry)
-                        )
-                            .tag(entry.id)
-                            .contextMenu {
-                                TerminalRowContextMenu(entry: entry, model: model)
-                            }
-                    }
                     if row.isEmpty {
                         // FORK #3 / DB5 — an empty workspace renders its row + an inline
                         // "no tabs yet" marker, never blank pixels (onboarding ③ seeds
                         // legitimately-empty workspaces).
                         SidebarWorkspaceEmptyRow()
                     }
-                }
-                // U19(b): a non-empty filter that hides every row gets an explicit,
-                // quoted "No sessions match …" state with a one-click Clear — distinct
-                // from a genuinely-empty workspace.
-                if model.sidebarFilterIsActive && model.workspaceSidebarModel.rows.allSatisfy(\.tabs.isEmpty) {
-                    SidebarFilterEmptyStateRow(model: model)
                 }
                 SidebarActionRow(title: "New Terminal", systemImage: "plus") {
                     model.isNewSessionSheetPresented = true
@@ -3276,19 +3226,36 @@ struct SidebarWorkspaceEmptyRow: View {
 struct WorkspaceTabStrip: View {
     @ObservedObject var model: WorkbenchViewModel
 
-    /// The active workspace's resolved active tabs (the seam already dropped dangling
-    /// ids + archived tabs). Empty when the active workspace has no active tabs.
-    private var tabs: [ResolvedTab] { model.activeWorkspaceRow?.tabs ?? [] }
+    /// The active workspace's active tabs AFTER the sidebar filter (FP5 — the filter
+    /// now lives in the strip; `workspaceTabRows` resolves the seam's active tabs and
+    /// applies `SidebarSessionFilter`). The seam already dropped dangling/archived ids.
+    private func filteredTabs(_ active: WorkspaceRow) -> [ResolvedTab] {
+        model.workspaceTabRows(for: active).map(\.resolved)
+    }
 
     /// Select a tab — sets the entry selection; the row's workspace stays active.
     private func select(_ tab: ResolvedTab) { model.selectedEntryID = tab.id }
 
     var body: some View {
         if let active = model.activeWorkspaceRow {
+            let filtered = filteredTabs(active)
+            // FP4 — the filter empty-state is decided by the pure Core seam against the
+            // FILTERED count (not the unfiltered list): a filter is active AND it hid
+            // every tab the workspace actually has.
+            let filterHidAll = WorkspaceSidebarPresentation.stripFilterHidAllTabs(
+                tabsBeforeFilter: active.tabs.count,
+                tabsAfterFilter: filtered.count,
+                filterActive: model.sidebarFilterIsActive
+            )
             VStack(spacing: 0) {
-                if tabs.isEmpty {
-                    // FORK #3 / DB5 — never blank: an empty active workspace still
-                    // shows an honest "no tabs yet" strip state.
+                if filterHidAll {
+                    // FP4 — the filter hid every tab in the active workspace: show an
+                    // explicit, quoted "No sessions match …" state with a one-click
+                    // Clear, distinct from a genuinely-empty workspace.
+                    stripFilterEmptyState
+                } else if filtered.isEmpty {
+                    // FORK #3 / DB5 — never blank: an empty active workspace (no tabs at
+                    // all, no filter hiding them) still shows an honest "no tabs yet".
                     HStack {
                         Text("\(active.effectiveName) — no tabs yet")
                             .font(.caption)
@@ -3300,7 +3267,7 @@ struct WorkspaceTabStrip: View {
                 } else {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 6) {
-                            ForEach(tabs) { tab in
+                            ForEach(filtered) { tab in
                                 tabButton(tab)
                             }
                         }
@@ -3313,6 +3280,31 @@ struct WorkspaceTabStrip: View {
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Tabs in \(active.effectiveName)")
         }
+    }
+
+    /// FP4 — the in-strip "No sessions match …" empty-state with a one-click Clear.
+    /// Reuses the Core-pinned `SidebarFilterPresentation` copy (the same text the
+    /// sidebar previously showed) so the filter's voice stays consistent.
+    private var stripFilterEmptyState: some View {
+        HStack(spacing: 8) {
+            Label(
+                SidebarFilterPresentation.emptyStateTitle(query: model.sidebarFilter),
+                systemImage: "line.3.horizontal.decrease.circle"
+            )
+            .font(.callout.weight(.medium))
+            .lineLimit(1)
+            .truncationMode(.tail)
+            Spacer(minLength: 0)
+            Button {
+                model.sidebarFilter = ""
+            } label: {
+                Label("Clear", systemImage: "xmark.circle")
+            }
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
     }
 
     @ViewBuilder

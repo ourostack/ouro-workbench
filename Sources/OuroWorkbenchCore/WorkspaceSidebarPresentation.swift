@@ -200,6 +200,28 @@ public enum WorkspaceSidebarPresentation {
             }
     }
 
+    /// FIX PASS (FP4/FP5) — the filtered tab-strip empty-state decision. In the
+    /// lean-cmux layout the active filter is applied IN THE STRIP (the active
+    /// workspace's tabs render filtered). The "No sessions match…" empty-state must
+    /// appear ONLY when a filter is active AND it hid EVERY tab the workspace actually
+    /// has — distinct from a genuinely-empty workspace (0 tabs before filtering → the
+    /// "no tabs yet" marker). The previous sidebar guard tested the UNFILTERED count,
+    /// so the empty-state never showed when a filter hid all tabs; this pins the
+    /// decision against the FILTERED count.
+    ///
+    /// - Parameters:
+    ///   - tabsBeforeFilter: the active workspace's active-tab count BEFORE the filter.
+    ///   - tabsAfterFilter: the count AFTER applying the filter.
+    ///   - filterActive: whether a non-empty filter query is active.
+    /// - Returns: true iff the strip should show the filter "no match" empty-state.
+    public static func stripFilterHidAllTabs(
+        tabsBeforeFilter: Int,
+        tabsAfterFilter: Int,
+        filterActive: Bool
+    ) -> Bool {
+        filterActive && tabsBeforeFilter > 0 && tabsAfterFilter == 0
+    }
+
     /// The lean row attention summary over a workspace's ACTIVE tabs: the
     /// highest-severity attention present, plus whether any active tab needs the
     /// operator. Archived tabs are excluded by construction (the caller passes only

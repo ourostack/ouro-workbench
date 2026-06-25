@@ -21,8 +21,8 @@ final class WorkspaceSidebarWiringTests: XCTestCase {
             "the sidebar must derive its rows from the WorkspaceSidebarPresentation seam"
         )
         XCTAssertTrue(
-            source.contains("model.state.workspaces"),
-            "the seam must be fed state.workspaces (the persisted ②a structure)"
+            source.contains("workspaces: state.workspaces"),
+            "the seam must be fed the persisted state.workspaces (②a structure) — not a re-derived flat list"
         )
         // The Workspaces section header keeps using the surface-policy constant.
         XCTAssertTrue(
@@ -68,6 +68,65 @@ final class WorkspaceSidebarWiringTests: XCTestCase {
         XCTAssertFalse(
             source.contains("SidebarActionRow(title: WorkbenchSurfacePolicy.newWorkspaceTitle"),
             "the 'New Workspace' action row must be removed from the sidebar (DB8)"
+        )
+    }
+
+    // MARK: - FIX PASS (FP5): lean-cmux — nested per-tab rows GONE from the sidebar
+
+    func testSidebarHasNoNestedPerTabRows() throws {
+        // LEAN-CMUX: the sidebar shows ONLY lean workspace rows (+ empty marker) — the
+        // per-tab TerminalAgentRow ForEach (model.workspaceTabRows) is removed from the
+        // Workspaces section. Tabs live solely in the top strip (WorkspaceTabStrip).
+        let source = try appSource()
+        XCTAssertFalse(
+            source.contains("ForEach(model.workspaceTabRows(for: row))"),
+            "the nested per-tab TerminalAgentRow ForEach must be removed from the sidebar (tabs live in the top strip)"
+        )
+    }
+
+    func testSidebarStillRendersLeanWorkspaceRows() throws {
+        // The lean workspace row + empty marker stay (the sidebar's only workspace content).
+        let source = try appSource()
+        XCTAssertTrue(
+            source.contains("WorkspaceSidebarRow(row: row, model: model)"),
+            "the lean WorkspaceSidebarRow must still render per workspace"
+        )
+        XCTAssertTrue(
+            source.contains("SidebarWorkspaceEmptyRow()"),
+            "the empty-workspace marker must still render"
+        )
+    }
+
+    // MARK: - FIX PASS (FP4+FP5): the filtered empty-state lives in the STRIP
+
+    func testTabStripAppliesTheFilterAndShowsFilteredEmptyState() throws {
+        let source = try appSource()
+        let strip = try sourceSlice(
+            in: source,
+            from: "struct WorkspaceTabStrip: View",
+            to: "\n}\n"
+        )
+        // The strip renders the active workspace's FILTERED tabs (via workspaceTabRows,
+        // which applies SidebarSessionFilter), not the raw unfiltered ResolvedTabs.
+        XCTAssertTrue(
+            strip.contains("workspaceTabRows(for:"),
+            "the strip must render the active workspace's FILTERED tabs"
+        )
+        // The strip shows the filter empty-state via the pure Core decision, tested
+        // against the FILTERED count (FP4).
+        XCTAssertTrue(
+            strip.contains("stripFilterHidAllTabs"),
+            "the strip must decide the filter empty-state via the pure Core seam (filtered count)"
+        )
+    }
+
+    func testSidebarNoLongerCarriesTheFilterEmptyStateRow() throws {
+        // FP4/FP5: the filter empty-state moved from the sidebar Workspaces section to
+        // the strip. The old sidebar guard (allSatisfy on UNFILTERED row.tabs) is gone.
+        let source = try appSource()
+        XCTAssertFalse(
+            source.contains("model.workspaceSidebarModel.rows.allSatisfy(\\.tabs.isEmpty)"),
+            "the unfiltered-tabs sidebar filter empty-state guard must be removed (it moved to the strip, tested on the filtered list)"
         )
     }
 
