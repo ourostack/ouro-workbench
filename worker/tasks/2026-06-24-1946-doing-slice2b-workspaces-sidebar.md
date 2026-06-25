@@ -1,6 +1,6 @@
 # Doing: Slice ②b — Named-Workspace Sidebar + Tab Layout; DELETE "Terminals in Home"
 
-**Status**: done
+**Status**: fix pass (post-review) — in progress
 **Execution Mode**: direct
 **Created**: 2026-06-24 19:46
 **Planning**: ./2026-06-24-1755-planning-workspaces-converged-design.md
@@ -237,6 +237,41 @@ Also **update the two known breaking guards** to their new truth (re-point `Work
 4. **FORK #4 (minor, low-visibility) — rename the backing default "Home" project.** Default (DB6): leave `setupWorkspaceName = "Home"` (invisible after the swap). *Alternative:* rename/remove it for cleanliness. Out of ②b's minimal scope; flagged only for completeness. **Not user-facing under DB1; surface only if a clean removal is wanted.**
 5. **FORK #5 (user-facing UI/UX) — Archived section scoping.** Default (DB7): scope the Archived section to the ACTIVE WORKSPACE's tabs (hides when none). *Alternative:* show archived terminals globally (all workspaces) in one Archived section. Chosen workspace-scoped to stay coherent with "everything is shown under its workspace," but a global archive is defensible if the operator treats archive as a flat recycle-bin. **Surface to operator: per-workspace archive or global archive?**
 6. **FORK #6 (user-facing UI/UX, low-stakes) — keep a manual "New Workspace" affordance in ②b?** Default (DB8): REMOVE it (in-app create/rename is ②d; workspaces are seeded by onboarding ③ / bring-back ④). *Alternative:* keep a minimal "New Workspace" that creates an empty `Workspace` (not a `WorkbenchProject`) as a ②b stop-gap. Removed by default to avoid shipping a half-built create flow before ②d's naming model lands. **Surface to operator only if they want manual workspace creation before ②d.**
+
+## Fix pass (post-review) — independent review BLOCKED merge
+
+A fresh, unbiased independent review of the pushed-but-unmerged ②b branch BLOCKED the merge. The findings below were each **re-verified against source at the fix-pass HEAD (`073cabd`)** before any edit. This pass works directly on `feat/slice2b-workspaces-sidebar` (no new branch, no PR, no merge). One commit per fix; strict TDD; the tests must reflect REALITY (no hand-built states the real migration never produces).
+
+### Verified findings (against source @ `073cabd`)
+
+**FP1 — CRITICAL: archived terminals become invisible + un-restorable after upgrade.**
+- VERIFIED: `migrateToWorkspaceStructure()` (`WorkspaceModels.swift:963-985`) folds ONLY `!isArchived` entries into the "Restored workspace" (`:970-972` `filter { !$0.isArchived && ... }`). Archived entries are in NO workspace's `tabIds`.
+- VERIFIED: the App's `archivedSessionEntries` (`OuroWorkbenchApp.swift:11453-11457`) reads `activeWorkspaceRow?.archivedTabs` — the seam's per-workspace partition of that workspace's `tabIds`. Post-migration that partition is ALWAYS empty (archived ids aren't in any tabIds) ⇒ the Archived section (`:3157-3172`) never renders ⇒ the row's `Restore` menu (the only un-archive UI) vanishes ⇒ archived terminals are orphaned from the UI.
+- VERIFIED: `archiveCustomSession` (`:17651`) only flips `isArchived` via `replaceEntry`; it does NOT remove the id from any `tabIds`. So a runtime-archived entry stays in tabIds, but a MIGRATED archived entry never was — both must be covered, hence GLOBAL.
+- **FIX (supersedes DB7→DB10):** the Archived section surfaces ALL archived entries **globally** — `state.processEntries` filtered to terminal/shell + `isArchived` — decoupled from any workspace `tabIds` membership. No archived terminal can ever be orphaned. Regression test proves archived entries STILL appear after the REAL migration.
+
+**FP2 — FIXTURE DISHONESTY (root cause FP1 slipped through).**
+- VERIFIED: the Unit-0 fixture (`fixtures/migrated-ui-state.json:96-101`) and the `--uisurfacetest` smoke (`UISurfaceTest.swift:132-138`) HAND-BUILD the archived id into the "Restored workspace" `tabIds` (`...0004` / `archived.id`) — a state the real migration NEVER produces (`:970-972` filters it out). The seam's `restored.archivedTabs.count == 1` assertion (`:161`) only passed because of that injection, masking FP1.
+- **FIX:** rebuild the fixture + smoke so the migrated state is produced by driving the REAL `migrateToWorkspaceStructure()` (archived entries NOT in any `tabIds`). The smoke asserts the global Archived resolution surfaces the archived entry even though it's in no `tabIds`.
+
+**FP3 — seam test `testWorkspaceWithOnlyArchivedTabsIsNotEmpty`** (`WorkspaceSidebarPresentationTests.swift:217-227`) constructs `tabIds: [arch.id]` — a state the real migration never makes. The seam's per-workspace partition is still legit for RUNTIME-archived ids (which stay in tabIds), so the test stays valid AS A SEAM UNIT, but is re-documented to make clear it exercises the runtime-archive case, NOT the migration case (which the new global-archived regression test covers).
+
+**FP4 — MODERATE: filter empty-state tested against UNFILTERED tabs.**
+- VERIFIED: the `:3149` guard tests `model.workspaceSidebarModel.rows.allSatisfy(\.tabs.isEmpty)` (UNFILTERED `row.tabs`), but tabs render via the FILTERED `workspaceTabRows(for:)` / (post-FP5) the filtered strip — so "No sessions match…" doesn't appear when a filter hides all tabs but the workspace has tabs.
+- **FIX:** the filtered empty-state lands in the top strip (see FP5), tested against the FILTERED list (a new Core seam behavior: filtered-strip empty-state).
+
+**FP5 — LEAN-CMUX LAYOUT.** Remove the nested per-tab `TerminalAgentRow`s from the sidebar (`:3120-3138`). Sidebar shows ONLY: lean `WorkspaceSidebarRow` per workspace + New Terminal + global Archived + Recovery. Tabs live solely in the top strip (`WorkspaceTabStrip`), which renders the active workspace's tabs with the active filter APPLIED + shows "No sessions match … (Clear)" in the strip when the filter hides all tabs (the FP4 fix).
+- **SAFETY VALVE:** if relocating the filter is a substantial restructure (touches selection wiring / many call sites), STOP and report; merge FP1/FP2/FP3 + dead-sheet alone, split lean-cmux into its own pass.
+
+**FP6 — MINOR: dead surface.** DB8 removed the "New Workspace" trigger but `isNewGroupSheetPresented` + its `.sheet` (`:522`, `:10614`) are unreachable. Remove the orphaned sheet + flag, and fix the stale `SidebarProjectRow` comment at `:6731`. (`NewTerminalGroupSheet` struct stays — still guarded by `WorkspaceNameDerivationTests` and internal, so no unused-symbol warning.)
+
+### Decision change
+- **DB10 (supersedes DB7) — the Archived section is GLOBAL, not per-active-workspace.** Archived terminals are a flat recycle-bin surfaced from `state.processEntries` filtered to `isArchived` (terminal/shell), independent of workspace `tabIds`. Rationale: the real migration leaves archived entries out of every `tabIds`, so any per-workspace scoping orphans them after upgrade (FP1). The seam's per-workspace `archivedTabs` partition is RETAINED (it correctly excludes archived tabs from the active strip for runtime-archived ids) but is no longer the source of truth for the Archived SECTION.
+
+### Fix-pass units
+- **FP-A (FP1+FP2+FP3): global Archived + honest fixture/smoke.** Seam stays; App `archivedSessionEntries` → global. New regression test (Core-visible global-archived resolver + a real-migration test proving archived entries survive). Rebuild fixture + smoke from real migration output. Re-document FP3 test. Commit.
+- **FP-B (FP5+FP4): lean-cmux strip + filtered empty-state** (or SAFETY VALVE). Commit.
+- **FP-C (FP6): dead sheet + flag + stale comment.** Commit.
 
 ## Progress Log
 - 2026-06-24 20:56 **Completion gates passed.** Gate 1 (implementation coverage): all 6 slice commits present (one per unit, RED folded into the next GREEN per the TDD pattern); every deliverable matches its unit (seam + tests + wiring tests + `WorkspaceTabStrip` + `WorkspaceSidebarRow` present; `SidebarProjectRow` / `terminalsSectionTitle` / `Text(project.rootPath)` gone; migrated smoke present; `selectedProjectID` kept). Gate 2 (build+test): `OuroWorkbench` strict build exit 0; 2778 tests / 0 fail / 1 skip; `--uisurfacetest` exit 0. Gate 3 (PR review vs locked decisions): DB1 (projectId kept) / DB2 (pinned-first nil-fallback) / DB3 (droppedTabCount) / DB4 (no-cost boundary invariant) / DB5 (empty marker) / DB6 (setupWorkspaceName "Home" kept, bootstrapper tests unchanged) / DB7 (archived scoped to active workspace) / DB8 (New Workspace row removed) / DB9 (`workspaceTabEntries` accessor actually FED to `resolve()`) — all verified in the diff, not just documented. No AI attribution in any commit. Branch ready to push (no PR per operator).
