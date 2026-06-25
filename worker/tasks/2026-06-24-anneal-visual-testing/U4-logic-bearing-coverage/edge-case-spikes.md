@@ -214,3 +214,52 @@ byte-identically → green. **CAUGHT.**
 **GO.** Recipe sound; C10/C11 reuse the fixed-`Date` constant for
 `BossActionReceiptStrip`/`ActionLogView`/`HabitHistoryPanelView`/`HarnessStatusSheet`
 (`observedAt`) timestamped rows; the same producer-or-`@Published` seam applies.
+
+---
+
+## Recipe 5 — AN-001 + fixed `OuroAgentRecord` → `OuroAgentManagerView` (home cluster C8) ✅ GO
+
+**The risk it de-risks:** edge-case playbook #2 / the AN-001 SOURCE defect. A VM built with
+the default inventory scans the REAL `~/AgentBundles` in its initializer
+(`refreshOuroAgents()`), leaking machine-local agent NAMES into `model.ouroAgents` → the
+rendered tree (P3). The recipe pins it twofold: (1) inject a temp `agentBundlesURL` into
+BOTH the registrar AND the inventory (non-existent temp dir → `scan() == []`) so the init
+scan is hermetic; (2) drive `model.ouroAgents = [fixed OuroAgentRecord]` directly (the
+SU-E3 seam) with FIXED names + relative paths.
+
+**Proven seam (P2):** `model.ouroAgents` is the SAME `@Published` the inventory scan
+populates — direct injection of `public OuroAgentRecord` values IS the production seam. The
+view's `.task { model.refreshOuroAgents() }` does NOT run under the synchronous `inspect()`,
+so the injected agents survive the snapshot. `model` via the `makeVM` dual-injection.
+
+```swift
+return WorkbenchViewModel(paths: paths,
+    bossWorkbenchMCPRegistrar: BossWorkbenchMCPRegistrar(agentBundlesURL: tempAgentBundles), // AN-001
+    ouroAgentInventory: OuroAgentInventory(agentBundlesURL: tempAgentBundles))               // AN-001
+model.ouroAgents = [OuroAgentRecord(name: "alpha-agent",
+    bundlePath: "AgentBundles/alpha-agent.ouro", configPath: ".../agent.json",
+    status: .ready, detail: "ready")]                                                        // SU-E3 seam
+```
+
+**Enumerated state-set + references** (`__Snapshots__/OuroAgentManagerView.*`):
+| state | distinguishing nodes |
+|---|---|
+| `empty` | "no local agents" status line · `Text "No Ouro agents are installed on this machine yet."` |
+| `one` | one row: `Text "alpha-agent"` · `Text "ready"` (no boss pill) |
+| `many` | two rows; the boss-matching row carries the `Text "boss"` pill; status "2 local, 0 ready; boss boss-agent" |
+
+(The boss row's MCP-pill "registration error" comes from the temp registrar — deterministic
+& hermetic, asserted byte-identical-twice.)
+
+**Determinism (P3):** fixed agent names + relative paths + fixed boss name; byte-identical
+twice; `!contains("/Users/")`.
+
+**Mutation-verify (P2):** inverted the `if model.ouroAgents.isEmpty` gate → **all 3
+snapshots + the negative control went RED** → reverted byte-identically → green. **CAUGHT.**
+
+**a11y-id:** none needed (each row's `View label="<name>, ready"` a11y label is already
+distinct).
+
+**GO.** Recipe sound; C8 reuses the dual-injection + `model.ouroAgents` direct seam for
+`OuroAgentRowView`/`AgentHomeEmptyState`; C3/C7 reuse AN-001 for boss-choice/autonomy name
+reads + the agent-detail family.
