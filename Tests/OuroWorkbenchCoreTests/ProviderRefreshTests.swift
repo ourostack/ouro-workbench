@@ -123,9 +123,24 @@ final class ProviderRefreshTests: XCTestCase {
         XCTAssertFalse(outcome.commandAttempted)
     }
 
-    func testDefaultRunnerUsesHeadlessRefreshWhenAgentNamePresent() async throws {
+    func testEnvironmentInjectedRunnerUsesHeadlessRefreshWhenAgentNamePresent() async throws {
         let harness = try HeadlessOuroHarness()
-        await harness.withPathPrepended {
+        let runner = ProviderRefreshRunner(
+            environment: harness.environment(),
+            verifyProbe: { _ in .healthy }
+        )
+
+        let outcome = await runner.refresh(agentName: "slugger")
+
+        XCTAssertEqual(outcome.truth, .refreshed)
+        XCTAssertTrue(outcome.commandAttempted)
+
+        XCTAssertEqual(try harness.invocations(), [["provider", "refresh", "--agent", "slugger"]])
+    }
+
+    func testDefaultRunnerUsesProductionHeadlessRefreshWhenAgentNamePresent() async throws {
+        let harness = try HeadlessOuroHarness()
+        await harness.withLoginShellPath {
             let runner = ProviderRefreshRunner(verifyProbe: { _ in .healthy })
 
             let outcome = await runner.refresh(agentName: "slugger")
@@ -139,7 +154,7 @@ final class ProviderRefreshTests: XCTestCase {
 
     func testHeadlessRefreshInvokesOuroProviderRefreshFromPath() async throws {
         let harness = try HeadlessOuroHarness()
-        try await harness.withPathPrepended {
+        try await harness.withLoginShellPath {
             try await ProviderRefreshRunner.headlessRefresh(agentName: "slugger")
         }
 
@@ -187,10 +202,17 @@ private final class HeadlessOuroHarness {
         try? FileManager.default.removeItem(at: root)
     }
 
-    func withPathPrepended<T>(_ body: () async throws -> T) async rethrows -> T {
-        let oldPath = getenv("PATH").map { String(cString: $0) } ?? ""
-        setenv("PATH", "\(bin.path):\(oldPath)", 1)
-        defer { setenv("PATH", oldPath, 1) }
+    func environment() -> [String: String] {
+        var environment = ProcessInfo.processInfo.environment
+        let oldPath = environment["PATH"] ?? ""
+        environment["PATH"] = "\(bin.path):\(oldPath)"
+        return environment
+    }
+
+    func withLoginShellPath<T>(_ body: () async throws -> T) async rethrows -> T {
+        let oldPath = TerminalEnvironment.loginShellPath
+        TerminalEnvironment.loginShellPath = bin.path
+        defer { TerminalEnvironment.loginShellPath = oldPath }
         return try await body()
     }
 

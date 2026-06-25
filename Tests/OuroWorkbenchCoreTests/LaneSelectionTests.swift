@@ -141,13 +141,12 @@ final class LaneSelectionTests: XCTestCase {
         let root = try coverageBatch2TemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
         let argsFile = root.appendingPathComponent("args.txt")
-        let oldPath = try coverageBatch2InstallFakeOuro(
+        let environment = try coverageBatch2FakeOuroEnvironment(
             in: root,
             body: "printf '%s\\n' \"$@\" > '\(argsFile.path)'\nexit 0\n"
         )
-        defer { setenv("PATH", oldPath, 1) }
 
-        try await LaneSelectionRunner.headlessSelect(makeSelection())
+        try await LaneSelectionRunner.headlessSelect(makeSelection(), environment: environment)
 
         XCTAssertEqual(
             try String(contentsOf: argsFile, encoding: .utf8),

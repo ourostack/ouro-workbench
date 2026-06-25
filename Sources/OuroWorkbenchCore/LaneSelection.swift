@@ -142,10 +142,15 @@ public struct LaneSelectionRunner: Sendable {
     /// truth is the post-command probe's job.
     @Sendable
     public static func headlessSelect(_ selection: LaneSelection) async throws {
+        try await headlessSelect(selection, environment: TerminalEnvironment().valuesWithResolvedPath())
+    }
+
+    @Sendable
+    static func headlessSelect(_ selection: LaneSelection, environment: [String: String]) async throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = selection.useTokens
-        process.environment = TerminalEnvironment().valuesWithResolvedPath()
+        process.environment = environment
 
         let devNull = FileHandle.nullDevice
         process.standardInput = devNull

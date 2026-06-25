@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 import XCTest
 
 func coverageBatch2TemporaryDirectory(named name: String = #function) throws -> URL {
@@ -14,14 +15,51 @@ func coverageBatch2InstallFakeOuro(
     in directory: URL,
     body: String = "exit 0\n"
 ) throws -> String {
+    let bin = try coverageBatch2WriteFakeOuro(in: directory, body: body)
+    let oldPath = getenv("PATH").map { String(cString: $0) } ?? ""
+    setenv("PATH", "\(bin.path):\(oldPath)", 1)
+    return oldPath
+}
+
+func coverageBatch2FakeOuroEnvironment(
+    in directory: URL,
+    body: String = "exit 0\n"
+) throws -> [String: String] {
+    let bin = try coverageBatch2WriteFakeOuro(in: directory, body: body)
+    var environment = ProcessInfo.processInfo.environment
+    let oldPath = environment["PATH"] ?? ""
+    environment["PATH"] = "\(bin.path):\(oldPath)"
+    return environment
+}
+
+private func coverageBatch2WriteFakeOuro(
+    in directory: URL,
+    body: String
+) throws -> URL {
     let bin = directory.appendingPathComponent("bin", isDirectory: true)
     try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
     let ouro = bin.appendingPathComponent("ouro")
     try "#!/bin/sh\n\(body)".write(to: ouro, atomically: true, encoding: .utf8)
     try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: ouro.path)
-    let oldPath = getenv("PATH").map { String(cString: $0) } ?? ""
-    setenv("PATH", "\(bin.path):\(oldPath)", 1)
-    return oldPath
+    return bin
+}
+
+func coverageBatch2CleanupEscapedGrandchild(pidFile: URL) {
+    guard let text = try? String(contentsOf: pidFile, encoding: .utf8),
+          let rawPID = Int32(text.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+        return
+    }
+
+    let pid = pid_t(rawPID)
+    _ = kill(pid, SIGKILL)
+    let deadline = Date().addingTimeInterval(2)
+    while Date() < deadline {
+        errno = 0
+        if kill(pid, 0) == -1, errno == ESRCH {
+            return
+        }
+        usleep(20_000)
+    }
 }
 
 final class CoverageBatch2URLProtocol: URLProtocol {

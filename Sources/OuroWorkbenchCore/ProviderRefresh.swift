@@ -84,12 +84,28 @@ public struct ProviderRefreshRunner: Sendable {
     private let runRefresh: @Sendable (String) async throws -> Void
     private let verifyProbe: @Sendable (String) async -> AgentRepairProbe
 
+    public init(verifyProbe: @escaping @Sendable (String) async -> AgentRepairProbe) {
+        self.init(runRefresh: Self.headlessRefresh, verifyProbe: verifyProbe)
+    }
+
     public init(
-        runRefresh: @escaping @Sendable (String) async throws -> Void = ProviderRefreshRunner.headlessRefresh,
+        runRefresh: @escaping @Sendable (String) async throws -> Void,
         verifyProbe: @escaping @Sendable (String) async -> AgentRepairProbe
     ) {
         self.runRefresh = runRefresh
         self.verifyProbe = verifyProbe
+    }
+
+    init(
+        environment: [String: String],
+        verifyProbe: @escaping @Sendable (String) async -> AgentRepairProbe
+    ) {
+        self.init(
+            runRefresh: { agentName in
+                try await Self.headlessRefresh(agentName: agentName, environment: environment)
+            },
+            verifyProbe: verifyProbe
+        )
     }
 
     /// Run `ouro provider refresh --agent <name>` headlessly → post-command verify probe →
@@ -113,10 +129,18 @@ public struct ProviderRefreshRunner: Sendable {
     /// ignored: recovery truth is the post-command probe's job.
     @Sendable
     public static func headlessRefresh(agentName: String) async throws {
+        try await headlessRefresh(
+            agentName: agentName,
+            environment: TerminalEnvironment().valuesWithResolvedPath()
+        )
+    }
+
+    @Sendable
+    static func headlessRefresh(agentName: String, environment: [String: String]) async throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = ["ouro", "provider", "refresh", "--agent", agentName]
-        process.environment = TerminalEnvironment().valuesWithResolvedPath()
+        process.environment = environment
 
         let devNull = FileHandle.nullDevice
         process.standardInput = devNull
