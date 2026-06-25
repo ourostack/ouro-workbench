@@ -1,0 +1,2 @@
+Text kind=static text="beta-agent"
+Text kind=static text="anthropic/claude-opus"
