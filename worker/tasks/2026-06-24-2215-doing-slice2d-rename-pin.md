@@ -39,7 +39,7 @@ Wire the cmux in-app editing affordances to the EXISTING `Workspace` / `ProcessE
 - [x] Pure Core mutators on `WorkspaceState` exist and are 100% line+region covered: `setWorkspaceNameOverride(workspaceId:to:)`, `clearWorkspaceNameOverride(workspaceId:)`, `toggleWorkspacePin(workspaceId:)`, `setTabNameOverride(tabId:to:)`. Each is a no-op for an unknown id (covered).
 - [x] Pure `WorkspaceRenameCommit` helper decides empty/whitespace commit semantics (DECISION D2d-1 below); 100% region covered.
 - [x] Pure `InlineRenameState` (or equivalent) models "is rename active / which target / commit / cancel" transitions; 100% region covered.
-- [ ] Workspace context menu (Pin/Unpin, Rename ⇧⌘R, Remove Custom Name) attached to `WorkspaceSidebarRow`; "Remove Custom Name" item conditional on `nameOverride != nil`.
+- [x] Workspace context menu (Pin/Unpin, Rename ⇧⌘R, Remove Custom Name) attached to `WorkspaceSidebarRow`; "Remove Custom Name" item conditional on `nameOverride != nil`.
 - [ ] Tab context menu (Rename ⌘R) attached to `WorkspaceTabStrip` tab button.
 - [ ] Inline editors (prefilled, Enter=commit, Escape=cancel, helper caption) render for workspace + tab rename.
 - [ ] Pinning a workspace re-sorts pinned-first (verified through the existing seam in a Core test + the `--uisurfacetest` smoke).
@@ -177,7 +177,7 @@ Cover every transition arm.
 **Acceptance**: green; allowlist unchanged; tests green.
 **Commit (Unit 3, one commit)**: `feat(core): InlineRenameState begin/commit/cancel/switch transitions (②d)`
 
-### ⬜ Unit 4a: App workspace context menu + thin wrappers — Source guard (RED)
+### ✅ Unit 4a: App workspace context menu + thin wrappers — Source guard (RED)
 **What**: In a new `Tests/OuroWorkbenchCoreTests/WorkspaceEditingAffordancesWiringTests.swift` (copy the `appSource()`/`repoRoot()` helper verbatim), write FAILING `source.contains(...)` assertions for the WORKSPACE menu wiring:
 - `WorkspaceSidebarRow` (or its host) attaches a `.contextMenu` with Pin/Unpin, Rename Workspace, Remove Custom Name.
 - The ⇧⌘R Rename-Workspace chord exists and targets the active workspace + opens rename (per D2d-8: assert `.keyboardShortcut("r", modifiers: [.command, .shift])` is present AND its action begins-rename on the active workspace, e.g. `beginRename(.workspace(`/`activeWorkspaceRow`). Placement-agnostic: chord dispatcher OR context-menu button — assert the chord + its target, not a fixed location).
@@ -185,14 +185,14 @@ Cover every transition arm.
 - Thin VM wrappers call the Core mutators + `save()` (assert `state.toggleWorkspacePin`, `state.setWorkspaceNameOverride`, `state.clearWorkspaceNameOverride` appear in the App source and are followed by a `save()` in their wrapper).
 **Acceptance**: Assertions FAIL (wiring absent) — real RED, shown.
 
-### ⬜ Unit 4b: App workspace context menu + thin wrappers — Implementation (GREEN)
+### ✅ Unit 4b: App workspace context menu + thin wrappers — Implementation (GREEN)
 **What**: 
 - Add VM wrappers on `WorkbenchViewModel`: `toggleWorkspacePin(_ id:)`, `renameWorkspace(_ id:to:)` (resolves input via `WorkspaceRenameCommit` then `setWorkspaceNameOverride`), `removeCustomWorkspaceName(_ id:)` (→ `clearWorkspaceNameOverride`), each calling `save()`. Expose `workspaceNameOverride(_ id:) -> String?` (or pass the row's `nameOverride`) for the conditional menu item.
 - Add the workspace `.contextMenu` to the `WorkspaceSidebarRow` render (mirror `TerminalRowContextMenu` shape): Pin/Unpin (label flips on `row.isPinned`, `pin`/`pin.slash` icon), Rename Workspace… (⇧⌘R) → `model.beginRename(.workspace(row.id), prefill: row.effectiveName)`, and — only when an override exists — Remove Custom Workspace Name → `model.removeCustomWorkspaceName(row.id)`.
 - `WorkspaceRow` must surface `nameOverride` (add to the seam's `WorkspaceRow` if not present — small additive Core change; if added, extend the seam's existing tests for it). **Re-verify** whether `WorkspaceRow` already carries enough to decide `nameOverride != nil`; if it only has `effectiveName`/`isPinned`, add `nameOverride: String?` to `WorkspaceRow` + its `resolve` mapping (covered by the existing seam tests, extended).
 **Acceptance**: Unit 4a source assertions PASS; `swift build`/`swift test` strict green, 0 warnings.
 
-### ⬜ Unit 4c: Workspace menu — coverage of any Core seam change
+### ✅ Unit 4c: Workspace menu — coverage of any Core seam change
 **What**: If Unit 4b added `nameOverride` to `WorkspaceRow`/`resolve`, run `check-coverage.sh` and extend `WorkspaceSidebarPresentationTests`/`WorkspaceSidebarWiringTests` so the new field's mapping is 100% covered. Allowlist unchanged.
 **Acceptance**: `check-coverage.sh` green; allowlist unchanged.
 **Commit (Unit 4, one commit)**: `feat(app): workspace context menu — pin, rename (⇧⌘R), remove custom name (②d)`
@@ -259,3 +259,4 @@ Then run the FULL gate: `swift build`/`swift test` strict, `Scripts/check-covera
 - 2026-06-24 22:33 Unit 1 complete: 4 pure `WorkspaceState` mutators (`setWorkspaceNameOverride`/`clearWorkspaceNameOverride`/`toggleWorkspacePin`/`setTabNameOverride`) in the existing `public extension`; 15 XCTests (every arm: found/unknown-noop/nil/idempotent-clear/double-toggle) RED→GREEN under strict flags, 0 warn; `check-coverage.sh` green (WorkspaceModels.swift 100% line+region), allowlist unchanged. (commit 6ab1149)
 - 2026-06-24 22:46 Unit 2 complete: pure `WorkspaceRenameCommit.resolve(input:current:) -> Outcome` (D2d-1: empty/whitespace→noop, trimmed-non-empty→commit, trimmed==current→noop, case-change is a real change); 8 XCTests RED→GREEN strict, 0 warn; coverage green (148/150 at 100%, new file covered), allowlist unchanged. (commit d5be56c)
 - 2026-06-24 22:51 Unit 3 complete: pure `InlineRenameState` (`Target.workspace`/`.tab`, `begin`/`cancel`/`commit`→`PendingCommit`/`isEditing`; target-switch replaces draft, no stale leak; commit-when-inactive→nil); 9 XCTests RED→GREEN strict, 0 warn; coverage green (149/151 at 100%), allowlist unchanged. (commit d8753b0)
+- 2026-06-24 23:00 Unit 4 complete: workspace `WorkspaceRowContextMenu` (Pin/Unpin, Rename Workspace… ⇧⌘R, Remove Custom Workspace Name gated on `row.nameOverride != nil`); added `nameOverride: String?` to the `WorkspaceRow` seam + `resolve` mapping (+3 seam tests); VM wrappers `toggleWorkspacePin`/`renameWorkspace`(via `WorkspaceRenameCommit`)/`removeCustomWorkspaceName`/`beginRename*` (all call Core mutator + `save()`); ⇧⌘R/⌘R chords registered + dispatched targeting active workspace / selected tab. Wiring tests RED→GREEN (refined one over-greedy slice that stopped at a closure brace — impl was always correct); strict build 0 warn; coverage green (149/151 at 100%, seam field covered), allowlist unchanged. (commit bc47e5e)
