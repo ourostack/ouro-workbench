@@ -1,6 +1,6 @@
 # Planning: U3 — Surfaces C/D/E (inline editors · recovery+archived · onboarding)
 
-**Status**: drafting
+**Status**: approved (autonomous — operator asleep; fresh unbiased sub-agent review gate substitutes for signoff per the campaign's U1/U2 precedent)
 **Created**: 2026-06-25 09:22
 **Campaign / Journal**: ../2026-06-24-anneal-visual-testing.md  (the authoritative anneal journal — this is its U3 plan)
 **Branch**: feat/anneal-u3-onboarding-recovery (off origin/main @ 976610d, the U2 merge `#293`)
@@ -102,3 +102,4 @@ Use the LIVE ViewInspector view-snapshot harness to snapshot the REAL surfaces C
 
 ## Progress Log
 - 2026-06-25 09:22 Created from the campaign journal (U3 intake). Surfaces C/D/E mapped first-hand + via 3 parallel Explore fan-outs; all campaign §Surfaces line refs RE-LOCATED + validated @ 976610d (stale by ~100–120 lines post-extraction). Every provenance seam traced to its Core type (`RecoveryPlanner`/`RecoveryDigest`/`WorkbenchOnboardingAdvisor`/`FirstRunBootstrapDrive`/`OnboardingRepairActor`); the `.reattach` C1-risk resolved (`liveScreenSessionNames` is a settable `@Published` → NO provenance gap); determinism landmines enumerated per surface. Status: drafting.
+- 2026-06-25 09:25 Committed (`43eddd9`). Autonomous mode (operator asleep): per the campaign's U1/U2 precedent the fresh unbiased sub-agent review gate substitutes for human signoff; planning marked approved → proceeding to Phase 2 (convert to the doing doc; review gate runs before READY_FOR_EXECUTION). Forks Q1–Q6 resolved with recorded reversible defaults.
