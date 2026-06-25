@@ -263,3 +263,50 @@ distinct).
 **GO.** Recipe sound; C8 reuses the dual-injection + `model.ouroAgents` direct seam for
 `OuroAgentRowView`/`AgentHomeEmptyState`; C3/C7 reuse AN-001 for boss-choice/autonomy name
 reads + the agent-detail family.
+
+---
+
+## Recipe 6 — live-terminal-arm carve-out → `SessionDetailView` inactive arm (home cluster C9) ✅ GO
+
+**The risk it de-risks:** edge-case playbook #6 / allowlist-candidate #3. `SessionDetailView`
+(`:8477`) branches `if let session = model.activeSession(for: entry)` → the LIVE arm embeds
+`TerminalPane(session:)` (the live PTY, `@main`-allowlisted, outside coverage) `else` →
+`InactiveTerminalSurface`. The LIVE arm is non-snapshottable in-process. We CARVE it out
+(allowlist that arm) and snapshot the INACTIVE arm via the REAL `activeSession == nil` seam:
+a VM with NO launched session → the `else` branch renders. (Not a fabricated unreachable
+state — the `activeSession == nil` is the GENUINE state a fresh VM produces; AN-006 discipline.)
+
+**Path-leak (verified):** the inactive arm renders `Text(model.launchCommand(for: entry))`
+(`:9381`, built from the entry's executable + working dir). The fixture uses a FIXED `/tmp/u4`
+working dir (the SU3 `/tmp/su3` precedent), defended by `!tree.contains("/Users/")`.
+
+**Proven seam (P2):** VM via the `makeVM` dual-injection store seam; the `ProcessEntry` is
+persisted + loaded through the real store; no session is ever launched →
+`activeSession(for:) == nil` is the genuine seam state.
+
+**Enumerated state-set + references** (`__Snapshots__/SessionDetailView.*`):
+| state | distinguishing nodes (the inactive arm) |
+|---|---|
+| `readyToLaunch` | `Image "terminal"` · `Text "Ready to launch"` · `Text "Launch"` · `Image "play.fill"` · `Text "$"` · `Text "/bin/zsh"` |
+| `archived` | `Image "archivebox"` · `Text "Archived"` · `Text "Restore this session…"` · `Text "Restore"` |
+
+(No `TerminalPane` node in EITHER tree → the live arm is provably never constructed —
+the carve-out holds.)
+
+**Determinism (P3):** the launch command renders `/bin/zsh` (no path leak — the bare login
+shell's displayCommand omits the working dir); `!contains("/Users/")` AND
+`!contains("/var/folders/")`; byte-identical twice.
+
+**Mutation-verify (P2):** mutated `InactiveTerminalSurface.statusHeadline`'s "Ready to launch"
+default → "MUTANT" → **the `readyToLaunch` snapshot + the negative control went RED** →
+reverted byte-identically → green. **CAUGHT.**
+
+**a11y-id:** none needed.
+
+**Allowlist dossier (candidate #3):** the `if let session` LIVE arm is confirmed
+non-snapshottable (it constructs `TerminalPane`, the live PTY) — snapshot the inactive
+states (this recipe), allowlist the live arm. Dossier filled in `allowlist-candidates.md`.
+
+**GO.** Recipe sound; C9 reuses the `activeSession == nil` seam + fixed `/tmp/u4` paths for
+the whole session-detail family (`DetailSplitContainer` inactive arms, `EmptyPanePicker`,
+`SessionInspectorPanel`, `TranscriptHistoryView` `Text(tail.path)` leak, etc.).
