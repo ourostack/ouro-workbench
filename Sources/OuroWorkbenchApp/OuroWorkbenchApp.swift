@@ -3800,9 +3800,9 @@ struct StatusDot: View {
 /// Glanceable per-session chip distilled from the agent's structured transcript
 /// (`SessionActivity`) plus the free `AttentionState` health facet: a health
 /// glyph (amber "stalled" when the session looks busy but its output has gone
-/// quiet), a `done/total · current-step` todo mini, and a token/$ `MetricChip`.
+/// quiet) and a `done/total · current-step` todo mini.
 ///
-/// Composed entirely from existing primitives (`MetricChip`, the shared
+/// Composed entirely from existing primitives (the shared
 /// `AttentionState.health*` helpers). When there's no `SessionActivity` (a plain
 /// shell, or a transcript that doesn't map), it renders just the health glyph
 /// (+ "stalled") — never empty or broken.
@@ -3824,10 +3824,6 @@ struct SessionChip: View {
             healthGlyph
             if let activity, let todoLabel = activity.todoLabel {
                 todoMini(label: todoLabel, activeForm: activity.activeForm)
-            }
-            if let activity, let usd = activity.usdLabel {
-                MetricChip(label: "tok", value: usd)
-                    .help(tokenHelp(activity))
             }
         }
         .accessibilityElement(children: .ignore)
@@ -3865,20 +3861,6 @@ struct SessionChip: View {
         .help(activeForm.map { "\(label) todos · \($0)" } ?? "\(label) todos")
     }
 
-    private func tokenHelp(_ activity: SessionActivity) -> String {
-        var parts: [String] = []
-        if let usd = activity.usdLabel { parts.append("~\(usd) (recent window)") }
-        parts.append("out \(compact(activity.outputTokens)) · in \(compact(activity.inputTokens)) · cache \(compact(activity.cacheReadTokens))")
-        if let model = activity.model { parts.append(model) }
-        return parts.joined(separator: "\n")
-    }
-
-    private func compact(_ n: Int) -> String {
-        if n >= 1_000_000 { return String(format: "%.1fM", Double(n) / 1_000_000) }
-        if n >= 1_000 { return String(format: "%.1fk", Double(n) / 1_000) }
-        return "\(n)"
-    }
-
     private var accessibilityLabel: String {
         var pieces: [String] = [isStalled ? "stalled" : attention.healthLabel]
         if let activity {
@@ -3886,7 +3868,6 @@ struct SessionChip: View {
                 pieces.append("\(todoLabel) todos")
                 if let activeForm = activity.activeForm { pieces.append(activeForm) }
             }
-            if let usd = activity.usdLabel { pieces.append("about \(usd) tokens") }
         }
         return pieces.joined(separator: ", ")
     }
