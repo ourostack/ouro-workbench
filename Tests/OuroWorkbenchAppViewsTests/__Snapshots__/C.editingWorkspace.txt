@@ -1,0 +1,3 @@
+View label="Rename"
+TextField kind=editable text="Frontend"
+Text kind=static text="Press Enter to rename, Escape to cancel."

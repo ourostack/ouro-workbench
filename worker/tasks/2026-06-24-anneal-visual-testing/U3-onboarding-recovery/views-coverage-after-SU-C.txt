@@ -1,0 +1,52 @@
+Running views-lib coverage AFTER Surface C (inline rename editor) enumerated snapshots
+landed (SU-C). First U3 surface.
+
+Branch: feat/anneal-u3-onboarding-recovery (off origin/main @ 976610d)  ·  Captured: 2026-06-25
+
+SCOPE NOTE (D-U3-5 / D-U2-5 carried forward): the views lib (OuroWorkbenchAppViews) is
+NOT gated this unit — COVERAGE_DIRS stays {OuroWorkbenchCore, OuroWorkbenchShellAdapter}
+and the allowlist is UNCHANGED (verified:
+`git diff origin/main -- scripts/check-coverage.sh scripts/coverage-allowlist.txt` is empty).
+This number is PROGRESS TOWARD the U4 coverage gate, recorded per the brief; it does NOT
+gate SU-C. The InlineRenameEditor surface snapshots exercise the editor's body
+(WorkbenchViewsAndModel.swift:3169-3185) + the beginRename/commitRename/cancelRename seam.
+
+Measured via: swift test --enable-code-coverage (full suite, 2943 tests, 1 skipped,
+0 failures), then `xcrun llvm-cov report <PackageTests bin> -instr-profile <default.profdata>
+Sources/OuroWorkbenchAppViews/`.
+
+Per-file (views lib):
+Filename                           Regions  Missed   Cover    Lines    Missed   Cover
+WorkbenchViewsAndModel.swift          5790    5308    8.32%    31883    29514    7.43%
+WorkbenchUpdateInstaller.swift          16      16    0.00%       62       62    0.00%
+Views/DashboardRowLabel.swift            2       0  100.00%       11        0  100.00%
+TOTAL                                  5808    5324    8.33%    31956    29576    7.45%
+
+RUNNING VIEWS-LIB COVERAGE AFTER SU-C: 8.33% region / 7.45% line.
+
+Progression (the input the U4 coverage-gate + allowlist will consume):
+  after U2 (F + A + B + SU3r leaf)  — 7.70% region / 6.94% line   (post-U2 baseline @ 976610d)
+  after SU-C (inline rename editor) — 8.33% region / 7.45% line   <-- THIS sub-unit
+
+NEW code coverage THIS sub-unit (SU-C):
+  No new HARNESS-side helper code (SU-C reuses the U1/U2 harness unchanged). The only NEW
+  code is InlineRenameEditorStateSetTests.swift, whose every fixture/branch is exercised by
+  its own passing tests (8, 0 failures). No `[ExcludeFromCodeCoverage]`-equivalent.
+
+a11y-id audit (D-U3-6 / D-U2-2) — NONE needed:
+  `InlineRenameEditor` carries a FIXED `.accessibilityLabel("Rename")` on its container and
+  renders the bound `inlineRename.draft` in its `TextField`. The four C references are
+  disambiguated by their DISTINCT bound draft strings ("Frontend" / "build" / "   " /
+  "Renamed Frontend"); no two serialized editor trees are byte-identical (verified by
+  `testC_negativeControl_whitespaceTreeDiffersFromValid` + the determinism test's distinct
+  trees), and the no-op-boundary negative control asserts on MODEL STATE (not a node-identity
+  collision), so it is not defeated. → ZERO `.accessibilityIdentifier` added.
+
+MUTATION-VERIFIED negative control (P2 / D-U3-3, the upgraded skill measure):
+  The whitespace-no-op boundary. Breaking the REAL guard
+  `WorkspaceRenameCommit.resolve`'s `guard !trimmed.isEmpty else { return .noop }`
+  (Sources/OuroWorkbenchCore/WorkspaceRenameCommit.swift:35) — removing it so whitespace
+  becomes a `.commit("")` — made `testC_noOpBoundary_whitespaceCommitWritesNoOverride` go
+  RED (XCTAssertNil on `nameOverride` failed: a blank override was written; effectiveName
+  changed "Frontend"→""). Restored byte-identically (`git diff --exit-code Sources/` clean)
+  → GREEN. The control is mechanically load-bearing, not merely asserted.
