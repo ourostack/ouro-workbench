@@ -1,0 +1,44 @@
+Running views-lib coverage AFTER SU-E1 (onboarding repair-step row — OnboardingRepairStepRow
+actor/button variants) landed. First E sub-unit (third U3 surface overall).
+
+Branch: feat/anneal-u3-su-e-onboarding (off main @ 9228a2c, the #296 SU-C+SU-D merge)
+Captured: 2026-06-25
+
+SCOPE NOTE (D-U3-5 / D-U2-5 carried forward): the views lib (OuroWorkbenchAppViews) is
+NOT gated this unit — COVERAGE_DIRS stays {OuroWorkbenchCore, OuroWorkbenchShellAdapter}
+and the allowlist is UNCHANGED (verified:
+`git diff origin/main -- scripts/check-coverage.sh scripts/coverage-allowlist.txt` is empty).
+This number is PROGRESS TOWARD the U4 coverage gate, recorded per the brief; it does NOT
+gate SU-E1. The OnboardingRepairStepRow surface (the actor StatusPill mapping + the id-driven
+button variants: Register/Connect/Run/spinner/Try-again/Fix) exercises the newly-measured lines.
+
+Measured via: ./scripts/check-coverage.sh (full suite, 2968 tests, 1 skipped, 0 failures —
+was 2957 after SU-D), which produces .build/debug/codecov/default.profdata, then
+`xcrun llvm-cov report <PackageTests.xctest bin> -instr-profile default.profdata
+Sources/OuroWorkbenchAppViews/`.
+
+Per-file (views lib):
+
+  File                            Regions  Missed  Cover    Lines  Missed  Cover
+  WorkbenchViewsAndModel.swift     2670     2306   13.63%   5805    5190   10.59%
+  TOTAL                            2678     2312   13.67%   5823    5206   10.60%
+
+Running views-lib coverage AFTER SU-E1: 13.67% region / 10.60% line.
+
+Progression (region): U2 7.70% → SU-C 8.33% → SU-D 9.99% → SU-E1 13.67%.
+Progression (line):   U2 6.94% → SU-C 7.45% → SU-D 10.33% → SU-E1 10.60%.
+
+(The large region jump at SU-E1 reflects directly snapshotting the OnboardingRepairStepRow
+view body — all three actor branches + the workbench-mcp / isProviderSetup / check-* / command
+button branches are now exercised through the real rendered tree.)
+
+NOTE — access-level widening (recorded in the doing-doc Progress Log + reported to the operator):
+the four U3-E surface view structs (OnboardingRepairStepRow, FirstRunBootstrapView,
+OnboardingBossChoiceView, OnboardingReadinessView) were `private struct` and so unreachable by
+`@testable import` (unlike the U2/SU-C/SU-D surfaces, which were already `internal`). They were
+relaxed `private struct` -> `struct` (access-level-only; zero behavior change), matching the
+testable-seam access level RecoverySheet / InlineRenameEditor / TerminalAgentRow already carry.
+Two `*WiringTests` source-slicing anchors that keyed on the literal "private struct …" were made
+access-level-agnostic (Tests-only). This means SU-E1 is NOT strictly test-only — it carries a
+minimal, reversible, behavior-neutral Sources access-widening that was structurally required to
+snapshot the surfaces at all.

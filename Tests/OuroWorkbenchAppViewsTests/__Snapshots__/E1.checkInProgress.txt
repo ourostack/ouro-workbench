@@ -1,0 +1,4 @@
+Text kind=static text="Checking…"
+Text kind=static text="Checking…"
+Text kind=static text="Checking the model it talks with"
+Text kind=static text="Making sure your connection is live."

@@ -1,0 +1,6 @@
+Text kind=static text="Choose"
+Text kind=static text="Choose"
+Text kind=static text="Create a new agent"
+Text kind=static text="Set up a brand-new agent — Workbench walks you through it."
+Text kind=static text="Choose"
+Image image="wand.and.stars"

@@ -1,0 +1,6 @@
+Text kind=static text="Needs you"
+Text kind=static text="Needs you"
+Text kind=static text="Connect a provider"
+Text kind=static text="Workbench opens a setup form so you can connect a provider. This is the only step that needs you."
+Text kind=static text="Connect"
+Image image="link"

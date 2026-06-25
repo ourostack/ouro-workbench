@@ -1,0 +1,6 @@
+Text kind=static text="Workbench"
+Text kind=static text="Workbench"
+Text kind=static text="Wake your agent"
+Text kind=static text="Workbench brings the local runtime back online so your agent can respond."
+Text kind=static text="Fix"
+Image image="wand.and.stars"
