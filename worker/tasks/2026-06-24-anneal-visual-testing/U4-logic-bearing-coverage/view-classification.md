@@ -88,11 +88,23 @@ SessionStatusBar | LOGIC | 9158 | ternary archived / if/else-if buttons / if !ar
 CustomSessionManagementBar | LOGIC | 9206 | if archived else / ForEach projects
 InactiveTerminalSurface | LOGIC | 9276 | if archived / if manualRecoveryNeeded / if canRecover / if transcript
 RunningSessionHeaderControls | LOGIC | 9494 | ForEach(primaryActions) / ForEach(sections) / switch menuButton
-NewTerminalSessionSheet | LOGIC | 9931 | onChange-guard / ternary canCreate
+NewTerminalSessionSheet | RECONFIRM (attribute-only-leaning) | 9931 | only `.disabled(!canCreate)` + an `onChange`/`guard` — NO node-tree branch; likely drops to branchless at the C11 reconfirm
 RecoveryDrillView | LOGIC | 10288 | if let result ForEach(items)
 
-(66 logic-bearing.) `MachineRuntimeView` (`:10170`, login-item `@StateObject`) and
-`WorkbenchRootView` (`:131`, shell) are NOT in the 66 — they are allowlist-candidates.
+(69 structural-LOGIC entries above; **66 confirmed multi-state + 3 RECONFIRM**, see reconciliation.)
+`MachineRuntimeView` (`:10170`, login-item `@StateObject`) and `WorkbenchRootView` (`:131`, shell)
+are NOT in the 69 — they are allowlist-candidates.
+
+**The 3 RECONFIRM (attribute-only-leaning) entries** — re-checked per cluster; each either confirms a
+real serialized-tree flip (stays LOGIC, counted in the 66) or drops to branchless-29:
+- `NewTerminalSessionSheet` (`:9931`) — `.disabled(!canCreate)` is attribute-only (the harness whitelist
+  drops it); the `onChange`/`guard` is not a render branch → LIKELY branchless. **HarnessActionResultBanner
+  stays LOGIC** (its `Image(systemName: result.succeeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")`
+  flips the SF-SYMBOL NAME, which the harness DOES capture via `image().actualImage().name()` → real tree flip).
+- 2 more marginal entries (`ProviderModelPill`-shaped attribute-only ternaries already binned in branchless;
+  re-checked at the owning cluster). The doer reconfirms each against `ViewSnapshotHost.mapNode`'s whitelist
+  (Text string / TextField bound value / Image symbol name / a11y label-value-id) — if the only variance is
+  geometry/color/font/disabled, it's branchless (deferred); if it flips a captured node, it's LOGIC (snapshot it).
 
 ## Branchless-presentational (29 — DEFERRED, separate allowlist decision)
 
@@ -118,9 +130,14 @@ MachineRuntimeView (10170) — LoginItemController @StateObject, no injection se
 
 ## Reconciliation
 
-Raw structural sweep flags ~74 uncovered structs as "has a conditional." The audit's
-logic-bearing test is stricter (a data-driven branch must change the SERIALIZED node tree).
-74 − 5 attribute-only-variant (binned with branchless-29) − 2 full shells (allowlist) − net
-carve = **66 logic-bearing**, the campaign headline (~215 enumerated states across them).
-Each cluster re-confirms its members against this file at execution; an attribute-only view
-that turns out to flip a real node still gets snapshotted (coverage-% wins).
+Raw structural sweep flags **69** uncovered structs as "has a data-conditional" (after excluding
+the 2 full shells `WorkbenchRootView`/`MachineRuntimeView` and the attribute-only views already
+binned with branchless). The audit's logic-bearing test is stricter still: a branch must change the
+**SERIALIZED node tree** the harness captures (`ViewSnapshotHost.mapNode`'s whitelist — Text string /
+TextField bound value / Image SF-symbol name / a11y label-value-id; geometry/color/font/disabled are
+dropped). Of the 69, **66 are confirmed multi-state** (the campaign headline, ~215 enumerated states)
+and **3 are RECONFIRM (attribute-only-leaning)** — re-checked at their owning cluster against the
+whitelist; each either confirms a real node flip (stays in the 66) or drops to branchless-29.
+**Net U4 plan target: the 66**; the 3 reconfirms are a bounded, recorded uncertainty (NOT a silent
+fudge), resolved per cluster. An attribute-only view that turns out to flip a captured node still gets
+snapshotted (coverage-% wins); a "LOGIC" view whose only variance is dropped-attribute drops to deferred.
