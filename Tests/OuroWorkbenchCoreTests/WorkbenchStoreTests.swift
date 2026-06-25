@@ -12,7 +12,7 @@ final class WorkbenchStoreTests: XCTestCase {
 
         XCTAssertTrue(loaded.projects.isEmpty)
         XCTAssertTrue(loaded.processEntries.isEmpty)
-        XCTAssertEqual(loaded.schemaVersion, 1)
+        XCTAssertEqual(loaded.schemaVersion, 2)
     }
 
     func testConvenienceInitUsesWorkbenchPathsStateURL() {
@@ -580,12 +580,20 @@ final class WorkbenchStoreTests: XCTestCase {
     // ("The operation couldn't be completed. (…WorkbenchStoreError error 0.)").
 
     func testUnsupportedStateVersionErrorDescriptionNamesVersionAndUpgrade() throws {
-        let error = WorkbenchStoreError.unsupportedStateVersion(2)
+        // A FUTURE file is one above current; the message must name both the newer
+        // (found) version and the supported (current) version, distinctly. Derive
+        // the found version from the constant so this stays bump-safe (was a
+        // hardcoded v1/v2 pair that broke on the v1→v2 schema bump).
+        let found = WorkspaceState.currentSchemaVersion + 1
+        let error = WorkbenchStoreError.unsupportedStateVersion(found)
         let message = try XCTUnwrap(error.errorDescription)
-        // Names the schema it found (v2)...
-        XCTAssertTrue(message.contains("v2"), "must name the newer schema version, got: \(message)")
-        // ...the schema this build understands (v1)...
-        XCTAssertTrue(message.contains("v1"), "must name the supported schema version, got: \(message)")
+        // Names the schema it found (current + 1)...
+        XCTAssertTrue(message.contains("v\(found)"), "must name the newer schema version, got: \(message)")
+        // ...the schema this build understands (current)...
+        XCTAssertTrue(
+            message.contains("v\(WorkspaceState.currentSchemaVersion)"),
+            "must name the supported schema version, got: \(message)"
+        )
         // ...tells the boss to upgrade...
         XCTAssertTrue(
             message.lowercased().contains("upgrade"),

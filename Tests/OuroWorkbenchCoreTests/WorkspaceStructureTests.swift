@@ -189,6 +189,133 @@ final class WorkspaceStructureTests: XCTestCase {
         XCTAssertEqual(entry.effectiveTabName, "auto-name")
     }
 
+    // MARK: - Unit 3a: WorkspaceState.workspaces + schema bump 1→2
+
+    func testCurrentSchemaVersionIsTwo() {
+        XCTAssertEqual(WorkspaceState.currentSchemaVersion, 2)
+    }
+
+    func testWorkspaceStateMemberwiseInitDefaultsWorkspacesEmpty() {
+        let state = WorkspaceState()
+        XCTAssertEqual(state.workspaces, [])
+        XCTAssertEqual(state.schemaVersion, 2)
+    }
+
+    func testWorkspacesAbsentInJSONDecodesEmpty() throws {
+        // present-or-empty: a state JSON without a `workspaces` key → [].
+        let json = """
+        {
+          "schemaVersion": 2,
+          "boss": { "agentName": "slugger", "scope": "machine" },
+          "projects": [],
+          "processEntries": [],
+          "processRuns": [],
+          "actionLog": [],
+          "decisionLog": [],
+          "updatedAt": "2026-06-02T00:00:00Z"
+        }
+        """
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let state = try decoder.decode(WorkspaceState.self, from: Data(json.utf8))
+        XCTAssertEqual(state.workspaces, [])
+    }
+
+    func testWorkspacesRoundTripPreservesOrderNamesPin() throws {
+        let ws1 = Workspace(autoName: "First", nameOverride: "Renamed", isPinned: true, tabIds: [UUID(), UUID()])
+        let ws2 = Workspace(autoName: "Second", tabIds: [UUID()])
+        let state = WorkspaceState(workspaces: [ws1, ws2])
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(state)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(WorkspaceState.self, from: data)
+
+        XCTAssertEqual(decoded.workspaces, [ws1, ws2])
+        XCTAssertEqual(decoded.workspaces.map(\.effectiveName), ["Renamed", "Second"])
+        XCTAssertEqual(decoded.workspaces.map(\.isPinned), [true, false])
+    }
+
+    func testStoreSaveWritesSchemaTwoAndWorkspacesArray() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let stateURL = root.appendingPathComponent("workspace.json")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let ws = Workspace(autoName: "Restored workspace", tabIds: [UUID()])
+        let store = WorkbenchStore(stateURL: stateURL)
+        try store.save(WorkspaceState(workspaces: [ws]))
+
+        // Raw JSON carries schemaVersion 2 + a workspaces array.
+        let raw = try JSONSerialization.jsonObject(with: Data(contentsOf: stateURL)) as? [String: Any]
+        XCTAssertEqual(raw?["schemaVersion"] as? Int, 2)
+        let rawWorkspaces = raw?["workspaces"] as? [[String: Any]]
+        XCTAssertEqual(rawWorkspaces?.count, 1)
+        XCTAssertEqual(rawWorkspaces?.first?["autoName"] as? String, "Restored workspace")
+
+        // And round-trips through the store.
+        let loaded = try store.load()
+        XCTAssertEqual(loaded.workspaces, [ws])
+        XCTAssertEqual(loaded.schemaVersion, 2)
+    }
+
+    func testWorkspacesDecodeLenientlySkipsCorruptElementAttributesDrop() throws {
+        // One valid + one corrupt workspace (missing required `autoName`): the valid
+        // one is kept, the corrupt one dropped, the drop attributed into
+        // decodeReport.skippedByCollection["workspaces"]. Mirrors the projects test.
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let stateURL = root.appendingPathComponent("workspace.json")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let goodId = UUID()
+        let json = """
+        {
+          "schemaVersion": 2,
+          "boss": { "agentName": "slugger", "scope": "machine" },
+          "projects": [],
+          "processEntries": [],
+          "processRuns": [],
+          "workspaces": [
+            { "id": "\(goodId.uuidString)", "autoName": "Good" },
+            { "id": "\(UUID().uuidString)" }
+          ],
+          "updatedAt": "2026-05-23T00:00:00Z"
+        }
+        """
+        try Data(json.utf8).write(to: stateURL)
+
+        let loaded = try WorkbenchStore(stateURL: stateURL).load()
+        XCTAssertEqual(loaded.workspaces.map(\.autoName), ["Good"])
+        XCTAssertEqual(loaded.workspaces.first?.id, goodId)
+        XCTAssertEqual(loaded.decodeReport.skippedByCollection["workspaces"], 1)
+        XCTAssertTrue(loaded.decodeReport.isLossy)
+    }
+
+    func testV1FixtureLoadsUnderV2BuildWithEmptyWorkspacesNotQuarantined() throws {
+        // Backcompat: the Unit-0 v1 fixture (schemaVersion 1, no `workspaces`) loads
+        // under the v2 build with workspaces == [] (pre-migration), all 6 entries
+        // intact, NOT quarantined.
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let stateURL = root.appendingPathComponent("workspace.json")
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try Data(contentsOf: v1FixtureURL()).write(to: stateURL)
+
+        let loaded = try WorkbenchStore(stateURL: stateURL).load()
+        XCTAssertEqual(loaded.schemaVersion, 1) // decode preserves the input version
+        XCTAssertEqual(loaded.workspaces, [])
+        XCTAssertEqual(loaded.processEntries.count, 6)
+        // Not quarantined: live file in place, no `.corrupt-` sibling.
+        XCTAssertTrue(FileManager.default.fileExists(atPath: stateURL.path))
+        let siblings = try FileManager.default.contentsOfDirectory(atPath: root.path)
+        XCTAssertFalse(siblings.contains { $0.contains(".corrupt-") })
+    }
+
     // MARK: - Helpers
 
     private func makeEntry(

@@ -736,7 +736,12 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
     /// by a FUTURE build (`> currentSchemaVersion`), which `degradedReadReason`
     /// reports with this as the "supported" version. Bump in lockstep with a
     /// breaking schema change.
-    public static let currentSchemaVersion = 1
+    ///
+    /// v1 → v2 (Slice ②a): ADDS the durable `workspaces` structure collection
+    /// (and the additive `ProcessEntry.tabNameOverride`). Purely additive +
+    /// lenient-decoded, so the `<=`-current load gate keeps every v1 file
+    /// decodable (never wiped); only a future v3+ file is quarantined.
+    public static let currentSchemaVersion = 2
     public var schemaVersion: Int
     public var boss: BossAgentSelection
     public var bossWatchEnabled: Bool
@@ -745,6 +750,16 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
     public var selectedEntryId: UUID?
     public var projects: [WorkbenchProject]
     public var processEntries: [ProcessEntry]
+    /// Durable workspace STRUCTURE collection (Slice ②a): named, ordered groups
+    /// of tabs (a tab = a `ProcessEntry`, referenced by id via `Workspace.tabIds`;
+    /// DA1). Additive + lenient-decoded (`decodeLenientArray`) + present-or-empty,
+    /// so every pre-②a file loads with `workspaces == []`, then
+    /// `migrateToWorkspaceStructure()` populates it non-destructively.
+    ///
+    /// Grouped here with the other durable-structure fields (`projects`,
+    /// `processEntries`) and deliberately SEPARABLE: ②c lifts this structure into
+    /// its own git-init-able store as a block, without a second migration (DA7).
+    public var workspaces: [Workspace]
     public var processRuns: [ProcessRun]
     public var actionLog: [WorkbenchActionLogEntry]
     /// Durable, newest-first audit of boss decisions about waiting sessions —
@@ -779,6 +794,7 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         case selectedEntryId
         case projects
         case processEntries
+        case workspaces
         case processRuns
         case actionLog
         case decisionLog
@@ -796,6 +812,7 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         selectedEntryId: UUID? = nil,
         projects: [WorkbenchProject] = [],
         processEntries: [ProcessEntry] = [],
+        workspaces: [Workspace] = [],
         processRuns: [ProcessRun] = [],
         actionLog: [WorkbenchActionLogEntry] = [],
         decisionLog: [BossInboxDecision] = [],
@@ -812,6 +829,7 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         self.selectedEntryId = selectedEntryId
         self.projects = projects
         self.processEntries = processEntries
+        self.workspaces = workspaces
         self.processRuns = processRuns
         self.actionLog = actionLog
         self.decisionLog = decisionLog
@@ -846,6 +864,13 @@ public struct WorkspaceState: Codable, Equatable, Sendable {
         )
         self.processEntries = try container.decodeLenientArray(
             ProcessEntry.self, forKey: .processEntries, into: &report, collection: "processEntries"
+        )
+        // Slice ②a: additive durable structure. Absent in every pre-②a file → []
+        // (present-or-empty). Decoded leniently so one corrupt workspace element is
+        // dropped (attributed into decodeReport) rather than sinking the whole load,
+        // mirroring `projects`/`processEntries`.
+        self.workspaces = try container.decodeLenientArray(
+            Workspace.self, forKey: .workspaces, into: &report, collection: "workspaces"
         )
         self.processRuns = try container.decodeLenientArray(
             ProcessRun.self, forKey: .processRuns, into: &report, collection: "processRuns"

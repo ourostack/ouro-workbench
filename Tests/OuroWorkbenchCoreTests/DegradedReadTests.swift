@@ -68,8 +68,8 @@ final class DegradedReadTests: XCTestCase {
 
     // MARK: - WorkspaceState.currentSchemaVersion (the single source of truth)
 
-    func testCurrentSchemaVersionIsOne() {
-        XCTAssertEqual(WorkspaceState.currentSchemaVersion, 1)
+    func testCurrentSchemaVersionIsTwo() {
+        XCTAssertEqual(WorkspaceState.currentSchemaVersion, 2)
     }
 
     func testLoadRejectsOneAboveCurrentSchemaVersion() throws {
