@@ -1,0 +1,6 @@
+Text kind=static text="Recovery"
+Text kind=static text="Nothing to recover"
+Text kind=static text="Done"
+Text kind=static text="Nothing to recover"
+Image image="checkmark.seal.fill"
+Text kind=static text="No sessions are waiting on recovery. Agents that were still running when you quit reconnect automatically on the next launch; only sessions that didn't survive a restart show up here."

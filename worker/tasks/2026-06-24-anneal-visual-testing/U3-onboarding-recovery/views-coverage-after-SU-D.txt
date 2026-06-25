@@ -1,0 +1,83 @@
+Running views-lib coverage AFTER Surface D (recovery + archived) enumerated snapshots
+landed (SU-D). Second U3 surface.
+
+Branch: feat/anneal-u3-onboarding-recovery (off origin/main @ 976610d)  ·  Captured: 2026-06-25
+
+SCOPE NOTE (D-U3-5 / D-U2-5 carried forward): the views lib (OuroWorkbenchAppViews) is
+NOT gated this unit — COVERAGE_DIRS stays {OuroWorkbenchCore, OuroWorkbenchShellAdapter}
+and the allowlist is UNCHANGED (verified:
+`git diff origin/main -- scripts/check-coverage.sh scripts/coverage-allowlist.txt` is empty;
+allowlist sha `e3212be`). This number is PROGRESS TOWARD the U4 coverage gate, recorded per
+the brief; it does NOT gate SU-D. The RecoverySheet / NeedsYouEntryRow / RecoverableEntryRow
++ the sidebar Section("Archived") surfaces, plus the recovery VM derivations (recoveryDigest /
+autoRecoverableEntries / needsYouEntries / recoveryTrustFixAvailable / isLosslessReattach /
+launchCommand / recoveryReasonSentence) exercise the newly-measured lines.
+
+Measured via: swift test --enable-code-coverage (full suite, 2957 tests, 1 skipped,
+0 failures — was 2943 after SU-C; +14 from SU-D), then `xcrun llvm-cov report
+<PackageTests bin> -instr-profile <default.profdata> Sources/OuroWorkbenchAppViews/`.
+
+Per-file (views lib):
+Filename                           Regions  Missed   Cover     Lines    Missed   Cover
+WorkbenchViewsAndModel.swift          5790    5212    9.98%     31883    28592   10.32%
+WorkbenchUpdateInstaller.swift          16      16    0.00%        62       62    0.00%
+Views/DashboardRowLabel.swift            2       0  100.00%        11        0  100.00%
+TOTAL                                  5808    5228    9.99%     31956    28654   10.33%
+
+RUNNING VIEWS-LIB COVERAGE AFTER SU-D: 9.99% region / 10.33% line.
+
+Progression (the input the U4 coverage-gate + allowlist will consume):
+  after U2 (F + A + B + SU3r leaf)  — 7.70% region / 6.94% line   (post-U2 baseline @ 976610d)
+  after SU-C (inline rename editor) — 8.33% region / 7.45% line
+  after SU-D (recovery + archived)  — 9.99% region / 10.33% line  <-- THIS sub-unit
+
+NEW code coverage THIS sub-unit (SU-D):
+  No new HARNESS-side helper code (SU-D reuses the U1/U2 harness unchanged — the SU-D0 spike
+  confirmed ViewInspector descends the system ContentUnavailableView, so no extraction tweak
+  was needed). The only NEW code is RecoverySurfaceStateSetTests.swift, whose every
+  fixture/branch is exercised by its own passing tests (14, 0 failures). No
+  `[ExcludeFromCodeCoverage]`-equivalent. (The SU-D0 spike test was a throwaway, deleted after
+  its verdict was recorded in recovery-extraction-spike.md.)
+
+a11y-id audit (Q6 / D-U3-6 / D-U2-2) — NONE needed:
+  The recovery rows (NeedsYouEntryRow / RecoverableEntryRow) carry NO accessibilityLabel; node
+  identity rests on distinct `entry.name` + the planner reason sentence + the `launchCommand`
+  Text. Every "many"/"both" fixture uses DISTINCT entry names (respawn-alpha/respawn-bravo,
+  needs-trust/respawn-me, reconnect-me/respawn-me), so no two serialized rows are byte-identical
+  and no negative control is defeated (the section-membership / pill / trust-fix / Recover-All /
+  archived-section controls all pass). The sidebar Archived row reuses TerminalAgentRow's
+  computed accessibilityLabel ("archived-session, idle, archived"), which is distinct. → ZERO
+  `.accessibilityIdentifier` added.
+
+MUTATION-VERIFIED negative controls (P2 / D-U3-3, the upgraded skill measure) — 3 real guards
+broken, each confirmed to make a control go RED, then restored byte-identically:
+  (1) Trust gate — `RecoveryPlanner.planRecovery`'s `guard entry.trust == .trusted else { …
+      .manualActionNeeded, blocker: .untrusted }` (Sources/OuroWorkbenchCore/RecoveryPlanner.swift:185).
+      Bypassing it (untrusted no longer routed to needs-you) made BOTH
+      `testD_negativeControl_trustFlipsRow` AND `testD_needsYouOnly` go RED (the untrusted entry
+      stopped landing in "Needs you" / "Trust & resume"). Restored → GREEN.
+  (2) Reattach guard — `RecoveryPlanner.planRecovery`'s
+      `if liveSessionNames.contains(PersistentTerminalSession.sessionName(for: entry.id))`
+      (RecoveryPlanner.swift:176). Disabling it (reattach never fires) made
+      `testD_negativeControl_liveSessionTogglesReattachPill` go RED (the "Reconnect — no loss"
+      pill no longer appeared when the live session name was set). Restored → GREEN.
+  (3) The in-tree section-membership / Recover-All / archived-section controls
+      (testD_negativeControl_runStatusMovesSection / _recoverAllGate / _archivedSectionGate) flip
+      on the genuine `ProcessRun.status`, the `autoRecoverableEntries.count > 1` gate, and the
+      `!archivedSessionEntries.isEmpty` gate respectively, each asserted at the call site (digest
+      buckets) AND in the rendered tree — non-vacuous by construction (fact (4): the auto fixture
+      is trusted+autoResume so flipping its status genuinely moves it between sections).
+
+  `git diff --exit-code Sources/` is clean after every mutation/restore cycle.
+
+PROVENANCE (the SU-D0 spike verdict, recovery-extraction-spike.md): the WorkbenchStore.save →
+fresh-VM load() seam PRESERVES the fixture ProcessRun.status so the pure RecoveryPlanner emits
+the intended digest buckets — no C1-style impossibility. Every D state (nothing / needs-you-only
+/ start-fresh / auto:one / auto:many / both / lossless-reattach / sidebar-archived) is reachable
+through the real seam.
+
+Determinism (P3): twice-run byte-identical (re-record in OURO_SNAPSHOT_RECORD=1 → no diff);
+no `/Users/` / Date / UUID / `1_700_000_000` / `/tmp/` leak in any D ref (the canonical fixture
+executable `/bin/zsh` renders, NO cwd; the path-bearing `.help("Recovery detail: …")` tooltips
+are dropped by AN-004; `ProcessRun.startedAt` is a fixed epoch and is NOT rendered). AN-001 temp
+`agentBundlesURL` injected into BOTH the registrar AND the inventory in every VM fixture.
