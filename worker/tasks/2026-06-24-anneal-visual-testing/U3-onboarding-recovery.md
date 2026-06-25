@@ -140,6 +140,7 @@ Independent. Provenance via `model.beginRename(target:prefill:)` + `model.inline
 - `C.emptyWhitespaceDraft` — draft set to whitespace (e.g. `"   "`); the editor renders the (whitespace) draft; this is the no-op-on-commit case.
 - `C.prefilledValid` — a valid non-empty distinct draft (e.g. `"Renamed Frontend"`).
 - Choose the MINIMAL non-redundant set (P4e): editing-workspace vs editing-tab may serialize identically IF the editor tree doesn't encode the target — VERIFY; if identical, the "editing-tab" is covered by the embedded U2 `B.tabRenameInProgress` reference and SU-C keeps one editor reference per DISTINCT tree (record the mapping; do NOT commit two byte-identical refs).
+**Output**: `Tests/OuroWorkbenchAppViewsTests/InlineRenameEditorStateSetTests.swift` with the failing state-set tests (no references yet).
 **Acceptance**: Tests exist and FAIL (no references yet, red).
 
 #### ⬜ SU-C.b: record + verify references (green) + the no-op boundary negative control
@@ -173,6 +174,7 @@ Independent. Provenance via `WorkbenchStore.save(state)` → fresh hermetic VM (
 - BOUNDARY `D.losslessReattach`: an entry whose session name ∈ `liveScreenSessionNames` → the "Reconnect — no loss" pill + green link glyph + "Reconnect" button title; contrast a non-reattach auto-recoverable (no pill, orange glyph, "Resume"/"Respawn").
 - Sidebar Archived: `D.sidebarArchived` — `WorkbenchSidebarView` with an archived entry (not in any workspace's `tabIds`) → the `Section("Archived")` renders (gate satisfied); contrast the empty-archived sidebar (no section). (This may reuse the SU3 sidebar fixture pattern; clock-free per C1.)
 - Use DISTINCT `entry.name`s in "many"/"both" fixtures (Q6 a11y).
+**Output**: `Tests/OuroWorkbenchAppViewsTests/RecoverySurfaceStateSetTests.swift` with the failing state-set tests (no references yet).
 **Acceptance**: Tests exist and FAIL (red).
 
 #### ⬜ SU-D.b: record + verify references (green) + mutation-verified negative controls
@@ -198,6 +200,7 @@ Independent leaf. `OnboardingRepairStepRow(step: OnboardingRepairStep, model:)` 
 - `E1.checkInProgress` — `id: "check-outward"` with `command: []` (no commandLine) → "Checking…" pill + spinner (ProgressView; assert via the absence of a button / a stable node, since a spinner has no text).
 - `E1.checkPending` — `id: "check-outward"` with a non-empty `command` → "Checking…" pill + "Run"/`play.fill`.
 - Cover all three `OnboardingRepairActor` cases + the key `id`-driven button branches; MINIMAL non-redundant set (P4e).
+**Output**: `Tests/OuroWorkbenchAppViewsTests/OnboardingRepairStepRowTests.swift` with the failing actor-variant tests (no references yet).
 **Acceptance**: Tests exist and FAIL (red).
 
 #### ⬜ SU-E1.b: record + verify references (green) + mutation-verified negative control
@@ -222,6 +225,7 @@ Independent. `FirstRunBootstrapView` reads `model.firstRunPresentation` (`@Publi
 - `E2.needsAttention` — phase `.failedStep` (+ `attentionReason: .failedStep`) → "needs attention"/red + the reason line + "Try again"; and the `.invalidBoss` reason variant → "Choose a boss" (record whether one or two refs).
 - `E2.agentDriven` — phase `.handedOff` → "agent driving"/green + the `FirstRunNarrationRow` (set `model.firstRunAgentDrivenNarration` = the static Core copy).
 - `E2.nil` — `firstRunPresentation == nil` → the view renders nothing (empty tree). (Note: `FirstRunBootstrapView` is normally embedded; snapshot it standalone for the nil/mode matrix — a legitimate leaf, like U1.)
+**Output**: `Tests/OuroWorkbenchAppViewsTests/FirstRunBootstrapViewTests.swift` with the failing mode-variant tests (no references yet).
 **Acceptance**: Tests exist and FAIL (red).
 
 #### ⬜ SU-E2.b: record + verify references (green) + mutation-verified negative control
@@ -252,6 +256,7 @@ Independent (after the SU-E0 injection spike). Provenance (Q3 default): inject `
 - `E3.selected` — `state.boss.agentName` matches one record → that row shows the "selected" pill + filled radio.
 - `E3.unusable` — a record with `status != .ready` (e.g. `.disabled`) → the row renders but `isUsable == false` (disabled); the status pill reads "turned off"/"needs setup".
 - MINIMAL non-redundant set (fold selected+usable into the "many" fixture where it doesn't defeat a control).
+**Output**: `Tests/OuroWorkbenchAppViewsTests/OnboardingBossChoiceViewTests.swift` with the failing choice-state tests (no references yet).
 **Acceptance**: Tests exist and FAIL (red).
 
 #### ⬜ SU-E3.b: record + verify references (green) + mutation-verified negative control
@@ -277,6 +282,7 @@ Depends on SU-E1 (repair-step row) + SU-E2 (first-run view), which `OnboardingRe
 - `E4.readyOptional` — `state: .ready` with NON-empty `repairSteps` → the ready surface + the "Optional checks" section with `OnboardingRepairStepRow`s.
 - `E4.inProgress` — a `repairStep` with id prefix `check-` (the "Checking…" actorLabel + spinner) AND/OR an `onboardingProviderChecks[lane] = .running` → the in-progress check surface + the "first connection check…can take up to a minute" caption.
 - Use a FIXED boss name + fixed `OuroAgentRecord` (the only var); MINIMAL non-redundant set.
+**Output**: `Tests/OuroWorkbenchAppViewsTests/OnboardingReadinessViewTests.swift` with the failing readiness-state tests (no references yet).
 **Acceptance**: Tests exist and FAIL (red).
 
 #### ⬜ SU-E4.b: record + verify references (green) + mutation-verified negative control
