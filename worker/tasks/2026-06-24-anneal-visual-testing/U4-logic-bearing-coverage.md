@@ -123,13 +123,13 @@ The full struct enumeration + per-struct LOGIC-BEARING/BRANCHLESS classification
 
 ### C10 — Session-status list + transcript/action logs — OWN PR
 **Views (~8):** `SessionStatusListView`, `SessionStatusBucketSection`, `SessionStatusRowView`, `ActionLogView`, `BossActionReceiptStrip`, `TranscriptSearchView`, `OnboardingBossReconstructView`, `RecoveryDrillView`.
-**Seam:** `model.sessionStatus*` / `model.actionLog` / `model.transcriptSearchResults` `@Published`.
+**Seam:** the session-status-list producer / `model.recentActionLogEntries` / `model.transcriptSearchResults` `@Published` (exact accessor traced per-view in the C10 spike — these are illustrative pointers, the doer confirms each at execution).
 **Edge-cases:** `BossActionReceiptStrip`/`ActionLogView` rows may carry timestamps → fixed-timestamp fixtures; `RecoveryDrillView` is the drill harness (real producer).
 **Access-widening:** `SessionStatusBucketSection`, `SessionStatusRowView`, `OnboardingBossReconstructView` (private→internal).
 
 ### C11 — Harness-status + settings + import-summary sheets — OWN PR
 **Views (~7):** `HarnessStatusSheet`, `HarnessAgentRow`, `HarnessActionRow`, `HarnessActionResultBanner`, `SettingsSheet`, `ImportSummaryBanner`, `NewTerminalSessionSheet`.
-**Seam:** `model.harnessStatus*` / `model.importSummary` `@Published`; `HarnessStatusSheet` `if let observedAt` → fixed-timestamp.
+**Seam:** the harness-status producer / `model.lastImportSummary` `@Published`; `HarnessStatusSheet` `if let observedAt` → fixed-timestamp (exact accessors traced per-view in the C11 spike).
 **Edge-cases:** clock (`HarnessStatusSheet` `observedAt` → fixed); import-summary entry-id is a UUID → fixed.
 **Access-widening:** `HarnessAgentRow`, `HarnessActionRow`, `HarnessActionResultBanner`, `SettingsSection` (private→internal).
 
