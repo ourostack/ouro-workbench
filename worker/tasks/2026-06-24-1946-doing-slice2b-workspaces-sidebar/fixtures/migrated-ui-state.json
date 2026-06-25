@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 2,
+  "boss": {
+    "agentName": "slugger",
+    "scope": "machine"
+  },
+  "bossWatchEnabled": true,
+  "bossPaneCollapsed": true,
+  "selectedProjectId": "11111111-1111-1111-1111-111111111111",
+  "projects": [
+    {
+      "boss": { "agentName": "slugger", "scope": "machine" },
+      "id": "11111111-1111-1111-1111-111111111111",
+      "name": "Home",
+      "rootPath": "/Users/op/code/ouro-workbench"
+    }
+  ],
+  "processEntries": [
+    {
+      "id": "AAAAAAAA-0000-0000-0000-000000000001",
+      "projectId": "11111111-1111-1111-1111-111111111111",
+      "name": "ouro-workbench",
+      "kind": "terminalAgent",
+      "agentKind": "claudeCode",
+      "executable": "claude",
+      "arguments": ["--resume"],
+      "workingDirectory": "/Users/op/code/ouro-workbench",
+      "trust": "trusted",
+      "autoResume": true,
+      "attention": "active"
+    },
+    {
+      "id": "AAAAAAAA-0000-0000-0000-000000000002",
+      "projectId": "11111111-1111-1111-1111-111111111111",
+      "name": "ms-desk (auto)",
+      "tabNameOverride": "Agent Substrate",
+      "kind": "terminalAgent",
+      "agentKind": "claudeCode",
+      "executable": "claude",
+      "arguments": ["--resume"],
+      "workingDirectory": "/Users/op/code/ms-desk",
+      "trust": "trusted",
+      "autoResume": true,
+      "attention": "waitingOnHuman"
+    },
+    {
+      "id": "AAAAAAAA-0000-0000-0000-000000000003",
+      "projectId": "11111111-1111-1111-1111-111111111111",
+      "name": "deploy shell",
+      "kind": "shell",
+      "executable": "/bin/zsh",
+      "arguments": [],
+      "workingDirectory": "/Users/op/code/ouro-workbench",
+      "trust": "trusted",
+      "autoResume": false,
+      "attention": "idle"
+    },
+    {
+      "id": "AAAAAAAA-0000-0000-0000-000000000004",
+      "projectId": "11111111-1111-1111-1111-111111111111",
+      "name": "archived run",
+      "kind": "terminalAgent",
+      "agentKind": "claudeCode",
+      "executable": "claude",
+      "arguments": [],
+      "workingDirectory": "/Users/op/code/old",
+      "trust": "trusted",
+      "autoResume": false,
+      "isArchived": true,
+      "attention": "idle"
+    },
+    {
+      "id": "BBBBBBBB-0000-0000-0000-000000000005",
+      "projectId": "11111111-1111-1111-1111-111111111111",
+      "name": "pinned single tab",
+      "kind": "terminalAgent",
+      "agentKind": "codex",
+      "executable": "codex",
+      "arguments": [],
+      "workingDirectory": "/Users/op/code/pinned",
+      "trust": "trusted",
+      "autoResume": false,
+      "attention": "needsBossReview"
+    }
+  ],
+  "workspaces": [
+    {
+      "id": "C0000000-0000-0000-0000-0000000000A0",
+      "autoName": "Pinned workspace",
+      "isPinned": true,
+      "tabIds": ["BBBBBBBB-0000-0000-0000-000000000005"]
+    },
+    {
+      "id": "C0000000-0000-0000-0000-0000000000B0",
+      "autoName": "Restored workspace",
+      "tabIds": [
+        "AAAAAAAA-0000-0000-0000-000000000001",
+        "AAAAAAAA-0000-0000-0000-000000000002",
+        "AAAAAAAA-0000-0000-0000-000000000003",
+        "AAAAAAAA-0000-0000-0000-000000000004"
+      ]
+    },
+    {
+      "id": "C0000000-0000-0000-0000-0000000000C0",
+      "autoName": "Empty workspace",
+      "tabIds": []
+    }
+  ],
+  "processRuns": [],
+  "actionLog": [],
+  "decisionLog": [],
+  "proseLog": [],
+  "updatedAt": "2026-06-24T00:00:00Z"
+}
