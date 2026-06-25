@@ -86,10 +86,10 @@ The full struct enumeration + per-struct LOGIC-BEARING/BRANCHLESS classification
 **Edge-cases:** standalone popover snapshots (C0); AN-001 (boss-choice names ← inventory → temp `agentBundlesURL` + fixed records).
 **Access-widening:** none expected (these are `internal`).
 
-### C4 — Decision log / inbox + command palette — HIGH VALUE
-**Views (~5):** `DecisionLogSheet`, `DecisionInboxSheet`, `DecisionLogRow`, `CommandPaletteSheet`, `ShortcutHelpSheet`.
+### C4 — Decision log / inbox + command palette — HIGH VALUE (high-fan-out: `DecisionLogRow`)
+**Views (~5):** `DecisionLogSheet`, `DecisionInboxSheet`, **`DecisionLogRow`** (the brief's 5th named high-fan-out target — its OWN sub-unit/commit within this PR; it has the deepest state-set of the five: `@State taught` · `if let friend` · `if let proposed` · `if let pref` · `mode == .inbox` · `if let confidence`), `CommandPaletteSheet`, `ShortcutHelpSheet`.
 **Seam:** `model.state.decisionLog` via `WorkbenchStore.save`→VM; `DecisionInboxSheet` already carries the injectable `now:` (U2) → fixed clock.
-**Edge-cases:** clock (`DecisionInboxSheet` `now:` injected — already wired); `DecisionLogRow` `@State private var taught` (snapshot the initial state).
+**Edge-cases:** clock (`DecisionInboxSheet` `now:` injected — already wired); `DecisionLogRow` `@State private var taught` (snapshot the initial state). `DecisionLogRow`'s enumerated state-set is large enough that C4 SPLITS to a C4a (DecisionLogRow solo) + C4b (log/inbox/palette/shortcut) pair if it exceeds a single reviewable batch (Q4 default).
 **Access-widening:** `DecisionLogRow` (private→internal).
 
 ### C5 — `ReportBugSheet` (high-fan-out sheet #2) — OWN PR
