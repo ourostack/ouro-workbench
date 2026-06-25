@@ -14,17 +14,20 @@ final class WorkbenchAppSourceRetargetTests: XCTestCase {
     func testUnionContainsBothExeAndLibSides() throws {
         let source = try WorkbenchAppSource.appSource()
 
-        // Exe side: a marker that has NOT moved (the view-model still lives in the exe file).
+        // Exe side: a marker that stays in the thinned exe file. After U0 Unit 3′ (the full
+        // view-layer move, Reading #2) the exe holds only `OuroWorkbenchApp: App` + the app
+        // delegate; finding the App scene proves the exe file is still concatenated.
         XCTAssertTrue(
-            source.contains("final class WorkbenchViewModel"),
-            "union must include the exe file (WorkbenchViewModel still lives there)"
+            source.contains("struct OuroWorkbenchApp: App"),
+            "union must include the exe file (OuroWorkbenchApp: App stays there)"
         )
 
-        // Lib side: the one leaf view moved in Unit 1 — its public declaration only exists in the
-        // lib now, so finding it proves the lib files are concatenated into the union.
+        // Lib side: the view-model + every view now live in the lib (moved in U0 Unit 3′);
+        // finding the VM declaration proves the big lib file is concatenated into the union.
+        // (DashboardRowLabel, moved in Unit 1, lives in the lib too — both lib files are exercised.)
         XCTAssertTrue(
-            source.contains("public struct DashboardRowLabel: View"),
-            "union must include the lib files (DashboardRowLabel moved to OuroWorkbenchAppViews)"
+            source.contains("final class WorkbenchViewModel"),
+            "union must include the lib files (WorkbenchViewModel moved to OuroWorkbenchAppViews)"
         )
     }
 

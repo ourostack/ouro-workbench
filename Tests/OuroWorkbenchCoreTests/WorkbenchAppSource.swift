@@ -57,9 +57,21 @@ enum WorkbenchAppSource {
     ///
     /// Paths are relative to `Sources/OuroWorkbenchAppViews/`.
     static let orderedLibFiles: [String] = [
-        // U0 Unit 1 keystone — the one VM-free leaf view moved so far (was @ line 4930 in the
-        // old file; unguarded, so its position here does not affect any slice).
+        // U0 Unit 3′ (Reading #2 — full view-layer move, merges campaign U3+U4): the entire
+        // post-`App`/`AppDelegate` body of the old single file (original lines 132–21313) moved
+        // here as ONE file in BYTE-EXACT original declaration order. Listed FIRST because in the
+        // old file it began at line 132, BEFORE DashboardRowLabel (was @ 4930). Keeping the whole
+        // body contiguous in declaration order guarantees every cross-declaration `sourceSlice`
+        // pair (e.g. `TerminalSessionController`→`CapturingLocalProcessTerminalView`,
+        // `WorkbenchRootView`→`WorkbenchMenuBarController`) stays byte-adjacent in the union.
+        "WorkbenchViewsAndModel.swift",
+        // U0 Unit 1 keystone — the one VM-free leaf view moved first (was @ line 4930 in the old
+        // file; unguarded, so its position relative to the big file does not affect any slice).
         "Views/DashboardRowLabel.swift",
+        // U0 Unit 3′ — relocated from the exe (was its OWN file, never inside OuroWorkbenchApp.swift),
+        // so it is not part of any cross-declaration slice; the VM (now in the lib) depends on it.
+        // Byte-identical relocation; position here is immaterial to every slice.
+        "WorkbenchUpdateInstaller.swift",
     ]
 
     /// The UNION source: the old exe file followed by the lib files in declaration order.

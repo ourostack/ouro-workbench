@@ -1,6 +1,7 @@
 #if os(macOS)
 import Darwin
 import Foundation
+import OuroWorkbenchAppViews
 import OuroWorkbenchCore
 import SwiftUI
 

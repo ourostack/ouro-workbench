@@ -223,7 +223,11 @@ final class PersistenceSalvageWiringTests: XCTestCase {
         return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "@Published var selectedProjectID:",
-            to: "@Published var selectedEntryID:"
+            // `selectedEntryID` was widened to `public` in U0 Unit 3′ (it is read by the in-exe
+            // UISurfaceTest across the new module boundary); the marker tracks that access-control
+            // change. Slice semantics are unchanged — this still bounds the `selectedProjectID`
+            // didSet body at the next `@Published` property.
+            to: "@Published public var selectedEntryID:"
         )
     }
 
@@ -232,7 +236,8 @@ final class PersistenceSalvageWiringTests: XCTestCase {
         let source = try WorkbenchAppSource.appSource()
         return try WorkbenchAppSource.sourceSlice(
             in: source,
-            from: "@Published var selectedEntryID:",
+            // `public` added by the U0 Unit 3′ view-layer move (see above) — marker only.
+            from: "@Published public var selectedEntryID:",
             to: "@Published var selectedAgentName:"
         )
     }
