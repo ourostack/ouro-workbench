@@ -1,0 +1,2 @@
+Image image="exclamationmark.triangle.fill"
+Text kind=static text="Mailbox warnings: needs-me: timed out"
