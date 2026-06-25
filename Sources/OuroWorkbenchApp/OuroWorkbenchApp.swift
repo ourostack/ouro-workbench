@@ -3390,6 +3390,26 @@ struct WorkspaceTabStrip: View {
         .buttonStyle(.plain)
         .help(tab.attention.healthLabel)
         .accessibilityLabel("\(tab.effectiveTabName), \(tab.attention.healthLabel)\(isSelected ? ", selected" : "")")
+        .contextMenu {
+            WorkspaceTabContextMenu(tab: tab, model: model)
+        }
+    }
+}
+
+/// Slice ②d — the tab's context menu: Rename Tab… (⌘R). Mirrors
+/// `WorkspaceRowContextMenu`; the "⌘R" affordance is shown on the label (the chord is
+/// wired through the command dispatcher targeting the selected tab; D2d-8). No tab-level
+/// revert affordance this slice (cmux tab menu = Rename Tab only).
+struct WorkspaceTabContextMenu: View {
+    var tab: ResolvedTab
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        Button {
+            model.beginRename(.tab(tab.id), prefill: tab.effectiveTabName)
+        } label: {
+            Label("Rename Tab…  ⌘R", systemImage: "pencil")
+        }
     }
 }
 
@@ -11520,6 +11540,21 @@ final class WorkbenchViewModel: ObservableObject {
     func removeCustomWorkspaceName(_ id: UUID) {
         state.clearWorkspaceNameOverride(workspaceId: id)
         save()
+    }
+
+    /// ②d — apply an inline-rename input to a TAB. Same rule as `renameWorkspace`
+    /// (D2d-1 via `WorkspaceRenameCommit`): empty/whitespace or unchanged ⇒ no-op; a real
+    /// change sets the trimmed `tabNameOverride` and persists. No tab-level revert
+    /// affordance this slice (the cmux tab menu only has Rename Tab).
+    func renameTab(_ id: UUID, to input: String) {
+        let current = state.processEntries.first(where: { $0.id == id })?.effectiveTabName ?? ""
+        switch WorkspaceRenameCommit.resolve(input: input, current: current) {
+        case let .commit(name):
+            state.setTabNameOverride(tabId: id, to: name)
+            save()
+        case .noop:
+            break
+        }
     }
 
     /// ②d — begin the inline rename for `target`, prefilled with its current name. Used

@@ -117,6 +117,56 @@ final class WorkspaceEditingAffordancesWiringTests: XCTestCase {
         )
     }
 
+    // MARK: - Unit 5: tab context menu + thin VM wrapper
+
+    func testTabButtonAttachesAContextMenu() throws {
+        let source = try appSource()
+        XCTAssertTrue(
+            source.contains("WorkspaceTabContextMenu(tab: tab, model: model)"),
+            "the WorkspaceTabStrip tabButton must attach the ②d tab context menu"
+        )
+    }
+
+    func testTabContextMenuHasRenameTab() throws {
+        let source = try appSource()
+        XCTAssertTrue(
+            source.contains("model.beginRename(.tab(tab.id), prefill: tab.effectiveTabName)"),
+            "Rename Tab must begin the inline rename on the tab target, prefilled with effectiveTabName"
+        )
+    }
+
+    func testRenameTabChordTargetsSelectedTab() throws {
+        let source = try appSource()
+        // D2d-8 — ⌘R is wired via the chord dispatcher and targets the SELECTED tab.
+        XCTAssertTrue(
+            source.contains("menuCommand(\"Rename Tab…\", .renameTab, \"r\")"),
+            "the ⌘R Rename Tab chord must be registered in the command menu"
+        )
+        XCTAssertTrue(
+            source.contains("case .renameTab:"),
+            "the chord dispatcher must handle .renameTab"
+        )
+        XCTAssertTrue(
+            source.contains("model.beginRenameSelectedTab()"),
+            "the ⌘R chord must begin-rename the selected tab"
+        )
+    }
+
+    func testRenameTabWrapperCallsCoreMutatorThenSave() throws {
+        let source = try appSource()
+        let renameTabWrapper = try sourceSlice(
+            in: source,
+            from: "func renameTab(_ id: UUID, to input: String)",
+            to: "func beginRename("
+        )
+        XCTAssertTrue(
+            renameTabWrapper.contains("WorkspaceRenameCommit.resolve(input: input, current:")
+                && renameTabWrapper.contains("state.setTabNameOverride(tabId: id, to:")
+                && renameTabWrapper.contains("save()"),
+            "renameTab wrapper must route through WorkspaceRenameCommit, set the tab override, then save()"
+        )
+    }
+
     // MARK: - Source-guard helpers (copied verbatim from WorkspaceSidebarWiringTests)
 
     private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
