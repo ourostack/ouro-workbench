@@ -161,9 +161,24 @@ final class AgentRepairTests: XCTestCase {
         XCTAssertFalse(outcome.commandAttempted)
     }
 
-    func testDefaultRunnerUsesHeadlessRepairWhenAgentNamePresent() async throws {
+    func testEnvironmentInjectedRunnerUsesHeadlessRepairWhenAgentNamePresent() async throws {
         let harness = try RepairHeadlessOuroHarness()
-        await harness.withPathPrepended {
+        let runner = AgentRepairRunner(
+            environment: harness.environment(),
+            verifyProbe: { _ in .healthy }
+        )
+
+        let outcome = await runner.repair(agentName: "slugger")
+
+        XCTAssertEqual(outcome.truth, .repaired)
+        XCTAssertTrue(outcome.commandAttempted)
+
+        XCTAssertEqual(try harness.invocations(), [["repair", "--agent", "slugger"]])
+    }
+
+    func testDefaultRunnerUsesProductionHeadlessRepairWhenAgentNamePresent() async throws {
+        let harness = try RepairHeadlessOuroHarness()
+        await harness.withLoginShellPath {
             let runner = AgentRepairRunner(verifyProbe: { _ in .healthy })
 
             let outcome = await runner.repair(agentName: "slugger")
@@ -177,7 +192,7 @@ final class AgentRepairTests: XCTestCase {
 
     func testHeadlessRepairInvokesOuroRepairFromPath() async throws {
         let harness = try RepairHeadlessOuroHarness()
-        try await harness.withPathPrepended {
+        try await harness.withLoginShellPath {
             try await AgentRepairRunner.headlessRepair(agentName: "slugger")
         }
 
@@ -247,10 +262,17 @@ private final class RepairHeadlessOuroHarness {
         try? FileManager.default.removeItem(at: root)
     }
 
-    func withPathPrepended<T>(_ body: () async throws -> T) async rethrows -> T {
-        let oldPath = getenv("PATH").map { String(cString: $0) } ?? ""
-        setenv("PATH", "\(bin.path):\(oldPath)", 1)
-        defer { setenv("PATH", oldPath, 1) }
+    func environment() -> [String: String] {
+        var environment = ProcessInfo.processInfo.environment
+        let oldPath = environment["PATH"] ?? ""
+        environment["PATH"] = "\(bin.path):\(oldPath)"
+        return environment
+    }
+
+    func withLoginShellPath<T>(_ body: () async throws -> T) async rethrows -> T {
+        let oldPath = TerminalEnvironment.loginShellPath
+        TerminalEnvironment.loginShellPath = bin.path
+        defer { TerminalEnvironment.loginShellPath = oldPath }
         return try await body()
     }
 

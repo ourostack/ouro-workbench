@@ -405,6 +405,8 @@ final class BossAgentMCPClientTests: XCTestCase {
         // returns `.timeout` instead of parking the worker. The grandchild writes a marker file once
         // it is established so the wall-clock budget below is measured from a known-ready state.
         let readyMarker = temporaryDirectory.appendingPathComponent("gc-ready")
+        let grandchildPIDFile = temporaryDirectory.appendingPathComponent("gc-pid")
+        defer { coverageBatch2CleanupEscapedGrandchild(pidFile: grandchildPIDFile) }
         let mockOuro = temporaryDirectory.appendingPathComponent("ouro")
         // The shell BLOCKS until the grandchild signals ready (marker file), so by the time the
         // shell finishes reading the requests + the grandchild is escaped and holding stdout, the
@@ -415,6 +417,7 @@ final class BossAgentMCPClientTests: XCTestCase {
         read tool_call
         python3 -c 'import os,time
         os.setpgid(0,0)
+        open("\(grandchildPIDFile.path)","w").write(str(os.getpid()))
         open("\(readyMarker.path)","w").close()
         while True: time.sleep(30)' &
         while [ ! -f "\(readyMarker.path)" ]; do sleep 0.02; done
@@ -449,12 +452,7 @@ final class BossAgentMCPClientTests: XCTestCase {
         // never flakes, while still proving "does not park indefinitely".
         XCTAssertLessThan(elapsed, 3.0, "the call must not park past the watchdog (FIX 2): elapsed \(elapsed)s")
 
-        // Best-effort cleanup of the escaped grandchild so the test process doesn't leak it.
-        let pkill = Process()
-        pkill.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
-        pkill.arguments = ["-f", readyMarker.path]
-        try? pkill.run()
-        pkill.waitUntilExit()
+        coverageBatch2CleanupEscapedGrandchild(pidFile: grandchildPIDFile)
     }
 
     // MARK: - listToolNames (#F9 tools/list injection probe)

@@ -1,5 +1,6 @@
 #if os(macOS)
 import AppKit
+import Darwin
 import OuroAppShellUI
 import OuroWorkbenchCore
 import OuroWorkbenchShellAdapter
@@ -60,6 +61,30 @@ struct DetailSplitState: Equatable {
     var axis: DetailSplitAxis
     /// The session shown in the secondary pane, or `nil` for an empty picker.
     var secondaryEntryID: UUID?
+}
+
+private struct ProviderCheckProcessResult: Sendable {
+    var timedOut: Bool
+    var terminationStatus: Int32
+    var output: String
+}
+
+private final class ProviderCheckOutputBuffer: @unchecked Sendable {
+    private let lock = NSLock()
+    private var data = Data()
+
+    func append(_ chunk: Data) {
+        guard !chunk.isEmpty else { return }
+        lock.lock()
+        data.append(chunk)
+        lock.unlock()
+    }
+
+    func snapshot() -> Data {
+        lock.lock()
+        defer { lock.unlock() }
+        return data
+    }
 }
 
 // MARK: - W5 increment 2: in-memory split <-> persisted `PaneLayoutState`
@@ -13278,6 +13303,78 @@ public final class WorkbenchViewModel: ObservableObject {
         }
     }
 
+    nonisolated private static func runProviderCheckProcess(
+        agentName: String,
+        lane: String,
+        timeoutSeconds: TimeInterval
+    ) -> ProviderCheckProcessResult? {
+        let hostEnvironment = ProcessInfo.processInfo.environment
+        let isRunningUnderXCTest = NSClassFromString("XCTestCase") != nil
+            || NSClassFromString("XCTest.XCTestCase") != nil
+            || hostEnvironment["XCTestConfigurationFilePath"] != nil
+        if isRunningUnderXCTest,
+           hostEnvironment["OURO_WORKBENCH_LIVE_PROVIDER_CHECKS"] != "1" {
+            return nil
+        }
+        let process = Process()
+        let pipe = Pipe()
+        let outputBuffer = ProviderCheckOutputBuffer()
+        let exitSemaphore = DispatchSemaphore(value: 0)
+        let outputEOF = DispatchSemaphore(value: 0)
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = ["ouro", "check", "--agent", agentName, "--lane", lane]
+        // Resolve PATH from the user's real login shell so `ouro` + its `node` runtime are
+        // found from a Finder-launched app's bare launchd PATH (every other runner does this).
+        process.environment = TerminalEnvironment().valuesWithResolvedPath()
+        process.standardOutput = pipe
+        process.standardError = pipe
+        process.terminationHandler = { _ in
+            exitSemaphore.signal()
+        }
+        pipe.fileHandleForReading.readabilityHandler = { handle in
+            let data = handle.availableData
+            if data.isEmpty {
+                outputEOF.signal()
+            } else {
+                outputBuffer.append(data)
+            }
+        }
+
+        do {
+            try process.run()
+        } catch {
+            pipe.fileHandleForReading.readabilityHandler = nil
+            try? pipe.fileHandleForReading.close()
+            return nil
+        }
+
+        var timedOut = false
+        if exitSemaphore.wait(timeout: .now() + timeoutSeconds) == .timedOut {
+            timedOut = true
+            if process.isRunning {
+                process.terminate()
+            }
+            if exitSemaphore.wait(timeout: .now() + 1) == .timedOut, process.isRunning {
+                kill(process.processIdentifier, SIGKILL)
+                _ = exitSemaphore.wait(timeout: .now() + 1)
+            }
+        }
+
+        // Process exit does not guarantee FileHandle already delivered the final stdout/stderr
+        // readability callback. Wait briefly for pipe EOF so fast `ouro check` output is not lost,
+        // then close the read end so an escaped grandchild cannot hold the runner forever.
+        _ = outputEOF.wait(timeout: .now() + 1)
+        pipe.fileHandleForReading.readabilityHandler = nil
+        try? pipe.fileHandleForReading.close()
+        let output = String(decoding: outputBuffer.snapshot(), as: UTF8.self)
+            .replacingOccurrences(of: "\u{1B}[", with: "")
+        return ProviderCheckProcessResult(
+            timedOut: timedOut,
+            terminationStatus: process.isRunning ? Int32(SIGKILL) : process.terminationStatus,
+            output: output
+        )
+    }
+
     /// F7 — short-budget post-clone provider probe. Copies `runColdStartProviderCheck` verbatim:
     /// `ouro check --agent <n> --lane outward`, 15s watchdog, classify from the OUTPUT via
     /// `ProviderCheckClassifier` (never the exit code — `ouro check` exits 0 in every state). Returns
@@ -13285,46 +13382,23 @@ public final class WorkbenchViewModel: ObservableObject {
     /// than false-greening a clean-but-unauthenticated clone (gap #1 / B-3).
     private func runCloneProviderCheck(agentName: String, lane: String) async -> ProviderConnectionVerdict? {
         await Task.detached(priority: .userInitiated) {
-            let process = Process()
-            let pipe = Pipe()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-            process.arguments = ["ouro", "check", "--agent", agentName, "--lane", lane]
-            // Resolve PATH from the user's real login shell so `ouro` + its `node` runtime are
-            // found from a Finder-launched app's bare launchd PATH (every other runner does this).
-            process.environment = TerminalEnvironment().valuesWithResolvedPath()
-            process.standardOutput = pipe
-            process.standardError = pipe
-            do {
-                let start = Date()
-                try process.run()
-                // 15s short watchdog: a wedged/flaky daemon must NOT freeze the clone fold. Drain
-                // the pipe continuously so a chatty check (>64KB) can't fill the buffer and block.
-                let timeoutSeconds: TimeInterval = 15
-                let watchdog = DispatchWorkItem {
-                    if process.isRunning { process.terminate() }
-                }
-                DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + timeoutSeconds, execute: watchdog)
-                let rawOutput = pipe.fileHandleForReading.readDataToEndOfFile()
-                let output = String(decoding: rawOutput, as: UTF8.self)
-                    .replacingOccurrences(of: "\u{1B}[", with: "")
-                process.waitUntilExit()
-                watchdog.cancel()
-                // Past the budget the watchdog terminated the process — treat as "couldn't confirm"
-                // (nil), NOT as a classified verdict from truncated output.
-                if Date().timeIntervalSince(start) >= timeoutSeconds {
-                    return nil
-                }
-                // Classify from the OUTPUT (never the exit code — `ouro check` exits 0 in every
-                // state). The classifier never false-greens.
-                return ProviderCheckClassifier().classify(
-                    exitCode: process.terminationStatus,
-                    stdout: output,
-                    stderr: ""
-                )
-            } catch {
-                // Couldn't even launch the probe → couldn't confirm.
+            guard let result = Self.runProviderCheckProcess(
+                agentName: agentName,
+                lane: lane,
+                timeoutSeconds: 15
+            ) else {
                 return nil
             }
+            // Past the budget the runner terminated the process — treat as "couldn't confirm"
+            // (nil), NOT as a classified verdict from truncated output.
+            guard !result.timedOut else { return nil }
+            // Classify from the OUTPUT (never the exit code — `ouro check` exits 0 in every
+            // state). The classifier never false-greens.
+            return ProviderCheckClassifier().classify(
+                exitCode: result.terminationStatus,
+                stdout: result.output,
+                stderr: ""
+            )
         }.value
     }
 
@@ -15686,154 +15760,93 @@ public final class WorkbenchViewModel: ObservableObject {
     /// folds into `.failed(.couldNotConfirm)` (never a false green).
     private func runColdStartProviderCheck(agentName: String, lane: String) async -> ProviderConnectionVerdict? {
         await Task.detached(priority: .userInitiated) {
-            let process = Process()
-            let pipe = Pipe()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-            process.arguments = ["ouro", "check", "--agent", agentName, "--lane", lane]
-            // Resolve PATH from the user's real login shell so `ouro` + its `node` runtime are
-            // found from a Finder-launched app's bare launchd PATH (every other runner does this).
-            process.environment = TerminalEnvironment().valuesWithResolvedPath()
-            process.standardOutput = pipe
-            process.standardError = pipe
-            do {
-                let start = Date()
-                try process.run()
-                // 15s short watchdog: a wedged/flaky daemon must NOT freeze creation. Drain the
-                // pipe continuously so a chatty check (>64KB) can't fill the buffer and block.
-                let timeoutSeconds: TimeInterval = 15
-                let watchdog = DispatchWorkItem {
-                    if process.isRunning { process.terminate() }
-                }
-                DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + timeoutSeconds, execute: watchdog)
-                let rawOutput = pipe.fileHandleForReading.readDataToEndOfFile()
-                let output = String(decoding: rawOutput, as: UTF8.self)
-                    .replacingOccurrences(of: "\u{1B}[", with: "")
-                process.waitUntilExit()
-                watchdog.cancel()
-                // Past the budget the watchdog terminated the process — treat as "couldn't confirm"
-                // (nil), NOT as a classified verdict from truncated output.
-                if Date().timeIntervalSince(start) >= timeoutSeconds {
-                    return nil
-                }
-                // Classify from the OUTPUT (never the exit code — `ouro check` exits 0 in every
-                // state; that was the F2 bug). The classifier never false-greens.
-                return ProviderCheckClassifier().classify(
-                    exitCode: process.terminationStatus,
-                    stdout: output,
-                    stderr: ""
-                )
-            } catch {
-                // Couldn't even launch the probe → couldn't confirm.
+            guard let result = Self.runProviderCheckProcess(
+                agentName: agentName,
+                lane: lane,
+                timeoutSeconds: 15
+            ) else {
                 return nil
             }
+            // Past the budget the runner terminated the process — treat as "couldn't confirm"
+            // (nil), NOT as a classified verdict from truncated output.
+            guard !result.timedOut else { return nil }
+            // Classify from the OUTPUT (never the exit code — `ouro check` exits 0 in every
+            // state; that was the F2 bug). The classifier never false-greens.
+            return ProviderCheckClassifier().classify(
+                exitCode: result.terminationStatus,
+                stdout: result.output,
+                stderr: ""
+            )
         }.value
     }
 
     private func runOnboardingProviderCheck(agentName: String, lane: String) async -> OnboardingProviderCheckResult {
         await Task.detached(priority: .userInitiated) {
-            let process = Process()
-            let pipe = Pipe()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-            process.arguments = ["ouro", "check", "--agent", agentName, "--lane", lane]
-            // Resolve PATH from the user's real login shell (+ ~/.ouro-cli/bin + the
-            // system dirs) so `ouro` AND its `node` runtime are found from a
-            // Finder-launched app's bare launchd PATH. Every OTHER runner already does
-            // this; this check was the one that didn't — so it died with
-            // `env: ouro: No such file or directory`, which then surfaced verbatim in
-            // the wizard as a baffling "what env??" error to a brand-new user.
-            process.environment = TerminalEnvironment().valuesWithResolvedPath()
-            process.standardOutput = pipe
-            process.standardError = pipe
-            do {
-                let start = Date()
-                try process.run()
-                // Drain stdout/stderr continuously via readDataToEndOfFile so a
-                // chatty `ouro check` (>64KB) can't fill the pipe buffer and
-                // block the process — which previously looked like a timeout.
-                // A watchdog terminates the process past the deadline; the
-                // terminate closes the pipe, so the read returns.
-                let watchdog = DispatchWorkItem {
-                    if process.isRunning { process.terminate() }
-                }
-                // 90s, not 40s: a warm `ouro check` runs ~12s (it waits on the bitwarden vault
-                // lock the daemon holds), but the FIRST check right after a factory reset — cold
-                // daemon + cold vault, likely warm-up contention — can run well past that. 40s
-                // was hard-killing that cold first-check and surfacing a scary "took too long",
-                // so a brand-new user watched a silent spinner and quit. 90s gives the cold path
-                // room; the "Try again" button (U2) makes a warm retry cheap if it ever does hit
-                // the ceiling. (Root cause of the cold slowness is unconfirmed — couldn't
-                // reproduce live — so this tolerates-and-informs rather than fixing the source.)
-                DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 90, execute: watchdog)
-                // Capture the pipe output (don't discard it) — readiness is classified FROM the
-                // output, never from the exit code. Draining is still required: an undrained pipe
-                // past 64KB blocks the child and looks like a timeout. ANSI-strip exactly as the
-                // onboarding-doctor diagnostic does so the classifier's verdict line survives.
-                let rawOutput = pipe.fileHandleForReading.readDataToEndOfFile()
-                let output = String(decoding: rawOutput, as: UTF8.self)
-                    .replacingOccurrences(of: "\u{1B}[", with: "")
-                process.waitUntilExit()
-                watchdog.cancel()
-                // Lane-agnostic copy: U1's repair-step TITLE now carries the connection identity
-                // (provider · model + plain-English role), so these details no longer need the
-                // opaque "main"/"background" lane label (#234).
-                if Date().timeIntervalSince(start) >= 90 {
-                    return OnboardingProviderCheckResult(
-                        lane: lane,
-                        state: .failed,
-                        detail: "This is taking longer than usual. Try again, or reconnect your provider."
-                    )
-                }
-                // F2 FIX: `ouro check` exits 0 in EVERY state (working, vault-locked, 401,
-                // network-down), so deriving readiness from `terminationStatus == 0` handed off
-                // UNAUTHENTICATED bosses as green. Classify from the OUTPUT instead. ONLY a
-                // `.working` verdict is `.passed`; every other verdict is `.failed` with a
-                // distinct, seam-free detail (NEVER raw `ouro check` output — lane jargon,
-                // provider IDs, or a `node`/PATH shell error read as gibberish to a new user; the
-                // Connect step is the fix in every failure case, so the copy points there).
-                let verdict = ProviderCheckClassifier().classify(
-                    exitCode: process.terminationStatus,
-                    stdout: output,
-                    stderr: ""
-                )
-                switch verdict {
-                case .working:
-                    return OnboardingProviderCheckResult(
-                        lane: lane,
-                        state: .passed,
-                        detail: "This connection is working."
-                    )
-                case .vaultLocked:
-                    return OnboardingProviderCheckResult(
-                        lane: lane,
-                        state: .failed,
-                        detail: "Workbench couldn't unlock your saved credentials for this connection. "
-                            + "Reconnect your provider to continue."
-                    )
-                case .unauthorized:
-                    return OnboardingProviderCheckResult(
-                        lane: lane,
-                        state: .failed,
-                        detail: "This connection's credentials were rejected. Reconnect your provider to continue."
-                    )
-                case .unreachable:
-                    return OnboardingProviderCheckResult(
-                        lane: lane,
-                        state: .failed,
-                        detail: "Workbench couldn't reach this connection's provider. "
-                            + "Check your network, then try again."
-                    )
-                case .indeterminate:
-                    return OnboardingProviderCheckResult(
-                        lane: lane,
-                        state: .failed,
-                        detail: "Workbench couldn't confirm this connection yet. Try again, or reconnect your provider."
-                    )
-                }
-            } catch {
+            guard let result = Self.runProviderCheckProcess(
+                agentName: agentName,
+                lane: lane,
+                timeoutSeconds: 90
+            ) else {
                 return OnboardingProviderCheckResult(
                     lane: lane,
                     state: .failed,
                     detail: "Workbench is still setting this up. It clears once your provider is connected."
+                )
+            }
+            // Lane-agnostic copy: U1's repair-step TITLE now carries the connection identity
+            // (provider · model + plain-English role), so these details no longer need the
+            // opaque "main"/"background" lane label (#234).
+            if result.timedOut {
+                return OnboardingProviderCheckResult(
+                    lane: lane,
+                    state: .failed,
+                    detail: "This is taking longer than usual. Try again, or reconnect your provider."
+                )
+            }
+            // F2 FIX: `ouro check` exits 0 in EVERY state (working, vault-locked, 401,
+            // network-down), so deriving readiness from `terminationStatus == 0` handed off
+            // UNAUTHENTICATED bosses as green. Classify from the OUTPUT instead. ONLY a
+            // `.working` verdict is `.passed`; every other verdict is `.failed` with a
+            // distinct, seam-free detail (NEVER raw `ouro check` output — lane jargon,
+            // provider IDs, or a `node`/PATH shell error read as gibberish to a new user; the
+            // Connect step is the fix in every failure case, so the copy points there).
+            let verdict = ProviderCheckClassifier().classify(
+                exitCode: result.terminationStatus,
+                stdout: result.output,
+                stderr: ""
+            )
+            switch verdict {
+            case .working:
+                return OnboardingProviderCheckResult(
+                    lane: lane,
+                    state: .passed,
+                    detail: "This connection is working."
+                )
+            case .vaultLocked:
+                return OnboardingProviderCheckResult(
+                    lane: lane,
+                    state: .failed,
+                    detail: "Workbench couldn't unlock your saved credentials for this connection. "
+                        + "Reconnect your provider to continue."
+                )
+            case .unauthorized:
+                return OnboardingProviderCheckResult(
+                    lane: lane,
+                    state: .failed,
+                    detail: "This connection's credentials were rejected. Reconnect your provider to continue."
+                )
+            case .unreachable:
+                return OnboardingProviderCheckResult(
+                    lane: lane,
+                    state: .failed,
+                    detail: "Workbench couldn't reach this connection's provider. "
+                        + "Check your network, then try again."
+                )
+            case .indeterminate:
+                return OnboardingProviderCheckResult(
+                    lane: lane,
+                    state: .failed,
+                    detail: "Workbench couldn't confirm this connection yet. Try again, or reconnect your provider."
                 )
             }
         }.value

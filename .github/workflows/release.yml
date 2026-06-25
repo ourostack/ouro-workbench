@@ -46,6 +46,9 @@ jobs:
           swift --version
           xcodebuild -version
 
+      - name: Verify shared shell dependency freshness
+        run: scripts/check-shell-dependency.sh
+
       - name: Resolve dependencies
         run: swift package resolve
 
