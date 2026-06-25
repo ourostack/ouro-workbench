@@ -64,7 +64,7 @@ The full struct enumeration + per-struct LOGIC-BEARING/BRANCHLESS classification
 
 ### C0 — Edge-case spike pack (de-risk every flagged pattern ONCE) — FIRST
 **Views (representative, 1 each):** `GitBranchChip` (real-target fixture), `OuroAgentManagerView` (AN-001 + fixed `OuroAgentRecord`), `AgentInspectorPanel` (path-leak), `BossWatchStatusView` (fixed-timestamp clock), `TerminalRowContextMenu` (standalone menu), `SessionDetailView` inactive arm (live-arm carve-out).
-**Why first / value:** proves the 6 edge-case recipes are sound before fanning out 66 views; turns each later cluster into "apply the recipe." Each representative is also a real logic-bearing target → counts toward the 66 (not throwaway).
+**Why first / value:** proves the 6 edge-case recipes are sound before fanning out 66 views; turns each later cluster into "apply the recipe." Each representative is also a real logic-bearing target → counts toward the 66 (not throwaway). **NB — no double-count:** the C0 representatives ARE the first member of their home cluster (`GitBranchChip`→C1, `OuroAgentManagerView`→C8, `AgentInspectorPanel`→C7, `BossWatchStatusView`→C10, `TerminalRowContextMenu`→C1, `SessionDetailView`-inactive→C9); C0 is the SEQUENCING of "do this one first to prove the recipe," not a 67th view. Each is counted ONCE (in its home cluster's tally).
 **Output:** a proven fixture recipe per edge-case (committed as the first member of each pattern's home cluster) + `./U4-logic-bearing-coverage/edge-case-spikes.md`.
 **Access-widening:** `AgentInspectorPanel` (private→internal).
 
