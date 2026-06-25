@@ -14959,18 +14959,10 @@ public final class WorkbenchViewModel: ObservableObject {
         // this version, so installing is just the swap + relaunch.
         if let staged = pendingStagedUpdate {
             releaseUpdateInstallStatus = "Installing \(staged.releaseLabel) and relaunching…"
-            isApplyingManualUpdate = true
-            recordActionLog(
-                source: "native",
-                action: "installReleaseUpdate",
-                result: "Applying staged \(staged.releaseLabel); relaunching",
-                succeeded: true
-            )
-            WorkbenchUpdateInstaller.applyAndRelaunch(
+            applyReleaseUpdateAndTerminate(
                 staged: staged,
-                destinationBundle: Bundle.main.bundleURL
+                successLog: "Applying staged \(staged.releaseLabel); relaunching"
             )
-            NSApp.terminate(nil)
             return
         }
 
@@ -15001,18 +14993,10 @@ public final class WorkbenchViewModel: ObservableObject {
                 await MainActor.run { self?.releaseUpdateInstallStatus = line }
             }
             releaseUpdateInstallStatus = "Installing \(staged.releaseLabel) and relaunching…"
-            isApplyingManualUpdate = true
-            recordActionLog(
-                source: "native",
-                action: "installReleaseUpdate",
-                result: "Staged \(staged.releaseLabel); swapping bundle and relaunching",
-                succeeded: true
-            )
-            WorkbenchUpdateInstaller.applyAndRelaunch(
+            applyReleaseUpdateAndTerminate(
                 staged: staged,
-                destinationBundle: Bundle.main.bundleURL
+                successLog: "Staged \(staged.releaseLabel); swapping bundle and relaunching"
             )
-            NSApp.terminate(nil)
         } catch {
             let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             releaseUpdateInstallError = message
@@ -15022,6 +15006,40 @@ public final class WorkbenchViewModel: ObservableObject {
                 source: "native",
                 action: "installReleaseUpdate",
                 result: message,
+                succeeded: false
+            )
+        }
+    }
+
+    private func applyReleaseUpdateAndTerminate(
+        staged: WorkbenchUpdateInstaller.Staged,
+        successLog: String
+    ) {
+        releaseUpdateIsInstalling = true
+        switch WorkbenchUpdateInstaller.applyAndRelaunch(
+            staged: staged,
+            destinationBundle: Bundle.main.bundleURL
+        ) {
+        case .launched:
+            isApplyingManualUpdate = true
+            recordActionLog(
+                source: "native",
+                action: "installReleaseUpdate",
+                result: successLog,
+                succeeded: true
+            )
+            NSApp.terminate(nil)
+        case let .failedToLaunch(message):
+            pendingStagedUpdate = staged
+            stagedUpdateVersion = staged.releaseLabel
+            releaseUpdateInstallError = "Could not start the update helper: \(message)"
+            releaseUpdateInstallStatus = nil
+            releaseUpdateIsInstalling = false
+            isApplyingManualUpdate = false
+            recordActionLog(
+                source: "native",
+                action: "installReleaseUpdate",
+                result: releaseUpdateInstallError ?? message,
                 succeeded: false
             )
         }
@@ -15107,10 +15125,20 @@ public final class WorkbenchViewModel: ObservableObject {
             return
         }
         pendingStagedUpdate = nil
-        WorkbenchUpdateInstaller.applyOnQuit(
+        let result = WorkbenchUpdateInstaller.applyOnQuit(
             staged: staged,
             destinationBundle: Bundle.main.bundleURL
         )
+        if case let .failedToLaunch(message) = result {
+            pendingStagedUpdate = staged
+            stagedUpdateVersion = staged.releaseLabel
+            recordActionLog(
+                source: "native",
+                action: "autoApplyUpdateOnQuit",
+                result: "Could not start the update helper: \(message)",
+                succeeded: false
+            )
+        }
     }
 
     func collectSupportDiagnostics() {
