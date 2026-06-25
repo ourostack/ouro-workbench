@@ -176,6 +176,30 @@ public enum WorkspaceSidebarPresentation {
         return WorkspaceSidebarModel(rows: rows, activeWorkspaceId: activeId)
     }
 
+    /// Resolve the GLOBAL Archived list (DB10, supersedes DB7) — every archived
+    /// terminal/shell session, decoupled from any workspace's `tabIds`. The real
+    /// `migrateToWorkspaceStructure()` folds ONLY non-archived entries into the
+    /// "Restored workspace", so archived entries are in NO workspace's `tabIds`; a
+    /// per-workspace `archivedTabs` partition therefore orphans them after upgrade.
+    /// The Archived SECTION reads THIS instead — a flat recycle-bin over
+    /// `processEntries` so no archived terminal is ever invisible/un-restorable.
+    ///
+    /// Order is preserved from `entries`; each tab carries `effectiveTabName`. Only
+    /// `.terminalAgent`/`.shell` sessions surface (matching the App's session set);
+    /// non-session kinds (`.command`/`.ouroBoss`) are excluded. Pure — no I/O.
+    public static func resolveGlobalArchived(entries: [ProcessEntry]) -> [ResolvedTab] {
+        entries
+            .filter { $0.isArchived && ($0.kind == .terminalAgent || $0.kind == .shell) }
+            .map { entry in
+                ResolvedTab(
+                    id: entry.id,
+                    effectiveTabName: entry.effectiveTabName,
+                    attention: entry.attention,
+                    isArchived: true
+                )
+            }
+    }
+
     /// The lean row attention summary over a workspace's ACTIVE tabs: the
     /// highest-severity attention present, plus whether any active tab needs the
     /// operator. Archived tabs are excluded by construction (the caller passes only

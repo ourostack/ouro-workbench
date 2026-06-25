@@ -100,9 +100,13 @@ final class WorkbenchUISurfaceTester {
         defer { try? FileManager.default.removeItem(at: root) }
 
         // Write a migrated state (schema v2) to the model's state file so load() picks
-        // it up. Mirrors the Unit-0 fixture: pinned single-tab workspace, "Restored
-        // workspace" with several tabs (one renamed via tabNameOverride, one archived),
-        // and an empty workspace.
+        // it up. FIX PASS (FP2): the migrated state is produced by driving the REAL
+        // `migrateToWorkspaceStructure()` — NOT by hand-building tabIds. The previous
+        // smoke hand-injected the archived id into the "Restored workspace" tabIds, a
+        // state the real migration NEVER produces (it folds ONLY non-archived entries),
+        // which masked the CRITICAL (archived terminals orphaned after upgrade). Here
+        // the archived entry is left for the migration to EXCLUDE, and we assert the
+        // GLOBAL Archived resolution still surfaces it (DB10).
         let projectId = UUID()
         let active = ProcessEntry(
             projectId: projectId, name: "ouro-workbench", kind: .terminalAgent,
@@ -125,19 +129,32 @@ final class WorkbenchUISurfaceTester {
             projectId: projectId, name: "pinned single tab", kind: .terminalAgent,
             executable: "codex", workingDirectory: "/tmp/e", attention: .needsBossReview
         )
-        let state = WorkspaceState(
+        // Pre-existing structure BEFORE migration: a pinned single-tab workspace and an
+        // empty workspace. The migration folds the UNMAPPED, NON-ARCHIVED entries
+        // (active/renamed/shell) into a fresh "Restored workspace"; the archived entry
+        // is excluded (left out of every tabIds), and the already-mapped pinnedTab stays.
+        var state = WorkspaceState(
             boss: BossAgentSelection(agentName: "slugger"),
             projects: [WorkbenchProject(id: projectId, name: "Home", rootPath: "/tmp")],
             processEntries: [active, renamed, shell, archived, pinnedTab],
             workspaces: [
                 Workspace(autoName: "Pinned workspace", isPinned: true, tabIds: [pinnedTab.id]),
-                Workspace(
-                    autoName: WorkspaceState.migratedWorkspaceSeedName,
-                    tabIds: [active.id, renamed.id, shell.id, archived.id]
-                ),
                 Workspace(autoName: "Empty workspace", tabIds: []),
             ]
         )
+        state.migrateToWorkspaceStructure()
+        // Honesty check: the real migration produced a "Restored workspace" that does
+        // NOT contain the archived id (the structural cause of the CRITICAL).
+        guard let migratedRestored = state.workspaces.first(where: {
+            $0.autoName == WorkspaceState.migratedWorkspaceSeedName
+        }) else {
+            print("migrated workspace smoke: real migration did not create a Restored workspace")
+            return false
+        }
+        guard !migratedRestored.tabIds.contains(archived.id) else {
+            print("migrated workspace smoke: archived id leaked into Restored workspace tabIds")
+            return false
+        }
         do {
             try WorkbenchStore(stateURL: root.appendingPathComponent("workspace-state.json")).save(state)
         } catch {
@@ -148,19 +165,33 @@ final class WorkbenchUISurfaceTester {
         let model = WorkbenchViewModel(paths: WorkbenchPaths(rootURL: root))
 
         // The seam resolved the migrated structure: pinned-first ordering, the
-        // "Restored workspace" carries all its tabs (the renamed one shows its
-        // override), and the empty workspace renders (not hidden).
+        // "Restored workspace" carries its active tabs (the renamed one shows its
+        // override), and the empty workspace renders (not hidden). FP2: the real
+        // migration APPENDS the "Restored workspace" after the pre-existing
+        // workspaces, so the unpinned order is [Empty (pre-existing), Restored
+        // (appended)] — pinned-first puts "Pinned workspace" at the head.
         let rows = model.workspaceSidebarModel.rows
         let names = rows.map(\.effectiveName)
-        guard names == ["Pinned workspace", WorkspaceState.migratedWorkspaceSeedName, "Empty workspace"] else {
+        guard names == ["Pinned workspace", "Empty workspace", WorkspaceState.migratedWorkspaceSeedName] else {
             print("migrated workspace smoke: unexpected row order \(names)")
             return false
         }
         guard let restored = rows.first(where: { $0.effectiveName == WorkspaceState.migratedWorkspaceSeedName }),
               restored.tabs.count == 3,
-              restored.archivedTabs.count == 1,
+              // FP2: the real migration left the archived id OUT of tabIds, so the
+              // per-workspace partition is EMPTY (proving the previous smoke's
+              // hand-injected `archivedTabs.count == 1` was dishonest).
+              restored.archivedTabs.isEmpty,
               restored.tabs.contains(where: { $0.effectiveTabName == "Agent Substrate" }) else {
             print("migrated workspace smoke: Restored workspace did not resolve as expected")
+            return false
+        }
+        // FP1/DB10 — the CRITICAL regression: even though the archived entry is in NO
+        // workspace's tabIds (real migration), it MUST still be globally visible +
+        // restorable. The App's Archived section reads this global resolution.
+        let globallyArchived = model.archivedSessionEntries
+        guard globallyArchived.contains(where: { $0.id == archived.id }) else {
+            print("migrated workspace smoke: archived entry orphaned — not in the global Archived section")
             return false
         }
         guard rows.first(where: { $0.effectiveName == "Empty workspace" })?.isEmpty == true else {

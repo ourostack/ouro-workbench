@@ -11444,14 +11444,21 @@ final class WorkbenchViewModel: ObservableObject {
         state.processEntries.first(where: { $0.id == entry.id })?.isPinned ?? entry.isPinned
     }
 
-    /// Slice ②b (DB7) — the Archived section is scoped to the ACTIVE WORKSPACE's tabs,
-    /// not the old `selectedProjectID`: the sidebar now selects WORKSPACES, so the
-    /// Archived list stays coherent with the selected unit (the seam already partitions
-    /// each workspace's resolved tabs into active vs archived). The section hides when
-    /// the active workspace has no archived tabs (the existing `!isEmpty` guard). The
+    /// Slice ②b (DB10, supersedes DB7) — the Archived section is GLOBAL, not scoped to
+    /// the active workspace. The independent review BLOCKED merge on a CRITICAL: the
+    /// real `migrateToWorkspaceStructure()` folds ONLY non-archived entries into the
+    /// "Restored workspace", so archived entries are in NO workspace's `tabIds`; the
+    /// previous per-active-workspace scoping (`activeWorkspaceRow?.archivedTabs`) was
+    /// therefore ALWAYS empty after upgrade ⇒ the Archived section vanished and the
+    /// row's `Restore` menu (the only un-archive UI) vanished with it ⇒ archived
+    /// terminals were orphaned. This now reads ALL archived terminal/shell sessions
+    /// globally (the pure seam `resolveGlobalArchived`), decoupled from `tabIds`
+    /// membership, so no archived terminal is ever invisible/un-restorable. The
     /// sidebar filter still applies so structured/free-text queries narrow the list.
     var archivedSessionEntries: [ProcessEntry] {
-        let archivedIds = Set(activeWorkspaceRow?.archivedTabs.map(\.id) ?? [])
+        let archivedIds = Set(
+            WorkspaceSidebarPresentation.resolveGlobalArchived(entries: workspaceTabEntries).map(\.id)
+        )
         let archived = allSessionEntries.filter { archivedIds.contains($0.id) }
         return applySidebarFilter(archived, archived: true)
     }

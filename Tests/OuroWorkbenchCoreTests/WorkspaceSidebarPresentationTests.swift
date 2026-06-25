@@ -215,8 +215,15 @@ final class WorkspaceSidebarPresentationTests: XCTestCase {
     }
 
     func testWorkspaceWithOnlyArchivedTabsIsNotEmpty() {
-        // A workspace whose only resolved tabs are archived still has content to
-        // show (in the archived list), so it is NOT the empty-state marker.
+        // FIX PASS (FP3): this exercises the RUNTIME-ARCHIVE case — an entry that was
+        // archived AFTER being added to a workspace (archiveCustomSession only flips
+        // `isArchived`, it does NOT remove the id from `tabIds`), so the archived id
+        // legitimately remains in the workspace's `tabIds`. The seam's per-workspace
+        // partition correctly keeps it OUT of the active strip while marking the row
+        // non-empty (there's still content in the archived list). This is NOT the
+        // migration case — the real migration never puts archived ids in any `tabIds`
+        // (covered by WorkspaceGlobalArchivedTests, which proves the GLOBAL Archived
+        // section still surfaces migration-orphaned archived entries — DB10).
         let arch = makeEntry(name: "old", isArchived: true)
         let ws = Workspace(autoName: "W", tabIds: [arch.id])
         let model = resolve([ws], [arch])
@@ -397,19 +404,29 @@ final class WorkspaceSidebarPresentationTests: XCTestCase {
             entries: entries,
             selectedWorkspaceId: nil
         )
-        // Pinned workspace renders first; "Restored workspace" + "Empty workspace" follow.
+        // Pinned workspace renders first; "Restored workspace" + "Empty workspace" follow
+        // (their stored order in the fixture, both unpinned).
         XCTAssertEqual(model.rows.map(\.effectiveName), ["Pinned workspace", "Restored workspace", "Empty workspace"])
         // Active fallback (nil selection) → first pinned → "Pinned workspace".
         XCTAssertEqual(model.rows.first { $0.isActive }?.effectiveName, "Pinned workspace")
-        // Restored workspace: 3 active tabs (1 carries the override) + 1 archived.
+        // FP2 — HONEST fixture: the real migration folds ONLY non-archived entries into
+        // the "Restored workspace", so the archived id is in NO workspace's tabIds. The
+        // Restored workspace therefore has 3 active tabs (1 carries the override) and
+        // ZERO archived tabs in its per-workspace partition.
         let restored = try XCTUnwrap(model.rows.first { $0.effectiveName == "Restored workspace" })
         XCTAssertEqual(restored.tabs.count, 3)
-        XCTAssertEqual(restored.archivedTabs.count, 1)
+        XCTAssertTrue(restored.archivedTabs.isEmpty,
+                      "the honest migrated fixture has the archived id in NO tabIds")
         XCTAssertTrue(restored.tabs.contains { $0.effectiveTabName == "Agent Substrate" })
         XCTAssertEqual(restored.context.needsAttention, true)
         // Empty workspace renders (not hidden) with the empty marker.
         let empty = try XCTUnwrap(model.rows.first { $0.effectiveName == "Empty workspace" })
         XCTAssertTrue(empty.isEmpty)
+        // FP1/DB10 — the archived entry, though orphaned from every workspace's tabIds,
+        // is STILL surfaced by the GLOBAL Archived resolution (never invisible).
+        let globallyArchived = WorkspaceSidebarPresentation.resolveGlobalArchived(entries: entries)
+        XCTAssertEqual(globallyArchived.map(\.effectiveTabName), ["archived run"])
+        XCTAssertTrue(globallyArchived.allSatisfy(\.isArchived))
     }
 
     private func repoRoot() -> URL {
