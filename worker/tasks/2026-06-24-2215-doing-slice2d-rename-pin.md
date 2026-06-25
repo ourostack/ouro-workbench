@@ -36,7 +36,7 @@ Wire the cmux in-app editing affordances to the EXISTING `Workspace` / `ProcessE
 ---
 
 ## Completion Criteria
-- [ ] Pure Core mutators on `WorkspaceState` exist and are 100% line+region covered: `setWorkspaceNameOverride(workspaceId:to:)`, `clearWorkspaceNameOverride(workspaceId:)`, `toggleWorkspacePin(workspaceId:)`, `setTabNameOverride(tabId:to:)`. Each is a no-op for an unknown id (covered).
+- [x] Pure Core mutators on `WorkspaceState` exist and are 100% line+region covered: `setWorkspaceNameOverride(workspaceId:to:)`, `clearWorkspaceNameOverride(workspaceId:)`, `toggleWorkspacePin(workspaceId:)`, `setTabNameOverride(tabId:to:)`. Each is a no-op for an unknown id (covered).
 - [ ] Pure `WorkspaceRenameCommit` helper decides empty/whitespace commit semantics (DECISION D2d-1 below); 100% region covered.
 - [ ] Pure `InlineRenameState` (or equivalent) models "is rename active / which target / commit / cancel" transitions; 100% region covered.
 - [ ] Workspace context menu (Pin/Unpin, Rename ⇧⌘R, Remove Custom Name) attached to `WorkspaceSidebarRow`; "Remove Custom Name" item conditional on `nameOverride != nil`.
@@ -120,7 +120,7 @@ Each Core mutator gets a thin `WorkbenchViewModel` wrapper (e.g. `renameWorkspac
 **Output**: A short anchor note in `./2026-06-24-2215-doing-slice2d-rename-pin/anchors.md` (file:line for each). No code change.
 **Acceptance**: Every anchor resolves at HEAD; any drift from the file:line in this doc is recorded. `git status` clean except the artifacts note.
 
-### ⬜ Unit 1a: Core mutators — Tests (RED)
+### ✅ Unit 1a: Core mutators — Tests (RED)
 **What**: In a new `Tests/OuroWorkbenchCoreTests/WorkspaceEditingMutatorsTests.swift`, write FAILING XCTests for four pure mutators on `WorkspaceState` (mirroring `WorkspaceStructureTests` style):
 - `setWorkspaceNameOverride(workspaceId:to:)`: sets `nameOverride` on the matching workspace; **unknown id = no-op** (state unchanged); setting to `nil` is allowed (alias for clear — but prefer `clear…` for intent).
 - `clearWorkspaceNameOverride(workspaceId:)`: sets `nameOverride = nil` (revert to `autoName`); unknown id = no-op; already-nil = no-op (idempotent).
@@ -129,11 +129,11 @@ Each Core mutator gets a thin `WorkbenchViewModel` wrapper (e.g. `renameWorkspac
 Cover EVERY arm: found-id, unknown-id, nil-vs-value, idempotent-clear, double-toggle.
 **Acceptance**: Tests compile and FAIL (symbols don't exist yet) — real RED, run and shown.
 
-### ⬜ Unit 1b: Core mutators — Implementation (GREEN)
+### ✅ Unit 1b: Core mutators — Implementation (GREEN)
 **What**: Add the four mutators to `WorkspaceState` in `WorkspaceModels.swift`, inside the existing `public extension WorkspaceState` block (so they're PUBLIC — D2d-6; an `internal` mutator passes Core tests but breaks the plain-`import` App build). Pure; `firstIndex(where:)` guard → mutate → else no-op. Doc-comment each, cross-referencing the model's name semantics (DA4 honored, revert == nil). Also make `WorkspaceRenameCommit` / `InlineRenameState` (Units 2/3) and any new public seam types `public` for the same reason.
 **Acceptance**: All Unit 1a tests PASS under `swift test -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete`. 0 warnings.
 
-### ⬜ Unit 1c: Core mutators — Coverage & Refactor
+### ✅ Unit 1c: Core mutators — Coverage & Refactor
 **What**: Run `Scripts/check-coverage.sh`; confirm the four mutators are 100% line+region. Add any missing-arm test (e.g. a no-op path the suite didn't hit). Confirm `Scripts/coverage-allowlist.txt` is UNCHANGED.
 **Acceptance**: `check-coverage.sh` green for `WorkspaceModels.swift`; allowlist unchanged; tests still green.
 **Commit (Unit 1, one commit)**: `feat(core): WorkspaceState rename/pin/tab-override mutators (②d)`
@@ -255,4 +255,5 @@ Then run the FULL gate: `swift build`/`swift test` strict, `Scripts/check-covera
 - 2026-06-24 22:15 Validation pass: confirmed WorkspaceRow lacks `nameOverride` (Unit 4b additive need real); confirmed mutators must be public (App uses plain import) → D2d-6/D2d-8 refined.
 - 2026-06-24 22:15 Fresh unbiased sub-agent review gate spawned on the doing doc (autonomous signoff, no human gate).
 - 2026-06-24 22:15 Review gate returned PASS (all claims independently verified; 3 MINOR notes). Notes 2 & 3 hardened into Units 4a/6a (RED/GREEN token lockstep; single Escape mechanism). Verdict saved to artifacts/review-gate.md. Status → READY_FOR_EXECUTION.
-- Unit 0 complete: all anchors re-verified at execution-start HEAD; recorded one clarification (`togglePin` persists via `store.save` directly; ②d wrappers use the canonical `save()` @ :20309) + confirmed `WorkspaceRow` lacks `nameOverride` (4b additive need real) + chord-dispatcher plan for ⌘R/⇧⌘R. anchors.md updated.
+- Unit 0 complete: all anchors re-verified at execution-start HEAD; recorded one clarification (`togglePin` persists via `store.save` directly; ②d wrappers use the canonical `save()` @ :20309) + confirmed `WorkspaceRow` lacks `nameOverride` (4b additive need real) + chord-dispatcher plan for ⌘R/⇧⌘R. anchors.md updated. (commit 31c9886)
+- 2026-06-24 22:33 Unit 1 complete: 4 pure `WorkspaceState` mutators (`setWorkspaceNameOverride`/`clearWorkspaceNameOverride`/`toggleWorkspacePin`/`setTabNameOverride`) in the existing `public extension`; 15 XCTests (every arm: found/unknown-noop/nil/idempotent-clear/double-toggle) RED→GREEN under strict flags, 0 warn; `check-coverage.sh` green (WorkspaceModels.swift 100% line+region), allowlist unchanged. (commit 6ab1149)
