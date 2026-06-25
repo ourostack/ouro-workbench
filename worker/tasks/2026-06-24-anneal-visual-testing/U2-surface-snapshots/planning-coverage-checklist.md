@@ -10,7 +10,7 @@ Every requirement from the campaign journal (`../2026-06-24-anneal-visual-testin
 - ✅ Surface F (④ proposal card) full enumerated state-set (list none/one/many; card 0/one/many; itemRow selected×editable/static/absent) — **SU2** (SU2a enumerates exactly this)
 - ✅ Fold in AN-002 serializer hardening (extract bound value for TextField, not placeholder; de-dup findAll placeholder re-emission) — **SU1** (SU1a-c) ; ④ editable fields are where it matters → SU1 gates SU2
 - ✅ Surfaces A (sidebar rows) + B (tab-strip) full state-sets per §Surfaces — **SU3** (A) + **SU4** (B)
-- ✅ A depends on the TimelineView touch (sidebar embeds ElapsedTimePill) — **SU3 DEPENDS ON SU0** (stated in dep graph + SU3 header)
+- ✅ A "depends on the TimelineView touch (sidebar embeds ElapsedTimePill)" — REFINED by the review gate (C1): the sidebar SURFACE does NOT render ElapsedTimePill via the real seam (`runningSince` never wired at the sole call site `:3010`; `runningStartDate` helper dead). The elapsed seam is exercised on the standalone **SU3r** leaf, which DEPENDS ON SU0; the sidebar surface (SU3) is clock-free + SU0-independent. The campaign's "sidebar gates on SU0" intent is honored via SU3r.
 - ✅ `.accessibilityIdentifier` strategy (resolve fork F1): selective, NOT broad 121-view rollout; record decision + rationale — **D-U2-2 (F1 RESOLVED)** + per-surface audit in SU2c/SU3c/SU4c
 
 ## Brief: Coverage note (do NOT gate yet)
