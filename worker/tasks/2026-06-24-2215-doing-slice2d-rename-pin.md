@@ -38,7 +38,7 @@ Wire the cmux in-app editing affordances to the EXISTING `Workspace` / `ProcessE
 ## Completion Criteria
 - [x] Pure Core mutators on `WorkspaceState` exist and are 100% line+region covered: `setWorkspaceNameOverride(workspaceId:to:)`, `clearWorkspaceNameOverride(workspaceId:)`, `toggleWorkspacePin(workspaceId:)`, `setTabNameOverride(tabId:to:)`. Each is a no-op for an unknown id (covered).
 - [x] Pure `WorkspaceRenameCommit` helper decides empty/whitespace commit semantics (DECISION D2d-1 below); 100% region covered.
-- [ ] Pure `InlineRenameState` (or equivalent) models "is rename active / which target / commit / cancel" transitions; 100% region covered.
+- [x] Pure `InlineRenameState` (or equivalent) models "is rename active / which target / commit / cancel" transitions; 100% region covered.
 - [ ] Workspace context menu (Pin/Unpin, Rename ⇧⌘R, Remove Custom Name) attached to `WorkspaceSidebarRow`; "Remove Custom Name" item conditional on `nameOverride != nil`.
 - [ ] Tab context menu (Rename ⌘R) attached to `WorkspaceTabStrip` tab button.
 - [ ] Inline editors (prefilled, Enter=commit, Escape=cancel, helper caption) render for workspace + tab rename.
@@ -157,7 +157,7 @@ Cover EVERY arm: found-id, unknown-id, nil-vs-value, idempotent-clear, double-to
 **Acceptance**: green; allowlist unchanged; tests green.
 **Commit (Unit 2, one commit)**: `feat(core): WorkspaceRenameCommit empty/whitespace decision helper (②d)`
 
-### ⬜ Unit 3a: Inline-editor state helper — Tests (RED)
+### ✅ Unit 3a: Inline-editor state helper — Tests (RED)
 **What**: New `Tests/OuroWorkbenchCoreTests/InlineRenameStateTests.swift`. Failing tests for a pure `InlineRenameState` modeling "which target (if any) is being renamed and the draft text":
 - A target identifier enum/case for `.workspace(UUID)` vs `.tab(UUID)` (so one editor state serves both menus).
 - `begin(target:prefill:)` → active with the prefilled draft.
@@ -168,11 +168,11 @@ Cover EVERY arm: found-id, unknown-id, nil-vs-value, idempotent-clear, double-to
 Cover every transition arm.
 **Acceptance**: Tests compile and FAIL — real RED, shown.
 
-### ⬜ Unit 3b: Inline-editor state helper — Implementation (GREEN)
+### ✅ Unit 3b: Inline-editor state helper — Implementation (GREEN)
 **What**: Add `InlineRenameState` (pure `OuroWorkbenchCore` value type, e.g. `InlineRenameState.swift`). Keep it framework-free (no SwiftUI) so it is XCTest-visible and coverage-gated. The App holds it as `@Published var inlineRename: InlineRenameState` and binds the editor's `TextField` text to its draft.
 **Acceptance**: Unit 3a tests PASS under strict flags; 0 warnings.
 
-### ⬜ Unit 3c: Inline-editor state helper — Coverage & Refactor
+### ✅ Unit 3c: Inline-editor state helper — Coverage & Refactor
 **What**: `check-coverage.sh` → 100% line+region on `InlineRenameState.swift`. Allowlist unchanged.
 **Acceptance**: green; allowlist unchanged; tests green.
 **Commit (Unit 3, one commit)**: `feat(core): InlineRenameState begin/commit/cancel/switch transitions (②d)`
@@ -258,3 +258,4 @@ Then run the FULL gate: `swift build`/`swift test` strict, `Scripts/check-covera
 - Unit 0 complete: all anchors re-verified at execution-start HEAD; recorded one clarification (`togglePin` persists via `store.save` directly; ②d wrappers use the canonical `save()` @ :20309) + confirmed `WorkspaceRow` lacks `nameOverride` (4b additive need real) + chord-dispatcher plan for ⌘R/⇧⌘R. anchors.md updated. (commit 31c9886)
 - 2026-06-24 22:33 Unit 1 complete: 4 pure `WorkspaceState` mutators (`setWorkspaceNameOverride`/`clearWorkspaceNameOverride`/`toggleWorkspacePin`/`setTabNameOverride`) in the existing `public extension`; 15 XCTests (every arm: found/unknown-noop/nil/idempotent-clear/double-toggle) RED→GREEN under strict flags, 0 warn; `check-coverage.sh` green (WorkspaceModels.swift 100% line+region), allowlist unchanged. (commit 6ab1149)
 - 2026-06-24 22:46 Unit 2 complete: pure `WorkspaceRenameCommit.resolve(input:current:) -> Outcome` (D2d-1: empty/whitespace→noop, trimmed-non-empty→commit, trimmed==current→noop, case-change is a real change); 8 XCTests RED→GREEN strict, 0 warn; coverage green (148/150 at 100%, new file covered), allowlist unchanged. (commit d5be56c)
+- 2026-06-24 22:51 Unit 3 complete: pure `InlineRenameState` (`Target.workspace`/`.tab`, `begin`/`cancel`/`commit`→`PendingCommit`/`isEditing`; target-switch replaces draft, no stale leak; commit-when-inactive→nil); 9 XCTests RED→GREEN strict, 0 warn; coverage green (149/151 at 100%), allowlist unchanged. (commit d8753b0)
