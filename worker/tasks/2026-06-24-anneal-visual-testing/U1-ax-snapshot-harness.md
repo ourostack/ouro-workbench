@@ -1,6 +1,6 @@
 # Doing: U1 — AX-Snapshot Harness (deterministic NSHostingView AX-tree serializer + `__Snapshots__` + proof)
 
-**Status**: READY_FOR_EXECUTION
+**Status**: BLOCKED — Unit 0 spike NO-GO (serialization source); operator decision required
 **Execution Mode**: direct
 **Created**: 2026-06-25 02:20
 **Campaign**: ./../2026-06-24-anneal-visual-testing.md
@@ -255,7 +255,7 @@ twice → `XCTAssertEqual` byte-identical.
 
 > **CRITICAL: every unit header starts with a status emoji (⬜ for new).**
 
-### ⬜ Unit 0: Reality-check the AX walk + pick the 2nd proof view (research)
+### ❌ Unit 0: Reality-check the AX walk + pick the 2nd proof view (research) — NO-GO, BLOCKED
 **What**: Spike (throwaway, in a scratch test) the AppKit `NSAccessibility` walk over an
 `NSHostingView`-hosted `DashboardRowLabel`: confirm `host.view` (or its AX root) exposes
 `accessibilityChildren()` with a reachable text node carrying the `Label` text, and that
@@ -464,6 +464,24 @@ context reviewed this doc against: (a) the campaign rubric P1–P7, (b) the brie
 
 ## Progress Log
 - 2026-06-25 02:20 Created from campaign U1 brief (autonomous; authored straight to READY pending review gate).
+- 2026-06-25 **Unit 0 spike → NO-GO; UNIT BLOCKED.** Hosting a SwiftUI view in `NSHostingView`
+  inside a headless `xctest` process yields an EMPTY AppKit AX tree (`accessibilityChildren() == []`,
+  zero NSView subviews) across all 7 fallbacks tried (bare host / windowed host / unignoredDescendant /
+  key-window+runloop-spin+`.accessory` activation / `AXUIElement` C-API / forced `display()`). Raw
+  AppKit (`NSButton`) DOES populate children → the harness walk MECHANISM is sound; the wall is
+  SwiftUI serving its AX tree out-of-process via the remote-AX server (needs a bundled `.app` + a
+  connected assistive client; unavailable to `swift test`). This is the F-2 "one true feasibility
+  wall"; per Unit 0's directive + the brief, STOPPED and surfaced — did NOT fake a tree.
+  **F-1 packaging fix verified** (probe.txt → unhandled-file warning; `exclude:` silences it; build
+  stays exit-0) and documented, but REVERTED from `Package.swift` so the branch carries no
+  half-finished implementation while blocked. **Pivot found + VERIFIED dependency-free:** a `Mirror`
+  reflection of each proof view's `body` reaches the rendered text in-process — `SidebarWorkspaceEmptyRow`
+  → `["No tabs yet","No tabs yet"]`, `DashboardRowLabel` → `["Workbench MCP","infinity","infinity"]`.
+  But that is a SwiftUI-introspection source, NOT an AX role tree — a material change to the
+  campaign's P4a/P4b serialization-source definition → needs an operator call (options: ViewInspector
+  [adds a dep], `Mirror` [dep-free, weaker AX semantics], or a real `.app` UI-test target). Full
+  evidence + recommendations: `./U1-ax-snapshot-harness/ax-walk-spike.md`. Scratch spike + probe
+  removed; tree clean; build green; allowlist + `Package.swift` + `COVERAGE_DIRS` unchanged.
 - 2026-06-25 Verified facts against source: 2 `TimelineView(.periodic` sites (`:2166`,`:3775`);
   `SidebarWorkspaceEmptyRow` is `internal` + VM-free + AX-labelled (locked as 2nd proof view);
   `DashboardRowLabel` public; coverage gate = Core+ShellAdapter only (views lib not gated).
