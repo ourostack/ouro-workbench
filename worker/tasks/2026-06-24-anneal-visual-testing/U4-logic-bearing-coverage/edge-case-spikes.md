@@ -115,3 +115,55 @@ the negative control went RED** → reverted byte-identically → green. **CAUGH
 
 **GO.** Recipe sound; C1/C3 reuse standalone instantiation for
 `WorkspaceRowContextMenu`/`WorkspaceTabContextMenu`/`AutonomyStatusPopover`/`BossAgentNamePopover`.
+
+---
+
+## Recipe 3 — path-leak (hard) → `AgentInspectorPanel` (home cluster C7) ✅ GO
+
+**The risk it de-risks:** edge-case playbook #3 — `AgentInspectorPanel` renders
+`Text(agent.bundlePath)` (`:8181`) + `Text(agent.configPath)` (`:8192`) as VISIBLE
+content. The host whitelist can NOT strip a content `Text` (unlike the `.help` drop), and
+`OuroAgentInventory.scan` always sets `bundlePath: bundleURL.path` (an ABSOLUTE machine
+path — `/Users/<name>/…` or a `/var/folders/<random>/…` temp path) → a scanned record
+would leak. **The FIXTURE is the only fix:** construct the `OuroAgentRecord` with FIXED,
+RELATIVE paths, defended by `!tree.contains("/Users/")` (and `!contains("/var/folders/")`).
+
+**Proven seam (P2):** `OuroAgentRecord` is a `public` Core value type; constructing it with
+deterministic relative paths IS the real seam (same class as building a real `ProcessEntry`
+or parsing a real `GitSessionStatus` — P2 forbids hand-assembling serializer OUTPUT, not
+instantiating a real model VALUE). The panel's `model` is the `makeVM` dual-injection seam;
+`registration` (the panel's one `if let` branch) is a real `BossWorkbenchMCPRegistrationSnapshot`.
+
+```swift
+OuroAgentRecord(name: "fixture-agent",
+                bundlePath: "AgentBundles/fixture-agent.ouro",            // fixed/relative
+                configPath: "AgentBundles/fixture-agent.ouro/agent.json", // fixed/relative
+                status: .ready, detail: "ready")
+AgentInspectorPanel(agent: record, model: try makeVM(), registration: nil /* or a fixed snapshot */)
+```
+
+**Access-widening (SU-E precedent):** `AgentInspectorPanel` was `private struct` → widened
+to `internal` (visibility-only, zero behavior). The structural guard in
+`AgentDetailReadinessWiringTests.agentTitleStripDecl()` anchored its slice on the literal
+`"\nprivate struct AgentInspectorPanel: View {"` → its `to:` marker was updated to
+`"\nstruct AgentInspectorPanel: View {"` (the same minimal marker-retarget the SU-E
+widenings established; the `AgentTitleStrip` content assertions are unaffected).
+
+**Enumerated state-set + references** (`__Snapshots__/AgentInspectorPanel.*`):
+| state | tree |
+|---|---|
+| `noRegistration` | shippingbox · `Text "AgentBundles/fixture-agent.ouro"` · doc · `Text ".../agent.json"` · info · `Text "ready"` |
+| `withRegistration` | …above… + link · `Text "MCP: registered"` (the `if let registration` arm) |
+
+**Determinism (P3):** the relative paths render verbatim; `!contains("/Users/")` AND
+`!contains("/var/folders/")`; byte-identical twice.
+
+**Mutation-verify (P2):** mutated `Text(agent.bundlePath)` → `Text("MUTANT")` → **both
+snapshots went RED** (+ the path-leak-defense `contains("AgentBundles/…")` would fail) →
+reverted byte-identically → green. **CAUGHT.**
+
+**a11y-id:** none needed.
+
+**GO.** Recipe sound; C7 reuses fixed/relative `OuroAgentRecord` paths for
+`AgentStatusCard`/`OuroAgentRowView` (same visible-`Text` path vectors) + AN-001; C9 reuses
+the same fixed-path discipline for the transcript/launch-command leaks (`/tmp/u4`).

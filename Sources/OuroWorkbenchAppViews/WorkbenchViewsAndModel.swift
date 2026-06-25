@@ -8166,7 +8166,10 @@ private struct AgentTitleStrip: View {
     }
 }
 
-private struct AgentInspectorPanel: View {
+// Access-widening (C0 SU-3, the SU-E precedent): `private` → `internal` so the
+// `@testable import OuroWorkbenchAppViews` path-leak snapshot test can reach this leaf.
+// Zero-behavior change (visibility only). Surfaced to the operator per the doing doc.
+struct AgentInspectorPanel: View {
     var agent: OuroAgentRecord
     @ObservedObject var model: WorkbenchViewModel
     var registration: BossWorkbenchMCPRegistrationSnapshot?
