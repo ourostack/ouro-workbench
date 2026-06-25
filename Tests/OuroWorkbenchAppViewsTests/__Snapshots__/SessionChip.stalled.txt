@@ -1,0 +1,2 @@
+View label="stalled"
+Image image="zzz"

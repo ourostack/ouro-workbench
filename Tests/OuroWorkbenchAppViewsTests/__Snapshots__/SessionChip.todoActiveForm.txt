@@ -1,0 +1,5 @@
+View label="Active, 1/3 todos, Merging PR chain"
+Image image="bolt.fill"
+Image image="checklist"
+Text kind=static text="1/3"
+Text kind=static text="· Merging PR chain"

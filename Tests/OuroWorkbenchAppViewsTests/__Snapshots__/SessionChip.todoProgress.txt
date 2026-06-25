@@ -1,0 +1,4 @@
+View label="Active, 2/3 todos"
+Image image="bolt.fill"
+Image image="checklist"
+Text kind=static text="2/3"
