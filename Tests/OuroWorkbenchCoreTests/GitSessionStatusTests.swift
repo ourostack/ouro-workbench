@@ -130,6 +130,26 @@ final class GitSessionStatusTests: XCTestCase {
         XCTAssertEqual(reader.status(forDirectory: root.path), .notARepo)
     }
 
+    func testReaderParsesSuccessfulGitOutputFromResolvedGitPath() throws {
+        let root = try coverageBatch2TemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let git = root.appendingPathComponent("git")
+        try """
+        #!/bin/sh
+        printf '%s\\n' '# branch.head feature/pinned-runner' '# branch.ab +4 -1' '? generated.txt'
+        """.write(to: git, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: git.path)
+
+        var reader = GitStatusReader(timeout: 1)
+        reader.resolvedGitPath = git.path
+
+        let status = reader.status(forDirectory: root.path)
+        XCTAssertEqual(
+            status,
+            GitSessionStatus(isRepo: true, branch: "feature/pinned-runner", dirty: true, ahead: 4, behind: 1)
+        )
+    }
+
     func testReaderReturnsNotARepoWhenGitCannotLaunchOrTimesOut() throws {
         let root = try coverageBatch2TemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
