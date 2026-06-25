@@ -1,0 +1,5 @@
+Image image="magnifyingglass"
+TextField kind=editable text=""
+Text kind=static text="Waiting"
+Text kind=static text="Agent"
+Text kind=static text="Idle"
