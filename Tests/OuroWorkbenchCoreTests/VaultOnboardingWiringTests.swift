@@ -19,7 +19,7 @@ final class VaultOnboardingWiringTests: XCTestCase {
     // MARK: - Unit 2 — stash the provider + split the shared arm
 
     func testNewPublishedPropertiesExist() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         XCTAssertTrue(
             source.contains("var providerConfigNeedsVaultSetup"),
             "must add a published `providerConfigNeedsVaultSetup` flag"
@@ -70,7 +70,7 @@ final class VaultOnboardingWiringTests: XCTestCase {
     // MARK: - Unit 3 — beginVaultOnboarding + the "Finish setup" affordance
 
     func testBeginVaultOnboardingMethodExists() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         XCTAssertTrue(
             source.contains("func beginVaultOnboarding("),
             "must add a `beginVaultOnboarding` method that runs the recovery chain"
@@ -132,10 +132,10 @@ final class VaultOnboardingWiringTests: XCTestCase {
     }
 
     func testFinishSetupAffordanceIsGatedOnTheVaultFlag() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         // The sheet shows "Finish setup" ONLY when providerConfigNeedsVaultSetup, and it calls
         // beginVaultOnboarding. Pin both in the ProviderConfigSheet view.
-        let sheet = try sourceSlice(
+        let sheet = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "struct ProviderConfigSheet: View {",
             to: "private func binding(for key: String)"
@@ -228,31 +228,30 @@ final class VaultOnboardingWiringTests: XCTestCase {
     // MARK: - Helpers (mirror ColdStartHonestWiringTests)
 
     private func beginVaultOnboardingMethod() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(in: source, from: "func beginVaultOnboarding(", to: "\n    func ")
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(in: source, from: "func beginVaultOnboarding(", to: "\n    func ")
     }
 
     private func completeVaultOnboardingMethod() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(in: source, from: "func completeVaultOnboarding(", to: "\n    func ")
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(in: source, from: "func completeVaultOnboarding(", to: "\n    func ")
     }
 
     private func markTerminatedMethod() throws -> String {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         // `markTerminated` is immediately followed by the `shouldPostExitNotification` helper
         // (its doc-comment is the slice boundary).
-        return try sourceSlice(
+        return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "func markTerminated(entryId:",
             to: "/// Whether enough time has passed since the last unexpected-exit"
         )
     }
 
-
     /// The `.coldStartHatch` branch text (start marker → the next method's doc-comment).
     private func coldStartBranch() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "case let .coldStartHatch(plan):",
             to: "/// Open the native provider-config form in response to a non-secret-bearing"
@@ -262,7 +261,7 @@ final class VaultOnboardingWiringTests: XCTestCase {
     /// The `.needsVaultSetup` arm only (from its `case` to the next `case .failed:`).
     private func needsVaultSetupArm() throws -> String {
         let branch = try coldStartBranch()
-        return try sourceSlice(in: branch, from: "case .needsVaultSetup:", to: "case .failed:")
+        return try WorkbenchAppSource.sourceSlice(in: branch, from: "case .needsVaultSetup:", to: "case .failed:")
     }
 
     /// The `.failed` arm only (from its `case` to the end of the switch `}`).
@@ -270,26 +269,5 @@ final class VaultOnboardingWiringTests: XCTestCase {
         let branch = try coldStartBranch()
         let start = try XCTUnwrap(branch.range(of: "case .failed:")?.lowerBound)
         return String(branch[start...])
-    }
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
-    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
-        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound)
-        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound)
-        return String(source[start..<end])
     }
 }

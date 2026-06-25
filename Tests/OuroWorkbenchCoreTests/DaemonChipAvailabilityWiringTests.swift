@@ -156,33 +156,11 @@ final class DaemonChipAvailabilityWiringTests: XCTestCase {
 
     // MARK: - helpers (mirror BossMCPPillVerdictWiringTests)
 
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
-    private func sourceSlice(from startMarker: String, to endMarker: String) throws -> String {
-        let source = try appSource()
-        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound)
-        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound)
-        return String(source[start..<end])
-    }
-
     /// The `DashboardMetricsStrip` body with runs of whitespace collapsed to single
     /// spaces, so the assertions are robust to the concurrent-session reformatting of
     /// `OuroWorkbenchApp.swift` (indentation / line-break churn) the task warns about.
     private func strippedStrip() throws -> String {
-        let body = try sourceSlice(
+        let body = try WorkbenchAppSource.sourceSlice(
             from: "struct DashboardMetricsStrip: View {",
             to: "struct MetricStateChip: View {"
         )

@@ -26,8 +26,8 @@ final class WorkspaceExportImportRobustnessWiringTests: XCTestCase {
     /// The durable `WorkbenchStore.save` already writes `.atomic`; this pins the
     /// export path to the same bar (it was the lone inconsistent writer).
     func testExportWorkspaceWriteIsAtomic() throws {
-        let source = try appSource()
-        let slice = try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        let slice = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "func presentSaveWorkspacePanel() {",
             to: "func presentOpenWorkspacePanel"
@@ -58,8 +58,8 @@ final class WorkspaceExportImportRobustnessWiringTests: XCTestCase {
     /// (e.g. "couldn't create"). Additive field with a default so existing
     /// constructions stay valid.
     func testImportApplyResultCarriesAlreadyPresentCount() throws {
-        let source = try appSource()
-        let slice = try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        let slice = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "struct WorkbenchImportApplyResult: Equatable {",
             to: "var hasImports: Bool"
@@ -76,14 +76,14 @@ final class WorkspaceExportImportRobustnessWiringTests: XCTestCase {
     /// (`continue`) — FIX 2 only surfaces the count; it does NOT start updating
     /// matched terminals (that's a deferred product decision).
     func testImportApplyCountsAlreadyPresentSeparatelyFromErrorSkips() throws {
-        let source = try appSource()
-        let body = try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        let body = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "func openWorkspaceConfig(\n        config: WorkbenchWorkspaceConfig,",
             to: "return result"
         )
         // The already-present branch increments the dedicated tally, not skippedNames.
-        let alreadyPresentBranch = try sourceSlice(
+        let alreadyPresentBranch = try WorkbenchAppSource.sourceSlice(
             in: body,
             from: "if alreadyPresent {",
             to: "}"
@@ -119,8 +119,8 @@ final class WorkspaceExportImportRobustnessWiringTests: XCTestCase {
     /// (e.g. "N already present") so a re-import no-op is VISIBLE instead of a
     /// silent drop.
     func testImportSummaryDetailSurfacesAlreadyPresent() throws {
-        let source = try appSource()
-        let detail = try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        let detail = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "var detail: String? {",
             to: "@MainActor"
@@ -145,10 +145,10 @@ final class WorkspaceExportImportRobustnessWiringTests: XCTestCase {
     /// `catch let configError as WorkbenchWorkspaceConfigError` whose switch covers
     /// every structural case, then a single decision-gated prune.
     func testOpenRecentPrunesOnAllStructuralErrors() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         // The typed structural catch — from the typed catch to the prune+return —
         // routes EVERY structural case through the Core decision and forgets.
-        let structuralCatch = try sourceSlice(
+        let structuralCatch = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "catch let configError as WorkbenchWorkspaceConfigError {",
             to: "} catch {"
@@ -182,8 +182,8 @@ final class WorkspaceExportImportRobustnessWiringTests: XCTestCase {
     /// decision-gated prune (`shouldForget(after: classify(configError))`) then maps
     /// the read failure to keep, so the recent survives a blip.
     func testOpenRecentHandlesReadFailureArmHonestly() throws {
-        let source = try appSource()
-        let structuralCatch = try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        let structuralCatch = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "catch let configError as WorkbenchWorkspaceConfigError {",
             to: "} catch {"
@@ -203,10 +203,10 @@ final class WorkspaceExportImportRobustnessWiringTests: XCTestCase {
     /// INVERSE-BUG GUARD: the generic `catch` (a transient / unknown error a retry
     /// might clear) must NOT prune the recent — only structural failures do.
     func testOpenRecentDoesNotPruneOnTransientError() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         // The generic catch is the LAST arm: from the bare `} catch {` (no typed
         // pattern) following the structural catch, to the apply call after the do.
-        let genericCatch = try sourceSlice(
+        let genericCatch = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "} catch {\n            errorMessage = \"Couldn't open workspace:",
             to: "let result = openWorkspaceConfig(config: config"
@@ -221,8 +221,8 @@ final class WorkspaceExportImportRobustnessWiringTests: XCTestCase {
     /// invent a new transient prune — the App must classify the typed error and the
     /// Core decision must gate the forget. (Pins that pruning is decision-gated.)
     func testStructuralPruneIsDecisionGated() throws {
-        let source = try appSource()
-        let body = try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        let body = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "func openWorkspaceConfig(at directoryPath: String) -> WorkbenchImportApplyResult? {",
             to: "func exportWorkspaceConfig"
@@ -241,33 +241,6 @@ final class WorkspaceExportImportRobustnessWiringTests: XCTestCase {
     }
 
     // MARK: - Helpers (mirror ImportPersistenceHonestyWiringTests)
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
-    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
-        let start = try XCTUnwrap(
-            source.range(of: startMarker)?.lowerBound,
-            "start marker not found: \(startMarker)"
-        )
-        let end = try XCTUnwrap(
-            source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound,
-            "end marker not found: \(endMarker)"
-        )
-        return String(source[start..<end])
-    }
 
     private func occurrences(of needle: String, in haystack: String) -> Int {
         guard !needle.isEmpty else { return 0 }

@@ -83,7 +83,7 @@ final class BossWorkbenchInstallOverlayWiringTests: XCTestCase {
     /// Body of the `OnboardingRepairStepRow` view struct from its declaration to the next
     /// top-level `private struct` / `struct` boundary — spans the Register button branch.
     private func onboardingRepairStepRowBody() throws -> String {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         let start = try XCTUnwrap(
             source.range(of: "private struct OnboardingRepairStepRow: View {")?.upperBound,
             "could not find OnboardingRepairStepRow in the App source"
@@ -96,7 +96,7 @@ final class BossWorkbenchInstallOverlayWiringTests: XCTestCase {
     }
 
     private func slice(from declaration: String, label: String) throws -> String {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         let start = try XCTUnwrap(
             source.range(of: declaration)?.upperBound,
             "could not find \(label) in the App source"
@@ -106,20 +106,5 @@ final class BossWorkbenchInstallOverlayWiringTests: XCTestCase {
             ?? tail.range(of: "\n    func ")?.lowerBound
             ?? tail.endIndex
         return String(tail[tail.startIndex..<end])
-    }
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
     }
 }

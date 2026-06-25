@@ -1,0 +1,8 @@
+=== Unit 2: check-coverage.sh @ 01:04:00 ===
+==> swift test --enable-code-coverage
+... (instrumented run elided) ...
+Sources/OuroWorkbenchCore, Sources/OuroWorkbenchShellAdapter: 149/151 files at 100% line+region (2 with allowlisted structural exclusions)
+  allow BossAgentMCPClient.swift                     (1 line, 2 region exempt — see coverage-allowlist.txt)
+  allow SessionActivityReader.swift                  (0 line, 1 region exempt — see coverage-allowlist.txt)
+PASS: pure Workbench logic targets are 100% line + region covered (documented structural exclusions aside).
+COVERAGE_EXIT=0

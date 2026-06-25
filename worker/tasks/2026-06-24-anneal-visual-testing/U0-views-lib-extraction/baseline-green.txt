@@ -1,0 +1,110 @@
+U0 BASELINE — Green capture at HEAD (Unit 0)
+=============================================
+Branch: feat/anneal-views-lib-extract
+HEAD:   8662dd52c6c6e2e266b49eac6f37188ed387ed39 (docs(doing): resolve review-gate C1/H1/H2 + minors; READY_FOR_EXECUTION)
+Captured: 2026-06-25 (Unit 0)
+Toolchain: Apple Swift 6.3.2 (swiftlang-6.3.2.1.108), arm64-apple-macosx26.0
+
+This is the invariant the entire U0 extraction is regression-locked against. Every later
+increment must reproduce these four GREEN checks + the EXACT guard counts below.
+
+----------------------------------------------------------------------
+1. STRICT BUILD — swift build -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete
+----------------------------------------------------------------------
+RESULT: GREEN (exit 0). Zero errors, zero warnings on OUR products.
+(see baseline-build.txt for the full log)
+NOTE: The pre-existing 3rd-party SwiftTermFuzz target error is OUT OF SCOPE per the
+campaign — it is a SwiftTerm-package executable target we do not build/gate. Our four
+products (OuroWorkbenchCore, OuroWorkbench, OuroWorkbenchMCP, OuroWorkbenchScenarioVerifier)
++ the Core test target all build clean under strict flags.
+
+----------------------------------------------------------------------
+2. STRICT TEST — swift test -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete
+----------------------------------------------------------------------
+RESULT: GREEN (exit 0).
+  Executed 2841 tests, with 1 test skipped and 0 failures (0 unexpected) in 66.389s
+  Test Suite 'All tests' passed.
+(see baseline-test.txt for the full log)
+This run exercises ALL 295 source-grep guards (they live in Tests/OuroWorkbenchCoreTests/);
+all green = the regression oracle is healthy at HEAD.
+
+----------------------------------------------------------------------
+3. GREP-GUARD COUNTS — THE INVARIANT (re-measured at HEAD; NOT the campaign's stale 296)
+----------------------------------------------------------------------
+Raw greps over Tests/ :
+  grep -rc 'source.contains' Tests/  | sum  = 129   (source.contains call sites)
+  grep -rc 'sourceSlice('   Tests/  | sum  = 166   (sourceSlice mentions)
+  ---------------------------------------------------
+  RAW TOTAL                                = 295    <-- matches the doc's HEAD figure (129 + 166)
+
+Decomposed (so later units can assert the RIGHT invariant when the helpers de-duplicate):
+  source.contains  call sites            = 129
+  sourceSlice(     total mentions        = 166
+       of which: sourceSlice DEFINITIONS = 38   (the `func sourceSlice` helper copies)
+                 sourceSlice CALL SITES  = 128
+  appSource()      DEFINITIONS           = 43   (`private func appSource` copies — Unit 2 de-dups these)
+  repoRoot()       DEFINITIONS           = 51   (`func repoRoot` copies)
+  sourceSlice signature variants         = 2    ((in:from:to:)  and the self-reading (from:to:))
+
+>>> THE GUARD INVARIANT THAT MUST HOLD ACROSS UNITS:
+    The number of guard ASSERTIONS / CALL SITES is the regression oracle, NOT the raw
+    string count. Call sites at HEAD:
+        source.contains  call sites = 129
+        sourceSlice      call sites = 128
+        ------------------------------------
+        TOTAL GUARD CALL SITES      = 257   <-- INVARIANT; must NOT change across U0.
+    Unit 2 de-duplicates the 38 sourceSlice DEFS -> 2 (one per signature) and the 43
+    appSource() DEFS -> 1 shared helper. This MECHANICALLY drops the RAW `grep -rc`
+    totals (defs collapse), but leaves all 257 guard CALL SITES intact. So the correct
+    later-unit assertion is "257 guard call sites unchanged" AND "swift test green",
+    NOT "raw grep count == 295". (The raw 295 is recorded here only to document the
+    starting string-count; do not treat its post-dedup drop as a regression.)
+
+----------------------------------------------------------------------
+4. --uisurfacetest — swift run OuroWorkbench --uisurfacetest
+----------------------------------------------------------------------
+RESULT: GREEN (exit 0). All surface checks "ok":
+  about fitting size: 520.0x500.0 ok
+  current/available/failed/failed-then-checking update states: ok
+  about shared semantics: ok
+  migrated workspace render: ok
+  ②d editing affordances: ok
+(see baseline-uisurfacetest.txt for the full log)
+
+----------------------------------------------------------------------
+5. COVERAGE GATE — bash Scripts/check-coverage.sh
+----------------------------------------------------------------------
+RESULT: GREEN (exit 0).
+  Sources/OuroWorkbenchCore, Sources/OuroWorkbenchShellAdapter:
+    149/151 files at 100% line+region (2 with allowlisted structural exclusions)
+  PASS: pure Workbench logic targets are 100% line + region covered.
+(see baseline-coverage.txt for the full log)
+COVERAGE_DIRS at HEAD = { Sources/OuroWorkbenchCore, Sources/OuroWorkbenchShellAdapter }.
+The new OuroWorkbenchAppViews lib is NOT in COVERAGE_DIRS (correct — that gating is
+campaign-U4). U0 must NOT regress this gate: the new lib + its test target build & run
+under `swift test --enable-code-coverage` but contribute ZERO files to COVERAGE_DIRS, so
+the 149/151 figure and the 2-entry allowlist stay unchanged through U0.
+
+----------------------------------------------------------------------
+6. FOUR lib->exe EDGES — RE-CONFIRMED AT HEAD (no new edge appeared)
+----------------------------------------------------------------------
+E1 PTY     : TerminalFocusView @ 9747 holds `session: TerminalSessionController`; VM owns
+             activeSessions/activeSession(for:) and constructs/drives the controller.
+             TerminalSessionController @ 21007  (BEFORE)  CapturingLocalProcessTerminalView @ 21239.
+             >>> Declaration order 21007 < 21239 CONFIRMED — the C1 cross-type slice
+                 (CheckpointPromptDeliveryWiringTests.swift:76) is order-correct at HEAD.
+E2 Menu bar: WorkbenchMenuBarController @ 680; `.shared.attach(model:)` at 531, 532, 13048.
+E3 Login   : LoginItemController @ 10386; 5 in-view references.
+E4 AppKit  : (NON-edge) NSApp/NSWindow/NSStatusItem/willTerminateNotification are AppKit
+             framework symbols — a library may import AppKit freely. WindowChromeConfigurator
+             @ 902 (exe-defined NSViewRepresentable) moves with the views. NOT a blocker.
+EXE-STAYING: OuroWorkbenchApp: App @ 26 ; WorkbenchAppDelegate @ 20 ; main.swift @main
+             dispatch (OuroWorkbenchApp.main() @ main.swift:240). Neither App nor AppDelegate
+             is referenced by any MOVING view/VM -> they stay genuinely outside the lib.
+RESULT: All four edges match HEAD. NO new edge to an exe-only type was found. Safety valve
+        NOT tripped. The recorded D-A5 amendment (PTY+controllers move INTO the lib,
+        allowlisted) remains the chosen resolution.
+
+----------------------------------------------------------------------
+BASELINE VERDICT: ALL FOUR GATES GREEN AT HEAD. Extraction is regression-locked to this.
+----------------------------------------------------------------------

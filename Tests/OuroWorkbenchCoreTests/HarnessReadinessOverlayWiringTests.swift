@@ -85,7 +85,7 @@ final class HarnessReadinessOverlayWiringTests: XCTestCase {
         // Once the row routes through the live seam, the config-only
         // OuroAgentBundleStatus.harnessLabel / harnessTint extension is dead code;
         // an unused private decl breaks -warnings-as-errors, so it must be gone.
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         let bundleStatusExtension = "private extension OuroAgentBundleStatus {"
         if let range = source.range(of: bundleStatusExtension) {
             let slice = source[range.lowerBound...]
@@ -106,18 +106,17 @@ final class HarnessReadinessOverlayWiringTests: XCTestCase {
     // MARK: - Helpers (mirror AgentReadinessOverlayWiringTests)
 
     private func harnessAgentRowDecl() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "private struct HarnessAgentRow: View {",
             to: "\n/// A confirm-gated control button"
         )
     }
 
-
     private func harnessStatusComputedDecl() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "var harnessStatus: HarnessStatus {",
             to: "\n    func refreshHarnessStatus("
@@ -125,8 +124,8 @@ final class HarnessReadinessOverlayWiringTests: XCTestCase {
     }
 
     private func refreshHarnessStatusBody() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "func refreshHarnessStatus(",
             to: "\n    var recentActionLogEntries"
@@ -134,32 +133,11 @@ final class HarnessReadinessOverlayWiringTests: XCTestCase {
     }
 
     private func refreshOuroAgentsBody() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "func refreshOuroAgents() {",
             to: "\n    func "
         )
-    }
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
-    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
-        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound)
-        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound)
-        return String(source[start..<end])
     }
 }

@@ -109,8 +109,8 @@ final class AgentStatusLineAndMenuReadinessWiringTests: XCTestCase {
     // MARK: - Helpers (mirror AgentReadinessOverlayWiringTests)
 
     private func ouroAgentStatusLineDecl() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "var ouroAgentStatusLine: String {",
             to: "\n    var bossAgentChoices: [String] {"
@@ -118,32 +118,11 @@ final class AgentStatusLineAndMenuReadinessWiringTests: XCTestCase {
     }
 
     private func menuLabelDecl() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "private func menuLabel(for agentName: String) -> String {",
             to: "\nstruct BossAgentNamePopover: View {"
         )
-    }
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
-    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
-        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound)
-        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound)
-        return String(source[start..<end])
     }
 }

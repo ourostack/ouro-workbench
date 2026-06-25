@@ -11,8 +11,8 @@ final class ProviderCheckClassifierWiringTests: XCTestCase {
     // MARK: - runOnboardingProviderCheck (OuroWorkbenchApp.swift)
 
     func testOnboardingProviderCheckClassifiesFromOutputNotExitCode() throws {
-        let source = try appSource()
-        let body = try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        let body = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "private func runOnboardingProviderCheck(agentName: String, lane: String) async",
             to: "func scanForOnboardingSessions()"
@@ -40,8 +40,8 @@ final class ProviderCheckClassifierWiringTests: XCTestCase {
     }
 
     func testOnlyWorkingVerdictMapsToPassed() throws {
-        let source = try appSource()
-        let body = try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        let body = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "private func runOnboardingProviderCheck(agentName: String, lane: String) async",
             to: "func scanForOnboardingSessions()"
@@ -67,8 +67,8 @@ final class ProviderCheckClassifierWiringTests: XCTestCase {
     }
 
     func testNonWorkingFailureCopyIsSeamFree() throws {
-        let source = try appSource()
-        let body = try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        let body = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "private func runOnboardingProviderCheck(agentName: String, lane: String) async",
             to: "func scanForOnboardingSessions()"
@@ -112,14 +112,6 @@ final class ProviderCheckClassifierWiringTests: XCTestCase {
 
     // MARK: - Helpers (mirror BossForwardStatusWiringTests)
 
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
     private func mainSource() throws -> String {
         let sourceURL = repoRoot()
             .appendingPathComponent("Sources")
@@ -133,11 +125,5 @@ final class ProviderCheckClassifierWiringTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-    }
-
-    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
-        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound)
-        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound)
-        return String(source[start..<end])
     }
 }

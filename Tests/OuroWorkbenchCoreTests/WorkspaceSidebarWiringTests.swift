@@ -13,7 +13,7 @@ final class WorkspaceSidebarWiringTests: XCTestCase {
     // MARK: - NEW wiring present: the sidebar renders state.workspaces via the seam
 
     func testSidebarRendersWorkspacesThroughThePresentationSeam() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         // The sidebar wires the pure Core seam in (the only place grouping/ordering
         // is derived), reading state.workspaces — never a re-derived flat list.
         XCTAssertTrue(
@@ -34,7 +34,7 @@ final class WorkspaceSidebarWiringTests: XCTestCase {
     // MARK: - OLD wiring gone: projects-as-workspaces + PWD dump + Terminals-in section
 
     func testOldProjectsAsWorkspacesSurfaceIsGone() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         XCTAssertFalse(
             source.contains("ForEach(model.state.projects) { project in\n                    SidebarProjectRow("),
             "the projects-as-workspaces ForEach/SidebarProjectRow sidebar section must be gone"
@@ -50,7 +50,7 @@ final class WorkspaceSidebarWiringTests: XCTestCase {
     }
 
     func testTerminalsInHomeSectionIsGone() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         XCTAssertFalse(
             source.contains("Section(WorkbenchSurfacePolicy.terminalsSectionTitle(workspaceName: model.selectedProject?.name))"),
             "the 'Terminals in <name>' sidebar section must be removed (tabs move to the top strip)"
@@ -64,7 +64,7 @@ final class WorkspaceSidebarWiringTests: XCTestCase {
     func testNewWorkspaceActionRowIsRemoved() throws {
         // DB8: the sidebar 'New Workspace' action row (which created a WorkbenchProject,
         // a model mismatch once rows are Workspaces) is removed in ②b; manual create is ②d.
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         XCTAssertFalse(
             source.contains("SidebarActionRow(title: WorkbenchSurfacePolicy.newWorkspaceTitle"),
             "the 'New Workspace' action row must be removed from the sidebar (DB8)"
@@ -77,7 +77,7 @@ final class WorkspaceSidebarWiringTests: XCTestCase {
         // LEAN-CMUX: the sidebar shows ONLY lean workspace rows (+ empty marker) — the
         // per-tab TerminalAgentRow ForEach (model.workspaceTabRows) is removed from the
         // Workspaces section. Tabs live solely in the top strip (WorkspaceTabStrip).
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         XCTAssertFalse(
             source.contains("ForEach(model.workspaceTabRows(for: row))"),
             "the nested per-tab TerminalAgentRow ForEach must be removed from the sidebar (tabs live in the top strip)"
@@ -86,7 +86,7 @@ final class WorkspaceSidebarWiringTests: XCTestCase {
 
     func testSidebarStillRendersLeanWorkspaceRows() throws {
         // The lean workspace row + empty marker stay (the sidebar's only workspace content).
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         XCTAssertTrue(
             source.contains("WorkspaceSidebarRow(row: row, model: model)"),
             "the lean WorkspaceSidebarRow must still render per workspace"
@@ -100,8 +100,8 @@ final class WorkspaceSidebarWiringTests: XCTestCase {
     // MARK: - FIX PASS (FP4+FP5): the filtered empty-state lives in the STRIP
 
     func testTabStripAppliesTheFilterAndShowsFilteredEmptyState() throws {
-        let source = try appSource()
-        let strip = try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        let strip = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "struct WorkspaceTabStrip: View",
             to: "\n}\n"
@@ -123,7 +123,7 @@ final class WorkspaceSidebarWiringTests: XCTestCase {
     func testSidebarNoLongerCarriesTheFilterEmptyStateRow() throws {
         // FP4/FP5: the filter empty-state moved from the sidebar Workspaces section to
         // the strip. The old sidebar guard (allSatisfy on UNFILTERED row.tabs) is gone.
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         XCTAssertFalse(
             source.contains("model.workspaceSidebarModel.rows.allSatisfy(\\.tabs.isEmpty)"),
             "the unfiltered-tabs sidebar filter empty-state guard must be removed (it moved to the strip, tested on the filtered list)"
@@ -137,7 +137,7 @@ final class WorkspaceSidebarWiringTests: XCTestCase {
         // `.sheet` became unreachable. Remove the orphaned sheet presentation + flag.
         // (The `NewTerminalGroupSheet` struct itself stays — still guarded by
         // WorkspaceNameDerivationTests and internal, so no unused-symbol warning.)
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         XCTAssertFalse(
             source.contains("isNewGroupSheetPresented"),
             "the unreachable isNewGroupSheetPresented flag + its .sheet must be removed (DB8 left no trigger)"
@@ -147,7 +147,7 @@ final class WorkspaceSidebarWiringTests: XCTestCase {
     // MARK: - KEEP present: Archived + Recovery sections preserved through the rewire
 
     func testArchivedAndRecoverySectionsArePreserved() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         XCTAssertTrue(
             source.contains("if !model.archivedSessionEntries.isEmpty {"),
             "the Archived section must still render after the rewire"
@@ -169,7 +169,7 @@ final class WorkspaceSidebarWiringTests: XCTestCase {
     // MARK: - Unit 3: cmux tab-strip in the detail column
 
     func testDetailColumnMountsTheActiveWorkspaceTabStrip() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         // A dedicated tab-strip view renders the active workspace's tabs across the
         // top of the detail column (cmux layout).
         XCTAssertTrue(
@@ -183,8 +183,8 @@ final class WorkspaceSidebarWiringTests: XCTestCase {
     }
 
     func testTabStripSourcesTabsFromThePresentationSeamNotAReDerivedFlatList() throws {
-        let source = try appSource()
-        let strip = try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        let strip = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "struct WorkspaceTabStrip: View",
             to: "\n}\n"
@@ -208,7 +208,7 @@ final class WorkspaceSidebarWiringTests: XCTestCase {
     }
 
     func testTabStripMountsBetweenBossDashboardAndDetailGroup() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         // The strip sits above the session detail Group, below the Boss dashboard
         // divider — the cmux "tabs across the top" position.
         let stripMount = try XCTUnwrap(source.range(of: "WorkspaceTabStrip(model: model)"))
@@ -222,25 +222,4 @@ final class WorkspaceSidebarWiringTests: XCTestCase {
     }
 
     // MARK: - Helpers
-
-    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
-        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound)
-        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound)
-        return String(source[start..<end])
-    }
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
 }

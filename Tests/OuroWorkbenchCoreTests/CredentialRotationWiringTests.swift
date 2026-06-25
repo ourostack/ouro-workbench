@@ -53,7 +53,7 @@ final class CredentialRotationWiringTests: XCTestCase {
     // MARK: - rotation reuses F13's terminal + re-probe invariant (risk a)
 
     func testBeginCredentialRotationMethodExists() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         XCTAssertTrue(
             source.contains("func beginCredentialRotation("),
             "must add a beginCredentialRotation method"
@@ -120,11 +120,11 @@ final class CredentialRotationWiringTests: XCTestCase {
     }
 
     func testConnectAndCancelButtonsAreGatedOnTheInFlightFlag() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         // The gate only prevents re-entry because the form's Connect AND Cancel buttons are disabled
         // on `providerConfigColdStartInFlight`. Pin both disables so a refactor that drops one (and
         // re-opens the double-fire window) trips this.
-        let sheet = try sourceSlice(
+        let sheet = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "if model.providerConfigColdStartInFlight {",
             to: ".padding()"
@@ -137,11 +137,11 @@ final class CredentialRotationWiringTests: XCTestCase {
     }
 
     func testSpinnerLabelBranchesOnFlavorNotHardcodedToCreateCopy() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         // The shared in-flight spinner serves two flavors (cold-start hatch vs reconnect). Its label
         // must render the published `providerConfigInFlightLabel` (which the model sets per-flavor),
         // NOT a hardcoded "Creating your agent…" Text — that copy is wrong for a reconnect.
-        let sheet = try sourceSlice(
+        let sheet = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "if model.providerConfigColdStartInFlight {",
             to: "Spacer()"
@@ -172,7 +172,7 @@ final class CredentialRotationWiringTests: XCTestCase {
     }
 
     func testCompletionFoldIsNotDuplicatedForRotation() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         // The prompt forbids duplicating F13's fold. There must be exactly ONE call site of
         // afterVaultTerminal (inside completeVaultOnboarding) — rotation reuses it, not re-implements.
         let occurrences = source.components(separatedBy: "VaultOnboardingMachine.afterVaultTerminal(").count - 1
@@ -200,7 +200,7 @@ final class CredentialRotationWiringTests: XCTestCase {
     // MARK: - (b) remove-agent mutates roster/selection/boss, not just the directory
 
     func testRemoveAgentMethodExists() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         XCTAssertTrue(source.contains("func removeAgent("), "must add a removeAgent method")
     }
 
@@ -261,14 +261,14 @@ final class CredentialRotationWiringTests: XCTestCase {
     }
 
     func testRemoveAgentIsGatedBehindAConfirmation() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         // The destructive action must sit behind a confirmation that uses the Core confirmation copy.
         XCTAssertTrue(
             source.contains("AgentRemoval.confirmationCopy("),
             "the remove-agent UI must use the seam's confirmation copy"
         )
         // The row must offer a Remove affordance that arms the confirmation (not call removeAgent directly).
-        let row = try sourceSlice(in: source, from: "struct OuroAgentRowView: View {", to: "private var agentStatusImage:")
+        let row = try WorkbenchAppSource.sourceSlice(in: source, from: "struct OuroAgentRowView: View {", to: "private var agentStatusImage:")
         XCTAssertTrue(
             row.contains("agentPendingRemoval") || row.contains("confirmationDialog") || row.contains("RemovalConfirmation"),
             "the agent row must arm a confirmation before removing (no unconfirmed delete)"
@@ -278,43 +278,22 @@ final class CredentialRotationWiringTests: XCTestCase {
     // MARK: - Helpers (mirror VaultOnboardingWiringTests)
 
     private func submitProviderConfigMethod() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(in: source, from: "func submitProviderConfig(", to: "\n    func ")
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(in: source, from: "func submitProviderConfig(", to: "\n    func ")
     }
 
     private func beginCredentialRotationMethod() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(in: source, from: "func beginCredentialRotation(", to: "\n    func ")
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(in: source, from: "func beginCredentialRotation(", to: "\n    func ")
     }
 
     private func completeVaultOnboardingMethod() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(in: source, from: "func completeVaultOnboarding(", to: "\n    func ")
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(in: source, from: "func completeVaultOnboarding(", to: "\n    func ")
     }
 
     private func removeAgentMethod() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(in: source, from: "func removeAgent(", to: "\n    func ")
-    }
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
-    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
-        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound)
-        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound)
-        return String(source[start..<end])
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(in: source, from: "func removeAgent(", to: "\n    func ")
     }
 }

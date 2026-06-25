@@ -33,7 +33,7 @@ final class WorkspaceHomeNamingTests: XCTestCase {
         // renders a terminals section scoped to the selected project; the tabs move to
         // the cmux tab-strip and the sidebar renders named workspaces instead. (The
         // detailed new-wiring assertions live in WorkspaceSidebarWiringTests.)
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         XCTAssertFalse(
             source.contains("Section(WorkbenchSurfacePolicy.terminalsSectionTitle(workspaceName: model.selectedProject?.name))"),
             "the 'Terminals in <name>' sidebar section must be removed by ②b"
@@ -47,20 +47,5 @@ final class WorkspaceHomeNamingTests: XCTestCase {
             source.contains("WorkspaceSidebarPresentation.resolve("),
             "the sidebar must render state.workspaces via the WorkspaceSidebarPresentation seam"
         )
-    }
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
     }
 }

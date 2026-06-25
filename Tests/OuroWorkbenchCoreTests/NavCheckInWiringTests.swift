@@ -60,7 +60,7 @@ final class NavCheckInWiringTests: XCTestCase {
     /// dispatch reads `activeEntry` (not the raw `selectedEntry`) keeps the fix
     /// wired end-to-end: ⌘. / ⌘L hit the focus-mode-aware target.
     func testStopAndRedrawChordsTargetActiveEntry() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         XCTAssertTrue(
             source.contains("if let entry = model.activeEntry { model.requestStop(entry) }"),
             "the ⌘. Stop chord must target model.activeEntry (focus-mode aware)"
@@ -78,7 +78,7 @@ final class NavCheckInWiringTests: XCTestCase {
     /// the old hardcoded "Workbench will try again shortly" that lied when watch was
     /// off.
     func testCatchPathFailureLineRoutesThroughTheSeamBranchedOnWatchState() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         // The old false-promise literal must be GONE from the App (it now lives in
         // the seam's watch-ON arm only).
         XCTAssertFalse(
@@ -99,7 +99,7 @@ final class NavCheckInWiringTests: XCTestCase {
     /// copy from the seam's `persistentBanner`, branched on watch state — so it can't
     /// promise "keeps trying" when nothing is retrying.
     func testPersistentBannerRendersFromTheSeamBranchedOnWatchState() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         XCTAssertTrue(
             source.contains("BossCheckInFailureCopy.persistentBanner("),
             "the persistent failure banner must render from BossCheckInFailureCopy.persistentBanner"
@@ -126,8 +126,8 @@ final class NavCheckInWiringTests: XCTestCase {
     /// and, when the jump didn't move (false), surface a brief transient status via
     /// the app's existing transient-message channel (`errorMessage`) — no new infra.
     func testJumpToAttentionSurfacesStatusOnTheEmptyQueuePath() throws {
-        let source = try appSource()
-        let branch = try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        let branch = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "case .jumpToAttention:",
             to: "\n        case .newTerminal:"
@@ -161,8 +161,8 @@ final class NavCheckInWiringTests: XCTestCase {
     /// collapse — which dumped a configured-but-unreachable boss into the full
     /// boss-pick — must be gone.
     func testAttemptCheckInRoutesNoBossAndUnreachableDistinctly() throws {
-        let source = try appSource()
-        let branch = try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        let branch = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "func attemptCheckIn() {",
             to: "\n    @Published var bossWatchIsEnabled"
@@ -203,8 +203,8 @@ final class NavCheckInWiringTests: XCTestCase {
     /// `CheckInAvailability.resolve` seam (now producing the split), feeding it the
     /// boss usability so the configured-but-unreachable distinction is live.
     func testCheckInAvailabilityResolvesViaTheSeamWithUsability() throws {
-        let source = try appSource()
-        let branch = try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        let branch = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "var checkInAvailability: CheckInAvailability {",
             to: "\n    var checkInHelpText: String {"
@@ -222,8 +222,8 @@ final class NavCheckInWiringTests: XCTestCase {
     // MARK: - Slice helpers
 
     private func activeEntryBranch() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "var activeEntry: ProcessEntry? {",
             to: "\n    var summary: WorkspaceSummary {"
@@ -231,25 +231,4 @@ final class NavCheckInWiringTests: XCTestCase {
     }
 
     // MARK: - Helpers (mirror the other *WiringTests)
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
-    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
-        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound)
-        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound)
-        return String(source[start..<end])
-    }
 }

@@ -89,7 +89,7 @@ final class BossWatchBackoffBumpWiringTests: XCTestCase {
     // MARK: - source-pin helpers (App is not coverage-gated)
 
     private func runBossCheckInPrivateBody() throws -> String {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         let start = try XCTUnwrap(
             source.range(of: "private func runBossCheckIn(")?.upperBound,
             "could not find private runBossCheckIn in the App source"
@@ -100,7 +100,7 @@ final class BossWatchBackoffBumpWiringTests: XCTestCase {
     }
 
     private func registerBossWatchFailureBody() throws -> String {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         let start = try XCTUnwrap(
             source.range(of: "func registerBossWatchFailure(")?.upperBound,
             "could not find registerBossWatchFailure in the App source"
@@ -125,20 +125,5 @@ final class BossWatchBackoffBumpWiringTests: XCTestCase {
             "could not find the end of the daemon-down branch"
         )
         return String(tail[tail.startIndex..<end])
-    }
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
     }
 }

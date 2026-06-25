@@ -10,12 +10,12 @@ import XCTest
 /// stays present and reachable.
 final class BossForwardStatusWiringTests: XCTestCase {
     func testStatusListViewIsWiredIntoBossDashboard() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
 
         // The view exists and is rendered inside the boss dashboard's body,
         // before the conversation (boss-forward: status at a glance first).
         XCTAssertTrue(source.contains("struct SessionStatusListView: View"))
-        let dashboard = try sourceSlice(
+        let dashboard = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "private var scrollBody: some View {",
             to: "BossConversationView(model: model)"
@@ -27,8 +27,8 @@ final class BossForwardStatusWiringTests: XCTestCase {
     }
 
     func testStatusListClassificationLivesInCoreNotTheView() throws {
-        let source = try appSource()
-        let view = try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        let view = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "struct SessionStatusListView: View",
             to: "private struct SessionStatusBucketSection: View"
@@ -42,8 +42,8 @@ final class BossForwardStatusWiringTests: XCTestCase {
     }
 
     func testStatusRowReusesExistingSessionSelection() throws {
-        let source = try appSource()
-        let row = try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        let row = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "private struct SessionStatusRowView: View",
             to: "struct ActionLogView: View"
@@ -56,13 +56,13 @@ final class BossForwardStatusWiringTests: XCTestCase {
     }
 
     func testTerminalSidebarRemainsReachable() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
 
         // ADDITIVE guarantee: the terminal sidebar is still mounted in the root
         // split view, so every terminal stays reachable the canonical way. The
         // status list is layered on top, not a replacement.
         XCTAssertTrue(source.contains("struct WorkbenchSidebarView: View"))
-        let root = try sourceSlice(
+        let root = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "NavigationSplitView(columnVisibility: $columnVisibility) {",
             to: "} detail: {"
@@ -74,8 +74,8 @@ final class BossForwardStatusWiringTests: XCTestCase {
     }
 
     func testStatusListSurfacesAllThreeBuckets() throws {
-        let source = try appSource()
-        let view = try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        let view = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "struct SessionStatusListView: View",
             to: "private struct SessionStatusBucketSection: View"
@@ -87,25 +87,4 @@ final class BossForwardStatusWiringTests: XCTestCase {
     }
 
     // MARK: - Helpers (mirror WorkbenchSurfacePolicyTests)
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
-    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
-        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound)
-        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound)
-        return String(source[start..<end])
-    }
 }

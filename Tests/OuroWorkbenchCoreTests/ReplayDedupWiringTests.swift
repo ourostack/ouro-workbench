@@ -137,8 +137,8 @@ final class ReplayDedupWiringTests: XCTestCase {
     // MARK: startup orphan-marker sweep
 
     func testStartupSweepIsWiredAfterRecoverUnconfirmed() throws {
-        let source = try appSource()
-        let pump = try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        let pump = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "func runExternalActionPump() async {",
             to: "\n    /// Sendable result of an off-main queue drain."
@@ -158,8 +158,8 @@ final class ReplayDedupWiringTests: XCTestCase {
     }
 
     func testStartupSweepClearsMarkersWhoseProcessingFileIsGone() throws {
-        let body = try sourceSlice(
-            in: try appSource(),
+        let body = try WorkbenchAppSource.sourceSlice(
+            in: try WorkbenchAppSource.appSource(),
             from: "func sweepOrphanedAppliedMarkers() async",
             to: "\n    func "
         )
@@ -180,7 +180,7 @@ final class ReplayDedupWiringTests: XCTestCase {
     // MARK: existing sendInput guard unchanged
 
     func testIsNewDecisionSendInputGuardIsUnchanged() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         // The defense-in-depth + operator no-requestId path: the live-prompt
         // isNewDecision guard on the sendInput case must remain.
         XCTAssertTrue(
@@ -198,39 +198,18 @@ final class ReplayDedupWiringTests: XCTestCase {
     /// The prelude of `applyBossAction` — from its signature down to the first
     /// `switch action.action`, where the universal replay guard must sit.
     private func applyBossActionPrelude() throws -> String {
-        try sourceSlice(
-            in: try appSource(),
+        try WorkbenchAppSource.sourceSlice(
+            in: try WorkbenchAppSource.appSource(),
             from: "private func applyBossAction(_ action: BossWorkbenchAction, source: String, requestId: UUID? = nil) -> String {",
             to: "\n        switch action.action {"
         )
     }
 
     private func applyExternalActionRequests() throws -> String {
-        try sourceSlice(
-            in: try appSource(),
+        try WorkbenchAppSource.sourceSlice(
+            in: try WorkbenchAppSource.appSource(),
             from: "private func applyExternalActionRequests(_ requests: [WorkbenchActionRequest]) {",
             to: "\n    /// Refresh the set of live persistent"
         )
-    }
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
-    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
-        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound, "missing start marker: \(startMarker)")
-        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound, "missing end marker: \(endMarker)")
-        return String(source[start..<end])
     }
 }

@@ -310,7 +310,7 @@ final class BossMCPPillVerdictWiringTests: XCTestCase {
     /// (`status.boss.toolsInjection`), NOT the status-only `mcpStatus.harnessTint` — the last
     /// residual config-only false-green this fix removes.
     func testBossReachabilityDetailRowRoutesTintThroughSeam() throws {
-        let body = try sourceSlice(
+        let body = try WorkbenchAppSource.sourceSlice(
             from: "title: \"Boss reachability\",",
             to: "private struct HarnessSection<Content: View>: View {"
         )
@@ -331,7 +331,7 @@ final class BossMCPPillVerdictWiringTests: XCTestCase {
     // MARK: - App: all three pill render sites route through the seam with the verdict
 
     func testAgentDetailCardPillRoutesThroughSeamWithVerdict() throws {
-        let body = try sourceSlice(
+        let body = try WorkbenchAppSource.sourceSlice(
             from: "private struct AgentStatusCard: View {",
             to: "private struct AgentLanesCard: View {"
         )
@@ -350,7 +350,7 @@ final class BossMCPPillVerdictWiringTests: XCTestCase {
     }
 
     func testBossSectionRowPillRoutesThroughSeamWithVerdict() throws {
-        let body = try sourceSlice(
+        let body = try WorkbenchAppSource.sourceSlice(
             from: "struct OuroAgentRowView: View {",
             to: "struct ProviderConfigSheet: View {"
         )
@@ -369,7 +369,7 @@ final class BossMCPPillVerdictWiringTests: XCTestCase {
     }
 
     func testHarnessDiagnosticPillRoutesThroughSeamWithVerdict() throws {
-        let body = try sourceSlice(
+        let body = try WorkbenchAppSource.sourceSlice(
             from: "private struct HarnessAgentRow: View {",
             to: "private struct HarnessActionRow: View {"
         )
@@ -392,7 +392,7 @@ final class BossMCPPillVerdictWiringTests: XCTestCase {
     /// The App's `harnessStatus` builder call must pass the live injection map so the harness
     /// entries carry the verdict.
     func testHarnessStatusBuildPassesInjectionMap() throws {
-        let body = try sourceSlice(
+        let body = try WorkbenchAppSource.sourceSlice(
             from: "var harnessStatus: HarnessStatus {",
             to: "func refreshHarnessStatus() async {"
         )
@@ -430,27 +430,5 @@ final class BossMCPPillVerdictWiringTests: XCTestCase {
                 issues: []
             )
         )
-    }
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
-    private func sourceSlice(from startMarker: String, to endMarker: String) throws -> String {
-        let source = try appSource()
-        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound)
-        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound)
-        return String(source[start..<end])
     }
 }

@@ -68,8 +68,8 @@ final class WorkspaceNameDerivationTests: XCTestCase {
         // U34: the autofill must hang off the Root Path change in NewTerminalGroupSheet
         // (covering both the Choose panel and a typed path), routed through the
         // empty-guarded autofilledName so a typed name is never clobbered.
-        let source = try appSource()
-        let sheet = try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        let sheet = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "struct NewTerminalGroupSheet: View",
             to: "struct EditTerminalGroupSheet: View"
@@ -80,26 +80,5 @@ final class WorkspaceNameDerivationTests: XCTestCase {
             sheet.contains("WorkspaceNameDerivation.autofilledName(currentName: name, chosenPath: rootPath)"),
             "autofill must route through the empty-guarded derivation"
         )
-    }
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
-    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
-        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound)
-        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound)
-        return String(source[start..<end])
     }
 }

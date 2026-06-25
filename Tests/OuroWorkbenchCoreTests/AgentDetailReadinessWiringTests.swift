@@ -160,7 +160,7 @@ final class AgentDetailReadinessWiringTests: XCTestCase {
         // `statusHeadline` is now the last member of AgentStatusCard (the verdict-aware
         // MCP-pill fix removed the trailing `mcpPillText`/`mcpPillColor` helpers that this
         // slice used to anchor on), so end the slice at the struct's closing brace.
-        let headlineDecl = try sourceSlice(
+        let headlineDecl = try WorkbenchAppSource.sourceSlice(
             in: body,
             from: "private var statusHeadline: String {",
             to: "\n}"
@@ -178,8 +178,8 @@ final class AgentDetailReadinessWiringTests: XCTestCase {
     // MARK: - Helpers (mirror AgentReadinessOverlayWiringTests)
 
     private func ouroAgentRowDecl() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "struct OuroAgentRowView: View {",
             to: "\n/// The native provider-config form"
@@ -187,8 +187,8 @@ final class AgentDetailReadinessWiringTests: XCTestCase {
     }
 
     private func agentTitleStripDecl() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "private struct AgentTitleStrip: View {",
             to: "\nprivate struct AgentInspectorPanel: View {"
@@ -196,32 +196,11 @@ final class AgentDetailReadinessWiringTests: XCTestCase {
     }
 
     private func agentStatusCardDecl() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "private struct AgentStatusCard: View {",
             to: "\nprivate struct AgentLanesCard: View {"
         )
-    }
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
-    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
-        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound)
-        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound)
-        return String(source[start..<end])
     }
 }

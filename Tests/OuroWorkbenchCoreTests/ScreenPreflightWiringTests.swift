@@ -6,7 +6,7 @@ import XCTest
 /// The pure `TerminalExitDiagnosis` seam is unit-tested + 100% covered in Core; the
 /// App that wires it (preflight + the markTerminated backstop) isn't coverage-gated
 /// and can't be click-tested in CI, so we source-pin its structural wiring the same
-/// `appSource()` way `TerminalLeakReaperWiringTests` / `ReplayDedupWiringTests` do.
+/// `WorkbenchAppSource.appSource()` way `TerminalLeakReaperWiringTests` / `ReplayDedupWiringTests` do.
 ///
 /// The risks these pins defend (the spec's behavioral risks for gap 2):
 ///   - the preflight must check the OUTER `screen` executable
@@ -81,39 +81,18 @@ final class ScreenPreflightWiringTests: XCTestCase {
     // MARK: - Helpers
 
     private func launchPreflightProblem() throws -> String {
-        try sourceSlice(
-            in: try appSource(),
+        try WorkbenchAppSource.sourceSlice(
+            in: try WorkbenchAppSource.appSource(),
             from: "private func launchPreflightProblem(for entry: ProcessEntry, plan: TerminalCommandPlan) -> String? {",
             to: "\n    /// Build the per-session Workbench context"
         )
     }
 
     private func markTerminated() throws -> String {
-        try sourceSlice(
-            in: try appSource(),
+        try WorkbenchAppSource.sourceSlice(
+            in: try WorkbenchAppSource.appSource(),
             from: "func markTerminated(entryId: UUID, runId: UUID, rawStatus: Int32?) {",
             to: "\n    /// Whether enough time has passed since the last unexpected-exit"
         )
-    }
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
-    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
-        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound, "missing start marker: \(startMarker)")
-        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound, "missing end marker: \(endMarker)")
-        return String(source[start..<end])
     }
 }

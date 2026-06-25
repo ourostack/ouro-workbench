@@ -38,7 +38,7 @@ final class BossActionLogPendingWiringTests: XCTestCase {
     // MARK: - In-flight acks pass isInFlight: true
 
     func testEachAsyncStartHandlerMarksItsPostTaskAckInFlight() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         for handler in inFlightHandlers {
             let body = try handlerBody(named: handler, in: source)
             // The optimistic ack lives AFTER the `Task {` that kicks off the
@@ -54,7 +54,7 @@ final class BossActionLogPendingWiringTests: XCTestCase {
     // MARK: - Guard-failure acks stay isInFlight: false (a real skip is orange)
 
     func testGuardFailureAcksAreNotMarkedInFlight() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         // Every "Skipped …" guard ack is a settled failure — it must NOT be pending.
         for handler in inFlightHandlers {
             let body = try handlerBody(named: handler, in: source)
@@ -72,7 +72,7 @@ final class BossActionLogPendingWiringTests: XCTestCase {
     // MARK: - openProviderConfig (synchronous) is NOT in-flight
 
     func testOpenProviderConfigStaysSynchronousNotInFlight() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         let body = try handlerBody(named: "openProviderConfig", in: source)
         XCTAssertFalse(
             body.contains("Task {"),
@@ -87,7 +87,7 @@ final class BossActionLogPendingWiringTests: XCTestCase {
     // MARK: - startReportBug's optimistic ack is in-flight (its settled row lands later)
 
     func testStartReportBugMarksItsOptimisticAckInFlight() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         let body = try handlerBody(named: "startReportBug", in: source)
         // The async kickoff lives inside `submitBugReport(...)`, which logs the
         // VERIFIED outcome later under `action: "submitBugReport"`. The post-call
@@ -108,7 +108,7 @@ final class BossActionLogPendingWiringTests: XCTestCase {
     // The synchronous guard ack ("Skipped reportBug: missing note") sits BEFORE the
     // submitBugReport(…) call and is a settled skip — it must NOT be in-flight.
     func testStartReportBugGuardAckIsNotInFlight() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         let body = try handlerBody(named: "startReportBug", in: source)
         let callRange = try XCTUnwrap(
             body.range(of: "submitBugReport("),
@@ -124,7 +124,7 @@ final class BossActionLogPendingWiringTests: XCTestCase {
     // MARK: - complete* verified-outcome rows are never marked in-flight
 
     func testCompleteHandlersRecordVerifiedOutcomeNotInFlight() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         for handler in ["completeRepairAgent", "completeOnboardingAction"] {
             let body = try handlerBody(named: handler, in: source)
             XCTAssertTrue(
@@ -141,8 +141,8 @@ final class BossActionLogPendingWiringTests: XCTestCase {
     // MARK: - render site routes through the seam (not a raw entry.succeeded ternary)
 
     func testActionLogEntryRowRoutesThroughPresentationSeam() throws {
-        let source = try appSource()
-        let body = try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        let body = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "private func actionLogEntryRow(",
             to: "private func actionLogEntryHelp("
@@ -166,8 +166,8 @@ final class BossActionLogPendingWiringTests: XCTestCase {
     // MARK: - recordActionLog / finishBossAction thread the flag
 
     func testRecordActionLogAndFinishBossActionThreadTheFlag() throws {
-        let source = try appSource()
-        let record = try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        let record = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "private func recordActionLog(",
             to: "private func processEntry("
@@ -180,7 +180,7 @@ final class BossActionLogPendingWiringTests: XCTestCase {
             record.contains("isInFlight: isInFlight"),
             "recordActionLog must thread isInFlight into the WorkbenchActionLogEntry"
         )
-        let finish = try sourceSlice(
+        let finish = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "private func finishBossAction(",
             to: "private func recordActionLog("
@@ -217,29 +217,5 @@ final class BossActionLogPendingWiringTests: XCTestCase {
             "\(handler) was expected to kick off an async Task"
         )
         return String(body[taskStart...])
-    }
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
-    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
-        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound, "missing start marker: \(startMarker)")
-        let end = try XCTUnwrap(
-            source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound,
-            "missing end marker: \(endMarker)"
-        )
-        return String(source[start..<end])
     }
 }

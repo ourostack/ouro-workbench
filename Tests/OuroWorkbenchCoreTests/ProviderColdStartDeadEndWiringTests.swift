@@ -64,7 +64,7 @@ final class ProviderColdStartDeadEndWiringTests: XCTestCase {
     /// Just the `.onChange(of: provider)` handler body inside `ProviderConfigSheet`.
     private func providerOnChangeBlock() throws -> String {
         let body = try providerConfigSheetBody()
-        return try sourceSlice(
+        return try WorkbenchAppSource.sourceSlice(
             in: body,
             from: ".onChange(of: provider)",
             to: "private func binding(for key:"
@@ -73,32 +73,11 @@ final class ProviderColdStartDeadEndWiringTests: XCTestCase {
 
     /// The full `ProviderConfigSheet` view declaration (covers the picker + the onChange handler).
     private func providerConfigSheetBody() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "struct ProviderConfigSheet: View {",
             to: "/// U18: demoted to its ONLY unique capability"
         )
-    }
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
-    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
-        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound)
-        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound)
-        return String(source[start..<end])
     }
 }

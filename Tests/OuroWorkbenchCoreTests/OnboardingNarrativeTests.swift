@@ -133,7 +133,7 @@ final class OnboardingNarrativeTests: XCTestCase {
     }
 
     func testAppFlowWiringKeepsScanAndDuplicateCleanupActionsUseful() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
 
         XCTAssertFalse(source.contains("model.onboardingProposal?.selectedTerminalCount == 0 {\n                return true"))
         XCTAssertTrue(source.contains("Task { await model.runBossQuickQuestion(WorkbenchOnboardingNarrative.duplicateCleanup) }"))
@@ -141,7 +141,7 @@ final class OnboardingNarrativeTests: XCTestCase {
     }
 
     func testAppFlowInputUsesOnlyOnboardingArrangeSummaryForDuplicateCleanup() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
 
         XCTAssertTrue(source.contains("importSummaryHasImports: onboardingImportSummaryHasImports"))
         XCTAssertFalse(source.contains("importSummaryHasImports: lastImportSummary?.hasImports == true"))
@@ -150,25 +150,10 @@ final class OnboardingNarrativeTests: XCTestCase {
     }
 
     func testAppOnboardingChromeAvoidsStaticImportFraming() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
 
         XCTAssertFalse(source.contains("case .importWork:\n                return \"Import\""))
         XCTAssertFalse(source.contains("Ask about setup, providers, or which sessions to import"))
         XCTAssertFalse(source.contains("Import stays locked until provider checks pass."))
-    }
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
     }
 }
