@@ -154,6 +154,19 @@ final class WorkspaceSidebarPresentationTests: XCTestCase {
         XCTAssertEqual(model.rows.first?.droppedTabCount, 0)
     }
 
+    func testDuplicateEntryIdsResolveToTheFirstOccurrenceNotCrash() {
+        // Defensive: the entry list could (in a corrupt state) carry two rows with
+        // the same id. The seam indexes by id keeping the FIRST occurrence, so a tab
+        // referencing that id resolves once and deterministically rather than crashing.
+        let sharedId = UUID()
+        let first = makeEntry(id: sharedId, name: "first-wins")
+        let dupe = makeEntry(id: sharedId, name: "should-be-ignored")
+        let ws = Workspace(autoName: "W", tabIds: [sharedId])
+        let model = resolve([ws], [first, dupe])
+        XCTAssertEqual(model.rows.first?.tabs.count, 1)
+        XCTAssertEqual(model.rows.first?.tabs.first?.effectiveTabName, "first-wins")
+    }
+
     // MARK: - Active-workspace selection (DB2)
 
     func testActiveSelectionValidIdPicksThatWorkspace() {
