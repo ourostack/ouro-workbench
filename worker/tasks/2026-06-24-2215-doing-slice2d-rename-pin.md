@@ -37,7 +37,7 @@ Wire the cmux in-app editing affordances to the EXISTING `Workspace` / `ProcessE
 
 ## Completion Criteria
 - [x] Pure Core mutators on `WorkspaceState` exist and are 100% line+region covered: `setWorkspaceNameOverride(workspaceId:to:)`, `clearWorkspaceNameOverride(workspaceId:)`, `toggleWorkspacePin(workspaceId:)`, `setTabNameOverride(tabId:to:)`. Each is a no-op for an unknown id (covered).
-- [ ] Pure `WorkspaceRenameCommit` helper decides empty/whitespace commit semantics (DECISION D2d-1 below); 100% region covered.
+- [x] Pure `WorkspaceRenameCommit` helper decides empty/whitespace commit semantics (DECISION D2d-1 below); 100% region covered.
 - [ ] Pure `InlineRenameState` (or equivalent) models "is rename active / which target / commit / cancel" transitions; 100% region covered.
 - [ ] Workspace context menu (Pin/Unpin, Rename ⇧⌘R, Remove Custom Name) attached to `WorkspaceSidebarRow`; "Remove Custom Name" item conditional on `nameOverride != nil`.
 - [ ] Tab context menu (Rename ⌘R) attached to `WorkspaceTabStrip` tab button.
@@ -138,7 +138,7 @@ Cover EVERY arm: found-id, unknown-id, nil-vs-value, idempotent-clear, double-to
 **Acceptance**: `check-coverage.sh` green for `WorkspaceModels.swift`; allowlist unchanged; tests still green.
 **Commit (Unit 1, one commit)**: `feat(core): WorkspaceState rename/pin/tab-override mutators (②d)`
 
-### ⬜ Unit 2a: Rename-commit semantics helper — Tests (RED)
+### ✅ Unit 2a: Rename-commit semantics helper — Tests (RED)
 **What**: New `Tests/OuroWorkbenchCoreTests/WorkspaceRenameCommitTests.swift`. Failing tests for a pure `WorkspaceRenameCommit.resolve(input:current:) -> Outcome` (D2d-1), where `Outcome` is `.commit(String)` or `.noop`:
 - empty input → `.noop`.
 - whitespace-only input → `.noop`.
@@ -148,11 +148,11 @@ Cover EVERY arm: found-id, unknown-id, nil-vs-value, idempotent-clear, double-to
 - (document: the model still honors an empty override if set programmatically — that's ②a's test, not this helper's; this helper just prevents the EDITOR from producing one.)
 **Acceptance**: Tests compile and FAIL (helper doesn't exist) — real RED, shown.
 
-### ⬜ Unit 2b: Rename-commit semantics helper — Implementation (GREEN)
+### ✅ Unit 2b: Rename-commit semantics helper — Implementation (GREEN)
 **What**: Add `WorkspaceRenameCommit` (a pure enum/struct in `OuroWorkbenchCore`, e.g. new `WorkspaceRenameCommit.swift`) implementing D2d-1: trim, empty→noop, unchanged→noop, else commit(trimmed).
 **Acceptance**: All Unit 2a tests PASS under strict flags. 0 warnings.
 
-### ⬜ Unit 2c: Rename-commit helper — Coverage & Refactor
+### ✅ Unit 2c: Rename-commit helper — Coverage & Refactor
 **What**: `Scripts/check-coverage.sh` → 100% line+region on `WorkspaceRenameCommit.swift`. Add any missing-arm test. Allowlist unchanged.
 **Acceptance**: green; allowlist unchanged; tests green.
 **Commit (Unit 2, one commit)**: `feat(core): WorkspaceRenameCommit empty/whitespace decision helper (②d)`
@@ -257,3 +257,4 @@ Then run the FULL gate: `swift build`/`swift test` strict, `Scripts/check-covera
 - 2026-06-24 22:15 Review gate returned PASS (all claims independently verified; 3 MINOR notes). Notes 2 & 3 hardened into Units 4a/6a (RED/GREEN token lockstep; single Escape mechanism). Verdict saved to artifacts/review-gate.md. Status → READY_FOR_EXECUTION.
 - Unit 0 complete: all anchors re-verified at execution-start HEAD; recorded one clarification (`togglePin` persists via `store.save` directly; ②d wrappers use the canonical `save()` @ :20309) + confirmed `WorkspaceRow` lacks `nameOverride` (4b additive need real) + chord-dispatcher plan for ⌘R/⇧⌘R. anchors.md updated. (commit 31c9886)
 - 2026-06-24 22:33 Unit 1 complete: 4 pure `WorkspaceState` mutators (`setWorkspaceNameOverride`/`clearWorkspaceNameOverride`/`toggleWorkspacePin`/`setTabNameOverride`) in the existing `public extension`; 15 XCTests (every arm: found/unknown-noop/nil/idempotent-clear/double-toggle) RED→GREEN under strict flags, 0 warn; `check-coverage.sh` green (WorkspaceModels.swift 100% line+region), allowlist unchanged. (commit 6ab1149)
+- 2026-06-24 22:46 Unit 2 complete: pure `WorkspaceRenameCommit.resolve(input:current:) -> Outcome` (D2d-1: empty/whitespace→noop, trimmed-non-empty→commit, trimmed==current→noop, case-change is a real change); 8 XCTests RED→GREEN strict, 0 warn; coverage green (148/150 at 100%, new file covered), allowlist unchanged. (commit d5be56c)
