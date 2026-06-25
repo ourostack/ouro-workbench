@@ -1,0 +1,4 @@
+Text kind=static text="—"
+Text kind=static text="coding"
+Image image="info.circle"
+Image image="arrow.clockwise"

@@ -1,0 +1,3 @@
+Text kind=static text="2"
+Text kind=static text="inbox"
+Image image="arrow.up.right"

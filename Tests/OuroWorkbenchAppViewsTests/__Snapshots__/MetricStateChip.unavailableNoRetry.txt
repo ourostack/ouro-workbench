@@ -1,0 +1,3 @@
+Text kind=static text="—"
+Text kind=static text="needs me"
+Image image="info.circle"
