@@ -435,6 +435,35 @@ final class WorkspaceStructureTests: XCTestCase {
         XCTAssertFalse(state.workspaces.isEmpty)
     }
 
+    // MARK: - Unit 5: bootstrap chain passes `workspaces` through, migration populates it
+
+    func testBootstrapThenReconcileThenMigratePopulatesWorkspaces() throws {
+        // Mirrors the App load-success path (Core-visible seams): bootstrap →
+        // reconcile → migrate. Proves the bootstrapper/reconciler do NOT strip the
+        // additive `workspaces` collection, and that running the migration on the
+        // final post-reconcile state populates it from the flat entries.
+        let loaded = try loadV1Fixture()
+        XCTAssertEqual(loaded.workspaces, [])
+
+        let bootstrapped = WorkbenchBootstrapper().bootstrappedState(from: loaded)
+        // The additive collection survives bootstrap untouched (still empty here).
+        XCTAssertEqual(bootstrapped.workspaces, [])
+
+        var state = StartupRecoveryReconciler().reconcile(bootstrapped)
+        // Survives reconcile too.
+        XCTAssertEqual(state.workspaces, [])
+
+        state.migrateToWorkspaceStructure()
+        // Now populated: one default workspace covering the active entries.
+        XCTAssertEqual(state.workspaces.count, 1)
+        XCTAssertEqual(state.workspaces.first?.autoName, "Restored workspace")
+        XCTAssertFalse(state.workspaces.first?.tabIds.isEmpty ?? true)
+        // Re-running (as the App does on every load) stays idempotent.
+        let afterMigrate = state
+        state.migrateToWorkspaceStructure()
+        XCTAssertEqual(state, afterMigrate)
+    }
+
     // MARK: - Helpers
 
     private func makeEntry(
