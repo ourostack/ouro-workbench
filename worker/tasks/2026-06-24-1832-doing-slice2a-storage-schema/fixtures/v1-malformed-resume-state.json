@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "boss": { "agentName": "slugger", "scope": "machine" },
+  "bossWatchEnabled": true,
+  "bossPaneCollapsed": true,
+  "projects": [
+    {
+      "boss": { "agentName": "slugger", "scope": "machine" },
+      "id": "11111111-1111-1111-1111-111111111111",
+      "name": "ouro-workbench",
+      "rootPath": "/Users/op/code/ouro-workbench"
+    }
+  ],
+  "processEntries": [
+    {
+      "id": "AAAAAAAA-0000-0000-0000-000000000001",
+      "projectId": "11111111-1111-1111-1111-111111111111",
+      "name": "Resume ouro-workben…",
+      "kind": "terminalAgent",
+      "agentKind": "claudeCode",
+      "executable": "claude",
+      "arguments": ["--resume"],
+      "workingDirectory": "/Users/op/code/ouro-workbench",
+      "trust": "trusted",
+      "autoResume": true
+    },
+    {
+      "id": "AAAAAAAA-0000-0000-0000-000000000002",
+      "projectId": "11111111-1111-1111-1111-111111111111",
+      "name": "Resume ms-desk (Clau…",
+      "kind": "terminalAgent",
+      "agentKind": "claudeCode",
+      "executable": "claude",
+      "arguments": ["--resume"],
+      "workingDirectory": "/Users/op/code/ms-desk",
+      "trust": "trusted",
+      "autoResume": true
+    },
+    {
+      "id": "AAAAAAAA-0000-0000-0000-000000000003",
+      "projectId": "11111111-1111-1111-1111-111111111111",
+      "name": "Resume ouro-workben… (2)",
+      "kind": "terminalAgent",
+      "agentKind": "claudeCode",
+      "executable": "claude",
+      "arguments": ["--resume"],
+      "workingDirectory": "/Users/op/code/ouro-workbench",
+      "trust": "trusted",
+      "autoResume": true
+    },
+    {
+      "id": "AAAAAAAA-0000-0000-0000-000000000004",
+      "projectId": "11111111-1111-1111-1111-111111111111",
+      "name": "Resume ms-desk (Clau… (2)",
+      "kind": "terminalAgent",
+      "agentKind": "claudeCode",
+      "executable": "claude",
+      "arguments": ["--resume"],
+      "workingDirectory": "/Users/op/code/ms-desk",
+      "trust": "trusted",
+      "autoResume": true
+    },
+    {
+      "id": "BBBBBBBB-0000-0000-0000-000000000001",
+      "projectId": "11111111-1111-1111-1111-111111111111",
+      "name": "ouro-workbench",
+      "kind": "terminalAgent",
+      "agentKind": "claudeCode",
+      "executable": "claude",
+      "arguments": [],
+      "workingDirectory": "/Users/op/code/ouro-workbench",
+      "trust": "trusted",
+      "autoResume": false
+    },
+    {
+      "id": "BBBBBBBB-0000-0000-0000-000000000002",
+      "projectId": "11111111-1111-1111-1111-111111111111",
+      "name": "ms-desk",
+      "kind": "terminalAgent",
+      "agentKind": "openAICodex",
+      "executable": "codex",
+      "arguments": [],
+      "workingDirectory": "/Users/op/code/ms-desk",
+      "trust": "trusted",
+      "autoResume": false
+    }
+  ],
+  "processRuns": [],
+  "actionLog": [],
+  "decisionLog": [],
+  "updatedAt": "2026-06-02T00:00:00Z"
+}

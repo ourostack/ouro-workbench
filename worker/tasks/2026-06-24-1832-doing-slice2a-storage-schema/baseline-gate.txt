@@ -1,0 +1,72 @@
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStateProseLogTests testProseLogDecodesAbsentAsEmptyForPreF12aState]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStateProseLogTests testProseLogRoundTripsThroughCodable]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStateProseLogTests testProseLogRoundTripsThroughCodable]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStateProseLogTests testRecordProseAppendsNewestFirst]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStateProseLogTests testRecordProseAppendsNewestFirst]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStateProseLogTests testRecordProseTrimsToCap]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStateProseLogTests testRecordProseTrimsToCap]' passed (0.000 seconds).
+Test Suite 'WorkspaceStateProseLogTests' passed at 2026-06-24 18:50:20.041.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'WorkspaceSummaryTests' started at 2026-06-24 18:50:20.041.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testBossPromptIncludesProcessAndRecoveryTruth]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testBossPromptIncludesProcessAndRecoveryTruth]' passed (0.003 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testBossPromptIncludesRecentWorkspaceChanges]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testBossPromptIncludesRecentWorkspaceChanges]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testChangeSummarizerCapturesAddedRenamedRestoredRemovedSkippedAndRunStarted]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testChangeSummarizerCapturesAddedRenamedRestoredRemovedSkippedAndRunStarted]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testChangeSummarizerCapturesRunStatusAttentionArchiveAndActions]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testChangeSummarizerCapturesRunStatusAttentionArchiveAndActions]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testChangeSummarizerReplacesLatestRunAndIgnoresExistingActions]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testChangeSummarizerReplacesLatestRunAndIgnoresExistingActions]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testConfiguredLatestRunUsesConfiguredSummary]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testConfiguredLatestRunUsesConfiguredSummary]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testLatestRunSelectionAndDefaultSummariesCoverExitedAndConfigured]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testLatestRunSelectionAndDefaultSummariesCoverExitedAndConfigured]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testOneLineStatusFramesLosslessReattachAsNoLossReconnect]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testOneLineStatusFramesLosslessReattachAsNoLossReconnect]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testOneLineStatusSurfacesNeedsYouForManualRecovery]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testOneLineStatusSurfacesNeedsYouForManualRecovery]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testSummarySurfacesHumanWaitsFirst]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testSummarySurfacesHumanWaitsFirst]' passed (0.000 seconds).
+Test Suite 'WorkspaceSummaryTests' passed at 2026-06-24 18:50:20.046.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.004 (0.005) seconds
+Test Suite 'OuroWorkbenchPackageTests.xctest' passed at 2026-06-24 18:50:20.046.
+	 Executed 2708 tests, with 1 test skipped and 0 failures (0 unexpected) in 58.437 (58.643) seconds
+Test Suite 'All tests' passed at 2026-06-24 18:50:20.047.
+	 Executed 2708 tests, with 1 test skipped and 0 failures (0 unexpected) in 58.437 (58.645) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
+EXIT=
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testChangeSummarizerCapturesRunStatusAttentionArchiveAndActions]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testChangeSummarizerCapturesRunStatusAttentionArchiveAndActions]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testChangeSummarizerReplacesLatestRunAndIgnoresExistingActions]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testChangeSummarizerReplacesLatestRunAndIgnoresExistingActions]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testConfiguredLatestRunUsesConfiguredSummary]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testConfiguredLatestRunUsesConfiguredSummary]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testLatestRunSelectionAndDefaultSummariesCoverExitedAndConfigured]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testLatestRunSelectionAndDefaultSummariesCoverExitedAndConfigured]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testOneLineStatusFramesLosslessReattachAsNoLossReconnect]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testOneLineStatusFramesLosslessReattachAsNoLossReconnect]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testOneLineStatusSurfacesNeedsYouForManualRecovery]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testOneLineStatusSurfacesNeedsYouForManualRecovery]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testSummarySurfacesHumanWaitsFirst]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testSummarySurfacesHumanWaitsFirst]' passed (0.000 seconds).
+Test Suite 'WorkspaceSummaryTests' passed at 2026-06-24 18:52:23.135.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.004 (0.005) seconds
+Test Suite 'OuroWorkbenchPackageTests.xctest' passed at 2026-06-24 18:52:23.135.
+	 Executed 2708 tests, with 1 test skipped and 0 failures (0 unexpected) in 61.926 (62.133) seconds
+Test Suite 'All tests' passed at 2026-06-24 18:52:23.135.
+	 Executed 2708 tests, with 1 test skipped and 0 failures (0 unexpected) in 61.926 (62.135) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
+
+Sources/OuroWorkbenchCore, Sources/OuroWorkbenchShellAdapter: 146/148 files at 100% line+region (2 with allowlisted structural exclusions)
+  allow BossAgentMCPClient.swift                     (1 line, 2 region exempt — see coverage-allowlist.txt)
+  allow SessionActivityReader.swift                  (0 line, 1 region exempt — see coverage-allowlist.txt)
+
+PASS: pure Workbench logic targets are 100% line + region covered (documented structural exclusions aside).
+COVERAGE_EXIT=
