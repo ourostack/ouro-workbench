@@ -117,12 +117,15 @@ final class ViewSnapshotProofTests: XCTestCase {
         XCTAssertFalse(staticTree.contains("kind=editable"),
                        "static: NO node may render kind=editable (all Text):\n\(staticTree)")
 
-        // The SAME label content "Restore terminal A" is present in both — proving
-        // the flip is at the CONTROL TYPE, not the data (the label string is constant).
-        // In editable it's the TextField's content/placeholder context; in static it's
-        // a Text. The static tree carries the label text statically.
+        // The SAME label DATA value "Restore terminal A" is present in BOTH trees —
+        // proving the flip is at the CONTROL TYPE (kind), not the data. Post-AN-002,
+        // the editable node carries the BOUND value (not the "Label" placeholder), so
+        // both control types now expose the same data value and a data-value
+        // regression is caught in EITHER mode.
         XCTAssertTrue(staticTree.contains(#"kind=static text="Restore terminal A""#),
-                      "static label renders as Text:\n\(staticTree)")
+                      "static label renders as Text with the bound value:\n\(staticTree)")
+        XCTAssertTrue(editable.contains(#"kind=editable text="Restore terminal A""#),
+                      "editable label renders as TextField carrying the bound value (AN-002):\n\(editable)")
     }
 
     // MARK: - (b) determinism — serialize twice → byte-identical

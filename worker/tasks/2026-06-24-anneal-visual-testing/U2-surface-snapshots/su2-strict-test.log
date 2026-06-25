@@ -1,0 +1,120 @@
+Test Suite 'WorkspaceSidebarWiringTests' passed at 2026-06-25 06:26:42.697.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.364 (0.365) seconds
+Test Suite 'WorkspaceStateProseLogTests' started at 2026-06-25 06:26:42.697.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStateProseLogTests testProseEntryTextIsCappedAtConstruction]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStateProseLogTests testProseEntryTextIsCappedAtConstruction]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStateProseLogTests testProseLogDecodesAbsentAsEmptyForPreF12aState]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStateProseLogTests testProseLogDecodesAbsentAsEmptyForPreF12aState]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStateProseLogTests testProseLogRoundTripsThroughCodable]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStateProseLogTests testProseLogRoundTripsThroughCodable]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStateProseLogTests testRecordProseAppendsNewestFirst]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStateProseLogTests testRecordProseAppendsNewestFirst]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStateProseLogTests testRecordProseTrimsToCap]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStateProseLogTests testRecordProseTrimsToCap]' passed (0.000 seconds).
+Test Suite 'WorkspaceStateProseLogTests' passed at 2026-06-25 06:26:42.699.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.001 (0.002) seconds
+Test Suite 'WorkspaceStructureTests' started at 2026-06-25 06:26:42.699.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testBootstrapThenReconcileThenMigratePopulatesWorkspaces]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testBootstrapThenReconcileThenMigratePopulatesWorkspaces]' passed (0.006 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testCurrentSchemaVersionIsTwo]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testCurrentSchemaVersionIsTwo]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testEffectiveNameFallsBackToAutoNameWhenOverrideNil]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testEffectiveNameFallsBackToAutoNameWhenOverrideNil]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testEffectiveNameHonorsEmptyStringOverride]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testEffectiveNameHonorsEmptyStringOverride]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testEffectiveNameUsesOverrideWhenPresent]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testEffectiveNameUsesOverrideWhenPresent]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testEffectiveTabNameHonorsEmptyStringOverride]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testEffectiveTabNameHonorsEmptyStringOverride]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testEffectiveTabNameUsesOverrideWhenPresent]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testEffectiveTabNameUsesOverrideWhenPresent]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testMigrationAppendsUnmappedActiveEntriesToExistingDefaultWorkspace]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testMigrationAppendsUnmappedActiveEntriesToExistingDefaultWorkspace]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testMigrationExcludesArchivedEntriesFromAutoMembership]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testMigrationExcludesArchivedEntriesFromAutoMembership]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testMigrationIsIdempotent]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testMigrationIsIdempotent]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testMigrationIsNonDestructiveForAllOtherCollections]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testMigrationIsNonDestructiveForAllOtherCollections]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testMigrationLeavesAlreadyMigratedStateUnchanged]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testMigrationLeavesAlreadyMigratedStateUnchanged]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testMigrationOfAllArchivedEntriesMintsNoWorkspace]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testMigrationOfAllArchivedEntriesMintsNoWorkspace]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testMigrationOfV1FixtureCreatesSingleWorkspaceWithAllEntriesInOrder]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testMigrationOfV1FixtureCreatesSingleWorkspaceWithAllEntriesInOrder]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testMigrationOnEmptyStateMintsNoWorkspace]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testMigrationOnEmptyStateMintsNoWorkspace]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testProcessEntryTabNameOverrideDefaultsNil]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testProcessEntryTabNameOverrideDefaultsNil]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testProcessEntryWithoutTabNameOverrideDecodesNil]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testProcessEntryWithoutTabNameOverrideDecodesNil]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testStoreSaveWritesSchemaTwoAndWorkspacesArray]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testStoreSaveWritesSchemaTwoAndWorkspacesArray]' passed (0.003 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testTabNameOverrideRoundTripsAndRevertReturnsToName]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testTabNameOverrideRoundTripsAndRevertReturnsToName]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testV1FixtureLoadsUnderV2BuildWithEmptyWorkspacesNotQuarantined]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testV1FixtureLoadsUnderV2BuildWithEmptyWorkspacesNotQuarantined]' passed (0.007 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testWorkspaceCodableRoundTripsEqual]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testWorkspaceCodableRoundTripsEqual]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testWorkspaceDecodesMissingOptionalFieldsToDefaults]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testWorkspaceDecodesMissingOptionalFieldsToDefaults]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testWorkspaceExposesOnlyStructureFieldsNoRuntime]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testWorkspaceExposesOnlyStructureFieldsNoRuntime]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testWorkspaceIgnoresUnknownExtraKey]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testWorkspaceIgnoresUnknownExtraKey]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testWorkspaceMemberwiseInitDefaults]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testWorkspaceMemberwiseInitDefaults]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testWorkspaceMemberwiseInitExplicitValues]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testWorkspaceMemberwiseInitExplicitValues]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testWorkspacesAbsentInJSONDecodesEmpty]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testWorkspacesAbsentInJSONDecodesEmpty]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testWorkspacesDecodeLenientlySkipsCorruptElementAttributesDrop]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testWorkspacesDecodeLenientlySkipsCorruptElementAttributesDrop]' passed (0.002 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testWorkspacesRoundTripPreservesOrderNamesPin]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testWorkspacesRoundTripPreservesOrderNamesPin]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testWorkspaceStateMemberwiseInitDefaultsWorkspacesEmpty]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceStructureTests testWorkspaceStateMemberwiseInitDefaultsWorkspacesEmpty]' passed (0.000 seconds).
+Test Suite 'WorkspaceStructureTests' passed at 2026-06-25 06:26:42.724.
+	 Executed 30 tests, with 0 failures (0 unexpected) in 0.023 (0.026) seconds
+Test Suite 'WorkspaceSummaryTests' started at 2026-06-25 06:26:42.724.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testBossPromptIncludesProcessAndRecoveryTruth]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testBossPromptIncludesProcessAndRecoveryTruth]' passed (0.003 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testBossPromptIncludesRecentWorkspaceChanges]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testBossPromptIncludesRecentWorkspaceChanges]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testChangeSummarizerCapturesAddedRenamedRestoredRemovedSkippedAndRunStarted]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testChangeSummarizerCapturesAddedRenamedRestoredRemovedSkippedAndRunStarted]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testChangeSummarizerCapturesRunStatusAttentionArchiveAndActions]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testChangeSummarizerCapturesRunStatusAttentionArchiveAndActions]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testChangeSummarizerReplacesLatestRunAndIgnoresExistingActions]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testChangeSummarizerReplacesLatestRunAndIgnoresExistingActions]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testConfiguredLatestRunUsesConfiguredSummary]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testConfiguredLatestRunUsesConfiguredSummary]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testLatestRunSelectionAndDefaultSummariesCoverExitedAndConfigured]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testLatestRunSelectionAndDefaultSummariesCoverExitedAndConfigured]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testOneLineStatusFramesLosslessReattachAsNoLossReconnect]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testOneLineStatusFramesLosslessReattachAsNoLossReconnect]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testOneLineStatusSurfacesNeedsYouForManualRecovery]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testOneLineStatusSurfacesNeedsYouForManualRecovery]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testSummarySurfacesHumanWaitsFirst]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testSummarySurfacesHumanWaitsFirst]' passed (0.000 seconds).
+Test Suite 'WorkspaceSummaryTests' passed at 2026-06-25 06:26:42.730.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.005 (0.006) seconds
+Test Suite 'WorkspaceTabStripFilterTests' started at 2026-06-25 06:26:42.730.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceTabStripFilterTests testFilterEmptyStateWhenFilterHidesEveryExistingTab]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceTabStripFilterTests testFilterEmptyStateWhenFilterHidesEveryExistingTab]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceTabStripFilterTests testNoFilterEmptyStateWhenFilterMatchesSomeTabs]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceTabStripFilterTests testNoFilterEmptyStateWhenFilterMatchesSomeTabs]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceTabStripFilterTests testNoFilterEmptyStateWhenNoFilterActive]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceTabStripFilterTests testNoFilterEmptyStateWhenNoFilterActive]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceTabStripFilterTests testNoFilterEmptyStateWhenWorkspaceGenuinelyHasNoTabs]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceTabStripFilterTests testNoFilterEmptyStateWhenWorkspaceGenuinelyHasNoTabs]' passed (0.000 seconds).
+Test Suite 'WorkspaceTabStripFilterTests' passed at 2026-06-25 06:26:42.731.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.001 (0.001) seconds
+Test Suite 'OuroWorkbenchPackageTests.xctest' passed at 2026-06-25 06:26:42.731.
+	 Executed 2911 tests, with 1 test skipped and 0 failures (0 unexpected) in 383.281 (383.530) seconds
+Test Suite 'All tests' passed at 2026-06-25 06:26:42.731.
+	 Executed 2911 tests, with 1 test skipped and 0 failures (0 unexpected) in 383.281 (383.531) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
