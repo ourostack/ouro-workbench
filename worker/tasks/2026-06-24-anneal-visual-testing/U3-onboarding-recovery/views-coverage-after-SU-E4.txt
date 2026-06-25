@@ -1,0 +1,43 @@
+Running views-lib coverage AFTER SU-E4 (readiness — OnboardingReadinessView readiness states)
+landed. Fourth/last E sub-unit (sixth U3 surface overall). U3's SU-E (onboarding) is COMPLETE.
+
+Branch: feat/anneal-u3-su-e-onboarding (off main @ 9228a2c, the #296 SU-C+SU-D merge)
+Captured: 2026-06-25
+
+SCOPE NOTE (D-U3-5 carried forward): the views lib is NOT gated this unit — COVERAGE_DIRS
+stays {OuroWorkbenchCore, OuroWorkbenchShellAdapter} and the allowlist is UNCHANGED (this is
+the campaign's final unit U4's job). This number is PROGRESS toward the U4 coverage gate.
+
+Measured via: ./scripts/check-coverage.sh (full suite, 2990 tests, 1 skipped, 0 failures —
+was 2983 after SU-E3), then `xcrun llvm-cov report <PackageTests.xctest bin>
+-instr-profile default.profdata Sources/OuroWorkbenchAppViews/`.
+
+Per-file (views lib):
+
+  File                            Regions  Missed  Cover    Lines  Missed  Cover
+  TOTAL                            2678     2249   16.02%   5823    5065   13.02%
+
+Running views-lib coverage AFTER SU-E4: 16.02% region / 13.02% line.
+
+Progression (region): U2 7.70% → SU-C 8.33% → SU-D 9.99% → SU-E1 13.67% → SU-E2 14.23%
+                      → SU-E3 15.46% → SU-E4 16.02%.
+Progression (line):   U2 6.94% → SU-C 7.45% → SU-D 10.33% → SU-E1 10.60% → SU-E2 11.45%
+                      → SU-E3 12.36% → SU-E4 13.02%.
+
+The SU-E4 references exercise OnboardingReadinessView (the nil branch, the ready branch
+[checkmark + "<boss> is ready" + scan-intro], and the not-ready branch [FirstRunBootstrapView
+embed + OnboardingStatusRow + the repairSteps loop + the in-progress caption]) +
+OnboardingAgentProviderSummary (the collapsed-lane "Your agent uses" line + the diverged-lane
+"Talks with you using"/"Thinks with" rows + ProviderModelPill) + the
+WorkbenchOnboardingAdvisor.readiness(...) producer paths reached (ready / needsCredentials /
+needsRepair).
+
+Provenance (Q4 default): every readiness built through the PURE
+WorkbenchOnboardingAdvisor().readiness(boss:agents:mcpRegistration:providerChecks:daemonLiveness:)
+with controlled inputs, assigned to the @Published onboardingReadiness — never hand-assembled.
+
+AN-006 (recorded, NOT fabricated): the ".ready + non-empty repairSteps" ("Optional checks")
+branch is UNREACHABLE through the advisor (blockers.isEmpty ⟺ repairSteps.isEmpty on the .ready
+path), so it is NOT snapshotted. `testE4_AN006_readyImpliesEmptyRepairSteps` asserts the
+impossibility through the real seam (every input shape that reaches .ready has empty repairSteps;
+a pending/running check forces .needsRepair, never .ready-with-repairSteps).

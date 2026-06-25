@@ -1,0 +1,2 @@
+Text kind=static text="Connect your agent"
+Text kind=static text="Workbench makes sure your agent's connection and tools are working, then brings your recent work back."

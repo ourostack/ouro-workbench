@@ -1,0 +1,6 @@
+Text kind=static text="Checking…"
+Text kind=static text="Checking…"
+Text kind=static text="Check the model it talks with"
+Text kind=static text="Workbench will make sure your connection works."
+Text kind=static text="Run"
+Image image="play.fill"

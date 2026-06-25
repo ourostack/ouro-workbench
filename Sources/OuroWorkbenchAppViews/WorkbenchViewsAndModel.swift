@@ -6691,7 +6691,11 @@ private struct OnboardingStatusRow: View {
     }
 }
 
-private struct OnboardingBossChoiceView: View {
+// `internal` (not `private`) so the U3 view-snapshot tests can instantiate this surface
+// directly via `@testable import` — the same testable-seam access level the U2/SU-C/SU-D
+// surfaces (`RecoverySheet`, `InlineRenameEditor`, `TerminalAgentRow`) already carry. No
+// behavior change; access-level-only widening.
+struct OnboardingBossChoiceView: View {
     @ObservedObject var model: WorkbenchViewModel
 
     var body: some View {
@@ -6821,7 +6825,9 @@ private struct OnboardingBossChoiceRow: View {
 /// switches to the agent-driven (Layer B) framing — the agent inspects + remediates + narrates,
 /// and the human is never asked to run anything. Thin wiring over `model.firstRunPresentation`
 /// (pure `FirstRunBootstrapDrive` output).
-private struct FirstRunBootstrapView: View {
+// `internal` (not `private`) so the SU-E2 view-snapshot tests can instantiate this surface
+// directly. Access-level-only widening (same as the U2 testable surfaces); no behavior change.
+struct FirstRunBootstrapView: View {
     @ObservedObject var model: WorkbenchViewModel
 
     var body: some View {
@@ -6976,7 +6982,9 @@ private struct FirstRunNarrationRow: View {
     }
 }
 
-private struct OnboardingReadinessView: View {
+// `internal` (not `private`) so the SU-E4 view-snapshot tests can instantiate this surface
+// directly. Access-level-only widening (same as the U2 testable surfaces); no behavior change.
+struct OnboardingReadinessView: View {
     @ObservedObject var model: WorkbenchViewModel
 
     var body: some View {
@@ -7138,7 +7146,10 @@ private struct ProviderModelPill: View {
     }
 }
 
-private struct OnboardingRepairStepRow: View {
+// `internal` (not `private`) so the SU-E1 view-snapshot tests can instantiate this leaf row
+// directly via its own typed `OnboardingRepairStep` input. Access-level-only widening (same
+// as the U2 testable surfaces); no behavior change.
+struct OnboardingRepairStepRow: View {
     var step: OnboardingRepairStep
     @ObservedObject var model: WorkbenchViewModel
 
