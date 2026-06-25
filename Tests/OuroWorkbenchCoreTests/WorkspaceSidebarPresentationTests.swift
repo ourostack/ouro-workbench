@@ -85,6 +85,29 @@ final class WorkspaceSidebarPresentationTests: XCTestCase {
         XCTAssertEqual(model.rows.first?.effectiveName, "Custom")
     }
 
+    func testRowSurfacesNameOverrideWhenPresent() {
+        // Slice ②d — the row carries the override so the context menu can gate the
+        // "Remove Custom Workspace Name" item on its presence (D2d-2).
+        let ws = Workspace(autoName: "auto", nameOverride: "Custom")
+        let model = resolve([ws], [])
+        XCTAssertEqual(model.rows.first?.nameOverride, "Custom")
+    }
+
+    func testRowNameOverrideIsNilWhenAbsent() {
+        let ws = Workspace(autoName: "auto", nameOverride: nil)
+        let model = resolve([ws], [])
+        XCTAssertNil(model.rows.first?.nameOverride)
+    }
+
+    func testRowSurfacesEmptyNameOverrideAsNonNil() {
+        // DA4: an EMPTY override is a deliberate value (not a revert). The row reflects
+        // that faithfully so the "remove" affordance still appears for an empty override.
+        let ws = Workspace(autoName: "auto", nameOverride: "")
+        let model = resolve([ws], [])
+        XCTAssertEqual(model.rows.first?.nameOverride, "")
+        XCTAssertNotNil(model.rows.first?.nameOverride)
+    }
+
     // MARK: - Tab resolution + ordering
 
     func testTabsResolveInTabIdsOrderWithEffectiveTabName() {
