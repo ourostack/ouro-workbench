@@ -2159,12 +2159,18 @@ struct DecisionInboxSheet: View {
     /// Inbox (open queue) vs the full chronological log. Defaults to the inbox;
     /// the toggle keeps the raw log reachable without a second entry point.
     @State private var showFullLog = false
+    /// Test-only clock override. `nil` in production → the `TimelineView`'s
+    /// periodic `context.date` drives `openInboxGroups(now:)` (the sheet keeps
+    /// re-grouping every 30s so an elapsed snooze drops back into the queue). A
+    /// test injects a fixed `Date` for a deterministic grouping. The
+    /// `TimelineView(.periodic)` driver is RETAINED — production is unchanged.
+    var now: Date? = nil
 
     var body: some View {
         // Re-evaluate every 30s so an elapsed snooze drops back into the queue
         // without the operator reopening the sheet.
         TimelineView(.periodic(from: .now, by: 30)) { context in
-            content(now: context.date)
+            content(now: now ?? context.date)
         }
         .frame(width: 640, height: 560)
     }
@@ -3622,6 +3628,13 @@ struct TerminalAgentRow: View {
     /// Drives the `5m` / `2h` elapsed-time pill in the row. `nil` skips the
     /// pill entirely — keeps the row uncluttered for idle / archived entries.
     var runningSince: Date?
+    /// Test-only clock override, threaded into the `ElapsedTimePill` body AND the
+    /// `accessibilityLabel` elapsed read so BOTH the pill's `TimelineView`-driven
+    /// `Text` and the computed-property label string are deterministic under a
+    /// snapshot test. `nil` in production → the live clock (`TimelineView`
+    /// `context.date` for the pill; `Date()` for the label). Production behavior
+    /// is unchanged.
+    var now: Date? = nil
     /// Whether the entry is pinned to the top of its group. Shows a small
     /// pin glyph next to the name.
     var isPinned: Bool = false
@@ -3683,7 +3696,7 @@ struct TerminalAgentRow: View {
             }
             Spacer()
             if let runningSince {
-                ElapsedTimePill(startDate: runningSince)
+                ElapsedTimePill(startDate: runningSince, now: now)
             }
             if let health, health.status != .available {
                 Image(systemName: "exclamationmark.triangle.fill")
@@ -3715,7 +3728,7 @@ struct TerminalAgentRow: View {
         pieces.append(entry.attention.rawValue)
         pieces.append(entry.isArchived ? "archived" : "active")
         if let runningSince {
-            pieces.append("running for \(ElapsedTimePill.coarseDescription(since: runningSince))")
+            pieces.append("running for \(ElapsedTimePill.coarseDescription(since: runningSince, now: now ?? Date()))")
         }
         if let health, health.status != .available {
             pieces.append(health.detail)
@@ -3770,10 +3783,16 @@ struct GitBranchChip: View {
 /// view model needing a Timer; sub-minute updates would just noise the UI.
 struct ElapsedTimePill: View {
     var startDate: Date
+    /// Test-only clock override. `nil` in production → the `TimelineView`'s
+    /// periodic `context.date` drives the elapsed string (the pill keeps ticking
+    /// every 30s). A snapshot test injects a fixed `Date` so the rendered string
+    /// is deterministic. The `TimelineView(.periodic)` driver is RETAINED either
+    /// way — production behavior is unchanged.
+    var now: Date? = nil
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
-            Text(WorkbenchElapsedFormatter.coarseDescription(since: startDate, now: context.date))
+            Text(WorkbenchElapsedFormatter.coarseDescription(since: startDate, now: now ?? context.date))
                 .font(.caption2.monospacedDigit())
                 .padding(.horizontal, 5)
                 .padding(.vertical, 1)
