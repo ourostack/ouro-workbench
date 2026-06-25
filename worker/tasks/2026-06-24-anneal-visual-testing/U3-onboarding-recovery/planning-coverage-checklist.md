@@ -12,7 +12,7 @@ Systematic verification that the doing doc captures EVERYTHING from the planning
 | D boundary: lossless-reattach pill vs not | SU-D.a (`D.losslessReattach`) + SU-D.b negative control (`liveScreenSessionNames`) | ✅ |
 | D sidebar Archived section | SU-D.a (`D.sidebarArchived`) | ✅ |
 | E boss-choice {none/one/many/selected/unusable} | SU-E3.a (`E3.none/one/many/selected/unusable`) | ✅ |
-| E readiness {nil/not-ready/ready/ready+optional/in-progress} | SU-E4.a (`E4.nil/notReady/ready/readyOptional/inProgress`) | ✅ |
+| E readiness {nil/not-ready/ready/ready+optional/in-progress} | SU-E4.a (`E4.nil/notReady/ready/inProgress`) — **`ready+optional` RECLASSIFIED as unreachable (AN-006)**: the advisor reaches `.ready` only with EMPTY `repairSteps`, so the "Optional checks" branch is dead; recorded as an unreachable-observation, NOT fabricated (review-gate CRITICAL, verified first-hand). | ✅ (reclassified, not silently dropped) |
 | E first-run {bootstrapping/parked/needsAttention/agentDriven/nil} | SU-E2.a (`E2.bootstrapping/parked/needsAttention/agentDriven/nil`) | ✅ |
 | E repair-step actor variants {agentRunnable/humanRequired/humanChoice} | SU-E1.a (`E1.agentRunnable/humanRequired_providerSetup/humanChoice` + check variants) | ✅ |
 | Per surface: provenance via real seam (P2) | each SU intro + each .a/.b (assert digest/state at call site) | ✅ |
