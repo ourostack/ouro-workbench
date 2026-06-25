@@ -1,0 +1,40 @@
+=== Unit 1a RED: build tests (expect compile failure: WorkspaceSidebarPresentation undefined) ===
+error: emit-module command failed with exit code 1 (use -v to see invocation)
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceSidebarPresentationTests.swift:40:10: error: cannot find type 'WorkspaceSidebarModel' in scope
+ 40 |     ) -> WorkspaceSidebarModel {
+    |          `- error: cannot find type 'WorkspaceSidebarModel' in scope
+ 41 |         WorkspaceSidebarPresentation.resolve(
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceSidebarPresentationTests.swift:40:10: error: cannot find type 'WorkspaceSidebarModel' in scope
+ 40 |     ) -> WorkspaceSidebarModel {
+    |          `- error: cannot find type 'WorkspaceSidebarModel' in scope
+ 41 |         WorkspaceSidebarPresentation.resolve(
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceSidebarPresentationTests.swift:41:9: error: cannot find 'WorkspaceSidebarPresentation' in scope
+ 40 |     ) -> WorkspaceSidebarModel {
+ 41 |         WorkspaceSidebarPresentation.resolve(
+    |         `- error: cannot find 'WorkspaceSidebarPresentation' in scope
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceSidebarPresentationTests.swift:57:39: error: cannot infer key path type from context; consider explicitly specifying a root type
+    |                                       `- error: cannot infer key path type from context; consider explicitly specifying a root type
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceSidebarPresentationTests.swift:58:39: error: cannot infer key path type from context; consider explicitly specifying a root type
+    |                                       `- error: cannot infer key path type from context; consider explicitly specifying a root type
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceSidebarPresentationTests.swift:65:39: error: cannot infer key path type from context; consider explicitly specifying a root type
+    |                                       `- error: cannot infer key path type from context; consider explicitly specifying a root type
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceSidebarPresentationTests.swift:72:39: error: cannot infer key path type from context; consider explicitly specifying a root type
+    |                                       `- error: cannot infer key path type from context; consider explicitly specifying a root type
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceSidebarPresentationTests.swift:73:39: error: cannot infer key path type from context; consider explicitly specifying a root type
+    |                                       `- error: cannot infer key path type from context; consider explicitly specifying a root type
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceSidebarPresentationTests.swift:98:38: error: cannot infer key path type from context; consider explicitly specifying a root type
+    |                                      `- error: cannot infer key path type from context; consider explicitly specifying a root type
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceSidebarPresentationTests.swift:99:38: error: cannot infer key path type from context; consider explicitly specifying a root type
+    |                                      `- error: cannot infer key path type from context; consider explicitly specifying a root type
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceSidebarPresentationTests.swift:166:42: error: cannot infer key path type from context; consider explicitly specifying a root type
+    |                                          `- error: cannot infer key path type from context; consider explicitly specifying a root type
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceSidebarPresentationTests.swift:173:51: error: 'nil' requires a contextual type
+BUILD-TESTS EXIT: 
+
+=== Unit 1a RED summary ===
+RED for the RIGHT reason: `cannot find type 'WorkspaceSidebarModel' in scope` and
+`cannot find 'WorkspaceSidebarPresentation' in scope` — the seam type does not exist yet.
+The cascading "cannot infer key path type" errors are all downstream of the missing types.
+Tests written: 35 (ordering, tab resolution+ordering, dangling-id drop, active selection,
+empty handling, active/archived partition, attention-summary arms, no-cost/no-runtime
+boundary invariant, migrated-UI fixture sanity-decode). No source created yet.
