@@ -133,4 +133,102 @@ final class WorkspaceStructureTests: XCTestCase {
             "Workspace must carry no runtime field; found \(labels.intersection(forbiddenRuntimeFields))"
         )
     }
+
+    // MARK: - Unit 2a: ProcessEntry.tabNameOverride + effectiveTabName
+
+    func testProcessEntryTabNameOverrideDefaultsNil() {
+        // Memberwise init defaults tabNameOverride to nil; effectiveTabName falls
+        // back to `name`.
+        let entry = makeEntry(name: "ouro-workbench")
+        XCTAssertNil(entry.tabNameOverride)
+        XCTAssertEqual(entry.effectiveTabName, "ouro-workbench")
+    }
+
+    func testEffectiveTabNameUsesOverrideWhenPresent() {
+        let entry = makeEntry(name: "auto-name", tabNameOverride: "My Tab")
+        XCTAssertEqual(entry.effectiveTabName, "My Tab")
+    }
+
+    func testEffectiveTabNameHonorsEmptyStringOverride() {
+        // DA4 (mirrored for tabs): an empty override is honored, NOT a revert.
+        let entry = makeEntry(name: "auto-name", tabNameOverride: "")
+        XCTAssertEqual(entry.effectiveTabName, "")
+        XCTAssertNotNil(entry.tabNameOverride)
+    }
+
+    func testProcessEntryWithoutTabNameOverrideDecodesNil() throws {
+        // Backcompat: every pre-②a row (incl. the v1 fixture's "Resume …" rows)
+        // lacks `tabNameOverride` → decodes nil → effectiveTabName == name.
+        let state = try loadV1Fixture()
+        XCTAssertEqual(state.processEntries.count, 6)
+        for entry in state.processEntries {
+            XCTAssertNil(
+                entry.tabNameOverride,
+                "pre-②a entry \(entry.name) must decode tabNameOverride nil"
+            )
+            XCTAssertEqual(entry.effectiveTabName, entry.name)
+        }
+        // Spot-check a "Resume …" row specifically.
+        let resume = state.processEntries.first { $0.name.hasPrefix("Resume ") }
+        XCTAssertNotNil(resume)
+        XCTAssertNil(resume?.tabNameOverride)
+        XCTAssertEqual(resume?.effectiveTabName, resume?.name)
+    }
+
+    func testTabNameOverrideRoundTripsAndRevertReturnsToName() throws {
+        // An entry WITH a tabNameOverride survives save→load; clearing it (nil)
+        // reverts effectiveTabName to `name`.
+        var entry = makeEntry(name: "auto-name", tabNameOverride: "Renamed")
+        let data = try JSONEncoder().encode(entry)
+        let decoded = try JSONDecoder().decode(ProcessEntry.self, from: data)
+        XCTAssertEqual(decoded.tabNameOverride, "Renamed")
+        XCTAssertEqual(decoded.effectiveTabName, "Renamed")
+        XCTAssertEqual(decoded, entry)
+
+        entry.tabNameOverride = nil
+        XCTAssertEqual(entry.effectiveTabName, "auto-name")
+    }
+
+    // MARK: - Helpers
+
+    private func makeEntry(
+        id: UUID = UUID(),
+        name: String,
+        tabNameOverride: String? = nil,
+        isArchived: Bool = false
+    ) -> ProcessEntry {
+        ProcessEntry(
+            id: id,
+            projectId: UUID(),
+            name: name,
+            kind: .terminalAgent,
+            executable: "claude",
+            workingDirectory: "/tmp/work",
+            isArchived: isArchived,
+            tabNameOverride: tabNameOverride
+        )
+    }
+
+    private func repoRoot() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+    }
+
+    private func v1FixtureURL() -> URL {
+        repoRoot()
+            .appendingPathComponent("worker")
+            .appendingPathComponent("tasks")
+            .appendingPathComponent("2026-06-24-1832-doing-slice2a-storage-schema")
+            .appendingPathComponent("fixtures")
+            .appendingPathComponent("v1-malformed-resume-state.json")
+    }
+
+    private func loadV1Fixture() throws -> WorkspaceState {
+        let data = try Data(contentsOf: v1FixtureURL())
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(WorkspaceState.self, from: data)
+    }
 }

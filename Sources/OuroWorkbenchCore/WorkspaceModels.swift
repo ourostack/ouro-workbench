@@ -252,6 +252,14 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
     /// launched from a discovered session" (the common operator-typed case).
     public var discoveredHarness: AgentHarness?
     public var discoveredSessionId: String?
+    /// Slice ②a — the operator's REVERTIBLE custom name for this tab (a tab IS
+    /// this entry; DA1). `name` is the auto/derived tab name; `tabNameOverride`
+    /// is the custom override. `effectiveTabName == tabNameOverride ?? name`.
+    /// Mirrors `Workspace.nameOverride`: Rename Tab (⌘R, ②d) sets it; revert
+    /// clears it to `nil` (an empty string is honored, NOT a revert — DA4).
+    /// Additive + OPTIONAL, decoded if-present, so every pre-②a state file (which
+    /// lacks this key, incl. the v1 "Resume …" rows) loads with it `nil`.
+    public var tabNameOverride: String?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -274,6 +282,7 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         case owner
         case discoveredHarness
         case discoveredSessionId
+        case tabNameOverride
     }
 
     public init(
@@ -296,7 +305,8 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         friend: SessionFriend? = nil,
         owner: SessionOwner = .human,
         discoveredHarness: AgentHarness? = nil,
-        discoveredSessionId: String? = nil
+        discoveredSessionId: String? = nil,
+        tabNameOverride: String? = nil
     ) {
         self.id = id
         self.projectId = projectId
@@ -318,7 +328,13 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         self.owner = owner
         self.discoveredHarness = discoveredHarness
         self.discoveredSessionId = discoveredSessionId
+        self.tabNameOverride = tabNameOverride
     }
+
+    /// The operator-visible tab name: the custom override when set, else the
+    /// auto/derived `name`. An empty override is honored (DA4); `nil` reverts to
+    /// `name`. Mirrors `Workspace.effectiveName`.
+    public var effectiveTabName: String { tabNameOverride ?? name }
 
     public var trimmedNotes: String? {
         guard let notes else {
@@ -353,6 +369,10 @@ public struct ProcessEntry: Codable, Equatable, Identifiable, Sendable {
         // value to `.custom`, so a record from a newer build still loads.
         self.discoveredHarness = try container.decodeIfPresent(AgentHarness.self, forKey: .discoveredHarness)
         self.discoveredSessionId = try container.decodeIfPresent(String.self, forKey: .discoveredSessionId)
+        // Slice ②a: absent in every pre-②a state file → nil (no schema bump on
+        // ProcessEntry; the bump is on WorkspaceState for the new `workspaces`
+        // collection). Custom tab name overrides; nil means "use the derived name".
+        self.tabNameOverride = try container.decodeIfPresent(String.self, forKey: .tabNameOverride)
     }
 }
 
