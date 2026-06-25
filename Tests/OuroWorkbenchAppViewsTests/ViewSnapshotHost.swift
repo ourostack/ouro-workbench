@@ -43,15 +43,43 @@ enum ViewSnapshotHost {
     /// The extraction adapter: inspect → flat depth-first `ViewSnapshotNode` list.
     /// `try view.inspect()` and the per-node typed reads are throwing ViewInspector
     /// calls; an inspection failure propagates as ViewInspector's own `Error`.
+    ///
+    /// **AN-002 de-dup:** `findAll` enumerates a `TextField`'s supplementary
+    /// `labelView()` (the placeholder `Text`) as a SEPARATE node. That placeholder
+    /// is NOT load-bearing — the `TextField` node itself already carries the bound
+    /// value (read via `input()` in `mapNode`) — so re-emitting it would (a) noise
+    /// the tree (P4b) and (b) mask a bound-value regression behind a constant
+    /// placeholder. We drop it by skipping any node whose `pathToRoot` marks it as
+    /// a `TextField`'s `labelView()` child (`isTextFieldPlaceholder`).
     static func extractNodes<V: View>(of view: V, locale: Locale) throws -> [ViewSnapshotNode] {
         let classifiedNodes = try view.inspect().findAll(where: { _ in true })
         var nodes: [ViewSnapshotNode] = []
         for classified in classifiedNodes {
+            if isTextFieldPlaceholder(classified) { continue }
             if let node = mapNode(classified, locale: locale) {
                 nodes.append(node)
             }
         }
         return nodes
+    }
+
+    /// True when `view` is the supplementary `labelView()` (placeholder `Text`) of
+    /// a `TextField` — i.e. its `pathToRoot` contains a `.textField(…)` hop
+    /// immediately followed by a `.labelView()` hop. ViewInspector builds the
+    /// placeholder child with `call: "labelView()"` (TextField.swift:43), so this
+    /// is a robust, content-independent identity signal (a genuine `Text` whose
+    /// string happens to equal the placeholder literal is NOT skipped, because it
+    /// is not under a `.textField(…).labelView()` path).
+    private static func isTextFieldPlaceholder(
+        _ view: InspectableView<ViewType.ClassifiedView>
+    ) -> Bool {
+        let path = view.pathToRoot
+        guard let labelRange = path.range(of: ".labelView()") else { return false }
+        // The hop immediately preceding the `.labelView()` must be a `.textField(`.
+        let prefix = path[..<labelRange.lowerBound]
+        guard let dotRange = prefix.range(of: ".textField(", options: .backwards) else { return false }
+        // Nothing but the `textField(…)` token may sit between the two hops.
+        return !prefix[dotRange.upperBound...].contains(".")
     }
 
     /// Map one inspected node to a `ViewSnapshotNode` IFF it carries whitelisted
@@ -68,13 +96,16 @@ enum ViewSnapshotHost {
         let id = try? view.accessibilityIdentifier()
 
         // A TextField → an EDITABLE node (the load-bearing Mirror-gap signal). Its
-        // placeholder/label is the node's text.
+        // node text is the BOUND VALUE (via `input()` = `inputBinding().wrappedValue`,
+        // TextField.swift:96), NOT the placeholder literal — so a regression to an
+        // editable field's DATA value is caught (AN-002). The placeholder's inner
+        // `Text` is de-duped upstream in `extractNodes` (`isTextFieldPlaceholder`).
         if let textField = try? view.textField() {
-            let placeholder = try? textField.labelView().text().string(locale: locale)
+            let bound = try? textField.input()
             return ViewSnapshotNode(
                 viewType: "TextField",
                 kind: .editable,
-                text: placeholder,
+                text: bound,
                 label: label, value: value, id: id
             )
         }
