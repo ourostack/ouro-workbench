@@ -57,8 +57,12 @@ final class WorkspaceEditingAffordancesWiringTests: XCTestCase {
         let source = try WorkbenchAppSource.appSource()
         // D2d-8 — ⇧⌘R is wired via the chord dispatcher and targets the ACTIVE workspace.
         XCTAssertTrue(
-            source.contains("menuCommand(\"Rename Workspace…\", .renameWorkspace, \"r\", [.command, .shift])"),
-            "the ⇧⌘R Rename Workspace chord must be registered in the command menu"
+            source.contains("nativeMenuCommand(.renameWorkspace)"),
+            "the ⇧⌘R Rename Workspace chord must be mounted in the command menu"
+        )
+        XCTAssertTrue(
+            source.contains(".init(title: \"Rename Workspace…\", command: .renameWorkspace, key: .character(\"r\"), modifiers: [.command, .shift], guideKeys: \"⇧⌘R\")"),
+            "the ⇧⌘R Rename Workspace chord must be registered in the native menu catalog"
         )
         XCTAssertTrue(
             source.contains("case .renameWorkspace:"),
@@ -139,8 +143,12 @@ final class WorkspaceEditingAffordancesWiringTests: XCTestCase {
         let source = try WorkbenchAppSource.appSource()
         // D2d-8 — ⌘R is wired via the chord dispatcher and targets the SELECTED tab.
         XCTAssertTrue(
-            source.contains("menuCommand(\"Rename Tab…\", .renameTab, \"r\")"),
-            "the ⌘R Rename Tab chord must be registered in the command menu"
+            source.contains("nativeMenuCommand(.renameTab)"),
+            "the ⌘R Rename Tab chord must be mounted in the command menu"
+        )
+        XCTAssertTrue(
+            source.contains(".init(title: \"Rename Tab…\", command: .renameTab, key: .character(\"r\"), guideKeys: \"⌘R\")"),
+            "the ⌘R Rename Tab chord must be registered in the native menu catalog"
         )
         XCTAssertTrue(
             source.contains("case .renameTab:"),

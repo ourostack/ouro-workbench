@@ -13,13 +13,13 @@ import UserNotifications
 /// `.workbenchMenuCommand` and dispatched by the root view to the model — this
 /// keeps the shortcut as a real menu key equivalent (which beats the focused
 /// terminal) while reusing the existing model methods.
-public enum WorkbenchMenuCommand {
+public enum WorkbenchMenuCommand: Hashable, Sendable {
     case commandPalette, bossCheckIn, jumpToAttention
-    case newTerminal, openWorkspace, saveWorkspace
+    case newTerminal, newTerminalTab, openWorkspace, saveWorkspace
     case toggleSidebar, toggleFocus, fontIncrease, fontDecrease, fontReset
     case prevTerminal, nextTerminal, prevGroup, nextGroup
     case findInTerminal, redraw, stopSelected
-    case settings, shortcutsHelp, about, checkForUpdates
+    case settings, shortcutsHelp, about, checkForUpdates, reportBug
     case selectTerminal(Int)
     case splitRight, splitDown, closePane, focusOtherPane
     // Slice ②d — inline-rename chords targeting the active workspace / selected tab.
@@ -122,8 +122,6 @@ extension DetailPaneID {
 }
 
 extension Notification.Name {
-    /// Posted by the ⇧⌘B menu-bar command; the root view opens the reporter.
-    public static let workbenchReportBug = Notification.Name("workbenchReportBug")
     /// Posted by every other menu-bar command (object: `WorkbenchMenuCommand`).
     public static let workbenchMenuCommand = Notification.Name("workbenchMenuCommand")
 }
@@ -182,6 +180,8 @@ public struct WorkbenchRootView: View {
             }
         case .newTerminal:
             model.isNewSessionSheetPresented = true
+        case .newTerminalTab:
+            model.isNewSessionSheetPresented = true
         case .openWorkspace:
             model.presentOpenWorkspacePanel()
         case .saveWorkspace:
@@ -230,6 +230,8 @@ public struct WorkbenchRootView: View {
             model.isAboutSheetPresented = true
         case .checkForUpdates:
             Task { await model.checkForUpdatesAndPromptInstall() }
+        case .reportBug:
+            model.isReportBugPresented = true
         case let .selectTerminal(index):
             _ = model.selectTerminal(atOneIndexedPosition: index)
         case .renameWorkspace:
@@ -467,9 +469,6 @@ public struct WorkbenchRootView: View {
         }
         .sheet(isPresented: $model.isReportBugPresented) {
             ReportBugSheet(model: model)
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .workbenchReportBug)) { _ in
-            model.isReportBugPresented = true
         }
         .onReceive(NotificationCenter.default.publisher(for: .workbenchMenuCommand)) { note in
             guard let command = note.object as? WorkbenchMenuCommand else { return }

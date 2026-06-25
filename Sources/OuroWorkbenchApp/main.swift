@@ -39,6 +39,13 @@ if CommandLine.arguments.contains("--uisurfacetest") {
     }
 }
 
+if CommandLine.arguments.contains("--keyboarda11ycontract") {
+    let packageRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+    let report = WorkbenchKeyboardAccessibilityContract.evaluate(packageRoot: packageRoot)
+    FileHandle.standardOutput.write(Data((report.consoleSummary + "\n").utf8))
+    Darwin.exit(report.failures.isEmpty ? 0 : 1)
+}
+
 if workbenchLaunchDiagnostics.action == .factoryResetForE2E {
     let paths = WorkbenchPaths(rootURL: workbenchLaunchDiagnostics.appSupportRoot!)
     let defaultsDomain = "com.ourostack.workbench.e2e"

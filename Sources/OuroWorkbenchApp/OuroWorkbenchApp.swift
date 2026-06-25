@@ -49,40 +49,40 @@ struct OuroWorkbenchApp: App {
                 }
             }
             CommandGroup(replacing: .newItem) {
-                menuCommand("New Terminal", .newTerminal, "n")
-                menuCommand("New Terminal Tab", .newTerminal, "t")
+                nativeMenuCommand(.newTerminal)
+                nativeMenuCommand(.newTerminalTab)
                 Divider()
-                menuCommand("Open Workspace…", .openWorkspace, "o")
-                menuCommand("Save Workspace As…", .saveWorkspace, "s", [.command, .shift])
+                nativeMenuCommand(.openWorkspace)
+                nativeMenuCommand(.saveWorkspace)
             }
             CommandGroup(after: .sidebar) {
-                menuCommand("Toggle Sidebar", .toggleSidebar, "b", [.command, .control])
-                menuCommand("Enter / Exit Focus", .toggleFocus, "f", [.command, .shift])
+                nativeMenuCommand(.toggleSidebar)
+                nativeMenuCommand(.toggleFocus)
                 Divider()
-                menuCommand("Increase Terminal Font", .fontIncrease, "=")
-                menuCommand("Decrease Terminal Font", .fontDecrease, "-")
-                menuCommand("Reset Terminal Font", .fontReset, "0")
+                nativeMenuCommand(.fontIncrease)
+                nativeMenuCommand(.fontDecrease)
+                nativeMenuCommand(.fontReset)
             }
             CommandMenu("Terminal") {
-                menuCommand("Find in Terminal", .findInTerminal, "f")
-                menuCommand("Redraw", .redraw, "l")
-                menuCommand("Stop", .stopSelected, ".")
+                nativeMenuCommand(.findInTerminal)
+                nativeMenuCommand(.redraw)
+                nativeMenuCommand(.stopSelected)
                 Divider()
-                menuCommand("Previous Terminal", .prevTerminal, "[")
-                menuCommand("Next Terminal", .nextTerminal, "]")
-                menuCommand("Previous Workspace", .prevGroup, "[", [.command, .shift])
-                menuCommand("Next Workspace", .nextGroup, "]", [.command, .shift])
+                nativeMenuCommand(.prevTerminal)
+                nativeMenuCommand(.nextTerminal)
+                nativeMenuCommand(.prevGroup)
+                nativeMenuCommand(.nextGroup)
                 Divider()
                 // Slice ②d — inline-rename chords (D2d-8): ⇧⌘R renames the active
                 // workspace, ⌘R renames the selected tab. Wired through the chord
                 // dispatcher (the in-repo pattern) so they fire even with no menu open;
                 // the context-menu items carry the same labels as cmux affordances.
-                menuCommand("Rename Workspace…", .renameWorkspace, "r", [.command, .shift])
-                menuCommand("Rename Tab…", .renameTab, "r")
+                nativeMenuCommand(.renameWorkspace)
+                nativeMenuCommand(.renameTab)
                 Divider()
                 Menu("Select Terminal") {
                     ForEach(1...9, id: \.self) { index in
-                        menuCommand("Terminal \(index)", .selectTerminal(index), KeyEquivalent(Character("\(index)")))
+                        nativeMenuCommand(.selectTerminal(index))
                     }
                 }
                 Divider()
@@ -92,40 +92,36 @@ struct OuroWorkbenchApp: App {
                 // equivalents and don't shadow ⌘F/⌘K/⌘J/⌘1-9/⌘T/⌘W/⇧⌘B etc.
                 // They stay menu key equivalents (not view shortcuts) so they
                 // fire even while a SwiftTerm terminal holds keyboard focus.
-                menuCommand("Split Right", .splitRight, .rightArrow, [.command, .option])
-                menuCommand("Split Down", .splitDown, .downArrow, [.command, .option])
-                menuCommand("Focus Other Pane", .focusOtherPane, "]", [.command, .option])
-                menuCommand("Close Pane", .closePane, "w", [.command, .option])
+                nativeMenuCommand(.splitRight)
+                nativeMenuCommand(.splitDown)
+                nativeMenuCommand(.focusOtherPane)
+                nativeMenuCommand(.closePane)
             }
             CommandMenu("Boss") {
-                menuCommand(WorkbenchViewModel.checkInActionLabel, .bossCheckIn, "i")
-                menuCommand("Command Palette", .commandPalette, "k")
-                menuCommand("Jump to Next Needing Me", .jumpToAttention, "j")
+                nativeMenuCommand(.bossCheckIn)
+                nativeMenuCommand(.commandPalette)
+                nativeMenuCommand(.jumpToAttention)
             }
             CommandGroup(after: .appSettings) {
-                menuCommand("Settings…", .settings, ",")
+                nativeMenuCommand(.settings)
             }
             CommandGroup(after: .help) {
-                menuCommand("Keyboard Shortcuts", .shortcutsHelp, "/")
-                Button("Report a Bug…") {
-                    NotificationCenter.default.post(name: .workbenchReportBug, object: nil)
-                }
-                .keyboardShortcut("b", modifiers: [.command, .shift])
+                nativeMenuCommand(.shortcutsHelp)
+                nativeMenuCommand(.reportBug)
             }
         }
     }
 
     @ViewBuilder
-    private func menuCommand(
-        _ title: String,
-        _ command: WorkbenchMenuCommand,
-        _ key: KeyEquivalent,
-        _ modifiers: EventModifiers = .command
-    ) -> some View {
-        Button(title) {
-            NotificationCenter.default.post(name: .workbenchMenuCommand, object: command)
+    private func nativeMenuCommand(_ command: WorkbenchMenuCommand) -> some View {
+        if let shortcut = WorkbenchNativeMenuCatalog.shortcut(for: command) {
+            Button(shortcut.title) {
+                NotificationCenter.default.post(name: .workbenchMenuCommand, object: command)
+            }
+            .keyboardShortcut(shortcut.key.keyEquivalent, modifiers: shortcut.modifiers.eventModifiers)
+        } else {
+            EmptyView()
         }
-        .keyboardShortcut(key, modifiers: modifiers)
     }
 }
 #endif

@@ -55,6 +55,9 @@ swift test "${SWIFT_STRICT_FLAGS[@]}"
 run_step "Run native UI surface probe"
 swift run "${SWIFT_STRICT_FLAGS[@]}" OuroWorkbench --uisurfacetest
 
+run_step "Run keyboard and accessibility contract probe"
+swift run "${SWIFT_STRICT_FLAGS[@]}" OuroWorkbench --keyboarda11ycontract
+
 run_step "Run required native scenario verifier"
 swift run "${SWIFT_STRICT_FLAGS[@]}" OuroWorkbenchScenarioVerifier \
   --out .build/workbench-scenario-verifier-preflight \
