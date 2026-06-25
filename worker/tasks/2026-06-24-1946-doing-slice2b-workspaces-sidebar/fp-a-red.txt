@@ -1,0 +1,20 @@
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceGlobalArchivedTests.swift:49:53: error: type 'WorkspaceSidebarPresentation' has no member 'resolveGlobalArchived'
+    |                                                     `- error: type 'WorkspaceSidebarPresentation' has no member 'resolveGlobalArchived'
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceGlobalArchivedTests.swift:55:37: error: cannot infer key path type from context; consider explicitly specifying a root type
+    |                                     `- error: cannot infer key path type from context; consider explicitly specifying a root type
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceGlobalArchivedTests.swift:56:43: error: cannot infer key path type from context; consider explicitly specifying a root type
+    |                                           `- error: cannot infer key path type from context; consider explicitly specifying a root type
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceGlobalArchivedTests.swift:62:53: error: type 'WorkspaceSidebarPresentation' has no member 'resolveGlobalArchived'
+    |                                                     `- error: type 'WorkspaceSidebarPresentation' has no member 'resolveGlobalArchived'
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceGlobalArchivedTests.swift:64:37: error: cannot infer key path type from context; consider explicitly specifying a root type
+    |                                     `- error: cannot infer key path type from context; consider explicitly specifying a root type
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceGlobalArchivedTests.swift:69:52: error: type 'WorkspaceSidebarPresentation' has no member 'resolveGlobalArchived'
+    |                                                    `- error: type 'WorkspaceSidebarPresentation' has no member 'resolveGlobalArchived'
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceGlobalArchivedTests.swift:70:52: error: type 'WorkspaceSidebarPresentation' has no member 'resolveGlobalArchived'
+    |                                                    `- error: type 'WorkspaceSidebarPresentation' has no member 'resolveGlobalArchived'
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceGlobalArchivedTests.swift:104:61: error: type 'WorkspaceSidebarPresentation' has no member 'resolveGlobalArchived'
+    |                                                             `- error: type 'WorkspaceSidebarPresentation' has no member 'resolveGlobalArchived'
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceGlobalArchivedTests.swift:107:45: error: cannot infer key path type from context; consider explicitly specifying a root type
+    |                                             `- error: cannot infer key path type from context; consider explicitly specifying a root type
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceGlobalArchivedTests.swift:108:45: error: cannot infer key path type from context; consider explicitly specifying a root type
+    |                                             `- error: cannot infer key path type from context; consider explicitly specifying a root type

@@ -1,0 +1,84 @@
+=== Unit 1c coverage (after dedup test) ===
+[6/7] Compiling OuroWorkbenchCoreTests WorkspaceSidebarPresentationTests.swift
+Test Suite 'WorkspaceSidebarPresentationTests' started at 2026-06-24 20:31:50.117.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testActiveSelectionNilFallsBackToFirstAfterPinnedFirst]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testActiveSelectionNilFallsBackToFirstAfterPinnedFirst]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testActiveSelectionNilWithNoPinnedUsesFirstStored]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testActiveSelectionNilWithNoPinnedUsesFirstStored]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testActiveSelectionStaleIdFallsBackToFirstAfterPinnedFirst]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testActiveSelectionStaleIdFallsBackToFirstAfterPinnedFirst]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testActiveSelectionValidIdPicksThatWorkspace]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testActiveSelectionValidIdPicksThatWorkspace]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAllArchivedTabsYieldEmptyActivePartition]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAllArchivedTabsYieldEmptyActivePartition]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAllDanglingTabIdsYieldEmptyRowWithDropCount]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAllDanglingTabIdsYieldEmptyRowWithDropCount]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAttentionSummaryActiveBeatsIdleButNotNeedsAttention]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAttentionSummaryActiveBeatsIdleButNotNeedsAttention]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAttentionSummaryAllIdleIsIdleNoAttention]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAttentionSummaryAllIdleIsIdleNoAttention]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAttentionSummaryBlockedBeatsActiveAndIdle]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAttentionSummaryBlockedBeatsActiveAndIdle]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAttentionSummaryHighestSeverityWins]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAttentionSummaryHighestSeverityWins]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAttentionSummaryIgnoresArchivedTabs]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAttentionSummaryIgnoresArchivedTabs]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAttentionSummaryNeedsAttentionWhenAnyActiveTabNeedsHuman]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAttentionSummaryNeedsAttentionWhenAnyActiveTabNeedsHuman]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAttentionSummaryWaitingOnHumanArm]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testAttentionSummaryWaitingOnHumanArm]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testDanglingTabIdIsDroppedAndAttributed]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testDanglingTabIdIsDroppedAndAttributed]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testDuplicateEntryIdsResolveToTheFirstOccurrenceNotCrash]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testDuplicateEntryIdsResolveToTheFirstOccurrenceNotCrash]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testEmptyWorkspaceHasNilAttentionSummary]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testEmptyWorkspaceHasNilAttentionSummary]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testEmptyWorkspacesListYieldsNoRowsAndNilActive]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testEmptyWorkspacesListYieldsNoRowsAndNilActive]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testEmptyWorkspaceYieldsEmptyMarkerNotHidden]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testEmptyWorkspaceYieldsEmptyMarkerNotHidden]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testManyTabWorkspaceResolves]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testManyTabWorkspaceResolves]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testMigratedUIFixtureDecodesAndResolves]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testMigratedUIFixtureDecodesAndResolves]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testNoArchivedTabsYieldsEmptyArchivedPartition]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testNoArchivedTabsYieldsEmptyArchivedPartition]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testNoDangsYieldZeroDropCount]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testNoDangsYieldZeroDropCount]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testResolvedTabCarriesAttention]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testResolvedTabCarriesAttention]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testResolvedTabExposesOnlyStructureAndWorkContextNoCostNoRuntime]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testResolvedTabExposesOnlyStructureAndWorkContextNoCostNoRuntime]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testRowContextExposesOnlyAttentionSummaryNoCost]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testRowContextExposesOnlyAttentionSummaryNoCost]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testRowEffectiveNameUsesOverride]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testRowEffectiveNameUsesOverride]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testRowsAllPinnedPreserveStoredOrder]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testRowsAllPinnedPreserveStoredOrder]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testRowsAllUnpinnedPreserveStoredOrder]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testRowsAllUnpinnedPreserveStoredOrder]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testRowsArePinnedFirstThenStoredOrderStable]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testRowsArePinnedFirstThenStoredOrderStable]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testSingleTabWorkspaceResolves]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testSingleTabWorkspaceResolves]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testTabsPartitionIntoActiveAndArchivedPreservingOrder]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testTabsPartitionIntoActiveAndArchivedPreservingOrder]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testTabsResolveInTabIdsOrderWithEffectiveTabName]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testTabsResolveInTabIdsOrderWithEffectiveTabName]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testWorkspaceRowExposesOnlyStructureNoCostNoRuntime]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testWorkspaceRowExposesOnlyStructureNoCostNoRuntime]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testWorkspaceWithOnlyArchivedTabsIsNotEmpty]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarPresentationTests testWorkspaceWithOnlyArchivedTabsIsNotEmpty]' passed (0.000 seconds).
+Test Suite 'WorkspaceSidebarPresentationTests' passed at 2026-06-24 20:31:50.125.
+Sources/OuroWorkbenchCore, Sources/OuroWorkbenchShellAdapter: 147/149 files at 100% line+region (2 with allowlisted structural exclusions)
+PASS: pure Workbench logic targets are 100% line + region covered (documented structural exclusions aside).
+=== Allowlist unchanged check ===
+ALLOWLIST: identical to baseline (did NOT grow)
+
+=== Unit 1c summary ===
+Scripts/check-coverage.sh PASS: 147/149 files 100% line+region (2 allowlisted unchanged).
+WorkspaceSidebarPresentation.swift: 100% line + region (was 99.3%/97.1% — the uncovered
+`uniquingKeysWith` dedup arm is now exercised by testDuplicateEntryIdsResolveToTheFirstOccurrenceNotCrash).
+Boundary invariant GREEN: ResolvedTab/WorkspaceRow/WorkspaceRowContext Mirror checks confirm
+NO cost/usd/tok/price/pid/run/status/rootPath field. Allowlist did NOT grow (2 entries, identical).
+34 tests total in the seam suite.

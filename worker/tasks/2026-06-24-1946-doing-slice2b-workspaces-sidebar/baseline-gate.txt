@@ -1,0 +1,246 @@
+=== BASELINE strict build Wed Jun 24 20:14:51 PDT 2026 ===
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/14] Write sources
+[4/14] Write swift-version--58304C5D6DBC2206.txt
+[6/154] Compiling OuroWorkbenchCore TaskGroupSupport.swift
+[7/154] Compiling OuroWorkbenchCore TerminalCommandPlanPhrasebook.swift
+[8/154] Compiling OuroWorkbenchCore TerminalEnvironment.swift
+[9/154] Compiling OuroWorkbenchCore TerminalExitDiagnosis.swift
+[10/154] Compiling OuroWorkbenchCore TerminalIdentity.swift
+[11/154] Compiling OuroWorkbenchCore TranscriptRecorder.swift
+[12/154] Compiling OuroWorkbenchCore TranscriptSearch.swift
+[13/154] Compiling OuroWorkbenchCore TranscriptTailReader.swift
+[14/154] Compiling OuroWorkbenchCore TranscriptTextSanitizer.swift
+[15/154] Compiling OuroWorkbenchCore VaultOnboarding.swift
+[16/154] Compiling OuroWorkbenchCore WaitingSessionReconciler.swift
+[17/154] Compiling OuroWorkbenchCore WatchdogEscalation.swift
+[18/154] Compiling OuroWorkbenchCore WorkbenchGuide.swift
+[19/154] Compiling OuroWorkbenchCore WorkbenchHandoffGate.swift
+[20/154] Compiling OuroWorkbenchCore WorkbenchImportSummaryPresentation.swift
+[21/154] Compiling OuroWorkbenchCore WorkbenchLaunchDiagnostics.swift
+[22/154] Compiling OuroWorkbenchCore WorkbenchMCPRegistrationAction.swift
+[23/154] Compiling OuroWorkbenchCore WorkbenchOnboardingNarrative.swift
+[24/154] Compiling OuroWorkbenchCore WorkbenchPaths.swift
+[25/154] Compiling OuroWorkbenchCore WorkbenchRecentWorkspacePruning.swift
+[26/154] Compiling OuroWorkbenchCore WorkbenchRelease.swift
+[27/154] Compiling OuroWorkbenchCore WorkbenchReportBugRenderer.swift
+[28/154] Compiling OuroWorkbenchCore WorkbenchScenarioMatrix.swift
+[29/154] Compiling OuroWorkbenchCore WorkbenchSessionGroupResolver.swift
+[30/166] Emitting module SwiftTerm
+[31/166] Compiling OuroWorkbenchCore HarnessStatus.swift
+[32/166] Compiling OuroWorkbenchCore HeaderCalmPresentation.swift
+[33/166] Compiling OuroWorkbenchCore HeaderStatusLinePresentation.swift
+[34/166] Compiling OuroWorkbenchCore InboxDoorPresentation.swift
+[35/166] Compiling OuroWorkbenchCore InstalledAgentRowPresentation.swift
+[36/166] Compiling OuroWorkbenchCore LaneSelection.swift
+[37/166] Compiling OuroWorkbenchCore LaunchAgentLoginItem.swift
+[38/166] Compiling OuroWorkbenchCore MCPDispatchDedup.swift
+[39/166] Compiling OuroWorkbenchCore MCPError.swift
+[40/166] Compiling OuroWorkbenchCore MCPRequestDedupLedger.swift
+[41/166] Compiling OuroWorkbenchCore MailboxClient.swift
+[42/166] Compiling OuroWorkbenchCore MailboxDashboardSnapshotReader.swift
+[43/166] Compiling OuroWorkbenchCore MarkdownMessage.swift
+[44/166] Compiling OuroWorkbenchCore ProviderVerify.swift
+[45/166] Compiling OuroWorkbenchCore RecoveryDigest.swift
+[46/166] Compiling OuroWorkbenchCore RecoveryDrill.swift
+[47/166] Compiling OuroWorkbenchCore RecoveryPlanner.swift
+[48/166] Compiling OuroWorkbenchCore RecoveryReasonPhrasebook.swift
+[49/166] Compiling OuroWorkbenchCore ReleaseUpdate.swift
+[50/166] Compiling OuroWorkbenchCore ReplayDedupDecider.swift
+[51/166] Compiling OuroWorkbenchCore ReportBugDisclosureCopy.swift
+[52/166] Compiling OuroWorkbenchCore ScreenSessionReaper.swift
+[53/166] Compiling OuroWorkbenchCore SessionActionMenu.swift
+[54/166] Compiling OuroWorkbenchCore SessionActivity.swift
+[55/166] Compiling OuroWorkbenchCore SessionActivityReader.swift
+[56/166] Compiling OuroWorkbenchCore BossPaneListPresentation.swift
+[57/166] Compiling OuroWorkbenchCore BossProseLog.swift
+[58/166] Compiling OuroWorkbenchCore BossWatchEventPolicy.swift
+[59/166] Compiling OuroWorkbenchCore BossWatchPresentation.swift
+[60/166] Compiling OuroWorkbenchCore BossWorkbenchAction.swift
+[61/166] Compiling OuroWorkbenchCore BossWorkbenchActionAuthorizer.swift
+[62/166] Compiling OuroWorkbenchCore BugReport.swift
+[63/166] Compiling OuroWorkbenchCore BugReportFiledStatus.swift
+[64/166] Compiling OuroWorkbenchCore CheckInAvailability.swift
+[65/166] Compiling OuroWorkbenchCore CloneOutcomeClassifier.swift
+[66/166] Compiling OuroWorkbenchCore ClonedAgentResolver.swift
+[67/166] Compiling OuroWorkbenchCore CommandPlanner.swift
+[68/166] Compiling OuroWorkbenchCore CustomTerminalSession.swift
+[69/166] Compiling OuroWorkbenchCore SessionDetailAttentionPresentation.swift
+[70/166] Compiling OuroWorkbenchCore SessionFriend.swift
+[71/166] Compiling OuroWorkbenchCore SessionHealthProbe.swift
+[72/166] Compiling OuroWorkbenchCore SessionIdBackfill.swift
+[73/166] Compiling OuroWorkbenchCore SessionSnapshot.swift
+[74/166] Compiling OuroWorkbenchCore SessionStatusList.swift
+[75/166] Compiling OuroWorkbenchCore ShellArgumentEscaper.swift
+[76/166] Compiling OuroWorkbenchCore SidebarSessionFilter.swift
+[77/166] Compiling OuroWorkbenchCore SpawnInOwnGroup.swift
+[78/166] Compiling OuroWorkbenchCore StartSequencer.swift
+[79/166] Compiling OuroWorkbenchCore StartupRecoveryReconciler.swift
+[80/166] Compiling OuroWorkbenchCore SupportDiagnosticsRunner.swift
+[81/166] Compiling OuroWorkbenchCore CycleDirection.swift
+[82/166] Compiling OuroWorkbenchCore DaemonEnsureAction.swift
+[83/166] Compiling OuroWorkbenchCore DaemonLiveness.swift
+[84/166] Compiling OuroWorkbenchCore DecisionLogPhrasebook.swift
+[85/166] Compiling OuroWorkbenchCore DegradedRead.swift
+[86/166] Compiling OuroWorkbenchCore ExecutableHealth.swift
+[87/166] Compiling OuroWorkbenchCore ExitStatus.swift
+[88/166] Compiling OuroWorkbenchCore FailableDecodable.swift
+[89/166] Compiling OuroWorkbenchCore FirstRunBootstrapDrive.swift
+[90/166] Compiling OuroWorkbenchCore FirstRunBootstrapEffectsResolver.swift
+[91/166] Compiling OuroWorkbenchCore FlatYAMLReader.swift
+[92/166] Compiling OuroWorkbenchCore FriendPreferenceTeaching.swift
+[93/166] Compiling OuroWorkbenchCore GitSessionStatus.swift
+[94/166] Emitting module OuroWorkbenchCore
+[95/166] Compiling OuroWorkbenchCore WorkbenchActionOutcomePresentation.swift
+[96/166] Compiling OuroWorkbenchCore WorkbenchActionRequestQueue.swift
+[97/166] Compiling OuroWorkbenchCore WorkbenchActionResult.swift
+[98/166] Compiling OuroWorkbenchCore WorkbenchBootstrapper.swift
+[99/166] Compiling OuroWorkbenchCore WorkbenchBugReport.swift
+[100/166] Compiling OuroWorkbenchCore WorkbenchCommandPalette.swift
+[101/166] Compiling OuroWorkbenchCore WorkbenchCommandSection.swift
+[102/166] Compiling OuroWorkbenchCore WorkbenchContextFile.swift
+[103/166] Compiling OuroWorkbenchCore WorkbenchElapsedFormatter.swift
+[104/166] Compiling OuroWorkbenchCore WorkbenchEntryReorder.swift
+[105/166] Compiling OuroWorkbenchCore WorkbenchFactoryReset.swift
+[106/166] Compiling OuroWorkbenchCore WorkbenchGroupColor.swift
+[107/166] Compiling OuroWorkbenchCore MetricValuePresentation.swift
+[108/166] Compiling OuroWorkbenchCore NativeOnboardingRepairCopy.swift
+[109/166] Compiling OuroWorkbenchCore Onboarding.swift
+[110/166] Compiling OuroWorkbenchCore OnboardingBossChoiceCopy.swift
+[111/166] Compiling OuroWorkbenchCore OuroAgentInstallCommand.swift
+[112/166] Compiling OuroWorkbenchCore OuroAgentInventory.swift
+[113/166] Compiling OuroWorkbenchCore OuroVersionFloor.swift
+[114/166] Compiling OuroWorkbenchCore ProcessTerminationPolicy.swift
+[115/166] Compiling OuroWorkbenchCore ProcessWatchdog.swift
+[116/166] Compiling OuroWorkbenchCore PromptSafetyClassifier.swift
+[117/166] Compiling OuroWorkbenchCore ProviderCheckClassifier.swift
+[118/166] Compiling OuroWorkbenchCore ProviderConfigForm.swift
+[119/166] Compiling OuroWorkbenchCore ProviderRefresh.swift
+[120/166] Compiling OuroWorkbenchCore ActiveEntryResolver.swift
+[121/166] Compiling OuroWorkbenchCore AgentHomeEmptyStateCopy.swift
+[122/166] Compiling OuroWorkbenchCore AgentPreset.swift
+[123/166] Compiling OuroWorkbenchCore AgentProposal.swift
+[124/166] Compiling OuroWorkbenchCore AgentProposalQueue.swift
+[125/166] Compiling OuroWorkbenchCore AgentReadinessBootstrap.swift
+[126/166] Compiling OuroWorkbenchCore AgentReadinessRefreshPolicy.swift
+[127/166] Compiling OuroWorkbenchCore AgentRemoval.swift
+[128/166] Compiling OuroWorkbenchCore AgentRepair.swift
+[129/166] Compiling OuroWorkbenchCore AgentSelectCommandList.swift
+[130/166] Compiling OuroWorkbenchCore AgentSessionScanner.swift
+[131/166] Compiling OuroWorkbenchCore AttentionSignalDetector.swift
+[132/166] Compiling OuroWorkbenchCore AutonomyReadiness.swift
+[133/166] Compiling OuroWorkbenchCore AutonomyReadinessReadout.swift
+[134/166] Compiling OuroWorkbenchCore AutonomyReadinessRemediation.swift
+[135/166] Compiling OuroWorkbenchCore AutonomyRemediationAvailabilityBuilder.swift
+[136/166] Compiling OuroWorkbenchCore BossAgentBridge.swift
+[137/166] Compiling OuroWorkbenchCore BossAgentMCPClient.swift
+[138/166] Compiling OuroWorkbenchCore BossAgentPromptBuilder.swift
+[139/166] Compiling OuroWorkbenchCore BossAutoResolution.swift
+[140/166] Compiling OuroWorkbenchCore BossAutonomyGating.swift
+[141/166] Compiling OuroWorkbenchCore BossBridgeContract.swift
+[142/166] Compiling OuroWorkbenchCore BossCheckInFailureCopy.swift
+[143/166] Compiling OuroWorkbenchCore BossDashboard.swift
+[144/166] Compiling OuroWorkbenchCore BossInboxDecision.swift
+[145/166] Compiling OuroWorkbenchCore BossMCPPillPresentation.swift
+[146/166] Compiling OuroWorkbenchCore WorkbenchStore.swift
+[147/166] Compiling OuroWorkbenchCore WorkbenchSurfaceChrome.swift
+[148/166] Compiling OuroWorkbenchCore WorkbenchSurfacePolicy.swift
+[149/166] Compiling OuroWorkbenchCore WorkbenchToolsInjectionProbe.swift
+[150/166] Compiling OuroWorkbenchCore WorkbenchUpdate.swift
+[151/166] Compiling OuroWorkbenchCore WorkbenchUpdateStager.swift
+[152/166] Compiling OuroWorkbenchCore WorkbenchVisibility.swift
+[153/166] Compiling OuroWorkbenchCore WorkbenchWorkspaceConfig.swift
+[154/166] Compiling OuroWorkbenchCore WorkspaceModels.swift
+[155/166] Compiling OuroWorkbenchCore WorkspaceNameDerivation.swift
+[156/166] Compiling OuroWorkbenchCore WorkspaceRootValidation.swift
+[157/166] Compiling OuroWorkbenchCore WorkspaceSummary.swift
+[158/173] Compiling OuroWorkbenchShellAdapter WorkbenchShellPresentation.swift
+[159/173] Emitting module OuroWorkbenchShellAdapter
+[160/178] Compiling OuroWorkbenchMCP RunningProcessLister.swift
+[161/178] Emitting module OuroWorkbenchMCP
+[162/178] Compiling OuroWorkbenchMCP OuroWorkbenchMCPMain.swift
+[163/177] Emitting module OuroWorkbenchScenarioVerifier
+[164/177] Compiling OuroWorkbenchScenarioVerifier main.swift
+[164/176] Linking OuroWorkbenchMCP
+[165/176] Applying OuroWorkbenchMCP
+[166/176] Linking OuroWorkbenchScenarioVerifier
+[167/176] Applying OuroWorkbenchScenarioVerifier
+[169/176] Compiling OuroWorkbenchApp UISurfaceTest.swift
+[170/176] Compiling OuroWorkbenchApp WorkbenchUpdateInstaller.swift
+[171/176] Compiling OuroWorkbenchApp main.swift
+[172/176] Compiling OuroWorkbenchApp OuroWorkbenchApp.swift
+[173/176] Emitting module OuroWorkbenchApp
+[173/175] Linking OuroWorkbench
+[174/175] Applying OuroWorkbench
+Build complete! (50.70s)
+BUILD EXIT: 
+
+=== BASELINE strict swift test Wed Jun 24 20:15:50 PDT 2026 ===
+--- test summary tail ---
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testChangeSummarizerCapturesAddedRenamedRestoredRemovedSkippedAndRunStarted]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testChangeSummarizerCapturesRunStatusAttentionArchiveAndActions]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testChangeSummarizerCapturesRunStatusAttentionArchiveAndActions]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testChangeSummarizerReplacesLatestRunAndIgnoresExistingActions]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testChangeSummarizerReplacesLatestRunAndIgnoresExistingActions]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testConfiguredLatestRunUsesConfiguredSummary]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testConfiguredLatestRunUsesConfiguredSummary]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testLatestRunSelectionAndDefaultSummariesCoverExitedAndConfigured]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testLatestRunSelectionAndDefaultSummariesCoverExitedAndConfigured]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testOneLineStatusFramesLosslessReattachAsNoLossReconnect]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testOneLineStatusFramesLosslessReattachAsNoLossReconnect]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testOneLineStatusSurfacesNeedsYouForManualRecovery]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testOneLineStatusSurfacesNeedsYouForManualRecovery]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testSummarySurfacesHumanWaitsFirst]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSummaryTests testSummarySurfacesHumanWaitsFirst]' passed (0.000 seconds).
+Test Suite 'WorkspaceSummaryTests' passed at 2026-06-24 20:17:05.861.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.005 (0.006) seconds
+Test Suite 'OuroWorkbenchPackageTests.xctest' passed at 2026-06-24 20:17:05.861.
+	 Executed 2738 tests, with 1 test skipped and 0 failures (0 unexpected) in 67.498 (67.745) seconds
+Test Suite 'All tests' passed at 2026-06-24 20:17:05.861.
+	 Executed 2738 tests, with 1 test skipped and 0 failures (0 unexpected) in 67.498 (67.748) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
+
+=== BASELINE Scripts/check-coverage.sh Wed Jun 24 20:17:12 PDT 2026 ===
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.005 (0.006) seconds
+Test Suite 'OuroWorkbenchPackageTests.xctest' passed at 2026-06-24 20:19:19.812.
+	 Executed 2738 tests, with 1 test skipped and 0 failures (0 unexpected) in 65.323 (65.574) seconds
+Test Suite 'All tests' passed at 2026-06-24 20:19:19.813.
+	 Executed 2738 tests, with 1 test skipped and 0 failures (0 unexpected) in 65.323 (65.576) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
+
+Sources/OuroWorkbenchCore, Sources/OuroWorkbenchShellAdapter: 146/148 files at 100% line+region (2 with allowlisted structural exclusions)
+  allow BossAgentMCPClient.swift                     (1 line, 2 region exempt — see coverage-allowlist.txt)
+  allow SessionActivityReader.swift                  (0 line, 1 region exempt — see coverage-allowlist.txt)
+
+PASS: pure Workbench logic targets are 100% line + region covered (documented structural exclusions aside).
+
+=== BASELINE --uisurfacetest Wed Jun 24 20:19:30 PDT 2026 ===
+[234/237] Write Objects.LinkFileList
+[235/237] Linking OuroWorkbench
+[236/237] Applying OuroWorkbench
+Build of product 'OuroWorkbench' complete! (60.77s)
+about fitting size: 520.0x500.0 ok
+settings update fitting size: 438.0x94.0
+dashboard update fitting size: 438.0x94.0
+current update state: ok
+available update state: ok
+failed update state: ok
+failed then checking state: ok
+about shared semantics: ok
+UISURFACE EXIT recorded
+
+=== BASELINE GATE SUMMARY ===
+build (strict warnings-as-errors + strict-concurrency): GREEN (Build complete)
+test (strict): GREEN (2738 tests, 0 failures, 1 skipped)
+coverage (Scripts/check-coverage.sh): GREEN (146/148 100%, 2 allowlisted; allowlist=2 entries)
+uisurfacetest: GREEN (all checks ok, exit 0)
+HEAD: 3e45d0353b8f9f84cef1db5ca451ae4bc4327ba7

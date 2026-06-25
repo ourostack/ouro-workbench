@@ -21,46 +21,31 @@ final class WorkspaceHomeNamingTests: XCTestCase {
         XCTAssertNotEqual(WorkbenchSurfacePolicy.setupWorkspaceName, "This Mac")
     }
 
-    // MARK: - (b) terminals section names the relationship
+    // Slice ②b removed `terminalsSectionTitle(workspaceName:)` and the "Terminals in
+    // <name>" sidebar section entirely (tabs moved to the cmux tab-strip), so its
+    // value-tests are gone with it. The default-workspace-name tests above stay (the
+    // backing "Home" project is unchanged under DB1/DB6).
 
-    func testTerminalsSectionTitleExpressesTheRelationship() {
-        XCTAssertEqual(
-            WorkbenchSurfacePolicy.terminalsSectionTitle(workspaceName: "Home"),
-            "Terminals in Home"
-        )
-        XCTAssertEqual(
-            WorkbenchSurfacePolicy.terminalsSectionTitle(workspaceName: "my-project"),
-            "Terminals in my-project"
-        )
-    }
+    // MARK: - App wiring: Slice ②b removed the "Terminals in <name>" sidebar section
 
-    func testTerminalsSectionTitleFallsBackWhenNoWorkspaceIsSelected() {
-        // With nothing selected there is no workspace to name a relationship to, so
-        // the bare "Terminals" label is the sensible fallback (no "Terminals in ").
-        XCTAssertEqual(
-            WorkbenchSurfacePolicy.terminalsSectionTitle(workspaceName: nil),
-            "Terminals"
-        )
-        XCTAssertEqual(
-            WorkbenchSurfacePolicy.terminalsSectionTitle(workspaceName: "   "),
-            "Terminals"
-        )
-    }
-
-    // MARK: - App wiring: the sidebar terminals section names the relationship
-
-    func testSidebarTerminalsSectionUsesTheRelationshipLabelNotTheBareName() throws {
-        // U32: the terminals section header must route through the relationship-naming
-        // seam so the sidebar no longer renders the selected workspace's name twice
-        // (once in the Workspaces list, once as the bare section header).
+    func testSidebarNoLongerRendersATerminalsInRelationshipSection() throws {
+        // Slice ②b kills the "Terminals in <name>" framing: the sidebar no longer
+        // renders a terminals section scoped to the selected project; the tabs move to
+        // the cmux tab-strip and the sidebar renders named workspaces instead. (The
+        // detailed new-wiring assertions live in WorkspaceSidebarWiringTests.)
         let source = try appSource()
-        XCTAssertTrue(
+        XCTAssertFalse(
             source.contains("Section(WorkbenchSurfacePolicy.terminalsSectionTitle(workspaceName: model.selectedProject?.name))"),
-            "the terminals section must use terminalsSectionTitle, not the bare project name"
+            "the 'Terminals in <name>' sidebar section must be removed by ②b"
         )
         XCTAssertFalse(
             source.contains("Section(model.selectedProject?.name ?? \"Terminals\")"),
             "the bare-name section header must be gone"
+        )
+        // And the sidebar now renders the persisted workspace structure through the seam.
+        XCTAssertTrue(
+            source.contains("WorkspaceSidebarPresentation.resolve("),
+            "the sidebar must render state.workspaces via the WorkspaceSidebarPresentation seam"
         )
     }
 

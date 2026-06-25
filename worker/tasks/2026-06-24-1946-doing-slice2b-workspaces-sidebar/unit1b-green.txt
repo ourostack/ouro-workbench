@@ -1,0 +1,6 @@
+=== Unit 1b GREEN: run WorkspaceSidebarPresentationTests ===
+	 Executed 33 tests, with 0 failures (0 unexpected) in 0.008 (0.011) seconds
+	 Executed 33 tests, with 0 failures (0 unexpected) in 0.008 (0.011) seconds
+	 Executed 33 tests, with 0 failures (0 unexpected) in 0.008 (0.012) seconds
+=== Unit 1b strict build (full package) ===
+Build complete! (0.52s)

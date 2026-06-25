@@ -1,0 +1,8 @@
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceTabStripFilterTests.swift:22:42: error: type 'WorkspaceSidebarPresentation' has no member 'stripFilterHidAllTabs'
+   |                                          `- error: type 'WorkspaceSidebarPresentation' has no member 'stripFilterHidAllTabs'
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceTabStripFilterTests.swift:30:42: error: type 'WorkspaceSidebarPresentation' has no member 'stripFilterHidAllTabs'
+   |                                          `- error: type 'WorkspaceSidebarPresentation' has no member 'stripFilterHidAllTabs'
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceTabStripFilterTests.swift:39:42: error: type 'WorkspaceSidebarPresentation' has no member 'stripFilterHidAllTabs'
+   |                                          `- error: type 'WorkspaceSidebarPresentation' has no member 'stripFilterHidAllTabs'
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceTabStripFilterTests.swift:44:42: error: type 'WorkspaceSidebarPresentation' has no member 'stripFilterHidAllTabs'
+   |                                          `- error: type 'WorkspaceSidebarPresentation' has no member 'stripFilterHidAllTabs'

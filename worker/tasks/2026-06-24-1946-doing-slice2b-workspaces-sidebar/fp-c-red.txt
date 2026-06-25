@@ -1,0 +1,5 @@
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchCoreTests/WorkspaceSidebarWiringTests.swift:141: error: -[OuroWorkbenchCoreTests.WorkspaceSidebarWiringTests testDeadNewGroupSheetAndFlagAreRemoved] : XCTAssertFalse failed - the unreachable isNewGroupSheetPresented flag + its .sheet must be removed (DB8 left no trigger)
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarWiringTests testDeadNewGroupSheetAndFlagAreRemoved]' failed (0.012 seconds).
+	 Executed 1 test, with 1 failure (0 unexpected) in 0.012 (0.013) seconds
+	 Executed 1 test, with 1 failure (0 unexpected) in 0.012 (0.013) seconds
+	 Executed 1 test, with 1 failure (0 unexpected) in 0.012 (0.014) seconds

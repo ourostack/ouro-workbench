@@ -9,7 +9,7 @@ import XCTest
 /// ZERO accessibility modifiers. SwiftUI does NOT auto-expose an `onTapGesture` as an
 /// accessibility action, so that form was NOT keyboard-focusable and NOT VoiceOver-
 /// actionable — a user could not select a boss without a mouse. Every OTHER selectable
-/// row in the app correctly uses `Button` (e.g. `SidebarProjectRow` ~:3182), so this
+/// row in the app correctly uses `Button` (e.g. `WorkspaceSidebarRow`), so this
 /// was a miss, not a deliberate choice.
 ///
 /// The App target isn't coverage-gated and can't be click-tested in CI, so we source-

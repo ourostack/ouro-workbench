@@ -1,0 +1,10 @@
+migrated workspace sizes: sidebar 202x80, strip 153x34
+about fitting size: 520.0x500.0 ok
+settings update fitting size: 438.0x94.0
+dashboard update fitting size: 438.0x94.0
+current update state: ok
+available update state: ok
+failed update state: ok
+failed then checking state: ok
+about shared semantics: ok
+migrated workspace render: ok

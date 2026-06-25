@@ -1,0 +1,22 @@
+=== Unit 2a RED: run sidebar wiring guards (expect failures: old wiring present, new absent) ===
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchSurfacePolicyTests testAppWorkspaceCopyIsWiredThroughSurfacePolicy]' failed (0.501 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceHomeNamingTests testSidebarNoLongerRendersATerminalsInRelationshipSection]' failed (0.065 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarWiringTests testNewWorkspaceActionRowIsRemoved]' failed (0.006 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarWiringTests testOldProjectsAsWorkspacesSurfaceIsGone]' failed (0.016 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarWiringTests testSidebarRendersWorkspacesThroughThePresentationSeam]' failed (0.065 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarWiringTests testTerminalsInHomeSectionIsGone]' failed (0.011 seconds).
+	 Executed 5 tests, with 8 failures (0 unexpected) in 0.119 (0.119) seconds
+	 Executed 7 tests, with 11 failures (0 unexpected) in 0.684 (0.685) seconds
+	 Executed 7 tests, with 11 failures (0 unexpected) in 0.684 (0.687) seconds
+
+=== Unit 2a RED summary ===
+RED for the RIGHT reason — old wiring present, new absent. 6 guard methods fail (11 assertions):
+- WorkspaceSidebarWiringTests.testSidebarRendersWorkspacesThroughThePresentationSeam (seam not wired)
+- WorkspaceSidebarWiringTests.testOldProjectsAsWorkspacesSurfaceIsGone (SidebarProjectRow + rootPath present)
+- WorkspaceSidebarWiringTests.testTerminalsInHomeSectionIsGone (terminals section present)
+- WorkspaceSidebarWiringTests.testNewWorkspaceActionRowIsRemoved (newWorkspaceTitle row present)
+- WorkspaceHomeNamingTests.testSidebarNoLongerRendersATerminalsInRelationshipSection (re-pointed)
+- WorkbenchSurfacePolicyTests.testAppWorkspaceCopyIsWiredThroughSurfacePolicy (newWorkspaceTitle still present)
+GREEN (correctly): WorkspaceSidebarWiringTests.testArchivedAndRecoverySectionsArePreserved
+(the Archived + Recovery sections are already present and must stay — the guard confirms
+the rewire won't drop them). No App source edited yet.
