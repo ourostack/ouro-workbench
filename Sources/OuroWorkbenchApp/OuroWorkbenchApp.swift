@@ -72,6 +72,13 @@ struct OuroWorkbenchApp: App {
                 menuCommand("Previous Workspace", .prevGroup, "[", [.command, .shift])
                 menuCommand("Next Workspace", .nextGroup, "]", [.command, .shift])
                 Divider()
+                // Slice ②d — inline-rename chords (D2d-8): ⇧⌘R renames the active
+                // workspace, ⌘R renames the selected tab. Wired through the chord
+                // dispatcher (the in-repo pattern) so they fire even with no menu open;
+                // the context-menu items carry the same labels as cmux affordances.
+                menuCommand("Rename Workspace…", .renameWorkspace, "r", [.command, .shift])
+                menuCommand("Rename Tab…", .renameTab, "r")
+                Divider()
                 Menu("Select Terminal") {
                     ForEach(1...9, id: \.self) { index in
                         menuCommand("Terminal \(index)", .selectTerminal(index), KeyEquivalent(Character("\(index)")))
@@ -134,6 +141,8 @@ enum WorkbenchMenuCommand {
     case settings, shortcutsHelp, about, checkForUpdates
     case selectTerminal(Int)
     case splitRight, splitDown, closePane, focusOtherPane
+    // Slice ②d — inline-rename chords targeting the active workspace / selected tab.
+    case renameWorkspace, renameTab
 }
 
 /// Which of the two detail panes is meant when a split is active. Increment 1
@@ -318,6 +327,12 @@ struct WorkbenchRootView: View {
             Task { await model.checkForUpdatesAndPromptInstall() }
         case let .selectTerminal(index):
             _ = model.selectTerminal(atOneIndexedPosition: index)
+        case .renameWorkspace:
+            // ⇧⌘R — begin the inline rename on the active workspace (D2d-8).
+            model.beginRenameActiveWorkspace()
+        case .renameTab:
+            // ⌘R — begin the inline rename on the selected tab (D2d-8).
+            model.beginRenameSelectedTab()
         }
     }
 
@@ -3160,6 +3175,17 @@ struct WorkspaceSidebarRow: View {
     @ObservedObject var model: WorkbenchViewModel
 
     var body: some View {
+        // Slice ②d — swap the row label for an inline rename editor while THIS workspace
+        // is being renamed (D2d-3 inline editor, not a sheet); else render the normal row.
+        if model.inlineRename.isEditing(.workspace(row.id)) {
+            InlineRenameEditor(model: model)
+                .padding(.vertical, 1)
+        } else {
+            rowButton
+        }
+    }
+
+    private var rowButton: some View {
         Button {
             model.selectedWorkspaceID = row.id
         } label: {
@@ -3186,6 +3212,9 @@ struct WorkspaceSidebarRow: View {
         .padding(.vertical, 1)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabel)
+        .contextMenu {
+            WorkspaceRowContextMenu(row: row, model: model)
+        }
     }
 
     private var accessibilityLabel: String {
@@ -3197,6 +3226,67 @@ struct WorkspaceSidebarRow: View {
             pieces.append(row.context.needsAttention ? "\(summary.healthLabel), needs you" : summary.healthLabel)
         }
         return pieces.joined(separator: ", ")
+    }
+}
+
+/// Slice ②d — the workspace row's context menu: Pin/Unpin, Rename Workspace… (⇧⌘R),
+/// and — only when a custom override exists (D2d-2) — Remove Custom Workspace Name.
+/// Mirrors `TerminalRowContextMenu`'s `Button { … } label: { Label(…) }` shape. The
+/// "⇧⌘R" affordance is shown as the menu-item label so it reads like cmux; the actual
+/// chord is wired through the menu-bar command dispatcher (D2d-8), which targets the
+/// ACTIVE workspace (this menu's Rename item targets THIS row directly).
+struct WorkspaceRowContextMenu: View {
+    var row: WorkspaceSidebarPresentation.WorkspaceRow
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        Group {
+            Button {
+                model.toggleWorkspacePin(row.id)
+            } label: {
+                Label(
+                    row.isPinned ? "Unpin Workspace" : "Pin Workspace",
+                    systemImage: row.isPinned ? "pin.slash" : "pin"
+                )
+            }
+            Divider()
+            Button {
+                model.beginRename(.workspace(row.id), prefill: row.effectiveName)
+            } label: {
+                Label("Rename Workspace…  ⇧⌘R", systemImage: "pencil")
+            }
+            if row.nameOverride != nil {
+                Button {
+                    model.removeCustomWorkspaceName(row.id)
+                } label: {
+                    Label("Remove Custom Workspace Name", systemImage: "arrow.uturn.backward")
+                }
+            }
+        }
+    }
+}
+
+/// Slice ②d — the inline rename editor shared by the workspace row and the tab button
+/// (D2d-3). A `TextField` bound to `model.inlineRename.draft`, prefilled by `beginRename`;
+/// Enter (`.onSubmit`) commits via `model.commitRename()`, Escape (`.onExitCommand`)
+/// cancels via `model.cancelRename()`, and a caption matches the cmux affordance. The
+/// empty/whitespace/unchanged guard lives in `WorkspaceRenameCommit` (D2d-1) behind
+/// `commitRename`, so a blank commit just closes the editor without changing the name.
+struct InlineRenameEditor: View {
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            TextField("Name", text: $model.inlineRename.draft)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit { model.commitRename() }
+                .onExitCommand { model.cancelRename() }
+            Text("Press Enter to rename, Escape to cancel.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Rename")
     }
 }
 
@@ -3307,34 +3397,62 @@ struct WorkspaceTabStrip: View {
     @ViewBuilder
     private func tabButton(_ tab: ResolvedTab) -> some View {
         let isSelected = model.selectedEntryID == tab.id
-        Button {
-            select(tab)
-        } label: {
-            HStack(spacing: 5) {
-                Image(systemName: tab.attention.healthSymbol)
-                    .font(.caption2)
-                    .foregroundStyle(tab.attention.healthColor)
-                Text(tab.effectiveTabName)
-                    .font(.callout)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .fontWeight(isSelected ? .semibold : .regular)
+        // Slice ②d — swap the tab label for the inline rename editor while THIS tab is
+        // being renamed (D2d-3); else render the normal tab button.
+        if model.inlineRename.isEditing(.tab(tab.id)) {
+            InlineRenameEditor(model: model)
+                .frame(width: 180)
+                .padding(.horizontal, 4)
+        } else {
+            Button {
+                select(tab)
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: tab.attention.healthSymbol)
+                        .font(.caption2)
+                        .foregroundStyle(tab.attention.healthColor)
+                    Text(tab.effectiveTabName)
+                        .font(.callout)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .fontWeight(isSelected ? .semibold : .regular)
+                }
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.08))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .strokeBorder(isSelected ? Color.accentColor : Color.clear, lineWidth: 1)
+                )
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 9)
-            .padding(.vertical, 4)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.08))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                    .strokeBorder(isSelected ? Color.accentColor : Color.clear, lineWidth: 1)
-            )
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .help(tab.attention.healthLabel)
+            .accessibilityLabel("\(tab.effectiveTabName), \(tab.attention.healthLabel)\(isSelected ? ", selected" : "")")
+            .contextMenu {
+                WorkspaceTabContextMenu(tab: tab, model: model)
+            }
         }
-        .buttonStyle(.plain)
-        .help(tab.attention.healthLabel)
-        .accessibilityLabel("\(tab.effectiveTabName), \(tab.attention.healthLabel)\(isSelected ? ", selected" : "")")
+    }
+}
+
+/// Slice ②d — the tab's context menu: Rename Tab… (⌘R). Mirrors
+/// `WorkspaceRowContextMenu`; the "⌘R" affordance is shown on the label (the chord is
+/// wired through the command dispatcher targeting the selected tab; D2d-8). No tab-level
+/// revert affordance this slice (cmux tab menu = Rename Tab only).
+struct WorkspaceTabContextMenu: View {
+    var tab: ResolvedTab
+    @ObservedObject var model: WorkbenchViewModel
+
+    var body: some View {
+        Button {
+            model.beginRename(.tab(tab.id), prefill: tab.effectiveTabName)
+        } label: {
+            Label("Rename Tab…  ⌘R", systemImage: "pencil")
+        }
     }
 }
 
@@ -10459,6 +10577,11 @@ final class WorkbenchViewModel: ObservableObject {
     /// has a defined active workspace with no extra selection step. Clicking a tab sets
     /// this to the tab's workspace (see `selectWorkspaceContaining`).
     @Published var selectedWorkspaceID: UUID?
+    /// Slice ②d — the inline rename editor's pure state (which target is being renamed +
+    /// the draft text). One state serves the workspace menu AND the tab menu; a row/tab
+    /// swaps its label for a `TextField` while `inlineRename.isEditing(target)` is true.
+    /// Not persisted (a transient editing affordance). See `InlineRenameState`.
+    @Published var inlineRename = InlineRenameState()
     /// Currently focused Ouro agent for the Agents sidebar / detail pane.
     /// Mutually exclusive with `selectedEntryID`: setting either clears the other.
     /// Not persisted — the sidebar restores the natural session selection on
@@ -11430,6 +11553,96 @@ final class WorkbenchViewModel: ObservableObject {
     /// row + context menu, which hold a possibly-stale copy of the entry.
     func isPinned(_ entry: ProcessEntry) -> Bool {
         state.processEntries.first(where: { $0.id == entry.id })?.isPinned ?? entry.isPinned
+    }
+
+    // MARK: - Slice ②d — in-app editing wrappers (thin; mutate state then save — D2d-7)
+
+    /// ②d — toggle the workspace's pin (re-sorts pinned-first automatically through the
+    /// pure `WorkspaceSidebarPresentation` seam; D2d-4). Persists via `save()`.
+    func toggleWorkspacePin(_ id: UUID) {
+        state.toggleWorkspacePin(workspaceId: id)
+        save()
+    }
+
+    /// ②d — apply an inline-rename input to the workspace. Routes the raw input through
+    /// `WorkspaceRenameCommit` (D2d-1: empty/whitespace or unchanged ⇒ no-op, no override
+    /// write / no save); a real change sets the trimmed override and persists.
+    func renameWorkspace(_ id: UUID, to input: String) {
+        let current = state.workspaces.first(where: { $0.id == id })?.effectiveName ?? ""
+        switch WorkspaceRenameCommit.resolve(input: input, current: current) {
+        case let .commit(name):
+            state.setWorkspaceNameOverride(workspaceId: id, to: name)
+            save()
+        case .noop:
+            break
+        }
+    }
+
+    /// ②d — clear the workspace's custom name (revert to `autoName`; D2d-2's affordance).
+    /// Persists via `save()`.
+    func removeCustomWorkspaceName(_ id: UUID) {
+        state.clearWorkspaceNameOverride(workspaceId: id)
+        save()
+    }
+
+    /// ②d — apply an inline-rename input to a TAB. Same rule as `renameWorkspace`
+    /// (D2d-1 via `WorkspaceRenameCommit`): empty/whitespace or unchanged ⇒ no-op; a real
+    /// change sets the trimmed `tabNameOverride` and persists. No tab-level revert
+    /// affordance this slice (the cmux tab menu only has Rename Tab).
+    func renameTab(_ id: UUID, to input: String) {
+        let current = state.processEntries.first(where: { $0.id == id })?.effectiveTabName ?? ""
+        switch WorkspaceRenameCommit.resolve(input: input, current: current) {
+        case let .commit(name):
+            state.setTabNameOverride(tabId: id, to: name)
+            save()
+        case .noop:
+            break
+        }
+    }
+
+    /// ②d — begin the inline rename for `target`, prefilled with its current name. Used
+    /// by the context-menu items and the rename chords (D2d-8).
+    func beginRename(_ target: InlineRenameState.Target, prefill: String) {
+        inlineRename.begin(target: target, prefill: prefill)
+    }
+
+    /// ②d — ⇧⌘R chord: begin renaming the ACTIVE workspace (no-op when there is none).
+    func beginRenameActiveWorkspace() {
+        guard let row = activeWorkspaceRow else {
+            return
+        }
+        beginRename(.workspace(row.id), prefill: row.effectiveName)
+    }
+
+    /// ②d — ⌘R chord: begin renaming the SELECTED tab (no-op when none is selected or it
+    /// resolves to no entry). Prefills with the tab's `effectiveTabName`.
+    func beginRenameSelectedTab() {
+        guard let id = selectedEntryID,
+              let entry = state.processEntries.first(where: { $0.id == id }) else {
+            return
+        }
+        beginRename(.tab(id), prefill: entry.effectiveTabName)
+    }
+
+    /// ②d — Enter in the inline editor: pull the pending commit from `InlineRenameState`
+    /// (which goes inactive) and dispatch to the per-target wrapper. Each wrapper routes
+    /// the raw draft through `WorkspaceRenameCommit` (D2d-1), so an empty/whitespace or
+    /// unchanged draft is a no-op (the editor still closes via the `commit()` above).
+    func commitRename() {
+        guard let pending = inlineRename.commit() else {
+            return
+        }
+        switch pending.target {
+        case let .workspace(id):
+            renameWorkspace(id, to: pending.input)
+        case let .tab(id):
+            renameTab(id, to: pending.input)
+        }
+    }
+
+    /// ②d — Escape in the inline editor: close it without committing (draft discarded).
+    func cancelRename() {
+        inlineRename.cancel()
     }
 
     /// Slice ②b (DB10, supersedes DB7) — the Archived section is GLOBAL, not scoped to

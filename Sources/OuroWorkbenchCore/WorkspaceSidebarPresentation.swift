@@ -70,6 +70,12 @@ public enum WorkspaceSidebarPresentation {
     public struct WorkspaceRow: Equatable, Sendable, Identifiable {
         public let id: UUID
         public let effectiveName: String
+        /// Slice ②d — the custom name override (`nil` when the row shows its `autoName`).
+        /// Surfaced so the workspace context menu can show "Remove Custom Workspace Name"
+        /// ONLY when an override exists (`nameOverride != nil`; D2d-2) without re-reading
+        /// `state.workspaces`. `effectiveName` already folds override-vs-auto for display;
+        /// this is the orthogonal "is there an override to remove?" signal.
+        public let nameOverride: String?
         public let isPinned: Bool
         public let isActive: Bool
         public let tabs: [ResolvedTab]
@@ -84,6 +90,7 @@ public enum WorkspaceSidebarPresentation {
         public init(
             id: UUID,
             effectiveName: String,
+            nameOverride: String? = nil,
             isPinned: Bool,
             isActive: Bool,
             tabs: [ResolvedTab],
@@ -93,6 +100,7 @@ public enum WorkspaceSidebarPresentation {
         ) {
             self.id = id
             self.effectiveName = effectiveName
+            self.nameOverride = nameOverride
             self.isPinned = isPinned
             self.isActive = isActive
             self.tabs = tabs
@@ -164,6 +172,7 @@ public enum WorkspaceSidebarPresentation {
             return WorkspaceRow(
                 id: workspace.id,
                 effectiveName: workspace.effectiveName,
+                nameOverride: workspace.nameOverride,
                 isPinned: workspace.isPinned,
                 isActive: workspace.id == activeId,
                 tabs: active,

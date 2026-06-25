@@ -74,6 +74,11 @@ final class WorkbenchUISurfaceTester {
         // the migrated "Restored workspace".
         let workspaceSmokeOK = runMigratedWorkspaceSmoke()
 
+        // Slice ②d — the in-app editing affordances smoke: rename/pin/remove-custom-name
+        // mutators react through the existing seam, the inline editors render without
+        // crash for both a workspace and a tab, and an empty/whitespace commit is a no-op.
+        let editingSmokeOK = runEditingAffordancesSmoke()
+
         print(String(format: "about fitting size: %.1fx%.1f %@", aboutSize.width, aboutSize.height, sizeOK ? "ok" : "FAIL"))
         print(String(format: "settings update fitting size: %.1fx%.1f", settingsUpdateSize.width, settingsUpdateSize.height))
         print(String(format: "dashboard update fitting size: %.1fx%.1f", dashboardUpdateSize.width, dashboardUpdateSize.height))
@@ -83,11 +88,116 @@ final class WorkbenchUISurfaceTester {
         print("failed then checking state: \(failedThenCheckingOK ? "ok" : "FAIL")")
         print("about shared semantics: \(labelsOK ? "ok" : "FAIL")")
         print("migrated workspace render: \(workspaceSmokeOK ? "ok" : "FAIL")")
+        print("②d editing affordances: \(editingSmokeOK ? "ok" : "FAIL")")
 
         Darwin.exit(
             sizeOK && labelsOK && currentStateOK && availableStateOK
-                && failedStateOK && failedThenCheckingOK && workspaceSmokeOK ? 0 : 1
+                && failedStateOK && failedThenCheckingOK && workspaceSmokeOK
+                && editingSmokeOK ? 0 : 1
         )
+    }
+
+    /// Slice ②d — drive the in-app editing affordances end-to-end against a seeded
+    /// view-model: the pure mutators react through the existing `WorkspaceSidebarPresentation`
+    /// seam (pin re-sort D2d-4, override → revert, tab override), the inline editors render
+    /// without crash for a workspace AND a tab, and an empty/whitespace commit is a no-op
+    /// (D2d-1 — no override written). Returns true on success.
+    private func runEditingAffordancesSmoke() -> Bool {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ouro-workbench-2d-smoke-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let projectId = UUID()
+        // One tab the workspace will own; one extra entry so the state is realistic.
+        let tab = ProcessEntry(
+            projectId: projectId, name: "auto tab name", kind: .terminalAgent,
+            executable: "claude", workingDirectory: "/tmp/a", attention: .active
+        )
+        // Two workspaces: one already custom-named (so "Remove Custom Name" is live), one
+        // on its autoName (so a rename + pin can be exercised). The unpinned/auto one is
+        // FIRST so a pin toggle visibly re-sorts it ahead of the custom one.
+        let autoWS = Workspace(autoName: "Auto Workspace", isPinned: false, tabIds: [tab.id])
+        let customWS = Workspace(autoName: "auto", nameOverride: "Custom Workspace", isPinned: false)
+        let state = WorkspaceState(
+            projects: [WorkbenchProject(id: projectId, name: "Home", rootPath: "/tmp")],
+            processEntries: [tab],
+            workspaces: [autoWS, customWS]
+        )
+        do {
+            try WorkbenchStore(stateURL: root.appendingPathComponent("workspace-state.json")).save(state)
+        } catch {
+            print("②d smoke: seed save failed \(error)")
+            return false
+        }
+        let model = WorkbenchViewModel(paths: WorkbenchPaths(rootURL: root))
+
+        // Pin re-sort (D2d-4): toggling the unpinned auto workspace must move it pinned-first.
+        model.toggleWorkspacePin(autoWS.id)
+        let afterPin = model.workspaceSidebarModel.rows
+        guard afterPin.first?.id == autoWS.id, afterPin.first?.isPinned == true else {
+            print("②d smoke: pin toggle did not re-sort the workspace pinned-first")
+            return false
+        }
+
+        // Rename a workspace: effectiveName changes to the trimmed override.
+        model.renameWorkspace(autoWS.id, to: "  Renamed WS  ")
+        guard model.state.workspaces.first(where: { $0.id == autoWS.id })?.effectiveName == "Renamed WS" else {
+            print("②d smoke: rename did not set the trimmed override")
+            return false
+        }
+
+        // Remove the custom name: revert to autoName.
+        model.removeCustomWorkspaceName(customWS.id)
+        guard let revertedWS = model.state.workspaces.first(where: { $0.id == customWS.id }),
+              revertedWS.nameOverride == nil, revertedWS.effectiveName == "auto" else {
+            print("②d smoke: remove-custom-name did not revert to autoName")
+            return false
+        }
+
+        // Tab rename: effectiveTabName changes.
+        model.renameTab(tab.id, to: "Renamed Tab")
+        guard model.state.processEntries.first(where: { $0.id == tab.id })?.effectiveTabName == "Renamed Tab" else {
+            print("②d smoke: tab rename did not set the tab override")
+            return false
+        }
+
+        // D2d-1 — an empty/whitespace commit through the editor is a NO-OP: no override is
+        // written and the existing name persists. Begin a rename, blank the draft, commit.
+        model.beginRename(.workspace(autoWS.id), prefill: "Renamed WS")
+        model.inlineRename.draft = "   "
+        model.commitRename()
+        guard model.state.workspaces.first(where: { $0.id == autoWS.id })?.effectiveName == "Renamed WS",
+              !model.inlineRename.isEditing(.workspace(autoWS.id)) else {
+            print("②d smoke: empty commit was not a no-op (override changed or editor stayed open)")
+            return false
+        }
+
+        // The inline editors render without crash for BOTH a workspace and a tab.
+        model.beginRename(.workspace(autoWS.id), prefill: "Renamed WS")
+        let sidebarEditingSize = fittingSize(
+            WorkbenchSidebarView(model: model), constrainedTo: NSSize(width: 260, height: 700)
+        )
+        model.cancelRename()
+        guard let firstTab = model.activeWorkspaceRow?.tabs.first else {
+            print("②d smoke: no tab to render the tab editor for")
+            return false
+        }
+        model.selectedEntryID = firstTab.id
+        model.beginRename(.tab(firstTab.id), prefill: "Renamed Tab")
+        let stripEditingSize = fittingSize(
+            WorkspaceTabStrip(model: model), constrainedTo: NSSize(width: 760, height: 80)
+        )
+        model.cancelRename()
+        guard sidebarEditingSize.width > 0, sidebarEditingSize.height > 0, stripEditingSize.height > 0 else {
+            print("②d smoke: inline editors failed to render a positive size")
+            return false
+        }
+        print(String(
+            format: "②d editing sizes: sidebar(edit) %.0fx%.0f, strip(edit) %.0fx%.0f",
+            sidebarEditingSize.width, sidebarEditingSize.height, stripEditingSize.width, stripEditingSize.height
+        ))
+        return true
     }
 
     /// Seed a migrated `WorkspaceState` into a fresh root, build a view-model from it,

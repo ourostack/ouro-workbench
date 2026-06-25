@@ -983,4 +983,55 @@ public extension WorkspaceState {
             )
         }
     }
+
+    // MARK: - Slice ②d — in-app editing mutators
+
+    /// Slice ②d — set the custom name override on the workspace matching `workspaceId`.
+    /// Pure structure mutation (no persistence — the App wrapper calls `save()`; D2d-7).
+    ///
+    /// The name model (②a DA4): `effectiveName == nameOverride ?? autoName`, and an
+    /// EMPTY override is honored as a deliberate value (revert is unambiguously `nil`).
+    /// This mutator faithfully sets whatever it is given — the editor-level guard that
+    /// an empty/whitespace COMMIT becomes a no-op lives in `WorkspaceRenameCommit`
+    /// (D2d-1), NOT here, so this stays a pure setter. Passing `nil` clears the override
+    /// (prefer `clearWorkspaceNameOverride` for that intent). Unknown id ⇒ no-op.
+    mutating func setWorkspaceNameOverride(workspaceId: UUID, to override: String?) {
+        guard let index = workspaces.firstIndex(where: { $0.id == workspaceId }) else {
+            return
+        }
+        workspaces[index].nameOverride = override
+    }
+
+    /// Slice ②d — clear the custom name override on the workspace matching
+    /// `workspaceId`, reverting it to `autoName` (`effectiveName == autoName` once
+    /// `nameOverride == nil`; ②a DA4 — revert is exactly `nil`). Idempotent: an
+    /// already-`nil` override is left unchanged. Unknown id ⇒ no-op. Pure (no save).
+    mutating func clearWorkspaceNameOverride(workspaceId: UUID) {
+        guard let index = workspaces.firstIndex(where: { $0.id == workspaceId }) else {
+            return
+        }
+        workspaces[index].nameOverride = nil
+    }
+
+    /// Slice ②d — flip the pinned flag on the workspace matching `workspaceId`. The
+    /// sidebar re-sorts pinned-first automatically through the pure
+    /// `WorkspaceSidebarPresentation.resolve` seam (D2d-4 — no extra sort wiring).
+    /// Toggling twice is identity. Unknown id ⇒ no-op. Pure (no save).
+    mutating func toggleWorkspacePin(workspaceId: UUID) {
+        guard let index = workspaces.firstIndex(where: { $0.id == workspaceId }) else {
+            return
+        }
+        workspaces[index].isPinned.toggle()
+    }
+
+    /// Slice ②d — set the custom tab-name override on the `ProcessEntry` (tab) matching
+    /// `tabId` (`effectiveTabName == tabNameOverride ?? name`; mirrors workspace rename).
+    /// Same posture as `setWorkspaceNameOverride`: a pure setter (the empty-commit guard
+    /// lives in `WorkspaceRenameCommit`); `nil` clears the override. Unknown id ⇒ no-op.
+    mutating func setTabNameOverride(tabId: UUID, to override: String?) {
+        guard let index = processEntries.firstIndex(where: { $0.id == tabId }) else {
+            return
+        }
+        processEntries[index].tabNameOverride = override
+    }
 }
