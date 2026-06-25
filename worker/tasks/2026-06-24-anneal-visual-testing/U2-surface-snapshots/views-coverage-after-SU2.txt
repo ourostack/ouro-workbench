@@ -1,0 +1,31 @@
+Running views-lib coverage AFTER Surface F (④ proposal card) enumerated snapshots landed (SU1 + SU2).
+Branch: feat/anneal-u2-su1su2-proposal-card  ·  Captured: 2026-06-25
+
+SCOPE NOTE (D-U2-5): the views lib (OuroWorkbenchAppViews) is NOT gated this unit —
+COVERAGE_DIRS stays {OuroWorkbenchCore, OuroWorkbenchShellAdapter} and the allowlist is
+UNCHANGED. This number is PROGRESS TOWARD the U4 coverage gate, recorded per the brief; it
+does NOT gate SU1/SU2. The ④ surface snapshots (BossProposalCardList → BossProposalCard →
+BossProposalItemRow) + the U1 leaves are what exercise the measured lines.
+
+Measured via: swift test --enable-code-coverage --filter OuroWorkbenchAppViewsTests
+(67 tests, 0 failures), then llvm-cov report over Sources/OuroWorkbenchAppViews/*.swift.
+
+Per-file (views lib):
+Filename                           Regions  Missed   Cover    Lines   Missed   Cover
+WorkbenchViewsAndModel.swift          5790    5490    5.18%    31883    30606    4.01%
+WorkbenchUpdateInstaller.swift          16      16    0.00%       62       62    0.00%
+Views/DashboardRowLabel.swift            2       0  100.00%       11        0  100.00%
+TOTAL                                 5808    5506    5.20%    31956    30668    4.03%
+
+RUNNING VIEWS-LIB COVERAGE AFTER ④: 5.20% region / 4.03% line.
+(Prior reference point — after SU0 — was the seam-only delta; the surface snapshots in SU2
+are the first that descend the real ④ view bodies, so this is the first meaningful surface
+contribution. A/B (SU3/SU4, separate PRs) + the rest of the surfaces grow this toward the
+U4 100%-on-views-lib gate + honest allowlist.)
+
+Harness-side NEW code coverage (the AN-002 host change — gated as new code THIS unit):
+  Tests/OuroWorkbenchAppViewsTests/ViewSnapshotHost.swift — 100.00% region (33/33),
+  100.00% line (76/76), 100.00% functions (7/7). Both branches of isTextFieldPlaceholder
+  + the input() bound-value read are exercised by the ④ fixtures (placeholder skip via the
+  .textField(...).labelView() path; the false paths via Button/Image labelViews and plain
+  Text nodes).
