@@ -126,6 +126,15 @@ logic-bearing, not branchless.) *A few remaining are attribute-only-variant (Onb
 ProviderModelPill, DetailPaneChrome, TerminalSearchToggleButton) — re-confirmed per cluster; if one
 flips a real captured node it JOINS its cluster.*
 
+**C1 starred-candidate RECONFIRM (resolved at execution against `ViewSnapshotHost.mapNode`'s whitelist):**
+- `SidebarCountBadge` (`:3558`) — **MOVED OUT to LOGIC (C1, covered)**: body `Text("\(count)")` +
+  `.accessibilityLabel("\(count) active terminals")` flips a CAPTURED Text value AND a captured a11y
+  label with `count` → a value-flip in a captured node (the `GitBranchChip` class), NOT branchless.
+  Snapshotted in `SidebarCountBadgeTests` (3 refs, mutation-verified). Branchless count is now **27**.
+- `WorkspaceTabContextMenu` (`:3406`) — **STAYS BRANCHLESS / DEFERRED**: re-confirmed genuinely branchless —
+  its only content is the CONSTANT `Label("Rename Tab…  ⌘R", systemImage: "pencil")`; `tab` feeds ONLY the
+  (non-rendered) `beginRename` action closure, never a captured node. NOT forced (per the C1 cluster note).
+
 ## Genuinely-untestable / shell (2–3 — DEFERRED, honest-allowlist)
 
 WorkbenchRootView (131) — NavigationSplitView/scenePhase/dockTile/menu shell.
