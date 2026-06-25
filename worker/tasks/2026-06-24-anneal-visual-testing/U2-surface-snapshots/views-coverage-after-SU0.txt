@@ -1,0 +1,18 @@
+Filename                           Regions    Missed Regions     Cover   Functions  Missed Functions  Executed       Lines      Missed Lines     Cover    Branches   Missed Branches     Cover
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+WorkbenchViewsAndModel.swift          5790              5490     5.18%        2664              2442     8.33%       31883             30631     3.93%           0                 0         -
+WorkbenchUpdateInstaller.swift          16                16     0.00%           6                 6     0.00%          62                62     0.00%           0                 0         -
+Views/DashboardRowLabel.swift            2                 0   100.00%           2                 0   100.00%          11                 0   100.00%           0                 0         -
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+TOTAL                                 5808              5506     5.20%        2672              2448     8.38%       31956             30693     3.95%           0                 0         -
+
+---
+SU0 seam-line coverage (the NEW product code), from `swift test --filter SU0InjectableClockTests --enable-code-coverage`:
+  WorkbenchViewsAndModel.swift:2173  content(now: now ?? context.date)                                  hit=2  (default + injected branches)
+  WorkbenchViewsAndModel.swift:3699  ElapsedTimePill(startDate: runningSince, now: now)                  hit=46
+  WorkbenchViewsAndModel.swift:3731  ...coarseDescription(since: runningSince, now: now ?? Date())       hit=46 (the :3718 a11y-label leak, now :3731)
+  WorkbenchViewsAndModel.swift:3795  Text(...coarseDescription(since: startDate, now: now ?? context.date))  hit=10
+All four executable seam lines covered, BOTH branches each (nil/live default AND injected fixed Date).
+The `var now: Date? = nil` declaration lines are stored-property defaults (not separately instrumented statements; same as every other defaulted property in these structs).
+
+NOTE (D-U2-5): the VIEWS LIB is NOT gated this unit (COVERAGE_DIRS stays {Core, ShellAdapter}); WorkbenchViewsAndModel.swift sits at 3.93% line overall — that is expected and out-of-U2-scope. U2 GROWS snapshot coverage; the views lib joins the coverage gate at U4. The SU0 seam itself is fully exercised by the new behavior tests above.
