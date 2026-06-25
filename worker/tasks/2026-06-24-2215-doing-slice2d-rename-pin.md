@@ -41,13 +41,13 @@ Wire the cmux in-app editing affordances to the EXISTING `Workspace` / `ProcessE
 - [x] Pure `InlineRenameState` (or equivalent) models "is rename active / which target / commit / cancel" transitions; 100% region covered.
 - [x] Workspace context menu (Pin/Unpin, Rename ⇧⌘R, Remove Custom Name) attached to `WorkspaceSidebarRow`; "Remove Custom Name" item conditional on `nameOverride != nil`.
 - [x] Tab context menu (Rename ⌘R) attached to `WorkspaceTabStrip` tab button.
-- [ ] Inline editors (prefilled, Enter=commit, Escape=cancel, helper caption) render for workspace + tab rename.
-- [ ] Pinning a workspace re-sorts pinned-first (verified through the existing seam in a Core test + the `--uisurfacetest` smoke).
-- [ ] Source-regression guard (`appSource()`) pins the new menus/editors/shortcuts present.
-- [ ] `--uisurfacetest` smoke renders the menus/editors without crash AND exercises the mutators through `model.state`.
-- [ ] 100% test coverage on all new Core code (`Scripts/coverage-allowlist.txt` does NOT grow).
-- [ ] All tests pass under strict flags; 0 warnings.
-- [ ] `Scripts/check-coverage.sh` green; `Scripts/preflight.sh` green.
+- [x] Inline editors (prefilled, Enter=commit, Escape=cancel, helper caption) render for workspace + tab rename.
+- [x] Pinning a workspace re-sorts pinned-first (verified through the existing seam in a Core test + the `--uisurfacetest` smoke).
+- [x] Source-regression guard (`appSource()`) pins the new menus/editors/shortcuts present.
+- [x] `--uisurfacetest` smoke renders the menus/editors without crash AND exercises the mutators through `model.state`.
+- [x] 100% test coverage on all new Core code (`Scripts/coverage-allowlist.txt` does NOT grow).
+- [x] All tests pass under strict flags; 0 warnings.
+- [x] `Scripts/check-coverage.sh` green; `Scripts/preflight.sh` green.
 
 ## Code Coverage Requirements
 **MANDATORY: 100% coverage on all new Core code.**
@@ -209,7 +209,7 @@ Cover every transition arm.
 **Acceptance**: Unit 5a assertions PASS; strict build/test green, 0 warnings.
 **Commit (Unit 5, one commit)**: `feat(app): tab context menu — rename tab (⌘R) (②d)`
 
-### ⬜ Unit 6a: Inline rename editors + caption — Source guard (RED)
+### ✅ Unit 6a: Inline rename editors + caption — Source guard (RED)
 **What**: Extend the wiring test with FAILING `source.contains(...)` for the INLINE EDITORS:
 - `WorkspaceSidebarRow` shows a `TextField` bound to the inline-rename draft when `model.inlineRename.isEditing(.workspace(row.id))`, else the label.
 - `WorkspaceTabStrip.tabButton` shows a `TextField` when `model.inlineRename.isEditing(.tab(tab.id))`, else the label.
@@ -218,13 +218,13 @@ Cover every transition arm.
 - `commitRename()` routes through `WorkspaceRenameCommit.resolve` and, on `.commit`, dispatches to `renameWorkspace`/`renameTab` per the active target; on `.noop` just closes (D2d-1).
 **Acceptance**: Assertions FAIL — real RED, shown.
 
-### ⬜ Unit 6b: Inline rename editors — Implementation (GREEN)
+### ✅ Unit 6b: Inline rename editors — Implementation (GREEN)
 **What**: 
 - Add `@Published var inlineRename: InlineRenameState` to `WorkbenchViewModel` + `beginRename(_:prefill:)`, `commitRename()`, `cancelRename()` (commit routes through `WorkspaceRenameCommit` then the per-target wrapper; the Core helpers carry the logic).
 - Render the inline `TextField` (prefilled via `begin`'s draft binding, Enter=commit, Escape=cancel, caption) in both `WorkspaceSidebarRow` and `tabButton`, swapping the label for the editor while that target is active.
 **Acceptance**: Unit 6a assertions PASS; strict build/test green, 0 warnings.
 
-### ⬜ Unit 6c: `--uisurfacetest` rendering smoke + final gates
+### ✅ Unit 6c: `--uisurfacetest` rendering smoke + final gates
 **What**: Extend `UISurfaceTest.swift` with a ②d smoke that:
 - Builds a `WorkbenchViewModel` with ≥2 workspaces (one with `nameOverride`, one without) + ≥1 tab.
 - Renders `WorkbenchSidebarView` + `WorkspaceTabStrip` while an inline rename is active for a workspace AND (separately) a tab — assert positive fitting sizes (no crash).
@@ -261,3 +261,4 @@ Then run the FULL gate: `swift build`/`swift test` strict, `Scripts/check-covera
 - 2026-06-24 22:51 Unit 3 complete: pure `InlineRenameState` (`Target.workspace`/`.tab`, `begin`/`cancel`/`commit`→`PendingCommit`/`isEditing`; target-switch replaces draft, no stale leak; commit-when-inactive→nil); 9 XCTests RED→GREEN strict, 0 warn; coverage green (149/151 at 100%), allowlist unchanged. (commit d8753b0)
 - 2026-06-24 23:00 Unit 4 complete: workspace `WorkspaceRowContextMenu` (Pin/Unpin, Rename Workspace… ⇧⌘R, Remove Custom Workspace Name gated on `row.nameOverride != nil`); added `nameOverride: String?` to the `WorkspaceRow` seam + `resolve` mapping (+3 seam tests); VM wrappers `toggleWorkspacePin`/`renameWorkspace`(via `WorkspaceRenameCommit`)/`removeCustomWorkspaceName`/`beginRename*` (all call Core mutator + `save()`); ⇧⌘R/⌘R chords registered + dispatched targeting active workspace / selected tab. Wiring tests RED→GREEN (refined one over-greedy slice that stopped at a closure brace — impl was always correct); strict build 0 warn; coverage green (149/151 at 100%, seam field covered), allowlist unchanged. (commit bc47e5e)
 - 2026-06-24 23:06 Unit 5 complete: tab `WorkspaceTabContextMenu` (Rename Tab… ⌘R) attached to `tabButton`; VM wrapper `renameTab` routes input through `WorkspaceRenameCommit` → `setTabNameOverride` → `save()`. (⌘R chord + dispatch + `beginRenameSelectedTab` already landed in U4 for compile.) Wiring tests RED→GREEN (refined the slice end-marker — the helper restarts its end-search at the start index, so `to: "func "` matched the start signature itself; switched to the next method's full signature). Strict build 0 warn. No new Core seam → coverage unchanged. (commit a7bb50e)
+- 2026-06-24 23:21 Unit 6 complete: shared `InlineRenameEditor` (TextField bound to `$model.inlineRename.draft`, Enter=`.onSubmit{commitRename()}`, Escape=`.onExitCommand{cancelRename()}` [single mechanism per review note 3], caption "Press Enter to rename, Escape to cancel."); `WorkspaceSidebarRow`/`tabButton` swap label↔editor on `inlineRename.isEditing(.workspace/.tab)`; VM `commitRename` pulls `InlineRenameState.commit()` then dispatches `renameWorkspace`/`renameTab` (each routing through `WorkspaceRenameCommit`), `cancelRename` cancels. Extended `--uisurfacetest` with the ②d smoke (pin re-sort, rename trims, remove-custom reverts, tab rename, empty-commit no-op via `commitRename`, inline editors render positive sizes for workspace AND tab). Wiring tests RED→GREEN. FULL GATE GREEN: strict `swift build`/`swift test` 0 warn/0 fail; `check-coverage.sh` 100% (149/151, allowlist unchanged); `--uisurfacetest` exit 0 ("②d editing affordances: ok"); `preflight.sh` exit 0 (version contract, scenario matrix, strict tests, uisurfacetest, scenario verifier coverage-digest, app package/verify/archive, install-rollback all passed). (commit 68bffc8)
