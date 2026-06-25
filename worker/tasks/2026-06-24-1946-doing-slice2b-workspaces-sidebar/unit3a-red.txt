@@ -1,0 +1,14 @@
+=== Unit 3a RED: tab-strip guards (expect fail: strip absent) ===
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarWiringTests testDetailColumnMountsTheActiveWorkspaceTabStrip]' failed (0.228 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarWiringTests testTabStripMountsBetweenBossDashboardAndDetailGroup]' failed (0.027 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkspaceSidebarWiringTests testTabStripSourcesTabsFromThePresentationSeamNotAReDerivedFlatList]' failed (0.029 seconds).
+	 Executed 3 tests, with 4 failures (0 unexpected) in 0.284 (0.285) seconds
+	 Executed 3 tests, with 4 failures (0 unexpected) in 0.284 (0.285) seconds
+	 Executed 3 tests, with 4 failures (0 unexpected) in 0.284 (0.286) seconds
+
+=== Unit 3a RED summary ===
+RED for the RIGHT reason — the cmux tab-strip is absent. 3 guard methods fail (4 assertions):
+- testDetailColumnMountsTheActiveWorkspaceTabStrip (no `struct WorkspaceTabStrip` / no mount)
+- testTabStripSourcesTabsFromThePresentationSeamNotAReDerivedFlatList (no strip to slice)
+- testTabStripMountsBetweenBossDashboardAndDetailGroup (mount marker absent)
+No App source edited yet (Unit 3b implements the strip).

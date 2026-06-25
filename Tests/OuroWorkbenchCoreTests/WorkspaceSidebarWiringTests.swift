@@ -93,7 +93,68 @@ final class WorkspaceSidebarWiringTests: XCTestCase {
         )
     }
 
+    // MARK: - Unit 3: cmux tab-strip in the detail column
+
+    func testDetailColumnMountsTheActiveWorkspaceTabStrip() throws {
+        let source = try appSource()
+        // A dedicated tab-strip view renders the active workspace's tabs across the
+        // top of the detail column (cmux layout).
+        XCTAssertTrue(
+            source.contains("struct WorkspaceTabStrip: View"),
+            "a WorkspaceTabStrip view must exist for the cmux tab-strip"
+        )
+        XCTAssertTrue(
+            source.contains("WorkspaceTabStrip(model: model)"),
+            "the detail column must mount the WorkspaceTabStrip"
+        )
+    }
+
+    func testTabStripSourcesTabsFromThePresentationSeamNotAReDerivedFlatList() throws {
+        let source = try appSource()
+        let strip = try sourceSlice(
+            in: source,
+            from: "struct WorkspaceTabStrip: View",
+            to: "\n}\n"
+        )
+        // The strip reads the seam's active workspace (model.activeWorkspaceRow), not a
+        // re-derived flat session list.
+        XCTAssertTrue(
+            strip.contains("model.activeWorkspaceRow"),
+            "the tab-strip must source its tabs from the WorkspaceSidebarPresentation active workspace"
+        )
+        // It names tabs by effectiveTabName (carried by the seam's ResolvedTab).
+        XCTAssertTrue(
+            strip.contains("effectiveTabName"),
+            "the tab-strip must label tabs by effectiveTabName"
+        )
+        // Selecting a tab sets selectedEntryID.
+        XCTAssertTrue(
+            strip.contains("model.selectedEntryID ="),
+            "selecting a tab in the strip must set selectedEntryID"
+        )
+    }
+
+    func testTabStripMountsBetweenBossDashboardAndDetailGroup() throws {
+        let source = try appSource()
+        // The strip sits above the session detail Group, below the Boss dashboard
+        // divider — the cmux "tabs across the top" position.
+        let stripMount = try XCTUnwrap(source.range(of: "WorkspaceTabStrip(model: model)"))
+        let detailGroup = try XCTUnwrap(
+            source.range(of: "DetailSplitContainer(primaryEntry: entry, model: model)")
+        )
+        XCTAssertLessThan(
+            stripMount.lowerBound, detailGroup.lowerBound,
+            "the tab-strip must mount ABOVE the session-detail Group (tabs-across-the-top)"
+        )
+    }
+
     // MARK: - Helpers
+
+    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
+        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound)
+        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound)
+        return String(source[start..<end])
+    }
 
     private func appSource() throws -> String {
         let sourceURL = repoRoot()

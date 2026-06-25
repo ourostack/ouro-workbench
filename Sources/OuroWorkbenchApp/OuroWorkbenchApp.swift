@@ -377,6 +377,13 @@ struct WorkbenchRootView: View {
                                 BossDashboardView(model: model)
                                 Divider()
                             }
+                            // Slice ②b — the cmux tab-strip: the ACTIVE workspace's
+                            // tabs across the top of the detail column, above the
+                            // session detail. Pinned to its natural height so it never
+                            // starves the detail pane.
+                            WorkspaceTabStrip(model: model)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .layoutPriority(1)
                             // Every detail branch fills the remaining space
                             // identically and pins to the top, so layout is
                             // deterministic regardless of which view is shown.
@@ -3256,6 +3263,89 @@ struct SidebarWorkspaceEmptyRow: View {
             .padding(.leading, 22)
             .padding(.vertical, 1)
             .accessibilityLabel("No tabs yet")
+    }
+}
+
+/// Slice ②b — the cmux tab-strip: a horizontal strip of the ACTIVE workspace's named
+/// tabs across the top of the detail column. Tabs are sourced from the pure
+/// `WorkspaceSidebarPresentation` active workspace (`model.activeWorkspaceRow`), NOT a
+/// re-derived flat list, so the strip and sidebar can never disagree. Each tab is
+/// labeled by `effectiveTabName`; selecting one sets `model.selectedEntryID` and
+/// highlights it. An empty active workspace shows the "no tabs yet" marker (FORK #3).
+/// Renders nothing when there's no active workspace (empty machine).
+struct WorkspaceTabStrip: View {
+    @ObservedObject var model: WorkbenchViewModel
+
+    /// The active workspace's resolved active tabs (the seam already dropped dangling
+    /// ids + archived tabs). Empty when the active workspace has no active tabs.
+    private var tabs: [ResolvedTab] { model.activeWorkspaceRow?.tabs ?? [] }
+
+    /// Select a tab — sets the entry selection; the row's workspace stays active.
+    private func select(_ tab: ResolvedTab) { model.selectedEntryID = tab.id }
+
+    var body: some View {
+        if let active = model.activeWorkspaceRow {
+            VStack(spacing: 0) {
+                if tabs.isEmpty {
+                    // FORK #3 / DB5 — never blank: an empty active workspace still
+                    // shows an honest "no tabs yet" strip state.
+                    HStack {
+                        Text("\(active.effectiveName) — no tabs yet")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                } else {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(tabs) { tab in
+                                tabButton(tab)
+                            }
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                    }
+                }
+                Divider()
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Tabs in \(active.effectiveName)")
+        }
+    }
+
+    @ViewBuilder
+    private func tabButton(_ tab: ResolvedTab) -> some View {
+        let isSelected = model.selectedEntryID == tab.id
+        Button {
+            select(tab)
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: tab.attention.healthSymbol)
+                    .font(.caption2)
+                    .foregroundStyle(tab.attention.healthColor)
+                Text(tab.effectiveTabName)
+                    .font(.callout)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .fontWeight(isSelected ? .semibold : .regular)
+            }
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.secondary.opacity(0.08))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(isSelected ? Color.accentColor : Color.clear, lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(tab.attention.healthLabel)
+        .accessibilityLabel("\(tab.effectiveTabName), \(tab.attention.healthLabel)\(isSelected ? ", selected" : "")")
     }
 }
 

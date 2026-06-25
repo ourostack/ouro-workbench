@@ -1,0 +1,29 @@
+=== Unit 3b: strict build ===
+Build complete! (51.70s)
+
+=== Unit 3b: tab-strip guards (expect GREEN) ===
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.271 (0.273) seconds
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.271 (0.273) seconds
+	 Executed 8 tests, with 0 failures (0 unexpected) in 0.271 (0.276) seconds
+
+=== Unit 3b: --uisurfacetest (no crash) ===
+[0/3] Write swift-version--58304C5D6DBC2206.txt
+Build of product 'OuroWorkbench' complete! (0.48s)
+about fitting size: 520.0x500.0 ok
+settings update fitting size: 438.0x94.0
+dashboard update fitting size: 438.0x94.0
+current update state: ok
+available update state: ok
+failed update state: ok
+failed then checking state: ok
+about shared semantics: ok
+
+=== Unit 3b summary ===
+GREEN. Added `struct WorkspaceTabStrip: View` in OuroWorkbenchApp.swift and mounted it in the
+detail column between the Boss-dashboard divider and the session-detail Group (cmux tabs-on-top),
+.fixedSize + .layoutPriority(1) so it never starves the detail pane. The strip sources tabs from
+`model.activeWorkspaceRow.tabs` (the seam's active workspace — NOT a re-derived flat list), labels
+each by `effectiveTabName` with an attention glyph, highlights the selected tab, and sets
+`model.selectedEntryID` on tap. Empty active workspace → "<name> — no tabs yet" (FORK #3/DB5);
+no active workspace → renders nothing. Gates: strict build 0 warn/err; 8 WorkspaceSidebarWiringTests
+GREEN (incl. 3 tab-strip guards); --uisurfacetest exit 0.
