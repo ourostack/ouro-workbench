@@ -1,0 +1,48 @@
+Running views-lib coverage AFTER Surface B (tab-strip) enumerated snapshots landed (SU4).
+This is the FINAL running views-lib coverage % for U2 (all three U2 surfaces — F/A/B —
+now snapshotted, plus the SU3r elapsed-pill leaf).
+Branch: feat/anneal-u2-su3su4-workspace-surfaces  ·  Captured: 2026-06-25
+
+SCOPE NOTE (D-U2-5): the views lib (OuroWorkbenchAppViews) is NOT gated this unit —
+COVERAGE_DIRS stays {OuroWorkbenchCore, OuroWorkbenchShellAdapter} and the allowlist is
+UNCHANGED (verified: `git diff origin/main -- Scripts/check-coverage.sh scripts/coverage-allowlist.txt`
+is empty). This number is PROGRESS TOWARD the U4 coverage gate, recorded per the brief;
+it does NOT gate SU4. The tab-strip surface snapshots (WorkspaceTabStrip → tabButton /
+stripFilterEmptyState / InlineRenameEditor) exercise the newly-measured lines.
+
+Measured via: swift test --enable-code-coverage --filter OuroWorkbenchAppViewsTests
+(91 tests, 0 failures — was 81 after SU3; +10 from SU4), then llvm-cov report over
+Sources/OuroWorkbenchAppViews/*.swift + Views/*.swift.
+
+Per-file (views lib):
+Filename                           Regions  Missed   Cover    Lines   Missed   Cover
+WorkbenchViewsAndModel.swift          5790    5345    7.69%    31883    29675    6.93%
+WorkbenchUpdateInstaller.swift          16      16    0.00%       62       62    0.00%
+Views/DashboardRowLabel.swift            2       0  100.00%       11        0  100.00%
+TOTAL                                 5808    5361    7.70%    31956    29737    6.94%
+
+RUNNING VIEWS-LIB COVERAGE AFTER U2 (F + A + B + SU3r leaf): 7.70% region / 6.94% line.
+
+Progression across U2 surfaces (the input the U4 coverage-gate + allowlist will consume):
+  after SU0 (clock seam only)     — seam-line delta
+  after SU2 (④ proposal card)     — 5.20% region / 4.03% line
+  after SU3 (sidebar) + SU3r leaf — 6.65% region / 6.00% line
+  after SU4 (tab-strip)           — 7.70% region / 6.94% line   <-- FINAL for U2
+
+NEW code coverage THIS sub-unit (SU4):
+  No new HARNESS-side helper code (SU4 reuses the U1 harness unchanged). The only NEW
+  code is TabStripSurfaceStateSetTests.swift, whose every fixture/branch is exercised by
+  its own passing tests (10, 0 failures). No `[ExcludeFromCodeCoverage]`-equivalent.
+
+a11y-id audit (D-U2-2) — NONE needed:
+  Each tab carries a semantically-distinct computed accessibilityLabel
+  (e.g. "build, Idle, selected" vs "test, Idle"), so no two serialized tab nodes collide
+  such that a negative control is defeated (the selection/filter + the
+  filter-empty-vs-genuinely-empty controls all pass). → ZERO `.accessibilityIdentifier`.
+
+Note for the campaign: the WorkbenchViewsAndModel.swift file (31,883 lines, 5,790 regions)
+is dominated by the VM + ~120 view bodies; the U2 surfaces (F/A/B) + the U1 ④ proof
+descend only their own slices. The remaining surfaces (U3+: the boss pane, decision inbox,
+detail panes, onboarding, settings/about, the agent rows beyond their labels, etc.) plus
+the honest @main/App/AppDelegate/TerminalPane allowlist are what take the views lib to the
+U4 100%-on-views-lib gate.

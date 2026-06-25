@@ -1,0 +1,5 @@
+View label="running-agent, idle, active, running for 2h"
+Text kind=static text="running-agent"
+Image image="apple.terminal"
+Text kind=static text="2h"
+View label="idle"

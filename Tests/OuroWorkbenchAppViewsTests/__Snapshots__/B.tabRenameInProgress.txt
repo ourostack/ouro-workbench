@@ -1,0 +1,4 @@
+View label="Tabs in Frontend"
+View label="Rename"
+TextField kind=editable text="renaming-tab"
+Text kind=static text="Press Enter to rename, Escape to cancel."

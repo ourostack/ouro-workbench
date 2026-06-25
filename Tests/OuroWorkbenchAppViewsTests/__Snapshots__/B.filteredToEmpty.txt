@@ -1,0 +1,5 @@
+View label="Tabs in Frontend"
+Text kind=static text="No sessions match "zzznomatch""
+Image image="line.3.horizontal.decrease.circle"
+Text kind=static text="Clear"
+Image image="xmark.circle"

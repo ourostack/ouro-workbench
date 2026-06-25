@@ -1,0 +1,7 @@
+View label="Tabs in Frontend"
+View label="build, Idle, selected"
+Image image="moon.zzz.fill"
+Text kind=static text="build"
+View label="test, Idle"
+Image image="moon.zzz.fill"
+Text kind=static text="test"

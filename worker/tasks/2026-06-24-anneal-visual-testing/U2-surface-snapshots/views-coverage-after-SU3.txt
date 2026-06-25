@@ -1,0 +1,46 @@
+Running views-lib coverage AFTER Surface A (sidebar) enumerated snapshots + the
+SU3r standalone running-row leaf landed (SU3 + SU3r).
+Branch: feat/anneal-u2-su3su4-workspace-surfaces  ·  Captured: 2026-06-25
+
+SCOPE NOTE (D-U2-5): the views lib (OuroWorkbenchAppViews) is NOT gated this unit —
+COVERAGE_DIRS stays {OuroWorkbenchCore, OuroWorkbenchShellAdapter} and the allowlist is
+UNCHANGED (verified: `git diff origin/main -- Scripts/check-coverage.sh scripts/coverage-allowlist.txt`
+is empty). This number is PROGRESS TOWARD the U4 coverage gate, recorded per the brief;
+it does NOT gate SU3/SU3r. The sidebar surface snapshots (WorkbenchSidebarView →
+WorkspaceSidebarRow / SidebarWorkspaceEmptyRow / SidebarFilterField / SidebarAgentRow /
+SidebarActionRow / InlineRenameEditor) + the SU3r TerminalAgentRow → ElapsedTimePill leaf
+are what exercise the newly-measured lines.
+
+Measured via: swift test --enable-code-coverage --filter OuroWorkbenchAppViewsTests
+(81 tests, 0 failures — was 67 after SU2; +14 from SU3's 10 + SU3r's 4), then
+llvm-cov report over Sources/OuroWorkbenchAppViews/*.swift + Views/*.swift.
+
+Per-file (views lib):
+Filename                           Regions  Missed   Cover    Lines   Missed   Cover
+WorkbenchViewsAndModel.swift          5790    5406    6.63%    31883    29976    5.98%
+WorkbenchUpdateInstaller.swift          16      16    0.00%       62       62    0.00%
+Views/DashboardRowLabel.swift            2       0  100.00%       11        0  100.00%
+TOTAL                                 5808    5422    6.65%    31956    30038    6.00%
+
+RUNNING VIEWS-LIB COVERAGE AFTER A (sidebar) + SU3r leaf: 6.65% region / 6.00% line.
+(Prior reference points: after SU0 = seam-only delta; after SU2 (④ card) = 5.20% region /
+4.03% line. SU3 descends the sidebar surface bodies + the SU3r leaf exercises the
+ElapsedTimePill / TerminalAgentRow elapsed seam, so this is the first contribution from
+the workspace surfaces. SU4 (tab-strip) + the remaining surfaces grow this toward the U4
+100%-on-views-lib gate + honest allowlist.)
+
+NEW code coverage THIS sub-unit (SU3 + SU3r):
+  No new HARNESS-side helper code was added — SU3/SU3r reuse the U1 harness
+  (assertViewSnapshot / ViewSnapshotHost / ViewSnapshotStore / ViewTreeSerializer /
+  ViewSnapshotNode, all unchanged from SU1). The only NEW code is the two test files
+  (SidebarSurfaceStateSetTests.swift, TerminalAgentRowRunningLeafTests.swift), whose
+  every fixture/branch is exercised by its own passing tests (10 + 4 = 14, 0 failures).
+  No `[ExcludeFromCodeCoverage]`-equivalent anywhere.
+
+a11y-id audit (D-U2-2) — NONE needed:
+  Each workspace row carries a semantically-distinct computed accessibilityLabel
+  (e.g. "Charlie, active workspace, pinned, 1 tabs" vs "Alpha, workspace, 1 tabs"),
+  so no two serialized sidebar nodes collide such that a negative control is defeated
+  (the testA_negativeControl_workspaceMutationsFlipTree control passes — mutations flip
+  the tree distinctly). The SU3r leaf is a single row (no repeated-row ambiguity).
+  → ZERO `.accessibilityIdentifier` added.

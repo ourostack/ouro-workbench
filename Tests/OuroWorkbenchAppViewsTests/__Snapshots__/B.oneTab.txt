@@ -1,0 +1,4 @@
+View label="Tabs in Frontend"
+View label="main, Active"
+Image image="bolt.fill"
+Text kind=static text="main"
