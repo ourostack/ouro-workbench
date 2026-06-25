@@ -181,7 +181,7 @@ Cover every transition arm.
 **What**: In a new `Tests/OuroWorkbenchCoreTests/WorkspaceEditingAffordancesWiringTests.swift` (copy the `appSource()`/`repoRoot()` helper verbatim), write FAILING `source.contains(...)` assertions for the WORKSPACE menu wiring:
 - `WorkspaceSidebarRow` (or its host) attaches a `.contextMenu` with Pin/Unpin, Rename Workspace, Remove Custom Name.
 - The ⇧⌘R Rename-Workspace chord exists and targets the active workspace + opens rename (per D2d-8: assert `.keyboardShortcut("r", modifiers: [.command, .shift])` is present AND its action begins-rename on the active workspace, e.g. `beginRename(.workspace(`/`activeWorkspaceRow`). Placement-agnostic: chord dispatcher OR context-menu button — assert the chord + its target, not a fixed location).
-- The Remove-Custom-Name item is gated on `nameOverride != nil` (assert the conditional token, e.g. `row.nameOverride != nil` or the wrapper guard).
+- The Remove-Custom-Name item is gated on `nameOverride != nil` (assert the conditional token, e.g. `row.nameOverride != nil` or the wrapper guard). The exact token isn't fixed until Unit 4b decides whether the gate reads `WorkspaceRow.nameOverride` or a VM helper (`workspaceNameOverride(_:)`) — keep the RED assert and the GREEN token in LOCKSTEP: whichever 4b implements, 4a asserts that same token (review note 2).
 - Thin VM wrappers call the Core mutators + `save()` (assert `state.toggleWorkspacePin`, `state.setWorkspaceNameOverride`, `state.clearWorkspaceNameOverride` appear in the App source and are followed by a `save()` in their wrapper).
 **Acceptance**: Assertions FAIL (wiring absent) — real RED, shown.
 
@@ -213,7 +213,7 @@ Cover every transition arm.
 **What**: Extend the wiring test with FAILING `source.contains(...)` for the INLINE EDITORS:
 - `WorkspaceSidebarRow` shows a `TextField` bound to the inline-rename draft when `model.inlineRename.isEditing(.workspace(row.id))`, else the label.
 - `WorkspaceTabStrip.tabButton` shows a `TextField` when `model.inlineRename.isEditing(.tab(tab.id))`, else the label.
-- Each editor: `.onSubmit` (Enter) → `model.commitRename()`; an Escape path → `model.cancelRename()` (e.g. `.onExitCommand` or an `.onKeyPress(.escape)` / a cancel `.keyboardShortcut(.cancelAction)` button).
+- Each editor: `.onSubmit` (Enter) → `model.commitRename()`; an Escape path → `model.cancelRename()`. **Pick ONE Escape mechanism** (`.onExitCommand` OR `.onKeyPress(.escape)` OR a `.keyboardShortcut(.cancelAction)` cancel button) and assert that EXACT token in the source guard — do NOT write a vacuous "any of three" multi-contains, which would weaken the guard (review note 3).
 - The helper caption text "Press Enter to rename, Escape to cancel." is present.
 - `commitRename()` routes through `WorkspaceRenameCommit.resolve` and, on `.commit`, dispatches to `renameWorkspace`/`renameTab` per the active target; on `.noop` just closes (D2d-1).
 **Acceptance**: Assertions FAIL — real RED, shown.
@@ -252,3 +252,6 @@ Then run the FULL gate: `swift build`/`swift test` strict, `Scripts/check-covera
 
 ## Progress Log
 - 2026-06-24 22:15 Created from master plan (Slice ②d); anchors re-verified at HEAD d376564; render sites + Core seams + empty-commit decision recorded.
+- 2026-06-24 22:15 Validation pass: confirmed WorkspaceRow lacks `nameOverride` (Unit 4b additive need real); confirmed mutators must be public (App uses plain import) → D2d-6/D2d-8 refined.
+- 2026-06-24 22:15 Fresh unbiased sub-agent review gate spawned on the doing doc (autonomous signoff, no human gate).
+- 2026-06-24 22:15 Review gate returned PASS (all claims independently verified; 3 MINOR notes). Notes 2 & 3 hardened into Units 4a/6a (RED/GREEN token lockstep; single Escape mechanism). Verdict saved to artifacts/review-gate.md. Status → READY_FOR_EXECUTION.
