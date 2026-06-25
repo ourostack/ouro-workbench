@@ -1,0 +1,33 @@
+Running views-lib coverage AFTER SU-E2 (first-run bootstrap — FirstRunBootstrapView +
+FirstRunMode mode variants) landed. Second E sub-unit (fourth U3 surface overall).
+
+Branch: feat/anneal-u3-su-e-onboarding (off main @ 9228a2c, the #296 SU-C+SU-D merge)
+Captured: 2026-06-25
+
+SCOPE NOTE (D-U3-5 carried forward): the views lib is NOT gated this unit — COVERAGE_DIRS
+stays {OuroWorkbenchCore, OuroWorkbenchShellAdapter} and the allowlist is UNCHANGED. This
+number is PROGRESS toward the U4 coverage gate; it does NOT gate SU-E2.
+
+Measured via: ./scripts/check-coverage.sh (full suite, 2976 tests, 1 skipped, 0 failures —
+was 2968 after SU-E1), then `xcrun llvm-cov report <PackageTests.xctest bin>
+-instr-profile default.profdata Sources/OuroWorkbenchAppViews/`.
+
+Per-file (views lib):
+
+  File                            Regions  Missed  Cover    Lines  Missed  Cover
+  TOTAL                            2678     2297   14.23%   5823    5156   11.45%
+
+Running views-lib coverage AFTER SU-E2: 14.23% region / 11.45% line.
+
+Progression (region): U2 7.70% → SU-C 8.33% → SU-D 9.99% → SU-E1 13.67% → SU-E2 14.23%.
+Progression (line):   U2 6.94% → SU-C 7.45% → SU-D 10.33% → SU-E1 10.60% → SU-E2 11.45%.
+
+The SU-E2 references exercise the FirstRunBootstrapView body (all four FirstRunMode branches
+via headerIcon/modeLabel/modeColor, the agent-driven narration row vs the per-step rows, the
+provider-gate button, and the retry/choose-boss reason+button), plus the FirstRunStepRow icon
+states (pending/active/done/halted/awaitingHuman) reached through the pure-producer rows.
+
+Provenance: every state built through the PURE Core producer (FirstRunBootstrapDrive.presentIdle
+/ .present(result: BootstrapResult(phase:stepOutcomes:), activeStep:)) assigned to the
+@Published model.firstRunPresentation — never the live async runFirstRunBootstrap(), never a
+hand-assembled FirstRunBootstrapPresentation.

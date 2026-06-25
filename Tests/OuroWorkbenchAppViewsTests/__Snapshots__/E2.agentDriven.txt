@@ -1,0 +1,6 @@
+Text kind=static text="Your agent is online and finishing setup"
+Image image="sparkles"
+Text kind=static text="agent driving"
+Text kind=static text="agent driving"
+Image image="sparkles"
+Text kind=static text="Your agent is online and taking over from here — it's checking everything is set up and will let you know if it needs you."
