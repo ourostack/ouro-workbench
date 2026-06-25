@@ -34,15 +34,21 @@ permissions:
 jobs:
   release:
     name: Build ad-hoc-signed preview release
-    runs-on: macos-latest
+    runs-on: macos-14
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Show toolchain
+      - name: Verify pinned macOS runner policy
+        run: python3 .github/scripts/check-macos-runner-policy.py
+
+      - name: Select newest Xcode
         run: |
+          latest="$(ls -d /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)"
+          [ -n "$latest" ] || latest="$(ls -d /Applications/Xcode_*.app | sort -V | tail -1)"
+          sudo xcode-select -s "$latest/Contents/Developer"
           swift --version
           xcodebuild -version
 
