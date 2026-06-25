@@ -49,4 +49,6 @@ Every brief requirement → ✅ has a doing unit/section, or ❌ MISSING.
 - ✅ Realistic PR-count + any genuine fork → 12–16 PRs; Q3 (`NSFullUserName()`) is the genuine new fork; Q1 (`WorkbenchRootView` host viability) is the spike-gated fork.
 
 ## Verdict
-**FULL COVERAGE.** Every brief requirement maps to a doing unit/section. No ❌. The DecisionLogRow judgment call is resolved (own sub-unit/commit in C4, solo-PR if oversized — all 5 named high-fan-out targets honored). The U3-COMPLETE journal entry is the one remaining deliverable before the review gate.
+**FULL COVERAGE.** Every brief requirement maps to a doing unit/section. No ❌. The DecisionLogRow judgment call is resolved (own sub-unit/commit in C4, solo-PR if oversized — all 5 named high-fan-out targets honored).
+
+**Post-review-gate update:** the fresh unbiased gate (1 HIGH + 4 MEDIUM + 1 LOW, all resolved) ADDED 3 coverage items the first draft had dropped/mis-binned — `SessionTranscriptSheet`+`RunningSessionHeaderControls` (unassigned LOGIC → C9) and `TranscriptHistoryView` (branchless→LOGIC/C9) — sharpening the count to ~69 first-hand. It also caught 2 missed determinism leaks (the `NewTerminalSessionSheet` home-path; the `TranscriptHistoryView` `Text(tail.path)`) and 3 missed access-widenings, all now in the doc. The coverage is now MORE complete than the first draft; no brief requirement is uncovered. **Status: READY_FOR_EXECUTION.**

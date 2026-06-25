@@ -90,8 +90,10 @@ InactiveTerminalSurface | LOGIC | 9276 | if archived / if manualRecoveryNeeded /
 RunningSessionHeaderControls | LOGIC | 9494 | ForEach(primaryActions) / ForEach(sections) / switch menuButton
 NewTerminalSessionSheet | RECONFIRM (attribute-only-leaning) | 9931 | only `.disabled(!canCreate)` + an `onChange`/`guard` — NO node-tree branch; likely drops to branchless at the C11 reconfirm
 RecoveryDrillView | LOGIC | 10288 | if let result ForEach(items)
+TranscriptHistoryView | LOGIC | 9767 | if tail.truncated + Text(tail.path) PATH-LEAK [moved from branchless by the review gate; C9]
 
-(69 structural-LOGIC entries above; **66 confirmed multi-state + 3 RECONFIRM**, see reconciliation.)
+(**69 confirmed-LOGIC + 1 RECONFIRM** above; see reconciliation. The review gate added
+`TranscriptHistoryView` here from the branchless list.)
 `MachineRuntimeView` (`:10170`, login-item `@StateObject`) and `WorkbenchRootView` (`:131`, shell)
 are NOT in the 69 — they are allowlist-candidates.
 
@@ -114,13 +116,15 @@ StatusDot (3878), DashboardStatusLine (4866), InboxDoorPill (5319), DashboardMet
 WorkbenchVisibilityStrip (5643), MailboxWarningView (5740), OnboardingProgressDots (6602),
 ProviderModelPill (7128), AgentLanesCard (8338), AgentActionsCard (8416), DetailPaneChrome (8671),
 TerminalSearchToggleButton (8803), SessionNotesView (9144), TranscriptRehydrationPreview (9428),
-TerminalFocusView (9681), TranscriptHistoryView (9767), NewTerminalGroupSheet (9798),
+TerminalFocusView (9681), NewTerminalGroupSheet (9798),
 EditTerminalGroupSheet (9866), EditTerminalSessionSheet (10042), SessionNotesEditor (10150),
 ReleaseUpdateView (10249), WorkbenchReleaseUpdateControls (10261).
 
-(29 branchless.) *A few are attribute-only-variant (OnboardingProgressDots, ProviderModelPill,
-DetailPaneChrome, TerminalSearchToggleButton, TranscriptHistoryView) — re-confirmed per cluster;
-if one flips a real node it JOINS its cluster.*
+(**28 branchless** — `TranscriptHistoryView` was MOVED OUT to LOGIC/C9 by the fresh review gate:
+it has `if tail.truncated` (`:9775`) AND renders `Text(tail.path)` (`:9781`, a path-leak) → genuinely
+logic-bearing, not branchless.) *A few remaining are attribute-only-variant (OnboardingProgressDots,
+ProviderModelPill, DetailPaneChrome, TerminalSearchToggleButton) — re-confirmed per cluster; if one
+flips a real captured node it JOINS its cluster.*
 
 ## Genuinely-untestable / shell (2–3 — DEFERRED, honest-allowlist)
 
@@ -130,14 +134,19 @@ MachineRuntimeView (10170) — LoginItemController @StateObject, no injection se
 
 ## Reconciliation
 
-Raw structural sweep flags **69** uncovered structs as "has a data-conditional" (after excluding
-the 2 full shells `WorkbenchRootView`/`MachineRuntimeView` and the attribute-only views already
-binned with branchless). The audit's logic-bearing test is stricter still: a branch must change the
+The campaign's audit ESTIMATE was "~66 logic-bearing." The first-hand structural reclassification
+here (two parallel reads + the fresh review gate's corrections) finds, after excluding the 2 full
+shells (`WorkbenchRootView`/`MachineRuntimeView` → allowlist) and binning the attribute-only views
+with branchless: **69 confirmed-LOGIC + 1 RECONFIRM** (`NewTerminalSessionSheet`, attribute-only-leaning
+`.disabled(!canCreate)` → likely branchless). The logic-bearing test: a branch must change the
 **SERIALIZED node tree** the harness captures (`ViewSnapshotHost.mapNode`'s whitelist — Text string /
-TextField bound value / Image SF-symbol name / a11y label-value-id; geometry/color/font/disabled are
-dropped). Of the 69, **66 are confirmed multi-state** (the campaign headline, ~215 enumerated states)
-and **3 are RECONFIRM (attribute-only-leaning)** — re-checked at their owning cluster against the
-whitelist; each either confirms a real node flip (stays in the 66) or drops to branchless-29.
-**Net U4 plan target: the 66**; the 3 reconfirms are a bounded, recorded uncertainty (NOT a silent
-fudge), resolved per cluster. An attribute-only view that turns out to flip a captured node still gets
-snapshotted (coverage-% wins); a "LOGIC" view whose only variance is dropped-attribute drops to deferred.
+TextField bound value / Image SF-symbol name / a11y label-value-id; geometry/color/font/`.disabled`
+dropped). The review gate's corrections: `SessionTranscriptSheet`+`RunningSessionHeaderControls` were
+correctly LOGIC but UNASSIGNED to a cluster (now → C9); `TranscriptHistoryView` was wrongly binned
+branchless (now → LOGIC/C9, path-leak). **Net U4 plan target: ~69 logic-bearing views (slightly above
+the audit's ~66 estimate — the reclassification is MORE complete, not a regression), ~215+ enumerated
+states; 28 branchless deferred; 2 shells + 2 live-arm carves allowlisted.** The 1 RECONFIRM
+(`NewTerminalSessionSheet`) is a bounded, recorded uncertainty resolved at its C11 cluster (a captured-node
+flip → stays LOGIC; only dropped-attribute variance → branchless). The "~66 → ~69" delta is the audit
+estimate sharpening under first-hand reads + the review gate — exactly the anneal "measure-method-improving"
+case (read→reclassify), NOT new scope.
