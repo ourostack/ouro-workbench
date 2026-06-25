@@ -42,7 +42,7 @@ final class ReadinessActuatorStatusWiringTests: XCTestCase {
     /// The body of a model function, from its signature to the next `func` (or
     /// `// MARK`) boundary — enough to assert what it does and doesn't touch.
     private func actuatorBody(named signature: String) throws -> String {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         let start = try XCTUnwrap(
             source.range(of: signature)?.upperBound,
             "could not find \(signature) in the App source"
@@ -51,20 +51,5 @@ final class ReadinessActuatorStatusWiringTests: XCTestCase {
         // End at the next function declaration so we read only this body.
         let end = tail.range(of: "\n    func ")?.lowerBound ?? tail.endIndex
         return String(tail[tail.startIndex..<end])
-    }
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
     }
 }

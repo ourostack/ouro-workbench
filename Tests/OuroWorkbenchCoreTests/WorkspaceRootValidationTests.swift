@@ -131,10 +131,10 @@ final class WorkspaceRootValidationTests: XCTestCase {
         // U14: the operator's sheets AND the boss's MCP `createGroup` action both land
         // in model.createGroup / renameGroup, so the existence check must live there —
         // not only in the sheet — to reject a bad root at create time for both.
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
 
         for method in ["func createGroup(name: String, rootPath: String) -> Bool", "func renameGroup("] {
-            let slice = try sourceSlice(in: source, from: method, to: "\n    func ")
+            let slice = try WorkbenchAppSource.sourceSlice(in: source, from: method, to: "\n    func ")
             XCTAssertTrue(
                 slice.contains("WorkspaceRootValidation.validateOnDisk(trimmedRoot)"),
                 "\(method) must validate the root path on disk"
@@ -149,26 +149,5 @@ final class WorkspaceRootValidationTests: XCTestCase {
                 "\(method) must persist the tilde-expanded path"
             )
         }
-    }
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
-    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
-        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound)
-        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound)
-        return String(source[start..<end])
     }
 }

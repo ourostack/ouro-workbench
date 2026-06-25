@@ -19,7 +19,7 @@ import XCTest
 ///     start calling the back-fill seam.
 final class SessionIdBackfillWiringTests: XCTestCase {
     func testBackfillMethodExistsAndCallsTheSeam() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         XCTAssertTrue(
             source.contains("func backfillSessionIdsForFlushedRuns"),
             "a dedicated back-fill pass method must exist"
@@ -66,8 +66,8 @@ final class SessionIdBackfillWiringTests: XCTestCase {
     }
 
     func testBackfillIsWiredAtTheOutputSettlePoint() throws {
-        let source = try appSource()
-        let reclassify = try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        let reclassify = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "private func reclassifyAttentionForFlushedRuns",
             to: "\n    nonisolated private static func classifyTranscriptTail"
@@ -79,8 +79,8 @@ final class SessionIdBackfillWiringTests: XCTestCase {
     }
 
     func testMarkStartedDoesNotBackfill() throws {
-        let source = try appSource()
-        let markStarted = try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        let markStarted = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "func markStarted(plan: TerminalCommandPlan",
             to: "\n    /// Record that a run produced output."
@@ -101,32 +101,11 @@ final class SessionIdBackfillWiringTests: XCTestCase {
     /// The whole F4 back-fill block: `backfillSessionIdsForFlushedRuns` through the
     /// `ps`-backed lister, up to the unrelated `classifyTranscriptTail` helper.
     private func backfillMethod() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "private func backfillSessionIdsForFlushedRuns",
             to: "nonisolated private static func classifyTranscriptTail"
         )
-    }
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
-    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
-        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound)
-        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound)
-        return String(source[start..<end])
     }
 }

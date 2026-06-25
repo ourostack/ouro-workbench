@@ -57,12 +57,12 @@ final class TerminalLeakReaperWiringTests: XCTestCase {
     }
 
     func testSharedSpawnHelperExists() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         XCTAssertTrue(
             source.contains("func spawnScreenQuit"),
             "a shared spawnScreenQuit must factor the off-main + 1.5s watchdog so it isn't copy-pasted"
         )
-        let spawn = try sourceSlice(
+        let spawn = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "func spawnScreenQuit",
             to: "\n    func "
@@ -76,8 +76,8 @@ final class TerminalLeakReaperWiringTests: XCTestCase {
     // MARK: delete / archive call the quit BEFORE mutating state
 
     func testDeleteCustomSessionQuitsScreenBeforeRemovingTheEntry() throws {
-        let body = try sourceSlice(
-            in: try appSource(),
+        let body = try WorkbenchAppSource.sourceSlice(
+            in: try WorkbenchAppSource.appSource(),
             from: "func deleteCustomSession(_ entry: ProcessEntry)",
             to: "\n    private func recover(_ entry: ProcessEntry, recoveryPlan:"
         )
@@ -96,8 +96,8 @@ final class TerminalLeakReaperWiringTests: XCTestCase {
     }
 
     func testArchiveCustomSessionQuitsScreenBeforeReplacingTheEntry() throws {
-        let body = try sourceSlice(
-            in: try appSource(),
+        let body = try WorkbenchAppSource.sourceSlice(
+            in: try WorkbenchAppSource.appSource(),
             from: "func archiveCustomSession(_ entry: ProcessEntry",
             to: "\n    func restoreCustomSession"
         )
@@ -146,11 +146,11 @@ final class TerminalLeakReaperWiringTests: XCTestCase {
     }
 
     func testReaperIsWiredAfterRefreshLiveScreenSessionsAtStartup() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         // The startup task: order is load (in init) → refreshLiveScreenSessions
         // → reapOrphanedScreenSessions. Pin that the reaper call sits AFTER the
         // live-session refresh so the cache is populated when it runs.
-        let startup = try sourceSlice(
+        let startup = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "await model.refreshLiveScreenSessions()",
             to: "model.recoverEligibleSessionsOnStartup()"
@@ -162,8 +162,8 @@ final class TerminalLeakReaperWiringTests: XCTestCase {
     }
 
     func testStateLoadFlagIsSetOnlyOnTheSuccessPath() throws {
-        let load = try sourceSlice(
-            in: try appSource(),
+        let load = try WorkbenchAppSource.sourceSlice(
+            in: try WorkbenchAppSource.appSource(),
             from: "private func load() {",
             to: "\n    /// Rebuild the in-memory detail split"
         )
@@ -180,39 +180,18 @@ final class TerminalLeakReaperWiringTests: XCTestCase {
         // (the blank line before the NEXT member's doc comment) so the reaper's
         // docstring — which legitimately mentions liveScreenSessionNames — can't
         // bleed in and mask the stale-cache regression guard below.
-        try sourceSlice(
-            in: try appSource(),
+        try WorkbenchAppSource.sourceSlice(
+            in: try WorkbenchAppSource.appSource(),
             from: "func quitPersistentScreenIfNeeded",
             to: "\n    }\n"
         )
     }
 
     private func reaper() throws -> String {
-        try sourceSlice(
-            in: try appSource(),
+        try WorkbenchAppSource.sourceSlice(
+            in: try WorkbenchAppSource.appSource(),
             from: "func reapOrphanedScreenSessions",
             to: "\n    func "
         )
-    }
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
-    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
-        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound, "missing start marker: \(startMarker)")
-        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound, "missing end marker: \(endMarker)")
-        return String(source[start..<end])
     }
 }

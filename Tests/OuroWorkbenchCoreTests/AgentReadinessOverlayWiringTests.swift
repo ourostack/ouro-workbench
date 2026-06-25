@@ -13,7 +13,7 @@ final class AgentReadinessOverlayWiringTests: XCTestCase {
     // MARK: - Unit 2: viewmodel runs the live check + stores verdicts
 
     func testViewModelDeclaresOutwardVerdictAndInflightState() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         XCTAssertTrue(
             source.contains("@Published var agentOutwardVerdicts: [String: ProviderConnectionVerdict]"),
             "the viewmodel must publish per-agent outward verdicts so rows can render live readiness"
@@ -125,7 +125,7 @@ final class AgentReadinessOverlayWiringTests: XCTestCase {
     }
 
     func testSidebarAgentRowCallSitesThreadLiveState() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         // Both call sites (home-screen "Installed agents" card + the sidebar list) must thread the
         // per-agent live verdict + in-flight flag from the viewmodel into the row.
         let occurrences = source.components(separatedBy: "agentOutwardVerdicts[").count - 1
@@ -143,18 +143,17 @@ final class AgentReadinessOverlayWiringTests: XCTestCase {
     // MARK: - Helpers (mirror ColdStartHonestWiringTests)
 
     private func sidebarAgentRowDecl() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "struct SidebarAgentRow: View {",
             to: "\nprivate extension InstalledAgentRowPresentation.DotColor {"
         )
     }
 
-
     private func refreshOuroAgentsBody() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "func refreshOuroAgents() {",
             to: "\n    func "
@@ -162,32 +161,11 @@ final class AgentReadinessOverlayWiringTests: XCTestCase {
     }
 
     private func refreshAgentOutwardReadinessBody() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "func refreshAgentOutwardReadiness(",
             to: "\n    private func runColdStartProviderCheck"
         )
-    }
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
-    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
-        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound)
-        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound)
-        return String(source[start..<end])
     }
 }

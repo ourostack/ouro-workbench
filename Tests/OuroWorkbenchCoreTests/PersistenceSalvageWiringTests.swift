@@ -209,8 +209,8 @@ final class PersistenceSalvageWiringTests: XCTestCase {
     /// earlier in the file. Anchored on the reset-suppression comment that is
     /// unique to the view-model save.
     private func viewModelSaveBody() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "// While resetting to first run we've deliberately removed the state",
             to: "private func fetchResult"
@@ -219,8 +219,8 @@ final class PersistenceSalvageWiringTests: XCTestCase {
 
     /// The `selectedProjectID` `didSet` observer body.
     private func selectedProjectIDDidSet() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "@Published var selectedProjectID:",
             to: "@Published var selectedEntryID:"
@@ -229,8 +229,8 @@ final class PersistenceSalvageWiringTests: XCTestCase {
 
     /// The `selectedEntryID` `didSet` observer body.
     private func selectedEntryIDDidSet() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "@Published var selectedEntryID:",
             to: "@Published var selectedAgentName:"
@@ -239,8 +239,8 @@ final class PersistenceSalvageWiringTests: XCTestCase {
 
     /// The whole `load()` catch arm — from the catch through the end of `load()`.
     private func loadCatchArm() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "let loaded = try store.load()",
             to: "private func restoreDetailLayout"
@@ -254,37 +254,16 @@ final class PersistenceSalvageWiringTests: XCTestCase {
     /// scope to the failure branch alone.
     private func moveFailedArm() throws -> String {
         let arm = try loadCatchArm()
-        return try sourceSlice(in: arm, from: ".moveFailed", to: "} else {")
+        return try WorkbenchAppSource.sourceSlice(in: arm, from: ".moveFailed", to: "} else {")
     }
 
     /// The success block: from the load through the re-save, before the catch.
     private func loadSuccessBlock() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "let loaded = try store.load()",
             to: "} catch {"
         )
-    }
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
-    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
-        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound)
-        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound)
-        return String(source[start..<end])
     }
 }

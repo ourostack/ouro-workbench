@@ -26,7 +26,7 @@ final class StartSequenceAwaitWiringTests: XCTestCase {
     // MARK: start(_:with:) is async + consults the sequencer + awaits before launch
 
     func testStartIsAsync() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         XCTAssertTrue(
             source.contains("private func start(_ entry: ProcessEntry, with plan: TerminalCommandPlan) async"),
             "start(_:with:) must be async so it can await the quit before relaunching"
@@ -132,8 +132,8 @@ final class StartSequenceAwaitWiringTests: XCTestCase {
         // And the single-shot gate itself must be backed by a real atomic guard
         // (a lock making the check-and-set across the two background closures
         // atomic), not a bare bool that could still race.
-        let gate = try sourceSlice(
-            in: try appSource(),
+        let gate = try WorkbenchAppSource.sourceSlice(
+            in: try WorkbenchAppSource.appSource(),
             from: "private final class SingleShotContinuation",
             to: "\n@MainActor\nfinal class TerminalSessionController"
         )
@@ -152,8 +152,8 @@ final class StartSequenceAwaitWiringTests: XCTestCase {
         // The VM-level Stop path: terminate(_ entry:) must call the controller's
         // NON-awaiting terminate(), never the awaiting variant (blocking the main
         // actor on every Stop would jank the UI).
-        let body = try sourceSlice(
-            in: try appSource(),
+        let body = try WorkbenchAppSource.sourceSlice(
+            in: try WorkbenchAppSource.appSource(),
             from: "func terminate(_ entry: ProcessEntry) {",
             to: "\n    /// Terminate every currently-running session."
         )
@@ -168,10 +168,10 @@ final class StartSequenceAwaitWiringTests: XCTestCase {
     }
 
     func testControllerKeepsNonAwaitingTerminate() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         // The fire-and-forget terminate() the controller exposes for app-exit /
         // standalone Stop must remain.
-        let controllerTerminate = try sourceSlice(
+        let controllerTerminate = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "    func terminate() {",
             to: "\n    private func terminatePersistentSessionIfNeeded"
@@ -185,8 +185,8 @@ final class StartSequenceAwaitWiringTests: XCTestCase {
     // MARK: launch / recover route through await start
 
     func testLaunchRoutesThroughAwaitStart() throws {
-        let body = try sourceSlice(
-            in: try appSource(),
+        let body = try WorkbenchAppSource.sourceSlice(
+            in: try WorkbenchAppSource.appSource(),
             from: "func launch(_ entry: ProcessEntry) {",
             to: "\n    func focusTerminal"
         )
@@ -197,8 +197,8 @@ final class StartSequenceAwaitWiringTests: XCTestCase {
     }
 
     func testRecoverRoutesThroughAwaitStart() throws {
-        let body = try sourceSlice(
-            in: try appSource(),
+        let body = try WorkbenchAppSource.sourceSlice(
+            in: try WorkbenchAppSource.appSource(),
             from: "private func recover(_ entry: ProcessEntry, recoveryPlan: RecoveryPlan) {",
             to: "\n    private func applyBossAction"
         )
@@ -211,39 +211,18 @@ final class StartSequenceAwaitWiringTests: XCTestCase {
     // MARK: - Helpers
 
     private func startMethod() throws -> String {
-        try sourceSlice(
-            in: try appSource(),
+        try WorkbenchAppSource.sourceSlice(
+            in: try WorkbenchAppSource.appSource(),
             from: "private func start(_ entry: ProcessEntry, with plan: TerminalCommandPlan) async",
             to: "\n    func markStarted(plan: TerminalCommandPlan"
         )
     }
 
     private func awaitingQuit() throws -> String {
-        try sourceSlice(
-            in: try appSource(),
+        try WorkbenchAppSource.sourceSlice(
+            in: try WorkbenchAppSource.appSource(),
             from: "func terminatePersistentSessionAwaiting() async",
             to: "\n    private func recordOutput"
         )
-    }
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
-    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
-        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound, "missing start marker: \(startMarker)")
-        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound, "missing end marker: \(endMarker)")
-        return String(source[start..<end])
     }
 }

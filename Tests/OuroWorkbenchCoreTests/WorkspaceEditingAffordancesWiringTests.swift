@@ -13,7 +13,7 @@ final class WorkspaceEditingAffordancesWiringTests: XCTestCase {
     // MARK: - Unit 4: workspace context menu + thin VM wrappers
 
     func testWorkspaceRowAttachesAContextMenu() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         XCTAssertTrue(
             source.contains("WorkspaceRowContextMenu(row: row, model: model)"),
             "the WorkspaceSidebarRow must attach the ②d workspace context menu"
@@ -21,7 +21,7 @@ final class WorkspaceEditingAffordancesWiringTests: XCTestCase {
     }
 
     func testWorkspaceContextMenuHasPinRenameAndRemoveCustomName() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         // Pin/Unpin (label flips on row.isPinned; pin / pin.slash icon).
         XCTAssertTrue(
             source.contains("model.toggleWorkspacePin(row.id)"),
@@ -44,7 +44,7 @@ final class WorkspaceEditingAffordancesWiringTests: XCTestCase {
     }
 
     func testRemoveCustomNameItemIsGatedOnNameOverridePresent() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         // D2d-2 — the item is shown ONLY when an override exists. The gate reads the
         // row's nameOverride (added to WorkspaceRow in Unit 4b).
         XCTAssertTrue(
@@ -54,7 +54,7 @@ final class WorkspaceEditingAffordancesWiringTests: XCTestCase {
     }
 
     func testRenameWorkspaceChordTargetsActiveWorkspace() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         // D2d-8 — ⇧⌘R is wired via the chord dispatcher and targets the ACTIVE workspace.
         XCTAssertTrue(
             source.contains("menuCommand(\"Rename Workspace…\", .renameWorkspace, \"r\", [.command, .shift])"),
@@ -71,7 +71,7 @@ final class WorkspaceEditingAffordancesWiringTests: XCTestCase {
     }
 
     func testWorkspaceWrappersCallCoreMutatorsThenSave() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         // The thin VM wrappers mutate state via the Core mutators then persist via save().
         XCTAssertTrue(
             source.contains("state.toggleWorkspacePin(workspaceId: id)"),
@@ -88,7 +88,7 @@ final class WorkspaceEditingAffordancesWiringTests: XCTestCase {
         // Each wrapper persists. Pin a precise slice (from the wrapper signature to the
         // NEXT wrapper signature) so this is not a vacuous match: the call to the Core
         // mutator and the trailing save() must BOTH live inside the same wrapper body.
-        let pinWrapper = try sourceSlice(
+        let pinWrapper = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "func toggleWorkspacePin(_ id: UUID)",
             to: "func renameWorkspace(_ id: UUID, to input: String)"
@@ -97,7 +97,7 @@ final class WorkspaceEditingAffordancesWiringTests: XCTestCase {
             pinWrapper.contains("state.toggleWorkspacePin(workspaceId: id)") && pinWrapper.contains("save()"),
             "toggleWorkspacePin wrapper must call the Core mutator then persist via save()"
         )
-        let renameWrapper = try sourceSlice(
+        let renameWrapper = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "func renameWorkspace(_ id: UUID, to input: String)",
             to: "func removeCustomWorkspaceName(_ id: UUID)"
@@ -106,7 +106,7 @@ final class WorkspaceEditingAffordancesWiringTests: XCTestCase {
             renameWrapper.contains("state.setWorkspaceNameOverride(workspaceId: id, to:") && renameWrapper.contains("save()"),
             "renameWorkspace wrapper must set the override then persist via save()"
         )
-        let removeWrapper = try sourceSlice(
+        let removeWrapper = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "func removeCustomWorkspaceName(_ id: UUID)",
             to: "func beginRename("
@@ -120,7 +120,7 @@ final class WorkspaceEditingAffordancesWiringTests: XCTestCase {
     // MARK: - Unit 5: tab context menu + thin VM wrapper
 
     func testTabButtonAttachesAContextMenu() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         XCTAssertTrue(
             source.contains("WorkspaceTabContextMenu(tab: tab, model: model)"),
             "the WorkspaceTabStrip tabButton must attach the ②d tab context menu"
@@ -128,7 +128,7 @@ final class WorkspaceEditingAffordancesWiringTests: XCTestCase {
     }
 
     func testTabContextMenuHasRenameTab() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         XCTAssertTrue(
             source.contains("model.beginRename(.tab(tab.id), prefill: tab.effectiveTabName)"),
             "Rename Tab must begin the inline rename on the tab target, prefilled with effectiveTabName"
@@ -136,7 +136,7 @@ final class WorkspaceEditingAffordancesWiringTests: XCTestCase {
     }
 
     func testRenameTabChordTargetsSelectedTab() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         // D2d-8 — ⌘R is wired via the chord dispatcher and targets the SELECTED tab.
         XCTAssertTrue(
             source.contains("menuCommand(\"Rename Tab…\", .renameTab, \"r\")"),
@@ -153,8 +153,8 @@ final class WorkspaceEditingAffordancesWiringTests: XCTestCase {
     }
 
     func testRenameTabWrapperCallsCoreMutatorThenSave() throws {
-        let source = try appSource()
-        let renameTabWrapper = try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        let renameTabWrapper = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "func renameTab(_ id: UUID, to input: String)",
             to: "func beginRename("
@@ -170,7 +170,7 @@ final class WorkspaceEditingAffordancesWiringTests: XCTestCase {
     // MARK: - Unit 6: inline rename editors + caption + commit routing
 
     func testWorkspaceRowShowsInlineEditorWhenEditing() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         XCTAssertTrue(
             source.contains("model.inlineRename.isEditing(.workspace(row.id))"),
             "the workspace row must swap its label for the editor while that workspace is being renamed"
@@ -178,7 +178,7 @@ final class WorkspaceEditingAffordancesWiringTests: XCTestCase {
     }
 
     func testTabButtonShowsInlineEditorWhenEditing() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         XCTAssertTrue(
             source.contains("model.inlineRename.isEditing(.tab(tab.id))"),
             "the tab button must swap its label for the editor while that tab is being renamed"
@@ -186,7 +186,7 @@ final class WorkspaceEditingAffordancesWiringTests: XCTestCase {
     }
 
     func testInlineEditorBindsDraftAndCommitsOnSubmit() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         // The editor's TextField is bound to the inline-rename draft …
         XCTAssertTrue(
             source.contains("$model.inlineRename.draft"),
@@ -200,7 +200,7 @@ final class WorkspaceEditingAffordancesWiringTests: XCTestCase {
     }
 
     func testInlineEditorCancelsOnExitCommand() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         // Review note 3 — ONE Escape mechanism, asserted EXACTLY (not a vacuous
         // any-of-three). We use `.onExitCommand` (the AppKit Escape hook).
         XCTAssertTrue(
@@ -210,7 +210,7 @@ final class WorkspaceEditingAffordancesWiringTests: XCTestCase {
     }
 
     func testInlineEditorShowsHelperCaption() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         XCTAssertTrue(
             source.contains("Press Enter to rename, Escape to cancel."),
             "the inline editor must show the cmux helper caption"
@@ -218,10 +218,10 @@ final class WorkspaceEditingAffordancesWiringTests: XCTestCase {
     }
 
     func testCommitRenameDispatchesPerActiveTarget() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         // commitRename pulls the pending commit from InlineRenameState and dispatches to
         // the per-target wrapper (which itself routes through WorkspaceRenameCommit; D2d-1).
-        let commitFn = try sourceSlice(
+        let commitFn = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "func commitRename()",
             to: "func cancelRename()"
@@ -234,7 +234,7 @@ final class WorkspaceEditingAffordancesWiringTests: XCTestCase {
             commitFn.contains("renameWorkspace(") && commitFn.contains("renameTab("),
             "commitRename must dispatch to renameWorkspace / renameTab per the active target"
         )
-        let cancelFn = try sourceSlice(
+        let cancelFn = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "func cancelRename()",
             to: "}"
@@ -246,25 +246,4 @@ final class WorkspaceEditingAffordancesWiringTests: XCTestCase {
     }
 
     // MARK: - Source-guard helpers (copied verbatim from WorkspaceSidebarWiringTests)
-
-    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
-        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound)
-        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound)
-        return String(source[start..<end])
-    }
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
 }

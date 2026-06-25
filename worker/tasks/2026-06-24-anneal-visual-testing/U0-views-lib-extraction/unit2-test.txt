@@ -1,0 +1,9 @@
+=== Unit 2: FULL strict swift test @ 01:01:43 ===
+[0/1] Planning build
+... (per-test lines elided — 2845 tests) ...
+Test Suite 'WorkbenchAppSourceRetargetTests' started at 2026-06-25 01:02:47.540.
+Test Suite 'WorkbenchAppSourceRetargetTests' passed at 2026-06-25 01:02:47.605.
+	 Executed 2845 tests, with 1 test skipped and 0 failures (0 unexpected) in 67.553 (67.794) seconds
+Test Suite 'All tests' passed at 2026-06-25 01:02:52.804.
+	 Executed 2845 tests, with 1 test skipped and 0 failures (0 unexpected) in 67.553 (67.797) seconds
+TEST_EXIT=0

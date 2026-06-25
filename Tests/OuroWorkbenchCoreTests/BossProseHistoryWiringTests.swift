@@ -5,7 +5,7 @@ import XCTest
 ///
 /// The pure `WorkspaceState.recordProse` + `BossProseEntry` are unit-tested + 100%
 /// covered in Core; the App that wires the check-in success path isn't coverage-
-/// gated, so we source-pin its structure the `appSource()` way.
+/// gated, so we source-pin its structure the `WorkbenchAppSource.appSource()` way.
 ///
 /// The risks these pins defend:
 ///   - the SUCCESS path must recordProse the boss's answer + save — not just set
@@ -70,31 +70,10 @@ final class BossProseHistoryWiringTests: XCTestCase {
     private func checkInBody() throws -> String {
         // The check-in's do/catch around the boss ask — from the success answer
         // assignment region down through the catch.
-        try sourceSlice(
-            in: try appSource(),
+        try WorkbenchAppSource.sourceSlice(
+            in: try WorkbenchAppSource.appSource(),
             from: "let queueDepthBeforeAsk = externalActionQueue.pendingCount()",
             to: "\n    func applyBossActions(from answer: String) {"
         )
-    }
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
-    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
-        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound, "missing start marker: \(startMarker)")
-        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound, "missing end marker: \(endMarker)")
-        return String(source[start..<end])
     }
 }

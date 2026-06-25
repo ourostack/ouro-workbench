@@ -44,8 +44,8 @@ final class VaultOnboardingFormSessionResetTests: XCTestCase {
     // MARK: - Helpers (mirror VaultOnboardingWiringTests)
 
     private func presentProviderConfigFormMethod() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "func presentProviderConfigForm(agentName:",
             to: "/// Present the provider form to CREATE A NEW AGENT"
@@ -53,32 +53,11 @@ final class VaultOnboardingFormSessionResetTests: XCTestCase {
     }
 
     private func presentNewAgentProviderConfigFormMethod() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "func presentNewAgentProviderConfigForm(",
             to: "/// U18: the install sheet is demoted"
         )
-    }
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
-    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
-        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound)
-        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound)
-        return String(source[start..<end])
     }
 }

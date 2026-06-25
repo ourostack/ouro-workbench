@@ -5,7 +5,7 @@ import XCTest
 ///
 /// The pure `WaitingSessionReconciler.untriagedWaitingEntryIds` is unit-tested + 100%
 /// covered in Core; the App that wires it isn't coverage-gated, so we source-pin its
-/// structure the `appSource()` way.
+/// structure the `WorkbenchAppSource.appSource()` way.
 ///
 /// The risks these pins defend:
 ///   - the reconcile helper must consult the pure reconciler seam against the LIVE
@@ -53,7 +53,7 @@ final class WaitingReconcileWiringTests: XCTestCase {
     }
 
     func testReconcileIsInvokedAfterRecordBossDecisions() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         // In the check-in success path: recordBossDecisions(from: answer) then the
         // reconcile, so a just-made decision covers its own session first.
         let recordDecisionsIndex = try XCTUnwrap(
@@ -68,11 +68,11 @@ final class WaitingReconcileWiringTests: XCTestCase {
     }
 
     func testReconcileIsInvokedAtStartup() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         // The startup task wires the reconcile so a session waiting across a restart
         // (no decision) is triaged. Pin it sits in the startup sequence alongside
         // the other startup reconciles.
-        let startup = try sourceSlice(
+        let startup = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "model.reconcileStartupAttentionWithLiveSessions()",
             to: "model.refreshOnboardingReadiness()"
@@ -86,31 +86,10 @@ final class WaitingReconcileWiringTests: XCTestCase {
     // MARK: - Helpers
 
     private func reconcileHelper() throws -> String {
-        try sourceSlice(
-            in: try appSource(),
+        try WorkbenchAppSource.sourceSlice(
+            in: try WorkbenchAppSource.appSource(),
             from: "func reconcileWaitingSessionsIntoInbox(",
             to: "\n    func "
         )
-    }
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
-    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
-        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound, "missing start marker: \(startMarker)")
-        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound, "missing end marker: \(endMarker)")
-        return String(source[start..<end])
     }
 }

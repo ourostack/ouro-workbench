@@ -18,10 +18,10 @@ final class ImportPersistenceHonestyWiringTests: XCTestCase {
     // MARK: - save() is @discardableResult -> Bool
 
     func testSaveIsDiscardableResultReturningBool() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         // The view-model persistence save() — the one whose body calls
         // `try store.save(state)` — must be `@discardableResult ... func save() -> Bool`.
-        let slice = try sourceSlice(
+        let slice = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "@discardableResult\n    private func save() -> Bool {",
             to: "private func fetchResult"
@@ -48,8 +48,8 @@ final class ImportPersistenceHonestyWiringTests: XCTestCase {
     // MARK: - WorkbenchImportApplyResult carries persisted
 
     func testApplyResultHasPersistedField() throws {
-        let source = try appSource()
-        let slice = try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        let slice = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "struct WorkbenchImportApplyResult: Equatable {",
             to: "var hasImports: Bool"
@@ -63,8 +63,8 @@ final class ImportPersistenceHonestyWiringTests: XCTestCase {
     // MARK: - Workspace-config apply path gates on save()'s Bool
 
     func testWorkspaceImportCapturesSaveResultAndGatesActionLog() throws {
-        let source = try appSource()
-        let body = try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        let body = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "let persisted = save()\n        refreshExecutableHealth()\n        // Auto-resume",
             to: "return result"
@@ -93,8 +93,8 @@ final class ImportPersistenceHonestyWiringTests: XCTestCase {
     // MARK: - Onboarding apply path gates on save()'s Bool
 
     func testOnboardingApplyCapturesSaveResultAndGatesActionLog() throws {
-        let source = try appSource()
-        let body = try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        let body = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "func applyOnboardingProposal() -> WorkbenchImportApplyResult? {",
             to: "func openOnboardingRepair"
@@ -124,8 +124,8 @@ final class ImportPersistenceHonestyWiringTests: XCTestCase {
     // MARK: - ImportSummaryBanner routes through the presentation seam
 
     func testBannerRoutesThroughPresentationSeamNotUnconditionalGreen() throws {
-        let source = try appSource()
-        let body = try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        let body = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "struct ImportSummaryBanner: View {",
             to: "private func scheduleDismiss()"
@@ -162,31 +162,4 @@ final class ImportPersistenceHonestyWiringTests: XCTestCase {
     }
 
     // MARK: - Helpers (mirror ColdStartHonestWiringTests)
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
-    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
-        let start = try XCTUnwrap(
-            source.range(of: startMarker)?.lowerBound,
-            "start marker not found: \(startMarker)"
-        )
-        let end = try XCTUnwrap(
-            source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound,
-            "end marker not found: \(endMarker)"
-        )
-        return String(source[start..<end])
-    }
 }

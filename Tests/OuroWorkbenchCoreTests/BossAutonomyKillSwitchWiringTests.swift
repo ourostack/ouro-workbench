@@ -73,7 +73,7 @@ final class BossAutonomyKillSwitchWiringTests: XCTestCase {
     /// SIGKILL backstop, so a SIGTERM-ignoring `screen` survived. Each must now
     /// `kill(process.processIdentifier, SIGKILL)` after the timeout terminate().
     func testScreenTerminatorsHaveSigkillBackstop() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         for fn in ["spawnScreenQuit", "listLiveScreenSessionNames", "persistentSessionIsListed"] {
             let body = try functionBody(named: fn, in: source)
             XCTAssertTrue(
@@ -90,7 +90,7 @@ final class BossAutonomyKillSwitchWiringTests: XCTestCase {
     /// The SIGKILL must follow the `terminate()` inside the timed-out branch — not
     /// precede it (terminate-then-kill is the escalation order).
     func testScreenSigkillFollowsTerminate() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         for fn in ["spawnScreenQuit", "listLiveScreenSessionNames", "persistentSessionIsListed"] {
             let body = try functionBody(named: fn, in: source)
             let term = try XCTUnwrap(body.range(of: "process.terminate()"), "\(fn): no terminate()")
@@ -143,7 +143,7 @@ final class BossAutonomyKillSwitchWiringTests: XCTestCase {
     /// `isLoadingState` / `isResettingToFirstRun`), and during the batch the
     /// per-call saves are no-ops.
     func testBatchedSaveRespectsSuppressionGuardsAndSavesOnce() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         let batchBody = try functionBody(named: "withBatchedSave", in: source)
         XCTAssertTrue(
             batchBody.contains("save()"),
@@ -163,7 +163,7 @@ final class BossAutonomyKillSwitchWiringTests: XCTestCase {
     /// to `continue`. The loop is now started/cancelled by `setBossWatchEnabled`
     /// (a held task handle), so it only runs while enabled — no idle wakeups.
     func testWatchLoopStartStopDrivenByEnableToggle() throws {
-        let setter = try functionBody(named: "setBossWatchEnabled", in: try appSource())
+        let setter = try functionBody(named: "setBossWatchEnabled", in: try WorkbenchAppSource.appSource())
         XCTAssertTrue(
             setter.contains("bossWatchLoopTask"),
             "setBossWatchEnabled must own the loop's lifecycle via a held task handle (start on enable, cancel on disable)"
@@ -181,7 +181,7 @@ final class BossAutonomyKillSwitchWiringTests: XCTestCase {
     /// The loop body must no longer carry the wake-then-`continue`-while-off
     /// busy pattern (sleep, then `guard bossWatchIsEnabled else { continue }`).
     func testWatchLoopNoLongerBusyWakesWhenOff() throws {
-        let loop = try functionBody(named: "runBossWatchLoop", in: try appSource())
+        let loop = try functionBody(named: "runBossWatchLoop", in: try WorkbenchAppSource.appSource())
         XCTAssertFalse(
             loop.contains("guard bossWatchIsEnabled else {\n                continue"),
             "the loop must not wake every interval just to continue while Watch is OFF — its start/stop is driven by setBossWatchEnabled"
@@ -191,7 +191,7 @@ final class BossAutonomyKillSwitchWiringTests: XCTestCase {
     /// FIX4 must NOT re-introduce the unconditional `.task { await model.runBossWatchLoop() }`
     /// at the view root — the loop is now owned by the enable toggle.
     func testWatchLoopNotLaunchedUnconditionallyAtViewRoot() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         XCTAssertFalse(
             source.contains(".task {\n            await model.runBossWatchLoop()\n        }"),
             "the boss-watch loop must no longer be an unconditional .task — setBossWatchEnabled owns its lifecycle"
@@ -201,11 +201,11 @@ final class BossAutonomyKillSwitchWiringTests: XCTestCase {
     // MARK: - source-pin helpers (App is not coverage-gated)
 
     private func runExternalActionPumpBody() throws -> String {
-        try functionBody(named: "runExternalActionPump", in: try appSource())
+        try functionBody(named: "runExternalActionPump", in: try WorkbenchAppSource.appSource())
     }
 
     private func runBossCheckInPrivateBody() throws -> String {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         let start = try XCTUnwrap(
             source.range(of: "private func runBossCheckIn(")?.upperBound,
             "could not find private runBossCheckIn in the App source"
@@ -231,20 +231,5 @@ final class BossAutonomyKillSwitchWiringTests: XCTestCase {
             ?? tail.range(of: "\n    nonisolated ")?.lowerBound
             ?? tail.endIndex
         return String(tail[tail.startIndex..<end])
-    }
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
     }
 }

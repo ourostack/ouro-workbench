@@ -23,7 +23,7 @@ final class WorkbenchSurfacePolicyTests: XCTestCase {
     }
 
     func testAppWorkspaceCopyIsWiredThroughSurfacePolicy() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
 
         XCTAssertTrue(source.contains("Section(WorkbenchSurfacePolicy.bossSectionTitle)"))
         XCTAssertTrue(source.contains("Section(WorkbenchSurfacePolicy.workspaceSectionTitle)"))
@@ -45,8 +45,8 @@ final class WorkbenchSurfacePolicyTests: XCTestCase {
         // leads with purpose + `New Terminal` (the prominent, gate-free primary) and makes
         // the boss a secondary opt-in. The copy lives in Core (AgentHomeEmptyStateCopy) so
         // the view renders it through those constants rather than as raw literals.
-        let source = try appSource()
-        let emptyState = try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        let emptyState = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "struct AgentHomeEmptyState: View",
             to: "                if !model.ouroAgents.isEmpty {"
@@ -79,8 +79,8 @@ final class WorkbenchSurfacePolicyTests: XCTestCase {
     }
 
     func testTitleStripUsesSessionControlPolicyWithoutPrimaryRestartLeak() throws {
-        let source = try appSource()
-        let titleStrip = try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        let titleStrip = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "private struct SessionTitleStrip: View",
             to: "    @ViewBuilder\n    private var statusDot: some View"
@@ -218,7 +218,7 @@ final class WorkbenchSurfacePolicyTests: XCTestCase {
         // model.terminate(entry) directly, so a reflexive chord can't nuke a live
         // agent. (The bulk Stop-All / reset / boss-MCP paths intentionally keep
         // calling terminate directly and are asserted elsewhere by behavior.)
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
 
         // The ⌘. menu chord handler is gated.
         XCTAssertTrue(source.contains("if let entry = model.activeEntry { model.requestStop(entry) }"))
@@ -233,26 +233,5 @@ final class WorkbenchSurfacePolicyTests: XCTestCase {
 
         // The menubar / palette Stop-Selected command is gated too.
         XCTAssertTrue(source.contains("requestStop(selectedEntry)"))
-    }
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
-    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
-        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound)
-        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound)
-        return String(source[start..<end])
     }
 }

@@ -11,8 +11,8 @@ import XCTest
 final class CloneHonestWiringTests: XCTestCase {
 
     private func cloneBranch() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "func cloneAgentHeadless(remote: String, agentName: String) async -> CloneAgentFlowState {",
             to: "\n    func selectBoss(agentName: String) {"
@@ -234,12 +234,12 @@ final class CloneHonestWiringTests: XCTestCase {
     // MARK: - The dedicated short-budget clone probe
 
     func testCloneProbeRunsAShortBudgetCheck() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         XCTAssertTrue(
             source.contains("func runCloneProviderCheck"),
             "a dedicated short-budget clone probe method must exist"
         )
-        let probe = try sourceSlice(
+        let probe = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "private func runCloneProviderCheck",
             to: "\n    private func "
@@ -255,25 +255,4 @@ final class CloneHonestWiringTests: XCTestCase {
     }
 
     // MARK: - Helpers (mirror ColdStartHonestWiringTests)
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
-    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
-        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound)
-        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound)
-        return String(source[start..<end])
-    }
 }

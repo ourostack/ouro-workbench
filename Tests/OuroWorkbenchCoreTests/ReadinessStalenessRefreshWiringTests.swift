@@ -105,8 +105,8 @@ final class ReadinessStalenessRefreshWiringTests: XCTestCase {
     // MARK: - Helpers (mirror AgentDetailReadinessWiringTests)
 
     private func rootViewDecl() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "struct WorkbenchRootView: View {",
             to: "\nfinal class WorkbenchMenuBarController"
@@ -114,8 +114,8 @@ final class ReadinessStalenessRefreshWiringTests: XCTestCase {
     }
 
     private func refreshIfStaleDecl() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "func refreshOutwardReadinessIfStale(",
             to: "\n    func refreshAgentOutwardReadiness()"
@@ -123,32 +123,11 @@ final class ReadinessStalenessRefreshWiringTests: XCTestCase {
     }
 
     private func refreshReadinessDecl() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "func refreshAgentOutwardReadiness() {",
             to: "\n    private func runColdStartProviderCheck("
         )
-    }
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
-    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
-        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound)
-        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound)
-        return String(source[start..<end])
     }
 }

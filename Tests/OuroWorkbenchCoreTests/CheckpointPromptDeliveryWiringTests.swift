@@ -6,7 +6,7 @@ import XCTest
 /// The pure `CheckpointPromptDeliveryResolver` + the `TerminalCommandPlan.
 /// checkpointPromptDelivery` field are unit-tested + 100% covered in Core; the App
 /// (TerminalSessionController) that types the prompt isn't coverage-gated, so we
-/// source-pin its structure the `appSource()` way.
+/// source-pin its structure the `WorkbenchAppSource.appSource()` way.
 ///
 /// The risks these pins defend (the spec's behavioral risks for gap 5):
 ///   - the controller must consult `plan.checkpointPromptDelivery` and, for
@@ -19,7 +19,7 @@ import XCTest
 ///     `.positional`).
 final class CheckpointPromptDeliveryWiringTests: XCTestCase {
     func testControllerConsultsCheckpointPromptDeliveryAndRoutesSendAfterLaunchViaSendInput() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         let body = try sessionControllerBody(source)
         XCTAssertTrue(
             body.contains("plan.checkpointPromptDelivery"),
@@ -36,7 +36,7 @@ final class CheckpointPromptDeliveryWiringTests: XCTestCase {
     }
 
     func testSendAfterLaunchIsGatedOnInteractivityNotOnStarted() throws {
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         let body = try sessionControllerBody(source)
         // The delivery must hang off the first-output (interactive) signal, not the
         // synchronous start()/onStarted. Pin that the deliver helper is invoked from
@@ -52,7 +52,7 @@ final class CheckpointPromptDeliveryWiringTests: XCTestCase {
         )
         // It must be reached from recordOutput (the first-output interactive signal),
         // never from start()/onStarted (typing before the TUI is ready loses it).
-        let recordOutput = try sourceSlice(in: source, from: "private func recordOutput(", to: "\n    func ")
+        let recordOutput = try WorkbenchAppSource.sourceSlice(in: source, from: "private func recordOutput(", to: "\n    func ")
         XCTAssertTrue(
             recordOutput.contains("deliverCheckpointPromptIfNeeded") || recordOutput.contains("CheckpointPrompt"),
             "the checkpoint prompt must be delivered from the first-output (interactive) signal in recordOutput, not start()/onStarted"
@@ -60,8 +60,8 @@ final class CheckpointPromptDeliveryWiringTests: XCTestCase {
     }
 
     func testStartDoesNotTypeTheCheckpointPromptImmediately() throws {
-        let source = try appSource()
-        let startBody = try sourceSlice(in: source, from: "func start() {", to: "\n    func sendInput(")
+        let source = try WorkbenchAppSource.appSource()
+        let startBody = try WorkbenchAppSource.sourceSlice(in: source, from: "func start() {", to: "\n    func sendInput(")
         // start() must not type the checkpoint prompt synchronously — that's before
         // the TUI is interactive. Delivery belongs to the output path only.
         XCTAssertFalse(
@@ -73,31 +73,10 @@ final class CheckpointPromptDeliveryWiringTests: XCTestCase {
     // MARK: - Helpers
 
     private func sessionControllerBody(_ source: String) throws -> String {
-        try sourceSlice(
+        try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "final class TerminalSessionController",
             to: "\nfinal class CapturingLocalProcessTerminalView"
         )
-    }
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
-    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
-        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound, "missing start marker: \(startMarker)")
-        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound, "missing end marker: \(endMarker)")
-        return String(source[start..<end])
     }
 }

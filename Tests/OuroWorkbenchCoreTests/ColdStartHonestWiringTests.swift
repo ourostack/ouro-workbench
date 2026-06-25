@@ -18,8 +18,8 @@ final class ColdStartHonestWiringTests: XCTestCase {
     }
 
     private func coldStartBranch() throws -> String {
-        let source = try appSource()
-        return try sourceSlice(
+        let source = try WorkbenchAppSource.appSource()
+        return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "case let .coldStartHatch(plan):",
             to: "/// Open the native provider-config form in response to a non-secret-bearing"
@@ -102,12 +102,12 @@ final class ColdStartHonestWiringTests: XCTestCase {
     func testColdStartProbeRunsAShortBudgetCheck() throws {
         // The post-hatch probe lives in a dedicated short-budget method. Pin that it exists and is
         // wired into the cold-start branch, and that it classifies via the F2 classifier.
-        let source = try appSource()
+        let source = try WorkbenchAppSource.appSource()
         XCTAssertTrue(
             source.contains("func runColdStartProviderCheck"),
             "a dedicated short-budget cold-start probe method must exist"
         )
-        let probe = try sourceSlice(
+        let probe = try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "private func runColdStartProviderCheck",
             to: "\n    private func "
@@ -124,25 +124,4 @@ final class ColdStartHonestWiringTests: XCTestCase {
     }
 
     // MARK: - Helpers (mirror ProviderCheckClassifierWiringTests)
-
-    private func appSource() throws -> String {
-        let sourceURL = repoRoot()
-            .appendingPathComponent("Sources")
-            .appendingPathComponent("OuroWorkbenchApp")
-            .appendingPathComponent("OuroWorkbenchApp.swift")
-        return try String(contentsOf: sourceURL, encoding: .utf8)
-    }
-
-    private func repoRoot() -> URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-    }
-
-    private func sourceSlice(in source: String, from startMarker: String, to endMarker: String) throws -> String {
-        let start = try XCTUnwrap(source.range(of: startMarker)?.lowerBound)
-        let end = try XCTUnwrap(source.range(of: endMarker, range: start..<source.endIndex)?.lowerBound)
-        return String(source[start..<end])
-    }
 }
