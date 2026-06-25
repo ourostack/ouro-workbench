@@ -1,0 +1,59 @@
+U4 / C1 — Sidebar tail (chips, rows, filter, context-menus) — views-lib coverage snapshot
+Branch: feat/anneal-c1-sidebar-tail (off origin/main @ e03e59f)
+Measured: canonical `xcrun llvm-cov export <PackageTests> -instr-profile default.profdata -summary-only Sources/OuroWorkbenchAppViews`
+(full `swift test --enable-code-coverage`, no filter)
+
+                  region                 line
+BASELINE (e03e59f, post-C0+AN-007):   18.11% (1079/5958)     20.13% (6483/32207)
+AFTER C1:                             19.12% (1139/5958)     21.07% (6787/32207)
+delta:                                +1.01pp (+60 regions)  +0.94pp (+304 lines)
+
+The views lib is NOT gated in U4 (the gate is the campaign's FINAL step). This % is recorded
+as PROGRESS, input to the final gate step. COVERAGE_DIRS + scripts/coverage-allowlist.txt
+UNCHANGED (verified `git diff --stat` empty on both).
+
+C1 surfaces committed (one commit per sub-unit; strict TDD red→green→mutation-verify→revert):
+  C1-1  SessionChip (standalone real-target leaf)  — 4 refs   [SessionActivity.parse(claudeJSONLTail:) producer]
+  C1-2  SessionChip + GitBranchChip ON the real TerminalAgentRow composition — 3 refs
+  C1-3  SidebarFilterField                         — 3 refs   [WorkbenchStore.save→VM + @Published sidebarFilter]
+  C1-4  SidebarAgentRow                            — 3 refs   [fixed OuroAgentRecord/OuroAgentLane]
+  C1-5  WorkspaceRowContextMenu (standalone)       — 3 refs   [resolved WorkspaceRow via the real sidebar seam]
+  C1-6  SidebarCountBadge (reconfirmed LOGIC)      — 3 refs   [count value-flip in a captured Text + a11y label]
+  (C0, already on main as first members of C1: GitBranchChip 5 refs; TerminalRowContextMenu 3 refs)
+
+NEW C1 references: 19 (across 6 new test files). New tests: 31 (3033 → 3064 full-suite).
+
+Per-surface mutation-verify (P2 — single-actor serial; broke the REAL rendered branch → the
+surface's snapshot test went RED → reverted byte-identically → green):
+  SessionChip            effectiveSymbol `isStalled ? "zzz" : …` → drop stalled glyph   → 4 RED  ✓ caught
+  SessionChip (on row)   row chip gate `if !archived, activity != nil || isStalled`      → 8 RED  ✓ caught
+  SidebarFilterField     scope gate `if model.sidebarFilterIsActive`                      → 8 RED  ✓ caught
+  SidebarAgentRow        boss-pill gate `if isBoss`                                       → 4 RED  ✓ caught
+  WorkspaceRowContextMenu revert-arm gate `if row.nameOverride != nil`                    → 4 RED  ✓ caught
+  SidebarCountBadge      captured value `Text("\(count)")` → constant                     → 5 RED  ✓ caught
+  Mutation tally: 6/6 surfaces mutated → 6/6 CAUGHT, 0 uncaught (no vacuous guard → no backlog).
+
+Starred branchless-reconfirm candidates (re-checked against ViewSnapshotHost.mapNode whitelist):
+  - SidebarCountBadge — RECONFIRMED LOGIC: `count` flips a CAPTURED Text value + a11y label
+    (a value-flip, the GitBranchChip class) → COVERED here (C1-6); removed from the deferred-28.
+  - WorkspaceTabContextMenu — RECONFIRMED GENUINELY BRANCHLESS: single CONSTANT
+    `Label("Rename Tab…  ⌘R")`; `tab` feeds only the (non-rendered) action closure, never a
+    captured node → DROPPED to the deferred allowlist set (not forced — per the cluster note).
+
+a11y-identifier audit (selective policy D-U2-2): NONE needed for any C1 surface — no two
+serialized nodes are byte-identical-yet-distinct in a way that defeats a negative control
+(every captured node already carries a distinguishing Text/Image/label). Recorded: "none needed."
+
+Access-widenings (private→internal): NONE for C1 — all 6 covered structs were already internal
+(SidebarFilterField, SidebarAgentRow, WorkspaceRowContextMenu, SidebarCountBadge, SessionChip,
+TerminalAgentRow). No Sources behavior change of any kind landed (mutations reverted byte-identically;
+`git diff Sources/` empty after C1).
+
+Gates (all green; actual output captured in the PR/report):
+  strict build  `swift build -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete` → 0 warn / 0 err
+  full strict test `swift test --enable-code-coverage -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete` → 3064 tests, 0 fail
+  `swift run OuroWorkbench --uisurfacetest` → ok
+  `scripts/check-coverage.sh --no-build` → PASS (Core/ShellAdapter 100%; COVERAGE_DIRS + allowlist UNCHANGED)
+  appSource() structural guards (WorkbenchAppSource) → 3 tests, 0 fail
+  grep-guard sites: 271 (unchanged by C1; no new source.contains/sourceSlice added)
+  SerpentGuide.ouro/ / default.profraw / *.actual.txt: never staged.

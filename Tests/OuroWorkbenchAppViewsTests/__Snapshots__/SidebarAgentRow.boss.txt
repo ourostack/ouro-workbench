@@ -1,0 +1,3 @@
+Text kind=static text="boss-agent"
+Text kind=static text="boss"
+Text kind=static text="anthropic/claude-opus"

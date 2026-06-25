@@ -1,0 +1,4 @@
+Text kind=static text="Unpin Workspace"
+Image image="pin.slash"
+Text kind=static text="Rename Workspace…  ⇧⌘R"
+Image image="pencil"

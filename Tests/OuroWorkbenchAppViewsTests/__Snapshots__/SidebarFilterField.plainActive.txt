@@ -1,0 +1,5 @@
+Image image="magnifyingglass"
+TextField kind=editable text="build"
+View label="Clear session filter"
+Image image="xmark.circle.fill"
+Text kind=static text="Searching Frontend"

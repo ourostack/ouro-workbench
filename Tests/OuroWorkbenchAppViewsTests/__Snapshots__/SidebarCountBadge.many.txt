@@ -1,0 +1,2 @@
+Text kind=static text="42"
+Text kind=static text="42" label="42 active terminals"

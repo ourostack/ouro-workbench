@@ -1,0 +1,5 @@
+Image image="magnifyingglass"
+TextField kind=editable text="status:waiting"
+View label="Clear session filter"
+Image image="xmark.circle.fill"
+Text kind=static text="Searching all workspaces"

@@ -1,0 +1,8 @@
+View label="agent-session, active, active, git main"
+Text kind=static text="agent-session"
+Image image="apple.terminal"
+Image image="arrow.triangle.branch"
+Text kind=static text="main"
+View label="stalled"
+Image image="zzz"
+View label="active"
