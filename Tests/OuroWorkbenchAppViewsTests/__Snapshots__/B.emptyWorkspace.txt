@@ -1,0 +1,2 @@
+View label="Tabs in Scratch"
+Text kind=static text="Scratch — no tabs yet"
