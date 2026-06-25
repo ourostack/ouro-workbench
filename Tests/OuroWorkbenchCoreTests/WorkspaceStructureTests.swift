@@ -316,6 +316,125 @@ final class WorkspaceStructureTests: XCTestCase {
         XCTAssertFalse(siblings.contains { $0.contains(".corrupt-") })
     }
 
+    // MARK: - Unit 4a: migrateToWorkspaceStructure()
+
+    func testMigrationOfV1FixtureCreatesSingleWorkspaceWithAllEntriesInOrder() throws {
+        var state = try loadV1Fixture()
+        let originalIds = state.processEntries.map(\.id)
+        XCTAssertEqual(state.workspaces, [])
+
+        state.migrateToWorkspaceStructure()
+
+        // Exactly ONE workspace, deterministic seed name, defaults.
+        XCTAssertEqual(state.workspaces.count, 1)
+        let ws = try XCTUnwrap(state.workspaces.first)
+        XCTAssertEqual(ws.autoName, "Restored workspace")
+        XCTAssertNil(ws.nameOverride)
+        XCTAssertFalse(ws.isPinned)
+        // tabIds == every entry id in ORIGINAL order (all 6, incl. the 4 "Resume …").
+        XCTAssertEqual(ws.tabIds, originalIds)
+        XCTAssertEqual(ws.tabIds.count, 6)
+        // No processEntries row deleted — the 4 "Resume …" rows are all members.
+        let resumeIds = state.processEntries.filter { $0.name.hasPrefix("Resume ") }.map(\.id)
+        XCTAssertEqual(resumeIds.count, 4)
+        for rid in resumeIds {
+            XCTAssertTrue(ws.tabIds.contains(rid), "Resume row \(rid) must be a member")
+        }
+    }
+
+    func testMigrationIsIdempotent() throws {
+        var state = try loadV1Fixture()
+        state.migrateToWorkspaceStructure()
+        let afterFirst = state
+        state.migrateToWorkspaceStructure()
+        // Second call changes NOTHING.
+        XCTAssertEqual(state, afterFirst)
+        XCTAssertEqual(state.workspaces.count, 1)
+        XCTAssertEqual(state.workspaces.first?.tabIds.count, 6)
+    }
+
+    func testMigrationLeavesAlreadyMigratedStateUnchanged() {
+        // A v2 state whose single workspace already covers all entries is unchanged.
+        let e1 = makeEntry(name: "a")
+        let e2 = makeEntry(name: "b")
+        let covering = Workspace(autoName: "Restored workspace", tabIds: [e1.id, e2.id])
+        var state = WorkspaceState(processEntries: [e1, e2], workspaces: [covering])
+        let before = state
+        state.migrateToWorkspaceStructure()
+        XCTAssertEqual(state, before)
+        XCTAssertEqual(state.workspaces.count, 1)
+    }
+
+    func testMigrationOnEmptyStateMintsNoWorkspace() {
+        // DA5: an empty machine has nothing to restore — no default minted.
+        var state = WorkspaceState()
+        state.migrateToWorkspaceStructure()
+        XCTAssertEqual(state.workspaces, [])
+    }
+
+    func testMigrationExcludesArchivedEntriesFromAutoMembership() {
+        // DA6: archived entries are NOT forced into the default workspace's tabIds,
+        // but are PRESERVED in processEntries (never dropped).
+        let active1 = makeEntry(name: "active1")
+        let archived = makeEntry(name: "archived", isArchived: true)
+        let active2 = makeEntry(name: "active2")
+        var state = WorkspaceState(processEntries: [active1, archived, active2])
+
+        state.migrateToWorkspaceStructure()
+
+        XCTAssertEqual(state.workspaces.count, 1)
+        let ws = state.workspaces.first
+        // Only the two active entries are members, in order; archived excluded.
+        XCTAssertEqual(ws?.tabIds, [active1.id, active2.id])
+        XCTAssertFalse(ws?.tabIds.contains(archived.id) ?? true)
+        // Archived entry still present in processEntries (preserved).
+        XCTAssertEqual(state.processEntries.count, 3)
+        XCTAssertTrue(state.processEntries.contains { $0.id == archived.id })
+    }
+
+    func testMigrationOfAllArchivedEntriesMintsNoWorkspace() {
+        // If every entry is archived, there's no active tab to restore → no workspace
+        // minted (mirrors the empty-state rule).
+        let archived1 = makeEntry(name: "a", isArchived: true)
+        let archived2 = makeEntry(name: "b", isArchived: true)
+        var state = WorkspaceState(processEntries: [archived1, archived2])
+        state.migrateToWorkspaceStructure()
+        XCTAssertEqual(state.workspaces, [])
+        XCTAssertEqual(state.processEntries.count, 2)
+    }
+
+    func testMigrationAppendsUnmappedActiveEntriesToExistingDefaultWorkspace() {
+        // Incremental: a new active entry not covered by the existing default
+        // workspace is APPENDED to it (keeps idempotence + handles growth), rather
+        // than minting a second workspace.
+        let e1 = makeEntry(name: "a")
+        let e2 = makeEntry(name: "b")
+        let existing = Workspace(autoName: "Restored workspace", tabIds: [e1.id])
+        var state = WorkspaceState(processEntries: [e1, e2], workspaces: [existing])
+
+        state.migrateToWorkspaceStructure()
+
+        XCTAssertEqual(state.workspaces.count, 1)
+        XCTAssertEqual(state.workspaces.first?.tabIds, [e1.id, e2.id])
+    }
+
+    func testMigrationIsNonDestructiveForAllOtherCollections() throws {
+        var state = try loadV1Fixture()
+        let entriesBefore = state.processEntries
+        let projectsBefore = state.projects
+        let runsBefore = state.processRuns
+        let actionLogBefore = state.actionLog
+
+        state.migrateToWorkspaceStructure()
+
+        // Only `workspaces` grew; every other collection byte-for-byte equal.
+        XCTAssertEqual(state.processEntries, entriesBefore)
+        XCTAssertEqual(state.projects, projectsBefore)
+        XCTAssertEqual(state.processRuns, runsBefore)
+        XCTAssertEqual(state.actionLog, actionLogBefore)
+        XCTAssertFalse(state.workspaces.isEmpty)
+    }
+
     // MARK: - Helpers
 
     private func makeEntry(

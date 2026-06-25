@@ -933,4 +933,54 @@ public extension WorkspaceState {
         }
         bossWatchEnabled = true
     }
+
+    /// Deterministic seed name for the single workspace created when a flat
+    /// (pre-②a) state is migrated. A neutral, honest, non-directory string —
+    /// directory-naming is the anti-pattern the design calls out. Slice ⑤ improves
+    /// `autoName` derivation later; ②a only needs a safe seed. (Open fork #1.)
+    static let migratedWorkspaceSeedName = "Restored workspace"
+
+    /// Slice ②a — NON-DESTRUCTIVE, IDEMPOTENT migration of the flat `processEntries`
+    /// into the durable workspace STRUCTURE. Mirrors the mutating-migration shape of
+    /// `applyAutomaticBossDefaults`/`pruneProcessRuns`.
+    ///
+    /// Guarantees:
+    /// - **Non-destructive (P0):** mutates ONLY `workspaces`. `processEntries`,
+    ///   `projects`, `processRuns`, `actionLog`, and every other field are left
+    ///   byte-for-byte intact — no entry deleted, no malformed "Resume …" row
+    ///   dropped (auditability/recovery truth; ②b/④ decide their fate with operator
+    ///   visibility).
+    /// - **Idempotent (DA3):** ids already covered by any existing
+    ///   `workspaces[*].tabIds` are skipped, so re-running adds nothing and converges.
+    ///   Safe to run on every load with no run-once gate.
+    /// - **Membership rule:** every UNMAPPED, NON-ARCHIVED entry (DA6 — archived
+    ///   entries are excluded from auto-membership but preserved in `processEntries`)
+    ///   is mapped, in `processEntries` order, into exactly one default workspace
+    ///   (`autoName == migratedWorkspaceSeedName`): appended to it if it already
+    ///   exists, else a new one is created. If there are no unmapped active entries
+    ///   (empty machine, or all entries already mapped / archived — DA5), nothing is
+    ///   minted.
+    mutating func migrateToWorkspaceStructure() {
+        // Ids already covered by any existing workspace — skip them (idempotence).
+        var mappedIds = Set<UUID>()
+        for workspace in workspaces {
+            mappedIds.formUnion(workspace.tabIds)
+        }
+        // Unmapped, non-archived entries, preserving processEntries order.
+        let unmappedActiveIds = processEntries
+            .filter { !$0.isArchived && !mappedIds.contains($0.id) }
+            .map(\.id)
+        guard !unmappedActiveIds.isEmpty else {
+            // Nothing to restore (empty / all-archived / already-mapped) — no-op.
+            return
+        }
+        // Append to the existing default workspace if present, else create one.
+        if let defaultIndex = workspaces.firstIndex(where: { $0.autoName == WorkspaceState.migratedWorkspaceSeedName }) {
+            workspaces[defaultIndex].tabIds.append(contentsOf: unmappedActiveIds)
+        } else {
+            workspaces.append(
+                Workspace(autoName: WorkspaceState.migratedWorkspaceSeedName, tabIds: unmappedActiveIds)
+            )
+        }
+    }
 }
