@@ -1,0 +1,5 @@
+views-lib coverage AFTER C0 (canonical: xcrun llvm-cov export ... Sources/OuroWorkbenchAppViews)
+region: 17.05% (996/5843)
+line:   19.54% (6244/31957)
+
+baseline @ branch HEAD (same command): region 13.01% (760/5843) / line 13.92% (4450/31957)

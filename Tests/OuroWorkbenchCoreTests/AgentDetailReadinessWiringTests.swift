@@ -191,7 +191,11 @@ final class AgentDetailReadinessWiringTests: XCTestCase {
         return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "private struct AgentTitleStrip: View {",
-            to: "\nprivate struct AgentInspectorPanel: View {"
+            // `AgentInspectorPanel` was widened `private`→`internal` (C0 SU-3, the SU-E
+            // precedent — the path-leak snapshot test reaches it via `@testable import`), so
+            // its declaration line dropped the `private` keyword. The slice still bounds the
+            // `AgentTitleStrip` declaration at where `AgentInspectorPanel` begins.
+            to: "\nstruct AgentInspectorPanel: View {"
         )
     }
 

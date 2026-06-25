@@ -1,0 +1,3 @@
+Text kind=static text="Boss Watch"
+Image image="eye"
+Text kind=static text="paused"

@@ -1,0 +1,8 @@
+Image image="shippingbox"
+Text kind=static text="AgentBundles/fixture-agent.ouro"
+Image image="doc"
+Text kind=static text="AgentBundles/fixture-agent.ouro/agent.json"
+Image image="info.circle"
+Text kind=static text="ready"
+Image image="link"
+Text kind=static text="MCP: registered"
