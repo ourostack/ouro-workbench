@@ -1,0 +1,18 @@
+# compact() caller baseline — Slice ① Unit 1a (pre-removal)
+# Goal: confirm compact(_:) has exactly ONE real caller (tokenHelp) so it is
+#       safely dead once tokenHelp is removed.
+# Captured at: 4b641c6493517ff9462ef29320234176bac6c6dd (2026-06-24 18:06)
+
+=== grep -n 'compact(' (all occurrences) ===
+3871:        parts.append("out \(compact(activity.outputTokens)) · in \(compact(activity.inputTokens)) · cache \(compact(activity.cacheReadTokens))")
+3876:    private func compact(_ n: Int) -> String {
+
+=== grep -n 'chevron.compact' (SF Symbol strings — NOT calls, false positives) ===
+3943:                        ? "chevron.compact.down"
+3944:                        : "chevron.compact.up"
+
+=== Verdict ===
+Line 3871: real call to compact() inside tokenHelp()  -> the ONE caller
+Line 3876: definition of compact(_:)                  -> not a caller
+Lines 3943-3944: chevron.compact.down/up SF Symbol string literals -> NOT calls
+=> compact(_:) has exactly ONE real caller (tokenHelp). Dead after tokenHelp removal.
