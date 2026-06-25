@@ -1,6 +1,6 @@
 # Doing: U1 — AX-Snapshot Harness (deterministic NSHostingView AX-tree serializer + `__Snapshots__` + proof)
 
-**Status**: BLOCKED — Unit 0 spike NO-GO (serialization source); operator decision required
+**Status**: BLOCKED — AX-walk NO-GO + Mirror-source NOT VIABLE; ViewInspector decision for operator
 **Execution Mode**: direct
 **Created**: 2026-06-25 02:20
 **Campaign**: ./../2026-06-24-anneal-visual-testing.md
@@ -482,6 +482,25 @@ context reviewed this doc against: (a) the campaign rubric P1–P7, (b) the brie
   [adds a dep], `Mirror` [dep-free, weaker AX semantics], or a real `.app` UI-test target). Full
   evidence + recommendations: `./U1-ax-snapshot-harness/ax-walk-spike.md`. Scratch spike + probe
   removed; tree clean; build green; allowlist + `Package.swift` + `COVERAGE_DIRS` unchanged.
+- 2026-06-25 **Mirror-source viability spike (coordinator-requested) → `MIRROR NOT VIABLE`.** Drove
+  a throwaway Mirror-walk serializer against a COMPLEX surface built via the real seam
+  (`AgentProposalQueue.enqueue` → `model.loadPendingProposals` → `BossProposalCardList.body`) in
+  editable vs static states, plus a stateful `WorkspaceSidebarRow` (pinned/active). Two INDEPENDENT
+  FATAL findings: (1) **Meaningfulness** — Mirror does NOT invoke child views' `body`, so composed
+  surfaces (`BossProposalCard`→`BossProposalItemRow`, i.e. every `ForEach`-of-subviews target) are
+  OPAQUE leaves; the rendered `TextField` vs `Text` never appears. The editable-vs-static diff
+  survived only because `editableFields` is stored DATA in the ForEach source — so the snapshot
+  reflects the MODEL, not the VIEW, and would NOT catch a view-logic regression (inverted
+  `isEditable()` → byte-identical snapshot). (2) **Determinism across machines** — reflecting a view
+  holding `@ObservedObject model` recurses into the entire `WorkbenchViewModel` graph and leaked
+  **25 absolute machine paths** (`/Users/microsoft/AgentBundles/…`, app-bundle/cli paths);
+  unwhitelistable (unbounded graph, intermixed with real content) → fails P3/L4 on CI. Plus
+  toolchain-fragile internal field names (`Storage`/`ImageProviderBox`/`_VStackLayout`). →
+  **ViewInspector is NECESSARY, not just preferable** (or re-scope to presentation-MODEL snapshots,
+  e.g. `WorkspaceSidebarPresentation.resolve(...).rows` / `model.pendingProposals` — pure value
+  types, dep-free, deterministic — trading view-tree fidelity). Evidence + output samples:
+  `./U1-ax-snapshot-harness/mirror-viability-spike.md`. Spike removed; no impl committed; tree clean;
+  build green; `Package.swift`/allowlist/`COVERAGE_DIRS` unchanged; `SerpentGuide.ouro/` never staged.
 - 2026-06-25 Verified facts against source: 2 `TimelineView(.periodic` sites (`:2166`,`:3775`);
   `SidebarWorkspaceEmptyRow` is `internal` + VM-free + AX-labelled (locked as 2nd proof view);
   `DashboardRowLabel` public; coverage gate = Core+ShellAdapter only (views lib not gated).
