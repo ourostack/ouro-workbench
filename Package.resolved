@@ -1,5 +1,5 @@
 {
-  "originHash" : "f6305e560bf4994f43e554f4fe90cadf474853043f18c8ba117142089066b04d",
+  "originHash" : "6c5266f3ebd6b95344cdf0916e077cfb9853ec2e9ef0dd2d9d3d0e5724ff04e7",
   "pins" : [
     {
       "identity" : "ouro-native-apple-app-shell",
@@ -26,6 +26,15 @@
       "state" : {
         "revision" : "8e7a1e154f470e19c709a00a8768df348ba5fc43",
         "version" : "1.13.0"
+      }
+    },
+    {
+      "identity" : "viewinspector",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/nalexn/ViewInspector.git",
+      "state" : {
+        "revision" : "e9a06346499a3a889165647e3f23f8a7b2609a1c",
+        "version" : "0.10.3"
       }
     }
   ],

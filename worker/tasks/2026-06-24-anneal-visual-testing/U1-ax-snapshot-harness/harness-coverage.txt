@@ -1,0 +1,6 @@
+file | functions | regions | lines (all must be 100%)
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchAppViewsTests/ViewTreeSerializer.swift          15                 0   100.00%           5                 0   100.00%          43                 0   100.00%           0                 0         -
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchAppViewsTests/ViewSnapshotNode.swift           1                 0   100.00%           1                 0   100.00%          11                 0   100.00%           0                 0         -
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchAppViewsTests/ViewSnapshotHost.swift          27                 0   100.00%           6                 0   100.00%          63                 0   100.00%           0                 0         -
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchAppViewsTests/ViewSnapshotStore.swift          22                 0   100.00%          10                 0   100.00%          70                 0   100.00%           0                 0         -
+/Users/microsoft/code/ouro-workbench/Tests/OuroWorkbenchAppViewsTests/AssertViewSnapshot.swift          18                 0   100.00%           6                 0   100.00%          43                 0   100.00%           0                 0         -

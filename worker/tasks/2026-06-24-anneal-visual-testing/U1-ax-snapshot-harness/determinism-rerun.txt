@@ -1,0 +1,105 @@
+# U1 Unit 4 — determinism twice-run byte-identity (P3)
+# b4a22c3be35d1164e2f556f68254c6a7d9cdd1dd 2026-06-25 03:26:58
+
+=== RUN 1 (compare mode; references already committed-to-disk) ===
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.283 (0.285) seconds
+
+=== git status __Snapshots__ after RUN 1 ===
+?? Tests/OuroWorkbenchAppViewsTests/__Snapshots__/
+
+=== RUN 2 (compare mode) ===
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.285 (0.287) seconds
+
+=== git diff --exit-code __Snapshots__ (must be clean) ===
+diff --git a/Tests/OuroWorkbenchAppViewsTests/__Snapshots__/BossProposalCardList.editable.txt b/Tests/OuroWorkbenchAppViewsTests/__Snapshots__/BossProposalCardList.editable.txt
+new file mode 100644
+index 0000000..40991f5
+--- /dev/null
++++ b/Tests/OuroWorkbenchAppViewsTests/__Snapshots__/BossProposalCardList.editable.txt
+@@ -0,0 +1,21 @@
++Image image="checklist"
++Text kind=static text="Bring back your work"
++Text kind=static text="1/2"
++Image image="checkmark.circle.fill" label="Selected"
++TextField kind=editable text="Label"
++Text kind=static text="Label"
++Text kind=static text="agent-a in ~/proj"
++Text kind=static text="ouro resume agent-a"
++Text kind=static text="/repo/agent-a"
++Image image="circle" label="Not selected"
++TextField kind=editable text="Label"
++Text kind=static text="Label"
++Text kind=static text="agent-b idle"
++Text kind=static text="ouro resume agent-b"
++Text kind=static text="/repo/agent-b"
++Text kind=static text="Dismiss"
++Text kind=static text="Decline this proposal — the boss is told you took none of it."
++Text kind=static text="Decline this proposal — the boss is told you took none of it."
++Text kind=static text="Approve"
++Text kind=static text="Send the ticked (and edited) items back to the boss."
++Text kind=static text="Send the ticked (and edited) items back to the boss."
+\ No newline at end of file
+diff --git a/Tests/OuroWorkbenchAppViewsTests/__Snapshots__/BossProposalCardList.static.txt b/Tests/OuroWorkbenchAppViewsTests/__Snapshots__/BossProposalCardList.static.txt
+new file mode 100644
+index 0000000..29f3cb8
+--- /dev/null
++++ b/Tests/OuroWorkbenchAppViewsTests/__Snapshots__/BossProposalCardList.static.txt
+@@ -0,0 +1,19 @@
++Image image="checklist"
++Text kind=static text="Bring back your work"
++Text kind=static text="1/2"
++Image image="checkmark.circle.fill" label="Selected"
++Text kind=static text="Restore terminal A"
++Text kind=static text="agent-a in ~/proj"
++Text kind=static text="ouro resume agent-a"
++Text kind=static text="/repo/agent-a"
++Image image="circle" label="Not selected"
++Text kind=static text="Restore terminal B"
++Text kind=static text="agent-b idle"
++Text kind=static text="ouro resume agent-b"
++Text kind=static text="/repo/agent-b"
++Text kind=static text="Dismiss"
++Text kind=static text="Decline this proposal — the boss is told you took none of it."
++Text kind=static text="Decline this proposal — the boss is told you took none of it."
++Text kind=static text="Approve"
++Text kind=static text="Send the ticked (and edited) items back to the boss."
++Text kind=static text="Send the ticked (and edited) items back to the boss."
+\ No newline at end of file
+diff --git a/Tests/OuroWorkbenchAppViewsTests/__Snapshots__/DashboardRowLabel.default.txt b/Tests/OuroWorkbenchAppViewsTests/__Snapshots__/DashboardRowLabel.default.txt
+new file mode 100644
+index 0000000..ee4a20f
+--- /dev/null
++++ b/Tests/OuroWorkbenchAppViewsTests/__Snapshots__/DashboardRowLabel.default.txt
+@@ -0,0 +1,2 @@
++Text kind=static text="Workbench MCP"
++Image image="point.3.connected.trianglepath.dotted"
+\ No newline at end of file
+diff --git a/Tests/OuroWorkbenchAppViewsTests/__Snapshots__/SidebarWorkspaceEmptyRow.default.txt b/Tests/OuroWorkbenchAppViewsTests/__Snapshots__/SidebarWorkspaceEmptyRow.default.txt
+new file mode 100644
+index 0000000..d3c4f45
+--- /dev/null
++++ b/Tests/OuroWorkbenchAppViewsTests/__Snapshots__/SidebarWorkspaceEmptyRow.default.txt
+@@ -0,0 +1,2 @@
++Text kind=static text="No tabs yet"
++Text kind=static text="No tabs yet" label="No tabs yet"
+\ No newline at end of file
+git diff --exit-code rc=1 (0 = byte-identical across runs)
+=== Byte-hash of references BEFORE re-run ===
+9831b0252874e63da92fe70781a1fb90f654b9a49b01bdeac5811369bff7ec76  Tests/OuroWorkbenchAppViewsTests/__Snapshots__/BossProposalCardList.editable.txt
+d1bc0678f2d6e820994fe03606003ff337f4efa431bb39941357344cd167cfed  Tests/OuroWorkbenchAppViewsTests/__Snapshots__/BossProposalCardList.static.txt
+4622b5c030f10801e11db80cf4ce1cc2588fb7907e1a08ecaffcc5e48e195cf7  Tests/OuroWorkbenchAppViewsTests/__Snapshots__/DashboardRowLabel.default.txt
+286365e3fc811558d85b60bb747dc9614aea879c01bc0bc5ad987a1bc6ba8bf3  Tests/OuroWorkbenchAppViewsTests/__Snapshots__/SidebarWorkspaceEmptyRow.default.txt
+
+=== RUN 3 (compare mode — would FAIL on any drift) ===
+	 Executed 7 tests, with 0 failures (0 unexpected) in 0.283 (0.285) seconds
+
+=== Byte-hash of references AFTER re-run (must equal BEFORE) ===
+9831b0252874e63da92fe70781a1fb90f654b9a49b01bdeac5811369bff7ec76  Tests/OuroWorkbenchAppViewsTests/__Snapshots__/BossProposalCardList.editable.txt
+d1bc0678f2d6e820994fe03606003ff337f4efa431bb39941357344cd167cfed  Tests/OuroWorkbenchAppViewsTests/__Snapshots__/BossProposalCardList.static.txt
+4622b5c030f10801e11db80cf4ce1cc2588fb7907e1a08ecaffcc5e48e195cf7  Tests/OuroWorkbenchAppViewsTests/__Snapshots__/DashboardRowLabel.default.txt
+286365e3fc811558d85b60bb747dc9614aea879c01bc0bc5ad987a1bc6ba8bf3  Tests/OuroWorkbenchAppViewsTests/__Snapshots__/SidebarWorkspaceEmptyRow.default.txt
+
+CONCLUSION: RUN3 passed in COMPARE mode against the on-disk references AND the byte-hashes are
+unchanged across runs → the serialized trees are byte-identical run-to-run (P3 determinism).
+The earlier 'git diff' rc=1 was only because the references are still UNTRACKED (new files), not
+a between-run content drift; once committed, git diff --exit-code is clean.

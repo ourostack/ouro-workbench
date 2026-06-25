@@ -1,0 +1,2 @@
+Text kind=static text="No tabs yet"
+Text kind=static text="No tabs yet" label="No tabs yet"
