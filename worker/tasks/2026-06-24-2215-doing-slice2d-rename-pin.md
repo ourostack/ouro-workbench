@@ -40,7 +40,7 @@ Wire the cmux in-app editing affordances to the EXISTING `Workspace` / `ProcessE
 - [x] Pure `WorkspaceRenameCommit` helper decides empty/whitespace commit semantics (DECISION D2d-1 below); 100% region covered.
 - [x] Pure `InlineRenameState` (or equivalent) models "is rename active / which target / commit / cancel" transitions; 100% region covered.
 - [x] Workspace context menu (Pin/Unpin, Rename ⇧⌘R, Remove Custom Name) attached to `WorkspaceSidebarRow`; "Remove Custom Name" item conditional on `nameOverride != nil`.
-- [ ] Tab context menu (Rename ⌘R) attached to `WorkspaceTabStrip` tab button.
+- [x] Tab context menu (Rename ⌘R) attached to `WorkspaceTabStrip` tab button.
 - [ ] Inline editors (prefilled, Enter=commit, Escape=cancel, helper caption) render for workspace + tab rename.
 - [ ] Pinning a workspace re-sorts pinned-first (verified through the existing seam in a Core test + the `--uisurfacetest` smoke).
 - [ ] Source-regression guard (`appSource()`) pins the new menus/editors/shortcuts present.
@@ -197,14 +197,14 @@ Cover every transition arm.
 **Acceptance**: `check-coverage.sh` green; allowlist unchanged.
 **Commit (Unit 4, one commit)**: `feat(app): workspace context menu — pin, rename (⇧⌘R), remove custom name (②d)`
 
-### ⬜ Unit 5a: App tab context menu — Source guard (RED)
+### ✅ Unit 5a: App tab context menu — Source guard (RED)
 **What**: Extend `WorkspaceEditingAffordancesWiringTests` with FAILING `source.contains(...)` for the TAB menu:
 - `WorkspaceTabStrip.tabButton(_:)` attaches a `.contextMenu` with Rename Tab.
 - The ⌘R Rename-Tab chord exists and targets the selected tab + opens rename (per D2d-8: assert `.keyboardShortcut("r", modifiers: [.command])` present AND its action begins-rename on the selected tab, e.g. `beginRename(.tab(`/`selectedEntryID`). Placement-agnostic).
 - The VM wrapper `renameTab(_ id:to:)` calls `WorkspaceRenameCommit` → `state.setTabNameOverride` + `save()`.
 **Acceptance**: New assertions FAIL — real RED, shown.
 
-### ⬜ Unit 5b: App tab context menu — Implementation (GREEN)
+### ✅ Unit 5b: App tab context menu — Implementation (GREEN)
 **What**: Add VM `renameTab(_ id:to:)` (resolve via `WorkspaceRenameCommit`, then `setTabNameOverride`, then `save()`). Add the `.contextMenu` to `tabButton` with Rename Tab… (⌘R) → `model.beginRename(.tab(tab.id), prefill: tab.effectiveTabName)`.
 **Acceptance**: Unit 5a assertions PASS; strict build/test green, 0 warnings.
 **Commit (Unit 5, one commit)**: `feat(app): tab context menu — rename tab (⌘R) (②d)`
@@ -260,3 +260,4 @@ Then run the FULL gate: `swift build`/`swift test` strict, `Scripts/check-covera
 - 2026-06-24 22:46 Unit 2 complete: pure `WorkspaceRenameCommit.resolve(input:current:) -> Outcome` (D2d-1: empty/whitespace→noop, trimmed-non-empty→commit, trimmed==current→noop, case-change is a real change); 8 XCTests RED→GREEN strict, 0 warn; coverage green (148/150 at 100%, new file covered), allowlist unchanged. (commit d5be56c)
 - 2026-06-24 22:51 Unit 3 complete: pure `InlineRenameState` (`Target.workspace`/`.tab`, `begin`/`cancel`/`commit`→`PendingCommit`/`isEditing`; target-switch replaces draft, no stale leak; commit-when-inactive→nil); 9 XCTests RED→GREEN strict, 0 warn; coverage green (149/151 at 100%), allowlist unchanged. (commit d8753b0)
 - 2026-06-24 23:00 Unit 4 complete: workspace `WorkspaceRowContextMenu` (Pin/Unpin, Rename Workspace… ⇧⌘R, Remove Custom Workspace Name gated on `row.nameOverride != nil`); added `nameOverride: String?` to the `WorkspaceRow` seam + `resolve` mapping (+3 seam tests); VM wrappers `toggleWorkspacePin`/`renameWorkspace`(via `WorkspaceRenameCommit`)/`removeCustomWorkspaceName`/`beginRename*` (all call Core mutator + `save()`); ⇧⌘R/⌘R chords registered + dispatched targeting active workspace / selected tab. Wiring tests RED→GREEN (refined one over-greedy slice that stopped at a closure brace — impl was always correct); strict build 0 warn; coverage green (149/151 at 100%, seam field covered), allowlist unchanged. (commit bc47e5e)
+- 2026-06-24 23:06 Unit 5 complete: tab `WorkspaceTabContextMenu` (Rename Tab… ⌘R) attached to `tabButton`; VM wrapper `renameTab` routes input through `WorkspaceRenameCommit` → `setTabNameOverride` → `save()`. (⌘R chord + dispatch + `beginRenameSelectedTab` already landed in U4 for compile.) Wiring tests RED→GREEN (refined the slice end-marker — the helper restarts its end-search at the start index, so `to: "func "` matched the start signature itself; switched to the next method's full signature). Strict build 0 warn. No new Core seam → coverage unchanged. (commit a7bb50e)
