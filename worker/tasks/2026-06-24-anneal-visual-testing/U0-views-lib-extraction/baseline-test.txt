@@ -1,0 +1,7 @@
+=== BASELINE: strict swift test @ 2026-06-25 00:32:40 ===
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+... (per-test lines elided — 2841 tests) ...
+Test Suite 'All tests' passed at 2026-06-25 00:33:58.129.
+	 Executed 2841 tests, with 1 test skipped and 0 failures (0 unexpected) in 66.389 (66.631) seconds
+TEST_EXIT=0
