@@ -15,7 +15,16 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/ourostack/ouro-native-apple-app-shell.git", branch: "main"),
-        .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", from: "1.13.0")
+        .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", from: "1.13.0"),
+        // TEST-ONLY (operator-ratification item, D-U1-DEP). ViewInspector is the
+        // only in-process tool that invokes SwiftUI child bodies (composed surfaces
+        // visible → real negative control) AND extracts DECLARED content (no
+        // VM-graph machine-path leak) AND absorbs SwiftUI renames — the prerequisites
+        // the AX source (out-of-process in xctest) and Mirror (opaque leaves + 25
+        // leaked /Users paths) both failed. Pinned EXACT for reproducible CI; linked
+        // into the `OuroWorkbenchAppViewsTests` test target ONLY (never the .app /
+        // any product/runtime/distribution surface). Reversible in one PR.
+        .package(url: "https://github.com/nalexn/ViewInspector.git", exact: "0.10.3")
     ],
     targets: [
         .target(
@@ -78,8 +87,17 @@ let package = Package(
         .testTarget(
             name: "OuroWorkbenchAppViewsTests",
             dependencies: [
-                "OuroWorkbenchAppViews"
-            ]
+                "OuroWorkbenchAppViews",
+                // Test-only view-tree introspection (D-U1-DEP). NOT on any product target.
+                .product(name: "ViewInspector", package: "ViewInspector")
+            ],
+            // F-1 (D-U1-2): committed `__Snapshots__/*.txt` references live next to the
+            // test source and are read BY PATH (`#filePath`-relative), never bundled. Without
+            // this exclude SwiftPM emits an "unhandled file" build-PLAN warning for them.
+            // `exclude:` (not `resources:`) is correct because they must NOT be copied into
+            // the test bundle. This touches one array on one test target — no `dependencies`
+            // churn beyond the line above, no COVERAGE_DIRS / allowlist change.
+            exclude: ["__Snapshots__"]
         )
     ]
 )
