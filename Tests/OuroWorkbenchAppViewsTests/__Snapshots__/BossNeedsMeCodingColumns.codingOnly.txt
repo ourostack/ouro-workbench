@@ -1,0 +1,3 @@
+Text kind=static text="Coding"
+Text kind=static text="codex – running"
+Image image="chevron.right"
