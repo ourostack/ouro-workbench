@@ -310,3 +310,83 @@ states (this recipe), allowlist the live arm. Dossier filled in `allowlist-candi
 **GO.** Recipe sound; C9 reuses the `activeSession == nil` seam + fixed `/tmp/u4` paths for
 the whole session-detail family (`DetailSplitContainer` inactive arms, `EmptyPanePicker`,
 `SessionInspectorPanel`, `TranscriptHistoryView` `Text(tail.path)` leak, etc.).
+
+---
+
+## Q1 spike — `WorkbenchRootView` / `MachineRuntimeView` host viability → **ALLOWLIST** (NO-GO for in-process snapshot)
+
+**P1 discipline: the untestability claim is CHECKED first-hand, not asserted.**
+
+### `WorkbenchRootView` (`:131`) — ALLOWLIST
+- **Verified shape (re-read @ branch HEAD):** `@StateObject private var model: WorkbenchViewModel`
+  (`:132`); its ONLY initializer is `init(diagnostics: WorkbenchLaunchDiagnostics)` (`:141`) which
+  constructs the `@StateObject` model INTERNALLY — there is **no model-injection seam**, so any
+  in-process host would build a real `WorkbenchViewModel` that scans the REAL `~/AgentBundles`
+  in its init (`refreshOuroAgents()`) → a non-hermetic, machine-name-leaking AN-001 violation
+  the C0 recipes can't pin (the temp-`agentBundlesURL` dual-injection is unreachable through
+  `init(diagnostics:)`). Plus `NavigationSplitView(columnVisibility:)` (`:282`) +
+  `@Environment(\.scenePhase)` (`:139`) = the window/scene shell, no data-state seam.
+- **Verdict: ALLOWLIST.** The Q1 reversible default holds — there is no clean hostable subtree
+  reachable deterministically; the body IS the split + menu wiring. Dossier in `allowlist-candidates.md`.
+
+### `MachineRuntimeView` (`:10170`) — ALLOWLIST (login-item arm)
+- **Verified shape:** `@StateObject private var loginItem = LoginItemController()` constructed
+  IN-PLACE (no `paths`/init seam); only `MachineRuntimeView(model:)` exists (`:5273`) — the
+  `model` is injectable but the `@StateObject LoginItemController()` is NOT, and it shares the
+  SAME `body` as the model-driven `supportDiagnostics` rows → it taints the whole view's
+  determinism (the login-item `isEnabled`/`isUpdating`/`lastError` are driven by the live service).
+- **Verdict: ALLOWLIST (login-item arm).** A future `LoginItemController` protocol-injection seam
+  would reclaim it — recorded as a POSSIBLE source-fix, NOT done in U4. Dossier in `allowlist-candidates.md`.
+
+---
+
+## Q3 spike — `ProviderConfigSheet` `@State humanName = NSFullUserName()` determinism → **RESOLVED (recipe proven; ship in C6)**
+
+**The leak is REAL (verified first-hand):** `@State private var humanName: String = NSFullUserName()`
+(`:6075`) flows into `TextField("Your name", text: $humanName)` (`:6111`); the harness reads a bound
+`TextField`'s value via `input()` (AN-002), so the machine user name IS captured in the tree. On this
+machine `NSFullUserName() == "Microsoft"` → it would land in a committed reference (a P3 violation).
+This is the ONE determinism landmine beyond the audit's enumerated edge-cases.
+
+**Resolution (the reversible default, PROVEN VIABLE — to SHIP IN C6, not C0):** the brief says
+"if the doc's C0 includes the Q3 fix as a representative, do it; otherwise leave Q3 to C6." C0's
+`ProviderConfigSheet` is NOT a committed C0 snapshot representative (its home cluster is C6) — so
+C0 RESOLVES the recipe and C6 ships it. The proven recipe:
+
+  **Seed the `@State humanName` from a model seam.** Add `@Published var providerConfigHumanName: String`
+  to `WorkbenchViewModel` defaulting to `NSFullUserName()` (the machine read moves to the MODEL layer,
+  where a test injects a fixed value), and give `ProviderConfigSheet` a custom `init` that seeds
+  `_humanName = State(initialValue: model.providerConfigHumanName)`. **Zero behavior change in
+  production** (same default value, same render) — the SU-E precedent (a minimal source seam surfaced
+  to the operator). The C6 snapshot then drives `model.providerConfigHumanName = "Ada Lovelace"` (a
+  fixed value), and asserts `!tree.contains(NSFullUserName())`.
+
+  **Fallback (if the binding-seam is judged too invasive at C6):** carve the `humanName` row from the
+  asserted subtree and assert `!tree.contains(NSFullUserName())` on the model-driven (non-initial)
+  states only — the doc's recorded fallback. Either way the committed reference is `NSFullUserName()`-free.
+
+**Status: GO (recipe proven viable, leak confirmed, reversible default + fallback both recorded).**
+The source change + the `ProviderConfigSheet` snapshot land in **C6** (not C0) — C0 ships NO
+`ProviderConfigSheet` source touch (keeping the spike clean per the brief). C6 must apply the model-seam
+(or the fallback) and assert the leak-free tree.
+
+---
+
+## C0 summary — all 6 recipes GO; Q1 ALLOWLIST; Q3 RESOLVED
+
+| recipe | representative | home cluster | status | mutation |
+|---|---|---|---|---|
+| 1 real-target chip | `GitBranchChip` | C1 | ✅ GO | CAUGHT |
+| 2 standalone menu | `TerminalRowContextMenu` | C1 | ✅ GO | CAUGHT |
+| 3 path-leak (hard) | `AgentInspectorPanel` (private→internal) | C7 | ✅ GO | CAUGHT |
+| 4 fixed-timestamp clock | `BossWatchStatusView` | C10 | ✅ GO | CAUGHT |
+| 5 AN-001 + fixed record | `OuroAgentManagerView` | C8 | ✅ GO | CAUGHT |
+| 6 live-arm carve-out | `SessionDetailView` inactive | C9 | ✅ GO | CAUGHT |
+
+Q1 `WorkbenchRootView`/`MachineRuntimeView` → **ALLOWLIST** (verified non-hostable). Q3
+`ProviderConfigSheet` `NSFullUserName()` → **RESOLVED** (model-seam recipe proven; ship in C6).
+**Mutation tally: 6 surfaces mutated, 6 CAUGHT, 0 uncaught.** No uncaught guards → no backlog item.
+Access-widening: `AgentInspectorPanel` private→internal (1; surfaced to the operator).
+The 4 reusable fixture primitives (fixed-`Date`, fixed `OuroAgentRecord`/relative paths, temp
+`agentBundlesURL` dual-injection, standalone menu/popover instantiation) are all proven — every
+later cluster imports the recipe.
