@@ -629,6 +629,85 @@ public func postLoadDecision(for report: DecodeReport) -> PostLoadDecision {
     return .salvageBeforeResave(reason: "decode dropped \(report.skippedRowCount) row(s)")
 }
 
+/// Durable workspace STRUCTURE (Slice ②a). A named, ordered collection of tabs —
+/// where a "tab" IS the agent-session terminal already modeled as `ProcessEntry`
+/// (DA1). `tabIds` references `ProcessEntry.id`s in tab order; the entry remains
+/// the carrier of `workingDirectory`/`agentKind`/resume metadata, so this type
+/// never forks that source of truth.
+///
+/// PERSISTENCE-BOUNDARY RULE (DA2): a `Workspace` is a PURE STRUCTURAL value —
+/// id, names, pinned flag, ordered tab ids. It carries **no** live-process state:
+/// NO `pid`, NO `ProcessRun`, NO `status`, NO `startedAt`/`transcriptPath`. Live
+/// runtime lives on `ProcessRun` and is reconstructed at launch. A unit-tested
+/// `Mirror` invariant pins this so a future field-add can't smuggle runtime in.
+///
+/// A workspace spans ≥1 directory (cmux fact): it does NOT carry a single
+/// `rootPath`. Its directory set is *derived* from its tabs' `workingDirectory`
+/// values, never stored as identity. The same repo can back many workspaces; a
+/// workspace can span repos. (Deliberate departure from dir-anchored
+/// `WorkbenchProject`.)
+///
+/// NAME MODEL: `effectiveName == nameOverride ?? autoName`. `autoName` is the
+/// boss/heuristic-derived seed (⑤ improves derivation); `nameOverride` is the
+/// operator's revertible custom name. Revert ("Remove Custom Workspace Name",
+/// ②d) sets `nameOverride = nil`. An EMPTY override string is HONORED, not a
+/// revert (DA4).
+///
+/// Grouped with the other durable-structure fields so ②c can lift the structure
+/// into its own git-init-able store as a block (DA7), without a second migration.
+public struct Workspace: Codable, Equatable, Identifiable, Sendable {
+    /// Stable identity. Persisted; never re-derived.
+    public var id: UUID
+    /// Boss/heuristic-derived seed name (②a seeds a safe default; ⑤ improves it).
+    public var autoName: String
+    /// Operator's revertible custom name. `nil` ⇒ use `autoName`. An empty string
+    /// is a deliberate value, NOT a revert (DA4 — revert is unambiguously `nil`).
+    public var nameOverride: String?
+    /// Pin Workspace affordance (②d). Modeled now, no UI in ②a.
+    public var isPinned: Bool
+    /// ORDERED tab membership → `ProcessEntry.id`s in tab order (DA1).
+    public var tabIds: [UUID]
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case autoName
+        case nameOverride
+        case isPinned
+        case tabIds
+    }
+
+    public init(
+        id: UUID = UUID(),
+        autoName: String,
+        nameOverride: String? = nil,
+        isPinned: Bool = false,
+        tabIds: [UUID] = []
+    ) {
+        self.id = id
+        self.autoName = autoName
+        self.nameOverride = nameOverride
+        self.isPinned = isPinned
+        self.tabIds = tabIds
+    }
+
+    /// Lenient/forward-compatible decode: the optional/defaulted fields decode
+    /// if-present (a workspace JSON missing `nameOverride`/`isPinned`/`tabIds`
+    /// loads with the documented defaults and never throws), and an unknown extra
+    /// key is ignored. Mirrors the file's additive-decode posture.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decode(UUID.self, forKey: .id)
+        self.autoName = try container.decode(String.self, forKey: .autoName)
+        self.nameOverride = try container.decodeIfPresent(String.self, forKey: .nameOverride)
+        self.isPinned = try container.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
+        self.tabIds = try container.decodeIfPresent([UUID].self, forKey: .tabIds) ?? []
+    }
+
+    /// The operator-visible name: the custom override when set, else the seed.
+    /// An empty override is honored (DA4); `nil` reverts to `autoName`.
+    public var effectiveName: String { nameOverride ?? autoName }
+}
+
 public struct WorkspaceState: Codable, Equatable, Sendable {
     /// The state-file schema version this build reads and writes. The single
     /// source of truth for the version check — `WorkbenchStore.load` reads any
