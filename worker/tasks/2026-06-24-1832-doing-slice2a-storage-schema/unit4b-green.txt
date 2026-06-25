@@ -1,0 +1,5 @@
+Test Suite 'WorkspaceStructureTests' started at 2026-06-24 19:21:26.935.
+Test Suite 'WorkspaceStructureTests' passed at 2026-06-24 19:21:26.956.
+	 Executed 29 tests, with 0 failures (0 unexpected) in 0.019 (0.022) seconds
+	 Executed 29 tests, with 0 failures (0 unexpected) in 0.019 (0.022) seconds
+	 Executed 29 tests, with 0 failures (0 unexpected) in 0.019 (0.024) seconds
