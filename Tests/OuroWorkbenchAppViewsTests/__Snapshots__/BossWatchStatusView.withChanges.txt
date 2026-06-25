@@ -1,0 +1,6 @@
+Text kind=static text="Boss Watch"
+Image image="eye.fill"
+Text kind=static text="watching"
+Text kind=static text="03:04:05"
+Text kind=static text="Session renamed"
+Text kind=static text="old-name is now new-name"

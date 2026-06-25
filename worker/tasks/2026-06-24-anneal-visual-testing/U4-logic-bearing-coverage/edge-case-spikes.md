@@ -167,3 +167,50 @@ reverted byte-identically → green. **CAUGHT.**
 **GO.** Recipe sound; C7 reuses fixed/relative `OuroAgentRecord` paths for
 `AgentStatusCard`/`OuroAgentRowView` (same visible-`Text` path vectors) + AN-001; C9 reuses
 the same fixed-path discipline for the transcript/launch-command leaks (`/tmp/u4`).
+
+---
+
+## Recipe 4 — fixed-timestamp clock → `BossWatchStatusView` (home cluster C10) ✅ GO
+
+**The risk it de-risks:** edge-case playbook #4 — `BossWatchStatusView` renders
+`Text(change.occurredAt.formatted(date:.omitted, time:.standard))` (`:7875`), an absolute
+`Date` baked into a STRING at view construction. Unlike the `TimelineView` clock (which has
+the injectable `now:`, U2), this one has NO injection seam — a `Date()`-built summary would
+render a wall-clock-dependent string. **The fixture pins the clock:** one CANONICAL FIXED
+`Date` epoch fed to the producer + the host's UTC-TZ pin → byte-identical formatted string.
+
+**Proven seam (P2):** change summaries are produced by the REAL Core producer
+`WorkspaceChangeSummarizer.summarize(previous:current:occurredAt:)` (fed two real
+`WorkspaceState`s with a rename diff + the FIXED `occurredAt`), then assigned to
+`model.bossWatchChangeSummaries` (the SAME `@Published` the production boss-watch ingest
+sets — direct injection IS the real seam here). `model` via the `makeVM` dual-injection.
+
+```swift
+static let fixedDate = Date(timeIntervalSince1970: 1_767_323_045)   // 2026-01-02 03:04:05 UTC
+let summaries = WorkspaceChangeSummarizer().summarize(
+    previous: stateWith("old-name"), current: stateWith("new-name"), occurredAt: fixedDate)
+model.bossWatchChangeSummaries = summaries          // the @Published the ingest path sets
+```
+
+**Enumerated state-set + references** (`__Snapshots__/BossWatchStatusView.*`):
+| state | tree |
+|---|---|
+| `enabledNoChanges` | `Text "Boss Watch"` · `Image "eye.fill"` · `Text "watching"` |
+| `disabledNoChanges` | `Text "Boss Watch"` · `Image "eye"` · `Text "paused"` |
+| `withChanges` | …enabled… + `Text "03:04:05"` (the FIXED-TZ timestamp) · `Text "Session renamed"` · `Text "old-name is now new-name"` |
+
+(`bossWatchLastRunAt = nil` keeps the STATUS LINE clock-free — "watching"/"paused"; the
+ONLY clock value is the producer-driven change-row timestamp, pinned by `occurredAt`.)
+
+**Determinism (P3):** `Text "03:04:05"` is byte-identical twice under the host UTC pin;
+`!contains("/Users/")`. (The summary's `id` UUID is NOT rendered by the view.)
+
+**Mutation-verify (P2):** mutated `Text(change.occurredAt.formatted(...))` → `Text("MUTANT")`
+→ **the `withChanges` snapshot went RED** (the one carrying the timestamp) → reverted
+byte-identically → green. **CAUGHT.**
+
+**a11y-id:** none needed.
+
+**GO.** Recipe sound; C10/C11 reuse the fixed-`Date` constant for
+`BossActionReceiptStrip`/`ActionLogView`/`HabitHistoryPanelView`/`HarnessStatusSheet`
+(`observedAt`) timestamped rows; the same producer-or-`@Published` seam applies.
