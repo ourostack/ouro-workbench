@@ -25,6 +25,9 @@ jobs:
       - name: Verify release version contract
         run: scripts/verify-version-contract.sh
 
+      - name: Verify shared shell dependency freshness
+        run: scripts/check-shell-dependency.sh
+
       - name: Verify generated scenario matrix
         run: |
           scripts/generate-workbench-5000-matrix.rb
@@ -47,6 +50,9 @@ jobs:
         run: |
           swift --version
           xcodebuild -version
+
+      - name: Verify shared shell dependency freshness
+        run: scripts/check-shell-dependency.sh
 
       - name: Resolve dependencies
         run: swift package resolve
@@ -86,6 +92,9 @@ jobs:
         run: |
           swift --version
           xcodebuild -version
+
+      - name: Verify shared shell dependency freshness
+        run: scripts/check-shell-dependency.sh
 
       - name: Resolve dependencies
         run: swift package resolve
@@ -153,6 +162,9 @@ jobs:
         run: |
           swift --version
           xcodebuild -version
+
+      - name: Verify shared shell dependency freshness
+        run: scripts/check-shell-dependency.sh
 
       - name: Resolve dependencies
         run: swift package resolve

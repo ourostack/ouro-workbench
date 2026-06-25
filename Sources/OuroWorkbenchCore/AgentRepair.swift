@@ -121,12 +121,28 @@ public struct AgentRepairRunner: Sendable {
     private let runRepair: @Sendable (String) async throws -> Void
     private let verifyProbe: @Sendable (String) async -> AgentRepairProbe
 
+    public init(verifyProbe: @escaping @Sendable (String) async -> AgentRepairProbe) {
+        self.init(runRepair: Self.headlessRepair, verifyProbe: verifyProbe)
+    }
+
     public init(
-        runRepair: @escaping @Sendable (String) async throws -> Void = AgentRepairRunner.headlessRepair,
+        runRepair: @escaping @Sendable (String) async throws -> Void,
         verifyProbe: @escaping @Sendable (String) async -> AgentRepairProbe
     ) {
         self.runRepair = runRepair
         self.verifyProbe = verifyProbe
+    }
+
+    init(
+        environment: [String: String],
+        verifyProbe: @escaping @Sendable (String) async -> AgentRepairProbe
+    ) {
+        self.init(
+            runRepair: { agentName in
+                try await Self.headlessRepair(agentName: agentName, environment: environment)
+            },
+            verifyProbe: verifyProbe
+        )
     }
 
     /// Run `ouro repair --agent <name>` headlessly → post-command verify probe → classify.
@@ -159,10 +175,18 @@ public struct AgentRepairRunner: Sendable {
     /// is a finite, non-interactive remediation, and the verify probe runs after it returns.
     @Sendable
     public static func headlessRepair(agentName: String) async throws {
+        try await headlessRepair(
+            agentName: agentName,
+            environment: TerminalEnvironment().valuesWithResolvedPath()
+        )
+    }
+
+    @Sendable
+    static func headlessRepair(agentName: String, environment: [String: String]) async throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = ["ouro", "repair", "--agent", agentName]
-        process.environment = TerminalEnvironment().valuesWithResolvedPath()
+        process.environment = environment
 
         let devNull = FileHandle.nullDevice
         process.standardInput = devNull

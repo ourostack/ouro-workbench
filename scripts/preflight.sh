@@ -35,6 +35,9 @@ cd "$ROOT_DIR"
 
 run_step "Verify release version contract"
 scripts/verify-version-contract.sh
+
+run_step "Verify shared shell dependency freshness"
+scripts/check-shell-dependency.sh
 scripts/smoke-package-shallow-guard.sh
 scripts/install-latest-app-artifact.sh --help >/dev/null
 scripts/install-latest-release.sh --help >/dev/null
@@ -91,7 +94,7 @@ if [[ "$RUN_DEEP" == "true" ]]; then
     --expect-matrix-rows 5000 \
     --expect-deep-rows 15000 \
     --expect-render-passes 100000 \
-    --expect-coverage-digest 83e10a2284896aea
+    --expect-coverage-digest d205bd5c250d80ca
 fi
 
 run_step "Preflight complete"

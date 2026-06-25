@@ -173,6 +173,19 @@ public struct ProviderVerifyRunner: Sendable {
     /// recovery truth is the post-command probe's job.
     @Sendable
     public static func headlessVerify(agentName: String, lane: ProviderLane?) async throws {
+        try await headlessVerify(
+            agentName: agentName,
+            lane: lane,
+            environment: TerminalEnvironment().valuesWithResolvedPath()
+        )
+    }
+
+    @Sendable
+    static func headlessVerify(
+        agentName: String,
+        lane: ProviderLane?,
+        environment: [String: String]
+    ) async throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         if let lane {
@@ -180,7 +193,7 @@ public struct ProviderVerifyRunner: Sendable {
         } else {
             process.arguments = ["ouro", "auth", "verify", "--agent", agentName]
         }
-        process.environment = TerminalEnvironment().valuesWithResolvedPath()
+        process.environment = environment
 
         let devNull = FileHandle.nullDevice
         process.standardInput = devNull

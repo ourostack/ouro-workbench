@@ -23,10 +23,18 @@ final class ProviderCheckClassifierWiringTests: XCTestCase {
             body.contains("ProviderCheckClassifier()"),
             "runOnboardingProviderCheck must classify via ProviderCheckClassifier"
         )
-        // The output is actually captured (not discarded) and passed to the classifier.
+        // The output is captured by the bounded runner and passed to the classifier.
         XCTAssertFalse(
-            body.contains("_ = pipe.fileHandleForReading.readDataToEndOfFile()"),
-            "the pipe output must be captured into a String, not discarded with `_ =`"
+            body.contains("readDataToEndOfFile()"),
+            "provider checks must not block on readDataToEndOfFile before observing the timeout"
+        )
+        XCTAssertTrue(
+            body.contains("Self.runProviderCheckProcess("),
+            "runOnboardingProviderCheck must use the bounded provider-check process runner"
+        )
+        XCTAssertTrue(
+            body.contains("stdout: result.output"),
+            "the bounded runner's captured output must be handed to the classifier"
         )
         XCTAssertTrue(
             body.contains(".classify("),
@@ -88,6 +96,56 @@ final class ProviderCheckClassifierWiringTests: XCTestCase {
             XCTAssertFalse(lowered.contains("--lane"), "failure copy leaked a lane flag seam: \(line)")
             XCTAssertFalse(lowered.contains("--agent"), "failure copy leaked an agent flag seam: \(line)")
         }
+    }
+
+    func testProviderCheckProcessRunnerBoundsPipeAndProcessLifetime() throws {
+        let source = try WorkbenchAppSource.appSource()
+        let body = try WorkbenchAppSource.sourceSlice(
+            in: source,
+            from: "private static func runProviderCheckProcess(",
+            to: "/// F7"
+        )
+
+        XCTAssertTrue(
+            body.contains("readabilityHandler"),
+            "provider-check output must be drained asynchronously so the pipe cannot block timeout handling"
+        )
+        XCTAssertTrue(
+            body.contains("XCTestConfigurationFilePath"),
+            "ordinary unit tests must not run live provider checks against the operator's real Ouro agent state"
+        )
+        XCTAssertTrue(
+            body.contains("NSClassFromString(\"XCTest"),
+            "the unit-test guard must detect SwiftPM XCTest even when the environment key is absent"
+        )
+        XCTAssertTrue(
+            body.contains("OURO_WORKBENCH_LIVE_PROVIDER_CHECKS"),
+            "live provider-check tests must require an explicit opt-in environment variable"
+        )
+        XCTAssertTrue(
+            body.contains("terminationHandler"),
+            "the runner must observe process exit without blocking on pipe EOF"
+        )
+        XCTAssertTrue(
+            body.contains("outputEOF.wait(timeout: .now() + 1)"),
+            "the runner must wait briefly for pipe EOF after process exit so fast final output is not dropped"
+        )
+        XCTAssertTrue(
+            body.contains("exitSemaphore.wait(timeout: .now() + timeoutSeconds)"),
+            "the runner must enforce the configured provider-check timeout"
+        )
+        XCTAssertTrue(
+            body.contains("process.terminate()"),
+            "the runner must terminate a provider check that exceeds its budget"
+        )
+        XCTAssertTrue(
+            body.contains("kill(process.processIdentifier, SIGKILL)"),
+            "the runner must force-kill a provider check that ignores terminate()"
+        )
+        XCTAssertFalse(
+            body.contains("readDataToEndOfFile()"),
+            "the bounded runner must not wait for pipe EOF before enforcing the process timeout"
+        )
     }
 
     // MARK: - onboarding-doctor diagnostic (main.swift)

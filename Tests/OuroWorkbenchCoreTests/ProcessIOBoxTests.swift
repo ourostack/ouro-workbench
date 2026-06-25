@@ -273,6 +273,8 @@ final class ProcessIOBoxTests: XCTestCase {
         try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: tmpDir) }
         let readyMarker = tmpDir.appendingPathComponent("gc-ready")
+        let grandchildPIDFile = tmpDir.appendingPathComponent("gc-pid")
+        defer { coverageBatch2CleanupEscapedGrandchild(pidFile: grandchildPIDFile) }
         let script = tmpDir.appendingPathComponent("hold-stdout.sh")
         // The grandchild escapes the group, signals ready, then holds stdout forever (writes nothing).
         // The shell exits immediately after backgrounding it, so the ONLY stdout-write holder is the
@@ -281,6 +283,7 @@ final class ProcessIOBoxTests: XCTestCase {
         #!/bin/sh
         python3 -c 'import os,time
         os.setpgid(0,0)
+        open("\(grandchildPIDFile.path)","w").write(str(os.getpid()))
         open("\(readyMarker.path)","w").close()
         while True: time.sleep(30)' &
         exit 0
@@ -355,12 +358,7 @@ final class ProcessIOBoxTests: XCTestCase {
         // FIX 1 cleanup still applies: closing the read handles is safe now (read no longer parked).
         box.closeReadHandles()
 
-        // Clean up the escaped grandchild (it left the group, so it survives the killpg above).
-        let pkill = Process()
-        pkill.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
-        pkill.arguments = ["-f", readyMarker.path]
-        try? pkill.run()
-        pkill.waitUntilExit()
+        coverageBatch2CleanupEscapedGrandchild(pidFile: grandchildPIDFile)
     }
 
     func testPollReadableReturnsReadableImmediatelyWhenDataIsPresent() throws {

@@ -25,6 +25,9 @@ jobs:
           swift --version
           xcodebuild -version
 
+      - name: Verify shared shell dependency freshness
+        run: scripts/check-shell-dependency.sh
+
       - name: Resolve dependencies
         run: swift package resolve
 
@@ -42,7 +45,7 @@ jobs:
           --expect-matrix-rows 5000
           --expect-deep-rows 15000
           --expect-render-passes 100000
-          --expect-coverage-digest 83e10a2284896aea
+          --expect-coverage-digest d205bd5c250d80ca
 
       - name: Upload deep scenario verifier summary
         uses: actions/upload-artifact@v7

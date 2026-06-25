@@ -179,16 +179,15 @@ final class ProviderVerifyTests: XCTestCase {
         let root = try coverageBatch2TemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
         let argsFile = root.appendingPathComponent("args.txt")
-        let oldPath = try coverageBatch2InstallFakeOuro(
+        let environment = try coverageBatch2FakeOuroEnvironment(
             in: root,
             body: "printf '%s\\n' \"$@\" > '\(argsFile.path)'\nexit 0\n"
         )
-        defer { setenv("PATH", oldPath, 1) }
 
-        try await ProviderVerifyRunner.headlessVerify(agentName: "slugger", lane: .inner)
+        try await ProviderVerifyRunner.headlessVerify(agentName: "slugger", lane: .inner, environment: environment)
         XCTAssertEqual(try String(contentsOf: argsFile, encoding: .utf8), "check\n--agent\nslugger\n--lane\ninner\n")
 
-        try await ProviderVerifyRunner.headlessVerify(agentName: "slugger", lane: nil)
+        try await ProviderVerifyRunner.headlessVerify(agentName: "slugger", lane: nil, environment: environment)
         XCTAssertEqual(try String(contentsOf: argsFile, encoding: .utf8), "auth\nverify\n--agent\nslugger\n")
     }
 }
