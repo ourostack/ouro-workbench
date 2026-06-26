@@ -77,3 +77,19 @@ descended), so the `.task` closure is structurally undrivable through the synchr
 --show-regions justified: the region's body (`refreshWorkbenchMCPRegistration()`) is the SAME call the
 Refresh button drives (so its LOGIC is covered) — only the `.task`-modifier hook itself is uncolorable.
 → Unit-3 allowlist carve candidate.
+
+### BossNeedsMeCodingColumns (L5443-5534) — 3 → 3 driven, 0 carved
+BEFORE: 3 uncovered (`5477` coding key fallback autoclosure, `5497` View-all Button action,
+`5514` itemButton Button action). Existing C2 tests RENDER the columns but never TAP a row/overflow.
+DRIVEN via INVOCATION:
+- `5514` itemButton: a needsMe row whose nav-key matches no process entry → `find(Button).tap()` runs
+  `selectSession(byNavigationKey:)` → false → `presentDecisionInbox()` → `isDecisionLogPresented == true`.
+  MUTATION: `model.selectSession(byNavigationKey: key)` → `_ = key` → RED → revert → GREEN.
+- `5497` View-all: 5 needsMe items render the overflow control; start `bossPaneCollapsed == true`;
+  `findAll(Button)[3].tap()` (last = overflow) runs `setBossPaneCollapsed(false)` → `state.bossPaneCollapsed
+  == false`. MUTATION: `model.setBossPaneCollapsed(false)` → `_ = model` → RED → revert → GREEN.
+- `5477` coding key `item.taskRef ?? item.runner`: a coding item with `taskRef==nil` + a REAL seeded
+  process entry named "codex" → the `?? "codex"` fallback key MATCHES → `selectSession` true →
+  `selectedEntryID == entryId` (inbox NOT opened). MUTATION: `item.taskRef ?? item.runner` →
+  `item.taskRef ?? ""` → no match → `selectedEntryID == nil` → RED → revert → GREEN.
+CARVED: none.
