@@ -216,8 +216,25 @@ final class DaemonLivenessTests: XCTestCase {
             XCTAssertTrue(reachable)
         }
 
+        // Cover the SUCCESS epilogue of the single-arg `defaultReachability(timeoutSeconds:)`
+        // overload (the resume-after-`await` region — line ~159 — that counts ONLY when the inner
+        // `try await` RETURNS, not throws) deterministically, with NO wall-clock race and NO external
+        // port dependency.
+        //
+        // FLAKE NOTE: this block is the one path that ALWAYS exercises the single-arg overload via the
+        // in-process `StubURLProtocol` (the loopback-server test above can `XCTSkip` when 127.0.0.1:6876
+        // is occupied, and the throw-path test never returns). It previously passed `timeoutSeconds: 0.1`,
+        // which set `request.timeoutInterval = 0.1`; on a SLOW CI runner the stubbed response could lose
+        // that 100ms budget → `URLSession.shared.data` threw a request-timeout → the overload threw before
+        // returning → its epilogue stayed `^0` (CI: `DaemonLiveness.swift 99.6% line / 98.8% region`,
+        // line 159 uncovered). Passing `nil` takes the inner overload's `else` arm (no `timeoutInterval`
+        // set → URLSession's generous ~60s default), so the synchronous stub 204 RETURNS on every runner
+        // regardless of speed — covering the epilogue deterministically every run. `check-coverage.sh`
+        // runs `swift test` WITHOUT `--parallel`, so the global stub registration is not shared
+        // concurrently; the 100ms budget was the only nondeterminism, and `nil` removes it. Production
+        // callers are unaffected — they pass a real timeout and hit the live daemon.
         try await StubURLProtocol.withHTTPStatus(204) {
-            let reachable = try await DaemonLivenessProbe.defaultReachability(timeoutSeconds: 0.1)
+            let reachable = try await DaemonLivenessProbe.defaultReachability(timeoutSeconds: nil)
             XCTAssertTrue(reachable)
         }
     }
