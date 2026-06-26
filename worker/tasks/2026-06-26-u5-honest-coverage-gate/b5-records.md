@@ -160,3 +160,26 @@ MUTATION: removed `beginEditingSession(entry)` → Edit-tap RED; removed `moveSe
 Move-tap RED → revert → GREEN. (The remaining 4 taps share the identical assert-the-side-effect
 structure.)
 CARVED: none. FIXED `/tmp/u5` paths (leak-defended).
+
+### InactiveTerminalSurface (L9426-9571) — 11 → 11 driven (4 via INVOCATION), 0 carved
+BEFORE: 11 uncovered — `L9429:40` (`onShowTranscript = {}` default autoclosure), `L9448:29`
+(the `canRecover ? "Ready to recover"` headline arm), `L9495:28` (Restore ACTION), `L9504:28`
+(Start-fresh ACTION), `L9512`/`L9513:28`/`L9513:39`/`L9515:32` (the Launch/Recover button +
+`if canRecover { recover } else { launch }` arms + the `canRecover ? title : "Launch"` label),
+`L9538:24` (Copy-launch ACTION), `L9550:106`/`L9554:14` (the executable-health label arm). C9
+drove the headline RENDER arms but carved every action + the recover-headline + the health arm.
+DRIVEN:
+- `L9429` default autoclosure: construct `InactiveTerminalSurface(entry:model:)` WITHOUT
+  `onShowTranscript` → the `= {}` default runs.
+- `L9448` "Ready to recover": a recoverable entry with `lastSummary` cleared (the recovery plan
+  is keyed by entry id → `canRecover` stays true; an entry with no summary is a real state) →
+  the headline falls through to the `canRecover` arm; asserting ref `.readyToRecover`.
+- 4 button ACTIONS via INVOCATION: Restore→un-archived; Start-fresh→`pendingStartFresh`;
+  Launch/Recover→`errorMessage` (EMPTY-executable → planner throws SYNC, no spawn); Copy
+  (image-only button, found by glyph `doc.on.doc`)→`state.actionLog` +1 (`copyLaunchCommand`).
+- `L9550/9554` health label: inject `ExecutableHealth(status: .missing)`; ref `.missingExecutable`.
+PROOF: scoped coverage → all 11 baseline regions GONE; only `L9556/L9558` (transcript-preview
+arm) remain scoped, covered by C9's `testSurface_withTranscriptPreview` in the full suite → 0.
+MUTATION: removed `recover(entry)` + `launch(entry)` action bodies → both tap tests RED → revert
+→ GREEN. (Restore/Start-fresh/Copy taps share the identical assert-the-side-effect structure.)
+CARVED: none. FIXED `/tmp/u5` paths (leak-defended).
