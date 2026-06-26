@@ -32,6 +32,7 @@ clean_asset_dir="$TEMP_ROOT/clean-assets"
 clean_archive_name="$WORKBENCH_ARTIFACT_NAME_PREFIX${WORKBENCH_VERSION}-build.${build}-${short_sha}.zip"
 clean_manifest_name="$WORKBENCH_ARTIFACT_NAME_PREFIX${WORKBENCH_VERSION}-build.${build}-${short_sha}.manifest.json"
 hosted_installer_url="https://example.invalid/workbench-install.sh"
+default_web_installer_url="https://raw.githubusercontent.com/ourostack/ouro-workbench/$sha/web/workbench-install.sh"
 fake_bin="$TEMP_ROOT/bin"
 fake_curl_log="$TEMP_ROOT/curl.log"
 stale_web_installer="$TEMP_ROOT/stale-workbench-install.sh"
@@ -262,9 +263,8 @@ PATH="$fake_bin:$PATH" \
   FAKE_ARCHIVE_PATH="$clean_asset_dir/$clean_archive_name" \
   FAKE_MANIFEST_PATH="$clean_asset_dir/$clean_manifest_name" \
   FAKE_WEB_INSTALLER_PATH="$ROOT_DIR/web/workbench-install.sh" \
-  FAKE_WEB_INSTALLER_URL="$hosted_installer_url" \
+  FAKE_WEB_INSTALLER_URL="$default_web_installer_url" \
   FAKE_CURL_LOG="$fake_curl_log" \
-  OURO_WB_WEB_INSTALLER_URL="$hosted_installer_url" \
   OURO_WB_WEB_INSTALLER_ATTEMPTS=1 \
   OURO_WB_WEB_INSTALLER_RETRY_SECONDS=0 \
   "$ROOT_DIR/scripts/verify-published-release.sh" \
@@ -455,6 +455,10 @@ grep -Fq 'scripts/install-latest-release.sh' "$ROOT_DIR/scripts/verify-published
 }
 grep -Fq 'WEB_INSTALLER_URL' "$ROOT_DIR/scripts/verify-published-release.sh" || {
   printf 'Published release verifier must fetch and run the hosted public web installer.\n' >&2
+  exit 1
+}
+grep -Fq 'raw.githubusercontent.com/${REPO}/${EXPECTED_SHA}/web/workbench-install.sh' "$ROOT_DIR/scripts/verify-published-release.sh" || {
+  printf 'Published release verifier must derive its default hosted installer from the expected release SHA.\n' >&2
   exit 1
 }
 grep -Fq 'cmp -s "$WEB_INSTALLER_SOURCE" "$hosted_installer"' "$ROOT_DIR/scripts/verify-published-release.sh" || {

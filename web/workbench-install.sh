@@ -2,7 +2,7 @@
 #
 # Ouro Workbench — one-line installer.
 #
-#   curl -fsSL https://ouro.bot/workbench-install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/ourostack/ouro-workbench/main/web/workbench-install.sh | bash
 #
 # Self-contained: needs only tools present on a stock macOS. No git checkout,
 # no GitHub CLI, no jq/python. Downloads the latest published release artifact,

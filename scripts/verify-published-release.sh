@@ -10,7 +10,7 @@ TAG="v$VERSION"
 EXPECTED_SHA=""
 EXPECTED_PRERELEASE="true"
 INSTALL_SMOKE="true"
-WEB_INSTALLER_URL="${OURO_WB_WEB_INSTALLER_URL:-https://ouro.bot/workbench-install.sh}"
+WEB_INSTALLER_URL="${OURO_WB_WEB_INSTALLER_URL:-}"
 WEB_INSTALLER_SOURCE="${OURO_WB_WEB_INSTALLER_SOURCE:-$ROOT_DIR/web/workbench-install.sh}"
 WEB_INSTALLER_ATTEMPTS="${OURO_WB_WEB_INSTALLER_ATTEMPTS:-120}"
 WEB_INSTALLER_RETRY_SECONDS="${OURO_WB_WEB_INSTALLER_RETRY_SECONDS:-5}"
@@ -31,7 +31,7 @@ Options:
   --prerelease true|false
                          Expected GitHub prerelease flag (default: true)
   --web-installer-url URL
-                         Hosted public installer URL (default: $WEB_INSTALLER_URL)
+                         Hosted public installer URL (default: raw GitHub at expected SHA)
   --web-installer-source PATH
                          Source file the hosted installer must match (default: $WEB_INSTALLER_SOURCE)
   --skip-install         Skip installer smoke, used only by local selftests
@@ -129,6 +129,9 @@ if ! [[ "$WEB_INSTALLER_RETRY_SECONDS" =~ ^[0-9]+$ ]]; then
 fi
 if [[ -z "$EXPECTED_SHA" ]]; then
   EXPECTED_SHA="$(git -C "$ROOT_DIR" rev-parse HEAD)"
+fi
+if [[ -z "$WEB_INSTALLER_URL" ]]; then
+  WEB_INSTALLER_URL="https://raw.githubusercontent.com/${REPO}/${EXPECTED_SHA}/web/workbench-install.sh"
 fi
 
 release_value() {
