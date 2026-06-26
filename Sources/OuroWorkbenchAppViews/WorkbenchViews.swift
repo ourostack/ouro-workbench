@@ -10164,15 +10164,28 @@ struct EditTerminalGroupSheet: View {
 struct NewTerminalSessionSheet: View {
     @ObservedObject var model: WorkbenchViewModel
     @Environment(\.dismiss) private var dismiss
-    @State private var name = ""
-    @State private var command = ""
+    @State private var name: String
+    @State private var command: String
     @State private var workingDirectory = FileManager.default.homeDirectoryForCurrentUser.path
-    @State private var trusted = true
+    @State private var trusted: Bool
     @State private var autoResume = true
     @State private var notes = ""
 
-    init(model: WorkbenchViewModel) {
+    // `initialName` / `initialCommand` default to empty and `initialTrusted` to true (the
+    // prod behavior the ⌘N sheet presents UNCHANGED); the seam params let a test seed the
+    // `@State` so the `.onChange(of: command)` autofill guard arms, BOTH `trusted` ternary
+    // arms, and the `create()` body are reachable (B4-redo). `workingDirectory` keeps its
+    // `selectedProject?.rootPath ?? home` seed.
+    init(
+        model: WorkbenchViewModel,
+        initialName: String = "",
+        initialCommand: String = "",
+        initialTrusted: Bool = true
+    ) {
         self.model = model
+        _name = State(initialValue: initialName)
+        _command = State(initialValue: initialCommand)
+        _trusted = State(initialValue: initialTrusted)
         _workingDirectory = State(initialValue: model.selectedProject?.rootPath ?? FileManager.default.homeDirectoryForCurrentUser.path)
     }
 
