@@ -1,0 +1,3 @@
+Text kind=static text="Latest Transcript"
+Text kind=static text="/tmp/u5/session.log"
+Text kind=static text="No transcript output yet"
