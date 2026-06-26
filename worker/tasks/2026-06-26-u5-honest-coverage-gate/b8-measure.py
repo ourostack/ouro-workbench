@@ -14,20 +14,20 @@ import sys
 
 # B8 view decl line ranges (start of decl -> just before next decl). Computed
 # from the grep of struct decls; hi is exclusive upper bound of the NEXT decl.
-# Ranges RE-MEASURED post-init-seams (ActionLogView +18, BossActionReceiptStrip +18).
+# Ranges RE-MEASURED post-init-seams + post-rebase onto B1/B3/B6 (+22 file shift).
 VIEWS = [
-    ("InboxDoorPill",            5396, 5443),
-    ("BossNeedsMeCodingColumns", 5443, 5534),
-    ("HabitHistoryPanelView",    5534, 5589),
-    ("MetricStateChip",          5677, 5720),
-    ("BossConversationView",     5868, 5913),
-    ("BossProposalCardList",     7473, 7491),
-    ("BossProposalCard",         7491, 7536),
-    ("BossProposalItemRow",      7536, 7628),
-    ("ActionLogView",            7782, 7925),
-    ("BossActionReceiptStrip",   7925, 8019),
-    ("BossWatchStatusView",      8019, 8069),
-    ("BossWorkbenchMCPSetupView",8137, 8179),
+    ("InboxDoorPill",            5418, 5465),
+    ("BossNeedsMeCodingColumns", 5465, 5556),
+    ("HabitHistoryPanelView",    5556, 5611),
+    ("MetricStateChip",          5699, 5742),
+    ("BossConversationView",     5890, 5935),
+    ("BossProposalCardList",     7508, 7526),
+    ("BossProposalCard",         7526, 7571),
+    ("BossProposalItemRow",      7571, 7663),
+    ("ActionLogView",            7817, 7960),
+    ("BossActionReceiptStrip",   7960, 8054),
+    ("BossWatchStatusView",      8054, 8104),
+    ("BossWorkbenchMCPSetupView",8172, 8214),
 ]
 
 data = json.load(sys.stdin)
