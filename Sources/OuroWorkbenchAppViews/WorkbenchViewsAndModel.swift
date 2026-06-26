@@ -6310,9 +6310,29 @@ struct ProviderConfigSheet: View {
 struct OuroAgentInstallSheet: View {
     @ObservedObject var model: WorkbenchViewModel
     @Environment(\.dismiss) private var dismiss
-    @State private var agentName = ""
-    @State private var remote = ""
-    @State private var cloneState: CloneAgentFlowState = .idle
+    @State private var agentName: String
+    @State private var remote: String
+    @State private var cloneState: CloneAgentFlowState
+
+    /// AN-007 — injectable seeds for the form's three `@State` values, each defaulting to the
+    /// prior literal (`""`, `""`, `.idle`) so production is BYTE-IDENTICAL: the only call site
+    /// (`OuroAgentInstallSheet(model:)`, `:523`) takes all defaults and renders the empty idle
+    /// form exactly as before. The `cloneState` / `agentName` arms (`if cloneNameValidation`
+    /// `:6332`, `if cloneState.inlineMessage` `:6340`, the busy/error/success icon + button copy)
+    /// are otherwise reachable ONLY by firing the in-view "Clone Agent" Button closure
+    /// `inspect()` can't fire (the C4 `DecisionLogRow.taught` pattern) — this minimal seam lets a
+    /// SNAPSHOT test drive them through the REAL `CloneAgentFlowState` Core values, so the
+    /// validation/message/error/success arms are COVERED, not fabricated. Same minimal shape as
+    /// the Q3 `ProviderConfigSheet.initialHumanName` seam.
+    init(model: WorkbenchViewModel,
+         initialAgentName: String = "",
+         initialRemote: String = "",
+         initialCloneState: CloneAgentFlowState = .idle) {
+        self.model = model
+        self._agentName = State(initialValue: initialAgentName)
+        self._remote = State(initialValue: initialRemote)
+        self._cloneState = State(initialValue: initialCloneState)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
