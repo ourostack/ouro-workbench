@@ -36,22 +36,12 @@ jobs:
           version="$(tr -d '[:space:]' < VERSION)"
           tag="v${version}"
           echo "tag=${tag}" >> "$GITHUB_OUTPUT"
-          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            released_sha="$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json targetCommitish --jq .targetCommitish)"
-            if ! changed_files="$(git diff --name-only "$released_sha" "$GITHUB_SHA")"; then
-              echo "::error::Could not compare existing release $tag ($released_sha) to $GITHUB_SHA; refusing to skip auto-release."
-              exit 1
-            fi
-            if printf '%s\n' "$changed_files" | grep -E '^(Sources/|Resources/|scripts/|Package[.]swift$|Package[.]resolved$|VERSION$)' >/dev/null; then
-              {
-                echo "::error::Release $tag already exists at $released_sha, but this push changes releasable app inputs."
-                echo "::error::Bump VERSION and WorkbenchRelease.version before merging runtime/package changes so auto-update has a new public release to install."
-              }
-              exit 1
-            fi
+          if [[ "$(scripts/release-policy.sh release-exists --version "$version")" == "true" ]]; then
+            scripts/release-policy.sh freshness --mode main
             echo "Release $tag already exists and this push has no releasable app input changes; nothing to do."
             echo "should_release=false" >> "$GITHUB_OUTPUT"
           else
+            scripts/release-policy.sh freshness --mode main
             echo "VERSION $version has no release yet; will publish $tag."
             echo "should_release=true" >> "$GITHUB_OUTPUT"
           fi

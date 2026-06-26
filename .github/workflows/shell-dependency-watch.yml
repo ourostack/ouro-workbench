@@ -64,8 +64,11 @@ jobs:
         run: |
           git diff --check
           ./scripts/verify-version-contract.sh
+          ./scripts/release-policy.sh freshness --mode pr --base-ref origin/main
+          ./scripts/release-policy.sh selftest-package-guards
+          ./scripts/release-policy.sh selftest-paths
+          ./scripts/release-policy.sh selftest-shell-dependency-watch
           ./scripts/check-shell-dependency.sh
-          ./scripts/selftest-shell-dependency-watch.sh
           ./scripts/generate-release-notes.sh >/dev/null
 
       - name: Open or update refresh PR
@@ -102,8 +105,11 @@ jobs:
             echo "- \`./scripts/refresh-shell-dependency.sh\`"
             echo "- \`git diff --check\`"
             echo "- \`./scripts/verify-version-contract.sh\`"
+            echo "- \`./scripts/release-policy.sh freshness --mode pr --base-ref origin/main\`"
+            echo "- \`./scripts/release-policy.sh selftest-package-guards\`"
+            echo "- \`./scripts/release-policy.sh selftest-paths\`"
+            echo "- \`./scripts/release-policy.sh selftest-shell-dependency-watch\`"
             echo "- \`./scripts/check-shell-dependency.sh\`"
-            echo "- \`./scripts/selftest-shell-dependency-watch.sh\`"
             echo "- \`./scripts/generate-release-notes.sh >/dev/null\`"
           } > "$body"
 

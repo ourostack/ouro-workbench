@@ -55,6 +55,11 @@ jobs:
       - name: Verify shared shell dependency freshness
         run: scripts/check-shell-dependency.sh
 
+      - name: Verify release freshness policy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/release-policy.sh freshness --mode main
+
       - name: Resolve dependencies
         run: swift package resolve
 
