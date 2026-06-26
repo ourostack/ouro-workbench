@@ -31,12 +31,29 @@ build="$(plutil -extract build raw -o - "$latest_manifest")"
 clean_asset_dir="$TEMP_ROOT/clean-assets"
 clean_archive_name="$WORKBENCH_ARTIFACT_NAME_PREFIX${WORKBENCH_VERSION}-build.${build}-${short_sha}.zip"
 clean_manifest_name="$WORKBENCH_ARTIFACT_NAME_PREFIX${WORKBENCH_VERSION}-build.${build}-${short_sha}.manifest.json"
+hosted_installer_url="https://example.invalid/workbench-install.sh"
+fake_bin="$TEMP_ROOT/bin"
+fake_curl_log="$TEMP_ROOT/curl.log"
+stale_web_installer="$TEMP_ROOT/stale-workbench-install.sh"
 mkdir -p "$clean_asset_dir"
 cp "$latest_archive" "$clean_asset_dir/$clean_archive_name"
 cp "$latest_manifest" "$clean_asset_dir/$clean_manifest_name"
 plutil -replace archive -string "$clean_archive_name" "$clean_asset_dir/$clean_manifest_name"
 plutil -replace gitSha -string "$sha" "$clean_asset_dir/$clean_manifest_name"
 plutil -replace gitDirty -bool false "$clean_asset_dir/$clean_manifest_name"
+cp "$ROOT_DIR/web/workbench-install.sh" "$stale_web_installer"
+printf '\n# stale deployment sentinel\n' >> "$stale_web_installer"
+release_json="$TEMP_ROOT/release.json"
+cat > "$release_json" <<JSON
+[
+  {
+    "assets": [
+      {"browser_download_url": "https://example.invalid/$clean_archive_name"},
+      {"browser_download_url": "https://example.invalid/$clean_manifest_name"}
+    ]
+  }
+]
+JSON
 fake_gh="$TEMP_ROOT/gh"
 cat > "$fake_gh" <<'SH'
 #!/usr/bin/env bash
@@ -130,29 +147,40 @@ case "$command" in
     tag="${1:-}"
     shift || true
     [[ "$tag" == "$FAKE_TAG" ]] || exit 1
-    pattern=""
+    patterns=()
     destination=""
     while [[ "$#" -gt 0 ]]; do
       case "$1" in
         --repo)
           shift 2
-          ;;
-        --pattern)
-          pattern="${2:-}"
-          shift 2
-          ;;
+        ;;
+      --pattern)
+        patterns+=("${2:-}")
+        shift 2
+        ;;
         --dir)
           destination="${2:-}"
           shift 2
           ;;
         *)
           shift
-          ;;
-      esac
+        ;;
+    esac
     done
-    [[ -n "$pattern" && -n "$destination" ]] || exit 64
+    [[ "${#patterns[@]}" -gt 0 && -n "$destination" ]] || exit 64
     mkdir -p "$destination"
-    cp "$FAKE_ASSET_DIR/$pattern" "$destination/"
+    for pattern in "${patterns[@]}"; do
+      matched="false"
+      for asset in "$FAKE_ASSET_DIR"/$pattern; do
+        [[ -e "$asset" ]] || continue
+        cp "$asset" "$destination/"
+        matched="true"
+      done
+      [[ "$matched" == "true" ]] || {
+        printf 'fake gh download found no assets for pattern: %s\n' "$pattern" >&2
+        exit 1
+      }
+    done
     ;;
   *)
     printf 'unsupported fake gh release command: %s\n' "$command" >&2
@@ -161,18 +189,123 @@ case "$command" in
 esac
 SH
 chmod +x "$fake_gh"
+mkdir -p "$fake_bin"
+ln -sf "$fake_gh" "$fake_bin/gh"
 
-GH_BIN="$fake_gh" \
+cat > "$fake_bin/curl" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${FAKE_RELEASE_JSON:?}"
+: "${FAKE_ARCHIVE_PATH:?}"
+: "${FAKE_MANIFEST_PATH:?}"
+: "${FAKE_WEB_INSTALLER_PATH:?}"
+: "${FAKE_WEB_INSTALLER_URL:?}"
+: "${FAKE_CURL_LOG:?}"
+
+output=""
+url=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -o)
+      output="$2"
+      shift 2
+      ;;
+    -*)
+      shift
+      ;;
+    *)
+      url="$1"
+      shift
+      ;;
+  esac
+done
+
+printf '%s\n' "$url" >> "$FAKE_CURL_LOG"
+
+emit_file() {
+  local source="$1"
+  if [[ -n "$output" ]]; then
+    cp "$source" "$output"
+  else
+    cat "$source"
+  fi
+}
+
+case "$url" in
+  "$FAKE_WEB_INSTALLER_URL")
+    emit_file "$FAKE_WEB_INSTALLER_PATH"
+    ;;
+  https://api.github.com/repos/*/releases?per_page=1)
+    emit_file "$FAKE_RELEASE_JSON"
+    ;;
+  https://example.invalid/*.zip)
+    emit_file "$FAKE_ARCHIVE_PATH"
+    ;;
+  https://example.invalid/*.manifest.json)
+    emit_file "$FAKE_MANIFEST_PATH"
+    ;;
+  *)
+    printf 'unexpected fake curl URL: %s\n' "$url" >&2
+    exit 2
+    ;;
+esac
+SH
+chmod +x "$fake_bin/curl"
+
+PATH="$fake_bin:$PATH" \
+  GH_BIN="$fake_gh" \
   FAKE_TAG="$tag" \
   FAKE_SHA="$sha" \
   FAKE_ASSET_DIR="$clean_asset_dir" \
+  FAKE_RELEASE_JSON="$release_json" \
+  FAKE_ARCHIVE_PATH="$clean_asset_dir/$clean_archive_name" \
+  FAKE_MANIFEST_PATH="$clean_asset_dir/$clean_manifest_name" \
+  FAKE_WEB_INSTALLER_PATH="$ROOT_DIR/web/workbench-install.sh" \
+  FAKE_WEB_INSTALLER_URL="$hosted_installer_url" \
+  FAKE_CURL_LOG="$fake_curl_log" \
+  OURO_WB_WEB_INSTALLER_URL="$hosted_installer_url" \
+  OURO_WB_WEB_INSTALLER_ATTEMPTS=1 \
+  OURO_WB_WEB_INSTALLER_RETRY_SECONDS=0 \
   "$ROOT_DIR/scripts/verify-published-release.sh" \
     --repo ourostack/ouro-workbench \
     --tag "$tag" \
     --version "$WORKBENCH_VERSION" \
     --sha "$sha" \
-    --prerelease true \
-    --skip-install >/dev/null
+    --prerelease true >/dev/null
+
+set +e
+PATH="$fake_bin:$PATH" \
+  GH_BIN="$fake_gh" \
+  FAKE_TAG="$tag" \
+  FAKE_SHA="$sha" \
+  FAKE_ASSET_DIR="$clean_asset_dir" \
+  FAKE_RELEASE_JSON="$release_json" \
+  FAKE_ARCHIVE_PATH="$clean_asset_dir/$clean_archive_name" \
+  FAKE_MANIFEST_PATH="$clean_asset_dir/$clean_manifest_name" \
+  FAKE_WEB_INSTALLER_PATH="$stale_web_installer" \
+  FAKE_WEB_INSTALLER_URL="$hosted_installer_url" \
+  FAKE_CURL_LOG="$fake_curl_log" \
+  OURO_WB_WEB_INSTALLER_URL="$hosted_installer_url" \
+  OURO_WB_WEB_INSTALLER_ATTEMPTS=1 \
+  OURO_WB_WEB_INSTALLER_RETRY_SECONDS=0 \
+  "$ROOT_DIR/scripts/verify-published-release.sh" \
+    --repo ourostack/ouro-workbench \
+    --tag "$tag" \
+    --version "$WORKBENCH_VERSION" \
+    --sha "$sha" \
+    --prerelease true >/dev/null 2>"$TEMP_ROOT/stale-hosted-installer.err"
+stale_hosted_status=$?
+set -e
+if [[ "$stale_hosted_status" -eq 0 ]]; then
+  printf 'Published release verifier selftest failed: stale hosted installer unexpectedly passed\n' >&2
+  exit 1
+fi
+grep -Fq 'does not match' "$TEMP_ROOT/stale-hosted-installer.err" || {
+  printf 'Published release verifier selftest failed: stale hosted installer diagnostic missing\n' >&2
+  cat "$TEMP_ROOT/stale-hosted-installer.err" >&2
+  exit 1
+}
 
 set +e
 GH_BIN="$fake_gh" \
@@ -221,6 +354,36 @@ fi
 grep -Fq 'expected exactly one' "$TEMP_ROOT/missing-manifest.err" || {
   printf 'Published release verifier selftest failed: missing manifest diagnostic missing\n' >&2
   cat "$TEMP_ROOT/missing-manifest.err" >&2
+  exit 1
+}
+
+extra_assets_dir="$TEMP_ROOT/extra-assets"
+mkdir -p "$extra_assets_dir"
+cp "$clean_asset_dir/$clean_archive_name" "$extra_assets_dir/$clean_archive_name"
+cp "$clean_asset_dir/$clean_manifest_name" "$extra_assets_dir/$clean_manifest_name"
+cp "$clean_asset_dir/$clean_archive_name" "$extra_assets_dir/TotallyUnrelated.zip"
+cp "$clean_asset_dir/$clean_manifest_name" "$extra_assets_dir/TotallyUnrelated.manifest.json"
+set +e
+GH_BIN="$fake_gh" \
+  FAKE_TAG="$tag" \
+  FAKE_SHA="$sha" \
+  FAKE_ASSET_DIR="$extra_assets_dir" \
+  "$ROOT_DIR/scripts/verify-published-release.sh" \
+    --repo ourostack/ouro-workbench \
+    --tag "$tag" \
+    --version "$WORKBENCH_VERSION" \
+    --sha "$sha" \
+    --prerelease true \
+    --skip-install >/dev/null 2>"$TEMP_ROOT/extra-assets.err"
+extra_assets_status=$?
+set -e
+if [[ "$extra_assets_status" -eq 0 ]]; then
+  printf 'Published release verifier selftest failed: extra assets unexpectedly passed\n' >&2
+  exit 1
+fi
+grep -Fq 'expected exactly one public .zip asset' "$TEMP_ROOT/extra-assets.err" || {
+  printf 'Published release verifier selftest failed: extra asset diagnostic missing\n' >&2
+  cat "$TEMP_ROOT/extra-assets.err" >&2
   exit 1
 }
 
@@ -288,6 +451,14 @@ grep -Fq 'scripts/verify-published-release.sh' "$ROOT_DIR/.github/workflows/rele
 }
 grep -Fq 'scripts/install-latest-release.sh' "$ROOT_DIR/scripts/verify-published-release.sh" || {
   printf 'Published release verifier must exercise the release installer path.\n' >&2
+  exit 1
+}
+grep -Fq 'WEB_INSTALLER_URL' "$ROOT_DIR/scripts/verify-published-release.sh" || {
+  printf 'Published release verifier must fetch and run the hosted public web installer.\n' >&2
+  exit 1
+}
+grep -Fq 'cmp -s "$WEB_INSTALLER_SOURCE" "$hosted_installer"' "$ROOT_DIR/scripts/verify-published-release.sh" || {
+  printf 'Published release verifier must require the hosted installer to match the source copy.\n' >&2
   exit 1
 }
 

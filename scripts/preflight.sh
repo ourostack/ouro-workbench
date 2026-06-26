@@ -88,6 +88,7 @@ scripts/smoke-app-artifact-verifier.sh
 scripts/smoke-install-from-artifact.sh
 scripts/selftest-install-app-artifact-version.sh
 scripts/selftest-published-release-verifier.sh
+scripts/selftest-web-installer.sh
 
 run_step "Smoke install rollback"
 scripts/smoke-install-rollback.sh
