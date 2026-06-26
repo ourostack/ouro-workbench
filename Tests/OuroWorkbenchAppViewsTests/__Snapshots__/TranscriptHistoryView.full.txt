@@ -1,0 +1,5 @@
+Text kind=static text="Latest Transcript"
+Text kind=static text="/tmp/ouro-c9/history.log"
+Text kind=static text="line one
+line two
+"

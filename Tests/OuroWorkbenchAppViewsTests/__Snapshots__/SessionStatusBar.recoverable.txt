@@ -1,0 +1,5 @@
+Text kind=static text="build will auto-resume on recovery"
+Text kind=static text="Respawn"
+Image image="arrow.clockwise"
+Text kind=static text="Reopens from its saved checkpoint."
+Text kind=static text="Executable: Found /bin/zsh."

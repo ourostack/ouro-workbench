@@ -1,0 +1,3 @@
+Text kind=static text="Configured"
+Text kind=static text="Nothing to recover."
+Text kind=static text="Executable: Found /bin/zsh."
