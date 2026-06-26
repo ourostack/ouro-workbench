@@ -371,8 +371,10 @@ final class BossMCPPillVerdictWiringTests: XCTestCase {
     }
 
     func testHarnessDiagnosticPillRoutesThroughSeamWithVerdict() throws {
+        // C11 widened `HarnessAgentRow` `private`→`internal`, dropping `private`
+        // from its decl line; the slice still bounds the row at `HarnessActionRow`.
         let body = try WorkbenchAppSource.sourceSlice(
-            from: "private struct HarnessAgentRow: View {",
+            from: "struct HarnessAgentRow: View {",
             to: "private struct HarnessActionRow: View {"
         )
         // The harness-diagnostic pill (entry.mcpStatus / entry.toolsInjection) must route

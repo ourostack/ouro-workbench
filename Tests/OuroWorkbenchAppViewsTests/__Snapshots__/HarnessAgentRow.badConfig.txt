@@ -1,0 +1,7 @@
+Image image="person.crop.circle.badge.exclamationmark"
+Text kind=static text="gamma-agent"
+Text kind=static text="bad json"
+Text kind=static text="bad config"
+Text kind=static text="bad config"
+Text kind=static text="mcp off"
+Text kind=static text="mcp off"

@@ -1454,7 +1454,10 @@ private struct HarnessDetailRow: View {
     }
 }
 
-private struct HarnessAgentRow: View {
+// C11: `private`→`internal` (zero-behavior) so the snapshot test can
+// `@testable import` the standalone agent-readiness row leaf; sole call site is
+// `HarnessStatusSheet`'s agent-section `ForEach` (unchanged).
+struct HarnessAgentRow: View {
     var entry: HarnessAgentEntry
 
     var body: some View {
