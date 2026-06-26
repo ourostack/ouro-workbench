@@ -23,9 +23,10 @@ if [[ -z "$latest_manifest" ]]; then
   printf 'Install-from-artifact smoke failed: no manifest found for version %s in %s\n' "$VERSION" "$ARTIFACTS_DIR" >&2
   exit 1
 fi
+manifest_version="$(plutil -extract version raw -o - "$latest_manifest")"
 
 mkdir -p "$INSTALL_DIR"
 "$ROOT_DIR/scripts/install-app.sh" --install-dir "$INSTALL_DIR" --artifact-manifest "$latest_manifest" >/dev/null
-"$ROOT_DIR/scripts/verify-app-bundle.sh" "$INSTALL_DIR/$WORKBENCH_APP_NAME.app" >/dev/null
+"$ROOT_DIR/scripts/verify-app-bundle.sh" "$INSTALL_DIR/$WORKBENCH_APP_NAME.app" --expected-version "$manifest_version" >/dev/null
 
 printf 'Install-from-artifact smoke passed\n'
