@@ -43,6 +43,7 @@ scripts/smoke-package-shallow-guard.sh
 scripts/install-latest-app-artifact.sh --help >/dev/null
 scripts/install-latest-release.sh --help >/dev/null
 scripts/resolve-latest-release-tag.sh --help >/dev/null
+scripts/verify-published-release.sh --help >/dev/null
 scripts/selftest-latest-release-installer.sh
 scripts/collect-support-diagnostics.sh --help >/dev/null
 scripts/smoke-support-diagnostics-crash-reports.sh
@@ -86,6 +87,7 @@ scripts/archive-app-artifact.sh
 scripts/smoke-app-artifact-verifier.sh
 scripts/smoke-install-from-artifact.sh
 scripts/selftest-install-app-artifact-version.sh
+scripts/selftest-published-release-verifier.sh
 
 run_step "Smoke install rollback"
 scripts/smoke-install-rollback.sh
