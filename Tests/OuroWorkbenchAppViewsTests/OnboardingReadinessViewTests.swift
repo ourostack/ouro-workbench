@@ -197,6 +197,49 @@ final class OnboardingReadinessViewTests: XCTestCase {
                           "AN-006: a pending check → .needsRepair, never .ready-with-repairSteps")
     }
 
+    // MARK: - U5 B3 — DRIVE the `.onAppear` closure (L7184)
+
+    /// U5 B3 (corrected recipe). The view's `.onAppear { model.startFirstRunBootstrapIfNeeded() }`
+    /// (`:7184`) is its only interaction region. DRIVEN by `callOnAppear()`. With a `.ready`
+    /// readiness, `FirstRunBootstrapDrive.shouldStart(isReady: true, …)` returns false (and the
+    /// fully-configured ready agent also short-circuits the configured-agent guard), so
+    /// `startFirstRunBootstrapIfNeeded()` early-returns WITHOUT spawning the live bootstrap Task —
+    /// the closure executes, the region is covered, and the no-op is asserted
+    /// (`firstRunBootstrapIsRunning` stays false, no presentation kicked).
+    func testE4_drive_onAppear_readyIsNoOp() throws {
+        let model = try vm(
+            agent: readyAgent(),
+            providerChecks: ["outward": OnboardingProviderCheckResult(lane: "outward", state: .passed, detail: "ok")])
+        XCTAssertEqual(model.onboardingReadiness?.isReady, true, "precondition: ready")
+        XCTAssertFalse(model.firstRunBootstrapIsRunning, "precondition: bootstrap not running")
+        try view(model).inspect().find(ViewType.VStack.self).callOnAppear()
+        XCTAssertFalse(model.firstRunBootstrapIsRunning,
+                       "ready → startFirstRunBootstrapIfNeeded() early-returns, no bootstrap kicked")
+        XCTAssertNil(model.firstRunPresentation, "ready → no live presentation seeded")
+    }
+
+    /// MUTATION control for the `.onAppear` — a NOT-ready readiness + a resolved boss makes the
+    /// SAME `.onAppear` closure kick the bootstrap: `startFirstRunBootstrapIfNeeded()` proceeds
+    /// (`shouldStart(isReady: false, hasResolvedBoss: true, …) == true`), flipping
+    /// `firstRunBootstrapIsRunning` true + seeding the idle presentation SYNCHRONOUSLY. We assert
+    /// that synchronous effect (the spawned bootstrap Task runs against the hermetic temp dirs and
+    /// is not awaited). This proves the `.onAppear` action is behaviorally load-bearing — deleting
+    /// it would leave `firstRunBootstrapIsRunning` false.
+    func testE4_drive_onAppear_notReadyKicksBootstrap() throws {
+        let model = try makeVM()
+        // A not-ready readiness with a resolved boss NOT present in ouroAgents → no configured-agent
+        // short-circuit → shouldStart == true → the bootstrap starts synchronously.
+        model.state.boss.agentName = Self.bossName
+        model.onboardingReadiness = OnboardingReadiness(
+            state: .needsCredentials, headline: "h", detail: "d",
+            selectedBossName: Self.bossName, repairSteps: [])
+        XCTAssertFalse(model.firstRunBootstrapIsRunning, "precondition")
+        try view(model).inspect().find(ViewType.VStack.self).callOnAppear()
+        XCTAssertTrue(model.firstRunBootstrapIsRunning,
+                      "not-ready + resolved boss → .onAppear kicks the bootstrap (running flag flips)")
+        XCTAssertNotNil(model.firstRunPresentation, "the idle presentation is seeded synchronously")
+    }
+
     // MARK: - SU-E4.b — MUTATION-verified negative control (P2)
 
     /// NEGATIVE CONTROL — changing the advisor INPUTS so the state flips `.ready` ↔ not-ready
