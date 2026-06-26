@@ -138,6 +138,9 @@ jobs:
       - name: Verify latest release resolver help
         run: scripts/resolve-latest-release-tag.sh --help
 
+      - name: Verify published release verifier help
+        run: scripts/verify-published-release.sh --help
+
       - name: Verify latest release installer resolves prereleases
         run: scripts/selftest-latest-release-installer.sh
 
@@ -167,6 +170,9 @@ jobs:
 
       - name: Verify artifact install uses manifest version
         run: scripts/selftest-install-app-artifact-version.sh
+
+      - name: Verify published release verifier
+        run: scripts/selftest-published-release-verifier.sh
 
       - name: Upload app bundle
         uses: actions/upload-artifact@v7
