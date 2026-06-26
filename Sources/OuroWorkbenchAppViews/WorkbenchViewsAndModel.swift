@@ -7374,7 +7374,7 @@ struct OnboardingRepairStepRow: View {
 /// proposes them via the editable card (which renders in the boss dashboard), and relaunches
 /// the approved ones as terminals — all context-specific intelligence the boss owns. This
 /// surface is a clean explanation + a single hand-off affordance, never a hardcoded scan.
-private struct OnboardingBossReconstructView: View {
+struct OnboardingBossReconstructView: View {
     @ObservedObject var model: WorkbenchViewModel
 
     var body: some View {
@@ -7765,6 +7765,13 @@ private struct SessionStatusRowView: View {
 
 struct ActionLogView: View {
     var entries: [WorkbenchActionLogEntry]
+    /// The zone + locale the per-entry timestamp renders in (AN-007). Both default to the
+    /// operator's local values (`.autoupdatingCurrent`) so production is byte-identical to the
+    /// prior raw `occurredAt.formatted(date:.omitted, time:.standard)`; the clock test injects
+    /// `.gmt` + `en_GB` for a snapshot that's byte-identical across CI runner zones AND locales
+    /// (the C4 `DecisionLogRow` / `BossWatchStatusView` recipe).
+    var timeZone: TimeZone = .autoupdatingCurrent
+    var locale: Locale = .autoupdatingCurrent
     @State private var isExpanded = false
 
     private var displayedEntries: ArraySlice<WorkbenchActionLogEntry> {
@@ -7830,7 +7837,7 @@ struct ActionLogView: View {
             Image(systemName: WorkbenchActionOutcomePresentation.iconSystemName(for: tone))
                 .foregroundStyle(Self.swiftUIColor(for: WorkbenchActionOutcomePresentation.color(for: tone)))
                 .fixedSize()
-            Text(entry.occurredAt.formatted(date: .omitted, time: .standard))
+            Text(entry.occurredAt.workbenchTimeText(date: .omitted, time: .standard, timeZone: timeZone, locale: locale))
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .fixedSize()
@@ -7884,6 +7891,11 @@ struct ActionLogView: View {
 /// cluster. The counts come from the pure `BossActionReceiptSummary`.
 struct BossActionReceiptStrip: View {
     @ObservedObject var model: WorkbenchViewModel
+    /// Zone + locale forwarded to the expanded `ActionLogView`'s per-entry timestamp (AN-007).
+    /// Both default to `.autoupdatingCurrent` (operator-local, prod byte-identical); the clock
+    /// test injects `.gmt` + `en_GB` for a deterministic snapshot.
+    var timeZone: TimeZone = .autoupdatingCurrent
+    var locale: Locale = .autoupdatingCurrent
     @State private var isExpanded = false
 
     private var summary: BossActionReceiptSummary { model.bossActionReceiptSummary }
@@ -7926,7 +7938,7 @@ struct BossActionReceiptStrip: View {
                 .buttonStyle(.plain)
                 .help("The boss's executed actions — \(summary.label). Click to see the full log.")
                 if isExpanded {
-                    ActionLogView(entries: model.recentActionLogEntries)
+                    ActionLogView(entries: model.recentActionLogEntries, timeZone: timeZone, locale: locale)
                 } else if summary.hasFailures {
                     // Surface the failed receipts prominently even when collapsed,
                     // so a failure is never one disclosure away.
@@ -10409,12 +10421,17 @@ public struct WorkbenchReleaseUpdateControls: View {
 
 struct RecoveryDrillView: View {
     @ObservedObject var model: WorkbenchViewModel
+    /// Zone + locale the drill's `ranAt` timestamp renders in (AN-007). Default to
+    /// `.autoupdatingCurrent` (operator-local, prod byte-identical); the clock test injects
+    /// `.gmt` + `en_GB` for a deterministic snapshot.
+    var timeZone: TimeZone = .autoupdatingCurrent
+    var locale: Locale = .autoupdatingCurrent
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 12) {
                 DashboardRowLabel(title: "Recovery Drill", systemImage: "arrow.clockwise.circle")
-                DashboardStatusLine(text: model.recoveryDrillStatusLine)
+                DashboardStatusLine(text: model.recoveryDrillStatusLine(timeZone: timeZone, locale: locale))
                 Button {
                     model.runRecoveryDrill()
                 } label: {
@@ -12049,11 +12066,21 @@ public final class WorkbenchViewModel: ObservableObject {
         return "No transcript matches for \(query)."
     }
 
-    var recoveryDrillStatusLine: String {
+    /// The recovery-drill status line — the one-line outcome plus the drill's `ranAt` timestamp.
+    /// The timestamp is rendered through the shared `Date.workbenchTimeText` seam (AN-007): both
+    /// `timeZone`/`locale` default to `.autoupdatingCurrent`, so production is BYTE-IDENTICAL to
+    /// the prior raw `ranAt.formatted(date:.omitted, time:.standard)`; the clock test injects
+    /// `.gmt` + `en_GB` for a runner-zone/locale-independent snapshot.
+    func recoveryDrillStatusLine(
+        timeZone: TimeZone = .autoupdatingCurrent,
+        locale: Locale = .autoupdatingCurrent
+    ) -> String {
         guard let recoveryDrillResult else {
             return "not run"
         }
-        return "\(recoveryDrillResult.oneLineStatus); \(recoveryDrillResult.ranAt.formatted(date: .omitted, time: .standard))"
+        let stamp = recoveryDrillResult.ranAt.workbenchTimeText(
+            date: .omitted, time: .standard, timeZone: timeZone, locale: locale)
+        return "\(recoveryDrillResult.oneLineStatus); \(stamp)"
     }
 
     var releaseUpdateStatusLine: String {
