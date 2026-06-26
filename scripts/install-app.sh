@@ -8,6 +8,7 @@ INSTALL_DIR="$HOME/Applications"
 OPEN_AFTER_INSTALL="false"
 VERIFY_SCRIPT="$ROOT_DIR/scripts/verify-app-bundle.sh"
 ARTIFACT_MANIFEST=""
+ARTIFACT_EXPECTED_VERSION=""
 
 usage() {
   printf 'Usage: %s [--install-dir PATH] [--artifact-manifest PATH] [--verify-script PATH] [--open]\n' "$(basename "$0")" >&2
@@ -140,8 +141,19 @@ if [[ ! -x "$VERIFY_SCRIPT" ]]; then
   printf 'App verifier is not executable: %s\n' "$VERIFY_SCRIPT" >&2
   exit 64
 fi
+
+verify_installed_bundle() {
+  local app_path="$1"
+  if [[ -n "$ARTIFACT_EXPECTED_VERSION" ]]; then
+    "$VERIFY_SCRIPT" "$app_path" --expected-version "$ARTIFACT_EXPECTED_VERSION" >/dev/null
+  else
+    "$VERIFY_SCRIPT" "$app_path" >/dev/null
+  fi
+}
+
 if [[ -n "$ARTIFACT_MANIFEST" ]]; then
   "$ROOT_DIR/scripts/verify-app-artifact.sh" "$ARTIFACT_MANIFEST" >/dev/null
+  ARTIFACT_EXPECTED_VERSION="$(plutil -extract version raw -o - "$ARTIFACT_MANIFEST")"
 else
   "$ROOT_DIR/scripts/package-app.sh" >/dev/null
   APP_SOURCE="$ROOT_DIR/dist/$APP_NAME"
@@ -169,7 +181,7 @@ if [[ ! -d "$APP_SOURCE" ]]; then
 fi
 
 ditto "$APP_SOURCE" "$STAGED_APP"
-"$VERIFY_SCRIPT" "$STAGED_APP" >/dev/null
+verify_installed_bundle "$STAGED_APP"
 
 if [[ -e "$APP_DEST" ]]; then
   mv "$APP_DEST" "$BACKUP_APP"
@@ -191,7 +203,7 @@ if [[ -x "$LSREGISTER" ]]; then
   "$LSREGISTER" -f "$APP_DEST" >/dev/null 2>&1 || true
 fi
 
-"$VERIFY_SCRIPT" "$APP_DEST" >/dev/null
+verify_installed_bundle "$APP_DEST"
 INSTALL_SUCCEEDED="true"
 rm -rf "$BACKUP_APP"
 
