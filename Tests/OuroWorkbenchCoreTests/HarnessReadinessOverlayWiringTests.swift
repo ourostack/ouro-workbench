@@ -109,7 +109,9 @@ final class HarnessReadinessOverlayWiringTests: XCTestCase {
         let source = try WorkbenchAppSource.appSource()
         return try WorkbenchAppSource.sourceSlice(
             in: source,
-            from: "private struct HarnessAgentRow: View {",
+            // C11 widened `HarnessAgentRow` `private`→`internal` (dropping `private`
+            // from the decl); the slice still bounds the row at the next struct's doc.
+            from: "struct HarnessAgentRow: View {",
             to: "\n/// A confirm-gated control button"
         )
     }

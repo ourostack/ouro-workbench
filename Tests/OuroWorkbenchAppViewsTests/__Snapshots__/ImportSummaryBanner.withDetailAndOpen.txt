@@ -1,0 +1,5 @@
+Image image="checkmark.seal.fill"
+Text kind=static text="Brought back 2 terminals across 2 workspaces"
+Text kind=static text="Home, Side · Skipped: broken-one · After I resume these in Workbench, I will help you close matching sessions still running outside Workbench so work does not fork."
+Text kind=static text="Open"
+Image image="xmark"

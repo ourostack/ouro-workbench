@@ -1,0 +1,5 @@
+Image image="exclamationmark.triangle.fill"
+Text kind=static text="Brought back 1 terminal"
+Text kind=static text="Imported, but couldn't save to disk — they'll be lost when you quit."
+Text kind=static text="Home · After I resume these in Workbench, I will help you close matching sessions still running outside Workbench so work does not fork."
+Image image="xmark"

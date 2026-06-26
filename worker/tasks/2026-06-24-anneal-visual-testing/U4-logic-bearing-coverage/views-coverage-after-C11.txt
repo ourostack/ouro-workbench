@@ -1,0 +1,37 @@
+U4 Cluster C11 — views-lib coverage (canonical: xcrun llvm-cov export … Sources/OuroWorkbenchAppViews)
+Measured after C11 (branch feat/anneal-c11-harness-settings off origin/main @ 1b6d907=#315 C9 tip).
+NOT gated (the views lib is the campaign's final gate step); COVERAGE_DIRS + allowlist UNCHANGED.
+
+BASELINE (origin/main C9 tip, pristine):
+  region 35.36% (2108/5962)   line 48.52% (15645/32243)
+AFTER C11:
+  region 38.88% (2318/5962)   line 53.93% (17389/32243)
+DELTA: +210 regions / +1744 lines  (+3.52pp region / +5.41pp line)
+
+Canonical per-metric:
+  C11-ISOLATED (off the C9 base @ 1b6d907, before C10 merged):
+    regions   38.88%  (2318/5962)   lines 53.93%  (17389/32243)
+    (baseline 35.36% / 48.52% → +210 regions / +1744 lines)
+  POST-REBASE ABSOLUTE (rebased clean+additive onto origin/main C10 tip @ 820314e=#316;
+  C10's workbenchTimeText seam params shifted the denominator 5962→5968):
+    regions   41.29%  (2464/5968)   lines 57.63%  (18585/32251)
+    (the FINAL views-lib coverage with C10+C11 both present; only the campaign's
+     final views-lib gate decision remains, owned by the operator)
+
+Full strict suite: 3350 tests, 1 skipped (env-gated RepairAgentKeystoneTests), 0 failures, 0 warnings.
+Baseline was 3314 → +36 C11 tests (20 committed references):
+  C11-1 HarnessActionResultBanner (2 refs / +4 tests)
+  C11-2 HarnessAgentRow           (3 refs / +5 tests)
+  C11-3 HarnessStatusSheet        (6 refs / +9 tests, incl. cross-TZ observedAt proof)
+  C11-4 ImportSummaryBanner       (5 refs / +7 tests)
+  C11-5 SettingsSheet             (2 refs / +4 tests)
+  C11-6 NewTerminalSessionSheet   (2 refs / +5 tests) + reconfirm ledger (+2 tests)
+
+C11-covered (real-LOGIC, snapshotted): HarnessActionResultBanner, HarnessAgentRow,
+HarnessStatusSheet, ImportSummaryBanner, SettingsSheet, NewTerminalSessionSheet.
+C11-deferred (genuinely branchless from the host whitelist, reconfirmed by mutation,
+covered transitively where applicable): HarnessSection, HarnessDetailRow,
+SettingsSection, HarnessActionRow, AboutSheet, ReleaseUpdateView,
+WorkbenchReleaseUpdateControls. AboutSheet is also a final-step ALLOWLIST candidate
+(renders Bundle.main build hash via a vendored shell — machine/build-derived, no
+data-state seam).
