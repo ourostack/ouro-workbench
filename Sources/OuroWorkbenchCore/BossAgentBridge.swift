@@ -170,7 +170,7 @@ public struct BossWorkbenchMCPRegistrar: @unchecked Sendable {
     private let jsonWriter: @Sendable (Data, URL) throws -> Void
 
     public init(
-        agentBundlesURL: URL = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("AgentBundles", isDirectory: true),
+        agentBundlesURL: URL = BossWorkbenchMCPRegistrar.defaultAgentBundlesURL(),
         mcpExecutableURL: URL = BossWorkbenchMCPRegistrar.defaultMCPExecutableURL(),
         serverName: String = "ouro_workbench",
         fileManager: FileManager = .default,
@@ -181,6 +181,18 @@ public struct BossWorkbenchMCPRegistrar: @unchecked Sendable {
         self.serverName = serverName
         self.fileManager = fileManager
         self.jsonWriter = jsonWriter
+    }
+
+    /// AN-001: the default agent-bundles root resolves to `<home>/AgentBundles`, but
+    /// the registrar HONORS any injected `agentBundlesURL` (the `init` default is the
+    /// ONLY caller of this — an injected path bypasses it entirely). Naming the default
+    /// (mirroring `defaultMCPExecutableURL`) makes the "default only when none provided"
+    /// contract explicit and testable, so callers/tests can point the registrar at a
+    /// hermetic root without it silently reading the real home.
+    public static func defaultAgentBundlesURL(
+        homeURL: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) -> URL {
+        homeURL.appendingPathComponent("AgentBundles", isDirectory: true)
     }
 
     public static func defaultMCPExecutableURL(

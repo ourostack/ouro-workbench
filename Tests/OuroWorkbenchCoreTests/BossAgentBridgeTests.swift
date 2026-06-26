@@ -531,6 +531,72 @@ final class BossAgentBridgeTests: XCTestCase {
         XCTAssertEqual(executableURL.path, "/Users/test/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP")
     }
 
+    // MARK: - AN-001: injected agentBundlesURL is honored; default stays ~/AgentBundles
+
+    /// AN-001 (a): an injected `agentBundlesURL` is RESPECTED — the registrar reads
+    /// from the injected root, never the real `~/AgentBundles`. Drives a temp bundle
+    /// root (no real-home dependency) and proves the sweep/cleanup acts ONLY there.
+    func testInjectedAgentBundlesURLIsRespectedNotRealHome() throws {
+        // A dirty bundle planted under the INJECTED temp root.
+        try writeAgentConfig(
+            agentName: "injected",
+            json: """
+            {
+              "version": 2,
+              "mcpServers": {
+                "ouro_workbench": { "command": "/stale/OuroWorkbenchMCP", "args": [] }
+              }
+            }
+            """
+        )
+        let registrar = BossWorkbenchMCPRegistrar(agentBundlesURL: temporaryDirectory)
+
+        // The registrar stores exactly the injected root (not ~/AgentBundles).
+        XCTAssertEqual(registrar.agentBundlesURL, temporaryDirectory)
+        let realHome = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("AgentBundles", isDirectory: true)
+        XCTAssertNotEqual(registrar.agentBundlesURL, realHome)
+
+        // The sweep operates on the injected root: it finds + cleans the temp bundle,
+        // proving the read targets the injected path and not the real home.
+        XCTAssertEqual(registrar.cleanupAllAgents(), ["injected"])
+
+        // The snapshot's config lookup is also rooted at the injected path.
+        try writeAgentConfig(
+            agentName: "probe",
+            json: """
+            { "version": 2 }
+            """
+        )
+        let snapshot = registrar.snapshot(for: BossAgentSelection(agentName: "probe"))
+        XCTAssertTrue(
+            snapshot.agentConfigPath.hasPrefix(temporaryDirectory.path),
+            "snapshot config path \(snapshot.agentConfigPath) should be rooted at the injected bundles dir"
+        )
+    }
+
+    /// AN-001 (b): the named default resolver returns `<home>/AgentBundles` so the
+    /// no-injection default is explicit + testable (mirrors `defaultMCPExecutableURL`).
+    func testDefaultAgentBundlesURLResolvesToHomeAgentBundles() {
+        let homeURL = URL(fileURLWithPath: "/Users/test", isDirectory: true)
+
+        let bundlesURL = BossWorkbenchMCPRegistrar.defaultAgentBundlesURL(homeURL: homeURL)
+
+        XCTAssertEqual(bundlesURL.path, "/Users/test/AgentBundles")
+    }
+
+    /// AN-001 prod-byte-identical default: a registrar built with NO injected path
+    /// resolves `agentBundlesURL` to the REAL `~/AgentBundles` — unchanged from before.
+    func testRegistrarDefaultAgentBundlesURLIsHomeAgentBundlesWhenNotInjected() {
+        let registrar = BossWorkbenchMCPRegistrar(
+            mcpExecutableURL: temporaryDirectory.appendingPathComponent("OuroWorkbenchMCP")
+        )
+
+        let expected = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("AgentBundles", isDirectory: true)
+        XCTAssertEqual(registrar.agentBundlesURL, expected)
+    }
+
     @discardableResult
     private func writeAgentConfig(agentName: String, json: String) throws -> URL {
         let bundleURL = temporaryDirectory
