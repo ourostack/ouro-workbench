@@ -125,3 +125,19 @@ now EXECUTED (P1 satisfied); their value produces no observable difference in th
 rubric's "presentation constants OUT of P2 scope"). The change-row timestamp's BEHAVIOR (the
 `workbenchTimeText` seam) is already mutation-covered by the existing C0 clock tests + cross-TZ proof.
 CARVED: none (driven to execution).
+
+### BossConversationView (L5868-5912) — 6 → 6 driven, 0 carved
+BEFORE: 6 uncovered (`5880` .onSubmit closure, `5881` its Task{}, `5885` Ask Button action, `5886` its
+Task{}, `5898` quick-question Button action, `5899` its Task{}). Existing C3 tests RENDER the field +
+quick-question titles but never INVOKE any action. Recipe: the `RunningSessionHeaderControlsDriveTests`
+async-tap precedent — tap/callOnSubmit → the `Task {}` runs the async fn whose FIRST pre-await statement
+is an observable synchronous effect; `await Task.yield()` loop lets it run, then assert.
+DRIVEN via INVOCATION (async tests):
+- `5885`/`5886` Ask: `find(button:"Ask").tap()` → `Task { await runBossQuestion() }`; `runBossQuestion`'s
+  pre-await `setBossPaneCollapsed(false)` flips `state.bossPaneCollapsed` (started true). 
+- `5880`/`5881` onSubmit: `find(TextField).callOnSubmit()` → same `runBossQuestion()` → same flip.
+- `5898`/`5899` quick-question: `find(button:"What's Going On?").tap()` → `Task { await
+  runBossQuickQuestion(item.question) }`; its pre-await `bossQuestion = resolved` overwrites the SENTINEL.
+MUTATION: each inner `await model.run…()` → `_ = model` → ALL 3 tests RED (effects never fire) → revert
+→ GREEN. (One mutation pass covered the 2 runBossQuestion callers + the quick-question caller.)
+CARVED: none.

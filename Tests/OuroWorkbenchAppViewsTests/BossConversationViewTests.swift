@@ -65,6 +65,57 @@ final class BossConversationViewTests: XCTestCase {
         try assertViewSnapshot(of: view, named: "BossConversationView.typed")
     }
 
+    // MARK: - U5 B8 — Ask / onSubmit / quick-question INTERACTIONS (drive the action + Task closures)
+
+    /// U5 B8 — the "Ask" `Button` action + its `Task {}` (`:5885`/`:5886` —
+    /// `Button { Task { await model.runBossQuestion() } }`). With a non-empty `bossQuestion`,
+    /// `runBossQuestion()` SYNCHRONOUSLY calls `setBossPaneCollapsed(false)` (before any await), so
+    /// after the Task body starts we can assert it. We start the pane COLLAPSED so the effect is a
+    /// real flip. (Hermetic fixture: no boss daemon → the trailing `runBossCheckIn` await fails fast.)
+    func testConversation_askTap_runsBossQuestion() async throws {
+        let model = try makeVM()
+        model.bossQuestion = "What is running right now?"
+        model.setBossPaneCollapsed(true)
+        XCTAssertTrue(model.state.bossPaneCollapsed, "precondition: pane collapsed")
+        let view = BossConversationView(model: model)
+        try view.inspect().find(button: "Ask").tap()
+        for _ in 0..<50 where model.state.bossPaneCollapsed { await Task.yield() }
+        XCTAssertFalse(model.state.bossPaneCollapsed,
+                       "Ask tap → Task → runBossQuestion calls setBossPaneCollapsed(false)")
+    }
+
+    /// U5 B8 — the `TextField.onSubmit` closure + its `Task {}` (`:5880`/`:5881` —
+    /// `.onSubmit { Task { await model.runBossQuestion() } }`). ViewInspector 0.10.3 drives
+    /// `.callOnSubmit()`; the same pre-await `setBossPaneCollapsed(false)` is the observable effect.
+    func testConversation_onSubmit_runsBossQuestion() async throws {
+        let model = try makeVM()
+        model.bossQuestion = "Status?"
+        model.setBossPaneCollapsed(true)
+        XCTAssertTrue(model.state.bossPaneCollapsed, "precondition: pane collapsed")
+        let view = BossConversationView(model: model)
+        try view.inspect().find(ViewType.TextField.self).callOnSubmit()
+        for _ in 0..<50 where model.state.bossPaneCollapsed { await Task.yield() }
+        XCTAssertFalse(model.state.bossPaneCollapsed,
+                       "onSubmit → Task → runBossQuestion calls setBossPaneCollapsed(false)")
+    }
+
+    /// U5 B8 — a quick-question `Button` action + its `Task {}` (`:5898`/`:5899` —
+    /// `Button(item.title) { Task { await model.runBossQuickQuestion(item.question) } }`).
+    /// `runBossQuickQuestion(_:)` SYNCHRONOUSLY sets `bossQuestion = resolved` (its first pre-await
+    /// statement), replacing whatever was there. We tap the first quick-question ("What's Going On?")
+    /// and assert `bossQuestion` became its resolved question text.
+    func testConversation_quickQuestionTap_runsQuickQuestion() async throws {
+        let model = try makeVM()
+        model.bossQuestion = "SENTINEL"
+        XCTAssertFalse(model.bossCheckInIsRunning, "precondition: not running → quick buttons enabled")
+        let view = BossConversationView(model: model)
+        try view.inspect().find(button: "What's Going On?").tap()
+        for _ in 0..<50 where model.bossQuestion == "SENTINEL" { await Task.yield() }
+        XCTAssertNotEqual(model.bossQuestion, "SENTINEL",
+                          "the quick-question tap → runBossQuickQuestion overwrites bossQuestion")
+        XCTAssertFalse(model.bossQuestion.isEmpty, "the resolved quick-question is set")
+    }
+
     // MARK: - Determinism (P3)
 
     func testConversation_determinism_byteIdenticalTwiceAndNoLeak() throws {
