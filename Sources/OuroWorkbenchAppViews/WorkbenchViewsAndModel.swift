@@ -2156,6 +2156,11 @@ public struct AboutSheet: View {
 struct DecisionLogSheet: View {
     @ObservedObject var model: WorkbenchViewModel
     @Environment(\.dismiss) private var dismiss
+    /// Threaded into each `DecisionLogRow` so the row's `occurredAt` timestamp is
+    /// deterministic under test (AN-007). Prod defaults to `.autoupdatingCurrent`
+    /// (unchanged); the snapshot tests inject `.gmt`/`en_GB`.
+    var timeZone: TimeZone = .autoupdatingCurrent
+    var locale: Locale = .autoupdatingCurrent
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -2194,7 +2199,7 @@ struct DecisionLogSheet: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 10) {
                         ForEach(model.state.decisionLog) { decision in
-                            DecisionLogRow(decision: decision) { autoAdvance in
+                            DecisionLogRow(decision: decision, timeZone: timeZone, locale: locale) { autoAdvance in
                                 Task { await model.teachBoss(from: decision, autoAdvance: autoAdvance) }
                             }
                         }
@@ -2227,6 +2232,12 @@ struct DecisionInboxSheet: View {
     /// test injects a fixed `Date` for a deterministic grouping. The
     /// `TimelineView(.periodic)` driver is RETAINED — production is unchanged.
     var now: Date? = nil
+    /// Threaded into each `DecisionLogRow` so the row's `occurredAt` timestamp is
+    /// deterministic under test (AN-007). Prod defaults to `.autoupdatingCurrent`
+    /// (unchanged); the snapshot tests inject `.gmt`/`en_GB`. (Orthogonal to `now`,
+    /// which drives the open-inbox GROUPING, not the row timestamp render.)
+    var timeZone: TimeZone = .autoupdatingCurrent
+    var locale: Locale = .autoupdatingCurrent
 
     var body: some View {
         // Re-evaluate every 30s so an elapsed snooze drops back into the queue
@@ -2300,6 +2311,8 @@ struct DecisionInboxSheet: View {
                             DecisionLogRow(
                                 decision: decision,
                                 mode: .inbox,
+                                timeZone: timeZone,
+                                locale: locale,
                                 onTeach: { autoAdvance in
                                     Task { await model.teachBoss(from: decision, autoAdvance: autoAdvance) }
                                 },
@@ -2363,7 +2376,7 @@ struct DecisionInboxSheet: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 10) {
                     ForEach(model.state.decisionLog) { decision in
-                        DecisionLogRow(decision: decision) { autoAdvance in
+                        DecisionLogRow(decision: decision, timeZone: timeZone, locale: locale) { autoAdvance in
                             Task { await model.teachBoss(from: decision, autoAdvance: autoAdvance) }
                         }
                     }
@@ -2549,7 +2562,7 @@ struct ReportBugSheet: View {
     }
 }
 
-private struct DecisionLogRow: View {
+struct DecisionLogRow: View {
     /// How the row renders. `.log` is the flat reverse-chron audit row (Teach
     /// only). `.inbox` is the prioritized-queue variant: a severity accent plus
     /// Ack / Snooze / Resolve triage controls next to Teach. ~90% of the row is
@@ -2558,6 +2571,17 @@ private struct DecisionLogRow: View {
 
     let decision: BossInboxDecision
     var mode: Mode = .log
+    /// The zone + locale the row's `occurredAt` timestamp renders in (AN-007).
+    /// Both default to the operator's local values (`.autoupdatingCurrent`) so
+    /// production is byte-identical to the prior `decision.occurredAt.formatted(…)`
+    /// — `Date.FormatStyle`'s own defaults are also `.autoupdatingCurrent`, so the
+    /// explicit seam is a no-op in prod. The snapshot tests inject `.gmt` + `en_GB`
+    /// for a reference byte-identical across CI runner zones AND locales (the C0
+    /// recipe — `.abbreviated`/`.shortened` is both zone- and locale-sensitive, and
+    /// a body-evaluated `.formatted()` String is NOT reliably re-pinned by the host
+    /// process-TZ pin, the C0 determinism root cause).
+    var timeZone: TimeZone = .autoupdatingCurrent
+    var locale: Locale = .autoupdatingCurrent
     /// Teach the boss from this decision. `true` = reinforce (auto-advance these
     /// next time), `false` = correct (always ask me).
     var onTeach: (Bool) -> Void
@@ -2595,7 +2619,11 @@ private struct DecisionLogRow: View {
                         .lineLimit(1)
                 }
                 Spacer()
-                Text(decision.occurredAt.formatted(date: .abbreviated, time: .shortened))
+                // AN-007: render the timestamp through the shared deterministic
+                // seam (injected `.gmt`/`en_GB` in tests; `.autoupdatingCurrent`
+                // defaults keep prod byte-identical to the prior `.formatted(…)`).
+                Text(decision.occurredAt.workbenchTimeText(
+                    date: .abbreviated, time: .shortened, timeZone: timeZone, locale: locale))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }

@@ -1,0 +1,5 @@
+Image image="command"
+TextField kind=editable text="zzqqx-no-such-command"
+Text kind=static text="No Commands"
+Image image="command"
+Text kind=static text="Try another action, terminal name, or alias."

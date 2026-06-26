@@ -1,0 +1,6 @@
+Text kind=static text="Boss Decision Log"
+Text kind=static text="Every decision the boss made about a waiting session, and why"
+Text kind=static text="Done"
+Image image="checklist"
+Text kind=static text="No decisions recorded yet"
+Text kind=static text="When a session is waiting on you, the boss records what it would do and why here — automatically, as it checks in."
