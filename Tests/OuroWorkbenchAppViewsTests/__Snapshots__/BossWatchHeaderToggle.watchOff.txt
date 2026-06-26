@@ -1,0 +1,3 @@
+View label="Boss Watch Off"
+Image image="eye.slash"
+Text kind=static text="Watch Off"

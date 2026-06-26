@@ -1,0 +1,3 @@
+View label="Boss Watch On"
+Image image="eye.fill"
+Text kind=static text="Watch On"

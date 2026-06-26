@@ -1,0 +1,5 @@
+Text kind=static text="Boss Agent"
+TextField kind=editable text="bad/name"
+Text kind=static text="That name can't be used. Avoid slashes, colons, and backslashes."
+Text kind=static text="Cancel"
+Text kind=static text="Use"
