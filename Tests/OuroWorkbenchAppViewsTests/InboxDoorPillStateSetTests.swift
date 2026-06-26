@@ -132,6 +132,45 @@ final class InboxDoorPillStateSetTests: XCTestCase {
                        "severity drives only the dropped tint → same-count trees are byte-identical")
     }
 
+    /// U5 B8 — the `.low` severity arm of `InboxDoorPill.color(for:)` (`:5407`). A `.hold`
+    /// decision needs the human (`needsHuman` returns true for `.hold`) and floors to
+    /// `DecisionSeverity.low` (`DecisionSeverity.of` — `.hold` → `.low`), so the door's
+    /// `topSeverity` is `.low` and rendering the pill evaluates `tint` → `color(for: .low)`
+    /// → the previously-uncovered `.secondary` switch arm. Like the `.critical` case above,
+    /// the resolved tint is a DROPPED node (the host whitelist drops `Color`), so the
+    /// captured tree is byte-identical to a same-count higher-severity door — we therefore
+    /// assert the `.low` STATE via the real resolver (provenance), exactly as the `.critical`
+    /// test does. This drives the `.low` arm to execution honestly (no fabricated state).
+    func testDoor_lowOne_holdFloorsToLowSeverity() throws {
+        let presentation = try XCTUnwrap(door([
+            decision(prompt: "Hold for the morning review", kind: .hold)
+        ]))
+        XCTAssertEqual(presentation.count, 1, "provenance: one open hold decision")
+        XCTAssertEqual(presentation.topSeverity, .low,
+                       "provenance: a .hold decision floors the door to .low (DecisionSeverity.of)")
+        XCTAssertEqual(presentation.label, "1 waiting on you")
+        // Rendering the pill evaluates `tint` → `Self.color(for: .low)` → the `.low` arm.
+        let tree = try ViewSnapshotHost.snapshotText(of: pill(presentation))
+        XCTAssertTrue(tree.contains(#"text="1 waiting on you""#),
+                      "the low-severity door still renders its label:\n\(tree)")
+        try assertViewSnapshot(of: pill(presentation), named: "InboxDoorPill.lowOne")
+    }
+
+    /// U5 B8 negative control (P2) — `color(for:)` is a total switch over `DecisionSeverity`;
+    /// each arm returns a DISTINCT `Color`. We assert the producer directly (the tint is a
+    /// dropped node, so the captured tree can't see it). This is the mutation seam: changing
+    /// the `.low` arm's return value here makes THIS assertion fail (a real guard on the arm).
+    func testDoor_colorForSeverity_lowArmReturnsSecondary() throws {
+        XCTAssertEqual(InboxDoorPill.color(for: .low), .secondary,
+                       "the .low arm returns the muted secondary tint")
+        XCTAssertEqual(InboxDoorPill.color(for: .normal), .blue, "the .normal arm")
+        XCTAssertEqual(InboxDoorPill.color(for: .elevated), .orange, "the .elevated arm")
+        XCTAssertEqual(InboxDoorPill.color(for: .critical), .red, "the .critical arm")
+        // The arms are distinct — the switch is load-bearing, not a constant.
+        XCTAssertNotEqual(InboxDoorPill.color(for: .low), InboxDoorPill.color(for: .normal),
+                          ".low and .normal must differ (the switch is not a constant)")
+    }
+
     func testDoor_none_resolvesNilNeverRenders() throws {
         // The calm/absent gate: an empty inbox resolves to nil, so the pill is NEVER
         // constructed (the caller guards on `model.inboxDoor != nil`). The contract

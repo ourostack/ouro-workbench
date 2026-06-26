@@ -141,6 +141,73 @@ final class BossNeedsMeCodingColumnsStateSetTests: XCTestCase {
         try assertViewSnapshot(of: view, named: "BossNeedsMeCodingColumns.bothWithOverflow")
     }
 
+    // MARK: - U5 B8 — row/overflow tap INTERACTIONS + the coding-key fallback
+
+    /// U5 B8 — the needsMe `itemButton` action (`:5514` — `Button { model.selectSession(
+    /// byNavigationKey: key) }`). A single needsMe row whose nav-key matches NO process entry →
+    /// `selectSession` returns false → `presentDecisionInbox()` → `isDecisionLogPresented = true`.
+    /// We find the ROW button and `.tap()` it; ASSERT the inbox-present side-effect.
+    func testColumns_itemButtonTap_selectsSessionOrOpensInbox() throws {
+        let model = try makeVM()
+        XCTAssertFalse(model.isDecisionLogPresented, "precondition: inbox not presented")
+        // One needsMe item, focus "no-such-session" → no matching processEntry → falls back to inbox.
+        let view = BossNeedsMeCodingColumns(
+            dashboard: dashboard(needsMe: [needsMeItem("Review the rename", focus: "no-such-session")]),
+            model: model)
+        // The only button in a one-item, no-overflow needsMe column is the row itemButton.
+        try view.inspect().find(ViewType.Button.self).tap()
+        XCTAssertTrue(model.isDecisionLogPresented,
+                      "tapping a needsMe row with no matching session opens the decision inbox")
+    }
+
+    /// U5 B8 — the "View all N" overflow `Button` action (`:5497` — `Button { model.
+    /// setBossPaneCollapsed(false) }`). With >3 needsMe items the overflow control renders; we
+    /// start with the boss pane COLLAPSED (`bossPaneCollapsed == true`) so the tap flips it to
+    /// false (a real `@Published state` change). We find the LAST button (the overflow control
+    /// sits after the 3 row buttons) and `.tap()` it; ASSERT `state.bossPaneCollapsed == false`.
+    func testColumns_viewAllTap_uncollapsesBossPane() throws {
+        let model = try makeVM()
+        model.setBossPaneCollapsed(true)
+        XCTAssertTrue(model.state.bossPaneCollapsed, "precondition: boss pane collapsed")
+        let needsMe = (1...5).map { needsMeItem("Item \($0)", focus: "sess-\($0)") }
+        let view = BossNeedsMeCodingColumns(dashboard: dashboard(needsMe: needsMe), model: model)
+        let buttons = try view.inspect().findAll(ViewType.Button.self)
+        // 3 visible row buttons + 1 "View all 5" overflow button.
+        XCTAssertEqual(buttons.count, 4, "3 inline rows + 1 overflow control")
+        try buttons[3].tap()  // the overflow control is last
+        XCTAssertFalse(model.state.bossPaneCollapsed,
+                       "tapping View-all un-collapses the boss pane (setBossPaneCollapsed(false))")
+    }
+
+    /// U5 B8 — the coding-key fallback autoclosure (`:5477` — `key: item.taskRef ?? item.runner`).
+    /// A coding item with `taskRef == nil` forces the `?? item.runner` fallback. To make the fallback
+    /// VALUE load-bearing (not just "non-nil"), we seed a real process entry NAMED "codex" so the
+    /// CORRECT fallback key ("codex") matches it → `selectSession` returns true → `selectedEntryID` is
+    /// set (and the inbox does NOT open). A broken fallback would miss the match → open the inbox
+    /// instead. ASSERT the entry was selected.
+    func testColumns_codingKeyFallback_usesRunnerWhenTaskRefNil() throws {
+        let projectId = UUID(uuidString: "B8C0D100-0000-0000-0000-000000000001")!
+        let entryId = UUID(uuidString: "B8C0D100-0000-0000-0000-0000000000E1")!
+        let model = try makeVM()
+        model.state.projects = [WorkbenchProject(id: projectId, name: "repo", rootPath: "/tmp/u4-repo")]
+        model.state.processEntries = [ProcessEntry(
+            id: entryId, projectId: projectId, name: "codex", kind: .terminalAgent,
+            executable: "/usr/bin/codex", workingDirectory: "/tmp/u4-repo", trust: .trusted)]
+        XCTAssertFalse(model.isDecisionLogPresented, "precondition: inbox not presented")
+        XCTAssertNil(model.selectedEntryID, "precondition: no session selected")
+        // A coding item with NO taskRef → key falls back to the runner name "codex" → matches the entry.
+        let view = BossNeedsMeCodingColumns(
+            dashboard: dashboard(coding: [codingItem("codex", status: "running", taskRef: nil)]),
+            model: model)
+        let tree = try ViewSnapshotHost.snapshotText(of: view)
+        XCTAssertTrue(tree.contains("codex"), "the coding row renders the runner:\n\(tree)")
+        // The only button is the coding row itemButton; tapping it runs selectSession(key: "codex").
+        try view.inspect().find(ViewType.Button.self).tap()
+        XCTAssertEqual(model.selectedEntryID, entryId,
+                       "the runner-fallback key 'codex' matched the entry → it was selected")
+        XCTAssertFalse(model.isDecisionLogPresented, "a successful match does NOT open the inbox")
+    }
+
     // MARK: - Negative control (P2 mutation-verified)
 
     /// The outer guard, each column gate, and the overflow gate flip the captured tree;
