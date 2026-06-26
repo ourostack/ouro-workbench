@@ -1,0 +1,5 @@
+Text kind=static text="Transcript Search"
+Image image="text.magnifyingglass"
+TextField kind=editable text=""
+Text kind=static text="Search"
+Image image="magnifyingglass"

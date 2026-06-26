@@ -1,0 +1,8 @@
+Text kind=static text="Transcript Search"
+Image image="text.magnifyingglass"
+TextField kind=editable text="needle"
+Text kind=static text="Search"
+Image image="magnifyingglass"
+Text kind=static text="alpha / deploy-runner"
+Text kind=static text="line 42"
+Text kind=static text="found the needle here"
