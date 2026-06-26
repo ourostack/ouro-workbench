@@ -201,6 +201,22 @@ final class DaemonLivenessTests: XCTestCase {
         }
 
         try await StubURLProtocol.withHTTPStatus(204) {
+            let reachable = try await DaemonLivenessProbe.defaultReachability(
+                url: URL(string: "http://daemon.test/default-timeout")!,
+                timeoutSeconds: nil
+            )
+            XCTAssertTrue(reachable)
+        }
+
+        try await StubURLProtocol.withHTTPStatus(204) {
+            let reachable = try await DaemonLivenessProbe.defaultReachability(
+                url: URL(string: "http://daemon.test/nonpositive-timeout")!,
+                timeoutSeconds: 0
+            )
+            XCTAssertTrue(reachable)
+        }
+
+        try await StubURLProtocol.withHTTPStatus(204) {
             let reachable = try await DaemonLivenessProbe.defaultReachability(timeoutSeconds: 0.1)
             XCTAssertTrue(reachable)
         }
