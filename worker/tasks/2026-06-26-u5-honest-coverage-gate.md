@@ -1,6 +1,6 @@
 # Doing: U5 — Honest per-file-100% coverage gate on the OuroWorkbench view layer
 
-**Status**: drafting
+**Status**: READY_FOR_EXECUTION
 **Execution Mode**: spawn
 **Created**: 2026-06-26 09:11
 **Planning**: (none — converted directly from the operator's firm-decision brief; campaign planning lives in the ANNEAL journal)
@@ -279,8 +279,11 @@ NOTE: Steps 1 (the extract) and 3 (gate wiring) write NO new product logic — s
 
 **Output**: `./2026-06-26-u5-honest-coverage-gate/review-gate.md` — the fresh agent's findings + verdict.
 
-**Acceptance**: The review gate verdict is PASS (or its findings are resolved and it re-passes). Only then
-  does the doc flip to done and the campaign journal pointer is written. NO PR is opened (per brief).
+**Acceptance**: The review gate verdict is PASS (or its findings are resolved and it re-passes). Only then:
+  (a) this doc's Status flips to `done`; (b) a TERSE pointer is appended to the campaign journal
+  `../2026-06-24-anneal-visual-testing.md` (e.g. "U5 — views file gated at per-file 100%, K1-only honest
+  allowlist of N lines/M regions; VM split out; energy-0 still holds") linking back to this doing doc.
+  NO PR is opened (per brief).
 
 ## Execution
 
@@ -341,7 +344,10 @@ NOTE: Steps 1 (the extract) and 3 (gate wiring) write NO new product logic — s
 - 2026-06-26 09:14 Created from the operator's firm-decision brief (Q1=SPLIT, Q2=SNAPSHOT)
 - 2026-06-26 09:21 Granularity pass + measured the residual (THE FORK: ~1,019 region segments / 93 views,
   NOT just 28 branchless) + extract risk numbers (N=3 promotions, M=0 guard retargets, VM 10607–20716)
-- 2026-06-26 09:2x Validation pass: verified VM extent, the 3 promotion symbols + 2 move-helpers exact
+- 2026-06-26 09:22 Validation pass: verified VM extent, the 3 promotion symbols + 2 move-helpers exact
   lines, post-VM terminal type lines, `ViewSnapshotHost.mapNode` harness, `--uisurfacetest`/preflight gates,
   `check-coverage.sh` in CI, `assertEveryLibFileIsOrdered` wired. Noted preflight ≠ coverage gate + the
   scenario-verifier coverage-digest pins.
+- 2026-06-26 09:23 Quality pass (all unit headers carry status emoji, no TBDs, criteria testable — no
+  changes). Planning coverage check: every brief requirement mapped to a unit (planning-coverage-checklist.md
+  — full coverage); tightened Unit R to explicitly write the terse campaign-journal pointer.
