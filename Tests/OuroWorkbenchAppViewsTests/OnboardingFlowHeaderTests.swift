@@ -120,5 +120,27 @@ final class OnboardingFlowHeaderTests: XCTestCase {
         XCTAssertTrue(done.contains("Done"), "completed: the button reads Done:\n\(done)")
         XCTAssertFalse(done.contains("Cancel"), "completed: not Cancel")
     }
+
+    // MARK: - U5 B3 — DRIVE the dismiss-button action closure (L6680 `{ dismiss() }`)
+
+    /// U5 B3 (corrected recipe — INVOKE, do not carve). The Cancel/Done `Button(_:action:)`
+    /// action closure (`:6680`) is the header's only interaction region. `HeaderHost` supplies a
+    /// real environment `DismissAction`; tapping the button INVOKES the action closure (executes
+    /// the region). `dismiss()` is a single SwiftUI environment call with NO model-observable
+    /// side-effect when read outside a presentation (it no-ops gracefully) — so the assertion is
+    /// that the responsive button's action closure runs without throwing. Mutation control:
+    /// deleting the `Button` makes `find(button:)` throw RED → the action-bearing button is
+    /// load-bearing in the rendered tree.
+    func testHeader_drive_dismissButtonAction_cancel() throws {
+        let button = try header(page: .boss, completed: false).inspect().find(button: "Cancel")
+        // Responsive (not disabled): guardIsResponsive() inside tap() would throw otherwise.
+        XCTAssertNoThrow(try button.tap(), "the Cancel button action closure (dismiss()) executes")
+    }
+
+    /// The completed label "Done" drives the SAME action closure on the other ternary arm.
+    func testHeader_drive_dismissButtonAction_done() throws {
+        let button = try header(page: .boss, completed: true).inspect().find(button: "Done")
+        XCTAssertNoThrow(try button.tap(), "the Done button action closure (dismiss()) executes")
+    }
 }
 #endif

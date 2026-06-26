@@ -1,0 +1,6 @@
+Text kind=static text="Workbench"
+Text kind=static text="Workbench"
+Text kind=static text="Recheck the outward lane"
+Text kind=static text="Run the connection check again."
+Text kind=static text="Try again"
+Image image="wand.and.stars"

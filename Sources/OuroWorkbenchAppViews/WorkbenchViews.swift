@@ -6469,7 +6469,20 @@ struct OuroAgentInstallSheet: View {
 struct WorkbenchOnboardingSheet: View {
     @ObservedObject var model: WorkbenchViewModel
     @Environment(\.dismiss) private var dismiss
-    @State private var page: OnboardingPage = .boss
+    @State private var page: OnboardingPage
+
+    /// U5 B3 — injectable seed for the wizard's `@State page`, defaulting to the prior literal
+    /// (`.boss`) so production is BYTE-IDENTICAL: the only prod call site (`presentOnboarding` →
+    /// `WorkbenchOnboardingSheet(model:)`) takes the default and opens on Choose Boss exactly as
+    /// before. The `.connect` / `.importWork` pages' `primaryActionTitle` / `primaryActionImage` /
+    /// `primaryActionIsDisabled` switch arms are otherwise reachable ONLY by firing the in-view
+    /// Back/Continue Button closures, whose `@State` write the no-hosting `inspect()` does not
+    /// reflect — this minimal seam lets a snapshot drive those pages through the REAL model state.
+    /// Same minimal shape as the `OuroAgentInstallSheet` / `ProviderConfigSheet` `@State` seams.
+    init(model: WorkbenchViewModel, initialPage: OnboardingPage = .boss) {
+        self.model = model
+        self._page = State(initialValue: initialPage)
+    }
 
     enum OnboardingPage: Int, CaseIterable {
         // #U26(a): the Welcome splash is gone — the empty-state already oriented the operator (U2)

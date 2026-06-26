@@ -189,6 +189,108 @@ final class OnboardingRepairStepRowTests: XCTestCase {
                       "non-check → Workbench pill + Fix button:\n\(fixTree)")
     }
 
+    // MARK: - U5 B3 — DRIVE the trailing-button action closures + the un-hit render arms
+
+    /// A `workbench-mcp` step (`isActionable == true` snapshot) renders the Register button
+    /// (`:7297`) — the un-hit `if step.id == "workbench-mcp", isActionable` gate (`:7289`) + the
+    /// button label (`:7301`). The Register action runs `installWorkbenchMCPForBoss()` +
+    /// `refreshOnboardingReadiness()` + `runOnboardingProviderChecksIfNeeded()`; DRIVEN by `.tap()`
+    /// → the model-observable effect is `onboardingReadiness` becoming non-nil (the refresh ran).
+    private func workbenchMCPStep() -> OnboardingRepairStep {
+        OnboardingRepairStep(
+            id: "workbench-mcp", actor: .agentRunnable,
+            title: "Connect your agent to Workbench",
+            detail: "Register the Workbench tools so your agent can act here.")
+    }
+
+    private func actionableRegistration(_ boss: String) -> BossWorkbenchMCPRegistrationSnapshot {
+        BossWorkbenchMCPRegistrationSnapshot(
+            agentName: boss, serverName: "ouro_workbench",
+            commandPath: "/tmp/u5/ouro-workbench-mcp", agentConfigPath: "/tmp/u5/\(boss).ouro/agent.json",
+            status: .notRegistered, detail: "not registered")
+    }
+
+    func testE1_drive_registerButton_workbenchMCP() throws {
+        let model = try makeVM()
+        model.state.boss.agentName = "boss"
+        model.bossWorkbenchMCPRegistration = actionableRegistration("boss")
+        XCTAssertTrue(model.bossWorkbenchMCPRegistration?.isActionable == true, "precondition: actionable")
+        model.onboardingReadiness = nil
+        let row = OnboardingRepairStepRow(step: workbenchMCPStep(), model: model)
+        // The actionable gate renders the Register button (the un-hit gate + label arms).
+        let tree = try ViewSnapshotHost.snapshotText(of: row)
+        XCTAssertTrue(tree.contains(#"text="Register""#), "workbench-mcp actionable → Register button:\n\(tree)")
+        // DRIVE the action closure.
+        try row.inspect().find(button: "Register").tap()
+        XCTAssertNotNil(model.onboardingReadiness, "tapping Register runs refreshOnboardingReadiness()")
+    }
+
+    /// The Connect button (`:7310`, `isProviderSetup`) action runs `openOnboardingRepair(step)` →
+    /// `presentProviderConfigForm` → `isProviderConfigPresented = true`. DRIVEN by `.tap()`.
+    func testE1_drive_connectButton_providerSetup() throws {
+        let model = try makeVM()
+        model.state.boss.agentName = "boss"
+        XCTAssertFalse(model.isProviderConfigPresented, "precondition")
+        let row = OnboardingRepairStepRow(step: humanRequiredProviderStep(), model: model)
+        try row.inspect().find(button: "Connect").tap()
+        XCTAssertTrue(model.isProviderConfigPresented, "tapping Connect presents the provider-config form")
+    }
+
+    /// The Run button (`:7323`, a `check-*` step WITH a commandLine) action runs
+    /// `runOnboardingProviderChecksIfNeeded()`. With no ready selected agent it early-returns —
+    /// the closure still executes the region; the assertion is that the responsive button's
+    /// action runs without throwing (no model-observable mutation on the early-return path).
+    func testE1_drive_runButton_checkPending() throws {
+        let model = try makeVM()
+        let row = OnboardingRepairStepRow(step: checkPendingStep(), model: model)
+        let button = try row.inspect().find(button: "Run")
+        XCTAssertNoThrow(try button.tap(), "tapping Run executes runOnboardingProviderChecksIfNeeded()")
+    }
+
+    /// The Fix button (`:7337`, a commandLine non-check non-provider step) action runs
+    /// `openOnboardingRepair(step)` → `runOnboardingRepairStepNatively` → (default case)
+    /// `refreshOnboardingReadiness()`. DRIVEN by `.tap()` → `onboardingReadiness` becomes non-nil.
+    func testE1_drive_fixButton_commandStep() throws {
+        let model = try makeVM()
+        model.state.boss.agentName = "boss"
+        model.onboardingReadiness = nil
+        let row = OnboardingRepairStepRow(step: agentRunnableStep(), model: model)
+        try row.inspect().find(button: "Fix").tap()
+        XCTAssertNotNil(model.onboardingReadiness,
+                        "tapping Fix routes to runOnboardingRepairStepNatively → refreshOnboardingReadiness()")
+    }
+
+    /// RENDER the `commandButtonTitle` `repair-*-provider` ternary (`:7369`) → the "Try again"
+    /// label (vs the "Fix" default). A `repair-outward-provider` step carries a command but is
+    /// NOT a provider-setup / check-* / workbench-mcp step, so it renders the command "Try again"
+    /// button. This drives the un-hit ternary arm.
+    func testE1_render_tryAgainButton_repairProvider() throws {
+        let model = try makeVM()
+        let step = OnboardingRepairStep(
+            id: "repair-outward-provider", actor: .agentRunnable,
+            title: "Recheck the outward lane", detail: "Run the connection check again.",
+            command: ["ouro", "check", "--lane", "outward"])
+        let tree = try ViewSnapshotHost.snapshotText(of: OnboardingRepairStepRow(step: step, model: model))
+        XCTAssertTrue(tree.contains(#"text="Try again""#),
+                      "repair-*-provider → the 'Try again' command button (not 'Fix'):\n\(tree)")
+        XCTAssertFalse(tree.contains(#"text="Fix""#), "repair-*-provider is NOT the 'Fix' default:\n\(tree)")
+        try assertViewSnapshot(of: OnboardingRepairStepRow(step: step, model: model), named: "E1.tryAgainRepairProvider")
+    }
+
+    /// NEGATIVE CONTROL — the `repair-*-provider` ternary is load-bearing: the SAME command under a
+    /// non-`repair-*-provider` id renders "Fix", not "Try again". Flipping the id flips the label.
+    func testE1_negativeControl_repairProviderTernaryFlipsLabel() throws {
+        let model = try makeVM()
+        let command = ["ouro", "check", "--lane", "outward"]
+        let tryAgain = OnboardingRepairStep(id: "repair-outward-provider", actor: .agentRunnable, title: "T", detail: "D", command: command)
+        let fix = OnboardingRepairStep(id: "ensure-daemon", actor: .agentRunnable, title: "T", detail: "D", command: command)
+        let tryAgainTree = try ViewSnapshotHost.snapshotText(of: OnboardingRepairStepRow(step: tryAgain, model: model))
+        let fixTree = try ViewSnapshotHost.snapshotText(of: OnboardingRepairStepRow(step: fix, model: model))
+        XCTAssertNotEqual(tryAgainTree, fixTree, "the repair-*-provider id flips the command-button label")
+        XCTAssertTrue(tryAgainTree.contains(#"text="Try again""#), "repair-*-provider → Try again:\n\(tryAgainTree)")
+        XCTAssertTrue(fixTree.contains(#"text="Fix""#), "non-repair → Fix:\n\(fixTree)")
+    }
+
     // MARK: - Determinism (P3)
 
     func testE1_determinism_eachVariantByteIdenticalTwiceAndNoLeak() throws {

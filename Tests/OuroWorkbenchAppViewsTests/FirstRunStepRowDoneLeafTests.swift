@@ -113,6 +113,53 @@ final class FirstRunStepRowDoneLeafTests: XCTestCase {
         XCTAssertNotEqual(done, awaitingTree, "the .isDone guard flips the icon vs awaitingHuman")
     }
 
+    // MARK: - U5 B3 — DRIVE the `.isActive` arm (L7072) — the ProgressView (no-glyph) branch
+
+    /// U5 B3 (corrected recipe). The `icon` `@ViewBuilder`'s FIRST arm `if row.isActive` (`:7072`)
+    /// was the residual uncovered region: every prior snapshot rendered pending/done/halted/
+    /// awaitingHuman rows, never an `.active` one, because the active arm's `ProgressView()` emits
+    /// no serializable node so the campaign skipped it. DRIVEN by rendering a producer-derived
+    /// `.active` row (`present(result:activeStep:)` maps `step == activeStep` → `.active`).
+    /// EXECUTING the row with `isActive == true` covers the branch; the assertion is that the
+    /// active arm renders NONE of the sibling glyphs (it's the no-glyph ProgressView arm) while the
+    /// active human-facing line renders. MUTATION-VERIFIED below.
+    private func activeRow() -> BootstrapStepProgress {
+        // `.awaitingHandoff` carries no per-step recovery override, so the `activeStep` (ensureDaemon)
+        // maps cleanly to a `.active` row via `present(result:activeStep:)` (the producer rule
+        // `step == activeStep → .active`).
+        let presentation = drive.present(
+            result: BootstrapResult(phase: .awaitingHandoff, stepOutcomes: []),
+            activeStep: .ensureDaemon
+        )
+        return presentation.rows.first { $0.step == .ensureDaemon && $0.state == .active }!
+    }
+
+    func testStepRow_active_rendersProgressNoGlyph() throws {
+        let row = activeRow()
+        XCTAssertTrue(row.isActive, "provenance: step == activeStep → an .active row via present(result:activeStep:)")
+        let tree = try ViewSnapshotHost.snapshotText(of: FirstRunStepRow(row: row))
+        // The active arm is the ProgressView() branch — NONE of the sibling glyphs render.
+        XCTAssertFalse(tree.contains(#"image="checkmark.circle.fill""#), "active ≠ done glyph:\n\(tree)")
+        XCTAssertFalse(tree.contains(#"image="exclamationmark.triangle.fill""#), "active ≠ failure glyph:\n\(tree)")
+        XCTAssertFalse(tree.contains(#"image="person.crop.circle.badge.exclamationmark""#), "active ≠ awaiting glyph:\n\(tree)")
+        XCTAssertFalse(tree.contains(#"image="circle""#), "active ≠ pending circle glyph:\n\(tree)")
+        // The active human-facing line renders (the row's text is captured).
+        XCTAssertTrue(tree.contains("Bringing Workbench online…"), "active step → its human line:\n\(tree)")
+        try assertViewSnapshot(of: FirstRunStepRow(row: row), named: "FirstRunStepRow.active")
+    }
+
+    /// NEGATIVE CONTROL — only the `.active` state renders the no-glyph ProgressView arm: flipping
+    /// the row to pending makes the `circle` glyph appear (the `.isActive` guard no longer holds),
+    /// so the trees differ. Proves the `if row.isActive` branch is load-bearing.
+    func testStepRow_negativeControl_activeArmIsLoadBearing() throws {
+        let active = try ViewSnapshotHost.snapshotText(of: FirstRunStepRow(row: activeRow()))
+        let pending = try ViewSnapshotHost.snapshotText(of:
+            FirstRunStepRow(row: BootstrapStepProgress(step: .ensureDaemon, state: .pending)))
+        XCTAssertNotEqual(active, pending, "the .isActive guard flips the icon arm vs pending")
+        XCTAssertFalse(active.contains(#"image="circle""#), "active: no pending circle:\n\(active)")
+        XCTAssertTrue(pending.contains(#"image="circle""#), "pending: the circle glyph:\n\(pending)")
+    }
+
     // MARK: - Determinism (P3)
 
     func testStepRow_done_twiceRunByteIdentical_noLeak() throws {

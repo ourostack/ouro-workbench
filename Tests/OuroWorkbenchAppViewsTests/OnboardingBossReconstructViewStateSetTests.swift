@@ -98,6 +98,50 @@ final class OnboardingBossReconstructViewStateSetTests: XCTestCase {
         try assertViewSnapshot(of: view, named: "OnboardingBossReconstructView.handedDone")
     }
 
+    // MARK: - U5 B3 — DRIVE the button action closures (corrected recipe: INVOKE, do not carve)
+
+    /// Build the model AND the view so the drive tests can assert the model side-effect after a tap.
+    private func modelAndView(
+        readiness state: OnboardingReadinessState?,
+        handedOff: Bool = false,
+        running: Bool = false
+    ) throws -> (WorkbenchViewModel, OnboardingBossReconstructView) {
+        let model = try makeVM()
+        model.onboardingReadiness = state.map(readiness)
+        model.onboardingReconstructionHandedOff = handedOff
+        model.bossCheckInIsRunning = running
+        return (model, OnboardingBossReconstructView(model: model))
+    }
+
+    /// READY, NOT HANDED OFF — the "Bring Back My Work" button (`:7416`) action runs
+    /// `startBossReconstruction()`. With a ready boss + not-running, the synchronous effect flips
+    /// `onboardingReconstructionHandedOff` true AND records a "startBossReconstruction" action-log
+    /// entry. DRIVEN by `.tap()` + asserted (the spawned async boss check-in runs against the
+    /// hermetic daemon-less env and is not awaited — the synchronous hand-off is the assertion).
+    func testReconstruct_drive_bringBackMyWorkButton() throws {
+        let (model, view) = try modelAndView(readiness: .ready, handedOff: false, running: false)
+        XCTAssertFalse(model.onboardingReconstructionHandedOff, "precondition: not handed off")
+        let before = model.state.actionLog.count
+        try view.inspect().find(button: "Bring Back My Work").tap()
+        XCTAssertTrue(model.onboardingReconstructionHandedOff,
+                      "tapping Bring Back My Work hands reconstruction off (flag flips true)")
+        XCTAssertEqual(model.state.actionLog.first?.action, "startBossReconstruction",
+                       "the hand-off records a startBossReconstruction action-log entry")
+        XCTAssertGreaterThan(model.state.actionLog.count, before, "the action log grew")
+    }
+
+    /// HANDED OFF, DONE — the "Ask Again" button (`:7449`) action re-runs `startBossReconstruction()`.
+    /// Already handed off + ready + not running → the synchronous effect records a fresh
+    /// "startBossReconstruction" action-log entry (the re-ask). DRIVEN by `.tap()` + asserted.
+    func testReconstruct_drive_askAgainButton() throws {
+        let (model, view) = try modelAndView(readiness: .ready, handedOff: true, running: false)
+        let before = model.state.actionLog.count
+        try view.inspect().find(button: "Ask Again").tap()
+        XCTAssertEqual(model.state.actionLog.first?.action, "startBossReconstruction",
+                       "tapping Ask Again re-records a startBossReconstruction action-log entry")
+        XCTAssertGreaterThan(model.state.actionLog.count, before, "the action log grew on the re-ask")
+    }
+
     // MARK: - Determinism (P3)
 
     func testReconstruct_determinism_byteIdenticalTwiceNoLeak() throws {
