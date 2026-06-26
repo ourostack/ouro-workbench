@@ -7185,7 +7185,10 @@ struct OnboardingReadinessView: View {
 /// gap a, so it re-collects the credential in a real TTY rather than persisting silently). So rather
 /// than build a new model picker (deferred), this surface points the operator at their agent's
 /// provider settings. The proactive "a newer model is available" nudge is also deferred (#237).
-private struct OnboardingAgentProviderSummary: View {
+// `internal` (not `private`) so the C8 view-snapshot tests can instantiate this leaf
+// directly via its typed `OuroAgentRecord?` input — the same testable-seam access level
+// the U2/U3/C-cluster surfaces already carry. Access-level-only widening; no behavior change.
+struct OnboardingAgentProviderSummary: View {
     var agent: OuroAgentRecord?
 
     var body: some View {
