@@ -29,6 +29,14 @@ grep -F ".executable(name: \"$WORKBENCH_MCP_EXECUTABLE\"" "$PACKAGE_SOURCE" >/de
 if [[ -f "$ROOT_DIR/web/workbench-install.sh" ]]; then
   grep -F "OURO_WB_REPO:-$WORKBENCH_REPOSITORY" "$ROOT_DIR/web/workbench-install.sh" >/dev/null \
     || fail "web installer default repository does not match WorkbenchRelease.repository"
+  grep -F "APP_NAME=\"$WORKBENCH_APP_NAME\"" "$ROOT_DIR/web/workbench-install.sh" >/dev/null \
+    || fail "web installer app name does not match WorkbenchRelease.appName"
+  grep -F "EXPECTED_BUNDLE_ID=\"$WORKBENCH_BUNDLE_IDENTIFIER\"" "$ROOT_DIR/web/workbench-install.sh" >/dev/null \
+    || fail "web installer bundle id does not match WorkbenchRelease.bundleIdentifier"
+  grep -F "EXPECTED_EXECUTABLE=\"$WORKBENCH_BUNDLE_EXECUTABLE\"" "$ROOT_DIR/web/workbench-install.sh" >/dev/null \
+    || fail "web installer executable does not match WorkbenchRelease.bundleExecutable"
+  grep -F "EXPECTED_MINIMUM_MACOS=\"$WORKBENCH_MINIMUM_MACOS_VERSION\"" "$ROOT_DIR/web/workbench-install.sh" >/dev/null \
+    || fail "web installer minimum macOS does not match WorkbenchRelease.minimumMacOSVersion"
 fi
 
 printf 'Verified Workbench release contract: %s (%s, %s)\n' "$version" "$WORKBENCH_BUNDLE_IDENTIFIER" "$WORKBENCH_REPOSITORY"

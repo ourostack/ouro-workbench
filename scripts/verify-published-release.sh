@@ -10,6 +10,10 @@ TAG="v$VERSION"
 EXPECTED_SHA=""
 EXPECTED_PRERELEASE="true"
 INSTALL_SMOKE="true"
+WEB_INSTALLER_URL="${OURO_WB_WEB_INSTALLER_URL:-https://ouro.bot/workbench-install.sh}"
+WEB_INSTALLER_SOURCE="${OURO_WB_WEB_INSTALLER_SOURCE:-$ROOT_DIR/web/workbench-install.sh}"
+WEB_INSTALLER_ATTEMPTS="${OURO_WB_WEB_INSTALLER_ATTEMPTS:-120}"
+WEB_INSTALLER_RETRY_SECONDS="${OURO_WB_WEB_INSTALLER_RETRY_SECONDS:-5}"
 
 usage() {
   cat <<USAGE
@@ -17,7 +21,7 @@ Usage: verify-published-release.sh [options]
 
 Verify that the public GitHub Release exists, targets the expected commit,
 publishes exactly one app archive and manifest, and installs through the
-release installer path.
+release installer path plus the hosted web installer matching this checkout.
 
 Options:
   --repo OWNER/REPO      GitHub repository (default: $REPO)
@@ -26,6 +30,10 @@ Options:
   --sha SHA              Expected target commit (default: current HEAD)
   --prerelease true|false
                          Expected GitHub prerelease flag (default: true)
+  --web-installer-url URL
+                         Hosted public installer URL (default: $WEB_INSTALLER_URL)
+  --web-installer-source PATH
+                         Source file the hosted installer must match (default: $WEB_INSTALLER_SOURCE)
   --skip-install         Skip installer smoke, used only by local selftests
   -h, --help             Show this help
 USAGE
@@ -78,6 +86,22 @@ while [[ $# -gt 0 ]]; do
       EXPECTED_PRERELEASE="$2"
       shift 2
       ;;
+    --web-installer-url)
+      if [[ $# -lt 2 || -z "$2" ]]; then
+        usage >&2
+        exit 64
+      fi
+      WEB_INSTALLER_URL="$2"
+      shift 2
+      ;;
+    --web-installer-source)
+      if [[ $# -lt 2 || -z "$2" ]]; then
+        usage >&2
+        exit 64
+      fi
+      WEB_INSTALLER_SOURCE="$2"
+      shift 2
+      ;;
     --skip-install)
       INSTALL_SMOKE="false"
       shift
@@ -95,6 +119,13 @@ done
 
 if ! command -v "$GH_BIN" >/dev/null 2>&1 && [[ ! -x "$GH_BIN" ]]; then
   fail "GitHub CLI is required to inspect release $TAG"
+fi
+[[ -f "$WEB_INSTALLER_SOURCE" ]] || fail "web installer source is missing: $WEB_INSTALLER_SOURCE"
+if ! [[ "$WEB_INSTALLER_ATTEMPTS" =~ ^[0-9]+$ ]] || [[ "$WEB_INSTALLER_ATTEMPTS" -lt 1 ]]; then
+  fail "OURO_WB_WEB_INSTALLER_ATTEMPTS must be a positive integer"
+fi
+if ! [[ "$WEB_INSTALLER_RETRY_SECONDS" =~ ^[0-9]+$ ]]; then
+  fail "OURO_WB_WEB_INSTALLER_RETRY_SECONDS must be a non-negative integer"
 fi
 if [[ -z "$EXPECTED_SHA" ]]; then
   EXPECTED_SHA="$(git -C "$ROOT_DIR" rev-parse HEAD)"
@@ -132,7 +163,17 @@ zip_asset=""
 manifest_asset=""
 zip_count=0
 manifest_count=0
+all_zip_count=0
+all_manifest_count=0
 while IFS= read -r asset_name; do
+  case "$asset_name" in
+    *.manifest.json)
+      all_manifest_count=$((all_manifest_count + 1))
+      ;;
+    *.zip)
+      all_zip_count=$((all_zip_count + 1))
+      ;;
+  esac
   case "$asset_name" in
     ${WORKBENCH_ARTIFACT_NAME_PREFIX}${VERSION}-build.*.zip)
       zip_asset="$asset_name"
@@ -145,6 +186,8 @@ while IFS= read -r asset_name; do
   esac
 done < <("$GH_BIN" release view "$TAG" --repo "$REPO" --json assets --jq '.assets[].name')
 
+[[ "$all_zip_count" -eq 1 ]] || fail "expected exactly one public .zip asset, found $all_zip_count"
+[[ "$all_manifest_count" -eq 1 ]] || fail "expected exactly one public .manifest.json asset, found $all_manifest_count"
 [[ "$zip_count" -eq 1 ]] || fail "expected exactly one $WORKBENCH_ARTIFACT_NAME_PREFIX$VERSION zip asset, found $zip_count"
 [[ "$manifest_count" -eq 1 ]] || fail "expected exactly one $WORKBENCH_ARTIFACT_NAME_PREFIX$VERSION manifest asset, found $manifest_count"
 case "$zip_asset" in
@@ -155,6 +198,7 @@ case "$manifest_asset" in
   *-"$expected_short_sha".manifest.json) ;;
   *) fail "$manifest_asset does not end with expected short SHA $expected_short_sha" ;;
 esac
+[[ "$manifest_asset" == "${zip_asset%.zip}.manifest.json" ]] || fail "$manifest_asset does not match archive asset $zip_asset"
 
 TEMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/ouro-workbench-published-release.XXXXXX")"
 cleanup() {
@@ -174,11 +218,42 @@ manifest_dirty="$(plutil -extract gitDirty raw -o - "$TEMP_ROOT/$manifest_asset"
 [[ "$manifest_dirty" == "false" ]] || fail "$manifest_asset gitDirty is $manifest_dirty, expected false"
 
 if [[ "$INSTALL_SMOKE" == "true" ]]; then
+  if ! command -v curl >/dev/null 2>&1; then
+    fail "curl is required to verify hosted web installer $WEB_INSTALLER_URL"
+  fi
   install_dir="$TEMP_ROOT/Applications"
   mkdir -p "$install_dir"
   "$ROOT_DIR/scripts/install-latest-release.sh" --repo "$REPO" --tag "$TAG" --install-dir "$install_dir" >/dev/null
   installed_app="$install_dir/$WORKBENCH_APP_NAME.app"
   "$ROOT_DIR/scripts/verify-app-bundle.sh" "$installed_app" --expected-version "$VERSION" >/dev/null
+
+  web_install_dir="$TEMP_ROOT/WebApplications"
+  hosted_installer="$TEMP_ROOT/hosted-workbench-install.sh"
+  mkdir -p "$web_install_dir"
+
+  hosted_installer_matches_source="false"
+  for attempt in $(seq 1 "$WEB_INSTALLER_ATTEMPTS"); do
+    if curl -fsSL "$WEB_INSTALLER_URL" -o "$hosted_installer" && cmp -s "$WEB_INSTALLER_SOURCE" "$hosted_installer"; then
+      hosted_installer_matches_source="true"
+      break
+    fi
+    if [[ "$attempt" -lt "$WEB_INSTALLER_ATTEMPTS" ]]; then
+      sleep "$WEB_INSTALLER_RETRY_SECONDS"
+    fi
+  done
+  [[ -s "$hosted_installer" ]] || fail "hosted web installer was not reachable at $WEB_INSTALLER_URL"
+  if [[ "$hosted_installer_matches_source" != "true" ]]; then
+    source_hash="$(shasum -a 256 "$WEB_INSTALLER_SOURCE" | awk '{print $1}')"
+    hosted_hash="$(shasum -a 256 "$hosted_installer" | awk '{print $1}')"
+    fail "hosted web installer at $WEB_INSTALLER_URL does not match $WEB_INSTALLER_SOURCE (hosted sha256 $hosted_hash, source sha256 $source_hash)"
+  fi
+
+  OURO_WB_REPO="$REPO" \
+    OURO_WB_INSTALL_DIR="$web_install_dir" \
+    OURO_WB_NO_OPEN=1 \
+    bash "$hosted_installer" >/dev/null
+  web_installed_app="$web_install_dir/$WORKBENCH_APP_NAME.app"
+  "$ROOT_DIR/scripts/verify-app-bundle.sh" "$web_installed_app" --expected-version "$VERSION" >/dev/null
 fi
 
 printf 'Verified published release: %s (%s)\n' "$TAG" "$EXPECTED_SHA"
