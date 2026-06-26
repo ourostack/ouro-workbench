@@ -65,3 +65,23 @@ genuine invocation (region driven, `XCTAssertNoThrow`) with no behavioral guard 
 file's non-vacuity is the chrome (Transcript title + entry-name subtitle + Done label),
 mutation-verified: `Text(entry.name)` → `Text("MUTATED-NAME")` → 5 failures RED → revert → GREEN.
 CARVED: none.
+
+### SessionStatusBar (L9308-9354) — 3 → 3 driven (2 via INVOCATION), 0 carved
+BEFORE: 3 uncovered — `L9321:28` (Restore button ACTION), `L9328:28` (Recover button ACTION),
+`L9346:98` (the `.orange` arm of `health.status == .available ? .secondary : .orange`).
+C9 rendered the labels but carved the actions + the orange arm.
+DRIVEN:
+- `L9321` Restore via INVOCATION: `find(button: "Restore").tap()` → `restoreCustomSession`
+  un-archives the entry; assert `state.processEntries.first?.isArchived == false`.
+- `L9328` Recover via INVOCATION: an EMPTY-executable recoverable entry → `find(button:
+  "Respawn").tap()` → `recover(_:)` → `WorkbenchCommandPlanner().recoveryPlan(...)` throws
+  `emptyExecutable` → the catch arm sets `errorMessage` SYNCHRONOUSLY (no Task/no spawn); assert
+  `errorMessage != nil` + names the entry.
+- `L9346:98` `.orange` arm: inject `ExecutableHealth(status: .missing)` → the non-available row
+  renders (`text="Executable: not found on PATH"`), asserting ref `.missingExecutable`.
+PROOF: scoped `--filter SessionStatusBarDriveTests --enable-code-coverage` → all 3 baseline
+regions GONE; only `L9346:72` (the `.secondary` available arm) shows uncovered in the scoped run,
+and that arm is covered by the existing C9 configured/recoverable tests in the full suite → 0.
+MUTATION: removed `restoreCustomSession(entry)` + `recover(entry)` action bodies → 4 failures RED
+(both taps + both negative controls) → revert → GREEN.
+CARVED: none. FIXED `/tmp/u5` cwd (leak-defended).
