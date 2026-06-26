@@ -128,7 +128,7 @@ NOTE: Steps 1 (the extract) and 3 (gate wiring) write NO new product logic — s
 
 ---
 
-### ⬜ Unit 1a: Extract `WorkbenchViewModel` — risk map + plan (DONE during conversion; doer RE-VERIFIES)
+### ✅ Unit 1a: Extract `WorkbenchViewModel` — risk map + plan (DONE during conversion; doer RE-VERIFIES)
 
 **What**: The extraction plan is already produced (during this doc's conversion) in
   `./2026-06-26-u5-honest-coverage-gate/extract-plan.md` from a first-hand structural read. Key results:
@@ -152,7 +152,7 @@ NOTE: Steps 1 (the extract) and 3 (gate wiring) write NO new product logic — s
 **Acceptance**: extract-plan.md exists with concrete N/M backed by line citations (DONE). Doer's re-verified
   N/M recorded in the Progress Log before 1b commits. NO source change in this unit.
 
-### ⬜ Unit 1b: Extract `WorkbenchViewModel` — the pure code-MOVE (PR #1)
+### ✅ Unit 1b: Extract `WorkbenchViewModel` — the pure code-MOVE (PR #1)
 
 **What**: Execute the plan from 1a:
 - Create `Sources/OuroWorkbenchAppViews/WorkbenchViewModel.swift`; move the VM class (+ the agreed
@@ -351,3 +351,26 @@ NOTE: Steps 1 (the extract) and 3 (gate wiring) write NO new product logic — s
 - 2026-06-26 09:23 Quality pass (all unit headers carry status emoji, no TBDs, criteria testable — no
   changes). Planning coverage check: every brief requirement mapped to a unit (planning-coverage-checklist.md
   — full coverage); tightened Unit R to explicitly write the terse campaign-journal pointer.
+- 2026-06-26 RE-VERIFIED at the compiler (Unit 1a ground truth): **N = 2 promotions, NOT 3.** The compiler
+  named exactly `ProviderCheckProcessResult` (:104) AND `ProviderCheckOutputBuffer` (:110) as inaccessible
+  after the split — both view-section `private` types the VM uses. The plan's estimate `BossQuickQuestion`
+  (:5833) / `bossQuickQuestions` (:5839) were WRONG: both are referenced ONLY inside the views file
+  (the `ForEach(bossQuickQuestions)` view body @ :5891) → no promotion needed, kept `private`. The plan
+  MISSED `ProviderCheckOutputBuffer`. Net: 2 promotions, both `private`→`internal`, pure access-widen.
+  **M = 0 confirmed** (re-grepped every `appSource()` `sourceSlice` from/to pair against the post-split
+  boundaries; every cross-decl pair is co-file — `TerminalSessionController`→`CapturingLocalProcessTerminalView`
+  both in WorkbenchViewModel.swift, `WorkbenchRootView`→`WorkbenchMenuBarController` both in WorkbenchViews.swift;
+  `WorkbenchAppSourceRetargetTests` + `assertEveryLibFileIsOrdered` green).
+- 2026-06-26 Unit 1b COMPLETE (PR#1): pure code-MOVE. `WorkbenchViewsAndModel.swift` (21,444 lines) split
+  into `WorkbenchViews.swift` (10,623 lines — View structs + relocated `WorkbenchGroupColor.swiftUIColor`
+  view helper) + new `WorkbenchViewModel.swift` (10,838 lines — VM @ old 10606–20716 + MailboxFetchResult +
+  TerminalThemeOverride + WorkbenchTerminalPalette + TerminalPane + TerminalHostView + SingleShotContinuation
+  + TerminalSessionController + CapturingLocalProcessTerminalView + 2 private extensions; D3 default applied —
+  all AppKit/PTY UI moved to the NON-gated file so the gated views file has zero categorically-uncoverable
+  AppKit code). Multiset content-conservation check: every non-blank code line byte-identical (only delta is
+  the duplicated `#if/imports/#endif` + 5-line doc header + 1 cosmetic blank). 2 access promotions. Plus one
+  rename-propagation: `WorkbenchKeyboardAccessibilityContract.swift` :308 path retargeted
+  `WorkbenchViewsAndModel.swift`→`WorkbenchViews.swift` (all 4 a11y needles live in the views file; was a
+  hardcoded filename, not logic). GATES: strict build 0/0; full `swift test` 3426 tests / 1 skip (pre-existing
+  env-gated RepairAgentKeystone) / 0 fail (same count as baseline); `--uisurfacetest` ok; structural+a11y
+  guards green; `check-coverage.sh` green + COVERAGE_DIRS/allowlist UNCHANGED (gate wiring is Unit 3).
