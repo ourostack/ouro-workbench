@@ -1760,41 +1760,6 @@ struct ShortcutHelpSheet: View {
     }
 }
 
-/// SwiftUI drop delegate that accepts file-URL items dropped on the
-/// workbench window. Filters to directories — every other URL is
-/// declined — and dispatches each accepted folder through the standard
-/// `openWorkspaceConfig(at:)` path, so the result is identical to using
-/// the More menu's "Open Workspace…" panel. Multi-folder drops are
-/// allowed; the last one wins for focus and any non-directory items are
-/// silently dropped rather than erroring loudly.
-struct WorkspaceFolderDropDelegate: DropDelegate {
-    let model: WorkbenchViewModel
-
-    func validateDrop(info: DropInfo) -> Bool {
-        info.hasItemsConforming(to: [.fileURL])
-    }
-
-    func performDrop(info: DropInfo) -> Bool {
-        let providers = info.itemProviders(for: [.fileURL])
-        guard !providers.isEmpty else { return false }
-        for provider in providers {
-            _ = provider.loadObject(ofClass: URL.self) { url, _ in
-                guard let url else { return }
-                // FileManager isn't Sendable, so resolve the singleton inside
-                // the closure rather than capturing it across the boundary.
-                var isDir: ObjCBool = false
-                guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir),
-                      isDir.boolValue else { return }
-                let path = url.path
-                Task { @MainActor in
-                    _ = model.openWorkspaceConfig(at: path)
-                }
-            }
-        }
-        return true
-    }
-}
-
 /// User preferences sheet, opened by ⌘, or the More menu's "Settings…"
 /// action. Consolidates settings that were previously scattered as raw
 /// UserDefaults reads — terminal font size, theme override, and menu-bar
