@@ -102,6 +102,34 @@ final class MetricChipStateSetTests: XCTestCase {
         try assertViewSnapshot(of: view, named: "MetricStateChip.unavailableRetry")
     }
 
+    // MARK: - U5 B8 — retry Button INTERACTION (drive the `onRetry()` action closure)
+
+    /// U5 B8 — `MetricStateChip`'s retry `Button` action (`:5697` — `Button { onRetry() }`). The
+    /// existing `unavailableRetry` test RENDERS the retry glyph but never INVOKES the action. Here
+    /// an unavailable+retryable presentation makes the retry button reachable; we FIND it and
+    /// `.tap()` it → the `onRetry` closure fires → a recorded flag flips. ASSERT the side-effect.
+    func testMetricStateChip_retryTap_firesOnRetry() throws {
+        var retried = 0
+        let presentation = MetricValuePresentation.resolve(
+            value: nil, isAvailable: false, issue: "coding: probe failed")
+        XCTAssertTrue(presentation.canRetry, "provenance: unavailable → the retry button renders")
+        let view = MetricStateChip(label: "coding", presentation: presentation, onRetry: { retried += 1 })
+        // The chip has exactly one Button (the retry affordance under `if presentation.isUnavailable`).
+        try view.inspect().find(ViewType.Button.self).tap()
+        XCTAssertEqual(retried, 1, "tapping the retry button fires the onRetry closure exactly once")
+    }
+
+    /// U5 B8 negative control (P2) — a real-VALUE (available) chip renders NO retry button, so the
+    /// `if presentation.isUnavailable` / `if let onRetry, canRetry` gates are load-bearing: a button
+    /// search finds nothing, proving the action closure is gated, not always present.
+    func testMetricStateChip_value_noRetryButton() throws {
+        let presentation = MetricValuePresentation.resolve(value: 7, isAvailable: true, issue: nil)
+        XCTAssertFalse(presentation.isUnavailable, "provenance: an available value → no retry affordance")
+        let view = MetricStateChip(label: "needs me", presentation: presentation, onRetry: { })
+        XCTAssertThrowsError(try view.inspect().find(ViewType.Button.self),
+                             "an available chip renders no retry button (the isUnavailable gate)")
+    }
+
     // MARK: - Negative control (P2 mutation-verified)
 
     /// The `tap`/`isUnavailable` gates flip which captured glyphs render, and the resolved
