@@ -1624,7 +1624,9 @@ struct HarnessActionResultBanner: View {
 
 // MARK: - Harness state styling
 
-private extension HarnessHealthState {
+// U5 B10: private->internal so the B10 direct logic test can assert every styling arm. Same
+// module, no behavior change — these are pure presentation extensions on Core types.
+extension HarnessHealthState {
     var tint: SwiftUI.Color {
         switch self {
         case .healthy:
@@ -1670,7 +1672,8 @@ final class WorkbenchToolsInjectionRecorder: @unchecked Sendable {
     }
 }
 
-private extension BossWorkbenchMCPRegistrationStatus {
+// U5 B10: private->internal for the B10 direct logic test (pure presentation, same module).
+extension BossWorkbenchMCPRegistrationStatus {
     var harnessTint: SwiftUI.Color {
         switch self {
         case .registered:
@@ -1686,7 +1689,8 @@ private extension BossWorkbenchMCPRegistrationStatus {
     }
 }
 
-private extension Optional where Wrapped == BossWorkbenchMCPRegistrationStatus {
+// U5 B10: private->internal for the B10 direct logic test (pure presentation, same module).
+extension Optional where Wrapped == BossWorkbenchMCPRegistrationStatus {
     /// Tint for a possibly-unknown registration status; unknown reads as
     /// secondary so the row doesn't imply a problem before the check runs.
     var harnessTint: SwiftUI.Color {
@@ -4896,7 +4900,8 @@ struct AutonomyStatusCheckRow: View {
     }
 }
 
-private extension AutonomyRemediationKind {
+// U5 B10: private->internal for the B10 direct logic test (pure presentation, same module).
+extension AutonomyRemediationKind {
     /// SF Symbol per repair, matching the OnboardingRepairStepRow / popover-footer icon vocabulary.
     var systemImage: String {
         switch self {
@@ -4951,7 +4956,8 @@ private struct DashboardStatusLine: View {
     }
 }
 
-private extension AutonomyReadinessState {
+// U5 B10: private->internal for the B10 direct logic test (pure presentation, same module).
+extension AutonomyReadinessState {
     var tint: SwiftUI.Color {
         switch self {
         case .ready:
@@ -4975,7 +4981,8 @@ private extension AutonomyReadinessState {
     }
 }
 
-private extension HeaderCalmPresentation.BossDotColor {
+// U5 B10: private->internal for the B10 direct logic test (pure presentation, same module).
+extension HeaderCalmPresentation.BossDotColor {
     /// Map the framework-free Core dot color onto a SwiftUI color. `.neutral` is the calm
     /// no-boss-yet state (`.secondary`), not an alarm.
     var swiftUIColor: SwiftUI.Color {
