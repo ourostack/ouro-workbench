@@ -143,6 +143,79 @@ final class DashboardStripStateSetTests: XCTestCase {
         try assertViewSnapshot(of: WorkbenchVisibilityStrip(snapshot: snapshot, onOpenInbox: nil, onRetry: {}), named: "WorkbenchVisibilityStrip.degraded")
     }
 
+    // MARK: - AN-R2-03 — energy-0 r2 close: the live inbox door
+
+    /// An OPEN escalate decision (needsHuman + no triage → open at any `now`) — the same
+    /// provenance `DecisionInboxSheetTests` uses. Drives `state.openInboxCount(now:)` > 0,
+    /// hence `WorkbenchVisibilitySnapshot.decisions.openInbox` > 0.
+    private func openInboxState() -> WorkspaceState {
+        var state = WorkspaceState(boss: BossAgentSelection(agentName: "boss"))
+        state.decisionLog = [BossInboxDecision(
+            id: UUID(uuidString: "DEC15102-0000-0000-0000-0000000000A3")!,
+            occurredAt: Date(timeIntervalSince1970: 1_767_300_000),  // before fixedNow
+            source: "boss:slugger",
+            sessionName: "deploy-runner",
+            prompt: "Apply the migration?",
+            kind: .escalate,
+            reasoning: "Matches the standing preference.",
+            status: .recorded)]
+        return state
+    }
+
+    /// A real visibility snapshot whose state carries one open inbox decision (available
+    /// work card, so the other chips render real values). Built through the REAL
+    /// `WorkbenchVisibilityBuilder` — no hand-assembled snapshot.
+    private func visibilityWithOpenInbox() throws -> WorkbenchVisibilitySnapshot {
+        let card = try JSONDecoder().decode(OuroWorkCard.self, from: Data(Self.availableWorkCardJSON.utf8))
+        return WorkbenchVisibilityBuilder().build(
+            state: openInboxState(), workCard: .available(card), now: Self.fixedNow)
+    }
+
+    /// The inbox-chip tap arm `tap: (snapshot.decisions.openInbox > 0) ? onOpenInbox : nil`
+    /// (`:5757`) only renders the `arrow.up.right` door glyph when BOTH the open count is
+    /// positive AND a handler is wired. Every committed strip fixture passed
+    /// `onOpenInbox: nil`, so the door arm never rendered — the round-2 mutation sweep
+    /// proved it (inverting the ternary left the suite GREEN). Here a real open-inbox
+    /// snapshot + a live `onOpenInbox` makes the inbox chip a door, pinned via inline
+    /// assert + a recorded reference.
+    func testVisibilityStrip_openInboxWithHandler_rendersDoorGlyph() throws {
+        let snapshot = try visibilityWithOpenInbox()
+        XCTAssertEqual(snapshot.decisions.openInbox, 1,
+                       "provenance: one open escalate decision → openInbox == 1")
+        let view = WorkbenchVisibilityStrip(snapshot: snapshot, onOpenInbox: {}, onRetry: {})
+        let tree = try ViewSnapshotHost.snapshotText(of: view)
+        XCTAssertTrue(tree.contains(#"text="1""#), "the inbox chip shows the open count:\n\(tree)")
+        XCTAssertTrue(tree.contains(#"image="arrow.up.right""#),
+                      "open inbox + a handler → the inbox chip is a live door:\n\(tree)")
+        try assertViewSnapshot(of: view, named: "WorkbenchVisibilityStrip.inboxDoorLive")
+    }
+
+    /// Negative control (P2): the door is gated on BOTH the count AND the handler. A
+    /// positive count with NO handler stays inert; a handler with a ZERO count stays inert.
+    /// Each drops the `arrow.up.right` glyph — proving the gate's two halves are both
+    /// load-bearing.
+    func testVisibilityStrip_inboxDoor_gatedOnCountAndHandler() throws {
+        // Positive count, NO handler → inert.
+        let openNoHandler = try ViewSnapshotHost.snapshotText(of: WorkbenchVisibilityStrip(
+            snapshot: try visibilityWithOpenInbox(), onOpenInbox: nil, onRetry: {}))
+        XCTAssertFalse(openNoHandler.contains(#"image="arrow.up.right""#),
+                       "open count but no handler → inert chip:\n\(openNoHandler)")
+
+        // Zero count, WITH handler → inert (the default empty-state snapshot has openInbox 0).
+        let zeroWithHandler = try ViewSnapshotHost.snapshotText(of: WorkbenchVisibilityStrip(
+            snapshot: try visibility(available: true), onOpenInbox: {}, onRetry: {}))
+        XCTAssertEqual((try visibility(available: true)).decisions.openInbox, 0,
+                       "provenance: the available fixture has an empty inbox")
+        XCTAssertFalse(zeroWithHandler.contains(#"image="arrow.up.right""#),
+                       "zero count even with a handler → inert chip:\n\(zeroWithHandler)")
+
+        // Both → the door renders. Differs from both inert trees.
+        let live = try ViewSnapshotHost.snapshotText(of: WorkbenchVisibilityStrip(
+            snapshot: try visibilityWithOpenInbox(), onOpenInbox: {}, onRetry: {}))
+        XCTAssertTrue(live.contains(#"image="arrow.up.right""#), "both → the door:\n\(live)")
+        XCTAssertNotEqual(live, openNoHandler, "the handler half of the gate must flip the tree")
+    }
+
     // MARK: - Negative control (P2 mutation-verified)
 
     /// The per-probe availability + counts drive which chips show a real value vs the
