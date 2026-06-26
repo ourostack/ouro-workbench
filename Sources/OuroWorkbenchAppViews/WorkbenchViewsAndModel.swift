@@ -6137,10 +6137,25 @@ struct ProviderConfigSheet: View {
     @ObservedObject var model: WorkbenchViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var provider: WorkbenchProvider = .anthropic
-    @State private var humanName: String = NSFullUserName()
+    @State private var humanName: String
     @State private var newAgentName: String = ""
     @State private var values: [String: String] = [:]
     @State private var message: String?
+
+    /// AN-007 / Q3 — the seed for the `humanName` `@State`, made injectable with a default
+    /// that equals the prior behavior (`@State private var humanName = NSFullUserName()`).
+    /// Production is BYTE-IDENTICAL: the default still evaluates to `NSFullUserName()` at the
+    /// only call site (`ProviderConfigSheet(model:)`, `:529`), so the rendered "Your name"
+    /// field reads the machine full user name exactly as before. A SNAPSHOT test injects a
+    /// fixed value (e.g. "Test User") so the committed reference never carries the machine
+    /// user name (a P3 determinism leak — the name flows into the bound
+    /// `TextField("Your name", text: $humanName)` and the harness captures bound `TextField`
+    /// values via AN-002). The same minimal-source-seam shape as the C4 `DecisionLogRow`
+    /// `timeZone`/`locale` defaults and `Date.workbenchTimeText`'s `.autoupdatingCurrent`.
+    init(model: WorkbenchViewModel, initialHumanName: String = NSFullUserName()) {
+        self.model = model
+        self._humanName = State(initialValue: initialHumanName)
+    }
 
     private var form: ProviderConfigForm {
         ProviderConfigForm(agentName: model.providerConfigAgentName, humanName: humanName)
