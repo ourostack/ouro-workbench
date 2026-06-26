@@ -67,6 +67,8 @@ jobs:
         run: rm -f artifacts/*.zip artifacts/*.manifest.json artifacts/release-notes.md
 
       - name: Run release preflight
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: scripts/preflight.sh
 
       - name: Generate release notes
