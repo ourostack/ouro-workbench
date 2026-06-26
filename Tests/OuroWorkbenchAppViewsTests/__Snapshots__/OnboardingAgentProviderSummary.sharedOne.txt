@@ -1,0 +1,4 @@
+Text kind=static text="Your agent uses"
+Text kind=static text="anthropic · opus"
+Text kind=static text="anthropic · opus"
+Text kind=static text="To change your model, use your agent's provider settings."
