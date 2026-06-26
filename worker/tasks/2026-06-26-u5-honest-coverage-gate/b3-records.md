@@ -20,7 +20,7 @@ AppViews suite ran with the B3 tests in place. Script: `/tmp/b3-seg.py` (segment
 | view | line | baseline | driven | carved | after |
 |---|---|---|---|---|---|
 | WorkbenchOnboardingSheet | L6447 | 46 | — | — | — |
-| FirstRunBootstrapView | L6943 | 9 | — | — | — |
+| FirstRunBootstrapView | L6943 | 9 | 9 | 0 | **0** |
 | OnboardingRepairStepRow | L7272 | 8 | 8 | 0 | **0** |
 | OnboardingReadinessView | L7104 | 5 | 1 | 4 | **4 (carve)** |
 | OnboardingBossChoiceView | L6811 | 3 | 3 | 0 | **0** |
@@ -157,3 +157,28 @@ CARVED (4) — the "Optional checks" branch (`if readiness.isReady && !readiness
 | L7142:66 | the Optional-checks `VStack` | provenance-impossible (AN-006) | inside the dead branch above |
 | L7146:60 | the Optional-checks `ForEach(readiness.repairSteps)` | provenance-impossible (AN-006) | inside the dead branch above |
 | L7151:22 | the Optional-checks block close | provenance-impossible (AN-006) | inside the dead branch above |
+
+---
+
+## FirstRunBootstrapView (L6943–7049) — 9 → 9 driven, 0 carved → 0 uncovered
+
+Nine interaction/branch regions, all DRIVEN:
+- **L6953/6955 `if model.firstRunBootstrapIsRunning { ProgressView() }`** — the running-spinner
+  branch (every prior `E2.*` fixture left the flag false). DRIVEN by seeding the presentation +
+  `firstRunBootstrapIsRunning = true` (the SAME `@Published` `runFirstRunBootstrap()` sets); ref
+  `E2.bootstrappingRunning`. The ProgressView is nodeless (anneal P2: presentation), so the BRANCH
+  coverage is the deliverable and the flag is the behavioral guard (asserted).
+- **L6974 "Connect a provider" gate button + L6976 `agentName:` autoclosure** (`opensProviderGate`
+  on `.parked`) → `presentProviderConfigForm(agentName:)`. DRIVEN by `.tap()`; asserted
+  `isProviderConfigPresented == true` AND `providerConfigAgentName == "boss"` (proving the
+  `?? state.boss.agentName` fallback in the `:6976` autoclosure executed). MUTATION-VERIFIED
+  (action body neutered → both assertions RED → reverted → GREEN).
+- **L6998 retry button + L6999 `switch reason.recoveryAction` + L7000 `.chooseBoss` arm** →
+  `.invalidBoss` reason → `presentOnboarding()`. DRIVEN by `.tap()` on "Choose a boss"; asserted
+  `isOnboardingPresented == true`. MUTATION-VERIFIED (`.chooseBoss` arm neutered → RED).
+- **L7002 `.retry` arm + L7004 close** → `.failedStep` reason → `runFirstRunBootstrap()`. DRIVEN by
+  `.tap()` on "Try again" (with `onboardingReadiness = nil` so the bootstrap's bossName resolves to
+  `state.boss.agentName`); asserted `firstRunBootstrapIsRunning` flips true (the spawned bootstrap
+  Task runs against the hermetic temp dirs, not awaited). MUTATION-VERIFIED (`.retry` arm neutered → RED).
+
+Carved: none.
