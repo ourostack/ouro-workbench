@@ -1,0 +1,4 @@
+Image image="link"
+Text kind=static text="Connect"
+Text kind=static text="Ouro Workbench"
+Text kind=static text="Cancel"

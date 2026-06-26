@@ -6137,10 +6137,25 @@ struct ProviderConfigSheet: View {
     @ObservedObject var model: WorkbenchViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var provider: WorkbenchProvider = .anthropic
-    @State private var humanName: String = NSFullUserName()
+    @State private var humanName: String
     @State private var newAgentName: String = ""
     @State private var values: [String: String] = [:]
     @State private var message: String?
+
+    /// AN-007 / Q3 — the seed for the `humanName` `@State`, made injectable with a default
+    /// that equals the prior behavior (`@State private var humanName = NSFullUserName()`).
+    /// Production is BYTE-IDENTICAL: the default still evaluates to `NSFullUserName()` at the
+    /// only call site (`ProviderConfigSheet(model:)`, `:529`), so the rendered "Your name"
+    /// field reads the machine full user name exactly as before. A SNAPSHOT test injects a
+    /// fixed value (e.g. "Test User") so the committed reference never carries the machine
+    /// user name (a P3 determinism leak — the name flows into the bound
+    /// `TextField("Your name", text: $humanName)` and the harness captures bound `TextField`
+    /// values via AN-002). The same minimal-source-seam shape as the C4 `DecisionLogRow`
+    /// `timeZone`/`locale` defaults and `Date.workbenchTimeText`'s `.autoupdatingCurrent`.
+    init(model: WorkbenchViewModel, initialHumanName: String = NSFullUserName()) {
+        self.model = model
+        self._humanName = State(initialValue: initialHumanName)
+    }
 
     private var form: ProviderConfigForm {
         ProviderConfigForm(agentName: model.providerConfigAgentName, humanName: humanName)
@@ -6295,9 +6310,29 @@ struct ProviderConfigSheet: View {
 struct OuroAgentInstallSheet: View {
     @ObservedObject var model: WorkbenchViewModel
     @Environment(\.dismiss) private var dismiss
-    @State private var agentName = ""
-    @State private var remote = ""
-    @State private var cloneState: CloneAgentFlowState = .idle
+    @State private var agentName: String
+    @State private var remote: String
+    @State private var cloneState: CloneAgentFlowState
+
+    /// AN-007 — injectable seeds for the form's three `@State` values, each defaulting to the
+    /// prior literal (`""`, `""`, `.idle`) so production is BYTE-IDENTICAL: the only call site
+    /// (`OuroAgentInstallSheet(model:)`, `:523`) takes all defaults and renders the empty idle
+    /// form exactly as before. The `cloneState` / `agentName` arms (`if cloneNameValidation`
+    /// `:6332`, `if cloneState.inlineMessage` `:6340`, the busy/error/success icon + button copy)
+    /// are otherwise reachable ONLY by firing the in-view "Clone Agent" Button closure
+    /// `inspect()` can't fire (the C4 `DecisionLogRow.taught` pattern) — this minimal seam lets a
+    /// SNAPSHOT test drive them through the REAL `CloneAgentFlowState` Core values, so the
+    /// validation/message/error/success arms are COVERED, not fabricated. Same minimal shape as
+    /// the Q3 `ProviderConfigSheet.initialHumanName` seam.
+    init(model: WorkbenchViewModel,
+         initialAgentName: String = "",
+         initialRemote: String = "",
+         initialCloneState: CloneAgentFlowState = .idle) {
+        self.model = model
+        self._agentName = State(initialValue: initialAgentName)
+        self._remote = State(initialValue: initialRemote)
+        self._cloneState = State(initialValue: initialCloneState)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -6402,7 +6437,7 @@ struct WorkbenchOnboardingSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var page: OnboardingPage = .boss
 
-    fileprivate enum OnboardingPage: Int, CaseIterable {
+    enum OnboardingPage: Int, CaseIterable {
         // #U26(a): the Welcome splash is gone — the empty-state already oriented the operator (U2)
         // and this wizard opens only after they clicked "Set up a boss", so it lands directly on
         // Choose Boss. Progress dots auto-tighten from `allCases` (now three).
@@ -6606,7 +6641,7 @@ struct WorkbenchOnboardingSheet: View {
 
 }
 
-private struct OnboardingFlowHeader: View {
+struct OnboardingFlowHeader: View {
     var page: WorkbenchOnboardingSheet.OnboardingPage
     @ObservedObject var model: WorkbenchViewModel
     var dismiss: DismissAction
@@ -6639,7 +6674,7 @@ private struct OnboardingFlowHeader: View {
     }
 }
 
-private struct OnboardingPageContent: View {
+struct OnboardingPageContent: View {
     var page: WorkbenchOnboardingSheet.OnboardingPage
     @ObservedObject var model: WorkbenchViewModel
 

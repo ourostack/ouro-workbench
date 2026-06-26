@@ -1,0 +1,37 @@
+U4 — views-lib coverage after C6 (ProviderConfigSheet + bundled form sheets + the Q3 humanName determinism fix)
+================================================================================================================
+Branch: feat/anneal-c6-provider-config (off origin/main @ 635bea1 = #308)
+Canonical command (apples-to-apples cluster-over-cluster):
+  xcrun llvm-cov export "$bin" -instr-profile "$prof" -summary-only Sources/OuroWorkbenchAppViews
+
+  region: 29.76% (1774/5962)
+  line:   38.33% (12359/32243)
+
+Delta vs C4 baseline (25.50% region / 33.42% line): +4.26 region / +4.91 line.
+
+NOTE: the views lib is NOT coverage-gated in U4 (the gate is the campaign's FINAL step).
+COVERAGE_DIRS = (Sources/OuroWorkbenchCore, Sources/OuroWorkbenchShellAdapter) — UNCHANGED.
+coverage-allowlist.txt sha = e3212be10db3ff4d514af0074f3ffce7d85f79a6 — UNCHANGED.
+git diff origin/main -- Scripts/check-coverage.sh Scripts/coverage-allowlist.txt → EMPTY.
+
+C6 views covered (5) / 17 new references / +33 tests:
+  C6-1 ProviderConfigSheet         5 refs  (existing / new-agent / cold-start-message / in-flight / needs-vault)
+  C6-2 OuroAgentInstallSheet       5 refs  (idle / invalid-name / cloning / succeeded / failed)
+  C6-3 OnboardingFlowHeader        3 refs  (boss / connect / importWork-done)        [private->internal]
+  C6-4 OnboardingPageContent       3 refs  (boss / connect / importWork)             [private->internal]
+  C6-5 WorkbenchOnboardingSheet    1 ref   (initial .boss composite; re-confirmed NOT a shell-allowlist)
+
+Q3 (the cluster headline — a real prod determinism leak, CLOSED):
+  ProviderConfigSheet @State humanName = NSFullUserName() flowed into the bound
+  TextField("Your name", text: $humanName), captured via AN-002 (this machine: "Microsoft").
+  Fix: injectable init(model:initialHumanName:) seed, default NSFullUserName() => PROD BYTE-IDENTICAL
+  (proven old == new == "Microsoft"; only call site ProviderConfigSheet(model:) :529 takes the default).
+  Test injects a fixed "Test User" + asserts !tree.contains(NSFullUserName()) per state.
+  Mutation-verified the humanName field renders (broken binding -> injection test caught MUTANT, RED).
+
+Mutation tally: 7/7 surfaces mutated -> 7/7 CAUGHT, 0 uncaught (no backlog item).
+Access-widenings: 3 (OnboardingPage enum fileprivate->internal; OnboardingFlowHeader +
+  OnboardingPageContent private->internal). All Sources changes prod-byte-identical.
+
+Determinism scan (all 17 refs): ZERO machine-name / /Users/ / /var/folders/ / NSFullUserName / host leaks.
+No timestamps in any C6 ref => no cross-TZ proof needed (no clock surfaces in this cluster).
