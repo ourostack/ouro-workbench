@@ -1,0 +1,2 @@
+Image image="checkmark.circle.fill"
+Text kind=static text="Workbench is online."

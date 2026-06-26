@@ -7042,7 +7042,11 @@ struct FirstRunBootstrapView: View {
     }
 }
 
-private struct FirstRunStepRow: View {
+// `internal` (not `private`) so the AN-R3 view-snapshot tests can instantiate this leaf directly
+// via `@testable import` — the same testable-seam access level the sibling onboarding surfaces
+// (`FirstRunBootstrapView`, `OnboardingReadinessView`) already carry. No behavior change;
+// access-level-only widening.
+struct FirstRunStepRow: View {
     var row: BootstrapStepProgress
 
     var body: some View {
