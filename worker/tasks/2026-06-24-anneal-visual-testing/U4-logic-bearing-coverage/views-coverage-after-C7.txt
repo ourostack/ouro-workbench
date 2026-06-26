@@ -1,0 +1,87 @@
+C7 — Agent-detail family (path-leak cluster) — views-lib coverage record
+========================================================================
+Canonical command (apples-to-apples, the per-cluster convention):
+  swift test --enable-code-coverage
+  xcrun llvm-cov export <PackageTests> -instr-profile <default.profdata> \
+      -summary-only "Sources/OuroWorkbenchAppViews"
+
+Measured first-hand this session by STASHING the 6 C7 test files for the
+baseline, then restoring them for the after figure (the same llvm-cov
+invocation both times):
+
+  BASELINE (no C7 tests):  28.00% region (1670/5964) · 37.31% line (12028/32237)
+  AFTER C7:                29.95% region (1786/5964) · 40.63% line (13099/32237)
+
+  C7 delta:                +1.95% region (+116 regions) · +3.32% line (+1071 lines)
+
+(Cross-run llvm-cov variance of ~0.15% region is normal — a handful of
+`.task`/async regions flicker by measurement timing; the +116-region /
++1071-line DELTA from the single-session stash/restore is the load-bearing
+figure. The views lib is NOT gated in U4 — the gate is the campaign's FINAL
+step. COVERAGE_DIRS = {Core, ShellAdapter} and scripts/coverage-allowlist.txt
+were UNCHANGED through C7: check-coverage.sh md5 c0209de883287565e51939b965533a8a,
+allowlist md5 76e33cb652f63be4b842e0d9e573c615 — both byte-identical to baseline,
+`git diff` on both empty.)
+
+C7 sub-units (one commit each; 19 new references; +33 tests):
+  C7-1 OuroAgentRowView          4 refs  (plain / boss / registeredUnverified / notRegisteredActionable)
+  C7-2 AgentTitleStrip           2 refs  (plain / boss)            [private→internal widening]
+  C7-3 AgentStatusCard           4 refs  (unverified / ready / actionableRegistration / bossBlocked) [private→internal]
+  C7-4 LanePanel                 4 refs  (configured / providerOnly / modelOnly / notConfigured)      [private→internal]
+  C7-5 BossWorkbenchMCPSetupView 3 refs  (unknown / registered / actionable)
+  C7-6 AgentDetailView           2 refs  (collapsedPlain / collapsedBoss)  [showsInspector carve-out]
+
+  (AgentInspectorPanel — the cluster's path-leak template — was already
+  covered as the C0 SU-3 first-member, on main: AgentInspectorPanelPathLeakTests,
+  2 refs. C7 covers the 6 REMAINING agent-detail views.)
+
+Mutation-verify (P2, SINGLE-ACTOR SERIAL): 6/6 surfaces mutated → 6/6 CAUGHT, 0 uncaught.
+  C7-1 boss `StatusPill("boss")` → "MUTANT"                         → RED (.boss)        CAUGHT
+  C7-2 boss capsule `Text("boss")` → "MUTANT"                       → RED (.boss)        CAUGHT
+  C7-3 `StatusPill("boss blocked")` → "MUTANT"                      → RED (.bossBlocked) CAUGHT
+  C7-4 `Text("Not configured")` → "MUTANT"                          → RED (.notConfigured) CAUGHT
+  C7-5 install `Label(bossWorkbenchMCPActionTitle)` → "MUTANT"      → RED (.actionable)  CAUGHT
+  C7-6 `if showsInspector` → `if showsInspector || true`            → RED (3 tests, incl
+       the unreachable-arm proof: the inspector's config-path Text appeared) CAUGHT
+  Every mutation reverted BYTE-IDENTICALLY (`git diff Sources/` = only the
+  3 access-widenings after each revert).
+
+Path-leak / determinism (P3 — the cluster's named hazard):
+  - AgentInspectorPanel (C0): visible `Text(bundlePath)`+`Text(configPath)` →
+    FIXED relative paths, defended by `!contains("/Users/")` AND `!contains("/var/folders/")`.
+  - OuroAgentRowView: bundlePath only via `.help(...)` → dropped by the host (AN-004);
+    asserted leak-free anyway.
+  - AgentDetailView: the ONLY composite that can host the path-rendering inspector;
+    its `showsInspector == true` arm is UNREACHABLE through the real `@State` seam under
+    `inspect()` (the C4 DecisionLogRow `@State taught` discipline) → the collapsed arm is
+    the genuine render (chevron.right), the inspector's config-path Text is asserted ABSENT,
+    and the mutation that forced the gate open proved the path appears ONLY when expanded
+    (expanded arm covered by AgentInspectorPanelPathLeakTests). NOT fabricated.
+  - AN-001 hermetic: every VM fixture dual-injects a temp `agentBundlesURL` into BOTH the
+    registrar AND the inventory (the init scan returns [] — no machine agent-name leak).
+  - Every reference: byte-identical twice; NO `/Users/`, NO `/var/folders/`.
+  - NO timestamp / NSFullUserName() / machine-name / real UUID renders on ANY C7 surface
+    (verified first-hand) → NO cross-TZ proof needed for C7.
+
+Reclassifications (reconfirm-by-mutation): all 6 C7 views RECONFIRMED real-LOGIC
+  (each flips a captured Text/Image node). No deferrals; no view dropped to branchless.
+
+Access-widenings (private→internal, SU-E precedent, zero-behavior, surfaced to operator):
+  AgentTitleStrip (C7-2), AgentStatusCard (C7-3), LanePanel (C7-4). The structural-guard
+  slice markers in AgentDetailReadinessWiringTests + BossMCPPillVerdictWiringTests were
+  retargeted (`private struct X` → `\nstruct X`) — the same minimal marker-retarget the
+  C0 AgentInspectorPanel widening established; all 295 *WiringTests green.
+  (AgentInspectorPanel widened in C0. AgentDetailView / OuroAgentRowView /
+  BossWorkbenchMCPSetupView were already internal — no widening.)
+
+a11y-id audit: none needed (every committed state byte-distinct via real Text/Image content).
+
+Gates (all GREEN, actual output in the PR/report):
+  - strict `swift test -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete`:
+    3219 tests, 0 failures, 0 warnings, 1 skip (RepairAgentKeystoneTests.testLiveRepairAgentLoop…,
+    an env-gated live test — OURO_WORKBENCH_LIVE_REPAIR — NOT a flake, NOT ours).
+  - `swift run OuroWorkbench --uisurfacetest`: EXIT 0, all surfaces ok.
+  - `scripts/check-coverage.sh`: PASS (Core/ShellAdapter 149/151 @ 100%, 2 documented
+    exemptions); COVERAGE_DIRS + allowlist UNCHANGED.
+  - appSource() + keyboard-a11y + 295 *WiringTests structural guards: green.
+  - SerpentGuide.ouro/ never staged; no default.profraw / *.actual.txt committed.
