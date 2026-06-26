@@ -1,0 +1,7 @@
+Text kind=static text="Where you left off"
+Image image="clock.arrow.circlepath"
+Text kind=static text="tail"
+Text kind=static text="View full transcript"
+Image image="doc.text"
+Text kind=static text="last line
+"
