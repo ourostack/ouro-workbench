@@ -110,3 +110,18 @@ fixture (`rows=[]`+`statusMessage=nil`) the real code path cannot produce → a 
 --show-regions justified: the LHS `Text(model.statusMessage` is COVERED (the empty + unavailable C2
 tests render it); only the dead `??`-RHS default autoclosure is `^0`. Verified no other producer sets
 `statusMessage=nil`+empty-rows (grep over Sources/). → Unit-3 allowlist carve candidate.
+
+### BossWatchStatusView (L7985-8034) — 2 → 2 driven, 0 carved
+BEFORE: 2 uncovered (`7992`/`7993` — `var timeZone: TimeZone = .autoupdatingCurrent` /
+`var locale: Locale = .autoupdatingCurrent` DEFAULT-ARGUMENT autoclosures). Every existing C0 clock
+test INJECTS explicit `.gmt`/`en_GB` (for snapshot determinism), so the PRODUCTION default autoclosures
+— the ones the real call site `BossWatchStatusView(model:)` (`:5347`) evaluates — were never executed.
+DRIVEN: `testWatch_productionDefaults_noTimeZoneOrLocaleArg` constructs the view EXACTLY as production
+does (OMITTING both args → the `.autoupdatingCurrent` default autoclosures run, coloring `7992`/`7993`).
+With NO change summaries the body renders no timestamp `Text`, so the captured tree is TZ/locale-
+independent + deterministic. ASSERT the rendered status line ("watching") + "Boss Watch" label + eye.fill.
+P2 note: these are default-VALUE autoclosures (presentation constants, not behavioral guards) — they are
+now EXECUTED (P1 satisfied); their value produces no observable difference in the no-rows tree (the
+rubric's "presentation constants OUT of P2 scope"). The change-row timestamp's BEHAVIOR (the
+`workbenchTimeText` seam) is already mutation-covered by the existing C0 clock tests + cross-TZ proof.
+CARVED: none (driven to execution).

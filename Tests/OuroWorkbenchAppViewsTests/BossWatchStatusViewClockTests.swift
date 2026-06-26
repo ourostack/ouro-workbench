@@ -120,6 +120,33 @@ final class BossWatchStatusViewClockTests: XCTestCase {
         try assertViewSnapshot(of: view, named: "BossWatchStatusView.withChanges")
     }
 
+    // MARK: - U5 B8 — drive the production timeZone/locale DEFAULT-argument autoclosures
+
+    /// U5 B8 — the `timeZone`/`locale` default-argument autoclosures (`:7992`/`:7993` —
+    /// `var timeZone: TimeZone = .autoupdatingCurrent` / `var locale: Locale = .autoupdatingCurrent`).
+    /// Every other test injects explicit `.gmt`/`en_GB`, so the PRODUCTION defaults (the autoclosures
+    /// the real call site `BossWatchStatusView(model:)` at `:5347` evaluates) were never executed. Here
+    /// we construct the view EXACTLY as production does — OMITTING both arguments — so the
+    /// `.autoupdatingCurrent` default autoclosures run. With NO change summaries the body renders no
+    /// timestamp `Text` (the `ForEach(...workbenchTimeText...)` block is empty), so the captured tree is
+    /// TZ/locale-INDEPENDENT and deterministic. ASSERT the status line + label render.
+    func testWatch_productionDefaults_noTimeZoneOrLocaleArg() throws {
+        let model = try makeVM()
+        model.bossWatchIsEnabled = true
+        model.bossWatchLastError = nil
+        model.bossWatchLastRunAt = nil
+        model.bossWatchChangeSummaries = []   // no rows → no timestamp → deterministic
+        XCTAssertEqual(model.bossWatchStatusLine, "watching", "provenance: enabled, no run → watching")
+        // Construct as production does — defaults for timeZone + locale (drives :7992/:7993).
+        let view = BossWatchStatusView(model: model)
+        let tree = try ViewSnapshotHost.snapshotText(of: view)
+        XCTAssertTrue(tree.contains(#"text="watching""#),
+                      "the prod-default view renders the status line:\n\(tree)")
+        XCTAssertTrue(tree.contains("Boss Watch"), "the Boss Watch label renders:\n\(tree)")
+        XCTAssertTrue(tree.contains("eye.fill"), "enabled → the filled eye glyph:\n\(tree)")
+        XCTAssertFalse(tree.contains("/Users/"), "no machine-path leak:\n\(tree)")
+    }
+
     // MARK: - Clock determinism (P3 — the recipe's whole point)
 
     /// The change-row timestamp is a baked-at-construction `Date.formatted`, so determinism
