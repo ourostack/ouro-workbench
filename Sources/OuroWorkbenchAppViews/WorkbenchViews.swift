@@ -2236,8 +2236,9 @@ struct DecisionInboxSheet: View {
     @ObservedObject var model: WorkbenchViewModel
     @Environment(\.dismiss) private var dismiss
     /// Inbox (open queue) vs the full chronological log. Defaults to the inbox;
-    /// the toggle keeps the raw log reachable without a second entry point.
-    @State private var showFullLog = false
+    /// the toggle keeps the raw log reachable without a second entry point. Seeded
+    /// via `init(initialShowFullLog:)` (prod default `false`).
+    @State private var showFullLog: Bool
     /// Test-only clock override. `nil` in production → the `TimelineView`'s
     /// periodic `context.date` drives `openInboxGroups(now:)` (the sheet keeps
     /// re-grouping every 30s so an elapsed snooze drops back into the queue). A
@@ -2250,6 +2251,27 @@ struct DecisionInboxSheet: View {
     /// which drives the open-inbox GROUPING, not the row timestamp render.)
     var timeZone: TimeZone = .autoupdatingCurrent
     var locale: Locale = .autoupdatingCurrent
+
+    /// Init seam (parallels the `now`/`timeZone`/`locale` test seams). Production callers omit
+    /// every argument past `model`, so the sheet opens on the Inbox with the live clock —
+    /// byte-identical to the prior synthesized init. A test seeds `initialShowFullLog: true` to
+    /// render the full-log arm directly (ViewInspector re-seeds `@State` per inspect, so the
+    /// in-view Picker/"View full decision log" toggle is not reachable through a `.tap()` re-render;
+    /// the init seam is the sanctioned way to drive the `showFullLog == true` branch — prod default
+    /// is UNCHANGED at `false`).
+    init(
+        model: WorkbenchViewModel,
+        now: Date? = nil,
+        timeZone: TimeZone = .autoupdatingCurrent,
+        locale: Locale = .autoupdatingCurrent,
+        initialShowFullLog: Bool = false
+    ) {
+        self.model = model
+        self.now = now
+        self.timeZone = timeZone
+        self.locale = locale
+        self._showFullLog = State(initialValue: initialShowFullLog)
+    }
 
     var body: some View {
         // Re-evaluate every 30s so an elapsed snooze drops back into the queue
