@@ -14,12 +14,12 @@ import json, sys
 
 # Current decl ranges (recomputed at HEAD via brace-matching).
 VIEWS = {
-    "TerminalSearchBar":        (9010, 9097),
-    "TerminalFocusView":        (9866, 9950),
-    "NewTerminalGroupSheet":    (9983, 10063),
-    "EditTerminalGroupSheet":   (10065, 10128),
-    "NewTerminalSessionSheet":  (10130, 10252),
-    "EditTerminalSessionSheet": (10254, 10360),
+    "TerminalSearchBar":        (9044, 9131),
+    "TerminalFocusView":        (9900, 9984),
+    "NewTerminalGroupSheet":    (10017, 10097),
+    "EditTerminalGroupSheet":   (10099, 10162),
+    "NewTerminalSessionSheet":  (10164, 10286),
+    "EditTerminalSessionSheet": (10288, 10394),
 }
 
 def main():
