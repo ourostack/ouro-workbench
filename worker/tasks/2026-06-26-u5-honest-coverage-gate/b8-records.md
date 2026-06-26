@@ -59,3 +59,21 @@ control `testMetricStateChip_value_noRetryButton`: an available chip renders NO 
 `if presentation.isUnavailable` / `if let onRetry, canRetry` gate is load-bearing → button search throws).
 MUTATION: `onRetry()` → `_ = onRetry` → retry-tap test RED (`0 != 1`) → revert → GREEN.
 CARVED: none.
+
+### BossWorkbenchMCPSetupView (L8103-8138) — 3 → 2 driven, 1 carved
+BEFORE: 3 uncovered (`8113` Refresh Button action, `8123` Install Button action, `8133` `.task{}`).
+DRIVEN via INVOCATION:
+- `8113` Refresh: seed a SENTINEL `.registered` registration the hermetic empty registrar can't
+  reproduce; `find(ViewType.Button.self).tap()` runs `refreshWorkbenchMCPRegistration()` → the registrar
+  re-read OVERWRITES the sentinel. ASSERT `bossWorkbenchMCPRegistration?.detail != "SENTINEL"`.
+  MUTATION: `model.refreshWorkbenchMCPRegistration()` → `_ = model` → RED (sentinel survives) → revert → GREEN.
+- `8123` Install: a `.notRegistered` (`isActionable`) registration renders Refresh+Install (2 buttons);
+  `findAll(ViewType.Button.self)[1].tap()` runs `installWorkbenchMCPForBoss()` → the empty-bundle install
+  throws → the `catch` sets `errorMessage`. ASSERT `errorMessage != nil` (was nil). MUTATION:
+  `model.installWorkbenchMCPForBoss()` → `_ = model` → RED (errorMessage stays nil) → revert → GREEN.
+CARVED (1): `8133` `.task { model.refreshWorkbenchMCPRegistration() }` — ViewInspector 0.10.3 has NO
+`.task` driver (`callOnAppear`/`tap`/`callOnSubmit`/`callOnChange` only; `.task`'s async modifier is not
+descended), so the `.task` closure is structurally undrivable through the synchronous `inspect()` seam.
+--show-regions justified: the region's body (`refreshWorkbenchMCPRegistration()`) is the SAME call the
+Refresh button drives (so its LOGIC is covered) — only the `.task`-modifier hook itself is uncolorable.
+→ Unit-3 allowlist carve candidate.
