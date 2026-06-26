@@ -50,6 +50,22 @@ final class NewTerminalSessionSheetTests: XCTestCase {
         NewTerminalSessionSheet(model: try makeVM(rootPath: rootPath))
     }
 
+    /// U5 B4: a VM with NO selected project — so the init's `?? home` FALLBACK arm
+    /// (L10093) is taken. The home default is the ONE machine-specific node; we mask
+    /// it to `<HOME>` for the assertion so the test is deterministic + leak-free.
+    private static let home = FileManager.default.homeDirectoryForCurrentUser.path
+    private func noProjectVM() throws -> WorkbenchViewModel {
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("b4newterm-noproj-\(UUID().uuidString)", isDirectory: true)
+        let agentBundles = tmp.appendingPathComponent("AgentBundles", isDirectory: true)
+        let paths = WorkbenchPaths(rootURL: tmp)
+        try WorkbenchStore(paths: paths).save(WorkspaceState(boss: BossAgentSelection(agentName: "boss")))
+        return WorkbenchViewModel(
+            paths: paths,
+            bossWorkbenchMCPRegistrar: BossWorkbenchMCPRegistrar(agentBundlesURL: agentBundles),
+            ouroAgentInventory: OuroAgentInventory(agentBundlesURL: agentBundles))
+    }
+
     // MARK: - Enumerated state-set (the working-directory value-flip)
 
     func testSheet_withProject_workingDirectoryFromProjectRoot() throws {
@@ -87,6 +103,26 @@ final class NewTerminalSessionSheetTests: XCTestCase {
         let a = try ViewSnapshotHost.snapshotText(of: try view(rootPath: "/tmp/u4"))
         let b = try ViewSnapshotHost.snapshotText(of: try view(rootPath: "/tmp/u4"))
         XCTAssertEqual(a, b, "the sheet must serialize byte-identically twice")
+    }
+
+    // MARK: - U5 B4: the no-project init fallback arm (L10093 `?? home`)
+
+    /// With NO selected project the init takes the `?? home` fallback, seeding the
+    /// Working-Directory field with the machine home. We assert the masked tree so
+    /// it is deterministic + leak-free, while driving the previously-un-hit fallback
+    /// region. (The with-project arm above drives the `model.selectedProject?.rootPath`
+    /// side; together both `??` arms are covered.)
+    func testSheet_noProject_workingDirectoryFallsBackToHome() throws {
+        let view = NewTerminalSessionSheet(model: try noProjectVM())
+        let tree = try ViewSnapshotHost.snapshotText(of: view)
+        let masked = tree.replacingOccurrences(of: Self.home, with: "<HOME>")
+        XCTAssertTrue(masked.contains(#"text="New Terminal""#), "the sheet title:\n\(masked)")
+        XCTAssertTrue(masked.contains(#"kind=editable text="<HOME>""#),
+                      "the Working Directory field falls back to the (masked) home:\n\(masked)")
+        XCTAssertFalse(masked.contains("/Users/"),
+                       "the masked tree must contain no /Users/ machine-path:\n\(masked)")
+        let store = ViewSnapshotStore.default(testFilePath: #filePath)
+        try assertViewSnapshotText(masked, named: "NewTerminalSessionSheet.noProjectHome", store: store)
     }
 
     // MARK: - Negative control (P2 mutation-verified)

@@ -1,0 +1,8 @@
+Text kind=static text="Edit Workspace"
+TextField kind=editable text="Home"
+TextField kind=editable text="/tmp/u4"
+Text kind=static text="Choose"
+Image image="folder"
+Text kind=static text="Cancel"
+Text kind=static text="Save"
+Image image="checkmark"

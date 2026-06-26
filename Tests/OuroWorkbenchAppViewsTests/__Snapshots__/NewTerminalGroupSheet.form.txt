@@ -1,0 +1,8 @@
+Text kind=static text="New Workspace"
+TextField kind=editable text=""
+TextField kind=editable text="<HOME>"
+Text kind=static text="Choose"
+Image image="folder"
+Text kind=static text="Cancel"
+Text kind=static text="Create"
+Image image="checkmark"
