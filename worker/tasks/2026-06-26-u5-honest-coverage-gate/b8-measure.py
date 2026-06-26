@@ -14,19 +14,20 @@ import sys
 
 # B8 view decl line ranges (start of decl -> just before next decl). Computed
 # from the grep of struct decls; hi is exclusive upper bound of the NEXT decl.
+# Ranges RE-MEASURED post-init-seams (ActionLogView +18, BossActionReceiptStrip +18).
 VIEWS = [
     ("InboxDoorPill",            5396, 5443),
     ("BossNeedsMeCodingColumns", 5443, 5534),
     ("HabitHistoryPanelView",    5534, 5589),
-    ("MetricStateChip",          5677, 5719),
-    ("BossConversationView",     5868, 5912),
-    ("BossProposalCardList",     7473, 7491),   # list only (BossProposalCard/ItemRow are private siblings)
-    ("BossProposalCard",         7491, 7535),
-    ("BossProposalItemRow",      7536, 7617),
-    ("ActionLogView",            7782, 7902),
-    ("BossActionReceiptStrip",   7908, 7984),
-    ("BossWatchStatusView",      7985, 8034),
-    ("BossWorkbenchMCPSetupView",8103, 8138),
+    ("MetricStateChip",          5677, 5720),
+    ("BossConversationView",     5868, 5913),
+    ("BossProposalCardList",     7473, 7491),
+    ("BossProposalCard",         7491, 7536),
+    ("BossProposalItemRow",      7536, 7628),
+    ("ActionLogView",            7782, 7925),
+    ("BossActionReceiptStrip",   7925, 8019),
+    ("BossWatchStatusView",      8019, 8069),
+    ("BossWorkbenchMCPSetupView",8137, 8179),
 ]
 
 data = json.load(sys.stdin)

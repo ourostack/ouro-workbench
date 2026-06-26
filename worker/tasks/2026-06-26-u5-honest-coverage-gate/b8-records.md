@@ -165,7 +165,7 @@ CARVED (1): `7484` `BossProposalCardList` `.task { model.loadPendingProposals() 
 has NO `.task` driver. --show-regions justified: `loadPendingProposals()` LOGIC is covered (every
 `makeVM`/fixture calls it); only the `.task`-modifier hook is uncolorable. → Unit-3 allowlist carve.
 
-### ActionLogView (L7782-7902, +init seam) — 14 → 14 driven, 0 carved
+### ActionLogView (L7782-7925, +init seam) — 14 → 13 driven, 1 carved (proven-dead)
 BEFORE: 14 uncovered (`7789`/`7790` timeZone/locale default-arg autoclosures, `7791` @State default,
 `7793`/`7794` displayedEntries + `prefix(isExpanded?6:1)`, `7812`/`7813`/`7814`/`7823` the `else`
 expanded VStack+ForEach, `7832` toggle Button action, `7835` `Label(isExpanded?…)`, `7839`
@@ -190,7 +190,14 @@ DRIVEN:
   constructs `ActionLogView(entries:)` OMITTING both args (prod call shape) → the `.autoupdatingCurrent`
   defaults run; asserts the non-timestamp "Action Log"/"1 recent" labels render (no snapshot — the
   per-entry timestamp is `.autoupdatingCurrent`-locale, intentionally not pinned here).
-CARVED: none.
+CARVED (1) — PROVEN-DEAD: `7811:41` (post-seam line) — the `: 1` FALSE arm of `entries.prefix(isExpanded
+? 6 : 1)` in the `displayedEntries` computed var. `displayedEntries` is read ONLY at `:7840`
+(`ForEach(displayedEntries)`) inside the `else` (EXPANDED) body, where `isExpanded == true` always — so
+the ternary never sees `isExpanded == false` → the `: 1` arm is structurally unreachable (the collapsed
+arm uses `entries.first` directly, never `displayedEntries`). Verified: `displayedEntries` has exactly 2
+references (the decl + the expanded `ForEach`); no collapsed-arm read exists. Driving it would require
+evaluating `displayedEntries` with `isExpanded==false`, which the view never does. --show-regions
+justified (`? 6` true arm is COVERED by the expanded test; only `: 1` is `^0`). → Unit-3 allowlist carve.
 
 ### BossActionReceiptStrip (L7908-7984 → L7925+, +init seam) — 6 → 6 driven, 0 carved
 BEFORE: 6 uncovered (`7915` @State default, `7923`/`7924` disclosure Button + `withAnimation{isExpanded
@@ -214,3 +221,41 @@ DRIVEN:
   `BossActionReceiptStrip.failedNilTarget`. MUTATION: `?? ""` → `?? " · MUT"` → `text="selfRepair"` no
   longer matches + snapshot mismatch → RED → revert → GREEN.
 CARVED: none.
+
+---
+
+## B8 final tally (re-measured @ full suite, post-drives)
+
+| view | BEFORE | driven | carved | AFTER |
+|---|---|---|---|---|
+| InboxDoorPill | 1 | 1 | 0 | 0 |
+| BossNeedsMeCodingColumns | 3 | 3 | 0 | 0 |
+| HabitHistoryPanelView | 1 | 0 | 1 | 1 (proven-dead `?? ""`) |
+| MetricStateChip | 1 | 1 | 0 | 0 |
+| BossConversationView | 6 | 6 | 0 | 0 |
+| BossProposalCardList | 1 | 0 | 1 | 1 (`.task`) |
+| BossProposalCard | 2 | 2 | 0 | 0 |
+| BossProposalItemRow | 4 | 4 | 0 | 0 |
+| ActionLogView | 14 | 13 | 1 | 1 (proven-dead `: 1` arm) |
+| BossActionReceiptStrip | 6 | 6 | 0 | 0 |
+| BossWatchStatusView | 2 | 2 | 0 | 0 |
+| BossWorkbenchMCPSetupView | 3 | 2 | 1 | 1 (`.task`) |
+| **TOTAL** | **44** | **40** | **4** | **4** |
+
+**Region delta: 44 → 4** (40 driven + asserted + mutation-verified; 4 carves, ALL --show-regions-justified).
+**Carve breakdown (4 → Unit-3 allowlist candidates):**
+- 2× `.task {}` modifier hook (BossProposalCardList `loadPendingProposals`, BossWorkbenchMCPSetupView
+  `refreshWorkbenchMCPRegistration`) — ViewInspector 0.10.3 has no `.task` driver; the closure LOGIC is
+  covered elsewhere (the same calls drive other regions / are called by makeVM).
+- 1× proven-dead `?? "No habit runs yet"` (HabitHistoryPanelView) — the real `init` invariant
+  `rows.isEmpty ⟹ statusMessage != nil` makes the fallback unreachable through any production seam.
+- 1× proven-dead `: 1` ternary arm (ActionLogView `displayedEntries`) — `displayedEntries` is read ONLY
+  in the `isExpanded==true` body, so the `: 1` (`isExpanded==false`) branch is structurally unreachable.
+
+**Two `@State`-init seams added** (prod default UNCHANGED = collapsed): `ActionLogView(initialExpanded:)`
++ `BossActionReceiptStrip(initialExpanded:)`. Both replace the inline `@State = false` (whose
+default-autoclosure region is thereby eliminated, not carved — per the brief's preference).
+
+**New tests:** +25 (3570 → 3595, 0 fail). **New snapshot refs (5):** `InboxDoorPill.lowOne`,
+`F.fields.editableNilDetailCwd`, `ActionLogView.expanded`, `BossActionReceiptStrip.expanded`,
+`BossActionReceiptStrip.failedNilTarget`.
