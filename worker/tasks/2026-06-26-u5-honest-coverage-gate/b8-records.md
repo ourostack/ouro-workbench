@@ -93,3 +93,20 @@ DRIVEN via INVOCATION:
   `selectedEntryID == entryId` (inbox NOT opened). MUTATION: `item.taskRef ?? item.runner` →
   `item.taskRef ?? ""` → no match → `selectedEntryID == nil` → RED → revert → GREEN.
 CARVED: none.
+
+### HabitHistoryPanelView (L5534-5589) — 1 → 0 driven, 1 carved (proven-dead)
+BEFORE: 1 uncovered (`5543:45` — the `?? "No habit runs yet"` RHS autoclosure of
+`Text(model.statusMessage ?? "No habit runs yet")`, rendered only inside `if model.rows.isEmpty`).
+CARVED (1) — PROVEN-DEAD via the real producer: the `?? "No habit runs yet"` fallback fires ONLY when
+`statusMessage == nil` AND `rows.isEmpty`. But `HabitHistoryPanelModel.init` (the ONLY production
+producer — `BossDashboardBuilder.build` + the default) sets:
+  • `!isAvailable` → statusMessage = "Habit history unavailable…" (non-nil)
+  • `isAvailable && summaries.isEmpty` → statusMessage = "No habit runs yet" (non-nil)
+  • `isAvailable && !summaries.isEmpty` → statusMessage = nil **but rows is NON-empty** (the `if
+    rows.isEmpty` view gate is then FALSE, so this `Text` is never rendered).
+So `rows.isEmpty ⟹ statusMessage != nil` is an INVARIANT of the real init — the `?? "No habit runs
+yet"` fallback is structurally unreachable through any production seam. Driving it would require a
+fixture (`rows=[]`+`statusMessage=nil`) the real code path cannot produce → a P2 provenance violation.
+--show-regions justified: the LHS `Text(model.statusMessage` is COVERED (the empty + unavailable C2
+tests render it); only the dead `??`-RHS default autoclosure is `^0`. Verified no other producer sets
+`statusMessage=nil`+empty-rows (grep over Sources/). → Unit-3 allowlist carve candidate.
