@@ -1,0 +1,4 @@
+Text kind=static text="Bring back your work"
+Text kind=static text="Your boss will look for the work you had open and bring it back as terminals here."
+Text kind=static text="Bring Back My Work"
+Image image="arrow.uturn.backward.circle"

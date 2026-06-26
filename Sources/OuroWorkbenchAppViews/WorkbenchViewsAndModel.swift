@@ -7374,7 +7374,7 @@ struct OnboardingRepairStepRow: View {
 /// proposes them via the editable card (which renders in the boss dashboard), and relaunches
 /// the approved ones as terminals — all context-specific intelligence the boss owns. This
 /// surface is a clean explanation + a single hand-off affordance, never a hardcoded scan.
-private struct OnboardingBossReconstructView: View {
+struct OnboardingBossReconstructView: View {
     @ObservedObject var model: WorkbenchViewModel
 
     var body: some View {

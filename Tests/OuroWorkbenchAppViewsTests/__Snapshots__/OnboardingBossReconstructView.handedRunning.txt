@@ -1,0 +1,6 @@
+Text kind=static text="Bring back your work"
+Text kind=static text="Your boss will look for the work you had open and bring it back as terminals here."
+Text kind=static text="slugger is looking for your recent work…"
+Text kind=static text="Nothing to bring back — you're all set. You can close this whenever you're ready."
+Text kind=static text="Ask Again"
+Image image="arrow.clockwise"
