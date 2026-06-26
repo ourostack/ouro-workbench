@@ -1,0 +1,4 @@
+Text kind=static text="Recent actions"
+Image image="checkmark.circle.fill"
+Text kind=static text="2 ok"
+Image image="chevron.down"
