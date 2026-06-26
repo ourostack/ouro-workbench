@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 eval "$("$ROOT_DIR/scripts/read-workbench-release.sh")"
 RUN_DEEP="false"
+PR_BASE_REF="${OURO_PR_BASE_REF:-origin/main}"
 SWIFT_STRICT_FLAGS=(-Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete)
 
 usage() {
@@ -36,9 +37,15 @@ cd "$ROOT_DIR"
 run_step "Verify release version contract"
 scripts/verify-version-contract.sh
 
+run_step "Verify release freshness policy"
+scripts/release-policy.sh freshness --mode pr --base-ref "$PR_BASE_REF"
+scripts/release-policy.sh selftest-pr-base
+scripts/release-policy.sh selftest-package-guards
+scripts/release-policy.sh selftest-shell-dependency-watch
+scripts/release-policy.sh selftest-paths
+
 run_step "Verify shared shell dependency freshness"
 scripts/check-shell-dependency.sh
-scripts/selftest-shell-dependency-watch.sh
 scripts/smoke-package-shallow-guard.sh
 scripts/install-latest-app-artifact.sh --help >/dev/null
 scripts/install-latest-release.sh --help >/dev/null
