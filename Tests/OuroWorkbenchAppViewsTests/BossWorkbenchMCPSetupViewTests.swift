@@ -80,6 +80,45 @@ final class BossWorkbenchMCPSetupViewTests: XCTestCase {
         try assertViewSnapshot(of: view, named: "BossWorkbenchMCPSetupView.actionable")
     }
 
+    // MARK: - U5 B8 — button INTERACTIONS (drive the action closures)
+
+    /// U5 B8 — the Refresh `Button` action (`:8113` — `Button { refreshWorkbenchMCPRegistration() }`).
+    /// We seed a SENTINEL `@Published bossWorkbenchMCPRegistration` (a `.registered` snapshot that the
+    /// hermetic empty registrar would NEVER produce), find the Refresh button (the first/only
+    /// icon-only borderless button in the unknown state), `.tap()` it → `refreshWorkbenchMCPRegistration()`
+    /// runs and OVERWRITES the registration with what the registrar reads for an empty bundle (a
+    /// not-`.registered` snapshot or nil). ASSERT the sentinel was replaced.
+    func testSetup_refreshTap_overwritesRegistration() throws {
+        let model = try makeVM()
+        // Seed a sentinel that the empty registrar cannot reproduce.
+        model.bossWorkbenchMCPRegistration = registration(status: .registered, detail: "SENTINEL")
+        XCTAssertEqual(model.bossWorkbenchMCPRegistration?.detail, "SENTINEL", "precondition: sentinel set")
+        let view = BossWorkbenchMCPSetupView(model: model)
+        // In the unknown/registered state the only button is Refresh (install is gated off).
+        try view.inspect().find(ViewType.Button.self).tap()
+        XCTAssertNotEqual(model.bossWorkbenchMCPRegistration?.detail, "SENTINEL",
+                          "tapping Refresh re-reads the registrar → the sentinel is overwritten")
+    }
+
+    /// U5 B8 — the Install `Button` action (`:8123` — `Button { installWorkbenchMCPForBoss() }`),
+    /// reachable only when `bossWorkbenchMCPRegistration?.isActionable == true` (a `.notRegistered`
+    /// snapshot). We render that arm, find the Install button (the SECOND button — Refresh is first),
+    /// `.tap()` it → `installWorkbenchMCPForBoss()` runs. Against the hermetic empty registrar the
+    /// install fails (no real bundle) and the VM sets `errorMessage` (the `catch` arm) — an observable
+    /// side-effect. ASSERT `errorMessage` went from nil to set.
+    func testSetup_installTap_firesInstallSideEffect() throws {
+        let model = try makeVM()
+        model.bossWorkbenchMCPRegistration = registration(status: .notRegistered, detail: "not registered")
+        XCTAssertEqual(model.bossWorkbenchMCPRegistration?.isActionable, true, "precondition: actionable")
+        XCTAssertNil(model.errorMessage, "precondition: no error yet")
+        let view = BossWorkbenchMCPSetupView(model: model)
+        let buttons = try view.inspect().findAll(ViewType.Button.self)
+        XCTAssertEqual(buttons.count, 2, "actionable state renders Refresh + Install buttons")
+        try buttons[1].tap()  // [0] = Refresh, [1] = Install
+        XCTAssertNotNil(model.errorMessage,
+                        "tapping Install runs installWorkbenchMCPForBoss → the empty-bundle catch sets errorMessage")
+    }
+
     // MARK: - Determinism (P3)
 
     func testSetup_determinism_byteIdenticalTwiceAndNoLeak() throws {
