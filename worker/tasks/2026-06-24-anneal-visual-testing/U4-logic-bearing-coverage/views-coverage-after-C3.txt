@@ -1,0 +1,115 @@
+U4 / C3 — Header / boss-selector / autonomy popovers — views-lib coverage snapshot
+Branch: feat/anneal-c3-header-autonomy (off origin/main @ 22f8c0d = #302; origin/main advanced to
+6f7fa0e during execution — rebase clean + additive before push, per the brief)
+Measured: canonical `xcrun llvm-cov export <PackageTests> -instr-profile default.profdata
+-summary-only Sources/OuroWorkbenchAppViews` (full `swift test --enable-code-coverage`, no filter)
+
+                  region                 line
+BASELINE (22f8c0d, pre-C3):           19.12% (1139/5958)     21.07% (6787/32207)
+AFTER C3:                             22.44% (1337/5958)     25.43% (8189/32207)
+delta:                                +3.32pp (+198 regions) +4.36pp (+1402 lines)
+
+(Baseline measured first-hand by stashing the 8 C3 test files + rebuilding coverage on this same
+checkout — 19.12%/21.07% matches the documented post-C1 figure; the region denominator 5958 is the
+same as C1's, confirming a clean apples-to-apples delta. The +3.32pp region / +4.36pp line is the
+HONEST C3-ISOLATED delta — measured against my clean merge-base @ `22f8c0d` with C3 tests in vs out.)
+
+POST-REBASE NOTE: after rebasing onto the advanced origin/main (`6f7fa0e`, which merged C2 + external
+PRs while C3 ran), the STACKED absolute is region 24.82% (1479/5958) / line 29.98% (9656/32207) — higher
+because the rebased base now also carries C2's references. The full suite there is 3145 tests, 1 skip,
+0 fail/0 warn; all gates re-confirmed green on the final rebased base. The C3-isolated +3.32pp/+4.36pp
+above is the figure attributable to THIS PR.
+
+The views lib is NOT gated in U4 (the gate is the campaign's FINAL step). This % is recorded as
+PROGRESS, input to the final gate step. COVERAGE_DIRS + scripts/coverage-allowlist.txt UNCHANGED
+(verified `git diff origin/main` empty on both; no Core/ShellAdapter source touched).
+
+C3 surfaces committed (one commit per sub-unit; strict TDD red→record→green→mutation-verify→revert→green;
+SINGLE-ACTOR SERIAL mutations). ALL 8 cluster views covered:
+  C3-1  BossWatchHeaderToggle   — 3 refs  [makeVM + ouroAgents(usable boss) + bossWatchIsEnabled;
+                                           if presentation.isVisible (hidden) + isOn (Watch On/Off + eye glyph)]
+  C3-2  BossSelectorView        — 3 refs  [makeVM + ouroAgents; HeaderCalmPresentation.resolve →
+                                           No boss yet / Boss:X / "missing" pill; Menu rows DESCEND here]
+  C3-3  BossAgentNamePopover    — 3 refs  [STANDALONE via .constant bindings; if !isEmpty && !canApply
+                                           (BossWorkbenchMCPRegistrar.isValidAgentBundleName) error row]
+  C3-4  AutonomyStatusCheckRow  — 4 refs  [STANDALONE constructed AutonomyReadinessCheck + real untrusted
+                                           terminal seam; indicator branch ok/warning/soft-blocker/degraded]
+  C3-5  AutonomyStatusPopover   — 3 refs  [STANDALONE constructed AutonomyReadinessSnapshot; reframe tone
+                                           ready/watch/degraded via real AutonomyReadinessReframe.present;
+                                           login-footer carve (strippingLoginFooter)]
+  C3-6  BossConversationView    — 2 refs  [makeVM + bossQuestion @Published; bound-value flip +
+                                           ForEach(bossQuickQuestions) four fixed titles]
+  C3-7  AutonomyStatusButton    — 1 ref   [no-boss NEUTRAL arm "TTFA · off" — login-INDEPENDENT;
+                                           boss-set ttfaText arm = login-tainted carve (candidate #6)]
+  C3-8  HeaderView              — 2 refs  [no-boss composite; if statusLine.shouldShow gate via real
+                                           HeaderStatusLinePresentation.resolve(summary:); embedded button
+                                           on its login-independent neutral arm]
+
+NEW C3 references: 21 (across 8 new test files). New tests: 32 (3069→3101 full-suite, 1 pre-existing skip).
+
+Per-surface mutation-verify (P2 — single-actor serial; broke the REAL rendered branch → the surface's
+snapshot test went RED → reverted byte-identically → green):
+  BossWatchHeaderToggle   eye glyph `isOn ? "eye.fill" : "eye.slash"` → swapped       → 3 RED  ✓ caught
+  BossSelectorView        `if presentation.bossShowsMissingPill` → negated            → 4 RED  ✓ caught
+  BossAgentNamePopover    `if !isEmpty && !canApply` → `&& canApply`                  → 4 RED  ✓ caught
+  AutonomyStatusCheckRow  indicator `... !isDegraded` → `isDegraded`                  → 4 RED  ✓ caught
+  AutonomyStatusPopover   `ForEach(snapshot.checks)` → `.prefix(1)`                   → 5 RED  ✓ caught
+  BossConversationView    `ForEach(bossQuickQuestions)` → `.prefix(1)`                → 5 RED  ✓ caught
+  AutonomyStatusButton    HeaderCalmPresentation empty-name `ttfaText "TTFA · off"`   → 3 RED  ✓ caught
+                          → "TTFA · MUTANT" (Core mutation, reverted byte-identically)
+  HeaderView              `if statusLine.shouldShow` → negated                        → 3 RED  ✓ caught
+  Mutation tally: 8/8 surfaces mutated → 8/8 CAUGHT, 0 uncaught (no vacuous guard → no backlog).
+  (Each mutation was transient — broken → RED observed → reverted byte-identically → green; `git diff
+  Sources/` empty after every revert, both views-lib and Core.)
+
+Covered-vs-deferred reclassifications (re-checked against ViewSnapshotHost.mapNode whitelist):
+  - All 8 C3 views were already binned LOGIC (none was first-pass-branchless) — RECONFIRMED LOGIC: each
+    flips a CAPTURED Text/Image/bound-value/a11y node through a real seam (no vacuous green committed).
+  - NEW first-hand finding: ViewInspector DOES descend `Menu {}` content (BossSelectorView's choice rows,
+    HeaderView's More-menu rows are CAPTURED) — unlike `.contextMenu{}`/`.popover{}` (not descended).
+    The two STANDALONE popovers (BossAgentNamePopover, AutonomyStatusPopover) were still snapshotted
+    standalone per the recipe (their PARENT presents them via `.popover{}`, which is NOT descended).
+
+Login-item allowlist carve (NEW — candidate #6, recorded in allowlist-candidates.md, NOT fabricated):
+  - `LoginItemController` is NON-INJECTABLE (`@Published private(set) var status`, set in `init()` from the
+    live machine `LaunchAgentLoginItem.status()`; no test-injection seam — verified first-hand; this
+    machine reports `.enabled`, a clean CI runner reports `.appBundleMissing`). It is the `MachineRuntimeView`
+    (candidate #2) class of non-injectability.
+  - `AutonomyStatusButton` boss-SET arm folds the live login state into `snapshot.state` → the captured
+    `ttfaText` ("TTFA · ready" vs "TTFA · blocked") is machine-dependent → ALLOWLIST. The NO-BOSS neutral
+    arm ("TTFA · off") is login-INDEPENDENT (HeaderCalmPresentation empty-name branch) → COVERED (C3-7).
+  - `AutonomyStatusPopover` footer `if !loginItem.isEnabled` "Login"/"Update Login" button is the lone
+    login-dependent node → STRIPPED from the committed reference (`strippingLoginFooter`), proven the ONLY
+    login-dependent node by a stripped-projection determinism guard → the popover is COVERED minus that one
+    button (which rides the carve). `HeaderView` is covered on its no-boss (login-independent) composite;
+    the boss-set header rides the same carve via the embedded button.
+  - A future `LoginItemController` protocol-injection seam would reclaim all of these (same source-fix
+    candidate #2 names) — recorded, NOT done in U4.
+
+Determinism (P3): every reference byte-identical-twice + `!contains("/Users/")`; the login-item carves are
+each defended by a two-fresh-controllers byte-identical guard (the carved/no-boss region is provably
+login-state-independent). AN-001 temp `agentBundlesURL` dual-injected in every VM fixture; fixed
+agent names/paths; no `Date()`/`UUID()`/`NSFullUserName()` in any committed reference. The clock-dependent
+`inboxDoor` (collapsed-pane badge — `InboxDoorPresentation.resolve(now: Date())`) was DEFERRED to its own
+clock cluster (C4 decision inbox), not forced into the header fixture.
+
+a11y-identifier audit (selective policy D-U2-2): NONE needed for any C3 surface — every captured node
+already carries a distinguishing Text/Image/a11y-label (e.g. BossWatchHeaderToggle's "Boss Watch On/Off"
+label). Recorded: "none needed."
+
+Access-widenings (private→internal): NONE for C3 — all 8 covered structs were already `internal`
+(HeaderView, BossWatchHeaderToggle, BossSelectorView, BossAgentNamePopover, AutonomyStatusButton,
+AutonomyStatusPopover, AutonomyStatusCheckRow, BossConversationView). ZERO Sources behavior change of any
+kind landed (all mutations reverted byte-identically; `git diff origin/main -- Sources/` carries only the
+unrelated main-churn drift, none from C3 — the C3 commits are test-only).
+
+Gates (all green; actual output captured in the PR/report):
+  strict build      `swift build -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete` → 0/0
+  full strict test  `swift test --enable-code-coverage -Xswiftc -warnings-as-errors
+                     -Xswiftc -strict-concurrency=complete` → 3101 tests, 1 skipped (pre-existing), 0 fail/0 warn
+  `swift run OuroWorkbench --uisurfacetest` → EXIT 0, every surface ok
+  `Scripts/check-coverage.sh --no-build` → PASS (Core/ShellAdapter 149/151 files 100%; 2 documented
+                     structural exemptions; COVERAGE_DIRS + allowlist UNCHANGED)
+  appSource() structural guards (WorkbenchAppSourceRetargetTests) → 3 tests, 0 fail
+  keyboard-a11y structural guards (WorkbenchKeyboardAccessibilityContractTests) → 6 tests, 0 fail
+  SerpentGuide.ouro/ / default.profraw / *.actual.txt: never staged (verified `git status` clean of them).
