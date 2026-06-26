@@ -1,0 +1,6 @@
+Text kind=static text="Status"
+Text kind=static text="•"
+Text kind=static text="first item"
+Text kind=static text="•"
+Text kind=static text="second item"
+Text kind=static text="That wraps it up."
