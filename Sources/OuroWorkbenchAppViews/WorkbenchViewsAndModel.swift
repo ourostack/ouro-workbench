@@ -8490,7 +8490,10 @@ private struct AgentLanesCard: View {
     }
 }
 
-private struct LanePanel: View {
+// Access-widening (C7-4, the SU-E / C0 SU-3 precedent): `private` → `internal` so the
+// `@testable import OuroWorkbenchAppViews` lane-panel snapshot test can reach this leaf.
+// Zero-behavior change (visibility only). Surfaced to the operator per the doing doc.
+struct LanePanel: View {
     var title: String
     var systemImage: String
     var lane: OuroAgentLane?

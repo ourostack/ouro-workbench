@@ -1,0 +1,4 @@
+Image image="person.crop.circle"
+Text kind=static text="Human-facing"
+Text kind=static text="anthropic"
+Text kind=static text="anthropic"
