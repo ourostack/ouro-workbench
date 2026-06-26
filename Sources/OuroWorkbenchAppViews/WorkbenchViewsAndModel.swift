@@ -8339,7 +8339,10 @@ struct AgentInspectorPanel: View {
     }
 }
 
-private struct AgentStatusCard: View {
+// Access-widening (C7-3, the SU-E / C0 SU-3 precedent): `private` → `internal` so the
+// `@testable import OuroWorkbenchAppViews` status-card snapshot test can reach this leaf.
+// Zero-behavior change (visibility only). Surfaced to the operator per the doing doc.
+struct AgentStatusCard: View {
     var agent: OuroAgentRecord
     @ObservedObject var model: WorkbenchViewModel
     var registration: BossWorkbenchMCPRegistrationSnapshot?

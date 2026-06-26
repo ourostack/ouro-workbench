@@ -331,8 +331,10 @@ final class BossMCPPillVerdictWiringTests: XCTestCase {
     // MARK: - App: all three pill render sites route through the seam with the verdict
 
     func testAgentDetailCardPillRoutesThroughSeamWithVerdict() throws {
+        // `AgentStatusCard` was widened `private`→`internal` (C7-3), dropping `private` from
+        // its declaration line; the slice still bounds the card at `AgentLanesCard`.
         let body = try WorkbenchAppSource.sourceSlice(
-            from: "private struct AgentStatusCard: View {",
+            from: "\nstruct AgentStatusCard: View {",
             to: "private struct AgentLanesCard: View {"
         )
         XCTAssertTrue(

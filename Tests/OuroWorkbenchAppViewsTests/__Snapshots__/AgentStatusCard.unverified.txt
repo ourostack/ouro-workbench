@@ -1,0 +1,5 @@
+Image image="questionmark.circle"
+Text kind=static text="Not verified yet"
+Text kind=static text="ready"
+Text kind=static text="not verified"
+Text kind=static text="not verified"
