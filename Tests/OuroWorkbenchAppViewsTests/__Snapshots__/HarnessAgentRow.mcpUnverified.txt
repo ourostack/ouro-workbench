@@ -1,0 +1,7 @@
+Image image="person.crop.circle.badge.exclamationmark"
+Text kind=static text="unv-agent"
+Text kind=static text="configured"
+Text kind=static text="not verified"
+Text kind=static text="not verified"
+Text kind=static text="mcp unverified"
+Text kind=static text="mcp unverified"

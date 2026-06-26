@@ -67,14 +67,15 @@ final class FirstRunBootstrapRetryWiringTests: XCTestCase {
     /// The full `FirstRunBootstrapView` view declaration (covers the mode switch + the buttons).
     private func firstRunBootstrapViewBody() throws -> String {
         let source = try WorkbenchAppSource.appSource()
-        // Access-level-agnostic `from:` anchor: U3 widened this view from `private struct`
-        // to `struct` (so the view-snapshot tests can instantiate it). `struct …: View {` is
-        // a substring of both forms; `FirstRunStepRow` stays `private`, so the `to:` anchor
-        // is unchanged.
+        // Access-level-agnostic anchors: U3 widened `FirstRunBootstrapView` from `private struct`
+        // to `struct` (so the view-snapshot tests can instantiate it), and AN-R3 widened
+        // `FirstRunStepRow` the same way (so the AN-R3 step-row leaf test can construct it).
+        // `struct …: View {` is a substring of BOTH the `private struct …` and the bare `struct …`
+        // forms, so both anchors are robust to the access level (each marker occurs exactly once).
         return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "struct FirstRunBootstrapView: View {",
-            to: "private struct FirstRunStepRow: View {"
+            to: "struct FirstRunStepRow: View {"
         )
     }
 }
