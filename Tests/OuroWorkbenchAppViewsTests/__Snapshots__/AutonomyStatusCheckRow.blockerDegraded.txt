@@ -1,0 +1,5 @@
+Image image="xmark.octagon.fill"
+Text kind=static text="Agent terminals"
+Text kind=static text="agent-tab is not trusted."
+Text kind=static text="Trust"
+Image image="checkmark.shield"

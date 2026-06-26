@@ -1,0 +1,3 @@
+Image image="exclamationmark.triangle.fill"
+Text kind=static text="Boss watch"
+Text kind=static text="Watch mode is paused; manual boss asks still work."
