@@ -17,9 +17,20 @@ AppViews suite ran with the B3 tests in place. Script: `/tmp/b3-seg.py` (segment
 `--show-regions` ASCII caret output is too fragile to count per-region). Baseline @ origin/main
 `9a635ef`: **78 uncovered region heads** across the 9 B3 views.
 
+**Result:** 78 → **7 carved, 71 driven**. Carves (all genuinely-unreachable, justified per-view
+below): WorkbenchOnboardingSheet 2 (`.task` modifier untestable-on-toolchain + a `.disabled`-gated
+defensive `advance()` arm), OnboardingReadinessView 4 (the AN-006 dead "Optional checks" branch),
+MarkdownMessageView 1 (a framework-never-throws `AttributedString` fallback). All carves seed the
+Unit-3 allowlist; NONE is an un-driven K2 region.
+
+**Prod source change:** ONE minimal seam — `WorkbenchOnboardingSheet.init(model:initialPage: = .boss)`
+seeding the `@State page` with the prior `.boss` literal as default → the single prod call site
+(`presentOnboarding` → `WorkbenchOnboardingSheet(model:)`) is BYTE-IDENTICAL. Mirrors the existing
+`OuroAgentInstallSheet`/`ProviderConfigSheet` `@State` seams.
+
 | view | line | baseline | driven | carved | after |
 |---|---|---|---|---|---|
-| WorkbenchOnboardingSheet | L6447 | 46 | — | — | — |
+| WorkbenchOnboardingSheet | L6447 | 46 | 44 | 2 | **2 (carve)** |
 | FirstRunBootstrapView | L6943 | 9 | 9 | 0 | **0** |
 | OnboardingRepairStepRow | L7272 | 8 | 8 | 0 | **0** |
 | OnboardingReadinessView | L7104 | 5 | 1 | 4 | **4 (carve)** |
@@ -182,3 +193,48 @@ Nine interaction/branch regions, all DRIVEN:
   Task runs against the hermetic temp dirs, not awaited). MUTATION-VERIFIED (`.retry` arm neutered → RED).
 
 Carved: none.
+
+---
+
+## WorkbenchOnboardingSheet (L6447–6667, after the init seam) — 46 → 44 driven, 2 carved → 2 uncovered (carve)
+
+The top B3 offender. A minimal `init(model:initialPage: = .boss)` seam (prod default `.boss` →
+byte-identical) lets snapshots render the `.connect`/`.importWork` pages (the no-hosting `inspect()`
+does NOT reflect a `@State page` write after a Continue tap — probed).
+
+DRIVEN (44):
+- **`@State page` default + the 3 page renders** — `initialPage:` seam renders `.boss` (existing) +
+  `.connect` × {bossSetupWizard, bossReconstruct, duplicateCleanup} + `.importWork` × {bossReconstruct,
+  duplicateCleanup, bossSetupWizard-disabled}, covering `primaryActionTitle` (`.connect`/`.importWork`
+  arms), `primaryActionImage` (`.connect` ternary + `.importWork` inner `switch phase`), and
+  `primaryActionIsDisabled` (`.connect` scanning/checks-running + `.importWork` `isReady`/`bossReconstruct`/
+  `onboardingIsScanning` gates). Each page's flow phase is the REAL `WorkbenchOnboardingFlowPolicy`
+  verdict (`bossIsReady` ⟸ `onboardingReadiness?.isReady`; `importSummaryHasImports` ⟸ the `@Published`).
+  The `if model.onboardingIsScanning { return true }` (`:6618`) third gate is driven by a
+  duplicateCleanup importWork render with `onboardingIsScanning = true`.
+- **`OnboardingPage.next` (`:6498`)** — NO body caller (the wizard uses `previous` for Back + `advance()`
+  sets pages directly), so DIRECT logic test on the `internal` enum: boss→connect, connect→importWork,
+  importWork→nil.
+- **Back button (`:6506`) + `if let previous` (`:6507`)** — `.tap()` on the `.connect`-page Back button
+  (responsive on a non-`.boss` page); executes the closure + the `if let previous` arm.
+- **Continue button (`:6521`) + `advance()` (`:6612`) switch arms** — DRIVEN by `.tap()` on enabled
+  Continue buttons:
+  - `.boss` arm (`:6614`) — tap with a usable selected boss; asserted responsive.
+  - `.connect` `.bossSetupWizard` arm (`:6617`) — tap (not-ready) → `refreshOnboardingReadiness +
+    runProviderChecks + startFirstRunBootstrapIfNeeded` + return; asserted `onboardingReadiness` re-derives.
+  - `.connect` non-wizard (ready) arm — tap → asserted `onboardingHasBeenCompleted` flips true +
+    `onboardingBossSnapshot` cleared + a "startBossReconstruction" action-log entry. MUTATION-VERIFIED
+    (`onboardingHasBeenCompleted = true` → `false` → RED → reverted → GREEN).
+  - `.importWork` `.bossReconstruct` arm (`:6641`) — tap → asserted `onboardingReconstructionHandedOff`
+    flips true.
+  - `.importWork` `.duplicateCleanup` arm (`:6646`) — tap → asserted responsive (spawns a Task, not awaited).
+- **`.onDisappear` (`:6544`)** — `callOnDisappear()` with a mid-wizard pick (`onboardingBossSnapshot`
+  set + not-completed + a changed live boss) → `cancelOnboardingProviderChecks + rollbackOnboardingIfIncomplete`;
+  asserted the boss REVERTS to the snapshot (the rollback fired). MUTATION-VERIFIED
+  (`rollbackOnboardingIfIncomplete()` removed → the boss stays changed → RED → reverted → GREEN).
+
+CARVED (2):
+| line:col | region | carve kind | why no invoking test reaches it |
+|---|---|---|---|
+| L6547:15 | `.task { … }` modifier closure | toolchain-untestable | On macOS 26 / Swift 6.3, SwiftUI lowers `.task {…}` to **`_TaskModifier2`** (NOT the `_TaskModifier` ViewInspector's public `callTask()` hardcodes — probed), and the modifier's `action` is `@isolated(any) () async -> ()`, which cannot be `as?`-cast to `(@Sendable () async -> Void)` / `(() async -> Void)` for a Mirror-extracted invocation (probed: cast fails). ViewInspector's `modifierAttribute(modifierName:)` is `internal` (inaccessible), so the corrected name is also unreachable. So no public/type-safe path invokes this `.task` on this toolchain. ITS BODY IS COVERED: `testOnboardingSheet_taskBodyMethodsDrivenDirectly` calls the exact body sequence (`prepareLoginShellEnvironment` + `refreshOuroAgents` + `refreshWorkbenchMCPRegistration` + `refreshOnboardingReadiness` + `runOnboardingProviderChecksIfNeeded`) directly and asserts the effect; only the modifier-closure region is carved. |
+| L6661:13 | `advance()` `.importWork` → `case .bossSetupWizard: page = .connect` | gated-unreachable (defensive arm) | `advance()` is `private`, called ONLY by the Continue button, which is `.disabled(primaryActionIsDisabled)`. On `.importWork`, `primaryActionIsDisabled` returns true whenever `onboardingReadiness?.isReady != true` (`:6595`). The `.bossSetupWizard` phase ⟺ `bossIsReady == false` ⟺ `onboardingReadiness?.isReady != true` — so on `.importWork` the Continue button is ALWAYS disabled when the phase is `.bossSetupWizard`, and `tap()`'s `guardIsResponsive()` throws. So this defensive "fall back to Connect" arm is unreachable through the only seam (the gated button). Recorded for Unit-3 allowlist. |
