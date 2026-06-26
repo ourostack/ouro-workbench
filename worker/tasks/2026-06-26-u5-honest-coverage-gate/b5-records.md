@@ -85,3 +85,20 @@ and that arm is covered by the existing C9 configured/recoverable tests in the f
 MUTATION: removed `restoreCustomSession(entry)` + `recover(entry)` action bodies → 4 failures RED
 (both taps + both negative controls) → revert → GREEN.
 CARVED: none. FIXED `/tmp/u5` cwd (leak-defended).
+
+### EmptyPanePicker (L8881-8943) — 4 → 4 driven (1 via INVOCATION), 0 carved
+BEFORE: 4 uncovered — `L8908:36` (candidate Button ACTION `assignSecondaryPane`), `L8913:88`
+(the GREEN `activeSession != nil` circle arm), `L8918:80` (`if let cliName` pill), `L8925:38`
+(the candidate row body). `SessionSplitAndOverflowTests` drove the empty arm + a no-session/no-cli
+candidate only.
+DRIVEN: a candidate that BOTH has a live session (no-PTY `TerminalSessionController` injected into
+`activeSessions` → green circle) AND a CLI name (`.terminalAgent` `/usr/local/bin/claude` →
+`cliName "Claude Code"` pill); the second candidate is plain (gray circle). The cli pill + both
+rows render (asserting ref `.liveCandidates`). The candidate Button ACTION via INVOCATION:
+`find(button: "plain"/"build").tap()` → `assignSecondaryPane(to:)` (a `detailSplit` is set first)
+→ assert `detailSplit?.secondaryEntryID == that candidate.id`; the two taps distinguish the two
+candidates.
+PROOF: scoped coverage → all 4 baseline regions GONE; only `L8899` (empty arm) remains scoped,
+covered by the existing empty-state test in the full suite → 0.
+MUTATION: removed `assignSecondaryPane(to: entry.id)` action body → 2 failures RED → revert → GREEN.
+CARVED: none. FIXED `/tmp/u5` cwd (leak-defended).

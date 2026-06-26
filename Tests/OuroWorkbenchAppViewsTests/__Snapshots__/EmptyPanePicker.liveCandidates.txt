@@ -1,0 +1,5 @@
+Text kind=static text="Pick a session for this pane"
+Text kind=static text="Choose a terminal to watch alongside the other pane. The same session can't be shown in both panes at once."
+Text kind=static text="build"
+Text kind=static text="Claude Code"
+Text kind=static text="plain"
