@@ -1,0 +1,76 @@
+C5 — ReportBugSheet (high-fan-out sheet #2) — views-lib coverage snapshot
+==========================================================================
+Branch: feat/anneal-c5-report-bug  (off origin/main @ f1db4e7 = #307)
+Measured: canonical `xcrun llvm-cov export <PackageTests> -instr-profile
+          <default.profdata> -summary-only Sources/OuroWorkbenchAppViews`
+          (same command the prior clusters recorded; first-hand, by stashing
+          the two C5 test files for the baseline, then restoring).
+
+views-lib coverage (Sources/OuroWorkbenchAppViews):
+  BASELINE (C5 tests stashed):  24.87% region (1482/5958) / 30.01% line ( 9666/32207)
+  AFTER C5:                      25.53% region (1521/5958) / 32.15% line (10353/32207)
+  RISE (attributable to C5):    +0.66pp region (+39 regions) / +2.14pp line (+687 lines)
+
+NOTE: the views lib is NOT gated in U4 (the coverage gate is the campaign's
+FINAL step). This figure is recorded PROGRESS only. COVERAGE_DIRS
+(OuroWorkbenchCore + OuroWorkbenchShellAdapter) and scripts/coverage-allowlist.txt
+are UNCHANGED on this branch (git diff HEAD on both files is empty).
+
+Coverage gate (scripts/check-coverage.sh): PASS
+  "Sources/OuroWorkbenchCore, Sources/OuroWorkbenchShellAdapter: 149/151 files
+   at 100% line+region (2 with allowlisted structural exclusions)"
+  allow BossAgentMCPClient.swift     (1 line, 2 region exempt — pre-existing)
+  allow SessionActivityReader.swift  (0 line, 1 region exempt — pre-existing)
+  PASS: pure Workbench logic targets are 100% line + region covered.
+
+Surfaces covered (6 committed references across 2 sub-units):
+  C5-1 ReportBugSheetCoreStateSetTests   — empty / typed / error          (3 refs)
+  C5-2 ReportBugSheetSuccessStateSetTests — success / successWithIssueURL /
+                                            successWithIssueError          (3 refs)
+
+Deferred (recorded, NOT fabricated):
+  collecting (bugReportIsSubmitting==true) — structurally-unobservable through
+    the host whitelist: the arm only adds a node-less ProgressView + a dropped
+    .disabled, so the captured tree is byte-identical to `empty`. Proven by
+    testReportBug_collectingArm_isUnobservableThroughWhitelist (NOT a vacuous
+    duplicate snapshot). Re-opens automatically if a future host change captures
+    the spinner.
+
+Mutation-verify (P2, single-actor serial — 6 mutations, 6/6 CAUGHT, 0 uncaught):
+  1. note-placeholder guard `if bugReportNote.isEmpty` inverted -> RED (empty/typed/neg-control)
+  2. error Label content -> constant -> RED (error/neg-control)
+  3. saved-bundle Label `url.lastPathComponent` -> constant -> RED (all 3 success refs)
+  4. `if bugReportIssueURL == nil` button gate inverted -> RED (success/successWithIssueURL/-Error/neg)
+  5. "Filed: <url>" Label content -> constant -> RED (successWithIssueURL only)
+  6. issue-error Label content -> constant -> RED (successWithIssueError only)
+  All reverted byte-identically (git diff Sources/ empty after the run).
+
+Machine-context / determinism handling (P3):
+  - lastBugReportURL is machine-derived but the view renders ONLY
+    url.lastPathComponent -> fixture uses a FIXED /tmp/u4 bundle URL so the
+    rendered last component is byte-stable and no /Users/ (nor the full /tmp
+    path) reaches the captured tree. Defended by !contains("/Users/").
+  - bugReportIssueURL / bugReportError / bugReportIssueError / warnings are
+    model strings -> fixed in the fixture.
+  - The disclosure line is static pure-Core (ReportBugDisclosureCopy.disclosure).
+  - NO timestamp / NSFullUserName() / machine name reaches this surface ->
+    NO cross-TZ proof needed (none of the C5 surfaces render a Date or host id).
+  - The submit `.help("Create the report (⌘↩)")` tooltip is dropped by the host (AN-004).
+
+Access-widenings: NONE. ReportBugSheet (struct, internal) and all bugReport*/
+lastBugReport* @Published vars are internal -> reachable + writable via
+@testable import OuroWorkbenchAppViews. git diff Sources/ is empty.
+
+a11y-id audit: none needed (every committed state is byte-distinct via real
+Text / Image SF-symbol content).
+
+Gates (all green):
+  - strict build+test `swift test -Xswiftc -warnings-as-errors
+    -Xswiftc -strict-concurrency=complete`: 3156 tests, 1 pre-existing skip,
+    0 failures, 0 warnings.
+  - swift run OuroWorkbench --uisurfacetest: EXIT 0, all surfaces ok.
+  - scripts/check-coverage.sh: PASS (149/151 @ 100%, 2 pre-existing exemptions);
+    COVERAGE_DIRS + allowlist UNCHANGED.
+  - keyboard-a11y + appSource structural guards: green (in the strict suite).
+
+SerpentGuide.ouro/ never staged.
