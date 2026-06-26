@@ -233,6 +233,59 @@ NOTE: Steps 1 (the extract) and 3 (gate wiring) write NO new product logic — s
 
 ---
 
+## Unit 2 — RE-MEASURED batch plan (post-split @ `origin/main 0c9f803`)
+
+> Full per-view region targets + per-batch recipes: `./2026-06-26-u5-honest-coverage-gate/unit2-batch-plan.md`.
+> Scripts (committed): `uncovered-by-view-postsplit.py`, `decls-postsplit.txt` (this dir).
+
+**Authoritative re-measurement** (3426 tests / 1 skip / 0 fail; `swift test --enable-code-coverage` →
+`xcrun llvm-cov export … WorkbenchViews.swift`): the gated views file is **64.99% region** — **1,046
+uncovered regions** (gate metric `regions.count − covered`) / 78.47% line, across 102 of 127 decls. (The
+pre-split residual-baseline's 41.8% was diluted by the VM body; 1,046 ≈ the pre-split ~1,019 estimate and
+is now the AUTHORITATIVE target.) Classification (sums to 1,046):
+
+| bucket | decls | regions | disposition |
+|---|---|---|---|
+| **K1** dossiered carves (#1–#8) | 10 | 330 | → Unit 3 allowlist (partial carves have a K2 tail — split per-arm; firm floor 249) |
+| **K4** non-View behavioral helpers in gated file | 14 | 72 | → B10: MOVE DropDelegate to VM file; DIRECT logic-test the rest |
+| **K2/K3** closeable views | 78 | 644 | → B1–B9, drive+assert+mutation-verify each |
+
+**K1 carve seed (NOT closed in Unit 2):** WorkbenchRootView 155 · WorkbenchMenuBarController 54 ·
+LoginItemController 23 · AboutSheet 10 · MachineRuntimeView 7 (full shells = firm floor 249) +
+SessionDetailView 29 · BossDashboardView 28 · AutonomyStatusPopover 14 · AutonomyStatusButton 8 ·
+DetailSplitContainer 2 (partial live/login arms ≤81 — split per-arm, drive non-carve arms, carve only the
+live/login/build-hash arm). **Do NOT blind-seed the allowlist at 330** — the measured minimum after the
+per-arm split (likely < 330) is the budget.
+
+**K4 finding (the brief's "K4 helper that stayed in WorkbenchViews.swift"):** 14 non-View types stayed in
+the gated file. `WorkspaceFolderDropDelegate` (12, a `DropDelegate` over `DropInfo`/async `Task` — near-
+undrivable, behavioral) → **MOVE to `WorkbenchViewModel.swift`** (the K4 follow-up move). The rest
+(`WorkbenchGroupColor.swiftUIColor` 10, `AutonomyReadinessState` 7, `DetailSplitState`/`DetailPaneID`/
+`AttentionState` 6 ea, `DetailSplitAxis`/`AutonomyRemediationKind`/`BossWorkbenchMCPRegistrationStatus` 5 ea,
+`WorkbenchImportApplyResult` 4, `WorkbenchToolsInjectionRecorder` 2, `Optional` 2, `HarnessHealthState`/
+`HeaderCalmPresentation` 1 ea) are pure enums/structs/extensions → **DIRECT `XCTAssert` logic tests** (NOT
+snapshots — they render no captured node). Reversible default recorded (D8).
+
+### ⬜ Unit 2 batches (each: re-measure → drive reachable arm + asserting ref → mutation-verify → re-measure to ~0 minus carves; ONE commit per view/sub-unit; all per-PR gates green). Sequenced high-region-first; B1–B10 independent (fan-out OK; serialize doc commits).
+
+| seq | batch | views | regions | recipe |
+|---|---|---|---|---|
+| 1 | ⬜ B4 Terminal group/session sheets | 6 | 113 | model project/group/session state; FIXED `/tmp/u4` path-leak pins |
+| 2 | ⬜ B5 Session detail strip + panels | 11 | 102 | `activeSession==nil` carve seam (C9); `workbenchTimeText`; always-true arms recorded |
+| 3 | ⬜ B3 Onboarding flow | 9 | 79 | onboarding `@Published` seams (C10); page/step arm coverage |
+| 4 | ⬜ B9 Harness/settings/import/recovery/misc | 12 | 74 | `HarnessStatusBuilder` AN-001 hermetic (C11); import presentation; RecoveryDrill producer |
+| 5 | ⬜ B2 Header/boss-selector/autonomy rows | 6 | 67 | `workbenchTimeText` cross-TZ; descended `Menu{}`; standalone rows |
+| 6 | ⬜ B6 Decision inbox/log + command palette | 4 | 59 | `state.recordDecision`/`decisionLog` real producer (C2); command-row arms |
+| 7 | ⬜ B1 Sidebar + workspace tabs/rows | 12 | 54 | standalone `.contextMenu`; `GitSessionStatus.parse` (C1); `workbenchTimeText` |
+| 8 | ⬜ B7 Agent manager/detail/install + provider | 8 | 52 | AN-001 dual-injection; C6 `initialHumanName` seam; fixed records/paths |
+| 9 | ⬜ B8 Boss dashboard sub-views + watch + receipts | 10 | 44 | `BossDashboardBuilder`/`BossActionReceiptSummary` producers; `workbenchTimeText` |
+| 10 | ⬜ B10 K4 behavioral helpers | 14 | 72 | MOVE `WorkspaceFolderDropDelegate`→VM file; DIRECT logic-test the rest |
+
+**Target after B1–B10:** every non-K1 region driven+asserted+mutation-verified (or moved/direct-tested); the
+ONLY remaining views-file residual is K1, split to its measured minimum (≤330, likely less) in Unit 3.
+
+---
+
 ### ⬜ Unit 3: Wire the gate with the honest minimal allowlist (PR #3)
 
 **What**:
@@ -339,6 +392,23 @@ NOTE: Steps 1 (the extract) and 3 (gate wiring) write NO new product logic — s
   harness — U5 writes no new harness.
 - **D4 — execution mode = spawn** (fully autonomous; fresh review gate before READY).
 - **D5 — no PR** (per brief; branch pushed at most, doc + journal pointer committed).
+- **D8 — K4 behavioral-helper disposition (NEW, post-split re-measure):** 14 non-View types stayed in the
+  gated `WorkbenchViews.swift` after the Unit-1 split (72 uncovered regions). Reversible default:
+  **MOVE `WorkspaceFolderDropDelegate`** (12 regions — a `DropDelegate` over `DropInfo`/`NSItemProvider`/
+  async `Task`, behavioral and near-undrivable in-process) — and optionally `WorkbenchToolsInjectionRecorder`
+  (2) — **to the non-gated `WorkbenchViewModel.swift`** (same rationale as moving the VM/terminal machinery:
+  they are behavioral, not views); **DIRECT `XCTAssert` logic-test the rest** (pure enums/structs/extensions
+  — `WorkbenchGroupColor.swiftUIColor`, `AutonomyReadinessState`, `DetailSplitState/Axis/PaneID`,
+  `AttentionState` ext, etc. — they render no host-captured node, so they are NOT snapshots). Fallback if a
+  move triggers a guard-slice inversion: direct-test-in-place or allowlist with a verified justification.
+  This is batch B10, landed BEFORE Unit 3 measures the carve budget (a move changes the residual).
+- **D9 — partial-carve K2 tail (NEW):** the 5 K1 PARTIAL carves (SessionDetailView 29, BossDashboardView 28,
+  AutonomyStatusPopover 14, AutonomyStatusButton 8, DetailSplitContainer 2 = 81 measured regions) are NOT
+  all carve — their residual may include ordinary un-driven arms the campaign's fixtures didn't hit. Default:
+  the partial-carve / Unit-3 doer MUST `llvm-cov show --show-regions` each and SPLIT per-arm — DRIVE the
+  non-carve arms (do NOT allowlist), carve ONLY the genuinely-untestable live/login/build-hash arm. The
+  allowlist budget is the measured minimum after this split (firm full-shell floor 249; total ≤330, likely
+  less). **Never blind-seed the allowlist at 330.**
 
 ## Progress Log
 - 2026-06-26 09:14 Created from the operator's firm-decision brief (Q1=SPLIT, Q2=SNAPSHOT)
@@ -374,3 +444,15 @@ NOTE: Steps 1 (the extract) and 3 (gate wiring) write NO new product logic — s
   hardcoded filename, not logic). GATES: strict build 0/0; full `swift test` 3426 tests / 1 skip (pre-existing
   env-gated RepairAgentKeystone) / 0 fail (same count as baseline); `--uisurfacetest` ok; structural+a11y
   guards green; `check-coverage.sh` green + COVERAGE_DIRS/allowlist UNCHANGED (gate wiring is Unit 3).
+- 2026-06-26 Unit 2 RE-MEASURED on the post-split `WorkbenchViews.swift` (`origin/main 0c9f803`) + decomposed
+  into batches. **Authoritative residual: 64.99% region = 1,046 uncovered regions / 78.47% line, 102 of 127
+  decls** (3426 tests / 0 fail; `swift test --enable-code-coverage` → `llvm-cov export`). The pre-split 41.8%
+  was diluted by the VM body; 1,046 ≈ the pre-split ~1,019 estimate, now authoritative. **Classification
+  (sums to 1,046):** K1 carve seed 330 (10 decls; firm full-shell floor 249 + ≤81 partial-arm tail to split),
+  K4 behavioral helpers 72 (14 decls; MOVE DropDelegate→VM + direct-test the rest), K2/K3 closeable 644 (78
+  decls). **Batch decomposition: B1–B9 (644 regions, 78 views) + B10 (K4, 72) — 10 batches, sequenced
+  high-region-first** (B4 113 · B5 102 · B3 79 · B9 74 · B2 67 · B6 59 · B1 54 · B7 52 · B8 44 · B10 72);
+  each independent (fan-out OK), each: re-measure → drive reachable arm + asserting ref → mutation-verify →
+  re-measure to ~0 minus carves; one commit per view. **New decisions D8 (K4 move/direct-test) + D9 (split
+  partial carves per-arm, never blind-seed allowlist at 330).** Artifacts: `unit2-batch-plan.md` (full per-
+  view region targets + per-batch recipes), `uncovered-by-view-postsplit.py`, `decls-postsplit.txt`.
