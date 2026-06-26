@@ -12,14 +12,14 @@
  * (the Porkbun CNAME) being reachable once the record is proxied.
  *
  * Sources of truth stay in their product repos:
- *   workbench-install.sh -> ourostack/ouro-workbench:web/ (via its Pages project)
+ *   workbench-install.sh -> ourostack/ouro-workbench:web/ (via GitHub raw on main)
  *   ouro-md-install.sh   -> ourostack/ouro-md:web/        (via GitHub raw on main)
  * This Worker only re-serves those files under the apex host.
  */
 
 const INSTALL_UPSTREAMS = {
   "/workbench-install.sh":
-    "https://ouro-workbench-install.pages.dev/workbench-install.sh",
+    "https://raw.githubusercontent.com/ourostack/ouro-workbench/main/web/workbench-install.sh",
   "/ouro-md-install.sh":
     "https://raw.githubusercontent.com/ourostack/ouro-md/main/web/ouro-md-install.sh",
 };
