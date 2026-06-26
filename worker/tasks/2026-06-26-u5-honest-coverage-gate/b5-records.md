@@ -121,3 +121,22 @@ never returns nil → the else is genuinely UNREACHABLE. No seam (even an invoki
 a bad pattern (the pattern is a `private static let` literal, not a parameter). llvm-uncountable
 dead-else. → Unit 3 allowlist.
 CARVE kind: dead-else-on-constant-valid-regex.
+
+### SessionInspectorPanel (L9192-9257) — 9 → 9 driven (1 via INVOCATION), 0 carved
+BEFORE: 9 uncovered — `L9203:60` (cliName purple pill), `L9205:18`/`L9206:57`/`L9208:18`
+(the `if let badge = entry.owner.sidebarBadge` teal pill), `L9214:46`/`L9214:62`/`L9215:47`/
+`L9215:55` (BOTH arms of the auto-resume status-pill ternary), `L9242:28` (the Transcript
+`Button { onShowTranscript() }` ACTION). The existing inspector tests rendered basic/notes/
+transcript-button arms but used a human-owned shell entry (no cli, no badge) and never tapped.
+DRIVEN:
+- cliName: a `.terminalAgent` `/usr/local/bin/claude` → `"Claude Code"` pill.
+- badge: `owner: .agent(name: "boss-agent")` → `("cpu", "boss-agent")` teal pill.
+- auto-resume ternary: BOTH arms — a `autoResume: true` fixture (`"auto-resume"`) and a
+  `autoResume: false` fixture (`"manual restart"`), asserting refs `.rich`/`.manualRestart`.
+- `L9242` Transcript ACTION via INVOCATION: a real `/tmp/u5-inspector/history.log` transcript →
+  `find(button: "Transcript").tap()` → `onShowTranscript()`; assert a captured `shown` flag flips.
+PROOF: scoped coverage → all 9 baseline regions GONE; only `L9231/L9233` (the `if let notes` arm)
+remain scoped, covered by the existing `testInspector_withNotes` in the full suite → 0.
+MUTATION: removed `onShowTranscript()` body → tap test RED → revert → GREEN. The cli/badge/ternary
+arms are guarded by `.rich`/`.manualRestart` + the negative control.
+CARVED: none. FIXED `/tmp/u5` + `/tmp/u5-inspector` paths (leak-defended).
