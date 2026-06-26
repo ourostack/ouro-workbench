@@ -1,0 +1,7 @@
+Text kind=static text="Habit History"
+Text kind=static text="heartbeat"
+Text kind=static text="surfaced"
+Text kind=static text="2026-06-11T10:01:00.000Z"
+Text kind=static text="Queued iMessage and recorded the route."
+Text kind=static text="habit:heartbeat"
+Text kind=static text="arc/flight-recorder/habit-receipts/run-a.json"

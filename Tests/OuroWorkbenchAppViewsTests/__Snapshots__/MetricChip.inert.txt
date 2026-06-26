@@ -1,0 +1,2 @@
+Text kind=static text="ok"
+Text kind=static text="claims"

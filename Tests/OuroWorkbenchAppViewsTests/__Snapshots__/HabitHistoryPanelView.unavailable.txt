@@ -1,0 +1,2 @@
+Text kind=static text="Habit History"
+Text kind=static text="Habit history unavailable: habit-history: timed out"

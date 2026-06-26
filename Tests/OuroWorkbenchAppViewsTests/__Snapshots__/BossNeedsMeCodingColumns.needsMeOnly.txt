@@ -1,0 +1,3 @@
+Text kind=static text="Needs Me"
+Text kind=static text="Review the migration – decision ready"
+Image image="chevron.right"

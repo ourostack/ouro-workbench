@@ -1,0 +1,20 @@
+views-lib coverage AFTER C2 (canonical: xcrun llvm-cov export ... Sources/OuroWorkbenchAppViews)
+
+== As recorded on the C2 branch off origin/main @ e03e59f (post-C0, pre-C1-merge) ==
+region: 20.63% (1229/5958)
+line:   25.12% (8089/32207)
+baseline @ that base (post-C0, same canonical command): region 17.05% / line 19.54%
+C2-isolated delta there: +3.58pp region / +5.58pp line.
+
+== After rebase onto origin/main @ 22f8c0d (C1 #301 + #302 merged while C2 ran) ==
+region: 21.63% (1289/5958)
+line:   26.06% (8393/32207)
+(This is the number the C2 PR reflects: C1's sidebar-tail refs are now on the base,
+so the absolute % is higher than the pre-C1 figure above; C2 still adds its 27 refs
+on top. The canonical single-command per-cluster measure stays apples-to-apples.)
+
+NOT a gate (the views lib is ungated through all of U4 — the final campaign step owns
+the gate). COVERAGE_DIRS + allowlist UNCHANGED; no Sources/ touched (all 9 C2 views
+were already internal — zero access-widening).
+
+C2 cluster: BossDashboardView + the dashboard strip — 9 views, 27 references, 44 tests.

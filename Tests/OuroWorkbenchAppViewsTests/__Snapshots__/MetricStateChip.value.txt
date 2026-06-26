@@ -1,0 +1,2 @@
+Text kind=static text="3"
+Text kind=static text="needs me"
