@@ -101,3 +101,24 @@ jobs:
             args+=(--prerelease)
           fi
           gh "${args[@]}"
+
+      - name: Verify published release and installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_TAG: ${{ inputs.tag }}
+          INPUT_PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < VERSION)"
+          if [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
+            tag="$GITHUB_REF_NAME"
+            prerelease="true"
+          else
+            tag="$INPUT_TAG"
+            prerelease="${INPUT_PRERELEASE:-true}"
+          fi
+          scripts/verify-published-release.sh \
+            --tag "$tag" \
+            --version "$version" \
+            --sha "$GITHUB_SHA" \
+            --prerelease "$prerelease"
