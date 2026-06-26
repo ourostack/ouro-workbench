@@ -104,12 +104,12 @@ final class ActionLogViewStateSetTests: XCTestCase {
         try assertViewSnapshot(of: view, named: "ActionLogView.noTarget")
     }
 
-    // MARK: - @State isExpanded arm (structurally-unreachable in a snapshot — recorded)
+    // MARK: - @State isExpanded arm (collapsed default + DRIVEN expanded via the init seam — U5 B8)
 
-    /// With MORE than one entry the collapsed arm still renders only the FIRST (the `entries.first`
-    /// branch + the "N recent" count); the expanded 6-row `ForEach` is unreachable in a snapshot
-    /// (`@State isExpanded == false`). Asserted via the captured tree — classified, not fabricated.
-    func testLog_collapsedShowsFirstOnly_expandedArmUnreachable() throws {
+    /// The COLLAPSED default (`initialExpanded == false`, the prod default): with MORE than one entry
+    /// the collapsed arm still renders only the FIRST (the `entries.first` branch + the "N recent"
+    /// count + the `chevron.down` "Show More"), NOT the expanded 6-row `ForEach`. Asserted via the tree.
+    func testLog_collapsedShowsFirstOnly() throws {
         let many = (0..<3).map { i in
             entry(action: "act\(i)", result: "result\(i)",
                   id: UUID(uuidString: "AC710000-0000-0000-0000-00000000000\(i)")!)
@@ -117,8 +117,78 @@ final class ActionLogViewStateSetTests: XCTestCase {
         let tree = try ViewSnapshotHost.snapshotText(of: view(many))
         XCTAssertTrue(tree.contains("3 recent"), "the count reflects all entries:\n\(tree)")
         XCTAssertTrue(tree.contains("result0"), "the collapsed arm shows the first entry")
-        XCTAssertFalse(tree.contains("result1"),
-                       "the expanded ForEach is structurally unreachable (@State isExpanded==false)")
+        XCTAssertFalse(tree.contains("result1"), "the collapsed arm shows only the first entry")
+        XCTAssertTrue(tree.contains("chevron.down"), "collapsed → the Show-More chevron:\n\(tree)")
+    }
+
+    /// U5 B8 — the EXPANDED arm, DRIVEN via the `init(initialExpanded:)` seam (`:7812`-`:7823` the
+    /// `else` VStack + `ForEach(displayedEntries)`, `:7794` `prefix(isExpanded ? 6 : 1)` true branch,
+    /// `:7835` `Label(isExpanded ? "Show Less" : …)`, `:7839` `.help(isExpanded ? …)`). With
+    /// `initialExpanded: true` the synchronous `inspect()` renders the expanded multi-row arm: up to
+    /// 6 entries, the `chevron.up` "Show Less" toggle. Prod default UNCHANGED (collapsed).
+    func testLog_expandedArm_drivenViaInitSeam() throws {
+        let many = (0..<6).map { i in
+            entry(action: "act\(i)", result: "result\(i)",
+                  id: UUID(uuidString: "AC710000-0000-0000-0000-00000000000\(i)")!)
+        }
+        let expanded = ActionLogView(entries: many, timeZone: .gmt, locale: Self.clockLocale,
+                                     initialExpanded: true)
+        let tree = try ViewSnapshotHost.snapshotText(of: expanded)
+        XCTAssertTrue(tree.contains("chevron.up"), "expanded → the Show-Less chevron (the isExpanded arm):\n\(tree)")
+        XCTAssertFalse(tree.contains("chevron.down"), "expanded → no Show-More chevron:\n\(tree)")
+        // The expanded ForEach renders ALL six entries (prefix(6)); the collapsed arm showed only the first.
+        for i in 0..<6 {
+            XCTAssertTrue(tree.contains("result\(i)"), "expanded: entry \(i) renders:\n\(tree)")
+        }
+        try assertViewSnapshot(of: expanded, named: "ActionLogView.expanded")
+    }
+
+    /// U5 B8 — the toggle `Button` action (`:7832` — `Button { isExpanded.toggle() }`). ViewInspector
+    /// 0.10.3 `.tap()` INVOKES the closure (coloring the action region). The `@State` flip itself is a
+    /// view-internal effect; the BEHAVIOR (collapsed↔expanded rendering) is mutation-verified by the
+    /// expanded-arm snapshot above + the negative control below. Here we prove the toggle button is
+    /// found + tappable (the action region executes without throwing).
+    func testLog_toggleButtonTap_invokesAction() throws {
+        let view = view([entry(), entry(action: "b", result: "second",
+                                        id: UUID(uuidString: "AC710000-0000-0000-0000-00000000000B")!)])
+        // The collapsed arm renders exactly one toggle button (the Show-More disclosure).
+        XCTAssertNoThrow(try view.inspect().find(ViewType.Button.self).tap(),
+                         "the toggle button's action closure executes")
+    }
+
+    /// U5 B8 negative control (P2) — the `isExpanded` arm SELECTION drives the captured tree: the
+    /// collapsed arm (prod default) shows one row + chevron.down; the init-seam expanded arm shows all
+    /// rows + chevron.up. Flipping `initialExpanded` must flip the tree (mutation-verifies the `else`
+    /// arm + the `isExpanded ? :` ternaries are load-bearing, not constants).
+    func testLog_negativeControl_expandedSelectionFlipsTree() throws {
+        let many = (0..<6).map { i in
+            entry(action: "act\(i)", result: "result\(i)",
+                  id: UUID(uuidString: "AC710000-0000-0000-0000-00000000000\(i)")!)
+        }
+        let collapsed = try ViewSnapshotHost.snapshotText(of: view(many))
+        let expanded = try ViewSnapshotHost.snapshotText(of: ActionLogView(
+            entries: many, timeZone: .gmt, locale: Self.clockLocale, initialExpanded: true))
+        XCTAssertNotEqual(collapsed, expanded, "the isExpanded selection must flip the tree")
+        XCTAssertTrue(collapsed.contains("chevron.down") && !collapsed.contains("chevron.up"),
+                      "collapsed: only Show-More:\n\(collapsed)")
+        XCTAssertTrue(expanded.contains("chevron.up") && !expanded.contains("chevron.down"),
+                      "expanded: only Show-Less:\n\(expanded)")
+        XCTAssertFalse(collapsed.contains("result5"), "collapsed: later entries hidden")
+        XCTAssertTrue(expanded.contains("result5"), "expanded: later entries shown")
+    }
+
+    /// U5 B8 — the `timeZone`/`locale` DEFAULT-argument autoclosures (`:7789`/`:7790` —
+    /// `var timeZone: TimeZone = .autoupdatingCurrent` / `var locale: Locale = .autoupdatingCurrent`).
+    /// Every other test injects explicit `.gmt`/`en_GB`; the PRODUCTION defaults (evaluated whenever a
+    /// caller omits the args) were never executed. Here we construct the view OMITTING both args (the
+    /// prod call shape) → the default autoclosures run. We assert the NON-timestamp "Action Log" label
+    /// renders (the per-entry timestamp is `.autoupdatingCurrent`-formatted, so we do NOT snapshot it —
+    /// only confirm the prod-default construction path executes + renders).
+    func testLog_productionDefaults_noTimeZoneOrLocaleArg() throws {
+        let view = ActionLogView(entries: [entry()])   // omit timeZone + locale → prod defaults
+        let nodes = try view.inspect().findAll(ViewType.Text.self).compactMap { try? $0.string(locale: ViewSnapshotHost.posixLocale) }
+        XCTAssertTrue(nodes.contains("Action Log"), "the prod-default view renders the Action Log label: \(nodes)")
+        XCTAssertTrue(nodes.contains("1 recent"), "and the recent count: \(nodes)")
     }
 
     // MARK: - Clock determinism (P3 — AN-007)

@@ -164,3 +164,30 @@ DRIVEN via INVOCATION (extends `BossProposalCardStateSetTests`):
 CARVED (1): `7484` `BossProposalCardList` `.task { model.loadPendingProposals() }` — ViewInspector 0.10.3
 has NO `.task` driver. --show-regions justified: `loadPendingProposals()` LOGIC is covered (every
 `makeVM`/fixture calls it); only the `.task`-modifier hook is uncolorable. → Unit-3 allowlist carve.
+
+### ActionLogView (L7782-7902, +init seam) — 14 → 14 driven, 0 carved
+BEFORE: 14 uncovered (`7789`/`7790` timeZone/locale default-arg autoclosures, `7791` @State default,
+`7793`/`7794` displayedEntries + `prefix(isExpanded?6:1)`, `7812`/`7813`/`7814`/`7823` the `else`
+expanded VStack+ForEach, `7832` toggle Button action, `7835` `Label(isExpanded?…)`, `7839`
+`.help(isExpanded?…)`). Existing C10 tests recorded the expanded arm as "structurally unreachable" — but
+ViewInspector 0.10.3 + an `init(initialExpanded:)` @State seam DRIVE it.
+SEAM ADDED (prod-default UNCHANGED): `init(entries:timeZone:locale:initialExpanded: Bool = false)`
+(`_isExpanded = State(initialValue: initialExpanded)`). Every prod call site omits `initialExpanded` →
+still starts collapsed, byte-identical. (C6 `ProviderConfigSheet(initialHumanName:)` precedent.)
+DRIVEN:
+- `7791` @State: replaced inline `= false` default with the init seam (the inline default's autoclosure
+  region is GONE — preferred per brief over carving it).
+- `7793`/`7794`/`7812`/`7813`/`7814`/`7823`/`7835`/`7839`: `initialExpanded: true` renders the expanded
+  arm → chevron.up + all 6 `result*` rows + the `displayedEntries` computed var + `prefix(...?6...)` true
+  branch + the `else` VStack/ForEach + the `Label`/`.help` `isExpanded` true ternaries. Snapshot
+  `ActionLogView.expanded`. MUTATION: `prefix(isExpanded ? 6 : 1)` → `? 1 : 1` → expanded test + neg
+  control RED (entries 1-5 missing + snapshot mismatch) → revert → GREEN.
+- `7832` toggle Button action `isExpanded.toggle()`: `find(Button).tap()` EXECUTES the action (P1). The
+  toggle's BEHAVIOR (collapsed↔expanded rendering) is mutation-verified by the expanded-arm snapshot +
+  `testLog_negativeControl_expandedSelectionFlipsTree` (flipping `initialExpanded` flips the tree). The
+  `@State` flip is view-internal (not observable via sync inspect) — region executed, behavior verified.
+- `7789`/`7790` timeZone/locale default autoclosures: `testLog_productionDefaults_noTimeZoneOrLocaleArg`
+  constructs `ActionLogView(entries:)` OMITTING both args (prod call shape) → the `.autoupdatingCurrent`
+  defaults run; asserts the non-timestamp "Action Log"/"1 recent" labels render (no snapshot — the
+  per-entry timestamp is `.autoupdatingCurrent`-locale, intentionally not pinned here).
+CARVED: none.
