@@ -135,6 +135,12 @@ jobs:
       - name: Verify latest release installer help
         run: scripts/install-latest-release.sh --help
 
+      - name: Verify latest release resolver help
+        run: scripts/resolve-latest-release-tag.sh --help
+
+      - name: Verify latest release installer resolves prereleases
+        run: scripts/selftest-latest-release-installer.sh
+
       - name: Verify support diagnostics help
         run: scripts/collect-support-diagnostics.sh --help
 
