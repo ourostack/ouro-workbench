@@ -305,7 +305,10 @@ public enum WorkbenchKeyboardAccessibilityContract {
         let appViewsURL = packageRoot
             .appendingPathComponent("Sources", isDirectory: true)
             .appendingPathComponent("OuroWorkbenchAppViews", isDirectory: true)
-            .appendingPathComponent("WorkbenchViewsAndModel.swift")
+            // U5 PR#1: the views half of the old `WorkbenchViewsAndModel.swift` is now
+            // `WorkbenchViews.swift` (the VM split out into `WorkbenchViewModel.swift`). All four
+            // a11y/help needles below are view-body wiring → they live in the views file.
+            .appendingPathComponent("WorkbenchViews.swift")
         if let appViews = try? String(contentsOf: appViewsURL, encoding: .utf8) {
             for required in [
                 ".help(tab.attention.healthLabel)",
