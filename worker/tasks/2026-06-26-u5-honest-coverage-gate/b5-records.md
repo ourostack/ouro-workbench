@@ -183,3 +183,26 @@ arm) remain scoped, covered by C9's `testSurface_withTranscriptPreview` in the f
 MUTATION: removed `recover(entry)` + `launch(entry)` action bodies → both tap tests RED → revert
 → GREEN. (Restore/Start-fresh/Copy taps share the identical assert-the-side-effect structure.)
 CARVED: none. FIXED `/tmp/u5` paths (leak-defended).
+
+### SessionTitleStrip (L9067-9188) — 13 → 13 driven (2 via INVOCATION), 0 carved
+BEFORE: 13 uncovered — `L9074:20` (inspector-toggle ACTION), `L9097:56`/`L9105:14` (the live-
+attention Label), `L9107:56`/`L9115:14` (cliName pill), `L9119:16`/`L9124:24` (the archived
+Archived-label + Restore ACTION), `L9164:89`/`L9165:16`/`L9166:9` (liveAttentionToAnnounce switch),
+`L9168:9`/`L9176:9`/`L9180:9` (statusDot switch). The existing strip tests used `.constant(true)`
++ a human shell and carved the actions, the live-attention arm, the cli pill, and three dot arms.
+DRIVEN:
+- `L9074` toggle ACTION via INVOCATION: a `BindingBox`-backed `Binding<Bool>` + tap the chevron
+  button (found by glyph `chevron.right`) → assert the box flips false→true.
+- `L9097/9105` + `L9164/9165` live-attention: a LIVE session (no-PTY controller) with
+  `entry.attention = .waitingOnHuman` → `liveAttentionToAnnounce` returns it → the `Attention:`
+  Label renders; the switch is driven across all five `AttentionState` values.
+- `L9168/9176/9180` statusDot: the four `DotState` seams — `.attention` (live), `.recoverable`
+  (inactive+canRecover), `.inactive` (inactive), `.archived` (archived).
+- `L9107/9115` cli pill: a `.terminalAgent` `/usr/local/bin/claude` → `"Claude Code"` pill.
+- `L9119/9124` archived Restore ACTION via INVOCATION: `find(button: "Restore").tap()` → un-archived.
+PROOF: scoped coverage → all 13 baseline regions GONE; only `L9077/L9083` (the `showsInspector ==
+true` chevron/help arms) remain scoped, covered by the existing `.constant(true)` test → 0.
+MUTATION: removed `showsInspector.toggle()` body → toggle-tap RED → revert → GREEN. The
+attention/dot/cli arms are guarded by `.liveWaiting`/`.cliPill` refs + the negative control;
+the Restore tap shares the proven assert-the-side-effect structure.
+CARVED: none. FIXED `/tmp/u5` paths (leak-defended).
