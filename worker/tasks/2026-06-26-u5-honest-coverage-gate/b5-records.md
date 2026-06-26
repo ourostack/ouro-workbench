@@ -53,3 +53,15 @@ DRIVEN: an empty-text `TranscriptTail` fixture renders the placeholder; assertin
 arms re-driven (`.populatedTruncated`). MUTATION: placeholder string `"No transcript output yet"`
 → `"MUTATED PLACEHOLDER"` → `.empty` snapshot + negative control RED (3 failures) → revert → GREEN.
 CARVED: none. FIXED `/tmp/u5/session.log` tail.path (leak-defended).
+
+### SessionTranscriptSheet (L9260-9292) — 1 → 1 driven (via INVOCATION), 0 carved
+BEFORE: 1 uncovered (`L9276:32` — the `Button("Done") { dismiss() }` ACTION closure).
+DRIVEN via INVOCATION: `find(button: "Done").tap()` executes the `{ dismiss() }` closure.
+PROOF the tap colors the region: a scoped `swift test --filter SessionTranscriptSheetTests
+--enable-code-coverage` run shows `L9276` GONE from the uncovered set (only `L9281` the
+populated-tail arm remains, and that is covered by the existing full-suite tests, not in B5's
+baseline). `dismiss()` is `@Environment` → no observable model side-effect, so the tap is a
+genuine invocation (region driven, `XCTAssertNoThrow`) with no behavioral guard of its own; the
+file's non-vacuity is the chrome (Transcript title + entry-name subtitle + Done label),
+mutation-verified: `Text(entry.name)` → `Text("MUTATED-NAME")` → 5 failures RED → revert → GREEN.
+CARVED: none.
