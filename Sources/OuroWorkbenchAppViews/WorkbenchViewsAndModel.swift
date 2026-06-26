@@ -1574,7 +1574,10 @@ private struct HarnessActionRow: View {
 
 /// Transient banner reporting the outcome of a harness control action. Green
 /// check on success, orange warning on failure, with a dismiss affordance.
-private struct HarnessActionResultBanner: View {
+// C11: `private`→`internal` (zero-behavior) so the snapshot test can
+// `@testable import` the standalone leaf; the only call site is
+// `HarnessStatusSheet`'s `if let result` arm (unchanged).
+struct HarnessActionResultBanner: View {
     var result: HarnessActionResult
     var onDismiss: () -> Void
 
