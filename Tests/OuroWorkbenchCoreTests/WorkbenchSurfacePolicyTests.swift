@@ -82,7 +82,7 @@ final class WorkbenchSurfacePolicyTests: XCTestCase {
         let source = try WorkbenchAppSource.appSource()
         let titleStrip = try WorkbenchAppSource.sourceSlice(
             in: source,
-            from: "private struct SessionTitleStrip: View",
+            from: "struct SessionTitleStrip: View",
             to: "    @ViewBuilder\n    private var statusDot: some View"
         )
 
