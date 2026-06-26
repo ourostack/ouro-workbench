@@ -1,0 +1,36 @@
+U4 cluster C4 — Decision log / inbox + command palette (the CLOCK cluster, AN-007)
+Branch: feat/anneal-c4-decision-log  off origin/main @ cc6ed6e (#305; C0/C1/C2 merged, C3 #304 in-flight, independent)
+
+Canonical views-lib coverage (xcrun llvm-cov export … Sources/OuroWorkbenchAppViews) AFTER C4:
+  region: 25.50%  (1521/5964)
+  line:   33.42%  (10774/32237)
+
+(Branch base = C0+C1+C2 merged. The views lib is NOT gated in U4 — this is recorded PROGRESS,
+ input to the campaign's FINAL gate step. COVERAGE_DIRS + allowlist UNCHANGED through C4.)
+
+C4 surfaces covered (6 sub-units, one commit each; 17 new references):
+  C4-1 ShortcutHelpSheet            — 1 ref  (static WorkbenchGuide.shortcutCategories ForEach; no clock)
+  C4-2 CommandPaletteSheet          — 3 refs (grouped / empty ContentUnavailableView / filtered arms)
+  C4-3 DecisionLogRow               — 6 refs (OWN commit; AN-007 .formatted()→workbenchTimeText seam migration
+                                              + private→internal widening; deep state-set under .gmt/en_GB)
+  C4-4 DecisionLogSheet             — 2 refs (empty / populated arms)
+  C4-5 DecisionInboxSheet           — 3 refs (queue / inbox-zero+log / inbox-zero-no-log; fixed now: clock)
+  C4-6 HeaderView collapsed badge   — 2 refs (deferred-from-C3 inboxDoor count badge, clock-independent door)
+
+Mutation-verify: 6/6 surfaces CAUGHT (RED→revert→GREEN), 0 uncaught. SINGLE-ACTOR SERIAL.
+Cross-TZ/locale proof (DecisionLogRow/Sheet/Inbox): GREEN under
+  TZ ∈ {America/Los_Angeles, America/New_York, UTC} × LANG ∈ {en_US, fr_FR} — all against ONE recorded ref.
+
+DecisionLogRow seam migration (Sources/OuroWorkbenchAppViews/WorkbenchViewsAndModel.swift):
+  raw decision.occurredAt.formatted(date:.abbreviated, time:.shortened)  (:2598)
+  → decision.occurredAt.workbenchTimeText(date:.abbreviated, time:.shortened, timeZone:timeZone, locale:locale)
+  PROD-BYTE-IDENTICAL: defaults .autoupdatingCurrent; verified old==new == "Jan 1, 2026 at 19:04" (local).
+  timeZone/locale threaded through DecisionLogSheet + DecisionInboxSheet (defaults unchanged).
+  private struct DecisionLogRow → struct DecisionLogRow (internal; the only access-widening in C4).
+
+Gates (all GREEN):
+  strict build/test  -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete : 3138 tests, 1 pre-existing skip, 0 fail/0 warn
+  swift run --uisurfacetest : ok
+  scripts/check-coverage.sh : PASS (149/151 @ 100%, 2 pre-existing allowlisted; COVERAGE_DIRS+allowlist UNCHANGED)
+  keyboard-a11y contract + 40 *WiringTests (appSource grep-guards) : GREEN
+  SerpentGuide.ouro/ : never staged
