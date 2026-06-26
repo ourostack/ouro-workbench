@@ -118,6 +118,24 @@ final class OuroAgentRowViewTests: XCTestCase {
         try assertViewSnapshot(of: view, named: "OuroAgentRowView.notRegisteredActionable")
     }
 
+    /// A `.needsUpdate` registration is ALSO actionable (a stale Workbench entry to clean), but
+    /// the action button's title flips to "Clean up entry" (vs the `.notRegistered` "Connect
+    /// tools"). Without this state the
+    /// `registration?.status == .needsUpdate ? "Clean up entry" : "Connect tools"` ternary's
+    /// true arm is rendered-but-never-asserted (a vacuous secondary guard).
+    func testRow_needsUpdateActionable() throws {
+        let view = try row(boss: "someone-else", agentName: "alpha-agent",
+                           registration: registration(for: "alpha-agent", status: .needsUpdate, detail: "stale entry"))
+        XCTAssertEqual(view.model.workbenchMCPRegistration(for: view.agent)?.isActionable, true,
+                       "provenance: .needsUpdate is actionable")
+        let tree = try ViewSnapshotHost.snapshotText(of: view)
+        XCTAssertTrue(tree.contains(#"text="Clean up entry""#),
+                      "the needsUpdate arm renders the clean-up button title:\n\(tree)")
+        XCTAssertFalse(tree.contains(#"text="Connect tools""#),
+                       "the needsUpdate arm must NOT render the notRegistered title:\n\(tree)")
+        try assertViewSnapshot(of: view, named: "OuroAgentRowView.needsUpdateActionable")
+    }
+
     // MARK: - Path-leak + AN-001 determinism (P3)
 
     /// The `.help(agent.bundlePath)` tooltip is the ONLY path vector and the host drops it

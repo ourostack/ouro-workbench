@@ -191,6 +191,34 @@ final class HarnessStatusSheetTests: XCTestCase {
         try assertViewSnapshot(of: view, named: "HarnessStatusSheet.bossUnreachable")
     }
 
+    /// The `.needsUpdate` arm of the register-MCP action row: a stale Workbench entry to
+    /// clean up. `mcpIsActionable` is true for `.needsUpdate` (like `.notRegistered`), so the
+    /// register-MCP row renders — but its TITLE flips to "Clean up Workbench entry" (vs the
+    /// `.notRegistered` "Connect Workbench tools"). Without this state, the
+    /// `status.boss.mcpStatus == .needsUpdate ? "Clean up Workbench entry" : …` ternary's
+    /// true arm is rendered-but-never-asserted (a vacuous secondary guard).
+    func testSheet_bossNeedsUpdate_cleanUpActionTitle() throws {
+        let model = try makeVM()
+        model.ouroAgents = [record(name: "alpha-boss")]
+        model.bossDashboard = dashboard(bossName: "alpha-boss", daemonStatus: "running")
+        model.bossWorkbenchMCPRegistration = reg(.needsUpdate, detail: "stale bundle entry")
+        model.bossWorkbenchMCPRegistrationByAgentName = ["alpha-boss": reg(.needsUpdate)]
+        model.agentOutwardVerdicts = ["alpha-boss": .working]
+
+        let status = model.harnessStatus
+        XCTAssertEqual(status.boss.mcpStatus, .needsUpdate,
+                       "provenance: a needsUpdate registration → mcpStatus needsUpdate")
+        XCTAssertTrue(status.controlOffer.isAvailable(.registerWorkbenchMCP),
+                      "provenance: a needsUpdate boss makes register-MCP actionable (stale entry to clean)")
+        let view = HarnessStatusSheet(model: model)
+        let tree = try ViewSnapshotHost.snapshotText(of: view)
+        XCTAssertTrue(tree.contains("Clean up Workbench entry"),
+                      "the needsUpdate arm renders the clean-up action title:\n\(tree)")
+        XCTAssertFalse(tree.contains("Connect Workbench tools"),
+                       "the needsUpdate arm must NOT render the notRegistered title:\n\(tree)")
+        try assertViewSnapshot(of: view, named: "HarnessStatusSheet.bossNeedsUpdate")
+    }
+
     func testSheet_agentsEmpty_emptyCopy() throws {
         let model = try makeVM()
         model.ouroAgents = []

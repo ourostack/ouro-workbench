@@ -106,6 +106,23 @@ final class AgentStatusCardTests: XCTestCase {
         try assertViewSnapshot(of: view, named: "AgentStatusCard.actionableRegistration")
     }
 
+    /// A `.needsUpdate` registration is ALSO actionable (a stale Workbench entry to clean), but
+    /// the Connect-tools button's title flips to "Clean up Workbench entry" (vs the
+    /// `.notRegistered` "Connect Workbench tools"). Without this state the
+    /// `registration.status == .needsUpdate ? "Clean up Workbench entry" : "Connect Workbench
+    /// tools"` ternary's true arm is rendered-but-never-asserted (a vacuous secondary guard).
+    func testCard_needsUpdateRegistration() throws {
+        let view = try card(agent: record(),
+                            registration: registration(status: .needsUpdate, detail: "stale entry"))
+        XCTAssertEqual(view.registration?.isActionable, true, "provenance: .needsUpdate is actionable")
+        let tree = try ViewSnapshotHost.snapshotText(of: view)
+        XCTAssertTrue(tree.contains("Clean up Workbench entry"),
+                      "the needsUpdate arm renders the clean-up action title:\n\(tree)")
+        XCTAssertFalse(tree.contains("Connect Workbench tools"),
+                       "the needsUpdate arm must NOT render the notRegistered title:\n\(tree)")
+        try assertViewSnapshot(of: view, named: "AgentStatusCard.needsUpdateRegistration")
+    }
+
     /// A `.missingConfig` record is NOT usable as boss → the "boss blocked" pill; the headline
     /// reads the config truth "Bundle missing agent.json".
     func testCard_bossBlocked() throws {
