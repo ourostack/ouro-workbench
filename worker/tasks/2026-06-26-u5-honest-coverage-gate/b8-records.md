@@ -191,3 +191,26 @@ DRIVEN:
   defaults run; asserts the non-timestamp "Action Log"/"1 recent" labels render (no snapshot — the
   per-entry timestamp is `.autoupdatingCurrent`-locale, intentionally not pinned here).
 CARVED: none.
+
+### BossActionReceiptStrip (L7908-7984 → L7925+, +init seam) — 6 → 6 driven, 0 carved
+BEFORE: 6 uncovered (`7915` @State default, `7923`/`7924` disclosure Button + `withAnimation{isExpanded
+.toggle()}`, `7948` `chevron.up` true arm, `7956` `if isExpanded` → ActionLogView, `7966`/`8000` failed-
+receipt `targetName.map{…} ?? ""` fallback). Existing C10 test recorded the expanded arm as
+"structurally unreachable" — same init-seam fix as ActionLogView.
+SEAM ADDED (prod-default UNCHANGED): `init(model:timeZone:locale:initialExpanded: Bool = false)`
+(`_isExpanded = State(initialValue: initialExpanded)`). All prod call sites omit it → start collapsed.
+DRIVEN:
+- `7915` @State: replaced inline `= false` with the init seam (inline default autoclosure GONE).
+- `7948`/`7956`: `initialExpanded: true` renders the expanded strip → outer `chevron.up` + the embedded
+  `ActionLogView` ("Action Log"). Snapshot `BossActionReceiptStrip.expanded`. (The embedded ActionLogView
+  keeps its own collapsed `chevron.down` — asserted the OUTER up-chevron PRESENT, not down absent.)
+  MUTATION: `if isExpanded {` → `if false {` → expanded test ("Action Log" missing) + snapshot RED →
+  revert → GREEN.
+- `7923`/`7924` disclosure Button + withAnimation: `find(Button).tap()` EXECUTES the closure (P1). The
+  expand BEHAVIOR is mutation-verified by the expanded-arm snapshot + the neg control. @State flip is
+  view-internal.
+- `7966`/`8000` failed-receipt nil-target `?? ""`: a failed receipt with `targetName == nil` forces the
+  `?? ""` fallback → the row renders the bare action with NO " · target" suffix. Snapshot
+  `BossActionReceiptStrip.failedNilTarget`. MUTATION: `?? ""` → `?? " · MUT"` → `text="selfRepair"` no
+  longer matches + snapshot mismatch → RED → revert → GREEN.
+CARVED: none.

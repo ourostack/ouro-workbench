@@ -7964,7 +7964,24 @@ struct BossActionReceiptStrip: View {
     /// test injects `.gmt` + `en_GB` for a deterministic snapshot.
     var timeZone: TimeZone = .autoupdatingCurrent
     var locale: Locale = .autoupdatingCurrent
-    @State private var isExpanded = false
+    @State private var isExpanded: Bool
+
+    /// The seed for the `isExpanded` `@State`, injectable with a default that equals the prior
+    /// behavior (`@State private var isExpanded = false`). Production is BYTE-IDENTICAL — every call
+    /// site omits `initialExpanded`, so the strip still starts COLLAPSED. A test injects
+    /// `initialExpanded: true` to render the expanded `ActionLogView` arm through the synchronous
+    /// `inspect()` seam (the same minimal-source-seam shape as `ActionLogView(initialExpanded:)`).
+    init(
+        model: WorkbenchViewModel,
+        timeZone: TimeZone = .autoupdatingCurrent,
+        locale: Locale = .autoupdatingCurrent,
+        initialExpanded: Bool = false
+    ) {
+        self.model = model
+        self.timeZone = timeZone
+        self.locale = locale
+        self._isExpanded = State(initialValue: initialExpanded)
+    }
 
     private var summary: BossActionReceiptSummary { model.bossActionReceiptSummary }
 
