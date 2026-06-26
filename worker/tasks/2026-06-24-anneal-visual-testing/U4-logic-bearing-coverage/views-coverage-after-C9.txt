@@ -1,0 +1,6 @@
+# views-lib coverage after C9 (session-detail family + live-arm carve)
+# canonical: xcrun llvm-cov export ... Sources/OuroWorkbenchAppViews
+region 34.92% (2082/5962)
+line   46.93% (15131/32243)
+# baseline (C8 on main): region 32.57% (1942/5962) / line 45.10% (14541/32243)
+# C9 delta: +140 regions / +590 lines (+2.35pp region / +1.83pp line)

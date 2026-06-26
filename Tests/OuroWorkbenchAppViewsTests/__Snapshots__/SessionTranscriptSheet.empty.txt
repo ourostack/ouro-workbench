@@ -1,0 +1,4 @@
+Text kind=static text="Transcript"
+Text kind=static text="build"
+Text kind=static text="Done"
+Text kind=static text="No transcript captured yet."

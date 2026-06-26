@@ -8850,7 +8850,7 @@ private struct DetailPaneChrome<Content: View>: View {
 /// current group's other sessions (the primary pane's session is excluded so
 /// the operator can't pick the same session into both panes) and assigns the
 /// tapped one to the secondary pane.
-private struct EmptyPanePicker: View {
+struct EmptyPanePicker: View {
     var excluding: UUID
     @ObservedObject var model: WorkbenchViewModel
 
@@ -9036,7 +9036,7 @@ struct TerminalSearchBar: View {
 /// Slim, single-row session title strip. Status pills inline, a tight
 /// keyboard-control cluster, and everything else hidden behind an inspector
 /// chevron or an overflow menu. The terminal owns the screen.
-private struct SessionTitleStrip: View {
+struct SessionTitleStrip: View {
     var entry: ProcessEntry
     @ObservedObject var model: WorkbenchViewModel
     @Binding var showsInspector: Bool
@@ -9161,7 +9161,7 @@ private struct SessionTitleStrip: View {
 
 /// Disclosure panel that owns everything the title strip dropped: pills,
 /// resume command, transcript, notes, and recovery context. Closed by default.
-private struct SessionInspectorPanel: View {
+struct SessionInspectorPanel: View {
     var entry: ProcessEntry
     @ObservedObject var model: WorkbenchViewModel
     var onShowTranscript: () -> Void
@@ -9229,7 +9229,7 @@ private struct SessionInspectorPanel: View {
 }
 
 /// Modal sheet for transcript review — keeps the chrome out of the live view.
-private struct SessionTranscriptSheet: View {
+struct SessionTranscriptSheet: View {
     var entry: ProcessEntry
     @ObservedObject var model: WorkbenchViewModel
     @Environment(\.dismiss) private var dismiss

@@ -1,0 +1,3 @@
+Text kind=static text="Pick a session for this pane"
+Text kind=static text="Choose a terminal to watch alongside the other pane. The same session can't be shown in both panes at once."
+Text kind=static text="No other sessions in this group yet. Create another terminal, then pick it here."

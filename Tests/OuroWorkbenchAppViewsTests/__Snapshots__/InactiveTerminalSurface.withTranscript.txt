@@ -1,0 +1,13 @@
+Image image="terminal"
+Text kind=static text="Ready to launch"
+Text kind=static text="Launch"
+Image image="play.fill"
+Text kind=static text="$"
+Text kind=static text="/bin/zsh"
+Image image="doc.on.doc"
+Text kind=static text="Where you left off"
+Image image="clock.arrow.circlepath"
+Text kind=static text="View full transcript"
+Image image="doc.text"
+Text kind=static text="where you left off
+"

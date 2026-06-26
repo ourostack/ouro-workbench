@@ -1,0 +1,7 @@
+Text kind=static text="Transcript"
+Text kind=static text="build"
+Text kind=static text="Done"
+Text kind=static text="Latest Transcript"
+Text kind=static text="/tmp/ouro-c9/run.log"
+Text kind=static text="the transcript body
+"

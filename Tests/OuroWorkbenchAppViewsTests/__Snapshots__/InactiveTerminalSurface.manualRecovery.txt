@@ -1,0 +1,8 @@
+Image image="exclamationmark.arrow.circlepath"
+Text kind=static text="No resumable session"
+Text kind=static text="No resumable session — needs you to start it fresh."
+Text kind=static text="Start fresh"
+Image image="arrow.counterclockwise"
+Text kind=static text="$"
+Text kind=static text="/bin/zsh"
+Image image="doc.on.doc"

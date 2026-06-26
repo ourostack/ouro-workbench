@@ -1,0 +1,6 @@
+Image image="chevron.down"
+Text kind=static text="build"
+Text kind=static text="Archived"
+Image image="archivebox"
+Text kind=static text="Restore"
+Image image="tray.and.arrow.up"
