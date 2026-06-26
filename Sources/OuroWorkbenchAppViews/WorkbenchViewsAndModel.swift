@@ -6437,7 +6437,7 @@ struct WorkbenchOnboardingSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var page: OnboardingPage = .boss
 
-    fileprivate enum OnboardingPage: Int, CaseIterable {
+    enum OnboardingPage: Int, CaseIterable {
         // #U26(a): the Welcome splash is gone — the empty-state already oriented the operator (U2)
         // and this wizard opens only after they clicked "Set up a boss", so it lands directly on
         // Choose Boss. Progress dots auto-tighten from `allCases` (now three).
@@ -6641,7 +6641,7 @@ struct WorkbenchOnboardingSheet: View {
 
 }
 
-private struct OnboardingFlowHeader: View {
+struct OnboardingFlowHeader: View {
     var page: WorkbenchOnboardingSheet.OnboardingPage
     @ObservedObject var model: WorkbenchViewModel
     var dismiss: DismissAction
@@ -6674,7 +6674,7 @@ private struct OnboardingFlowHeader: View {
     }
 }
 
-private struct OnboardingPageContent: View {
+struct OnboardingPageContent: View {
     var page: WorkbenchOnboardingSheet.OnboardingPage
     @ObservedObject var model: WorkbenchViewModel
 
