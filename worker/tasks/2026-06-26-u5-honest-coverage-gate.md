@@ -286,12 +286,15 @@ NOTE: Steps 1 (the extract) and 3 (gate wiring) write NO new product logic — s
 
 - **TDD strictly enforced** for Unit 2: provenance fixture → RED → record reference → GREEN → mutation-verify.
 - Units 1 and 3 write no product logic; their "test" is the full-suite + gate going green.
-- Per-PR gates (ALL must pass before a unit is done):
-  - strict build 0-warn: `swift build -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete`
-  - full `swift test` 0-fail
-  - `--uisurfacetest` green
-  - `scripts/check-coverage.sh` green (Core/ShellAdapter always; views file after Unit 3)
-  - structural guards green (incl. `assertEveryLibFileIsOrdered`)
+- Per-PR gates (ALL must pass before a unit is done). Two runners (validated @ conversion):
+  - `scripts/preflight.sh` — strict build/test 0-warn (`-Xswiftc -warnings-as-errors -Xswiftc
+    -strict-concurrency=complete`), full `swift test` 0-fail, `--uisurfacetest`, `--keyboarda11ycontract`,
+    and the scenario verifier with `--expect-coverage-digest <digest>` pins. **NOTE:** preflight does NOT
+    run `check-coverage.sh`; and the scenario-verifier `--expect-coverage-digest` values may shift when
+    coverage changes — if Unit 2/3 moves a digest, update the pinned digest in preflight.sh in the SAME PR.
+  - `scripts/check-coverage.sh` — the per-file coverage gate (separate; run in CI at `.github/workflows/
+    ci.yml:212`). Core/ShellAdapter always 100%; the views file after Unit 3.
+  - structural guards green (incl. `assertEveryLibFileIsOrdered` via `WorkbenchAppSourceRetargetTests`).
 - ONE commit per sub-unit. NO AI attribution. NEVER stage `SerpentGuide.ouro/` / `default.profraw` /
   `*.actual.txt`.
 - Branch: `u5-honest-coverage-gate` (off `origin/main` @ 687b6c7). NO PR (per brief).
@@ -335,4 +338,10 @@ NOTE: Steps 1 (the extract) and 3 (gate wiring) write NO new product logic — s
 - **D5 — no PR** (per brief; branch pushed at most, doc + journal pointer committed).
 
 ## Progress Log
-- 2026-06-26 09:11 Created from the operator's firm-decision brief (Q1=SPLIT, Q2=SNAPSHOT)
+- 2026-06-26 09:14 Created from the operator's firm-decision brief (Q1=SPLIT, Q2=SNAPSHOT)
+- 2026-06-26 09:21 Granularity pass + measured the residual (THE FORK: ~1,019 region segments / 93 views,
+  NOT just 28 branchless) + extract risk numbers (N=3 promotions, M=0 guard retargets, VM 10607–20716)
+- 2026-06-26 09:2x Validation pass: verified VM extent, the 3 promotion symbols + 2 move-helpers exact
+  lines, post-VM terminal type lines, `ViewSnapshotHost.mapNode` harness, `--uisurfacetest`/preflight gates,
+  `check-coverage.sh` in CI, `assertEveryLibFileIsOrdered` wired. Noted preflight ≠ coverage gate + the
+  scenario-verifier coverage-digest pins.
