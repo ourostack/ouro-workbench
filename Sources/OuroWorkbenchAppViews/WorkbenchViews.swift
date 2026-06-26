@@ -10017,8 +10017,22 @@ struct TranscriptHistoryView: View {
 struct NewTerminalGroupSheet: View {
     @ObservedObject var model: WorkbenchViewModel
     @Environment(\.dismiss) private var dismiss
-    @State private var name = ""
-    @State private var rootPath = FileManager.default.homeDirectoryForCurrentUser.path
+    @State private var name: String
+    @State private var rootPath: String
+
+    // The `@State` seeds default to an empty name + the machine home root (the prod
+    // behavior the sidebar's "New Workspace" presents). The seam parameters keep that
+    // default UNCHANGED at every production call site while letting a test drive the
+    // Create / disabled / autofill logic from a chosen starting state (B4-redo).
+    init(
+        model: WorkbenchViewModel,
+        initialName: String = "",
+        initialRootPath: String = FileManager.default.homeDirectoryForCurrentUser.path
+    ) {
+        self.model = model
+        _name = State(initialValue: initialName)
+        _rootPath = State(initialValue: initialRootPath)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
