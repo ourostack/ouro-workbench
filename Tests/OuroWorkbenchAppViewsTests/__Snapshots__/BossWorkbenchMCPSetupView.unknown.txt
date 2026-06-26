@@ -1,0 +1,6 @@
+Text kind=static text="Workbench MCP"
+Image image="point.3.connected.trianglepath.dotted"
+Text kind=static text="unknown"
+Text kind=static text="unknown"
+Text kind=static text="Refresh"
+Image image="arrow.clockwise"
