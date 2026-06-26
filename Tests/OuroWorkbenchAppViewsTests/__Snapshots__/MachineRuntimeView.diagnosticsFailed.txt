@@ -1,0 +1,6 @@
+Text kind=static text="Support Diagnostics"
+Image image="lifepreserver"
+Text kind=static text="failed: could not write archive"
+Text kind=static text="failed: could not write archive"
+Text kind=static text="Collect"
+Image image="archivebox"
