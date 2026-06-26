@@ -1,0 +1,4 @@
+Image image="person.crop.circle.badge.checkmark"
+Text kind=static text="Choose Boss"
+Text kind=static text="Ouro Workbench"
+Text kind=static text="Cancel"
