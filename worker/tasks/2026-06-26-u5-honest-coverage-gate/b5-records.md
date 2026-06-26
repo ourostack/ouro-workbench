@@ -241,3 +241,59 @@ entry rendered by this view → `isRecoverable` is always true (when not running
 that would hit `default`. Even an invoking test can't reach these (no seam makes `recoveryPlan`
 nil for an in-state entry). → Unit 3 allowlist.
 CARVE kind: dead-primary-arm-unreachable-via-always-non-nil-recoveryPlan.
+
+---
+
+## B5 batch summary (AFTER — full suite @ rebased onto origin/main 4ed673d)
+
+| view | before | driven | carved | after |
+|---|---|---|---|---|
+| LanePanel | 0 | 0 (already covered) | 0 | 0 |
+| EmptyPanePicker | 4 | 4 (1 tap) | 0 | 0 |
+| SessionTitleStrip | 13 | 13 (2 tap) | 0 | 0 |
+| SessionInspectorPanel | 9 | 9 (1 tap) | 0 | 0 |
+| SessionTranscriptSheet | 1 | 1 (1 tap) | 0 | 0 |
+| SessionStatusBar | 3 | 3 (2 tap) | 0 | 0 |
+| CustomSessionManagementBar | 10 | 10 (6 tap) | 0 | 0 |
+| InactiveTerminalSurface | 11 | 11 (4 tap) | 0 | 0 |
+| TranscriptRehydrationPreview | 5 | 4 (1 tap) | 1 | 1 |
+| RunningSessionHeaderControls | 35 | 31 (10 tap) | 4 | 4 |
+| TranscriptHistoryView | 1 | 1 | 0 | 0 |
+| **TOTAL** | **92** | **87** | **5** | **5** |
+
+- **9 of 11 views at literal 0 uncovered.** The other two sit at their minimal true-carve floor.
+- **27 action closures driven via `.tap()`/`.callOn…` INVOCATION** (button actions, Menu{}-descended
+  buttons, a `Task { await }` boss-question, a `@Binding` toggle), each asserting a real side-effect
+  (`errorMessage` / `editingSession` / `pendingStopSession` / `pendingStartFresh` / `pendingDeleteSession` /
+  `detailSplit` / `terminalFocusEntryID` / `bossQuestion` / `state.processEntries` / `state.actionLog` /
+  a `BindingBox` flag) and mutation-verified (mutate the action BODY → effect-assertion RED → revert → GREEN).
+
+### The 5 carves (Unit 3 allowlist seed — measured MINIMUM, each genuinely unreachable)
+
+| view | line:col | region | why even an invoking test can't reach it |
+|---|---|---|---|
+| TranscriptRehydrationPreview | L9602:75 | `strippingAnsiEscapes` `guard let regex = try? NSRegularExpression(pattern: <fixed literal>) else { return input }` | the pattern is a `private static let` constant valid regex → `try?` never returns nil → the else is dead; the pattern is not a parameter, so no seam injects a bad pattern. |
+| RunningSessionHeaderControls | L9810:9 | `primaryButton(for:)` `case .launch:` arm | `sessionControls(isRecoverable:)` reads `model.recoveryPlan(for:) != nil`, and `summary.recoveryPlans` emits a plan for EVERY in-state entry (incl. `.noAction`) → `recoveryPlan` is NEVER nil → `isRecoverable` always true (when not running/archived) → `primaryActions` never contains `.launch`. |
+| RunningSessionHeaderControls | L9811:20 | `.launch` arm Button | (rides L9810 — same unreachable arm) |
+| RunningSessionHeaderControls | L9813:22 | `.launch` arm action `{ model.launch(entry) }` | (rides L9810 — same unreachable arm) |
+| RunningSessionHeaderControls | L9824:9 | `primaryButton(for:)` `default: EmptyView()` | `controls.primaryActions` ∈ {`[.stop]`,`[.recover]`,`[]`} — never a value outside the explicit cases → `default` unreachable. |
+
+### WorkbenchViews.swift file-level region delta
+
+- B5 view-set: **92 → 5 uncovered** (87 regions driven, 5 carved).
+- File-level region (the gate metric), full suite: baseline **64.99% (1046 uncov)** → with B2+B5
+  landed **72.22% (830 uncov)**. B5's 11-view set contributes 87 directly-driven regions (plus
+  shared-helper cross-coverage from the live/running fixtures).
+
+### Gates (all green — actual output)
+
+- strict build `-Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete` → **Build complete, 0/0**.
+- full `swift test` (via `check-coverage.sh`) → **3570 tests, 1 skip (pre-existing env-gated
+  RepairAgentKeystoneTests), 0 failures**.
+- `OuroWorkbench --uisurfacetest` → all probes **ok**.
+- `scripts/check-coverage.sh` → **PASS** (Core/ShellAdapter 149/151 at 100%; 2 pre-existing
+  allowlisted; allowlist + COVERAGE_DIRS UNCHANGED vs origin/main).
+- `scripts/smoke-package-shallow-guard.sh` → **ok**.
+- Leak scan: **zero** `/Users/` `/var/folders/` host-name leaks in any committed snapshot ref
+  (test-source matches are the P3 leak-DEFENSE `XCTAssertFalse(contains("/Users/"))` literals).
+- Never staged: `SerpentGuide.ouro/`, `default.profraw`, `*.actual.txt`, coverage JSON.
