@@ -107,11 +107,29 @@ set -euo pipefail
 
 output=""
 url=""
+auth_header=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -o)
       output="$2"
       shift 2
+      ;;
+    -H|--header)
+      case "${2:-}" in
+        Authorization:*)
+          auth_header="$2"
+          ;;
+      esac
+      shift 2
+      ;;
+    --header=*)
+      header="${1#--header=}"
+      case "$header" in
+        Authorization:*)
+          auth_header="$header"
+          ;;
+      esac
+      shift
       ;;
     -*)
       shift
@@ -123,7 +141,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-printf '%s\n' "$url" >> "$FAKE_CURL_LOG"
+printf '%s\t%s\n' "$url" "$auth_header" >> "$FAKE_CURL_LOG"
 
 emit_file() {
   local source="$1"
@@ -179,6 +197,7 @@ PATH="$FAKE_BIN:$PATH" \
   FAKE_ARCHIVE_PATH="$clean_asset_dir/$clean_archive_name" \
   FAKE_MANIFEST_PATH="$clean_asset_dir/$clean_manifest_name" \
   FAKE_CURL_LOG="$FAKE_LOG" \
+  GH_TOKEN="web-installer-selftest-token" \
   OURO_WB_INSTALL_DIR="$success_install_dir" \
   OURO_WB_NO_OPEN=1 \
   "$ROOT_DIR/web/workbench-install.sh" >/dev/null
@@ -186,6 +205,18 @@ PATH="$FAKE_BIN:$PATH" \
 "$ROOT_DIR/scripts/verify-app-bundle.sh" \
   "$success_install_dir/$WORKBENCH_APP_NAME.app" \
   --expected-version "$manifest_version" >/dev/null
+api_auth_count="$(awk -F '\t' '$1 ~ /^https:\/\/api[.]github[.]com\/repos\// && $2 == "Authorization: Bearer web-installer-selftest-token" { count++ } END { print count + 0 }' "$FAKE_LOG")"
+if [[ "$api_auth_count" -lt 1 ]]; then
+  printf 'Web installer selftest failed: GitHub API request did not include the available bearer token\n' >&2
+  cat "$FAKE_LOG" >&2
+  exit 1
+fi
+asset_auth_count="$(awk -F '\t' '$1 ~ /^https:\/\/example[.]invalid\// && $2 != "" { count++ } END { print count + 0 }' "$FAKE_LOG")"
+if [[ "$asset_auth_count" -ne 0 ]]; then
+  printf 'Web installer selftest failed: asset downloads unexpectedly included an Authorization header\n' >&2
+  cat "$FAKE_LOG" >&2
+  exit 1
+fi
 
 extra_release_json="$TEMP_ROOT/extra-assets-release.json"
 write_extra_release_json "$extra_release_json"

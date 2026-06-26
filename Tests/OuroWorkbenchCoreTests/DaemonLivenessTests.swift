@@ -1,3 +1,4 @@
+import Darwin
 import XCTest
 @testable import OuroWorkbenchCore
 
@@ -150,6 +151,30 @@ final class DaemonLivenessTests: XCTestCase {
         }
     }
 
+    func testDefaultReachabilityWrapperUsesLocalMailboxHTTPResponse() async throws {
+        let server: LoopbackHTTPServer
+        do {
+            server = try LoopbackHTTPServer(port: 6876, statusCode: 204)
+        } catch let error as LoopbackHTTPServerError {
+            if case let .posix(operation, code) = error, operation == "bind", code == EADDRINUSE {
+                do {
+                    _ = try await DaemonLivenessProbe.defaultReachability(timeoutSeconds: 1)
+                } catch {
+                    throw XCTSkip("127.0.0.1:6876 is already bound but not reachable: \(error)")
+                }
+                return
+            }
+            throw XCTSkip("127.0.0.1:6876 unavailable for loopback wrapper coverage: \(error)")
+        } catch {
+            throw XCTSkip("127.0.0.1:6876 unavailable for loopback wrapper coverage: \(error)")
+        }
+        defer { server.stop() }
+
+        let reachable = try await DaemonLivenessProbe.defaultReachability(timeoutSeconds: 1)
+
+        XCTAssertTrue(reachable)
+    }
+
     func testDefaultReachabilityTreatsHTTPStatusesBelow500AsReachable() async throws {
         try await StubURLProtocol.withHTTPStatus(204) {
             let reachable = try await DaemonLivenessProbe.defaultReachability(
@@ -173,6 +198,22 @@ final class DaemonLivenessTests: XCTestCase {
                 timeoutSeconds: 0.1
             )
             XCTAssertFalse(reachable)
+        }
+
+        try await StubURLProtocol.withHTTPStatus(204) {
+            let reachable = try await DaemonLivenessProbe.defaultReachability(
+                url: URL(string: "http://daemon.test/default-timeout")!,
+                timeoutSeconds: nil
+            )
+            XCTAssertTrue(reachable)
+        }
+
+        try await StubURLProtocol.withHTTPStatus(204) {
+            let reachable = try await DaemonLivenessProbe.defaultReachability(
+                url: URL(string: "http://daemon.test/nonpositive-timeout")!,
+                timeoutSeconds: 0
+            )
+            XCTAssertTrue(reachable)
         }
 
         try await StubURLProtocol.withHTTPStatus(204) {
@@ -504,6 +545,118 @@ final class DaemonLivenessTests: XCTestCase {
 
 private enum DaemonLivenessTestError: Error {
     case boom
+}
+
+private final class LoopbackHTTPServer: @unchecked Sendable {
+    private let socketFD: Int32
+    private let lock = NSLock()
+    private var isStopped = false
+
+    init(port: UInt16, statusCode: Int) throws {
+        let fd = Darwin.socket(AF_INET, SOCK_STREAM, 0)
+        guard fd >= 0 else {
+            throw LoopbackHTTPServerError.posix("socket", errno)
+        }
+
+        var reuse: Int32 = 1
+        guard Darwin.setsockopt(
+            fd,
+            SOL_SOCKET,
+            SO_REUSEADDR,
+            &reuse,
+            socklen_t(MemoryLayout<Int32>.size)
+        ) == 0 else {
+            let capturedErrno = errno
+            Darwin.close(fd)
+            throw LoopbackHTTPServerError.posix("setsockopt", capturedErrno)
+        }
+
+        var address = sockaddr_in()
+        address.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_port = port.bigEndian
+        address.sin_addr = in_addr(s_addr: inet_addr("127.0.0.1"))
+
+        let bindResult = withUnsafePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                Darwin.bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+            }
+        }
+        guard bindResult == 0 else {
+            let capturedErrno = errno
+            Darwin.close(fd)
+            throw LoopbackHTTPServerError.posix("bind", capturedErrno)
+        }
+
+        guard Darwin.listen(fd, 1) == 0 else {
+            let capturedErrno = errno
+            Darwin.close(fd)
+            throw LoopbackHTTPServerError.posix("listen", capturedErrno)
+        }
+
+        socketFD = fd
+        Thread.detachNewThread {
+            Self.serveOneRequest(socketFD: fd, statusCode: statusCode)
+        }
+    }
+
+    deinit {
+        stop()
+    }
+
+    func stop() {
+        lock.withLock {
+            guard !isStopped else { return }
+            isStopped = true
+            Darwin.shutdown(socketFD, SHUT_RDWR)
+            Darwin.close(socketFD)
+        }
+    }
+
+    private static func serveOneRequest(socketFD: Int32, statusCode: Int) {
+        var clientAddress = sockaddr()
+        var clientAddressLength = socklen_t(MemoryLayout<sockaddr>.size)
+        let clientFD = Darwin.accept(socketFD, &clientAddress, &clientAddressLength)
+        guard clientFD >= 0 else { return }
+        defer { Darwin.close(clientFD) }
+
+        var requestBuffer = [UInt8](repeating: 0, count: 1024)
+        let requestBufferCount = requestBuffer.count
+        _ = requestBuffer.withUnsafeMutableBytes {
+            Darwin.recv(clientFD, $0.baseAddress, requestBufferCount, 0)
+        }
+
+        let body = #"{"ok":true}"#
+        let response = """
+        HTTP/1.1 \(statusCode) OK\r
+        Content-Type: application/json\r
+        Content-Length: \(body.utf8.count)\r
+        Connection: close\r
+        \r
+        \(body)
+        """
+        let bytes = Array(response.utf8)
+        bytes.withUnsafeBytes { buffer in
+            guard let base = buffer.baseAddress else { return }
+            var sent = 0
+            while sent < bytes.count {
+                let count = Darwin.write(clientFD, base.advanced(by: sent), bytes.count - sent)
+                guard count > 0 else { return }
+                sent += count
+            }
+        }
+    }
+}
+
+private enum LoopbackHTTPServerError: Error, CustomStringConvertible {
+    case posix(String, Int32)
+
+    var description: String {
+        switch self {
+        case let .posix(operation, code):
+            return "\(operation) failed with errno \(code)"
+        }
+    }
 }
 
 private final class LockedBox<Value>: @unchecked Sendable {
