@@ -1,0 +1,6 @@
+Text kind=static text="Recovery Drill"
+Image image="arrow.clockwise.circle"
+Text kind=static text="not run"
+Text kind=static text="not run"
+Text kind=static text="Run Drill"
+Image image="play.circle"

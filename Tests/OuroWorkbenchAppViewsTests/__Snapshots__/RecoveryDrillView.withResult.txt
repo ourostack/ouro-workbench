@@ -1,0 +1,8 @@
+Text kind=static text="Recovery Drill"
+Image image="arrow.clockwise.circle"
+Text kind=static text="1 recovery action after simulated restart; 3:04:05"
+Text kind=static text="1 recovery action after simulated restart; 3:04:05"
+Text kind=static text="Run Drill"
+Image image="play.circle"
+Text kind=static text="alpha / deploy-runner"
+Text kind=static text="Reopens from its saved checkpoint."

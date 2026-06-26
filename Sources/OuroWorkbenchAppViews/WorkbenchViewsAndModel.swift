@@ -10421,12 +10421,17 @@ public struct WorkbenchReleaseUpdateControls: View {
 
 struct RecoveryDrillView: View {
     @ObservedObject var model: WorkbenchViewModel
+    /// Zone + locale the drill's `ranAt` timestamp renders in (AN-007). Default to
+    /// `.autoupdatingCurrent` (operator-local, prod byte-identical); the clock test injects
+    /// `.gmt` + `en_GB` for a deterministic snapshot.
+    var timeZone: TimeZone = .autoupdatingCurrent
+    var locale: Locale = .autoupdatingCurrent
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 12) {
                 DashboardRowLabel(title: "Recovery Drill", systemImage: "arrow.clockwise.circle")
-                DashboardStatusLine(text: model.recoveryDrillStatusLine)
+                DashboardStatusLine(text: model.recoveryDrillStatusLine(timeZone: timeZone, locale: locale))
                 Button {
                     model.runRecoveryDrill()
                 } label: {
@@ -12061,11 +12066,21 @@ public final class WorkbenchViewModel: ObservableObject {
         return "No transcript matches for \(query)."
     }
 
-    var recoveryDrillStatusLine: String {
+    /// The recovery-drill status line — the one-line outcome plus the drill's `ranAt` timestamp.
+    /// The timestamp is rendered through the shared `Date.workbenchTimeText` seam (AN-007): both
+    /// `timeZone`/`locale` default to `.autoupdatingCurrent`, so production is BYTE-IDENTICAL to
+    /// the prior raw `ranAt.formatted(date:.omitted, time:.standard)`; the clock test injects
+    /// `.gmt` + `en_GB` for a runner-zone/locale-independent snapshot.
+    func recoveryDrillStatusLine(
+        timeZone: TimeZone = .autoupdatingCurrent,
+        locale: Locale = .autoupdatingCurrent
+    ) -> String {
         guard let recoveryDrillResult else {
             return "not run"
         }
-        return "\(recoveryDrillResult.oneLineStatus); \(recoveryDrillResult.ranAt.formatted(date: .omitted, time: .standard))"
+        let stamp = recoveryDrillResult.ranAt.workbenchTimeText(
+            date: .omitted, time: .standard, timeZone: timeZone, locale: locale)
+        return "\(recoveryDrillResult.oneLineStatus); \(stamp)"
     }
 
     var releaseUpdateStatusLine: String {
