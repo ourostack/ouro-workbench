@@ -144,6 +144,46 @@ final class OnboardingBossChoiceViewTests: XCTestCase {
                       "disabled non-boss → turned off, no selected:\n\(disabledTree)")
     }
 
+    // MARK: - U5 B3 — DRIVE the button action closures (corrected recipe: INVOKE, do not carve)
+
+    /// The "Refresh Agents" button (`:6827`) action runs `refreshOuroAgents()` +
+    /// `refreshWorkbenchMCPRegistration()` + `refreshOnboardingReadiness()` +
+    /// `runOnboardingProviderChecksIfNeeded()`. DRIVEN by `.tap()`; the model-observable
+    /// side-effect is `onboardingReadiness` flipping from nil → a non-nil advisor verdict (the
+    /// refresh ran). MUTATION-VERIFIED in the B3 records sweep.
+    func testE3_drive_refreshAgentsButton() throws {
+        let model = try vm(agents: [record("alpha", .ready)], boss: "alpha")
+        model.onboardingReadiness = nil
+        XCTAssertNil(model.onboardingReadiness, "precondition: no readiness yet")
+        let view = OnboardingBossChoiceView(model: model)
+        try view.inspect().find(button: "Refresh Agents").tap()
+        XCTAssertNotNil(model.onboardingReadiness,
+                        "tapping Refresh Agents runs refreshOnboardingReadiness() → a non-nil verdict")
+    }
+
+    /// The empty-state "Create Agent" button (`:6844`) action runs
+    /// `presentNewAgentProviderConfigForm()` → `isProviderConfigPresented = true` +
+    /// `providerConfigIsNewAgent = true`. DRIVEN by `.tap()` + asserted.
+    func testE3_drive_createAgentButton() throws {
+        let model = try vm(agents: [], boss: "")
+        XCTAssertTrue(model.onboardingBossChoices.isEmpty, "precondition: empty → the empty-state buttons render")
+        XCTAssertFalse(model.isProviderConfigPresented, "precondition")
+        let view = OnboardingBossChoiceView(model: model)
+        try view.inspect().find(button: "Create Agent").tap()
+        XCTAssertTrue(model.isProviderConfigPresented, "tap presents the provider-config form")
+        XCTAssertTrue(model.providerConfigIsNewAgent, "tap marks it a NEW-agent form")
+    }
+
+    /// The empty-state "Clone from Git…" button (`:6849`) action runs `presentCloneAgentSheet()`
+    /// → `isOuroAgentInstallSheetPresented = true`. DRIVEN by `.tap()` + asserted.
+    func testE3_drive_cloneFromGitButton() throws {
+        let model = try vm(agents: [], boss: "")
+        XCTAssertFalse(model.isOuroAgentInstallSheetPresented, "precondition")
+        let view = OnboardingBossChoiceView(model: model)
+        try view.inspect().find(button: "Clone from Git…").tap()
+        XCTAssertTrue(model.isOuroAgentInstallSheetPresented, "tap presents the clone (install) sheet")
+    }
+
     // MARK: - Determinism (P3)
 
     func testE3_determinism_eachStateByteIdenticalTwiceAndNoLeak() throws {
