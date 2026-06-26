@@ -8152,7 +8152,10 @@ struct AgentDetailView: View {
     }
 }
 
-private struct AgentTitleStrip: View {
+// Access-widening (C7-2, the SU-E / C0 SU-3 precedent): `private` → `internal` so the
+// `@testable import OuroWorkbenchAppViews` agent-title-strip snapshot test can reach this
+// leaf. Zero-behavior change (visibility only). Surfaced to the operator per the doing doc.
+struct AgentTitleStrip: View {
     var agent: OuroAgentRecord
     @ObservedObject var model: WorkbenchViewModel
     var isBoss: Bool
@@ -8336,7 +8339,10 @@ struct AgentInspectorPanel: View {
     }
 }
 
-private struct AgentStatusCard: View {
+// Access-widening (C7-3, the SU-E / C0 SU-3 precedent): `private` → `internal` so the
+// `@testable import OuroWorkbenchAppViews` status-card snapshot test can reach this leaf.
+// Zero-behavior change (visibility only). Surfaced to the operator per the doing doc.
+struct AgentStatusCard: View {
     var agent: OuroAgentRecord
     @ObservedObject var model: WorkbenchViewModel
     var registration: BossWorkbenchMCPRegistrationSnapshot?
@@ -8484,7 +8490,10 @@ private struct AgentLanesCard: View {
     }
 }
 
-private struct LanePanel: View {
+// Access-widening (C7-4, the SU-E / C0 SU-3 precedent): `private` → `internal` so the
+// `@testable import OuroWorkbenchAppViews` lane-panel snapshot test can reach this leaf.
+// Zero-behavior change (visibility only). Surfaced to the operator per the doing doc.
+struct LanePanel: View {
     var title: String
     var systemImage: String
     var lane: OuroAgentLane?

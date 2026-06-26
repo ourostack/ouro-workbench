@@ -1,0 +1,8 @@
+Text kind=static text="Workbench MCP"
+Image image="point.3.connected.trianglepath.dotted"
+Text kind=static text="tools binary missing"
+Text kind=static text="tools binary missing"
+Text kind=static text="Refresh"
+Image image="arrow.clockwise"
+Text kind=static text="Connect"
+Image image="link.badge.plus"

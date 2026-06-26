@@ -1,0 +1,5 @@
+Image image="checkmark.seal.fill"
+Text kind=static text="Bundle ready"
+Text kind=static text="ready"
+Text kind=static text="ready"
+Text kind=static text="ready"
