@@ -178,6 +178,87 @@ final class BossProposalCardStateSetTests: XCTestCase {
         try assertViewSnapshot(of: card(model), named: "F.fields.absentAndEmpty")
     }
 
+    // MARK: - U5 B8 — card/item INTERACTIONS (drive the action + binding closures)
+
+    /// U5 B8 — the "Dismiss" `Button` action (`:7517` — `Button("Dismiss") { model.dismissProposal(
+    /// proposalID:) }`). Tapping it writes an empty result, removes the pending proposal, and reloads
+    /// → `pendingProposals` drops the card. ASSERT the proposal is gone.
+    func testF_dismissTap_removesProposal() throws {
+        let proposal = AgentProposal(
+            id: "p-dismiss", title: "Dismiss me",
+            items: [AgentProposalItem(id: "d1", label: "An item", selected: true, editableFields: [])])
+        let model = try makeVM(enqueueing: [proposal])
+        XCTAssertEqual(model.pendingProposals.count, 1, "precondition: one pending proposal")
+        try card(model).inspect().find(button: "Dismiss").tap()
+        XCTAssertTrue(model.pendingProposals.isEmpty,
+                      "Dismiss tap → dismissProposal removes the pending proposal")
+    }
+
+    /// U5 B8 — the "Approve" `Button` action (`:7523` — `Button("Approve") { model.approveProposal(
+    /// proposalID:) }`). Tapping it writes the proposal's result, removes it, and reloads → the card
+    /// disappears. ASSERT the proposal is gone.
+    func testF_approveTap_removesProposal() throws {
+        let proposal = AgentProposal(
+            id: "p-approve", title: "Approve me",
+            items: [AgentProposalItem(id: "a1", label: "An item", selected: true, editableFields: [])])
+        let model = try makeVM(enqueueing: [proposal])
+        XCTAssertEqual(model.pendingProposals.count, 1, "precondition: one pending proposal")
+        try card(model).inspect().find(button: "Approve").tap()
+        XCTAssertTrue(model.pendingProposals.isEmpty,
+                      "Approve tap → approveProposal removes the pending proposal")
+    }
+
+    /// U5 B8 — the checkbox `Button` action (`:7558` — `Button { model.toggleProposalItem(...) }`).
+    /// Tapping the (only) checkbox button flips the item's `selected` flag in `pendingProposals`.
+    /// We start `selected: false` and assert it becomes true (the captured `1/1` counter would follow).
+    func testF_checkboxTap_togglesSelection() throws {
+        let proposal = AgentProposal(
+            id: "p-toggle", title: "Toggle me",
+            items: [AgentProposalItem(id: "t1", label: "An item", selected: false, editableFields: [])])
+        let model = try makeVM(enqueueing: [proposal])
+        XCTAssertEqual(model.pendingProposals.first?.items.first?.selected, false, "precondition: not selected")
+        // Buttons: [0] checkbox, then Dismiss/Approve. The checkbox is the first button.
+        let buttons = try card(model).inspect().findAll(ViewType.Button.self)
+        try buttons[0].tap()  // the row checkbox
+        XCTAssertEqual(model.pendingProposals.first?.items.first?.selected, true,
+                       "tapping the checkbox toggles the item's selected flag")
+    }
+
+    /// U5 B8 — the editable-field binding SETTER (`:7552` — `set: { model.editProposalItem(...) }`).
+    /// An editable `.label` field renders a bound `TextField`; calling `setInput("…")` on it routes
+    /// through the `fieldBinding` `set:` closure → `editProposalItem` → the value changes in
+    /// `pendingProposals`. ASSERT the edited value lands.
+    func testF_editableBindingSetter_routesEditThroughModel() throws {
+        let proposal = AgentProposal(
+            id: "p-edit", title: "Edit me",
+            items: [AgentProposalItem(id: "e1", label: "Original", selected: true, editableFields: [.label])])
+        let model = try makeVM(enqueueing: [proposal])
+        XCTAssertEqual(model.pendingProposals.first?.items.first?.label, "Original", "precondition")
+        try card(model).inspect().find(ViewType.TextField.self).setInput("Edited via binding")
+        XCTAssertEqual(model.pendingProposals.first?.items.first?.label, "Edited via binding",
+                       "the TextField binding setter routes the edit through editProposalItem")
+    }
+
+    /// U5 B8 — the editable-with-NIL-value `?? ""` fallbacks for detail + cwd (`:7583`/`:7605` —
+    /// `fieldBinding(.detail, current: item.detail ?? "")` / `.cwd, current: item.cwd ?? ""`). The
+    /// existing `absentAndEmpty` test only made `.command` editable-with-nil; here `.detail` AND `.cwd`
+    /// are editable but nil → their `?? ""` fallback autoclosures fire when the bound `TextField`s are
+    /// built (rendering EMPTY editable fields). ASSERT both empty editable fields render.
+    func testF_editableNilDetailAndCwd_emptyFallbackFields() throws {
+        let proposal = AgentProposal(
+            id: "p-nilfields", title: "Sparse editable",
+            items: [AgentProposalItem(
+                id: "n1", label: "Only label", detail: nil, command: "cmd", cwd: nil,
+                selected: true, editableFields: [.detail, .cwd])])
+        let model = try makeVM(enqueueing: [proposal])
+        let tree = try ViewSnapshotHost.snapshotText(of: card(model))
+        // Two empty editable TextFields (detail + cwd) render — the `?? ""` fallbacks were taken.
+        let editableEmpty = tree.components(separatedBy: #"kind=editable text="""#).count - 1
+        XCTAssertGreaterThanOrEqual(editableEmpty, 2,
+                                    "the nil detail + nil cwd editable fields render empty (?? \"\" taken):\n\(tree)")
+        try assertViewSnapshot(of: card(model), named: "F.fields.editableNilDetailCwd")
+    }
+
     // MARK: - Negative controls (P2) — beyond the existing isEditable flip
 
     /// NEGATIVE CONTROL #1 — toggling an item's `selected` flips the checkbox image

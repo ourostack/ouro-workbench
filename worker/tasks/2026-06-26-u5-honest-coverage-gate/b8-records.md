@@ -141,3 +141,26 @@ DRIVEN via INVOCATION (async tests):
 MUTATION: each inner `await model.run…()` → `_ = model` → ALL 3 tests RED (effects never fire) → revert
 → GREEN. (One mutation pass covered the 2 runBossQuestion callers + the quick-question caller.)
 CARVED: none.
+
+### BossProposalCardList + BossProposalCard + BossProposalItemRow (L7473-7617) — 7 → 6 driven, 1 carved
+The plan's "BossProposalCardList: 7" = the whole proposal-card family (List 1 + Card 2 + ItemRow 4).
+BEFORE: 7 uncovered (`7484` List `.task`; `7517` Dismiss, `7523` Approve; `7552` fieldBinding setter,
+`7558` checkbox toggle, `7583` editable nil-detail `?? ""`, `7605` editable nil-cwd `?? ""`).
+DRIVEN via INVOCATION (extends `BossProposalCardStateSetTests`):
+- `7517` Dismiss: `find(button:"Dismiss").tap()` → `dismissProposal` → reload → `pendingProposals.isEmpty`.
+  MUTATION: `model.dismissProposal(…)` → `_ = model` → RED → revert → GREEN.
+- `7523` Approve: `find(button:"Approve").tap()` → `approveProposal` → reload → `pendingProposals.isEmpty`.
+  MUTATION: `model.approveProposal(…)` → `_ = model` → RED → revert → GREEN.
+- `7558` checkbox: `findAll(Button)[0].tap()` (the row checkbox is first) → `toggleProposalItem` flips
+  `pendingProposals[0].items[0].selected` false→true. MUTATION: `model.toggleProposalItem(…)` → `_ = model`
+  → RED → revert → GREEN.
+- `7552` fieldBinding SETTER: an editable `.label` `TextField`; `setInput("Edited via binding")` routes
+  through the binding `set:` → `editProposalItem` → `pendingProposals[0].items[0].label` changes.
+  MUTATION: `set: { model.editProposalItem(…) }` → `set: { _ = $0 }` → RED → revert → GREEN.
+- `7583`/`7605` editable nil detail/cwd `?? ""`: an item with `detail:nil, cwd:nil` + `editableFields:
+  [.detail,.cwd]` → both bound TextFields built with the `?? ""` fallback → two EMPTY editable fields
+  render (`kind=editable text=""` ≥2) + snapshot `F.fields.editableNilDetailCwd`. MUTATION: `?? ""` →
+  `?? "MUT_DETAIL"`/`"MUT_CWD"` → empty-count drops to 0 + snapshot mismatch → RED → revert → GREEN.
+CARVED (1): `7484` `BossProposalCardList` `.task { model.loadPendingProposals() }` — ViewInspector 0.10.3
+has NO `.task` driver. --show-regions justified: `loadPendingProposals()` LOGIC is covered (every
+`makeVM`/fixture calls it); only the `.task`-modifier hook is uncolorable. → Unit-3 allowlist carve.
