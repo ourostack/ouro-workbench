@@ -206,11 +206,29 @@ set -euo pipefail
 
 output=""
 url=""
+auth_header=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -o)
       output="$2"
       shift 2
+      ;;
+    -H|--header)
+      case "${2:-}" in
+        Authorization:*)
+          auth_header="$2"
+          ;;
+      esac
+      shift 2
+      ;;
+    --header=*)
+      header="${1#--header=}"
+      case "$header" in
+        Authorization:*)
+          auth_header="$header"
+          ;;
+      esac
+      shift
       ;;
     -*)
       shift
@@ -222,7 +240,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-printf '%s\n' "$url" >> "$FAKE_CURL_LOG"
+printf '%s\t%s\n' "$url" "$auth_header" >> "$FAKE_CURL_LOG"
 
 emit_file() {
   local source="$1"
@@ -265,6 +283,7 @@ PATH="$fake_bin:$PATH" \
   FAKE_WEB_INSTALLER_PATH="$ROOT_DIR/web/workbench-install.sh" \
   FAKE_WEB_INSTALLER_URL="$default_web_installer_url" \
   FAKE_CURL_LOG="$fake_curl_log" \
+  GH_TOKEN="published-release-selftest-token" \
   OURO_WB_WEB_INSTALLER_ATTEMPTS=1 \
   OURO_WB_WEB_INSTALLER_RETRY_SECONDS=0 \
   "$ROOT_DIR/scripts/verify-published-release.sh" \
@@ -273,6 +292,18 @@ PATH="$fake_bin:$PATH" \
     --version "$WORKBENCH_VERSION" \
     --sha "$sha" \
     --prerelease true >/dev/null
+api_auth_count="$(awk -F '\t' '$1 ~ /^https:\/\/api[.]github[.]com\/repos\// && $2 == "Authorization: Bearer published-release-selftest-token" { count++ } END { print count + 0 }' "$fake_curl_log")"
+if [[ "$api_auth_count" -lt 1 ]]; then
+  printf 'Published release verifier selftest failed: hosted installer smoke did not pass the available bearer token to the GitHub API request\n' >&2
+  cat "$fake_curl_log" >&2
+  exit 1
+fi
+asset_auth_count="$(awk -F '\t' '$1 ~ /^https:\/\/example[.]invalid\// && $2 != "" { count++ } END { print count + 0 }' "$fake_curl_log")"
+if [[ "$asset_auth_count" -ne 0 ]]; then
+  printf 'Published release verifier selftest failed: asset downloads unexpectedly included an Authorization header\n' >&2
+  cat "$fake_curl_log" >&2
+  exit 1
+fi
 
 set +e
 PATH="$fake_bin:$PATH" \
