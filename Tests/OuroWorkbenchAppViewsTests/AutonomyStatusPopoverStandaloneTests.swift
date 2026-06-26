@@ -83,6 +83,21 @@ final class AutonomyStatusPopoverStandaloneTests: XCTestCase {
         )
     }
 
+    /// AN-R2-02 — a real, actionable Workbench-MCP registration snapshot (the same
+    /// `BossWorkbenchMCPRegistrationSnapshot` the live registrar emits). `.notRegistered`
+    /// is `isActionable`, so the footer's Connect button renders. Fixed/relative paths
+    /// keep it hermetic (they're never rendered anyway).
+    private func actionableMCPRegistration() -> BossWorkbenchMCPRegistrationSnapshot {
+        BossWorkbenchMCPRegistrationSnapshot(
+            agentName: "boss",
+            serverName: "workbench",
+            commandPath: "AgentBundles/workbench-mcp",
+            agentConfigPath: "AgentBundles/boss.ouro/agent.json",
+            status: .notRegistered,
+            detail: "Workbench tools not connected"
+        )
+    }
+
     /// Drop the lone machine-local login-footer button (`Label("Login"/"Update Login",
     /// systemImage: "power")` — a `Text` line + the `"power"` `Image` line) so the committed
     /// reference is cross-machine deterministic. This is the documented login-item carve; the
@@ -157,6 +172,85 @@ final class AutonomyStatusPopoverStandaloneTests: XCTestCase {
         XCTAssertTrue(ready.contains("checkmark.circle.fill"), "ready: ok glyph:\n\(ready)")
         XCTAssertTrue(watch.contains("exclamationmark.triangle.fill"), "watch: warning glyph:\n\(watch)")
         XCTAssertTrue(degraded.contains("xmark.octagon.fill"), "degraded: blocker glyph:\n\(degraded)")
+    }
+
+    // MARK: - AN-R2-02 — energy-0 r2 close: the footer MCP-actionable Connect button
+
+    /// The footer `if model.bossWorkbenchMCPRegistration?.isActionable == true` Connect
+    /// button (`:4763`) was the ONE footer arm the docstring claimed to cover but never
+    /// did: all three reframe-tone snapshots leave `bossWorkbenchMCPRegistration` nil, so
+    /// the button never rendered and its `Label(model.bossWorkbenchMCPActionTitle,
+    /// systemImage: "point.3.connected.trianglepath.dotted")` was never asserted. The
+    /// round-2 mutation sweep proved it: suppressing the arm left the popover suite GREEN.
+    ///
+    /// Here a REAL `.notRegistered` (isActionable) registration snapshot makes the button
+    /// live — pinning the "Connect" title + the connector glyph via inline asserts + the
+    /// login-footer-stripped reference. Provenance: the same Core
+    /// `BossWorkbenchMCPRegistrationSnapshot` the live registrar emits; the title is the
+    /// model's real `bossWorkbenchMCPActionTitle` ("Connect" for `.notRegistered`).
+    func testPopover_mcpActionable_rendersConnectButton() throws {
+        let model = try makeVM()
+        model.bossWorkbenchMCPRegistration = actionableMCPRegistration()
+        XCTAssertTrue(model.bossWorkbenchMCPRegistration?.isActionable == true,
+                      "provenance: a .notRegistered registration is actionable")
+        XCTAssertEqual(model.bossWorkbenchMCPActionTitle, "Connect",
+                       "provenance: .notRegistered → the Connect action title")
+
+        let view = AutonomyStatusPopover(
+            snapshot: AutonomyReadinessSnapshot(checks: checks(state: "ready")),
+            model: model,
+            loginItem: LoginItemController()
+        )
+        let tree = strippedLogin(try ViewSnapshotHost.snapshotText(of: view))
+        XCTAssertTrue(tree.contains(#"text="Connect""#), "the actionable footer button title:\n\(tree)")
+        XCTAssertTrue(tree.contains(#"image="point.3.connected.trianglepath.dotted""#),
+                      "the connector glyph:\n\(tree)")
+        try assertViewSnapshotText(tree, named: "AutonomyStatusPopover.mcpActionable", store: store)
+    }
+
+    /// Negative control (P2): a NON-actionable registration (`.registered`) drops the
+    /// Connect button entirely — proving the `isActionable` gate is load-bearing, not
+    /// incidental. A nil registration (the default the other three snapshots use) likewise
+    /// omits it.
+    func testPopover_mcpNotActionable_dropsConnectButton() throws {
+        let registeredModel = try makeVM()
+        registeredModel.bossWorkbenchMCPRegistration = BossWorkbenchMCPRegistrationSnapshot(
+            agentName: "boss", serverName: "workbench",
+            commandPath: "AgentBundles/workbench-mcp",
+            agentConfigPath: "AgentBundles/boss.ouro/agent.json",
+            status: .registered, detail: "")
+        XCTAssertFalse(registeredModel.bossWorkbenchMCPRegistration?.isActionable == true,
+                       "provenance: .registered is not actionable")
+        let registeredTree = strippedLogin(try ViewSnapshotHost.snapshotText(of: AutonomyStatusPopover(
+            snapshot: AutonomyReadinessSnapshot(checks: checks(state: "ready")),
+            model: registeredModel, loginItem: LoginItemController())))
+        XCTAssertFalse(registeredTree.contains(#"image="point.3.connected.trianglepath.dotted""#),
+                       "registered: no Connect button:\n\(registeredTree)")
+
+        // nil registration (the default) also omits it.
+        let nilTree = strippedLogin(try ViewSnapshotHost.snapshotText(of: try popover(state: "ready")))
+        XCTAssertFalse(nilTree.contains(#"image="point.3.connected.trianglepath.dotted""#),
+                       "nil registration: no Connect button:\n\(nilTree)")
+
+        // The actionable tree differs from both — the gate flips the tree.
+        let actionableModel = try makeVM()
+        actionableModel.bossWorkbenchMCPRegistration = actionableMCPRegistration()
+        let actionableTree = strippedLogin(try ViewSnapshotHost.snapshotText(of: AutonomyStatusPopover(
+            snapshot: AutonomyReadinessSnapshot(checks: checks(state: "ready")),
+            model: actionableModel, loginItem: LoginItemController())))
+        XCTAssertNotEqual(actionableTree, registeredTree, "the isActionable gate must flip the tree")
+    }
+
+    /// Strip ONLY the machine-local login footer (same projection as `strippedTree`) so
+    /// the MCP-button reference is cross-machine deterministic — but KEEP the MCP button.
+    private func strippedLogin(_ raw: String) -> String {
+        raw.split(separator: "\n", omittingEmptySubsequences: false)
+            .filter { line in
+                !line.contains(#"text="Login""#)
+                    && !line.contains(#"text="Update Login""#)
+                    && !line.contains(#"image="power""#)
+            }
+            .joined(separator: "\n")
     }
 }
 #endif

@@ -82,6 +82,28 @@ final class TerminalRowContextMenuStandaloneTests: XCTestCase {
         return TerminalRowContextMenu(entry: loaded, model: model)
     }
 
+    /// AN-R2-04 — a menu whose entry HAS a live session. The menu's two active-session
+    /// arms (`activeSession(for:) != nil`) read ONLY presence via `activeSessions[id]`, so
+    /// we inject a real `TerminalSessionController` built from a real `TerminalCommandPlan`
+    /// (the same value type the live `CommandPlanner` emits) WITHOUT calling `start()` — no
+    /// process spawns; `transcriptPath: nil` keeps it file-free + path-leak-free. This is a
+    /// legitimate model seam (P2 forbids hand-assembling serializer OUTPUT, not injecting a
+    /// real controller into the published map the live launch path also writes).
+    private func menuWithActiveSession(for entry: ProcessEntry) throws -> (TerminalRowContextMenu, WorkbenchViewModel) {
+        let model = try makeVM(state: state(entry: entry))
+        let loaded = model.state.processEntries.first ?? entry
+        let plan = TerminalCommandPlan(
+            entryId: loaded.id,
+            executable: "/bin/zsh",
+            arguments: [],
+            workingDirectory: "/tmp/u4",
+            reason: "test active session")
+        let controller = try TerminalSessionController(
+            plan: plan, onStarted: { _ in }, onOutput: {}, onTerminated: { _ in })
+        model.activeSessions[loaded.id] = controller
+        return (TerminalRowContextMenu(entry: loaded, model: model), model)
+    }
+
     // MARK: - Enumerated state-set
 
     func testMenu_inactiveCustom() throws {
@@ -106,6 +128,42 @@ final class TerminalRowContextMenuStandaloneTests: XCTestCase {
         let view = try menu(for: e)
         XCTAssertFalse(view.model.isCustomSession(e), "provenance: a command is NOT a custom session")
         try assertViewSnapshot(of: view, named: "TerminalRowContextMenu.nonCustom")
+    }
+
+    // MARK: - AN-R2-04 — energy-0 r2 close: the active-session arms (Stop + Restart)
+
+    /// With a LIVE session, two arms fire that every committed fixture (which asserts
+    /// `activeSession == nil`) left unexercised — the round-2 mutation sweep proved both
+    /// vacuous (mutating "Stop" / "Restart" with no live-session fixture stayed GREEN):
+    ///   - the destructive `if model.activeSession(for: entry) != nil` Stop button (`:3624`)
+    ///     → `Label("Stop", systemImage: "stop.fill")`
+    ///   - the `activeSession == nil ? "Launch" : "Restart"` ternary (`:3619`) → "Restart"
+    func testMenu_activeSession_rendersStopAndRestart() throws {
+        let (view, model) = try menuWithActiveSession(for: entry(kind: .shell))
+        XCTAssertNotNil(model.activeSession(for: view.entry),
+                        "provenance: an injected controller → a live session")
+        let tree = try ViewSnapshotHost.snapshotText(of: view)
+        XCTAssertTrue(tree.contains(#"text="Stop""#), "live session: the Stop button:\n\(tree)")
+        XCTAssertTrue(tree.contains(#"image="stop.fill""#), "live session: the stop glyph:\n\(tree)")
+        XCTAssertTrue(tree.contains(#"text="Restart""#), "live session: Launch→Restart:\n\(tree)")
+        XCTAssertFalse(tree.contains(#"text="Launch""#), "live session: NOT 'Launch':\n\(tree)")
+        try assertViewSnapshot(of: view, named: "TerminalRowContextMenu.activeSession")
+    }
+
+    /// Negative control (P2): with NO live session the SAME entry omits the Stop button and
+    /// labels the first action "Launch" (not "Restart") — proving the `activeSession`
+    /// presence gate is load-bearing for BOTH arms, and the trees differ.
+    func testMenu_activeSession_negativeControl_inactiveOmitsStopAndReadsLaunch() throws {
+        let (activeView, _) = try menuWithActiveSession(for: entry(kind: .shell))
+        let activeTree = try ViewSnapshotHost.snapshotText(of: activeView)
+
+        let inactiveTree = try ViewSnapshotHost.snapshotText(of: try menu(for: entry(kind: .shell)))
+        XCTAssertFalse(inactiveTree.contains(#"text="Stop""#), "inactive: no Stop button:\n\(inactiveTree)")
+        XCTAssertFalse(inactiveTree.contains(#"image="stop.fill""#), "inactive: no stop glyph:\n\(inactiveTree)")
+        XCTAssertTrue(inactiveTree.contains(#"text="Launch""#), "inactive: the Launch label:\n\(inactiveTree)")
+        XCTAssertFalse(inactiveTree.contains(#"text="Restart""#), "inactive: NOT 'Restart':\n\(inactiveTree)")
+
+        XCTAssertNotEqual(activeTree, inactiveTree, "the active-session gate must flip the tree")
     }
 
     // MARK: - Negative control (P2 mutation-verified)
