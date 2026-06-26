@@ -8850,7 +8850,7 @@ private struct DetailPaneChrome<Content: View>: View {
 /// current group's other sessions (the primary pane's session is excluded so
 /// the operator can't pick the same session into both panes) and assigns the
 /// tapped one to the secondary pane.
-private struct EmptyPanePicker: View {
+struct EmptyPanePicker: View {
     var excluding: UUID
     @ObservedObject var model: WorkbenchViewModel
 
