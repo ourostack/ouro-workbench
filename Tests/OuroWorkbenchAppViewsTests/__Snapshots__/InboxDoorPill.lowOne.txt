@@ -1,0 +1,4 @@
+View label="1 decision waiting on you — open the Decision Inbox"
+Image image="tray.full.fill"
+Text kind=static text="1 waiting on you"
+Image image="arrow.right"
