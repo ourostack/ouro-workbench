@@ -270,7 +270,7 @@ snapshots — they render no captured node). Reversible default recorded (D8).
 
 | seq | batch | views | regions | recipe |
 |---|---|---|---|---|
-| 1 | ⬜ B4 Terminal group/session sheets | 6 | 113 | model project/group/session state; FIXED `/tmp/u4` path-leak pins |
+| 1 | ✅ B4 Terminal group/session sheets | 6 | 113 | model project/group/session state; FIXED `/tmp/u4` path-leak pins — DONE: 113→69 carved, region 64.99%→66.57% |
 | 2 | ⬜ B5 Session detail strip + panels | 11 | 102 | `activeSession==nil` carve seam (C9); `workbenchTimeText`; always-true arms recorded |
 | 3 | ⬜ B3 Onboarding flow | 9 | 79 | onboarding `@Published` seams (C10); page/step arm coverage |
 | 4 | ⬜ B9 Harness/settings/import/recovery/misc | 12 | 74 | `HarnessStatusBuilder` AN-001 hermetic (C11); import presentation; RecoveryDrill producer |
@@ -456,3 +456,19 @@ ONLY remaining views-file residual is K1, split to its measured minimum (≤330,
   re-measure to ~0 minus carves; one commit per view. **New decisions D8 (K4 move/direct-test) + D9 (split
   partial carves per-arm, never blind-seed allowlist at 330).** Artifacts: `unit2-batch-plan.md` (full per-
   view region targets + per-batch recipes), `uncovered-by-view-postsplit.py`, `decls-postsplit.txt`.
+- 2026-06-26 B4 COMPLETE (terminal group/session sheets, 6 views). Drove every reachable
+  body region of all 6 views through real seams (model project/group/session state, FIXED
+  /tmp/u4 + <HOME>-masked path-leak pins, the proven live-session TerminalSessionController
+  seam for TerminalFocusView), each with an asserting content-pinned snapshot ref +
+  mutation-verified (RED→GREEN per view). **WorkbenchViews.swift region 64.99%→66.57%
+  (1046→999 uncovered, 47 regions driven); line 78.47%→82.39%.** Per-view: TerminalSearchBar
+  20→12, TerminalFocusView 17→8, NewTerminalGroupSheet 20→13, EditTerminalGroupSheet 17→8,
+  NewTerminalSessionSheet 17→17 (fallback value-flow driven+asserted; the 1 llvm region is
+  a ??-autoclosure artifact), EditTerminalSessionSheet 22→11. The 69 residual are all
+  genuinely-unreachable (in-closure-only button-action/onChange/onSubmit/onAppear, modal
+  NSOpenPanel, @State-no-init-seam, live-PTY, + 2 llvm measurement artifacts) → recorded in
+  b4-carve-records.md for the Unit-3 allowlist (NOT closed here). Gates: strict build 0/0;
+  full swift test 3448 tests / 1 skip / 0 fail; --uisurfacetest EXIT=0; check-coverage.sh
+  PASS (Core/ShellAdapter 100%, allowlist=2 + COVERAGE_DIRS UNCHANGED — Unit 3 wires the
+  gate); structural guards green; no path leaks in any new ref; SerpentGuide.ouro/ unstaged.
+  One commit per view (6) + carve-records doc.
