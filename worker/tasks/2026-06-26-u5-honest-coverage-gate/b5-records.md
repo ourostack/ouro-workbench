@@ -102,3 +102,22 @@ PROOF: scoped coverage → all 4 baseline regions GONE; only `L8899` (empty arm)
 covered by the existing empty-state test in the full suite → 0.
 MUTATION: removed `assignSecondaryPane(to: entry.id)` action body → 2 failures RED → revert → GREEN.
 CARVED: none. FIXED `/tmp/u5` cwd (leak-defended).
+
+### TranscriptRehydrationPreview (L9578-9642) — 5 → 4 driven (1 via INVOCATION), 1 carved
+BEFORE: 5 uncovered — `L9616:35` (truncated "tail" badge), `L9621:24` (the `Button {
+onShowTranscript() }` ACTION), `L9630:44` (the empty-preview placeholder arm), and `L9602:75`
+(the `strippingAnsiEscapes` regex-compile-failure else arm). Pure value-seam.
+DRIVEN:
+- `L9616` truncated badge: a `truncated: true` tail (asserting ref `.truncated`).
+- `L9630` empty arm: an empty-text tail → empty previewText → placeholder (ref `.empty`).
+- `L9621` Button ACTION via INVOCATION: `find(button: "View full transcript").tap()` →
+  `onShowTranscript()`; assert a captured `shown` flag flips.
+PROOF: scoped coverage → 4 baseline regions GONE; only `L9602:75` remains (the carve).
+MUTATION: removed `onShowTranscript()` body → tap test RED → revert → GREEN. The truncated/empty
+arms are guarded by the `.truncated`/`.empty` snapshot refs.
+CARVED (1): `L9602:75` — `guard let regex = try? NSRegularExpression(pattern: <fixed literal>)
+else { return input }`. The pattern is a constant valid regex that ALWAYS compiles, so `try?`
+never returns nil → the else is genuinely UNREACHABLE. No seam (even an invoking test) can inject
+a bad pattern (the pattern is a `private static let` literal, not a parameter). llvm-uncountable
+dead-else. → Unit 3 allowlist.
+CARVE kind: dead-else-on-constant-valid-regex.
