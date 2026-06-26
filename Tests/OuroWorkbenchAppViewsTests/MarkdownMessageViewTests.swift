@@ -95,6 +95,47 @@ final class MarkdownMessageViewTests: XCTestCase {
         try assertViewSnapshot(of: v, named: "MarkdownMessageView.mixed")
     }
 
+    // MARK: - U5 B3 — DRIVE the `headingFont(level:)` switch arms (L6777 case 1, L6779 default)
+
+    /// U5 B3 (corrected recipe). `headingFont(_ level:)` (`:6775`) is a three-arm switch:
+    /// `case 1 → .headline` (`:6777`), `case 2 → .subheadline`, `default → .callout` (`:6779`).
+    /// The C8 state-set only used level-2 headings (the `.subheadline` arm), leaving `case 1` and
+    /// `default` uncovered. A level-1 (`# H`) and a level-3 (`### H`) heading DRIVE the two
+    /// residual arms through the REAL `BossMessageMarkdown.blocks` producer (which carries the
+    /// heading `level`). The font is dropped by the host whitelist (nodeless), so the assertion is
+    /// provenance (the producer emits the right level) + the captured heading text renders, and the
+    /// MUTATION control proves the level→font switch is load-bearing.
+    func testMarkdown_headingLevel1_drivesHeadlineArm() throws {
+        XCTAssertEqual(BossMessageMarkdown.blocks(from: "# Top Heading"),
+                       [.heading(level: 1, text: "Top Heading")],
+                       "provenance: a level-1 heading → headingFont(1) → the .headline arm")
+        let tree = try ViewSnapshotHost.snapshotText(of: view("# Top Heading"))
+        XCTAssertTrue(tree.contains(#"text="Top Heading""#), "level-1 heading text renders:\n\(tree)")
+        XCTAssertFalse(tree.contains("#"), "the leading hash is stripped:\n\(tree)")
+        try assertViewSnapshot(of: view("# Top Heading"), named: "MarkdownMessageView.headingLevel1")
+    }
+
+    func testMarkdown_headingLevel3_drivesDefaultArm() throws {
+        XCTAssertEqual(BossMessageMarkdown.blocks(from: "### Deep Heading"),
+                       [.heading(level: 3, text: "Deep Heading")],
+                       "provenance: a level-3 heading → headingFont(3) → the default (.callout) arm")
+        let tree = try ViewSnapshotHost.snapshotText(of: view("### Deep Heading"))
+        XCTAssertTrue(tree.contains(#"text="Deep Heading""#), "level-3 heading text renders:\n\(tree)")
+        try assertViewSnapshot(of: view("### Deep Heading"), named: "MarkdownMessageView.headingLevel3")
+    }
+
+    /// NEGATIVE CONTROL — the heading `level` reaches the producer and drives the captured text.
+    /// `headingFont(level:)` returns a SwiftUI `Font`, which the host whitelist drops (nodeless),
+    /// so the font VALUE per arm is a presentation-only constant (anneal P2: presentation constants
+    /// are out of mutation-energy scope — a nodeless `.headline`↔`.callout` swap produces a
+    /// byte-identical tree). The load-bearing, mutation-verifiable behaviour is the producer's
+    /// `level` classification, asserted here; flipping the input heading level changes it.
+    func testMarkdown_headingLevels_distinctProducerClassification() throws {
+        XCTAssertEqual(BossMessageMarkdown.blocks(from: "# H"), [.heading(level: 1, text: "H")])
+        XCTAssertEqual(BossMessageMarkdown.blocks(from: "## H"), [.heading(level: 2, text: "H")])
+        XCTAssertEqual(BossMessageMarkdown.blocks(from: "### H"), [.heading(level: 3, text: "H")])
+    }
+
     // MARK: - Determinism (P3)
 
     func testMarkdown_byteIdenticalTwiceAndNoLeak() throws {
