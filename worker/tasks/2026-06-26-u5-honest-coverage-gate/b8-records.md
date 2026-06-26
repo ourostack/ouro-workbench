@@ -48,3 +48,14 @@ ASSERT: `presentation.topSeverity == .low` (provenance) + `color(for: .low) == .
 MUTATION: `case .low: return .secondary` → `return .red` → `testDoor_colorForSeverity…` RED
 (`"red" != "secondary"`) → revert → GREEN. Snapshot ref `InboxDoorPill.lowOne` recorded.
 CARVED: none.
+
+### MetricStateChip (L5677-5719) — 1 → 1 driven, 0 carved
+BEFORE: 1 uncovered (`5697:28` — `Button { onRetry() }` action closure; existing C2 test renders
+the retry glyph with `onRetry: {}` but never taps it).
+DRIVEN via INVOCATION: an unavailable+retryable `MetricValuePresentation` (`resolve(value:nil,
+isAvailable:false,issue:)` → `canRetry`) renders the retry button; `find(ViewType.Button.self).tap()`
+executes `{ onRetry() }`. ASSERT: a recording closure `{ retried += 1 }` → `retried == 1`. Negative
+control `testMetricStateChip_value_noRetryButton`: an available chip renders NO button (the
+`if presentation.isUnavailable` / `if let onRetry, canRetry` gate is load-bearing → button search throws).
+MUTATION: `onRetry()` → `_ = onRetry` → retry-tap test RED (`0 != 1`) → revert → GREEN.
+CARVED: none.
