@@ -1,0 +1,4 @@
+Text kind=static text="Boss Agent"
+TextField kind=editable text=""
+Text kind=static text="Cancel"
+Text kind=static text="Use"
