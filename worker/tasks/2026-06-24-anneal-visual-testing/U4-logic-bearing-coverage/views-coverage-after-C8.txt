@@ -1,0 +1,47 @@
+U4 — C8 (Agent manager / inventory — the AN-001 cluster) — views-lib coverage after C8
+
+Measured first-hand (canonical):
+  xcrun llvm-cov export <PackageTests.xctest binary> \
+    -instr-profile .build/.../codecov/default.profdata -summary-only \
+    | filter files under Sources/OuroWorkbenchAppViews/
+
+Branch: feat/anneal-c8-agent-manager (off origin/main @ 092ed2c1; origin/main advanced to cce43c7 = C7 #313 during the run — rebased clean+additive before push)
+
+Two measurements (both first-hand):
+
+(1) C8-ISOLATED delta — measured pre-rebase, C6-on-main baseline (no C7 in tree),
+    3237-test suite (3219 base + 18 C8):
+      region: 1829/5962 = 30.68%   (C6 baseline 1774/5962 = 29.76%  →  +55 regions, +0.92pp)
+      line:   13480/32243 = 41.81% (C6 baseline 12359/32243 = 38.33% →  +1121 lines, +3.48pp)
+    This is C8's own contribution.
+
+(2) POST-REBASE absolute — measured on the rebased tree (includes C7 #313 + C8),
+    3270-test suite, 0 failures, 1 pre-existing env-gated skip:
+      region: 1942/5962 = 32.57%   (post-C7 baseline 29.95%  →  C7+C8 combined)
+      line:   14541/32243 = 45.10% (post-C7 baseline 40.63%  →  C7+C8 combined)
+    This is what lands on the PR branch (C7 already on main; C8 is the additive delta).
+
+NOT gated (the views lib is the campaign's FINAL coverage-gate step). COVERAGE_DIRS
+(Sources/OuroWorkbenchCore + Sources/OuroWorkbenchShellAdapter) and the allowlist are
+UNCHANGED — `git diff origin/main` on scripts/check-coverage.sh + scripts/coverage-allowlist.txt
+is EMPTY; allowlist sha e3212be10db3ff4d514af0074f3ffce7d85f79a6 unchanged.
+
+C8 views covered this cluster (3 sub-units; OuroAgentManagerView was already the C0 first-member):
+  C8-1  AgentHomeEmptyState                (4 refs) — !ouroAgents.isEmpty "Installed agents" card
+                                                       + per-row InstalledAgentRowPresentation.reason
+  C8-2  MarkdownMessageView                (4 refs) — BossMessageMarkdown.blocks switch over
+                                                       .heading/.bullet/.paragraph/.blank
+  C8-3  OnboardingAgentProviderSummary     (4 refs) — lanesShareOneConnection + ProviderModelPill
+                                                       label (real-label vs "not connected yet")
+
+12 new references; +18 tests (3219→3237 full strict suite, +18 from the 3 new C8 files).
+Mutation-verify: 3/3 surfaces CAUGHT, 0 uncaught.
+Access-widening: 1 (OnboardingAgentProviderSummary private->internal, prod-byte-identical).
+AN-001: dual-injection (temp agentBundlesURL into BOTH registrar + inventory) in the
+        AgentHomeEmptyState VM fixture; the other two C8 leaves take fixed value-types directly
+        (no inventory scan in-surface). No backlog change — AN-001 source defect already recorded
+        OPEN (campaign doc); injected around for determinism (no new sharpening needed: this
+        cluster did not exercise the BossWorkbenchMCPRegistrar default-path seam — AgentHomeEmptyState
+        reads model.ouroAgents only, pinned hermetic by the inventory temp-dir injection).
+No-leak: every C8 ref free of /Users/, /var/folders/, machine-agent name, NSFullUserName, real UUID.
+No timestamp/clock surface in C8 → no cross-TZ proof needed.
