@@ -7765,6 +7765,13 @@ private struct SessionStatusRowView: View {
 
 struct ActionLogView: View {
     var entries: [WorkbenchActionLogEntry]
+    /// The zone + locale the per-entry timestamp renders in (AN-007). Both default to the
+    /// operator's local values (`.autoupdatingCurrent`) so production is byte-identical to the
+    /// prior raw `occurredAt.formatted(date:.omitted, time:.standard)`; the clock test injects
+    /// `.gmt` + `en_GB` for a snapshot that's byte-identical across CI runner zones AND locales
+    /// (the C4 `DecisionLogRow` / `BossWatchStatusView` recipe).
+    var timeZone: TimeZone = .autoupdatingCurrent
+    var locale: Locale = .autoupdatingCurrent
     @State private var isExpanded = false
 
     private var displayedEntries: ArraySlice<WorkbenchActionLogEntry> {
@@ -7830,7 +7837,7 @@ struct ActionLogView: View {
             Image(systemName: WorkbenchActionOutcomePresentation.iconSystemName(for: tone))
                 .foregroundStyle(Self.swiftUIColor(for: WorkbenchActionOutcomePresentation.color(for: tone)))
                 .fixedSize()
-            Text(entry.occurredAt.formatted(date: .omitted, time: .standard))
+            Text(entry.occurredAt.workbenchTimeText(date: .omitted, time: .standard, timeZone: timeZone, locale: locale))
                 .font(.caption.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .fixedSize()
@@ -7884,6 +7891,11 @@ struct ActionLogView: View {
 /// cluster. The counts come from the pure `BossActionReceiptSummary`.
 struct BossActionReceiptStrip: View {
     @ObservedObject var model: WorkbenchViewModel
+    /// Zone + locale forwarded to the expanded `ActionLogView`'s per-entry timestamp (AN-007).
+    /// Both default to `.autoupdatingCurrent` (operator-local, prod byte-identical); the clock
+    /// test injects `.gmt` + `en_GB` for a deterministic snapshot.
+    var timeZone: TimeZone = .autoupdatingCurrent
+    var locale: Locale = .autoupdatingCurrent
     @State private var isExpanded = false
 
     private var summary: BossActionReceiptSummary { model.bossActionReceiptSummary }
@@ -7926,7 +7938,7 @@ struct BossActionReceiptStrip: View {
                 .buttonStyle(.plain)
                 .help("The boss's executed actions — \(summary.label). Click to see the full log.")
                 if isExpanded {
-                    ActionLogView(entries: model.recentActionLogEntries)
+                    ActionLogView(entries: model.recentActionLogEntries, timeZone: timeZone, locale: locale)
                 } else if summary.hasFailures {
                     // Surface the failed receipts prominently even when collapsed,
                     // so a failure is never one disclosure away.
