@@ -14,11 +14,13 @@
 #   OURO_WB_REPO         GitHub owner/repo        (default: ourostack/ouro-workbench)
 #   OURO_WB_INSTALL_DIR  install destination dir  (default: ~/Applications)
 #   OURO_WB_NO_OPEN=1    don't open the app after installing
+#   GH_TOKEN/GITHUB_TOKEN optional GitHub API token for CI/rate-limit resilience
 set -euo pipefail
 
 REPO="${OURO_WB_REPO:-ourostack/ouro-workbench}"
 INSTALL_DIR="${OURO_WB_INSTALL_DIR:-$HOME/Applications}"
 API="https://api.github.com/repos/${REPO}/releases?per_page=1"
+GITHUB_API_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
 APP_NAME="Ouro Workbench"
 APP_BUNDLE="$APP_NAME.app"
 EXPECTED_BUNDLE_ID="com.ourostack.workbench"
@@ -40,6 +42,18 @@ for tool in curl shasum ditto plutil codesign pgrep ps osascript; do
   command -v "$tool" >/dev/null 2>&1 || die "required tool not found: $tool"
 done
 [ -x /usr/libexec/PlistBuddy ] || die "required tool not found: /usr/libexec/PlistBuddy"
+
+github_api_curl() {
+  local headers
+  headers=(
+    -H "Accept: application/vnd.github+json"
+    -H "X-GitHub-Api-Version: 2022-11-28"
+  )
+  if [ -n "$GITHUB_API_TOKEN" ]; then
+    headers+=(-H "Authorization: Bearer $GITHUB_API_TOKEN")
+  fi
+  curl -fsSL "${headers[@]}" "$@"
+}
 
 tmp=""
 install_staging=""
@@ -279,7 +293,7 @@ ASSET_URLS
 }
 
 say "Finding the latest Ouro Workbench release…"
-rel="$(curl -fsSL "$API")" || die "couldn't reach the GitHub release API."
+rel="$(github_api_curl "$API")" || die "couldn't reach the GitHub release API."
 
 select_release_assets
 zip_name="$(basename "$zip_url")"
