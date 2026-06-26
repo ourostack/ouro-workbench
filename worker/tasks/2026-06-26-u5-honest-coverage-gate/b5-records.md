@@ -140,3 +140,23 @@ remain scoped, covered by the existing `testInspector_withNotes` in the full sui
 MUTATION: removed `onShowTranscript()` body → tap test RED → revert → GREEN. The cli/badge/ternary
 arms are guarded by `.rich`/`.manualRestart` + the negative control.
 CARVED: none. FIXED `/tmp/u5` + `/tmp/u5-inspector` paths (leak-defended).
+
+### CustomSessionManagementBar (L9356-9421) — 10 → 10 driven (6 via INVOCATION), 0 carved
+BEFORE: 10 uncovered — `L9362`/`L9370`/`L9378`/`L9390`/`L9396`/`L9405` (Edit/Duplicate/Move-
+project/Restore/Archive/Delete button ACTIONS) + `L9368`/`L9387`/`L9402`/`L9411` (the
+`isRunning ? "Stop … before …" : …` help-ternary TRUE arms). C9 drove the render flip only.
+DRIVEN:
+- 6 button ACTIONS via INVOCATION (one fresh model per tap → independent `@Published`
+  assertion): Edit→`editingSession`; Duplicate→`processEntries.count` 1→2; Move("Other")→
+  `projectId` changes (the `Menu{}` IS descended → `find(button: "Other").tap()`); Restore→
+  un-archived; Archive→archived; Delete→`pendingDeleteSession`.
+- 4 `isRunning`-true help arms: CONSTRUCT the bar with a live session injected (no-PTY
+  `TerminalSessionController` in `activeSessions`); the body's ternaries evaluate during
+  traversal (the `.help` tooltip node is dropped by the host but the ternary EXECUTES → region
+  colored). Non-vacuity: `isRunning == true` asserted; asserting ref `.running`.
+PROOF: scoped `--filter CustomSessionManagementBarDriveTests --enable-code-coverage` → **0
+uncovered** (all 10 regions colored by this file alone).
+MUTATION: removed `beginEditingSession(entry)` → Edit-tap RED; removed `moveSession(entry,…)` →
+Move-tap RED → revert → GREEN. (The remaining 4 taps share the identical assert-the-side-effect
+structure.)
+CARVED: none. FIXED `/tmp/u5` paths (leak-defended).
