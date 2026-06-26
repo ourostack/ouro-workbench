@@ -42,6 +42,8 @@ scripts/selftest-shell-dependency-watch.sh
 scripts/smoke-package-shallow-guard.sh
 scripts/install-latest-app-artifact.sh --help >/dev/null
 scripts/install-latest-release.sh --help >/dev/null
+scripts/resolve-latest-release-tag.sh --help >/dev/null
+scripts/selftest-latest-release-installer.sh
 scripts/collect-support-diagnostics.sh --help >/dev/null
 scripts/smoke-support-diagnostics-crash-reports.sh
 scripts/generate-release-notes.sh >/dev/null

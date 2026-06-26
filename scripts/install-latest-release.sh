@@ -70,7 +70,7 @@ if ! command -v gh >/dev/null 2>&1; then
 fi
 
 if [[ -z "$TAG" ]]; then
-  TAG="$(gh release view --repo "$REPO" --json tagName --jq .tagName)"
+  TAG="$("$ROOT_DIR/scripts/resolve-latest-release-tag.sh" --repo "$REPO")"
 fi
 if [[ -z "$TAG" || "$TAG" == "null" ]]; then
   printf 'No release tag found for %s\n' "$REPO" >&2
