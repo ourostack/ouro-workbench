@@ -57,14 +57,18 @@ enum WorkbenchAppSource {
     ///
     /// Paths are relative to `Sources/OuroWorkbenchAppViews/`.
     static let orderedLibFiles: [String] = [
-        // U0 Unit 3′ (Reading #2 — full view-layer move, merges campaign U3+U4): the entire
-        // post-`App`/`AppDelegate` body of the old single file (original lines 132–21313) moved
-        // here as ONE file in BYTE-EXACT original declaration order. Listed FIRST because in the
-        // old file it began at line 132, BEFORE DashboardRowLabel (was @ 4930). Keeping the whole
-        // body contiguous in declaration order guarantees every cross-declaration `sourceSlice`
-        // pair (e.g. `TerminalSessionController`→`CapturingLocalProcessTerminalView`,
-        // `WorkbenchRootView`→`WorkbenchMenuBarController`) stays byte-adjacent in the union.
-        "WorkbenchViewsAndModel.swift",
+        // U5 PR#1 (pure move): the old `WorkbenchViewsAndModel.swift` was split into two files in
+        // BYTE-EXACT original declaration order — `WorkbenchViews.swift` (the View structs, original
+        // lines 1–10605 + the relocated `WorkbenchGroupColor.swiftUIColor` view helper) then
+        // `WorkbenchViewModel.swift` (the view model @ old line 10606 onward + the terminal-session
+        // machinery). Listed in that order so the views file (pre-VM decls, began @ old line 132)
+        // leads the VM file (began @ old line 10606), BEFORE DashboardRowLabel (was @ 4930). Every
+        // cross-declaration `sourceSlice` pair stays byte-adjacent: `TerminalSessionController`→
+        // `CapturingLocalProcessTerminalView` both live in WorkbenchViewModel.swift, and
+        // `WorkbenchRootView`→`WorkbenchMenuBarController` both stay in WorkbenchViews.swift, so no
+        // pair straddles the new file boundary (M = 0 guard-slice retargets).
+        "WorkbenchViews.swift",
+        "WorkbenchViewModel.swift",
         // U0 Unit 1 keystone — the one VM-free leaf view moved first (was @ line 4930 in the old
         // file; unguarded, so its position relative to the big file does not affect any slice).
         "Views/DashboardRowLabel.swift",
