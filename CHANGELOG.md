@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.180 - Login-item coverage tightening
+
+- Internal: the "Open at Login" controller and its boss-pane row (status line, enable/disable, error reporting) are now driven to test coverage by injecting the login-item plist handler behind a seam, so the state transitions and error path are exercised hermetically. No user-facing behavior change.
+
 ## 0.1.179 - Boss-pane Advanced coverage tightening
 
 - Internal: the boss pane's expanded "Advanced" section is now driven to test coverage by adding an injectable initial-state seam, so the expanded render (watch status, agent manager, transcript search, runtime, release, recovery drill, action log) is exercised. No user-facing behavior change — the pane still starts collapsed.
