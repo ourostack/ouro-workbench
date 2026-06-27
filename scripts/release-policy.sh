@@ -433,6 +433,8 @@ selftest_paths_mode() {
     VERSION
     scripts/package-app.sh
     scripts/preflight.sh
+    scripts/check-shell-boundary.sh
+    scripts/shell-boundary-allowlist.txt
     scripts/verify-published-release.sh
     scripts/release-policy.sh
     .github/workflows/release.yml
@@ -471,6 +473,7 @@ required_ci = [
     "scripts/release-policy.sh selftest-package-guards",
     "scripts/release-policy.sh selftest-shell-dependency-watch",
     "scripts/release-policy.sh selftest-paths",
+    "scripts/check-shell-boundary.sh --selftest",
     "scripts/check-shell-boundary.sh",
 ]
 for needle in required_ci:
@@ -484,6 +487,7 @@ required_preflight = [
     "scripts/release-policy.sh selftest-shell-dependency-watch",
     "scripts/release-policy.sh selftest-paths",
     "scripts/check-shell-dependency.sh",
+    "scripts/check-shell-boundary.sh --selftest",
     "scripts/check-shell-boundary.sh",
 ]
 for needle in required_preflight:

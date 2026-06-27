@@ -46,6 +46,7 @@ scripts/release-policy.sh selftest-paths
 
 run_step "Verify shared shell dependency freshness"
 scripts/check-shell-dependency.sh
+scripts/check-shell-boundary.sh --selftest
 scripts/check-shell-boundary.sh
 scripts/smoke-package-shallow-guard.sh
 scripts/install-latest-app-artifact.sh --help >/dev/null

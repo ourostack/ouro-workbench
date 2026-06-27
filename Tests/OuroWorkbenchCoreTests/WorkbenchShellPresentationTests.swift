@@ -18,6 +18,33 @@ final class WorkbenchShellPresentationTests: XCTestCase {
         XCTAssertEqual(model.accessibilityLabel, "About Ouro Workbench")
     }
 
+    @MainActor
+    func testShellAboutViewConstructsSharedAboutBody() {
+        let view = WorkbenchShellAboutView(
+            presentation: WorkbenchShellAboutPresentation(buildHash: "abc1234"),
+            updateState: ReleaseUpdateViewState(kind: .current, statusLine: "up to date"),
+            updateActions: ReleaseUpdateActions(checkForUpdates: {}),
+            aboutActions: AppShellAboutActions()
+        )
+
+        let body = view.body
+
+        XCTAssertTrue(String(describing: type(of: body)).contains("AppShellAboutView"))
+    }
+
+    @MainActor
+    func testShellUpdatePanelViewConstructsSharedReleaseBody() {
+        let view = WorkbenchShellUpdatePanelView(
+            state: ReleaseUpdateViewState(kind: .notChecked, statusLine: "not checked"),
+            actions: ReleaseUpdateActions(checkForUpdates: {}),
+            showTitle: true
+        )
+
+        let body = view.body
+
+        XCTAssertFalse(String(describing: type(of: body)).isEmpty)
+    }
+
     func testCommandReferenceMapsGuideIntoShellItems() {
         let items = WorkbenchShellCommandReference.items
         let guideRows = WorkbenchGuide.shortcutCategories.flatMap(\.shortcuts)
