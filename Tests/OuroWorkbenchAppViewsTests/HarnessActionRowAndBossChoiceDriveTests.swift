@@ -33,7 +33,6 @@ final class HarnessActionRowAndBossChoiceDriveTests: XCTestCase {
     /// `isBusy == true` renders the in-flight `ProgressView` (the TRUE arm); the action
     /// closure also fires on tap. A negative control (`isBusy == false`) has NO ProgressView.
     func testHarnessActionRow_isBusy_rendersProgressViewAndAction() throws {
-        let model = try makeVM()
         var fired = false
         let busy = HarnessActionRow(title: "Bring back online", systemImage: "bolt.heart",
                                     help: "repair", isUrgent: true, isBusy: true, action: { fired = true })

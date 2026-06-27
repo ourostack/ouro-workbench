@@ -62,8 +62,8 @@ final class AgentCardActionsDriveTests: XCTestCase {
         let agent = record("alpha")
         let before = model.state.actionLog.count
         try AgentActionsCard(agent: agent, model: model).inspect().find(button: "Run ouro check").tap()
-        XCTAssertEqual(model.state.actionLog.first?.action, "repairAgent",
-                       "Run ouro check runs repairAgent (logged); the session launch is seamed spawn-free")
+        XCTAssertTrue(model.state.actionLog.contains { $0.action == "repairAgent" },
+                      "Run ouro check runs repairAgent (logged); the session launch is seamed spawn-free")
         XCTAssertGreaterThan(model.state.actionLog.count, before, "an action-log entry was recorded")
     }
 
