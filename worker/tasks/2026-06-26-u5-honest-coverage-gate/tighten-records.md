@@ -243,3 +243,29 @@ was **`1224 lines / 242 regions uncovered`**. Allowlist set to the exact minimum
 synthesizable init seam without a verbose explicit init), `selectedIndex` (CommandPaletteSheet
 keyboard-nav highlight + the irreducible `.onKeyPress` handlers), `customBossIsPresented`
 (BossSelectorView popover — the standalone BossAgentNamePopover content is separately drivable).
+
+---
+
+## Class 7 — AboutSheet build-hash + AutonomyStatusButton loginItemCheck (PR #349, v0.1.182)
+
+**Carve before:** AboutSheet's `buildHash` read `Bundle.main` CFBundleVersion live (the about
+presentation + version-line render was environment-dependent, carved). AutonomyStatusButton's
+`loginItemCheck` 4-case map had 3 arms unreachable (the live machine reports one login status).
+
+**Drive:**
+- AboutSheet: `init(model:buildHash:)` seam (prod default = `CFBundleVersion ?? "dev"`, byte-
+  identical). AboutSheetTests asserts the injected hash renders in the version line + a negative
+  control (hash flips the tree) + the default-init prod path. openRepository (NSWorkspace) /
+  copyVersion (NSPasteboard) stay carved.
+- AutonomyStatusButton: extract `loginItemCheck` to a behavior-identical `static func
+  loginItemCheck(for:)`; unit-test all 4 arms by value (detail + severity). Add `init(model:
+  loginItem:)` for an injected-controller integration render. The `.popover{}` content descent
+  stays carved (AutonomyStatusPopover covered standalone).
+Mutation-verified (appBundleMissing `.blocker`→`.ok` → RED; AboutSheet buildHash→constant → RED).
+
+**CI-measured result (Coverage job, run 28300196247):** residual printed by the probe `1195 228`
+was **`1205 lines / 238 regions uncovered`**. Allowlist set to the exact minimum **`1205 238`**
+(was `1224 242`). **Driven out: 19 lines / 4 regions.**
+
+(GitSessionStatus.swift's live-git flake recurred on this probe run — the same pre-existing
+environmental flake in an untouched Core file; cleared on the final run.)

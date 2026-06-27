@@ -161,7 +161,9 @@ MailboxClient.swift 1 1
 # driven OUT). Measured on the Coverage job at run 28299620615 (probe-then-set: the probe 1230/238
 # forced the gate to print the exact residual `1224 lines / 242 regions`).
 # Coverage Class 7 (v0.1.182) DROVE AboutSheet build-hash (init seam) + AutonomyStatusButton
-# loginItemCheck (extracted static fn, 4 arms): lowering 1224/242 by the now-covered regions.
-# PROBE VALUE (Class 7): set deliberately below the true residual to force the Coverage job to print
-# the EXACT remaining uncovered line/region count; the next commit sets it to the CI-measured minimum.
-WorkbenchViews.swift 1195 228
+# loginItemCheck (extracted static fn, 4 arms): 1224/242 → 1205/238 (19 lines / 4 regions driven OUT).
+# Measured on the Coverage job at run 28300196247 (probe-then-set: the probe 1195/228 forced the gate
+# to print the exact residual `1205 lines / 238 regions`). Verified minimal: lowering EITHER number by
+# 1 makes the gate FAIL. (NOTE: GitSessionStatus.swift's live-git flake recurred on the probe run — a
+# pre-existing environmental flake in an untouched Core file; it clears on re-run.)
+WorkbenchViews.swift 1205 238
