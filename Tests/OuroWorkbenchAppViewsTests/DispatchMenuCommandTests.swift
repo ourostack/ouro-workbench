@@ -30,6 +30,30 @@ final class DispatchMenuCommandTests: XCTestCase {
     private static let entry2 = UUID(uuidString: "C0FFEE01-0000-0000-0000-0000000000E2")!
     private static let wsId = UUID(uuidString: "C0FFEE01-0000-0000-0000-0000000000B1")!
 
+    // MARK: - UserDefaults isolation
+    //
+    // The workspace-open/save flows persist the recent-workspaces list into the SHARED
+    // `UserDefaults.standard` (the `recentWorkspacePaths` key), which HeaderView's "Open
+    // Recent Workspace" submenu reads back. If a test here leaked a temp path into that key,
+    // it would contaminate OTHER suites' committed snapshots (e.g. HeaderCollapsedInboxBadge).
+    // Snapshot + restore the key around every test so this suite leaves NO global trace.
+
+    private var savedRecents: Any?
+
+    override func setUp() {
+        super.setUp()
+        savedRecents = UserDefaults.standard.object(forKey: WorkbenchViewModel.recentWorkspacePathsDefaultsKey)
+    }
+
+    override func tearDown() {
+        if let savedRecents {
+            UserDefaults.standard.set(savedRecents, forKey: WorkbenchViewModel.recentWorkspacePathsDefaultsKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: WorkbenchViewModel.recentWorkspacePathsDefaultsKey)
+        }
+        super.tearDown()
+    }
+
     // MARK: - Fixtures
 
     private func makeVM() throws -> WorkbenchViewModel {
@@ -212,21 +236,32 @@ final class DispatchMenuCommandTests: XCTestCase {
         XCTAssertNil(m.errorMessage, ".openWorkspace cancel arm → no value-flow, no error")
     }
 
-    func testSaveWorkspace_noSelectedProjectTerminals_setsMessage() throws {
+    func testSaveWorkspace_routesIntoSaveWorkspacePanel() throws {
         let m = try makeVM()
-        // The Home project HAS terminals, so we reach the panel; the save seam returns a
-        // real temp URL → the JSON is written and an action-log entry is recorded.
-        let dest = URL(fileURLWithPath: NSTemporaryDirectory())
-            .appendingPathComponent("dispatch-save-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
-        let file = dest.appendingPathComponent("config.workbench.json")
-        m.chooseWorkspaceSaveURL = { _ in file }
-        let before = m.state.actionLog.count
+        // Drive the `.saveWorkspace` arm into presentSaveWorkspacePanel. We inject a save
+        // seam that RECORDS it was invoked and returns nil (the cancel arm), so the method
+        // reaches the modal-resolution step (proving the route) but takes its early-return —
+        // it does NOT write a recent-workspace (which would pollute the shared UserDefaults
+        // recents key that HeaderView's "Open Recent" submenu reads, breaking other suites'
+        // snapshots). The Home project has terminals, so we pass the pre-modal guards.
+        var sawSavePanel = false
+        m.chooseWorkspaceSaveURL = { _ in sawSavePanel = true; return nil }
         dispatch(.saveWorkspace, to: m)
-        XCTAssertEqual(m.state.actionLog.count, before + 1,
-                       ".saveWorkspace → presentSaveWorkspacePanel writes + records the save")
-        XCTAssertEqual(m.state.actionLog.first?.action, "saveWorkspaceConfig")
-        XCTAssertTrue(FileManager.default.fileExists(atPath: file.path), "the JSON file landed")
+        XCTAssertTrue(sawSavePanel, ".saveWorkspace → presentSaveWorkspacePanel reaches the save-panel seam")
+    }
+
+    func testSaveWorkspace_noTerminals_setsMessage_beforeModal() throws {
+        let m = try makeVM()
+        // Clear the workspace's terminals so the pre-modal `guard !config.terminals.isEmpty`
+        // fails: the arm still routes into presentSaveWorkspacePanel (proving the route via
+        // the error message) but returns before the modal seam — a strong, write-free assert.
+        m.state.processEntries = []
+        var sawSavePanel = false
+        m.chooseWorkspaceSaveURL = { _ in sawSavePanel = true; return nil }
+        dispatch(.saveWorkspace, to: m)
+        XCTAssertFalse(sawSavePanel, "no-terminals guard returns before the modal seam")
+        XCTAssertEqual(m.errorMessage, "Home has no terminals to save",
+                       ".saveWorkspace → presentSaveWorkspacePanel no-terminals message")
     }
 
     // MARK: - Font arms
