@@ -651,12 +651,19 @@ public struct WorkbenchRootView: View {
 final class WorkbenchMenuBarController: NSObject, NSMenuDelegate {
     static let shared = WorkbenchMenuBarController()
 
-    private weak var model: WorkbenchViewModel?
-    private let statusItem: NSStatusItem
-    private let menu: NSMenu
+    // Coverage-tightening (Class 2): widened private→internal so a direct unit test can
+    // construct a FRESH, isolated controller (not the shared singleton) and assert on its
+    // attached model / built menu / status-item state. Pure access-widen, no logic change —
+    // `shared` still constructs identically and is the only instance prod ever uses.
+    private(set) weak var model: WorkbenchViewModel?
+    let statusItem: NSStatusItem
+    let menu: NSMenu
     private var watchObservation: NSObjectProtocol?
 
-    override private init() {
+    // Coverage-tightening (Class 2): `override private init()` → `override init()` so tests
+    // build their own instance. Prod is byte-identical: `shared` is the sole production
+    // construction site and still runs this exact body.
+    override init() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         menu = NSMenu()
         super.init()
