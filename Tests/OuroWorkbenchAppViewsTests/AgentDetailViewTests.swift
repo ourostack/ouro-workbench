@@ -118,6 +118,34 @@ final class AgentDetailViewTests: XCTestCase {
                        "collapsed: the inspector's config-path row is NOT rendered:\n\(tree)")
     }
 
+    // MARK: - Class 6 — the `if showsInspector` EXPANDED arm, DRIVEN via the init seam
+
+    /// `initialShowsInspector: true` seeds the @State so the `if showsInspector`
+    /// AgentInspectorPanel + Divider arm renders — the disclosure chevron points DOWN and the
+    /// inspector's config-path row appears (the previously-carved arm).
+    func testDetail_inspectorArm_expandedRendersInspectorPanel() throws {
+        let view = AgentDetailView(
+            agent: record(name: "alpha-agent"), model: try makeVM(bossName: "x"),
+            initialShowsInspector: true)
+        let tree = try ViewSnapshotHost.snapshotText(of: view)
+        XCTAssertTrue(tree.contains(#"image="chevron.down""#),
+                      "expanded: the disclosure chevron points down:\n\(tree)")
+        XCTAssertTrue(tree.contains("AgentBundles/alpha-agent.ouro/agent.json"),
+                      "expanded: the inspector's config-path row renders:\n\(tree)")
+    }
+
+    /// The showsInspector gate flips the tree (negative control): the inspector's config-path
+    /// row appears ONLY in the expanded render.
+    func testDetail_inspectorArm_gateFlipsTree() throws {
+        let collapsed = try ViewSnapshotHost.snapshotText(of: try detail(boss: "x", agentName: "alpha-agent"))
+        let expanded = try ViewSnapshotHost.snapshotText(of: AgentDetailView(
+            agent: record(name: "alpha-agent"), model: try makeVM(bossName: "x"),
+            initialShowsInspector: true))
+        XCTAssertNotEqual(collapsed, expanded, "the showsInspector gate must flip the tree")
+        XCTAssertFalse(collapsed.contains("AgentBundles/alpha-agent.ouro/agent.json"))
+        XCTAssertTrue(expanded.contains("AgentBundles/alpha-agent.ouro/agent.json"))
+    }
+
     // MARK: - Negative control (P2 mutation-verified)
 
     /// The composite's boss-ness flows into the title strip: the boss capsule + the "Boss"

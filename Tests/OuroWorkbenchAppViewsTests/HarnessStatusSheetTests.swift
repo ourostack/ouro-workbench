@@ -119,6 +119,25 @@ final class HarnessStatusSheetTests: XCTestCase {
 
     // MARK: - Enumerated state-set
 
+    // MARK: - Class 6 — the isRefreshing in-flight arm, DRIVEN via the init seam
+
+    /// `initialIsRefreshing: false` → the Refresh button is ENABLED.
+    func testSheet_refreshButton_enabledWhenNotRefreshing() throws {
+        let model = try makeVM()
+        let view = HarnessStatusSheet(model: model, initialIsRefreshing: false)
+        let refresh = try view.inspect().find(button: "Refresh")
+        XCTAssertFalse(refresh.isDisabled(), "not refreshing → the Refresh button is enabled")
+    }
+
+    /// `initialIsRefreshing: true` seeds the @State so the in-flight render is reached: the
+    /// Refresh button is DISABLED (the `.disabled(isRefreshing)` true arm).
+    func testSheet_refreshButton_disabledWhenRefreshing() throws {
+        let model = try makeVM()
+        let view = HarnessStatusSheet(model: model, initialIsRefreshing: true)
+        let refresh = try view.inspect().find(button: "Refresh")
+        XCTAssertTrue(refresh.isDisabled(), "refreshing → the Refresh button is disabled")
+    }
+
     func testSheet_healthy_overallHealthyNoUrgentAction() throws {
         let model = try makeVM()
         model.ouroAgents = [record(name: "alpha-boss")]

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.181 - Disclosure-panel coverage tightening
+
+- Internal: the agent/session detail inspectors, the session transcript sheet, and the Harness Status refresh-in-flight state are now driven to test coverage via injectable initial-state seams. No user-facing behavior change — every panel still starts collapsed.
+
 ## 0.1.180 - Login-item coverage tightening
 
 - Internal: the "Open at Login" controller and its boss-pane row (status line, enable/disable, error reporting) are now driven to test coverage by injecting the login-item plist handler behind a seam, so the state transitions and error path are exercised hermetically. No user-facing behavior change.
