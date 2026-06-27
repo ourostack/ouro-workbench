@@ -150,3 +150,32 @@ each fail; `1406/287` passes.
 integration test `testReaderReturnsRepoStatusForThisCheckout` does `XCTSkipIf(resolvedGitPath ==
 nil)` and git wasn't resolved on that runner. This is a pre-existing environmental flake in a Core
 file untouched by this PR (it was 100% on the #344 merge run); re-running the Coverage job clears it.
+
+---
+
+## Class 4 — BossDashboardView showsAdvanced expanded arm (PR #346, v0.1.179)
+
+**Carve before:** `@State showsAdvanced` defaults to `false` with no init seam, so the
+`if showsAdvanced` expanded block (BossWatchStatusView, OuroAgentManagerView, TranscriptSearchView,
+MachineRuntimeView, ReleaseUpdateView, RecoveryDrillView, BossWorkbenchMCPSetupView, the prompt
+block, applied-actions, ActionLogView), the Show/Hide-Advanced label+chevron ternary's expanded
+arms, the expanded `idealHeight`/`maxHeight` ternaries, and the `.onChange(of:
+transcriptSearchFocusToken)` reveal were unreachable (a post-tap @State toggle is not re-inspectable).
+
+**Drive:** add `init(model:initialShowsAdvanced: Bool = false)` (prod default false → byte-identical
+at every call site, incl. the prod WorkbenchRootView) that seeds the @State. Tests:
+- collapsed arm (default) — "Show Advanced" + chevron.down, none of the expanded subviews;
+- EXPANDED arm (`initialShowsAdvanced: true`) — "Hide Advanced" + chevron.up + the Support-Diagnostics
+  (MachineRuntimeView) and Recovery-Drill subview markers (no committed snapshot, since the embedded
+  MachineRuntimeView reads machine-local login state — deterministic markers asserted instead);
+- expand/collapse gate negative control (Recovery Drill present only when expanded);
+- `.onChange(of: transcriptSearchFocusToken)` reveal via `callOnChange`;
+- the Show-Advanced toggle button action via `tap`.
+Mutation-verified (the Hide/Show label ternary swap → RED, reverted).
+
+**CI-measured result (Coverage job, run 28298452535):** residual printed by the probe `1370 265`
+was **`1346 lines / 276 regions uncovered`**. Allowlist set to the exact minimum **`1346 276`**
+(was `1406 287`). **Driven out: 60 lines / 11 regions.**
+
+**Irreducibly kept (this class):** the non-injectable MachineRuntimeView login-item leaf (its
+SMAppService-class login rows live in MachineRuntimeView's own decl — the next class target).

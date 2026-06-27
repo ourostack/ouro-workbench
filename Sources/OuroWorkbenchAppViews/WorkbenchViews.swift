@@ -5175,7 +5175,18 @@ struct CommandPaletteSheet: View {
 /// disclosure so it never eats the screen.
 struct BossDashboardView: View {
     @ObservedObject var model: WorkbenchViewModel
-    @State private var showsAdvanced = false
+    @State private var showsAdvanced: Bool
+
+    /// `initialShowsAdvanced` defaults to `false` — the prod behavior the boss pane presents
+    /// UNCHANGED (the collapsed-by-default pane). The seam parameter lets a test seed the
+    /// `@State` so the `if showsAdvanced` EXPANDED block (and the "Hide Advanced" label / the
+    /// expanded `idealHeight`/`maxHeight` ternary arms) is reachable under ViewInspector —
+    /// otherwise unreachable, since `@State` has no other init seam and a post-tap toggle is
+    /// not re-inspectable. Prod byte-identical at every call site (the default is `false`).
+    init(model: WorkbenchViewModel, initialShowsAdvanced: Bool = false) {
+        self.model = model
+        _showsAdvanced = State(initialValue: initialShowsAdvanced)
+    }
 
     var body: some View {
         advancedExpandingScrollView

@@ -160,20 +160,68 @@ final class BossDashboardViewStateSetTests: XCTestCase {
         try assertViewSnapshot(of: BossDashboardView(model: model), named: "BossDashboardView.fullDashboard")
     }
 
-    // MARK: - Unreachable-arm classification (the showsAdvanced carve-out — NOT fabricated)
+    // MARK: - Class 4 — the showsAdvanced expanded arm, DRIVEN via the init seam
 
-    /// The `showsAdvanced == true` arm is structurally unreachable through the snapshot
-    /// seam: `@State private var showsAdvanced = false` has no init seam, so `inspect()`
-    /// always renders `false`. We assert the reachable arm proves the collapsed state
-    /// (the "Show Advanced" label, the `chevron.down` glyph) — never fabricating the
-    /// expanded arm (which also embeds the non-injectable `MachineRuntimeView`). Recorded
-    /// in `allowlist-candidates.md`.
-    func testDashboard_showsAdvancedArm_isUnreachableCollapsedByDefault() throws {
+    /// Collapsed (default) arm: `showsAdvanced == false` → the "Show Advanced" label + the
+    /// `chevron.down` glyph, and NONE of the expanded subviews.
+    func testDashboard_showsAdvanced_collapsedByDefault() throws {
         let model = try makeVM(seedDecision: false)
         let tree = try ViewSnapshotHost.snapshotText(of: BossDashboardView(model: model))
         XCTAssertTrue(tree.contains("Show Advanced"), "collapsed: the Show (not Hide) label:\n\(tree)")
         XCTAssertFalse(tree.contains("Hide Advanced"), "collapsed: never the expanded Hide label:\n\(tree)")
         XCTAssertTrue(tree.contains("chevron.down"), "collapsed: the down chevron (not up):\n\(tree)")
+    }
+
+    /// Expanded arm (the previously-carved `if showsAdvanced` block): the
+    /// `init(initialShowsAdvanced: true)` seam seeds `@State showsAdvanced = true`, so the
+    /// expanded block renders — the "Hide Advanced" label + the `chevron.up` glyph + the
+    /// expanded subviews (Support Diagnostics from MachineRuntimeView, the Recovery Drill).
+    /// (No committed snapshot: the embedded MachineRuntimeView reads machine-local login-item
+    /// state; we assert deterministic markers instead.)
+    func testDashboard_showsAdvanced_expandedArm_rendersAdvancedSubviews() throws {
+        let model = try makeVM(seedDecision: false)
+        let tree = try ViewSnapshotHost.snapshotText(
+            of: BossDashboardView(model: model, initialShowsAdvanced: true))
+        XCTAssertTrue(tree.contains("Hide Advanced"), "expanded: the Hide (not Show) label:\n\(tree)")
+        XCTAssertFalse(tree.contains("Show Advanced"), "expanded: never the collapsed Show label")
+        XCTAssertTrue(tree.contains("chevron.up"), "expanded: the up chevron (not down)")
+        // Markers of the expanded-only subviews (MachineRuntimeView's Support-Diagnostics row +
+        // the RecoveryDrillView), which only render inside the `if showsAdvanced` block.
+        XCTAssertTrue(tree.contains("Support Diagnostics"),
+                      "expanded: MachineRuntimeView's Support-Diagnostics row renders:\n\(tree)")
+        XCTAssertTrue(tree.contains("Recovery Drill"),
+                      "expanded: the RecoveryDrillView renders:\n\(tree)")
+    }
+
+    /// The expand/collapse gate flips the tree (mutation-verified negative control): the
+    /// expanded subviews appear ONLY in the `initialShowsAdvanced: true` render.
+    func testDashboard_showsAdvanced_negativeControl_gateFlipsTree() throws {
+        let model = try makeVM(seedDecision: false)
+        let collapsed = try ViewSnapshotHost.snapshotText(of: BossDashboardView(model: model))
+        let expanded = try ViewSnapshotHost.snapshotText(
+            of: BossDashboardView(model: model, initialShowsAdvanced: true))
+        XCTAssertNotEqual(collapsed, expanded, "the showsAdvanced gate must flip the tree")
+        XCTAssertFalse(collapsed.contains("Recovery Drill"), "collapsed: no Recovery Drill")
+        XCTAssertTrue(expanded.contains("Recovery Drill"), "expanded: the Recovery Drill renders")
+    }
+
+    /// The `.onChange(of: transcriptSearchFocusToken)` closure (the ⌘K "Search Transcripts"
+    /// reveal) sets `showsAdvanced = true`. ViewInspector invokes it via `callOnChange`.
+    func testDashboard_transcriptSearchFocusToken_onChangeRevealsAdvanced() throws {
+        let model = try makeVM(seedDecision: false)
+        let view = BossDashboardView(model: model)
+        XCTAssertNoThrow(
+            try view.inspect().find(ViewType.ScrollView.self)
+                .callOnChange(oldValue: 0, newValue: 1),
+            "the transcriptSearchFocusToken onChange closure (showsAdvanced = true) executes")
+    }
+
+    /// The "Show/Hide Advanced" button ACTION (`showsAdvanced.toggle()`) is invoked by a tap.
+    func testDashboard_showAdvancedButton_tapInvokesToggle() throws {
+        let model = try makeVM(seedDecision: false)
+        XCTAssertNoThrow(
+            try BossDashboardView(model: model).inspect().find(button: "Show Advanced").tap(),
+            "the Show-Advanced button action (showsAdvanced.toggle()) executes")
     }
 
     // MARK: - Negative control (P2 mutation-verified)

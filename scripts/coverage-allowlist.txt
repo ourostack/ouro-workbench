@@ -67,7 +67,13 @@ DaemonLiveness.swift 1 1
 #      * LoginItemController / MachineRuntimeView — SMAppService login-item (system svc).
 #      * SessionDetailView / DetailSplitState — the live-PTY detail/split (TerminalPane
 #        NSViewRepresentable; the D3-class carve).
-#      * BossDashboardView — the `showsAdvanced` @State-no-init-seam arm.
+#      * BossDashboardView — TIGHTENED (coverage Class 4, v0.1.179): the `showsAdvanced`
+#        expanded arm is DRIVEN via an injectable `init(initialShowsAdvanced:)` seam (prod
+#        default false, byte-identical) — the `if showsAdvanced` block, the Show/Hide-Advanced
+#        label + chevron ternary arms, the expanded `idealHeight`/`maxHeight` ternaries, the
+#        `.onChange(of: transcriptSearchFocusToken)` reveal, and the toggle button action are
+#        all covered. Only the non-injectable MachineRuntimeView login-item LEAF (driven up to
+#        its boundary; the SMAppService-class login rows stay carved in their own decl) remains.
 #      * AutonomyStatusButton / AutonomyStatusPopover — popover non-descent + @State.
 #      * AboutSheet — the live build-hash arm. WindowChromeConfigurator — NSWindow chrome.
 #
@@ -106,6 +112,9 @@ DaemonLiveness.swift 1 1
 # Coverage Class 3 (v0.1.178) DROVE the four chooseRootPath/chooseWorkingDirectory NSOpenPanel
 # value-flows (seamed behind chooseDirectory): 1487/301 → 1406/287 (81 lines / 14 regions driven OUT).
 # Measured on the Coverage job at run 28297944555 (probe-then-set: the probe 1450/280 forced the gate
-# to print the exact residual `1406 lines / 287 regions`). Verified minimal: lowering EITHER number by
-# 1 makes the gate FAIL (the count-1 check).
-WorkbenchViews.swift 1406 287
+# to print the exact residual `1406 lines / 287 regions`).
+# Coverage Class 4 (v0.1.179) DROVE the BossDashboardView showsAdvanced expanded arm (init seam):
+# 1406/287 → 1346/276 (60 lines / 11 regions driven OUT). Measured on the Coverage job at run
+# 28298452535 (probe-then-set: the probe 1370/265 forced the gate to print the exact residual
+# `1346 lines / 276 regions`). Verified minimal: lowering EITHER number by 1 makes the gate FAIL.
+WorkbenchViews.swift 1346 276
