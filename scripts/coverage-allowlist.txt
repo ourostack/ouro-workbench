@@ -133,7 +133,8 @@ DaemonLiveness.swift 1 1
 # the Coverage job at run 28298993999 (probe-then-set: the first probe 1310/255 PASSED so a re-probe
 # at 1250/230 forced the gate to print the exact residual `1262 lines / 252 regions`).
 # Coverage Class 6 (v0.1.181) DROVE four @State disclosure/inspector/refresh arms (init seams on
-# AgentDetailView/SessionDetailView/HarnessStatusSheet): lowering 1262/252 by the now-covered arms.
-# PROBE VALUE (Class 6): set deliberately below the true residual to force the Coverage job to print
-# the EXACT remaining uncovered line/region count; the next commit sets it to the CI-measured minimum.
-WorkbenchViews.swift 1230 238
+# AgentDetailView/SessionDetailView/HarnessStatusSheet): 1262/252 → 1224/242 (38 lines / 10 regions
+# driven OUT). Measured on the Coverage job at run 28299620615 (probe-then-set: the probe 1230/238
+# forced the gate to print the exact residual `1224 lines / 242 regions`). Verified minimal: lowering
+# EITHER number by 1 makes the gate FAIL.
+WorkbenchViews.swift 1224 242
