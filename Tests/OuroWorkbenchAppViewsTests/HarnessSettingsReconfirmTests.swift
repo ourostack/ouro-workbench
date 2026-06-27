@@ -34,10 +34,11 @@ import OuroWorkbenchCore
 ///       vendored `OuroAppShellUI.AppShellAboutView`. A machine/build-version
 ///       surface with no data-state seam → a final-step allowlist candidate, NOT a
 ///       snapshot (a snapshot would either be vacuous or leak the build hash).
-///   - `ReleaseUpdateView` / `WorkbenchReleaseUpdateControls` → DEFER (branchless
+///   - `WorkbenchUpdatePanel` / `AboutSheet` → DEFER (branchless
 ///       wrappers): pure passthroughs to the vendored `OuroAppShellUI.
-///       ReleaseUpdateControls`; the branch lives in the vendored component (outside
-///       our coverage). Covered transitively by C11-5 (the Software-Updates section).
+///       ReleaseUpdateControls` / `AppShellAboutView`; the stateful branches live in
+///       vendored components (outside our coverage). Covered transitively by C11-5
+///       and direct wrapper interaction tests.
 ///
 /// This file PROVES the `HarnessActionRow` branchless verdict empirically (the one
 /// in-view ternary the audit flagged) so the DEFER is recorded, not asserted.
