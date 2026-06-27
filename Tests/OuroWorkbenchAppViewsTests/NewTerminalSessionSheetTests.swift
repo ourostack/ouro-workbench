@@ -24,6 +24,26 @@ import OuroWorkbenchCore
 /// provenance-builds `model.selectedProject` with a FIXED relative `rootPath`
 /// (`/tmp/u4`) so no `/Users/…` reaches the tree, defended by `!contains("/Users/")`.
 /// This is the same class as the C6 Q3 `NSFullUserName()` landmine, different view.
+///
+/// **U5 B4-REDO.** The original B4 recorded the `.onChange(of: command)` autofill, the
+/// Cancel button, and BOTH Create buttons (and the `create()` body they route through) as
+/// "carves" under the obsolete "snapshots can't test interaction" assumption. ViewInspector
+/// 0.10.3 DOES invoke action-closures, so they are now DRIVEN: an `init(model:initialName:
+/// initialCommand:initialTrusted:)` seam (prod defaults UNCHANGED) seeds the `@State` so the
+/// onChange guard arms, both `trusted` ternary arms, and `create()` are reachable. Create &
+/// Launch's `launch()` schedules an async `Task { await start }` that never runs in a
+/// non-yielding test, so no process spawns.
+///
+/// **Genuinely-unreachable (the remaining carves):**
+///   - the `init`'s `?? home` RHS autoclosure inside `State(initialValue:)` — an llvm-cov
+///     autoclosure artifact the metric doesn't increment (the value IS driven: the no-project
+///     test renders `<HOME>`);
+///   - the Choose button action / `chooseWorkingDirectory()` / its `panel.runModal()` branches —
+///     `NSOpenPanel().runModal()` is a blocking live-GUI modal;
+///   - the `guard model.createCustomSession(...) != nil else { return }` FALSE arm — defensive:
+///     `.disabled(!canCreate)` requires a non-empty working directory, so `makeEntry` (whose only
+///     throw is `emptyWorkingDirectory`) cannot fail through the ENABLED button → the nil return
+///     is UI-gated unreachable (the same class as B5's `.launch`-primary carve).
 @MainActor
 final class NewTerminalSessionSheetTests: XCTestCase {
 
@@ -136,6 +156,128 @@ final class NewTerminalSessionSheetTests: XCTestCase {
         XCTAssertNotEqual(a, b, "the working-directory field must flip with the project root")
         XCTAssertTrue(a.contains(#"text="/tmp/u4""#))
         XCTAssertTrue(b.contains(#"text="/tmp/u4-other""#))
+    }
+
+    // MARK: - U5 B4-REDO — drive the onChange / Cancel / Create / Create&Launch closures
+    //
+    // ViewInspector 0.10.3 invokes action-closures, so the `.onChange(of: command)` autofill,
+    // the Cancel button, and BOTH Create buttons (whose actions route through `create()`) — all
+    // recorded as "carves" by the original B4 — are DRIVABLE. A minimal `init(model:initialName:
+    // initialCommand:)` seam (prod default UNCHANGED) seeds the `@State` so the onChange guard
+    // arms are reachable; the create-success arm uses the project's `/tmp/u4` root (non-empty →
+    // makeEntry passes). Create&Launch's `launch(entry)` schedules an async `Task { await start }`
+    // that NEVER runs in a synchronous (non-yielding) test, so no process spawns.
+
+    private func sheet(rootPath: String = "/tmp/u4", name: String = "", command: String = "")
+        throws -> NewTerminalSessionSheet {
+        NewTerminalSessionSheet(model: try makeVM(rootPath: rootPath),
+                                initialName: name, initialCommand: command)
+    }
+
+    // MARK: - the `.onChange(of: command)` autofill — every arm
+
+    func testSheet_onChangeCommand_emptyName_detectsAgent_setsName() throws {
+        // name == "" → guard passes; command "claude" parses + detects → the inner `if let`
+        // TRUE arm runs `name = displayName`. Covers the onChange entry + the detection arm.
+        let view = try sheet(name: "", command: "claude")
+        XCTAssertNoThrow(
+            try view.inspect().find(ViewType.TextField.self, where: { tf in
+                (try? tf.labelView().text().string()) == "Command"
+            }).callOnChange(oldValue: "", newValue: "claude"),
+            "the onChange detection arm executes (empty name + detected agent)")
+    }
+
+    func testSheet_onChangeCommand_emptyName_noDetection_skipsInnerIf() throws {
+        // name == "" → guard passes; command "ls" parses but detects NOTHING → the inner
+        // `if let` FALSE path (no assignment). Covers the guard-pass + the no-detection path.
+        let view = try sheet(name: "", command: "ls")
+        XCTAssertNoThrow(
+            try view.inspect().find(ViewType.TextField.self, where: { tf in
+                (try? tf.labelView().text().string()) == "Command"
+            }).callOnChange(oldValue: "", newValue: "ls"),
+            "the onChange no-detection path executes")
+    }
+
+    func testSheet_onChangeCommand_typedName_guardReturns() throws {
+        // name already typed → the `guard name.isEmpty else { return }` FALSE arm: return.
+        let view = try sheet(name: "Typed", command: "x")
+        XCTAssertNoThrow(
+            try view.inspect().find(ViewType.TextField.self, where: { tf in
+                (try? tf.labelView().text().string()) == "Command"
+            }).callOnChange(oldValue: "x", newValue: "xy"),
+            "the onChange guard-return arm (typed name) executes")
+    }
+
+    // MARK: - the Cancel button action `{ dismiss() }`
+
+    func testSheet_cancelTap_invokesDismiss() throws {
+        XCTAssertNoThrow(try sheet().inspect().find(button: "Cancel").tap(),
+                         "the Cancel action closure (dismiss()) executes")
+    }
+
+    // MARK: - Create (launchAfterCreate: false) → create() body, NO spawn
+
+    func testSheet_createTap_createsSessionNoLaunch() throws {
+        let model = try makeVM(rootPath: "/tmp/u4")
+        let view = NewTerminalSessionSheet(model: model, initialName: "build", initialCommand: "echo hi")
+        let before = model.state.processEntries.count
+        // The Create button → `create(launchAfterCreate: false)` → createCustomSession appends
+        // the entry; launchAfterCreate false → no launch, no spawn. Covers create()'s entry,
+        // the `trusted ? .trusted : .untrusted` ternary, the guard-pass, and dismiss().
+        try view.inspect().find(button: "Create").tap()
+        XCTAssertEqual(model.state.processEntries.count, before + 1,
+                       "Create → createCustomSession appends the session (no launch)")
+        XCTAssertEqual(model.state.processEntries.last?.name, "build", "the created session's name")
+    }
+
+    // MARK: - Create & Launch (launchAfterCreate: true) → create() body, async launch (no sync spawn)
+
+    func testSheet_createAndLaunchTap_createsSession() throws {
+        let model = try makeVM(rootPath: "/tmp/u4")
+        let view = NewTerminalSessionSheet(model: model, initialName: "runner", initialCommand: "echo hi")
+        let before = model.state.processEntries.count
+        // Create & Launch → `create(launchAfterCreate: true)` → createCustomSession appends, then
+        // launch() schedules `Task { @MainActor in await start(...) }`. This synchronous test never
+        // yields, so the Task body (the only spawn path) does NOT run — no process is launched.
+        try view.inspect().find(button: "Create & Launch").tap()
+        XCTAssertEqual(model.state.processEntries.count, before + 1,
+                       "Create & Launch → createCustomSession appends the session")
+    }
+
+    // MARK: - the `trusted ? .trusted : .untrusted` ternary — the `.untrusted` arm
+
+    func testSheet_createUntrusted_setsUntrustedTrust() throws {
+        // initialTrusted = false → create()'s `trusted ? .trusted : .untrusted` takes the
+        // `.untrusted` arm. The created entry carries `.untrusted` trust (the asserted effect).
+        let model = try makeVM(rootPath: "/tmp/u4")
+        let view = NewTerminalSessionSheet(model: model, initialName: "untrusted-run",
+                                           initialCommand: "echo hi", initialTrusted: false)
+        try view.inspect().find(button: "Create").tap()
+        XCTAssertEqual(model.state.processEntries.last?.trust, .untrusted,
+                       "initialTrusted false → create() builds the draft with .untrusted trust")
+    }
+
+    // MARK: - Negative control (P2 — mutation-verified)
+
+    /// Create is load-bearing: it appends a session. (Mutation-verify: replacing
+    /// `model.createCustomSession(...)` with nil leaves processEntries unchanged → RED.)
+    func testSheet_negativeControl_createAppendsSession() throws {
+        let model = try makeVM(rootPath: "/tmp/u4")
+        let before = model.state.processEntries.count
+        try NewTerminalSessionSheet(model: model, initialName: "neg", initialCommand: "echo hi")
+            .inspect().find(button: "Create").tap()
+        XCTAssertEqual(model.state.processEntries.count, before + 1, "Create must append a session")
+    }
+
+    /// The trust ternary is load-bearing: trusted=true yields .trusted. (Pairs with the
+    /// .untrusted test to prove BOTH ternary arms flip the created entry's trust.)
+    func testSheet_negativeControl_createTrusted_setsTrustedTrust() throws {
+        let model = try makeVM(rootPath: "/tmp/u4")
+        try NewTerminalSessionSheet(model: model, initialName: "trusted-run",
+                                    initialCommand: "echo hi", initialTrusted: true)
+            .inspect().find(button: "Create").tap()
+        XCTAssertEqual(model.state.processEntries.last?.trust, .trusted,
+                       "initialTrusted true → create() builds the draft with .trusted trust")
     }
 }
 #endif

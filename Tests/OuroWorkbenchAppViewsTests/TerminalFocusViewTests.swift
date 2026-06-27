@@ -109,5 +109,101 @@ final class TerminalFocusViewTests: XCTestCase {
         XCTAssertTrue(a.contains(#"text="build""#))
         XCTAssertTrue(b.contains(#"text="deploy""#))
     }
+
+    // MARK: - U5 B4-REDO — drive the six control-button actions + onAppear (originally carved)
+    //
+    // ViewInspector 0.10.3 invokes action-closures, so the six control buttons
+    // (Exit Full Screen / Redraw / Ctrl-C / Esc / EOF / Stop) and the `.onAppear`
+    // closure the original B4 recorded as "carves" are DRIVABLE. Each send button routes
+    // through a model method that guards on `activeSessions[entry.id]`, so we REGISTER the
+    // (un-started, no-PTY) live-session controller — the proven no-spawn seam — and tap.
+    // The send actions record an action-log entry (the asserted side-effect); Exit sets
+    // terminalFocusEntryID nil; Stop on a non-idle live session sets pendingStopSession.
+
+    /// A VM with the entry in state AND its (un-started) controller registered in
+    /// `activeSessions`, so the send/redraw methods take their success arm.
+    private func liveFocusView(attention: AttentionState = .waitingOnHuman)
+        throws -> (WorkbenchViewModel, ProcessEntry, TerminalFocusView) {
+        let model = try makeVM()
+        var e = entry()
+        e.attention = attention
+        // Seed the (possibly-attention-updated) entry into state so updateEntry finds it.
+        model.state.processEntries = [e]
+        let session = try session(for: e)
+        model.activeSessions[e.id] = session
+        return (model, e, TerminalFocusView(entry: e, session: session, model: model))
+    }
+
+    /// The six control buttons are image-only (an `Image(systemName:)` label + an
+    /// `.accessibilityLabel`), so `find(button:)` (which matches button TEXT) can't reach
+    /// them. Find by the contained SF-symbol name instead.
+    private func tapControl(_ view: TerminalFocusView, systemImage: String) throws {
+        try view.inspect().find(ViewType.Button.self, where: { b in
+            (try? b.labelView().image().actualImage().name()) == systemImage
+        }).tap()
+    }
+
+    func testFocus_exitFullScreenTap_clearsFocus() throws {
+        let (model, _, view) = try liveFocusView()
+        model.terminalFocusEntryID = Self.entryId  // provenance: focused
+        try tapControl(view, systemImage: "arrow.down.right.and.arrow.up.left")
+        XCTAssertNil(model.terminalFocusEntryID, "Exit Full Screen → exitTerminalFocus clears the focus id")
+    }
+
+    func testFocus_redrawTap_recordsActionLog() throws {
+        let (model, _, view) = try liveFocusView()
+        let before = model.state.actionLog.count
+        try tapControl(view, systemImage: "arrow.clockwise")
+        XCTAssertEqual(model.state.actionLog.count, before + 1, "Redraw tap records an action log")
+        XCTAssertEqual(model.state.actionLog.first?.action, "redrawTerminal", "the Redraw action")
+    }
+
+    func testFocus_ctrlCTap_recordsActionLog() throws {
+        let (model, _, view) = try liveFocusView()
+        try tapControl(view, systemImage: "command")
+        XCTAssertEqual(model.state.actionLog.first?.action, "sendControlC", "Ctrl-C tap → sendControlC")
+    }
+
+    func testFocus_escTap_recordsActionLog() throws {
+        let (model, _, view) = try liveFocusView()
+        try tapControl(view, systemImage: "escape")
+        XCTAssertEqual(model.state.actionLog.first?.action, "sendEscape", "Esc tap → sendEscape")
+    }
+
+    func testFocus_eofTap_recordsActionLog() throws {
+        let (model, _, view) = try liveFocusView()
+        try tapControl(view, systemImage: "eject")
+        XCTAssertEqual(model.state.actionLog.first?.action, "sendEOF", "EOF tap → sendEOF")
+    }
+
+    func testFocus_stopTap_setsPendingStop() throws {
+        // A live session with non-idle attention → requestStop → the confirmation gate
+        // (pendingStopSession), NOT an immediate terminate.
+        let (model, e, view) = try liveFocusView(attention: .waitingOnHuman)
+        XCTAssertNil(model.pendingStopSession, "no pending stop before tap")
+        try tapControl(view, systemImage: "stop.fill")
+        XCTAssertEqual(model.pendingStopSession?.id, e.id,
+                       "Stop tap → requestStop sets pendingStopSession (live agent → confirmation)")
+    }
+
+    func testFocus_onAppear_invokesFocusAndRedrawBurst() throws {
+        // The root ZStack's `.onAppear { session.focusInput(); session.redrawDisplayBurst(...) }`.
+        // Both schedule on the main queue (deferred) → no synchronous PTY work; invoking the
+        // closure covers the region and must not throw.
+        let (_, _, view) = try liveFocusView()
+        XCTAssertNoThrow(try view.inspect().zStack().callOnAppear(),
+                         "the onAppear focus/redraw-burst closure executes")
+    }
+
+    // MARK: - Negative control (P2 — mutation-verified)
+
+    /// Exit Full Screen is load-bearing: it clears the focus id. (Mutation-verify: replacing
+    /// `model.exitTerminalFocus()` with a no-op leaves terminalFocusEntryID set → RED.)
+    func testFocus_negativeControl_exitClearsFocus() throws {
+        let (model, _, view) = try liveFocusView()
+        model.terminalFocusEntryID = Self.entryId
+        try tapControl(view, systemImage: "arrow.down.right.and.arrow.up.left")
+        XCTAssertNil(model.terminalFocusEntryID, "Exit must clear the terminal-focus id")
+    }
 }
 #endif
