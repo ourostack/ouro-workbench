@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Verify pinned macOS runner policy
         run: python3 .github/scripts/check-macos-runner-policy.py
@@ -31,11 +33,25 @@ jobs:
       - name: Verify release version contract
         run: scripts/verify-version-contract.sh
 
+      - name: Verify release freshness policy
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/release-policy.sh freshness
+
+      - name: Verify release policy PR base handling
+        run: scripts/release-policy.sh selftest-pr-base
+
+      - name: Verify release package guard
+        run: scripts/release-policy.sh selftest-package-guards
+
       - name: Verify shared shell dependency freshness
         run: scripts/check-shell-dependency.sh
 
       - name: Verify shell dependency watch automation
-        run: scripts/selftest-shell-dependency-watch.sh
+        run: scripts/release-policy.sh selftest-shell-dependency-watch
+
+      - name: Verify release policy path classification
+        run: scripts/release-policy.sh selftest-paths
 
       - name: Verify generated scenario matrix
         run: |
