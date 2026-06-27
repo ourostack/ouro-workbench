@@ -4,6 +4,12 @@ import SwiftUI
 import OuroWorkbenchCore
 @testable import OuroWorkbenchAppViews
 
+/// File-private, NON-isolated copy of `WorkbenchViewModel.recentWorkspacePathsDefaultsKey`
+/// (which is `@MainActor`-isolated as a member of the `@MainActor` view model). The
+/// inherited `nonisolated` `setUp`/`tearDown` need a non-isolated key to snapshot+restore
+/// the recents defaults; `testRecentsKeyMatchesProductionConstant` guards it against drift.
+private let dispatchTestsRecentsKey = "ouro.workbench.recentWorkspacePaths"
+
 /// Coverage-tightening PR#1 — `dispatchMenuCommand(_:to:toggleSidebar:)`.
 ///
 /// The ~30 menu-dispatch arms used to live inside `WorkbenchRootView.handleMenuCommand`,
@@ -37,21 +43,31 @@ final class DispatchMenuCommandTests: XCTestCase {
     // Recent Workspace" submenu reads back. If a test here leaked a temp path into that key,
     // it would contaminate OTHER suites' committed snapshots (e.g. HeaderCollapsedInboxBadge).
     // Snapshot + restore the key around every test so this suite leaves NO global trace.
-
-    private var savedRecents: Any?
+    //
+    // `setUp`/`tearDown` are inherited `nonisolated`, so they touch only non-isolated state:
+    // the file-private `dispatchTestsRecentsKey` constant (the value of the `@MainActor`
+    // `WorkbenchViewModel` defaults key, asserted equal below) and a `nonisolated(unsafe)`
+    // snapshot box (tests run serially, so the single-threaded access is safe).
+    nonisolated(unsafe) private var savedRecents: Any?
 
     override func setUp() {
         super.setUp()
-        savedRecents = UserDefaults.standard.object(forKey: WorkbenchViewModel.recentWorkspacePathsDefaultsKey)
+        savedRecents = UserDefaults.standard.object(forKey: dispatchTestsRecentsKey)
     }
 
     override func tearDown() {
         if let savedRecents {
-            UserDefaults.standard.set(savedRecents, forKey: WorkbenchViewModel.recentWorkspacePathsDefaultsKey)
+            UserDefaults.standard.set(savedRecents, forKey: dispatchTestsRecentsKey)
         } else {
-            UserDefaults.standard.removeObject(forKey: WorkbenchViewModel.recentWorkspacePathsDefaultsKey)
+            UserDefaults.standard.removeObject(forKey: dispatchTestsRecentsKey)
         }
         super.tearDown()
+    }
+
+    /// Guard the file-private key copy against drift from the production constant.
+    func testRecentsKeyMatchesProductionConstant() {
+        XCTAssertEqual(dispatchTestsRecentsKey, WorkbenchViewModel.recentWorkspacePathsDefaultsKey,
+                       "the isolation key must track the production defaults key")
     }
 
     // MARK: - Fixtures
