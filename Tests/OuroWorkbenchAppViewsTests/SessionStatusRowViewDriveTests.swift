@@ -54,7 +54,9 @@ final class SessionStatusRowViewDriveTests: XCTestCase {
     func testStatusRow_tap_selectsEntry() throws {
         let id = UUID(uuidString: "55000010-0000-0000-0000-000000000010")!
         let model = try makeVM(entryId: id)
-        XCTAssertNil(model.selectedEntryID, "precondition: nothing selected")
+        // The VM may auto-select the only entry on load; clear it so the tap's effect is observable.
+        model.selectedEntryID = nil
+        XCTAssertNil(model.selectedEntryID, "precondition: selection cleared")
         try SessionStatusRowView(row: row(id, bucket: .running, status: .running, pid: 4242), model: model)
             .inspect().find(ViewType.Button.self).tap()
         XCTAssertEqual(model.selectedEntryID, id, "tapping the row selects the entry across groups")
