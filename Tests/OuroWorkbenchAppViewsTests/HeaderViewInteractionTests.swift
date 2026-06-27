@@ -35,11 +35,16 @@ final class HeaderViewInteractionTests: XCTestCase {
         let paths = WorkbenchPaths(rootURL: tmp)
         try WorkbenchStore(paths: paths).save(
             WorkspaceState(boss: BossAgentSelection(agentName: bossName)))
-        return WorkbenchViewModel(
+        let model = WorkbenchViewModel(
             paths: paths,
             bossWorkbenchMCPRegistrar: BossWorkbenchMCPRegistrar(agentBundlesURL: agentBundles),
             ouroAgentInventory: OuroAgentInventory(agentBundlesURL: agentBundles)
         )
+        // #332 seam: any tap reaching launch/recover → the detached start() → session.start()
+        // forks a real `screen` child that orphans past teardown (CI signal-1 crash). Inject a
+        // no-op launcher so those paths run without spawning a subprocess.
+        model.launchTerminalSession = { _ in }
+        return model
     }
 
     /// A VM whose persisted state has a real TRUSTED + autoResume `.shell`
@@ -67,10 +72,16 @@ final class HeaderViewInteractionTests: XCTestCase {
                                    autoName: "WS", tabIds: [entryId])],
             processRuns: [run])
         try WorkbenchStore(paths: paths).save(state)
-        return WorkbenchViewModel(
+        let model = WorkbenchViewModel(
             paths: paths,
             bossWorkbenchMCPRegistrar: BossWorkbenchMCPRegistrar(agentBundlesURL: agentBundles),
             ouroAgentInventory: OuroAgentInventory(agentBundlesURL: agentBundles))
+        // #332 seam: "Recover All Crashed…" → recoverAllCrashedSessions() → recover(entry) → the
+        // detached start() → session.start(), forking a real `screen` child that orphans past
+        // teardown (CI signal-1 crash). Inject a no-op launcher so the recover-all path runs but
+        // no subprocess spawns.
+        model.launchTerminalSession = { _ in }
+        return model
     }
 
     /// A real `.updateAvailable` snapshot with installable assets → a non-nil
