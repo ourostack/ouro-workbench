@@ -25,6 +25,13 @@ import OuroWorkbenchCore
 /// synchronously and dispatch the heavy work to a detached `Task` (so the tapped
 /// action region executes without blocking).
 ///
+/// **#332 subprocess seam.** `fileLastBugReportAsGitHubIssue`'s detached task shells out to
+/// `gh issue create`. Under an in-process tap that child OUTLIVES the test and orphans past
+/// teardown — crashing CI's xctest at teardown (signal 1). `savedModel()` injects a stub
+/// `model.fileGitHubIssue` returning a canned issue URL, so the tap drives the body + the
+/// `.success` completion handler with NO real subprocess. Production is byte-identical (the
+/// default closure is `GitHubIssueFiler.file`).
+///
 /// **Carve (genuinely-unreachable):** the "Create Report" button's action
 /// `{ model.submitBugReport() }` (`:2579`). `submitBugReport` synchronously calls
 /// `captureKeyWindowPNG()`, which force-touches `NSApp.keyWindow` — and `NSApp` is
@@ -37,7 +44,9 @@ final class ReportBugSheetInteractionTests: XCTestCase {
 
     private static let fixedBundleURL = URL(
         fileURLWithPath: "/tmp/u4/bug-reports/bug-report-2026-06-25-000000", isDirectory: true)
-    private static let fixedIssueURL = "https://github.com/example/repo/issues/42"
+    // `nonisolated` so the #332 `@Sendable` stub closure (savedModel's `fileGitHubIssue`) can
+    // reference the canned URL; a `String` literal constant is trivially `Sendable`.
+    private nonisolated static let fixedIssueURL = "https://github.com/example/repo/issues/42"
 
     private func makeVM() throws -> WorkbenchViewModel {
         let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
@@ -52,10 +61,17 @@ final class ReportBugSheetInteractionTests: XCTestCase {
     }
 
     /// A model with a saved bundle (the `if let url = lastBugReportURL` success box open).
+    ///
+    /// #332 seam: inject a stub `fileGitHubIssue` so the "File as GitHub Issue" tap fires the
+    /// action's synchronous body + the `Task.detached` completion wiring WITHOUT shelling out to
+    /// `gh`. Without this, the detached filing task spawns a real `gh issue create` child that
+    /// outlives the in-process test and orphans past teardown — crashing CI's xctest at teardown
+    /// (signal 1). The stub returns a canned issue URL so the completion handler is exercised too.
     private func savedModel() throws -> WorkbenchViewModel {
         let model = try makeVM()
         model.lastBugReportURL = Self.fixedBundleURL
         model.lastBugReportWarnings = []
+        model.fileGitHubIssue = { _, _, _, _, _, _, _, _ in .success(Self.fixedIssueURL) }
         return model
     }
 
@@ -88,7 +104,10 @@ final class ReportBugSheetInteractionTests: XCTestCase {
 
     /// "File as GitHub Issue" `Button { model.fileLastBugReportAsGitHubIssue() }` (`:2522`).
     /// Renders only while `bugReportIssueURL == nil`. Tapping sets the in-flight flag
-    /// synchronously (the heavy `gh` work is detached).
+    /// synchronously (the heavy filing work is detached). The injected stub (see
+    /// `savedModel()`) returns a canned issue URL so the detached task completes WITHOUT
+    /// shelling out to `gh` — exercising both the synchronous body and, after the detached
+    /// `Task` resolves, the `.success` completion handler (no orphan, #332).
     func testReportBug_fileIssueButton_tapStartsFiling() throws {
         let model = try savedModel()
         XCTAssertNil(model.bugReportIssueURL, "precondition: not yet filed → the file button shows")
@@ -96,8 +115,20 @@ final class ReportBugSheetInteractionTests: XCTestCase {
         try ReportBugSheet(model: model).inspect().find(button: "File as GitHub Issue").tap()
         XCTAssertTrue(model.bugReportIssueIsFiling,
                       "tapping File as GitHub Issue flips bugReportIssueIsFiling synchronously")
-        // Stop the detached filing task from leaking state into other tests is unnecessary —
-        // the `gh` subprocess runs in its own detached Task and resolves independently.
+    }
+
+    /// The detached filing task drives the `.success` completion handler to its terminal state:
+    /// the canned issue URL lands in `bugReportIssueURL` and the in-flight flag clears. Awaiting
+    /// the published transition (no real subprocess, #332 stub) asserts the WHOLE action — body
+    /// plus completion — is covered, not just the synchronous prefix.
+    func testReportBug_fileIssueButton_completionLandsCannedURL() async throws {
+        let model = try savedModel()
+        try ReportBugSheet(model: model).inspect().find(button: "File as GitHub Issue").tap()
+        // Yield until the detached stub-filing Task resolves and updates the @Published state.
+        for _ in 0..<200 where model.bugReportIssueIsFiling { await Task.yield() }
+        XCTAssertFalse(model.bugReportIssueIsFiling, "the filing completes (the in-flight flag clears)")
+        XCTAssertEqual(model.bugReportIssueURL, Self.fixedIssueURL,
+                       "the .success completion handler stores the canned issue URL")
     }
 
     // MARK: - Open Issue button

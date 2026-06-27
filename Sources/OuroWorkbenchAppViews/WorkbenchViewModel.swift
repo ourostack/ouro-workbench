@@ -626,6 +626,55 @@ public final class WorkbenchViewModel: ObservableObject {
     /// path) moves on.
     private let proposalQueue: AgentProposalQueue
     private let releaseUpdateChecker: ReleaseUpdateChecker
+
+    // MARK: - Subprocess-spawning seams (#332)
+    //
+    // The bug-report / diagnostics actions dispatch their heavy work to a detached
+    // `Task` that spawns a real subprocess (`gh issue create` for the issue filer,
+    // the `collect-support-diagnostics.sh` child for the diagnostics runner). Under
+    // an in-process interaction test (ViewInspector taps the button), that detached
+    // task OUTLIVES the test and, if it spawns a real child, ORPHANS it past teardown
+    // — which crashes CI's xctest at teardown with signal 1. These two stored closures
+    // make the subprocess boundary INJECTABLE: production defaults call the real impl
+    // byte-for-byte (the prod path is unchanged — same arguments, same call site), and
+    // a test injects a stub so the tapped action runs its synchronous body + the
+    // `Task.detached` completion wiring WITHOUT launching any child. Coverage of the
+    // action + its completion handler is preserved; no orphan; no teardown crash.
+
+    /// Files a prepared bug report as a GitHub issue. Defaults to the real
+    /// `GitHubIssueFiler.file` (which shells out to `gh`); a test injects a stub
+    /// returning a canned `Result` so the detached filing task spawns no `gh`.
+    /// `@Sendable` because it is invoked inside `Task.detached`.
+    var fileGitHubIssue: @Sendable (
+        _ reportURL: URL,
+        _ bundlePath: String,
+        _ note: String,
+        _ repo: String,
+        _ redactor: WorkbenchBugReportRedactor,
+        _ agentNames: [String],
+        _ homePath: String,
+        _ username: String
+    ) -> Result<String, GitHubIssueFilingError> = { reportURL, bundlePath, note, repo, redactor, agentNames, homePath, username in
+        GitHubIssueFiler.file(
+            reportURL: reportURL,
+            bundlePath: bundlePath,
+            note: note,
+            repo: repo,
+            redactor: redactor,
+            agentNames: agentNames,
+            homePath: homePath,
+            username: username
+        )
+    }
+
+    /// Builds the support-diagnostics runner for a resource directory. Defaults to
+    /// the real `SupportDiagnosticsRunner` (whose `run()` spawns the collector
+    /// script); a test injects a factory returning a runner whose `run()` does not
+    /// shell out. `@Sendable` because the produced runner is used inside `Task.detached`.
+    var makeSupportDiagnosticsRunner: @Sendable (URL?) -> SupportDiagnosticsRunner = { resourceDirectory in
+        SupportDiagnosticsRunner(resourceDirectory: resourceDirectory)
+    }
+
     private var manuallyTerminatedRunIDs = Set<UUID>()
     /// F13 — the entry id + runId of the in-flight vault-onboarding recovery terminal (the one-shot
     /// `ouro vault create && auth && refresh` chain), captured at launch so `markTerminated` can
@@ -4719,7 +4768,9 @@ public final class WorkbenchViewModel: ObservableObject {
         supportDiagnosticsIsCollecting = true
         supportDiagnosticsError = nil
 
-        let runner = SupportDiagnosticsRunner(resourceDirectory: Bundle.main.resourceURL)
+        // #332 seam: build via the (default = real) factory so a test can inject a
+        // runner whose `run()` does not spawn the collector child. Prod is unchanged.
+        let runner = makeSupportDiagnosticsRunner(Bundle.main.resourceURL)
         Task {
             let outcome = await Task.detached(priority: .userInitiated) {
                 do {
@@ -4846,7 +4897,9 @@ public final class WorkbenchViewModel: ObservableObject {
             BugReportComposer.directoryName(date: Date(), note: directoryNote),
             isDirectory: true
         )
-        let runner = SupportDiagnosticsRunner(resourceDirectory: Bundle.main.resourceURL)
+        // #332 seam: build via the (default = real) factory so a test can inject a
+        // runner whose `run()` does not spawn the collector child. Prod is unchanged.
+        let runner = makeSupportDiagnosticsRunner(Bundle.main.resourceURL)
 
         Task {
             let bundle = await Task.detached(priority: .userInitiated) { () -> Result<BugReportBundle, Error> in
@@ -4968,18 +5021,21 @@ public final class WorkbenchViewModel: ObservableObject {
         let agentNames = bugReportAgentNames()
         let homePath = FileManager.default.homeDirectoryForCurrentUser.path
         let username = NSUserName()
+        // #332 seam: capture the (default = real `GitHubIssueFiler.file`) closure on the
+        // main actor, then run it off-main. Production behavior is byte-identical.
+        let fileGitHubIssue = self.fileGitHubIssue
 
         Task {
             let outcome = await Task.detached(priority: .userInitiated) { () -> Result<String, GitHubIssueFilingError> in
-                GitHubIssueFiler.file(
-                    reportURL: reportURL,
-                    bundlePath: bundlePath,
-                    note: note,
-                    repo: repo,
-                    redactor: redactor,
-                    agentNames: agentNames,
-                    homePath: homePath,
-                    username: username
+                fileGitHubIssue(
+                    reportURL,
+                    bundlePath,
+                    note,
+                    repo,
+                    redactor,
+                    agentNames,
+                    homePath,
+                    username
                 )
             }.value
 
