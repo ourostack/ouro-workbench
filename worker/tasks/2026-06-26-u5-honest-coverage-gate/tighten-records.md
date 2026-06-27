@@ -246,7 +246,7 @@ keyboard-nav highlight + the irreducible `.onKeyPress` handlers), `customBossIsP
 
 ---
 
-## Class 7 — AboutSheet build-hash + AutonomyStatusButton loginItemCheck (PR #349, v0.1.182)
+## Class 7 — AboutSheet build-hash + AutonomyStatusButton loginItemCheck (PR #349, v0.1.183)
 
 **Carve before:** AboutSheet's `buildHash` read `Bundle.main` CFBundleVersion live (the about
 presentation + version-line render was environment-dependent, carved). AutonomyStatusButton's

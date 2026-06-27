@@ -95,13 +95,13 @@ MailboxClient.swift 1 1
 #        `.onChange(of: transcriptSearchFocusToken)` reveal, and the toggle button action are
 #        all covered. Only the non-injectable MachineRuntimeView login-item LEAF (driven up to
 #        its boundary; the SMAppService-class login rows stay carved in their own decl) remains.
-#      * AutonomyStatusButton — PARTLY TIGHTENED (coverage Class 7, v0.1.182): the loginItemCheck
+#      * AutonomyStatusButton — PARTLY TIGHTENED (coverage Class 7, v0.1.183): the loginItemCheck
 #        4-case status→readiness map was extracted to a pure `static func loginItemCheck(for:)` and
 #        all 4 arms are unit-tested by value; the `init(model:loginItem:)` seam drives the
 #        injected-controller fold into the rendered pill. Still carved: the `.popover{}` content
 #        DESCENT (ViewInspector can't descend it; AutonomyStatusPopover is covered STANDALONE).
 #      * AutonomyStatusPopover — covered standalone (own suite); its `.onAppear` focus is carved.
-#      * AboutSheet — DRIVEN (coverage Class 7, v0.1.182): the build-hash arm is seamed via
+#      * AboutSheet — DRIVEN (coverage Class 7, v0.1.183): the build-hash arm is seamed via
 #        `init(model:buildHash:)` (prod default = the live CFBundleVersion ?? "dev"), so the about
 #        presentation + version-line render is driven deterministically. Only the openRepository
 #        (NSWorkspace) / copyVersion (NSPasteboard) action closures stay carved (in-process I/O).
@@ -160,7 +160,7 @@ MailboxClient.swift 1 1
 # AgentDetailView/SessionDetailView/HarnessStatusSheet): 1262/252 → 1224/242 (38 lines / 10 regions
 # driven OUT). Measured on the Coverage job at run 28299620615 (probe-then-set: the probe 1230/238
 # forced the gate to print the exact residual `1224 lines / 242 regions`).
-# Coverage Class 7 (v0.1.182) DROVE AboutSheet build-hash (init seam) + AutonomyStatusButton
+# Coverage Class 7 (v0.1.183) DROVE AboutSheet build-hash (init seam) + AutonomyStatusButton
 # loginItemCheck (extracted static fn, 4 arms): 1224/242 → 1205/238 (19 lines / 4 regions driven OUT).
 # Measured on the Coverage job at run 28300196247 (probe-then-set: the probe 1195/228 forced the gate
 # to print the exact residual `1205 lines / 238 regions`). Verified minimal: lowering EITHER number by
