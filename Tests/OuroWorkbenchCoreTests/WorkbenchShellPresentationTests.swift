@@ -18,6 +18,21 @@ final class WorkbenchShellPresentationTests: XCTestCase {
         XCTAssertEqual(model.accessibilityLabel, "About Ouro Workbench")
     }
 
+    func testCommandReferenceMapsGuideIntoShellItems() {
+        let items = WorkbenchShellCommandReference.items
+        let guideRows = WorkbenchGuide.shortcutCategories.flatMap(\.shortcuts)
+
+        XCTAssertEqual(WorkbenchShellCommandReference.title, "Keyboard Shortcuts")
+        XCTAssertEqual(WorkbenchShellCommandReference.subtitle, "Press ⌘/ from anywhere to bring this back")
+        XCTAssertEqual(WorkbenchShellCommandReference.sectionOrder, WorkbenchGuide.shortcutCategories.map(\.title))
+        XCTAssertEqual(items.count, guideRows.count)
+        XCTAssertTrue(items.contains {
+            $0.title == "Open the command palette"
+                && $0.shortcut == "⌘K"
+                && $0.section == "Boss + Agents"
+        })
+    }
+
     func testUpdatePresentationBeforeCheckKeepsOnlyChannelMetadata() {
         let presentation = WorkbenchShellUpdatePresenter.presentation(
             snapshot: nil,

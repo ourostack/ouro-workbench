@@ -1730,63 +1730,8 @@ extension Optional where Wrapped == BossWorkbenchMCPRegistrationStatus {
 /// you can find what you need at a glance instead of trial-and-erroring the
 /// menu.
 struct ShortcutHelpSheet: View {
-    @Environment(\.dismiss) private var dismiss
-
-    // Single source of truth: the shortcut map lives in WorkbenchGuide so the
-    // in-app sheet, the boss `workbench_sense`, and the inner-agent context
-    // file can never drift apart. Edit shortcuts there, not here.
-    private var groups: [WorkbenchGuide.ShortcutCategory] {
-        WorkbenchGuide.shortcutCategories
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Keyboard Shortcuts")
-                        .font(.title3.weight(.semibold))
-                    Text("Press ⌘/ from anywhere to bring this back")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Button("Done") { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 18)
-            .padding(.bottom, 14)
-            Divider()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    ForEach(groups) { group in
-                        VStack(alignment: .leading, spacing: 8) {
-                            Label(group.title, systemImage: group.systemImage)
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                            VStack(spacing: 4) {
-                                ForEach(group.shortcuts) { row in
-                                    HStack(alignment: .firstTextBaseline, spacing: 12) {
-                                        Text(row.keys)
-                                            .font(.callout.monospaced().weight(.semibold))
-                                            .frame(minWidth: 170, alignment: .leading)
-                                            .textSelection(.enabled)
-                                        Text(row.summary)
-                                            .font(.callout)
-                                            .foregroundStyle(.primary)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                    }
-                                    .padding(.vertical, 4)
-                                    .padding(.horizontal, 10)
-                                    .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 6))
-                                }
-                            }
-                        }
-                    }
-                }
-                .padding(20)
-            }
-        }
+        WorkbenchShellCommandReferenceView()
         .frame(width: 560, height: 540)
     }
 }
@@ -1936,7 +1881,7 @@ struct SettingsSheet: View {
     @ViewBuilder
     private var updatesSection: some View {
         SettingsSection(title: "Software Updates", systemImage: "arrow.down.app") {
-            WorkbenchReleaseUpdateControls(model: model, showTitle: false)
+            WorkbenchUpdatePanel(model: model, showTitle: false)
             Toggle(isOn: Binding(
                 get: { model.autoUpdateEnabled },
                 set: { model.setAutoUpdateEnabled($0) }
@@ -2134,8 +2079,8 @@ public struct AboutSheet: View {
     }
 
     public var body: some View {
-        OuroAppShellUI.AppShellAboutView(
-            model: aboutModel,
+        WorkbenchShellAboutView(
+            presentation: aboutPresentation,
             updateState: model.appShellUpdateState,
             updateActions: model.appShellUpdateActions,
             aboutActions: AppShellAboutActions(
@@ -2145,10 +2090,6 @@ public struct AboutSheet: View {
             )
         )
         .frame(width: 520, height: 500)
-    }
-
-    private var aboutModel: AppShellAboutModel {
-        aboutPresentation.model
     }
 
     private func copyVersion() {
@@ -10512,11 +10453,11 @@ public struct ReleaseUpdateView: View {
     }
 
     public var body: some View {
-        WorkbenchReleaseUpdateControls(model: model, showTitle: true)
+        WorkbenchUpdatePanel(model: model, showTitle: true)
     }
 }
 
-public struct WorkbenchReleaseUpdateControls: View {
+public struct WorkbenchUpdatePanel: View {
     @ObservedObject var model: WorkbenchViewModel
     var showTitle: Bool
 
@@ -10526,20 +10467,11 @@ public struct WorkbenchReleaseUpdateControls: View {
     }
 
     public var body: some View {
-        OuroAppShellUI.ReleaseUpdateControls(
+        WorkbenchShellUpdatePanelView(
             state: model.appShellUpdateState,
             actions: model.appShellUpdateActions,
-            labels: ReleaseUpdateActionLabels(
-                check: "Check for Updates...",
-                review: "Review Update",
-                install: "Install & Relaunch",
-                openRelease: "View Release Notes"
-            ),
-            showTitle: showTitle,
-            centered: !showTitle
+            showTitle: showTitle
         )
-        // Span the full row width so centered settings/about rows stay visually balanced.
-        .frame(maxWidth: .infinity)
     }
 }
 

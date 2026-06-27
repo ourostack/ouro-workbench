@@ -47,6 +47,9 @@ jobs:
       - name: Verify shared shell dependency freshness
         run: scripts/check-shell-dependency.sh
 
+      - name: Verify shared shell boundary
+        run: scripts/check-shell-boundary.sh
+
       - name: Verify shell dependency watch automation
         run: scripts/release-policy.sh selftest-shell-dependency-watch
 

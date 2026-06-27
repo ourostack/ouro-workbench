@@ -471,6 +471,7 @@ required_ci = [
     "scripts/release-policy.sh selftest-package-guards",
     "scripts/release-policy.sh selftest-shell-dependency-watch",
     "scripts/release-policy.sh selftest-paths",
+    "scripts/check-shell-boundary.sh",
 ]
 for needle in required_ci:
     if needle not in ci:
@@ -483,6 +484,7 @@ required_preflight = [
     "scripts/release-policy.sh selftest-shell-dependency-watch",
     "scripts/release-policy.sh selftest-paths",
     "scripts/check-shell-dependency.sh",
+    "scripts/check-shell-boundary.sh",
 ]
 for needle in required_preflight:
     if needle not in preflight:

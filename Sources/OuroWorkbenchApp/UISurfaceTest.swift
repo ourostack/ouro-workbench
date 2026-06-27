@@ -22,7 +22,7 @@ final class WorkbenchUISurfaceTester {
 
         let aboutSize = fittingSize(AboutSheet(model: model), constrainedTo: NSSize(width: 520, height: 500))
         let settingsUpdateSize = fittingSize(
-            WorkbenchReleaseUpdateControls(model: model, showTitle: false),
+            WorkbenchUpdatePanel(model: model, showTitle: false),
             constrainedTo: NSSize(width: 520, height: 180)
         )
         let dashboardUpdateSize = fittingSize(
