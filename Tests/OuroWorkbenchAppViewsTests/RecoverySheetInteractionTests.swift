@@ -38,10 +38,17 @@ final class RecoverySheetInteractionTests: XCTestCase {
         let agentBundles = tmp.appendingPathComponent("AgentBundles", isDirectory: true)
         let paths = WorkbenchPaths(rootURL: tmp)
         try WorkbenchStore(paths: paths).save(state)
-        return WorkbenchViewModel(
+        let model = WorkbenchViewModel(
             paths: paths,
             bossWorkbenchMCPRegistrar: BossWorkbenchMCPRegistrar(agentBundlesURL: agentBundles),
             ouroAgentInventory: OuroAgentInventory(agentBundlesURL: agentBundles))
+        // #332 seam: tapping "Recover"/"Recover All" drives `recover(entry)` -> the detached
+        // `Task { await start(entry:with:) }` -> `session.start()`, which forks a real `screen`
+        // child that outlives the test and orphans past teardown (CI signal-1 crash). Inject a
+        // no-op launcher so the session is still constructed + stored in `activeSessions` (the
+        // provenance these tests assert) but NO subprocess is spawned.
+        model.launchTerminalSession = { _ in }
+        return model
     }
 
     private func entry(id: UUID, name: String, trust: ProcessTrust, autoResume: Bool) -> ProcessEntry {

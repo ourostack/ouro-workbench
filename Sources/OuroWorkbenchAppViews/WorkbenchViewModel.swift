@@ -675,6 +675,17 @@ public final class WorkbenchViewModel: ObservableObject {
         SupportDiagnosticsRunner(resourceDirectory: resourceDirectory)
     }
 
+    /// Launches a constructed terminal session — the boundary where `start()` forks
+    /// the live `screen`/agent subprocess (via `LocalProcessTerminalView.startProcess`).
+    /// Defaults to calling the real `session.start()`; an interaction test that taps a
+    /// Launch / Recover button (whose action drives `start(entry:with:)` through a
+    /// detached `Task`) injects a no-op so the session object is still constructed and
+    /// stored in `activeSessions` (the provenance a test asserts) but NO real child is
+    /// spawned. Without this seam that child outlives the in-process test and orphans
+    /// past teardown — a CI-only signal-1 teardown crash (#332, same class as the gh /
+    /// diagnostics orphans). `@MainActor`-isolated; the session is only ever started on main.
+    var launchTerminalSession: (TerminalSessionController) -> Void = { $0.start() }
+
     private var manuallyTerminatedRunIDs = Set<UUID>()
     /// F13 — the entry id + runId of the in-flight vault-onboarding recovery terminal (the one-shot
     /// `ouro vault create && auth && refresh` chain), captured at launch so `markTerminated` can
@@ -9323,7 +9334,10 @@ public final class WorkbenchViewModel: ObservableObject {
             // frame instead of springing from the hardcoded 13pt default.
             session.terminal.font = NSFont.monospacedSystemFont(ofSize: terminalFontSize, weight: .regular)
             activeSessions[entry.id] = session
-            session.start()
+            // #332 seam: the spawn boundary. Default = real `session.start()` (prod
+            // byte-identical); an interaction test injects a no-op so a tapped
+            // Launch/Recover drives this path without forking an orphan subprocess.
+            launchTerminalSession(session)
         } catch {
             errorMessage = String(describing: error)
         }
