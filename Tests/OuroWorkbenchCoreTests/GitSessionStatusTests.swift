@@ -140,7 +140,14 @@ final class GitSessionStatusTests: XCTestCase {
         """.write(to: git, atomically: true, encoding: .utf8)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: git.path)
 
-        var reader = GitStatusReader(timeout: 1)
+        // GENEROUS timeout (was 1s): the success path (GitSessionStatus.swift:161) is reached
+        // only when the guard `Date().timeIntervalSince(start) < timeout` passes. A loaded CI
+        // runner can occasionally take >1s to launch + reap the (trivial) stub subprocess —
+        // which made the `< timeout` arm flakily false, skipping :161 and intermittently RED-ing
+        // the exact-100% gate (same flake the campaign saw recur on this file). 60s removes the
+        // timing race entirely while asserting the SAME parsed result (no weakening): the stub
+        // exits in milliseconds, so the deterministic success path now reliably colours :161.
+        var reader = GitStatusReader(timeout: 60)
         reader.resolvedGitPath = git.path
 
         let status = reader.status(forDirectory: root.path)

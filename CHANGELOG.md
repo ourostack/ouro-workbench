@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.185 - Coverage-gate flake fix (GitSessionStatus)
+
+- Internal: makes the git-status reader's success-path test timing-robust (a generous timeout removes a CI launch-jitter race) and allowlists a single intermittently-uncovered region in the same CI-toolchain class as the existing DaemonLiveness / MailboxClient entries. No user-facing behavior change.
+
 ## 0.1.184 - Final-floor coverage tightening
 
 - Internal: drives the last reachable view regions to test coverage (the decision-row "taught" confirmation, the About sheet's open-repository / copy-version actions, the command-palette selection clamp) via injectable seams and a pure-function extraction, and removes a provably-dead onboarding branch. No user-facing behavior change.
