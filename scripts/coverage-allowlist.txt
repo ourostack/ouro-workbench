@@ -104,9 +104,8 @@ DaemonLiveness.swift 1 1
 # Measured on the Coverage job at run 28297036990 (probe-then-set: the probe value 1500/270 forced
 # the gate to print the exact residual `1487 lines / 301 regions`).
 # Coverage Class 3 (v0.1.178) DROVE the four chooseRootPath/chooseWorkingDirectory NSOpenPanel
-# value-flows (seamed behind chooseDirectory): lowering 1487/301 by the now-covered panel-config +
-# value-flow regions.
-# PROBE VALUE (Class 3): set deliberately below the true residual to force the Coverage job to print
-# the EXACT remaining uncovered line/region count for WorkbenchViews.swift; the next commit sets it
-# to that CI-measured minimum and proves the count-1 check fails.
-WorkbenchViews.swift 1450 280
+# value-flows (seamed behind chooseDirectory): 1487/301 → 1406/287 (81 lines / 14 regions driven OUT).
+# Measured on the Coverage job at run 28297944555 (probe-then-set: the probe 1450/280 forced the gate
+# to print the exact residual `1406 lines / 287 regions`). Verified minimal: lowering EITHER number by
+# 1 makes the gate FAIL (the count-1 check).
+WorkbenchViews.swift 1406 287
