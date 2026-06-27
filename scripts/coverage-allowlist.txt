@@ -84,9 +84,11 @@ DaemonLiveness.swift 1 1
 # The counts below are the EXACT CI-measured (Apple Swift 6.0.3) genuine-carve totals — NOT
 # a sum of records (B4-redo re-drove 50 of B4's 69; record counts overlap). The K1 scene/menu/
 # AppKit shells are the bulk; the rest are the per-view b-records carves above.
-# Coverage PR#1 drove the handleMenuCommand dispatch arms (extracted to the free
-# dispatchMenuCommand fn) — lowering the prior 1729/379 by the now-covered region count.
-# PROBE VALUE (coverage PR#1): set deliberately below the true residual to force the Coverage
-# job to print the EXACT remaining uncovered line/region count for WorkbenchViews.swift; the
-# next commit sets it to that CI-measured minimum and proves the count-1 check fails.
-WorkbenchViews.swift 1600 330
+# Coverage PR#1 (v0.1.175) DROVE the handleMenuCommand dispatch arms: the ~30-arm switch was
+# extracted to the free dispatchMenuCommand fn (prod byte-identical) and is now 100% covered by
+# DispatchMenuCommandTests (every arm + branch invoked, effect-asserted, mutation-verified).
+# That lowered the prior 1729/379 to 1650/342 — 79 lines / 37 regions driven OUT of the carve.
+# Measured on the Coverage job at run 28296121880 (probe-then-set protocol: the probe value
+# 1600/330 forced the gate to print the exact residual `1650 lines / 342 regions`). Verified
+# minimal: lowering EITHER number by 1 makes the gate FAIL (the count-1 check).
+WorkbenchViews.swift 1650 342
