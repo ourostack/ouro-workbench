@@ -12,6 +12,16 @@
 # (llvm-cov's Branch column is always empty for Swift). Region coverage is the
 # Swift-native equivalent — one region per conditional arm — so 100% region means
 # every branch was taken.
+#
+# Gate flakiness — handled at the ROOT, NOT by a CI retry. The two intermittent-flake
+# classes (TIMING-RACE tests + Apple Swift 6.0.3 SYNTHESIZED-EPILOGUE braces) are
+# documented in scripts/coverage-allowlist.txt's header with a cover-first-then-minimal-1/1
+# protocol. A 2026-06 proactive sweep hardened every at-risk timeout test to a generous
+# budget and pre-allowlisted the (only three) genuinely-synthesized braces, so the gate is
+# deterministic. DECISION: NO single-retry backstop on this job — a retry would mask not just
+# coverage flakes but any GENUINE intermittent test failure (the exact instability we want
+# surfaced), and with the root causes fixed it buys nothing but doubled CI time on a real RED.
+# Any future flake is diagnosed + handled per the allowlist protocol (cover-first, then 1/1).
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
