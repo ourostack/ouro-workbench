@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.179 - Boss-pane Advanced coverage tightening
+
+- Internal: the boss pane's expanded "Advanced" section is now driven to test coverage by adding an injectable initial-state seam, so the expanded render (watch status, agent manager, transcript search, runtime, release, recovery drill, action log) is exercised. No user-facing behavior change — the pane still starts collapsed.
+
 ## 0.1.178 - Directory-picker coverage tightening
 
 - Internal: the "Choose" directory pickers in the New/Edit Terminal and Workspace sheets are now driven to test coverage by injecting the `NSOpenPanel` behind a seam, so the post-selection value-flow is exercised without a live modal. No user-facing behavior change — production still opens the real panel.
