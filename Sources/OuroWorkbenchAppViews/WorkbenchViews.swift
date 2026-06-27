@@ -1225,7 +1225,17 @@ struct HarnessActionResult: Equatable {
 struct HarnessStatusSheet: View {
     @ObservedObject var model: WorkbenchViewModel
     @Environment(\.dismiss) private var dismiss
-    @State private var isRefreshing = false
+    @State private var isRefreshing: Bool
+
+    /// `initialIsRefreshing` defaults to `false` — the prod default UNCHANGED. The seam lets a
+    /// test seed `@State` so the in-flight render (the Refresh button `.disabled(isRefreshing)`
+    /// + the `isBusy: isRefreshing` HarnessActionRow) is reachable (otherwise unreachable: the
+    /// flag is flipped only by an async `.task`-style refresh ViewInspector can't drive). Prod
+    /// byte-identical.
+    init(model: WorkbenchViewModel, initialIsRefreshing: Bool = false) {
+        self.model = model
+        _isRefreshing = State(initialValue: initialIsRefreshing)
+    }
 
     private var status: HarnessStatus { model.harnessStatus }
     private var offer: HarnessControlOffer { status.controlOffer }
@@ -8176,7 +8186,16 @@ struct BossWorkbenchMCPSetupView: View {
 struct AgentDetailView: View {
     var agent: OuroAgentRecord
     @ObservedObject var model: WorkbenchViewModel
-    @State private var showsInspector = false
+    @State private var showsInspector: Bool
+
+    /// `initialShowsInspector` defaults to `false` — the prod collapsed default UNCHANGED. The
+    /// seam lets a test seed `@State` so the `if showsInspector` AgentInspectorPanel arm renders
+    /// (otherwise unreachable: a post-tap toggle is not re-inspectable). Prod byte-identical.
+    init(agent: OuroAgentRecord, model: WorkbenchViewModel, initialShowsInspector: Bool = false) {
+        self.agent = agent
+        self.model = model
+        _showsInspector = State(initialValue: initialShowsInspector)
+    }
 
     private var isBoss: Bool {
         model.state.boss.agentName.caseInsensitiveCompare(agent.name) == .orderedSame
@@ -8662,8 +8681,25 @@ struct AgentActionsCard: View {
 struct SessionDetailView: View {
     var entry: ProcessEntry
     @ObservedObject var model: WorkbenchViewModel
-    @State private var showsInspector = false
-    @State private var showsTranscriptSheet = false
+    @State private var showsInspector: Bool
+    @State private var showsTranscriptSheet: Bool
+
+    /// `initialShowsInspector`/`initialShowsTranscriptSheet` default to `false` — the prod
+    /// collapsed defaults UNCHANGED. The seam lets a test seed the `@State`s so the
+    /// `if showsInspector` SessionInspectorPanel arm and the
+    /// `.sheet(isPresented: $showsTranscriptSheet)` arm render (otherwise unreachable: a
+    /// post-tap toggle is not re-inspectable). Prod byte-identical.
+    init(
+        entry: ProcessEntry,
+        model: WorkbenchViewModel,
+        initialShowsInspector: Bool = false,
+        initialShowsTranscriptSheet: Bool = false
+    ) {
+        self.entry = entry
+        self.model = model
+        _showsInspector = State(initialValue: initialShowsInspector)
+        _showsTranscriptSheet = State(initialValue: initialShowsTranscriptSheet)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {

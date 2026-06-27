@@ -92,8 +92,13 @@ DaemonLiveness.swift 1 1
 #        `if let url { rootPath/workingDirectory = url.path }` value-flow (asserted via the
 #        captured panel; cancel arm covered too). Only the literal runModal() inside each
 #        default closure stays carved.
-#      * @State default autoclosures with no init seam (isRefreshing / taught /
-#        showsInspector / selectedIndex / customBossIsPresented) + .disabled short-circuits.
+#      * @State default autoclosures with no init seam — PARTLY TIGHTENED (coverage Class 6,
+#        v0.1.181): AgentDetailView.showsInspector, SessionDetailView.showsInspector +
+#        showsTranscriptSheet, and HarnessStatusSheet.isRefreshing are now DRIVEN via injectable
+#        `init(... initial<X>:)` seams (prod default unchanged) — the gated disclosure/inspector/
+#        sheet/disabled arms render under ViewInspector. Still carved: taught (DecisionLogRow has
+#        no synthesizable init), selectedIndex (CommandPaletteSheet keyboard nav), and
+#        customBossIsPresented (BossSelectorView popover) — candidates for a later class.
 #      * .task / .onChange / .onAppear toolchain-untestable closures (ViewInspector 0.10.3
 #        has no .task driver) — HarnessStatusSheet/.task, WorkbenchSidebarView refresh-loop,
 #        WorkbenchOnboardingSheet bootstrap.
@@ -126,6 +131,10 @@ DaemonLiveness.swift 1 1
 # Coverage Class 5 (v0.1.180) DROVE LoginItemController + MachineRuntimeView login rows (item +
 # controller injection seams): 1346/276 → 1262/252 (84 lines / 24 regions driven OUT). Measured on
 # the Coverage job at run 28298993999 (probe-then-set: the first probe 1310/255 PASSED so a re-probe
-# at 1250/230 forced the gate to print the exact residual `1262 lines / 252 regions`). Verified
-# minimal: lowering EITHER number by 1 makes the gate FAIL.
-WorkbenchViews.swift 1262 252
+# at 1250/230 forced the gate to print the exact residual `1262 lines / 252 regions`).
+# Coverage Class 6 (v0.1.181) DROVE four @State disclosure/inspector/refresh arms (init seams on
+# AgentDetailView/SessionDetailView/HarnessStatusSheet): 1262/252 → 1224/242 (38 lines / 10 regions
+# driven OUT). Measured on the Coverage job at run 28299620615 (probe-then-set: the probe 1230/238
+# forced the gate to print the exact residual `1224 lines / 242 regions`). Verified minimal: lowering
+# EITHER number by 1 makes the gate FAIL.
+WorkbenchViews.swift 1224 242

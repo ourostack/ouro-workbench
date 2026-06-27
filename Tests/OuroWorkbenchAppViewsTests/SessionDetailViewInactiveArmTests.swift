@@ -122,6 +122,54 @@ final class SessionDetailViewInactiveArmTests: XCTestCase {
         XCTAssertFalse(archived.contains("Ready to launch"), "archived: not the launch headline:\n\(archived)")
     }
 
+    // MARK: - Class 6 — the showsInspector / showsTranscriptSheet arms, DRIVEN via the init seam
+
+    /// `initialShowsInspector: true` (no live session → the inactive arm stays the body) seeds
+    /// the @State so the `if showsInspector` SessionInspectorPanel + Divider arm renders. The
+    /// disclosure chevron points DOWN (collapsed: RIGHT) and the inspector adds its pill row.
+    func testDetail_inspectorArm_expandedRendersInspectorPanel() throws {
+        let e = entry()
+        let model = try makeVM(state: state(entry: e))
+        let loaded = model.state.processEntries.first ?? e
+        let view = SessionDetailView(entry: loaded, model: model, initialShowsInspector: true)
+        let tree = try ViewSnapshotHost.snapshotText(of: view)
+        XCTAssertTrue(tree.contains(#"image="chevron.down""#),
+                      "expanded: the disclosure chevron points down:\n\(tree)")
+        // The SessionInspectorPanel adds a SECOND trust/auto-resume pill row (the title strip
+        // already carries one), so the expanded tree has the inspector's pills duplicated.
+        let trustCount = tree.components(separatedBy: #"text="trusted""#).count - 1
+        XCTAssertGreaterThanOrEqual(trustCount, 2,
+                                    "expanded: the inspector's trust pill is added (≥2 total):\n\(tree)")
+    }
+
+    /// The showsInspector gate flips the tree (negative control): the inspector adds nodes, so
+    /// the expanded tree differs AND carries the down chevron the collapsed one lacks.
+    func testDetail_inspectorArm_gateFlipsTree() throws {
+        let e = entry()
+        let collapsed = try ViewSnapshotHost.snapshotText(of: try detail(for: e))
+        let model = try makeVM(state: state(entry: e))
+        let loaded = model.state.processEntries.first ?? e
+        let expanded = try ViewSnapshotHost.snapshotText(
+            of: SessionDetailView(entry: loaded, model: model, initialShowsInspector: true))
+        XCTAssertNotEqual(collapsed, expanded, "the showsInspector gate must flip the tree")
+        XCTAssertTrue(collapsed.contains(#"image="chevron.right""#), "collapsed: the chevron points right")
+        XCTAssertTrue(expanded.contains(#"image="chevron.down""#), "expanded: the chevron points down")
+        XCTAssertFalse(collapsed.contains(#"image="chevron.down""#), "collapsed: never the down chevron")
+    }
+
+    /// `initialShowsTranscriptSheet: true` seeds the @State so the
+    /// `.sheet(isPresented: $showsTranscriptSheet) { SessionTranscriptSheet }` arm is presented.
+    func testDetail_transcriptSheetArm_expandedPresentsSheet() throws {
+        let e = entry()
+        let model = try makeVM(state: state(entry: e))
+        let loaded = model.state.processEntries.first ?? e
+        let view = SessionDetailView(entry: loaded, model: model, initialShowsTranscriptSheet: true)
+        // Rendering with the sheet flag set drives the `.sheet(isPresented:)` content closure;
+        // a render that includes the transcript sheet must not throw or leak a path.
+        let tree = try ViewSnapshotHost.snapshotText(of: view)
+        XCTAssertFalse(tree.contains("/Users/"), "no machine-path leak in the transcript-sheet render:\n\(tree)")
+    }
+
     // MARK: - Determinism (P3)
 
     func testDetail_determinism_byteIdenticalTwiceAndNoLeak() throws {

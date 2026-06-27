@@ -214,3 +214,32 @@ set to the exact minimum **`1262 252`** (was `1346 276`). **Driven out: 84 lines
 
 **Irreducibly kept (this class):** none — the entire LoginItemController + login-row region is driven
 (no SMAppService syscall exists; the plist I/O is hermetic).
+
+---
+
+## Class 6 — @State disclosure/inspector/refresh arms (PR #348, v0.1.181)
+
+**Carve before:** four `@State`-no-init-seam arms where a post-tap toggle is not re-inspectable
+under ViewInspector — AgentDetailView.showsInspector, SessionDetailView.showsInspector +
+showsTranscriptSheet, HarnessStatusSheet.isRefreshing.
+
+**Drive:** add prod-byte-identical `init(... initial<X>: = <current default>)` seams:
+- `AgentDetailView` — the `if showsInspector` AgentInspectorPanel arm (asserts chevron.down + the
+  inspector's config-path row).
+- `SessionDetailView` — the `if showsInspector` SessionInspectorPanel arm + the
+  `.sheet(isPresented: $showsTranscriptSheet)` arm. Driven with NO live session, so the live-PTY
+  `TerminalPane` arm stays carved. (Asserts chevron flip + the inspector's duplicated pill row;
+  the sheet render is path-leak-checked.)
+- `HarnessStatusSheet` — the Refresh button `.disabled(isRefreshing)` in-flight arm (asserted via
+  ViewInspector `isDisabled()`, since `.disabled` doesn't serialize into the snapshot tree).
+Each test seeds the @State + asserts the gated render + a gate negative control. Mutation-verified
+(SessionDetailView showsInspector gate → false → RED, reverted).
+
+**CI-measured result (Coverage job, run 28299620615):** residual printed by the probe `1230 238`
+was **`1224 lines / 242 regions uncovered`**. Allowlist set to the exact minimum **`1224 242`**
+(was `1262 252`). **Driven out: 38 lines / 10 regions.**
+
+**Still carved (later-class candidates):** `taught` (DecisionLogRow has many memberwise params, no
+synthesizable init seam without a verbose explicit init), `selectedIndex` (CommandPaletteSheet
+keyboard-nav highlight + the irreducible `.onKeyPress` handlers), `customBossIsPresented`
+(BossSelectorView popover — the standalone BossAgentNamePopover content is separately drivable).
