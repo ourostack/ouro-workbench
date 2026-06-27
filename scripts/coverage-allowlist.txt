@@ -126,7 +126,7 @@ DaemonLiveness.swift 1 1
 # Coverage Class 5 (v0.1.180) DROVE LoginItemController + MachineRuntimeView login rows (item +
 # controller injection seams): lowering 1346/276 by the now-covered controller logic + login-row
 # regions.
-# PROBE VALUE (Class 5): set deliberately below the true residual to force the Coverage job to print
-# the EXACT remaining uncovered line/region count for WorkbenchViews.swift; the next commit sets it to
-# that CI-measured minimum and proves the count-1 check fails.
-WorkbenchViews.swift 1310 255
+# PROBE VALUE (Class 5): the first probe 1310/255 unexpectedly PASSED (the drive overshot the
+# estimate), so this re-probe is set lower to force the Coverage job to print the EXACT remaining
+# uncovered line/region count; the next commit sets it to that CI-measured minimum.
+WorkbenchViews.swift 1250 230
