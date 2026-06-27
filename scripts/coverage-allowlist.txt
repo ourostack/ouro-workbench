@@ -45,16 +45,16 @@ DaemonLiveness.swift 1 1
 #
 #  (1) K1 dossiered AppKit/scene shells (residual-baseline.md THE FORK) — the bulk:
 #      * WorkbenchRootView — the SwiftUI `Scene` root: WindowGroup/NavigationSplitView,
-#        `.commands{}` menu wiring, `handleMenuCommand`, `init(diagnostics:)`. A Scene is
-#        not constructible/inspectable in-process.
-#        TRANSPARENCY (borderline carve, flagged by the independent review): the bulk here
-#        is `handleMenuCommand`'s ~30 pure-dispatch `case` arms. They live behind the
-#        non-executable `@StateObject` Scene root and are reached only via `.onReceive` of
-#        the menu-command publisher — ViewInspector 0.10.3 has NO driver for that path, so
-#        they are genuinely un-invokable in-process today. FUTURE-TIGHTENING (not done here
-#        to keep this PR scoped): extracting the switch into a free function `dispatch(_:to:)`
-#        on the VM (the K4-helper pattern B10 used) would make every arm directly testable
-#        and remove these ~30 from the carve. Documented so the carve stays honest.
+#        `.commands{}` menu wiring, the `handleMenuCommand` thin forwarder, `init(diagnostics:)`.
+#        A Scene is not constructible/inspectable in-process.
+#        TIGHTENED (coverage PR#1): `handleMenuCommand`'s ~30 pure-dispatch `case` arms were
+#        EXTRACTED into the free function `dispatchMenuCommand(_:to:toggleSidebar:)` (the
+#        K4-helper pattern) and are now DRIVEN to 100% by DispatchMenuCommandTests (every arm
+#        + branch invoked, effect-asserted, mutation-verified). Only the 1-line forwarder
+#        (`handleMenuCommand` -> dispatchMenuCommand) and the Scene/`.commands` wiring that
+#        reaches it remain carved (behind the non-executable @StateObject Scene root). The two
+#        model NSOpenPanel/NSSavePanel modal calls the `.openWorkspace`/`.saveWorkspace` arms
+#        reach are seamed (chooseWorkspaceOpenURL/SaveURL) and driven too.
 #      * WorkbenchMenuBarController — NSMenu/NSStatusItem AppKit menu-bar controller.
 #      * LoginItemController / MachineRuntimeView — SMAppService login-item (system svc).
 #      * SessionDetailView / DetailSplitState — the live-PTY detail/split (TerminalPane
@@ -83,9 +83,12 @@ DaemonLiveness.swift 1 1
 #
 # The counts below are the EXACT CI-measured (Apple Swift 6.0.3) genuine-carve totals — NOT
 # a sum of records (B4-redo re-drove 50 of B4's 69; record counts overlap). The K1 scene/menu/
-# AppKit shells are the bulk (~844 lines); the rest are the per-view b-records carves above.
-# Measured on the Coverage job at commit 821f50c (after driving SessionAttentionBanner +
-# AgentActionsCard/AgentLanesCard/NeedsYouEntryRow/SessionStatusRowView/HarnessActionRow/
-# OnboardingBossChoiceRow to 100%). Verified minimal: lowering EITHER number by 1 makes the
-# gate FAIL (the count-1 check — see finale-drive-records.md).
-WorkbenchViews.swift 1729 379
+# AppKit shells are the bulk; the rest are the per-view b-records carves above.
+# Coverage PR#1 (v0.1.175) DROVE the handleMenuCommand dispatch arms: the ~30-arm switch was
+# extracted to the free dispatchMenuCommand fn (prod byte-identical) and is now 100% covered by
+# DispatchMenuCommandTests (every arm + branch invoked, effect-asserted, mutation-verified).
+# That lowered the prior 1729/379 to 1650/342 — 79 lines / 37 regions driven OUT of the carve.
+# Measured on the Coverage job at run 28296121880 (probe-then-set protocol: the probe value
+# 1600/330 forced the gate to print the exact residual `1650 lines / 342 regions`). Verified
+# minimal: lowering EITHER number by 1 makes the gate FAIL (the count-1 check).
+WorkbenchViews.swift 1650 342
