@@ -1,6 +1,7 @@
 import Foundation
 import OuroAppShellUI
 import OuroWorkbenchCore
+import SwiftUI
 
 public struct WorkbenchShellAboutPresentation: Equatable, Sendable {
     public static let subtitle = "Terminal-first orchestrator for autonomous Ouro agents."
@@ -47,6 +48,102 @@ public struct WorkbenchShellUpdatePresentation: Equatable, Sendable {
         self.badgeText = badgeText
         self.promptRelease = promptRelease
         self.releaseURL = releaseURL
+    }
+}
+
+public enum WorkbenchShellCommandReference {
+    public static var title: String { "Keyboard Shortcuts" }
+    public static var subtitle: String { "Press ⌘/ from anywhere to bring this back" }
+
+    public static var sectionOrder: [String] {
+        WorkbenchGuide.shortcutCategories.map(\.title)
+    }
+
+    public static var items: [AppShellCommandReferenceItem] {
+        WorkbenchGuide.shortcutCategories.flatMap { category in
+            category.shortcuts.enumerated().map { index, shortcut in
+                AppShellCommandReferenceItem(
+                    id: "\(category.id).\(index)",
+                    title: shortcut.summary,
+                    section: category.title,
+                    shortcut: shortcut.keys,
+                    keywords: "\(category.title) \(category.systemImage)"
+                )
+            }
+        }
+    }
+}
+
+public struct WorkbenchShellCommandReferenceView: View {
+    public init() {}
+
+    public var body: some View {
+        AppShellCommandReferenceView(
+            title: WorkbenchShellCommandReference.title,
+            subtitle: WorkbenchShellCommandReference.subtitle,
+            items: WorkbenchShellCommandReference.items,
+            preferredSectionOrder: WorkbenchShellCommandReference.sectionOrder
+        )
+    }
+}
+
+public struct WorkbenchShellAboutView: View {
+    public var presentation: WorkbenchShellAboutPresentation
+    public var updateState: ReleaseUpdateViewState
+    public var updateActions: ReleaseUpdateActions
+    public var aboutActions: AppShellAboutActions
+
+    public init(
+        presentation: WorkbenchShellAboutPresentation,
+        updateState: ReleaseUpdateViewState,
+        updateActions: ReleaseUpdateActions,
+        aboutActions: AppShellAboutActions
+    ) {
+        self.presentation = presentation
+        self.updateState = updateState
+        self.updateActions = updateActions
+        self.aboutActions = aboutActions
+    }
+
+    public var body: some View {
+        AppShellAboutView(
+            model: presentation.model,
+            updateState: updateState,
+            updateActions: updateActions,
+            aboutActions: aboutActions
+        )
+    }
+}
+
+public struct WorkbenchShellUpdatePanelView: View {
+    public var state: ReleaseUpdateViewState
+    public var actions: ReleaseUpdateActions
+    public var showTitle: Bool
+
+    public init(
+        state: ReleaseUpdateViewState,
+        actions: ReleaseUpdateActions,
+        showTitle: Bool
+    ) {
+        self.state = state
+        self.actions = actions
+        self.showTitle = showTitle
+    }
+
+    public var body: some View {
+        ReleaseUpdateControls(
+            state: state,
+            actions: actions,
+            labels: ReleaseUpdateActionLabels(
+                check: "Check for Updates...",
+                review: "Review Update",
+                install: "Install & Relaunch",
+                openRelease: "View Release Notes"
+            ),
+            showTitle: showTitle,
+            centered: !showTitle
+        )
+        .frame(maxWidth: .infinity)
     }
 }
 

@@ -433,6 +433,8 @@ selftest_paths_mode() {
     VERSION
     scripts/package-app.sh
     scripts/preflight.sh
+    scripts/check-shell-boundary.sh
+    scripts/shell-boundary-allowlist.txt
     scripts/verify-published-release.sh
     scripts/release-policy.sh
     .github/workflows/release.yml
@@ -475,6 +477,10 @@ required_ci = [
 for needle in required_ci:
     if needle not in ci:
         raise SystemExit(f"ci.yml must contain {needle!r}")
+ci_lines = {line.strip() for line in ci.splitlines()}
+for line in ("run: scripts/check-shell-boundary.sh --selftest", "run: scripts/check-shell-boundary.sh"):
+    if line not in ci_lines:
+        raise SystemExit(f"ci.yml must contain an exact {line!r} step")
 
 required_preflight = [
     "scripts/release-policy.sh freshness --mode pr",
@@ -487,6 +493,10 @@ required_preflight = [
 for needle in required_preflight:
     if needle not in preflight:
         raise SystemExit(f"preflight.sh must contain {needle!r}")
+preflight_lines = {line.strip() for line in preflight.splitlines()}
+for line in ("scripts/check-shell-boundary.sh --selftest", "scripts/check-shell-boundary.sh"):
+    if line not in preflight_lines:
+        raise SystemExit(f"preflight.sh must contain an exact {line!r} call")
 
 required_auto = [
     "scripts/release-policy.sh release-exists",

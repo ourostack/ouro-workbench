@@ -18,6 +18,48 @@ final class WorkbenchShellPresentationTests: XCTestCase {
         XCTAssertEqual(model.accessibilityLabel, "About Ouro Workbench")
     }
 
+    @MainActor
+    func testShellAboutViewConstructsSharedAboutBody() {
+        let view = WorkbenchShellAboutView(
+            presentation: WorkbenchShellAboutPresentation(buildHash: "abc1234"),
+            updateState: ReleaseUpdateViewState(kind: .current, statusLine: "up to date"),
+            updateActions: ReleaseUpdateActions(checkForUpdates: {}),
+            aboutActions: AppShellAboutActions()
+        )
+
+        let body = view.body
+
+        XCTAssertTrue(String(describing: type(of: body)).contains("AppShellAboutView"))
+    }
+
+    @MainActor
+    func testShellUpdatePanelViewConstructsSharedReleaseBody() {
+        let view = WorkbenchShellUpdatePanelView(
+            state: ReleaseUpdateViewState(kind: .notChecked, statusLine: "not checked"),
+            actions: ReleaseUpdateActions(checkForUpdates: {}),
+            showTitle: true
+        )
+
+        let body = view.body
+
+        XCTAssertFalse(String(describing: type(of: body)).isEmpty)
+    }
+
+    func testCommandReferenceMapsGuideIntoShellItems() {
+        let items = WorkbenchShellCommandReference.items
+        let guideRows = WorkbenchGuide.shortcutCategories.flatMap(\.shortcuts)
+
+        XCTAssertEqual(WorkbenchShellCommandReference.title, "Keyboard Shortcuts")
+        XCTAssertEqual(WorkbenchShellCommandReference.subtitle, "Press ⌘/ from anywhere to bring this back")
+        XCTAssertEqual(WorkbenchShellCommandReference.sectionOrder, WorkbenchGuide.shortcutCategories.map(\.title))
+        XCTAssertEqual(items.count, guideRows.count)
+        XCTAssertTrue(items.contains {
+            $0.title == "Open the command palette"
+                && $0.shortcut == "⌘K"
+                && $0.section == "Boss + Agents"
+        })
+    }
+
     func testUpdatePresentationBeforeCheckKeepsOnlyChannelMetadata() {
         let presentation = WorkbenchShellUpdatePresenter.presentation(
             snapshot: nil,

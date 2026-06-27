@@ -39,3 +39,9 @@ by the standing directives.
 This product is high-trust local software. Preserve auditability and recovery
 truth. Do not silently claim a process survived a reboot; classify it as
 resumed, respawned, or needing manual recovery.
+
+## Shared Native App Shell
+
+- Treat `ouro-native-apple-app-shell` as the owner for reusable native Ouro app chrome: app identity/about, release update surfaces, keyboard shortcut reference UI, and utility-window presentation.
+- Keep Workbench-specific mappings in `Sources/OuroWorkbenchShellAdapter/`. If a new shared-looking surface needs glue, put the adapter there first; if it needs reusable behavior, move the behavior to `ouro-native-apple-app-shell` before using it in-app.
+- `scripts/check-shell-boundary.sh` is part of CI/preflight. Do not add allowlist rows unless the code is truly Workbench domain behavior or a narrow adapter.
