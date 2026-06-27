@@ -124,9 +124,8 @@ DaemonLiveness.swift 1 1
 # 28298452535 (probe-then-set: the probe 1370/265 forced the gate to print the exact residual
 # `1346 lines / 276 regions`).
 # Coverage Class 5 (v0.1.180) DROVE LoginItemController + MachineRuntimeView login rows (item +
-# controller injection seams): lowering 1346/276 by the now-covered controller logic + login-row
-# regions.
-# PROBE VALUE (Class 5): the first probe 1310/255 unexpectedly PASSED (the drive overshot the
-# estimate), so this re-probe is set lower to force the Coverage job to print the EXACT remaining
-# uncovered line/region count; the next commit sets it to that CI-measured minimum.
-WorkbenchViews.swift 1250 230
+# controller injection seams): 1346/276 → 1262/252 (84 lines / 24 regions driven OUT). Measured on
+# the Coverage job at run 28298993999 (probe-then-set: the first probe 1310/255 PASSED so a re-probe
+# at 1250/230 forced the gate to print the exact residual `1262 lines / 252 regions`). Verified
+# minimal: lowering EITHER number by 1 makes the gate FAIL.
+WorkbenchViews.swift 1262 252
