@@ -2081,6 +2081,19 @@ public struct AboutSheet: View {
     @Environment(\.dismiss) private var dismiss
     private let buildHash: String
 
+    /// Seam: open a URL in the system browser. Default = the real `NSWorkspace.shared.open`;
+    /// a test injects a recording stub to assert WHICH url the "View Repository" action sends,
+    /// without launching a browser. Prod byte-identical.
+    var openURL: (URL) -> Void = { NSWorkspace.shared.open($0) }
+
+    /// Seam: write a string to the general pasteboard. Default = the real
+    /// `NSPasteboard.general` clear+setString; a test injects a recording stub to assert the
+    /// version string the "Copy Version" action copies, without touching the live pasteboard.
+    var copyToPasteboard: (String) -> Void = { value in
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(value, forType: .string)
+    }
+
     /// `buildHash` defaults to the live `CFBundleVersion` (wired in by package-app.sh; falls
     /// back to "dev" for a `swift run` build with no bundle) — the prod behavior UNCHANGED. The
     /// seam lets a test inject a FIXED hash so the about presentation + version-line render is
@@ -2105,7 +2118,7 @@ public struct AboutSheet: View {
             updateState: model.appShellUpdateState,
             updateActions: model.appShellUpdateActions,
             aboutActions: AppShellAboutActions(
-                openRepository: { NSWorkspace.shared.open(aboutPresentation.repositoryURL) },
+                openRepository: openRepository,
                 copyVersion: copyVersion,
                 dismiss: { dismiss() }
             )
@@ -2113,10 +2126,16 @@ public struct AboutSheet: View {
         .frame(width: 520, height: 500)
     }
 
-    private func copyVersion() {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(aboutPresentation.versionLine, forType: .string)
+    /// The "View Repository" action — sends the repo URL through the `openURL` seam. Internal
+    /// so a test can invoke it directly (the action closure is passed into the opaque shell
+    /// `AppShellAboutView`, which ViewInspector cannot descend).
+    func openRepository() {
+        openURL(aboutPresentation.repositoryURL)
+    }
+
+    /// The "Copy Version" action — sends the version line through the `copyToPasteboard` seam.
+    func copyVersion() {
+        copyToPasteboard(aboutPresentation.versionLine)
     }
 }
 
@@ -2582,7 +2601,35 @@ struct DecisionLogRow: View {
     var onAcknowledge: (() -> Void)?
     var onSnooze: ((TimeInterval) -> Void)?
     var onResolve: (() -> Void)?
-    @State private var taught = false
+    @State private var taught: Bool
+
+    /// Explicit init mirroring the prior synthesized memberwise init (every param keeps its
+    /// default, so all call sites are unchanged) PLUS `initialTaught` — the same `@State`
+    /// init-seam used across this campaign (initialShowsAdvanced/initialShowsInspector/…). The
+    /// default `false` is the prod behavior UNCHANGED; a test seeds `true` so the
+    /// `if taught { "Sent to boss" }` TRUE arm renders (otherwise unreachable: the
+    /// `taught = true` set inside the Teach Menu tap is not re-inspectable post-toggle).
+    init(
+        decision: BossInboxDecision,
+        mode: Mode = .log,
+        timeZone: TimeZone = .autoupdatingCurrent,
+        locale: Locale = .autoupdatingCurrent,
+        onTeach: @escaping (Bool) -> Void,
+        onAcknowledge: (() -> Void)? = nil,
+        onSnooze: ((TimeInterval) -> Void)? = nil,
+        onResolve: (() -> Void)? = nil,
+        initialTaught: Bool = false
+    ) {
+        self.decision = decision
+        self.mode = mode
+        self.timeZone = timeZone
+        self.locale = locale
+        self.onTeach = onTeach
+        self.onAcknowledge = onAcknowledge
+        self.onSnooze = onSnooze
+        self.onResolve = onResolve
+        _taught = State(initialValue: initialTaught)
+    }
 
     /// Plain-language vocabulary for the status/source footer and the teach
     /// control (#U23a) — the single source so the row never prints raw enum
@@ -5177,9 +5224,17 @@ struct CommandPaletteSheet: View {
     }
 
     private func moveSelection(by delta: Int) {
-        let count = visualOrderedItems.count
-        guard count > 0 else { return }
-        selectedIndex = min(max(selectedIndex + delta, 0), count - 1)
+        selectedIndex = Self.clampedSelection(current: selectedIndex, delta: delta, count: visualOrderedItems.count)
+    }
+
+    /// Pure ↑/↓ keyboard-navigation clamp: `current + delta` clamped to `0..<count`; an empty
+    /// list returns `current` unchanged (the no-op). Extracted as a `static func` so the
+    /// selection math is directly unit-testable — `moveSelection(by:)` is reached only from the
+    /// `.onKeyPress` closures, which ViewInspector 0.10.3 cannot drive. Behavior-identical to the
+    /// prior inline `guard count > 0` + clamp (an empty list left `selectedIndex` untouched).
+    static func clampedSelection(current: Int, delta: Int, count: Int) -> Int {
+        guard count > 0 else { return current }
+        return min(max(current + delta, 0), count - 1)
     }
 
     private func runSelectedCommand() {
@@ -7165,17 +7220,12 @@ struct OnboardingReadinessView: View {
                             .multilineTextAlignment(.center)
                     }
                     .frame(maxWidth: 520)
-                    if !readiness.repairSteps.isEmpty {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("Optional checks")
-                                .font(.callout.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                            ForEach(readiness.repairSteps) { step in
-                                OnboardingRepairStepRow(step: step, model: model)
-                            }
-                        }
-                        .frame(maxWidth: 660)
-                    }
+                    // (Removed: a structurally-DEAD `if !readiness.repairSteps.isEmpty` "Optional
+                    // checks" block nested inside this `isReady` arm. The AN-006 invariant —
+                    // `isReady ⟺ repairSteps.isEmpty`, asserted by
+                    // OnboardingReadinessViewTests.testE4_AN006_readyImpliesEmptyRepairSteps — makes
+                    // it unreachable: when ready, repairSteps is always empty. Deleted rather than
+                    // carved, per the campaign's dead-code-deletion preference.)
                 } else {
                     VStack(alignment: .leading, spacing: 14) {
                         // R4b — Layer A native cold-start bootstrap drives the not-ready first run:
