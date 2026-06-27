@@ -179,3 +179,38 @@ was **`1346 lines / 276 regions uncovered`**. Allowlist set to the exact minimum
 
 **Irreducibly kept (this class):** the non-injectable MachineRuntimeView login-item leaf (its
 SMAppService-class login rows live in MachineRuntimeView's own decl — the next class target).
+
+---
+
+## Class 5 — LoginItemController + MachineRuntimeView login rows (PR #347, v0.1.180)
+
+**Carve before (residual-baseline K1 #2):** carved as the "SMAppService login-item (system svc)" —
+but `LaunchAgentLoginItem` is FileManager-based plist I/O, NOT SMAppService. `LoginItemController`
+built it in-place (`init()` → `LaunchAgentLoginItem(appURL: .defaultAppURL())`) and `MachineRuntimeView`
+held an in-place `@StateObject LoginItemController()`, so the controller logic + login rows read live
+machine state and were carved.
+
+**Drive (two prod-byte-identical seams):**
+- `LoginItemController.init(loginItem: = LaunchAgentLoginItem(appURL: .defaultAppURL()))` — inject a
+  temp-rooted item (real `appURL` file + temp `homeURL`), so `install()`/`uninstall()` write/remove a
+  real plist in temp — NO login-item syscall.
+- `MachineRuntimeView.init(model:loginItem: = LoginItemController())` — inject a controller in a known
+  state via `_loginItem = StateObject(wrappedValue:)`.
+
+`LoginItemControllerTests` (9) drives ALL controller logic hermetically: the 4-case `statusLine` map
+(enabled/needsUpdate/notInstalled/appBundleMissing), `setEnabled` install→enabled & uninstall→notInstalled,
+the `registerIfNeeded` already-enabled guard-return, the `unregisterIfNeeded` not-installed switch arm,
+the `lastError` catch path (residual-baseline :10600, via an appBundleMissing install throw), `refresh`,
+`isUpdating`. `MachineRuntimeViewLoginRowsTests` (4) drives the login-row render (the Toggle / statusLine
+/ the `if let lastError` Text arm) deterministically + a negative control. Mutation-verified (statusLine
+`.notInstalled` → RED, both the controller and the view test go red; reverted). The existing
+`MachineRuntimeViewCarveTests` (default live-state controller, strips its machine-local region) is
+unaffected.
+
+**CI-measured result (Coverage job, run 28298993999):** the first probe `1310/255` unexpectedly
+PASSED (the drive overshot the ~30-region estimate — it covered 24 regions / 84 lines), so a re-probe
+at `1250/230` forced the gate to print the exact residual **`1262 lines / 252 regions`**. Allowlist
+set to the exact minimum **`1262 252`** (was `1346 276`). **Driven out: 84 lines / 24 regions.**
+
+**Irreducibly kept (this class):** none — the entire LoginItemController + login-row region is driven
+(no SMAppService syscall exists; the plist I/O is hermetic).

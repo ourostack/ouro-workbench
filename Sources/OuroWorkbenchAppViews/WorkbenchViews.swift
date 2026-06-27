@@ -10408,7 +10408,17 @@ struct SessionNotesEditor: View {
 
 struct MachineRuntimeView: View {
     @ObservedObject var model: WorkbenchViewModel
-    @StateObject private var loginItem = LoginItemController()
+    @StateObject private var loginItem: LoginItemController
+
+    /// `loginItem` defaults to a fresh production `LoginItemController()` — the prod behavior
+    /// UNCHANGED (the in-place `@StateObject` it had before). The seam lets a test inject a
+    /// controller in a KNOWN state (a temp-rooted login item, an error preset) so the login-row
+    /// Toggle/Refresh/`statusLine`/`lastError` arms render deterministically. Prod byte-identical:
+    /// the default constructs the same controller the `@StateObject` previously did.
+    init(model: WorkbenchViewModel, loginItem: LoginItemController = LoginItemController()) {
+        self.model = model
+        _loginItem = StateObject(wrappedValue: loginItem)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -10568,8 +10578,15 @@ final class LoginItemController: ObservableObject {
 
     private let loginItem: LaunchAgentLoginItem
 
-    init() {
-        self.loginItem = LaunchAgentLoginItem(appURL: LaunchAgentLoginItem.defaultAppURL())
+    /// `loginItem` defaults to the production `LaunchAgentLoginItem` rooted at the real
+    /// app bundle + the user's home `LaunchAgents` dir — the prod behavior UNCHANGED. The
+    /// seam parameter lets a test inject a `LaunchAgentLoginItem` rooted at a TEMP home so
+    /// the controller's state transitions (status lines), the register/unregister flows
+    /// (real plist file writes to temp — NO login-item syscall: `LaunchAgentLoginItem` is
+    /// FileManager-based, not SMAppService), and the `lastError` error-formatting path are
+    /// all driven hermetically. Prod byte-identical: the default constructs the same item.
+    init(loginItem: LaunchAgentLoginItem = LaunchAgentLoginItem(appURL: LaunchAgentLoginItem.defaultAppURL())) {
+        self.loginItem = loginItem
         self.status = loginItem.status()
     }
 

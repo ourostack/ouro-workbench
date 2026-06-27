@@ -64,7 +64,13 @@ DaemonLiveness.swift 1 1
 #        mutation-verified). Irreducibly carved: quitApp (`NSApp.terminate` would kill the
 #        test process), showWorkbench's two `for window in NSApp.windows` loop BODIES (the
 #        xctest app has no windows), and the NSStatusBar/NSImage(systemSymbolName:) construction.
-#      * LoginItemController / MachineRuntimeView — SMAppService login-item (system svc).
+#      * LoginItemController / MachineRuntimeView — DRIVEN (coverage Class 5, v0.1.180): NOT
+#        actually SMAppService — `LaunchAgentLoginItem` is FileManager-based plist I/O. Injecting
+#        the item (LoginItemController.init(loginItem:)) + the controller (MachineRuntimeView.
+#        init(model:loginItem:)) — both prod-default byte-identical — drives ALL of the controller
+#        logic (statusLine 4-case map, register/unregister flows incl. both guard arms, the
+#        lastError catch path at :10600, refresh, isUpdating) and the login-row render (Toggle /
+#        statusLine / the `if let lastError` Text arm) hermetically (temp-rooted plist, no syscall).
 #      * SessionDetailView / DetailSplitState — the live-PTY detail/split (TerminalPane
 #        NSViewRepresentable; the D3-class carve).
 #      * BossDashboardView — TIGHTENED (coverage Class 4, v0.1.179): the `showsAdvanced`
@@ -116,5 +122,10 @@ DaemonLiveness.swift 1 1
 # Coverage Class 4 (v0.1.179) DROVE the BossDashboardView showsAdvanced expanded arm (init seam):
 # 1406/287 → 1346/276 (60 lines / 11 regions driven OUT). Measured on the Coverage job at run
 # 28298452535 (probe-then-set: the probe 1370/265 forced the gate to print the exact residual
-# `1346 lines / 276 regions`). Verified minimal: lowering EITHER number by 1 makes the gate FAIL.
-WorkbenchViews.swift 1346 276
+# `1346 lines / 276 regions`).
+# Coverage Class 5 (v0.1.180) DROVE LoginItemController + MachineRuntimeView login rows (item +
+# controller injection seams): 1346/276 → 1262/252 (84 lines / 24 regions driven OUT). Measured on
+# the Coverage job at run 28298993999 (probe-then-set: the first probe 1310/255 PASSED so a re-probe
+# at 1250/230 forced the gate to print the exact residual `1262 lines / 252 regions`). Verified
+# minimal: lowering EITHER number by 1 makes the gate FAIL.
+WorkbenchViews.swift 1262 252
