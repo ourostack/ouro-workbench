@@ -94,9 +94,9 @@ DaemonLiveness.swift 1 1
 # AppKit shells are the bulk; the rest are the per-view b-records carves above.
 # Coverage Class 1 (v0.1.175) DROVE the handleMenuCommand dispatch arms (extracted to the free
 # dispatchMenuCommand fn): 1729/379 → 1650/342 (79 lines / 37 regions).
-# Coverage Class 2 (v0.1.176) DROVES the WorkbenchMenuBarController logic (see the K1 note above):
-# lowering 1650/342 by the now-covered menu-build + action regions.
-# PROBE VALUE (Class 2): set deliberately below the true residual to force the Coverage job to
-# print the EXACT remaining uncovered line/region count for WorkbenchViews.swift; the next commit
-# sets it to that CI-measured minimum and proves the count-1 check fails.
-WorkbenchViews.swift 1500 270
+# Coverage Class 2 (v0.1.176) DROVE the WorkbenchMenuBarController logic (see the K1 note above):
+# 1650/342 → 1650→1487 / 342→301 (163 lines / 41 regions driven OUT of the carve).
+# Measured on the Coverage job at run 28297036990 (probe-then-set: the probe value 1500/270 forced
+# the gate to print the exact residual `1487 lines / 301 regions`). Verified minimal: lowering
+# EITHER number by 1 makes the gate FAIL (the count-1 check).
+WorkbenchViews.swift 1487 301
