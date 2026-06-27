@@ -36,21 +36,45 @@ SessionActivityReader.swift 0 1
 # toolchain-synthesized resume epilogue is structurally uncountable. Minimal 1/1.
 DaemonLiveness.swift 1 1
 
-# WorkbenchViews.swift (U5 Unit 3) — the per-file-100% views gate. The U5 B-series
-# drove every reachable region of the view structs to 100% (snapshot INVOCATION +
-# effect-assert + mutation RED->GREEN per the b*-records.md ledgers). What remains
-# is a small set of genuinely-untestable regions, each cross-referenced to a carve
-# justification in worker/tasks/2026-06-26-u5-honest-coverage-gate/b*-records.md +
-# b4-carve-records.md, all `--show-regions`-legit:
-#   * modal NSOpenPanel().runModal() (blocks on a live GUI modal in-process)
-#   * live-PTY TerminalPane / TerminalSessionController NSViewRepresentable arms
-#   * @State default autoclosures with no init seam / .disabled short-circuit arms
-#   * .task / .onChange / .onAppear toolchain-untestable closures
-#   * live-subprocess class arms (#332 gh issue-filer / diagnostics — now seamed)
-#   * llvm-cov-synthesized autoclosure/stored-default regions that execute (value
-#     renders) but whose region-entry counter the CI toolchain does not increment
-# The count below is the EXACT CI-measured (Apple Swift 6.0.3) genuine-carve total —
-# NOT a sum of records (B4-redo re-drove 50 of B4's 69; record counts overlap). It is
-# verified minimal: lowering either number by 1 makes the gate FAIL. PLACEHOLDER until
-# the first CI Coverage run reports the measured exempt count.
-WorkbenchViews.swift 400 400
+# WorkbenchViews.swift (U5 Unit 3) — the per-file-100% views gate. The U5 B-series drove
+# every REACHABLE region of the in-process-testable view structs to 100% (snapshot
+# INVOCATION + effect-assert + mutation RED->GREEN per the b*-records.md ledgers). The one
+# un-driven ordinary view the campaign missed (SessionAttentionBanner) is now driven, NOT
+# carved. What remains is genuinely-untestable, in two buckets — EVERY uncovered line was
+# classified by its enclosing decl + source-inspected; none is an un-driven ordinary arm:
+#
+#  (1) K1 dossiered AppKit/scene shells (residual-baseline.md THE FORK) — the bulk:
+#      * WorkbenchRootView — the SwiftUI `Scene` root: WindowGroup/NavigationSplitView,
+#        `.commands{}` menu wiring, `handleMenuCommand`, `init(diagnostics:)`. A Scene is
+#        not constructible/inspectable in-process.
+#      * WorkbenchMenuBarController — NSMenu/NSStatusItem AppKit menu-bar controller.
+#      * LoginItemController / MachineRuntimeView — SMAppService login-item (system svc).
+#      * SessionDetailView / DetailSplitState — the live-PTY detail/split (TerminalPane
+#        NSViewRepresentable; the D3-class carve).
+#      * BossDashboardView — the `showsAdvanced` @State-no-init-seam arm.
+#      * AutonomyStatusButton / AutonomyStatusPopover — popover non-descent + @State.
+#      * AboutSheet — the live build-hash arm. WindowChromeConfigurator — NSWindow chrome.
+#
+#  (2) B-records per-view carves (b*-records.md + b4-carve-records.md), all
+#      `--show-regions`-legit:
+#      * modal NSOpenPanel().runModal() — chooseWorkingDirectory/chooseRootPath in the
+#        New/Edit Terminal sheets (blocks on a live GUI modal in-process).
+#      * @State default autoclosures with no init seam (isRefreshing / taught /
+#        showsInspector / selectedIndex / customBossIsPresented) + .disabled short-circuits.
+#      * .task / .onChange / .onAppear toolchain-untestable closures (ViewInspector 0.10.3
+#        has no .task driver) — HarnessStatusSheet/.task, WorkbenchSidebarView refresh-loop,
+#        WorkbenchOnboardingSheet bootstrap.
+#      * button-action closures reached ONLY from a tap whose target traps in-process
+#        (ReportBug submitBugReport -> NSApp.keyWindow IUO is nil in xctest).
+#      * the structurally-DEAD OnboardingReadinessView "Optional checks" branch — proven
+#        unreachable by the AN-006 invariant (isReady <=> repairSteps.isEmpty), asserted by
+#        OnboardingReadinessViewTests.testE4_AN006_readyImpliesEmptyRepairSteps. NOT padding.
+#      * llvm-cov-synthesized autoclosure/stored-default regions that EXECUTE (the value
+#        renders) but whose region-entry counter Apple Swift 6.0.3 does not increment
+#        (TerminalFocusView.chrome, NewTerminalSessionSheet `?? home`).
+#
+# The counts below are the EXACT CI-measured (Apple Swift 6.0.3) genuine-carve totals — NOT
+# a sum of records (B4-redo re-drove 50 of B4's 69; record counts overlap). Verified minimal:
+# lowering EITHER number by 1 makes the gate FAIL (the count-1 check). [PLACEHOLDER pending
+# the post-SessionAttentionBanner CI Coverage measurement.]
+WorkbenchViews.swift 1850 410
