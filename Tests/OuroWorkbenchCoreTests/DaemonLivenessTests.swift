@@ -176,10 +176,18 @@ final class DaemonLivenessTests: XCTestCase {
     }
 
     func testDefaultReachabilityTreatsHTTPStatusesBelow500AsReachable() async throws {
+        // These three blocks test the STATUS→reachable MAPPING (204/499 → true, 500 → false)
+        // against an in-process synchronous stub; the timeout is incidental. They previously
+        // passed `timeoutSeconds: 0.1`, which set `request.timeoutInterval = 0.1` — on a SLOW CI
+        // runner the synchronous stub could lose that 100ms budget, throwing a request-timeout
+        // (failing the assertion AND leaving the resume epilogue uncovered), the same flake class
+        // the `timeoutSeconds: nil` block below was hardened against. A generous 60s budget keeps
+        // the EXPLICIT-timeout (`else`/non-nil) arm covered while removing the wall-clock race, so
+        // the stub response reliably returns and only the status mapping is under test.
         try await StubURLProtocol.withHTTPStatus(204) {
             let reachable = try await DaemonLivenessProbe.defaultReachability(
                 url: URL(string: "http://daemon.test/machine")!,
-                timeoutSeconds: 0.1
+                timeoutSeconds: 60
             )
             XCTAssertTrue(reachable)
         }
@@ -187,7 +195,7 @@ final class DaemonLivenessTests: XCTestCase {
         try await StubURLProtocol.withHTTPStatus(499) {
             let reachable = try await DaemonLivenessProbe.defaultReachability(
                 url: URL(string: "http://daemon.test/machine")!,
-                timeoutSeconds: 0.1
+                timeoutSeconds: 60
             )
             XCTAssertTrue(reachable)
         }
@@ -195,7 +203,7 @@ final class DaemonLivenessTests: XCTestCase {
         try await StubURLProtocol.withHTTPStatus(500) {
             let reachable = try await DaemonLivenessProbe.defaultReachability(
                 url: URL(string: "http://daemon.test/machine")!,
-                timeoutSeconds: 0.1
+                timeoutSeconds: 60
             )
             XCTAssertFalse(reachable)
         }
@@ -348,9 +356,14 @@ final class DaemonLivenessTests: XCTestCase {
         }
 
         try StubURLProtocol.withHTTPStatus(500) {
+            // `nil` (was 0.1): this block tests the 500-STATUS → false mapping with a real
+            // semaphore wait. A tight 0.1s budget on a slow CI runner could take the TIMEOUT arm
+            // (also `false`) before the stub's 500 lands — the assertion still passes, but the
+            // covered region drifts to the timeout path, not the 500-status path under test. A
+            // generous default budget makes the stubbed 500 reliably land, pinning the coverage.
             XCTAssertFalse(DaemonLivenessProbe.defaultSyncReachability(
                 url: URL(string: "http://daemon.test/machine")!,
-                timeoutSeconds: 0.1,
+                timeoutSeconds: nil,
                 waitForResult: { $0.wait(timeout: $1) }
             ))
         }

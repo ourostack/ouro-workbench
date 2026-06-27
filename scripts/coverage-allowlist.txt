@@ -4,6 +4,36 @@
 # possible — every entry needs a real structural justification.
 #
 # Format: <File.swift> <max_uncovered_lines> <max_uncovered_regions>
+#
+# ── FLAKY-REGION PROTOCOL (how to diagnose + handle an intermittent Coverage-gate RED) ──
+# The exact-100% gate on Apple Swift 6.0.3's llvm-cov has TWO known intermittent-flake classes.
+# When `main` (or a PR) reds on a file whose SOURCE is unchanged and that passed surrounding runs,
+# it is almost always one of these — diagnose by pulling the "uncovered LINES/REGIONS" detail from
+# the failing Coverage job and matching the line against:
+#
+#   (A) TIMING-RACE class — a production `Date().timeIntervalSince(start) < timeout` (or a
+#       URLSession `request.timeoutInterval`) guard whose SUCCESS path a test exercises, but the
+#       path gets SKIPPED when a loaded CI runner exceeds a TIGHT timeout the test configured
+#       (e.g. 1s / 100ms). Root cause is the test's budget, not the gate.
+#       → FIX (cover-first, NOT padding): make the test DETERMINISTIC — give it a GENEROUS timeout
+#         (e.g. 60s, or `nil` → URLSession's ~60s default) and/or a stub that completes in ms, so
+#         the guarded path reliably executes under CI load. Asserts the SAME result; no weakening.
+#         Precedents: GitSessionStatus 1s→60s, DaemonLiveness 0.1s→nil/60s.
+#
+#   (B) SYNTHESIZED-EPILOGUE class — an async delegating overload of the shape
+#       `func f(...) async throws -> R { try await f(..., <default>) }` whose resume-after-await
+#       epilogue (the closing brace) Apple Swift 6.0.3 llvm-cov SYNTHESIZES as a region that
+#       increments only when the inner awaited call returns under a specific timing, so it flakily
+#       stays `^0`. The overload's behavior IS fully exercised; only the synthesized brace is
+#       structurally uncountable on CI (local Swift 6.3.x doesn't even emit it).
+#       → FIX: prefer a deterministic test through a stub (keep it — the better test); if the brace
+#         is genuinely synthesized-uncoverable, ADD a MINIMAL 1/1 allowlist entry below with an
+#         honest justification. Precedents: DaemonLiveness:159, MailboxClient:192, GitSessionStatus:161.
+#
+# RULES: NO padding — never allowlist a currently-GREEN region; only (a) make an at-risk test
+# deterministic, or (b) 1/1-allowlist a genuinely-synthesized brace. A proactive sweep (2026-06)
+# hardened every at-risk TIMING-RACE test and confirmed the only SYNTHESIZED-EPILOGUE twins are the
+# three already listed; no others exist un-allowlisted in OuroWorkbenchCore + the gated dirs.
 
 # readResponse(id:) reads the MCP subprocess with a `while true` loop that only
 # exits via `return`/`throw`; the closing brace + its fall-through regions after

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.186 - Coverage-gate flake hardening (proactive sweep)
+
+- Internal: makes the daemon-liveness reachability tests timing-robust (generous timeouts remove CI launch-jitter races on the status-mapping success paths) and documents the gate-flakiness diagnosis/handling protocol in the coverage allowlist + gate script. No user-facing behavior change; no test weakening.
+
 ## 0.1.185 - Coverage-gate flake fix (GitSessionStatus)
 
 - Internal: makes the git-status reader's success-path test timing-robust (a generous timeout removes a CI launch-jitter race) and allowlists a single intermittently-uncovered region in the same CI-toolchain class as the existing DaemonLiveness / MailboxClient entries. No user-facing behavior change.
