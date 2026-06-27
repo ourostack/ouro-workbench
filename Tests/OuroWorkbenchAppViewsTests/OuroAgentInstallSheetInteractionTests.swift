@@ -68,7 +68,7 @@ final class OuroAgentInstallSheetInteractionTests: XCTestCase {
     /// REAL `model.cloneAgentHeadless`, awaited here directly to assert its honest `.failed` fold
     /// for the unresolvable remote.
     func testInstall_cloneAgent_runsStartCloneAndClonesHeadless() async throws {
-        let model = try await makeVM()
+        let model = try makeVM()
         // Enabled: a present remote + valid (blank) name → `canClone == true`.
         let sheet = OuroAgentInstallSheet(model: model, initialRemote: "git@github.com:org/does-not-exist.git")
         // Tap the enabled "Clone Agent" button → runs the action closure + `startClone()` body.
