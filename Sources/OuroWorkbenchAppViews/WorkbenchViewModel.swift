@@ -686,6 +686,25 @@ public final class WorkbenchViewModel: ObservableObject {
     /// diagnostics orphans). `@MainActor`-isolated; the session is only ever started on main.
     var launchTerminalSession: (TerminalSessionController) -> Void = { $0.start() }
 
+    /// Seam: resolve a directory URL from the configured "Open Workspace…" panel.
+    /// Defaults to the real `panel.runModal()` syscall path (`.OK ? panel.url : nil`),
+    /// which blocks on a live GUI modal and so cannot run in-process. A test injects a
+    /// stub URL (or `nil` for the cancel arm) so the post-selection value-flow
+    /// (`openWorkspaceConfig(at:)`) is driven without the modal. Only the literal
+    /// `runModal()` line lives behind this default — every other line of
+    /// `presentOpenWorkspacePanel` (panel configuration + the value-flow) runs as prod.
+    var chooseWorkspaceOpenURL: (NSOpenPanel) -> URL? = { panel in
+        panel.runModal() == .OK ? panel.url : nil
+    }
+
+    /// Seam: resolve a save-destination URL from the configured "Save Workspace…"
+    /// panel. Defaults to the real `panel.runModal()` syscall path; a test injects a
+    /// stub URL so the post-selection write/action-log/error value-flow is driven
+    /// without the live GUI modal. Only the literal `runModal()` line is behind this.
+    var chooseWorkspaceSaveURL: (NSSavePanel) -> URL? = { panel in
+        panel.runModal() == .OK ? panel.url : nil
+    }
+
     private var manuallyTerminatedRunIDs = Set<UUID>()
     /// F13 — the entry id + runId of the in-flight vault-onboarding recovery terminal (the one-shot
     /// `ouro vault create && auth && refresh` chain), captured at launch so `markTerminated` can
@@ -3516,7 +3535,7 @@ public final class WorkbenchViewModel: ObservableObject {
                 panel.directoryURL = URL(fileURLWithPath: expandedRoot)
             }
         }
-        guard panel.runModal() == .OK, let url = panel.url else {
+        guard let url = chooseWorkspaceSaveURL(panel) else {
             return
         }
         do {
@@ -3555,7 +3574,7 @@ public final class WorkbenchViewModel: ObservableObject {
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
-        guard panel.runModal() == .OK, let url = panel.url else {
+        guard let url = chooseWorkspaceOpenURL(panel) else {
             return
         }
         openWorkspaceConfig(at: url.path)
