@@ -2079,16 +2079,20 @@ struct ImportSummaryBanner: View {
 public struct AboutSheet: View {
     @ObservedObject var model: WorkbenchViewModel
     @Environment(\.dismiss) private var dismiss
+    private let buildHash: String
 
+    /// `buildHash` defaults to the live `CFBundleVersion` (wired in by package-app.sh; falls
+    /// back to "dev" for a `swift run` build with no bundle) — the prod behavior UNCHANGED. The
+    /// seam lets a test inject a FIXED hash so the about presentation + version-line render is
+    /// driven deterministically (the live bundle read is environment-dependent). Prod
+    /// byte-identical: the default still evaluates to the same `CFBundleVersion ?? "dev"`.
     public init(model: WorkbenchViewModel) {
-        self.model = model
+        self.init(model: model, buildHash: Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "dev")
     }
 
-    private var buildHash: String {
-        // Bundle CFBundleVersion holds the build number / git short hash
-        // wired in by package-app.sh. Fall back to "dev" so a swift run
-        // build (no bundle) still renders.
-        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "dev"
+    init(model: WorkbenchViewModel, buildHash: String) {
+        self.model = model
+        self.buildHash = buildHash
     }
 
     private var aboutPresentation: WorkbenchShellAboutPresentation {
@@ -4547,8 +4551,19 @@ struct OnboardingBossChoice: Identifiable {
 
 struct AutonomyStatusButton: View {
     @ObservedObject var model: WorkbenchViewModel
-    @StateObject private var loginItem = LoginItemController()
-    @State private var isPresented = false
+    @StateObject private var loginItem: LoginItemController
+    @State private var isPresented: Bool
+
+    /// `loginItem`/`initialIsPresented` default to a fresh `LoginItemController()` + `false` —
+    /// the prod behavior UNCHANGED (the in-place `@StateObject` + collapsed popover it had
+    /// before). The seams let a test inject a controller in a known state (so the
+    /// `loginItemCheck` 4-case switch + the pill tint render deterministically) and seed the
+    /// popover open (so the `.popover` content renders). Prod byte-identical at every call site.
+    init(model: WorkbenchViewModel, loginItem: LoginItemController = LoginItemController(), initialIsPresented: Bool = false) {
+        self.model = model
+        _loginItem = StateObject(wrappedValue: loginItem)
+        _isPresented = State(initialValue: initialIsPresented)
+    }
 
     private var snapshot: AutonomyReadinessSnapshot {
         model.autonomyReadiness.appending(loginItemCheck)
@@ -4575,7 +4590,14 @@ struct AutonomyStatusButton: View {
     }
 
     private var loginItemCheck: AutonomyReadinessCheck {
-        switch loginItem.status {
+        Self.loginItemCheck(for: loginItem.status)
+    }
+
+    /// Pure mapping `LaunchAgentLoginItemStatus → AutonomyReadinessCheck`, extracted as a
+    /// `static` function so all four arms are directly unit-testable (the view's live
+    /// `loginItem.status` reports only one). Behavior-identical to the prior inline switch.
+    static func loginItemCheck(for status: LaunchAgentLoginItemStatus) -> AutonomyReadinessCheck {
+        switch status {
         case .enabled:
             return AutonomyReadinessCheck(
                 id: "open-at-login",

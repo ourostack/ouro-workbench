@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.183 - About-sheet & autonomy-pill coverage tightening
+
+- Internal: the About sheet's build-hash render and the autonomy pill's login-item readiness mapping are now driven to test coverage via an injectable build-hash seam and an extracted pure status-mapping function. No user-facing behavior change.
+
 ## 0.1.182 - Coverage-gate flake fix (MailboxClient)
 
 - Internal: adds a deterministic test for the mailbox default-loader success path and allowlists a single CI-toolchain-synthesized resume-after-await region that flakily fails to register coverage (same class as the existing DaemonLiveness entry). No user-facing behavior change.
