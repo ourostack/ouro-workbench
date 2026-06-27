@@ -47,6 +47,14 @@ DaemonLiveness.swift 1 1
 #      * WorkbenchRootView — the SwiftUI `Scene` root: WindowGroup/NavigationSplitView,
 #        `.commands{}` menu wiring, `handleMenuCommand`, `init(diagnostics:)`. A Scene is
 #        not constructible/inspectable in-process.
+#        TRANSPARENCY (borderline carve, flagged by the independent review): the bulk here
+#        is `handleMenuCommand`'s ~30 pure-dispatch `case` arms. They live behind the
+#        non-executable `@StateObject` Scene root and are reached only via `.onReceive` of
+#        the menu-command publisher — ViewInspector 0.10.3 has NO driver for that path, so
+#        they are genuinely un-invokable in-process today. FUTURE-TIGHTENING (not done here
+#        to keep this PR scoped): extracting the switch into a free function `dispatch(_:to:)`
+#        on the VM (the K4-helper pattern B10 used) would make every arm directly testable
+#        and remove these ~30 from the carve. Documented so the carve stays honest.
 #      * WorkbenchMenuBarController — NSMenu/NSStatusItem AppKit menu-bar controller.
 #      * LoginItemController / MachineRuntimeView — SMAppService login-item (system svc).
 #      * SessionDetailView / DetailSplitState — the live-PTY detail/split (TerminalPane
