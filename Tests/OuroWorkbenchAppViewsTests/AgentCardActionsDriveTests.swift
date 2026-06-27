@@ -23,23 +23,22 @@ final class AgentCardActionsDriveTests: XCTestCase {
 
     private var bundleRoot = URL(fileURLWithPath: "/tmp")
 
-    private func makeVM(agentName: String = "alpha") throws -> WorkbenchViewModel {
+    /// A fully-hermetic VM with an EMPTY agent roster (no `agent.json` on disk). The card under
+    /// test takes its `OuroAgentRecord` directly, so it renders without a scanned bundle — and
+    /// crucially the VM never classifies a real agent, so it fires NO background `ouro work card`
+    /// read (which would shell out on PATH and pollute the shared headless-`ouro` harness other
+    /// suites use). The `#332` launcher is a no-op for safety though no tap here spawns.
+    private func makeVM() throws -> WorkbenchViewModel {
         let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("u5-agentcard-\(UUID().uuidString)", isDirectory: true)
         bundleRoot = tmp
         let agentBundles = tmp.appendingPathComponent("AgentBundles", isDirectory: true)
-        let bundle = agentBundles.appendingPathComponent("\(agentName).ouro", isDirectory: true)
-        try FileManager.default.createDirectory(at: bundle, withIntermediateDirectories: true)
-        try #"{"name":"\#(agentName)","humanFacing":{"provider":"anthropic","model":"claude-opus-4"}}"#
-            .data(using: .utf8)!.write(to: bundle.appendingPathComponent("agent.json"))
         let paths = WorkbenchPaths(rootURL: tmp)
         try WorkbenchStore(paths: paths).save(WorkspaceState(boss: BossAgentSelection(agentName: "boss")))
         let model = WorkbenchViewModel(
             paths: paths,
             bossWorkbenchMCPRegistrar: BossWorkbenchMCPRegistrar(agentBundlesURL: agentBundles),
             ouroAgentInventory: OuroAgentInventory(agentBundlesURL: agentBundles))
-        // #332 seam: "Run ouro check" -> repairAgent -> createCustomSession(launch) -> start()
-        // would fork a real `screen`. No-op the launcher so the action runs spawn-free.
         model.launchTerminalSession = { _ in }
         return model
     }
