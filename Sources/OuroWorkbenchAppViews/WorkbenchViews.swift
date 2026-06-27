@@ -1006,7 +1006,9 @@ private struct RecoverySheetSection<Content: View>: View {
 /// A "Needs you" row in the Recovery sheet (U7): a manual-recovery session with
 /// its plain-language reason, an inline one-click fix when the blocker is
 /// fixable (e.g. Trust), and a "Start fresh" fallback (confirmation-gated).
-private struct NeedsYouEntryRow: View {
+// U5: private->internal so the per-file-100% gate can drive its trust/start-fresh action
+// buttons via a direct ViewInspector tap. Same module, pure presentation — no behavior change.
+struct NeedsYouEntryRow: View {
     var entry: ProcessEntry
     @ObservedObject var model: WorkbenchViewModel
     var onJump: () -> Void
@@ -1543,7 +1545,9 @@ struct HarnessAgentRow: View {
 /// degraded in a way this action fixes — and as a quiet bordered button
 /// otherwise, so a healthy harness still exposes the control without shouting.
 /// Disabled while a refresh is in flight so it can't be double-fired.
-private struct HarnessActionRow: View {
+// U5: private->internal so the per-file-100% gate can drive the `if isBusy { ProgressView }`
+// render arm (isBusy is a plain Bool input). Same module, pure presentation — no behavior change.
+struct HarnessActionRow: View {
     var title: String
     var systemImage: String
     var help: String
@@ -1624,7 +1628,9 @@ struct HarnessActionResultBanner: View {
 
 // MARK: - Harness state styling
 
-private extension HarnessHealthState {
+// U5 B10: private->internal so the B10 direct logic test can assert every styling arm. Same
+// module, no behavior change — these are pure presentation extensions on Core types.
+extension HarnessHealthState {
     var tint: SwiftUI.Color {
         switch self {
         case .healthy:
@@ -1670,7 +1676,8 @@ final class WorkbenchToolsInjectionRecorder: @unchecked Sendable {
     }
 }
 
-private extension BossWorkbenchMCPRegistrationStatus {
+// U5 B10: private->internal for the B10 direct logic test (pure presentation, same module).
+extension BossWorkbenchMCPRegistrationStatus {
     var harnessTint: SwiftUI.Color {
         switch self {
         case .registered:
@@ -1686,7 +1693,8 @@ private extension BossWorkbenchMCPRegistrationStatus {
     }
 }
 
-private extension Optional where Wrapped == BossWorkbenchMCPRegistrationStatus {
+// U5 B10: private->internal for the B10 direct logic test (pure presentation, same module).
+extension Optional where Wrapped == BossWorkbenchMCPRegistrationStatus {
     /// Tint for a possibly-unknown registration status; unknown reads as
     /// secondary so the row doesn't imply a problem before the check runs.
     var harnessTint: SwiftUI.Color {
@@ -1757,41 +1765,6 @@ struct ShortcutHelpSheet: View {
             }
         }
         .frame(width: 560, height: 540)
-    }
-}
-
-/// SwiftUI drop delegate that accepts file-URL items dropped on the
-/// workbench window. Filters to directories — every other URL is
-/// declined — and dispatches each accepted folder through the standard
-/// `openWorkspaceConfig(at:)` path, so the result is identical to using
-/// the More menu's "Open Workspace…" panel. Multi-folder drops are
-/// allowed; the last one wins for focus and any non-directory items are
-/// silently dropped rather than erroring loudly.
-struct WorkspaceFolderDropDelegate: DropDelegate {
-    let model: WorkbenchViewModel
-
-    func validateDrop(info: DropInfo) -> Bool {
-        info.hasItemsConforming(to: [.fileURL])
-    }
-
-    func performDrop(info: DropInfo) -> Bool {
-        let providers = info.itemProviders(for: [.fileURL])
-        guard !providers.isEmpty else { return false }
-        for provider in providers {
-            _ = provider.loadObject(ofClass: URL.self) { url, _ in
-                guard let url else { return }
-                // FileManager isn't Sendable, so resolve the singleton inside
-                // the closure rather than capturing it across the boundary.
-                var isDir: ObjCBool = false
-                guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir),
-                      isDir.boolValue else { return }
-                let path = url.path
-                Task { @MainActor in
-                    _ = model.openWorkspaceConfig(at: path)
-                }
-            }
-        }
-        return true
     }
 }
 
@@ -4931,7 +4904,8 @@ struct AutonomyStatusCheckRow: View {
     }
 }
 
-private extension AutonomyRemediationKind {
+// U5 B10: private->internal for the B10 direct logic test (pure presentation, same module).
+extension AutonomyRemediationKind {
     /// SF Symbol per repair, matching the OnboardingRepairStepRow / popover-footer icon vocabulary.
     var systemImage: String {
         switch self {
@@ -4986,7 +4960,8 @@ private struct DashboardStatusLine: View {
     }
 }
 
-private extension AutonomyReadinessState {
+// U5 B10: private->internal for the B10 direct logic test (pure presentation, same module).
+extension AutonomyReadinessState {
     var tint: SwiftUI.Color {
         switch self {
         case .ready:
@@ -5010,7 +4985,8 @@ private extension AutonomyReadinessState {
     }
 }
 
-private extension HeaderCalmPresentation.BossDotColor {
+// U5 B10: private->internal for the B10 direct logic test (pure presentation, same module).
+extension HeaderCalmPresentation.BossDotColor {
     /// Map the framework-free Core dot color onto a SwiftUI color. `.neutral` is the calm
     /// no-boss-yet state (`.secondary`), not an alarm.
     var swiftUIColor: SwiftUI.Color {
@@ -6900,7 +6876,9 @@ struct OnboardingBossChoiceView: View {
     }
 }
 
-private struct OnboardingBossChoiceRow: View {
+// U5: private->internal so the per-file-100% gate can drive its boss-pick Button action via a
+// direct ViewInspector tap. Same module, pure presentation — no behavior change.
+struct OnboardingBossChoiceRow: View {
     var choice: OnboardingBossChoice
     @ObservedObject var model: WorkbenchViewModel
 
@@ -7747,7 +7725,9 @@ private struct SessionStatusBucketSection: View {
 /// A single clickable status row. Clicking selects the session in the detail
 /// pane (reusing `selectEntryAcrossGroups`), from which the operator opens its
 /// terminal exactly as before. Pure presentation — no logic beyond formatting.
-private struct SessionStatusRowView: View {
+// U5: private->internal so the per-file-100% gate can drive its jump action + the
+// nil-exitCode / nil-pid detail-line fallback arms. Same module, pure presentation.
+struct SessionStatusRowView: View {
     var row: SessionStatusRow
     @ObservedObject var model: WorkbenchViewModel
 
@@ -8551,7 +8531,9 @@ struct AgentStatusCard: View {
 
 }
 
-private struct AgentLanesCard: View {
+// U5: private->internal so the per-file-100% gate can drive its action button via a
+// direct ViewInspector tap. Same module, pure presentation — no behavior change.
+struct AgentLanesCard: View {
     var agent: OuroAgentRecord
     @ObservedObject var model: WorkbenchViewModel
 
@@ -8632,7 +8614,9 @@ struct LanePanel: View {
     }
 }
 
-private struct AgentActionsCard: View {
+// U5: private->internal so the per-file-100% gate can drive its action buttons via a
+// direct ViewInspector tap. Same module, pure presentation — no behavior change.
+struct AgentActionsCard: View {
     var agent: OuroAgentRecord
     @ObservedObject var model: WorkbenchViewModel
 
@@ -8775,7 +8759,12 @@ struct SessionDetailView: View {
 /// detected "why" (e.g. "Waiting on you · Proceed? (y/N)"), color-coded to the
 /// attention state via the shared `AttentionState.health*` helpers, with a
 /// direct "Jump to prompt" affordance for the waiting/blocked cases.
-private struct SessionAttentionBanner: View {
+// U5: private->internal so the per-file-100% gate can drive this banner's body + the
+// `state` switch + both `offersJumpToPrompt` arms via a direct snapshot. Its only prod
+// call site is inside `SessionDetailView` (a live-PTY K1 view ViewInspector can't descend),
+// so without this seam the banner is unreachable by a test. Same module, pure presentation —
+// no behavior change.
+struct SessionAttentionBanner: View {
     var banner: SessionDetailAttentionPresentation.Banner
     var onJump: () -> Void
 
@@ -10017,8 +10006,22 @@ struct TranscriptHistoryView: View {
 struct NewTerminalGroupSheet: View {
     @ObservedObject var model: WorkbenchViewModel
     @Environment(\.dismiss) private var dismiss
-    @State private var name = ""
-    @State private var rootPath = FileManager.default.homeDirectoryForCurrentUser.path
+    @State private var name: String
+    @State private var rootPath: String
+
+    // The `@State` seeds default to an empty name + the machine home root (the prod
+    // behavior the sidebar's "New Workspace" presents). The seam parameters keep that
+    // default UNCHANGED at every production call site while letting a test drive the
+    // Create / disabled / autofill logic from a chosen starting state (B4-redo).
+    init(
+        model: WorkbenchViewModel,
+        initialName: String = "",
+        initialRootPath: String = FileManager.default.homeDirectoryForCurrentUser.path
+    ) {
+        self.model = model
+        _name = State(initialValue: initialName)
+        _rootPath = State(initialValue: initialRootPath)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -10150,15 +10153,28 @@ struct EditTerminalGroupSheet: View {
 struct NewTerminalSessionSheet: View {
     @ObservedObject var model: WorkbenchViewModel
     @Environment(\.dismiss) private var dismiss
-    @State private var name = ""
-    @State private var command = ""
+    @State private var name: String
+    @State private var command: String
     @State private var workingDirectory = FileManager.default.homeDirectoryForCurrentUser.path
-    @State private var trusted = true
+    @State private var trusted: Bool
     @State private var autoResume = true
     @State private var notes = ""
 
-    init(model: WorkbenchViewModel) {
+    // `initialName` / `initialCommand` default to empty and `initialTrusted` to true (the
+    // prod behavior the ⌘N sheet presents UNCHANGED); the seam params let a test seed the
+    // `@State` so the `.onChange(of: command)` autofill guard arms, BOTH `trusted` ternary
+    // arms, and the `create()` body are reachable (B4-redo). `workingDirectory` keeps its
+    // `selectedProject?.rootPath ?? home` seed.
+    init(
+        model: WorkbenchViewModel,
+        initialName: String = "",
+        initialCommand: String = "",
+        initialTrusted: Bool = true
+    ) {
         self.model = model
+        _name = State(initialValue: initialName)
+        _command = State(initialValue: initialCommand)
+        _trusted = State(initialValue: initialTrusted)
         _workingDirectory = State(initialValue: model.selectedProject?.rootPath ?? FileManager.default.homeDirectoryForCurrentUser.path)
     }
 

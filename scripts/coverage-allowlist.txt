@@ -35,3 +35,57 @@ SessionActivityReader.swift 0 1
 # (159: 0). The overload's behavior is fully exercised by the suite; only this
 # toolchain-synthesized resume epilogue is structurally uncountable. Minimal 1/1.
 DaemonLiveness.swift 1 1
+
+# WorkbenchViews.swift (U5 Unit 3) — the per-file-100% views gate. The U5 B-series drove
+# every REACHABLE region of the in-process-testable view structs to 100% (snapshot
+# INVOCATION + effect-assert + mutation RED->GREEN per the b*-records.md ledgers). The one
+# un-driven ordinary view the campaign missed (SessionAttentionBanner) is now driven, NOT
+# carved. What remains is genuinely-untestable, in two buckets — EVERY uncovered line was
+# classified by its enclosing decl + source-inspected; none is an un-driven ordinary arm:
+#
+#  (1) K1 dossiered AppKit/scene shells (residual-baseline.md THE FORK) — the bulk:
+#      * WorkbenchRootView — the SwiftUI `Scene` root: WindowGroup/NavigationSplitView,
+#        `.commands{}` menu wiring, `handleMenuCommand`, `init(diagnostics:)`. A Scene is
+#        not constructible/inspectable in-process.
+#        TRANSPARENCY (borderline carve, flagged by the independent review): the bulk here
+#        is `handleMenuCommand`'s ~30 pure-dispatch `case` arms. They live behind the
+#        non-executable `@StateObject` Scene root and are reached only via `.onReceive` of
+#        the menu-command publisher — ViewInspector 0.10.3 has NO driver for that path, so
+#        they are genuinely un-invokable in-process today. FUTURE-TIGHTENING (not done here
+#        to keep this PR scoped): extracting the switch into a free function `dispatch(_:to:)`
+#        on the VM (the K4-helper pattern B10 used) would make every arm directly testable
+#        and remove these ~30 from the carve. Documented so the carve stays honest.
+#      * WorkbenchMenuBarController — NSMenu/NSStatusItem AppKit menu-bar controller.
+#      * LoginItemController / MachineRuntimeView — SMAppService login-item (system svc).
+#      * SessionDetailView / DetailSplitState — the live-PTY detail/split (TerminalPane
+#        NSViewRepresentable; the D3-class carve).
+#      * BossDashboardView — the `showsAdvanced` @State-no-init-seam arm.
+#      * AutonomyStatusButton / AutonomyStatusPopover — popover non-descent + @State.
+#      * AboutSheet — the live build-hash arm. WindowChromeConfigurator — NSWindow chrome.
+#
+#  (2) B-records per-view carves (b*-records.md + b4-carve-records.md), all
+#      `--show-regions`-legit:
+#      * modal NSOpenPanel().runModal() — chooseWorkingDirectory/chooseRootPath in the
+#        New/Edit Terminal sheets (blocks on a live GUI modal in-process).
+#      * @State default autoclosures with no init seam (isRefreshing / taught /
+#        showsInspector / selectedIndex / customBossIsPresented) + .disabled short-circuits.
+#      * .task / .onChange / .onAppear toolchain-untestable closures (ViewInspector 0.10.3
+#        has no .task driver) — HarnessStatusSheet/.task, WorkbenchSidebarView refresh-loop,
+#        WorkbenchOnboardingSheet bootstrap.
+#      * button-action closures reached ONLY from a tap whose target traps in-process
+#        (ReportBug submitBugReport -> NSApp.keyWindow IUO is nil in xctest).
+#      * the structurally-DEAD OnboardingReadinessView "Optional checks" branch — proven
+#        unreachable by the AN-006 invariant (isReady <=> repairSteps.isEmpty), asserted by
+#        OnboardingReadinessViewTests.testE4_AN006_readyImpliesEmptyRepairSteps. NOT padding.
+#      * llvm-cov-synthesized autoclosure/stored-default regions that EXECUTE (the value
+#        renders) but whose region-entry counter Apple Swift 6.0.3 does not increment
+#        (TerminalFocusView.chrome, NewTerminalSessionSheet `?? home`).
+#
+# The counts below are the EXACT CI-measured (Apple Swift 6.0.3) genuine-carve totals — NOT
+# a sum of records (B4-redo re-drove 50 of B4's 69; record counts overlap). The K1 scene/menu/
+# AppKit shells are the bulk (~844 lines); the rest are the per-view b-records carves above.
+# Measured on the Coverage job at commit 821f50c (after driving SessionAttentionBanner +
+# AgentActionsCard/AgentLanesCard/NeedsYouEntryRow/SessionStatusRowView/HarnessActionRow/
+# OnboardingBossChoiceRow to 100%). Verified minimal: lowering EITHER number by 1 makes the
+# gate FAIL (the count-1 check — see finale-drive-records.md).
+WorkbenchViews.swift 1729 379

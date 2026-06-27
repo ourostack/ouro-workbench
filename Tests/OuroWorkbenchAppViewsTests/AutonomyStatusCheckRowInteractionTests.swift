@@ -41,10 +41,16 @@ final class AutonomyStatusCheckRowInteractionTests: XCTestCase {
         var state = WorkspaceState(boss: BossAgentSelection(agentName: "boss"))
         configure(&state)
         try WorkbenchStore(paths: paths).save(state)
-        return WorkbenchViewModel(
+        let model = WorkbenchViewModel(
             paths: paths,
             bossWorkbenchMCPRegistrar: BossWorkbenchMCPRegistrar(agentBundlesURL: agentBundles),
             ouroAgentInventory: OuroAgentInventory(agentBundlesURL: agentBundles))
+        // #332 seam: the remediation "Recover" button drives recover(entry) → the detached
+        // start() → session.start(), forking a real `screen` child that orphans past teardown
+        // (CI signal-1 crash). Inject a no-op launcher so the recover path runs but no
+        // subprocess spawns.
+        model.launchTerminalSession = { _ in }
+        return model
     }
 
     private func check(_ id: String, _ label: String, _ state: AutonomyReadinessCheckState) -> AutonomyReadinessCheck {

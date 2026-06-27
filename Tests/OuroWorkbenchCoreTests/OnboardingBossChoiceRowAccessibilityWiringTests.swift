@@ -97,7 +97,7 @@ final class OnboardingBossChoiceRowAccessibilityWiringTests: XCTestCase {
         // top-level view (FirstRunBootstrapView) so nothing downstream bleeds in.
         try WorkbenchAppSource.sourceSlice(
             in: try WorkbenchAppSource.appSource(),
-            from: "private struct OnboardingBossChoiceRow: View {",
+            from: "struct OnboardingBossChoiceRow: View {",
             to: "\n/// R4b — the first-run cold-start bootstrap surface."
         )
     }

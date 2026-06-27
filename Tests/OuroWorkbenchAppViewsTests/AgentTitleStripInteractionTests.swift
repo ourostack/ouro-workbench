@@ -37,11 +37,17 @@ final class AgentTitleStripInteractionTests: XCTestCase {
         let paths = WorkbenchPaths(rootURL: tmp)
         try WorkbenchStore(paths: paths).save(
             WorkspaceState(boss: BossAgentSelection(agentName: bossName)))
-        return WorkbenchViewModel(
+        let model = WorkbenchViewModel(
             paths: paths,
             bossWorkbenchMCPRegistrar: BossWorkbenchMCPRegistrar(agentBundlesURL: agentBundles),
             ouroAgentInventory: OuroAgentInventory(agentBundlesURL: agentBundles)
         )
+        // #332 seam: "Run ouro check…" runs repairAgent → createCustomSession(launchAfterCreate:
+        // true) → launch(entry) → the detached start() → session.start(), forking a real `screen`
+        // child that orphans past teardown (CI signal-1 crash). Inject a no-op launcher so the
+        // repair session is still created (the provenance asserted) but no subprocess spawns.
+        model.launchTerminalSession = { _ in }
+        return model
     }
 
     private func record(name: String) -> OuroAgentRecord {

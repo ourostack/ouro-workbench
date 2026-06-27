@@ -45,7 +45,7 @@ final class BossForwardStatusWiringTests: XCTestCase {
         let source = try WorkbenchAppSource.appSource()
         let row = try WorkbenchAppSource.sourceSlice(
             in: source,
-            from: "private struct SessionStatusRowView: View",
+            from: "struct SessionStatusRowView: View",
             to: "struct ActionLogView: View"
         )
 

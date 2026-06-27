@@ -173,7 +173,7 @@ final class AgentRepairTests: XCTestCase {
         XCTAssertEqual(outcome.truth, .repaired)
         XCTAssertTrue(outcome.commandAttempted)
 
-        XCTAssertEqual(try harness.invocations(), [["repair", "--agent", "slugger"]])
+        XCTAssertEqual(try harness.repairInvocations(), [["repair", "--agent", "slugger"]])
     }
 
     func testDefaultRunnerUsesProductionHeadlessRepairWhenAgentNamePresent() async throws {
@@ -187,7 +187,7 @@ final class AgentRepairTests: XCTestCase {
             XCTAssertTrue(outcome.commandAttempted)
         }
 
-        XCTAssertEqual(try harness.invocations(), [["repair", "--agent", "slugger"]])
+        XCTAssertEqual(try harness.repairInvocations(), [["repair", "--agent", "slugger"]])
     }
 
     func testHeadlessRepairInvokesOuroRepairFromPath() async throws {
@@ -196,7 +196,7 @@ final class AgentRepairTests: XCTestCase {
             try await AgentRepairRunner.headlessRepair(agentName: "slugger")
         }
 
-        XCTAssertEqual(try harness.invocations(), [["repair", "--agent", "slugger"]])
+        XCTAssertEqual(try harness.repairInvocations(), [["repair", "--agent", "slugger"]])
     }
 }
 
@@ -279,5 +279,17 @@ private final class RepairHeadlessOuroHarness {
     func invocations() throws -> [[String]] {
         let text = try String(contentsOf: log, encoding: .utf8)
         return text.split(separator: "\n").map { $0.split(separator: " ").map(String.init) }
+    }
+
+    /// The harness installs its fake `ouro` by mutating the PROCESS-GLOBAL
+    /// `TerminalEnvironment.loginShellPath` for the duration of `withLoginShellPath`. A
+    /// concurrent test's background `Task.detached { workCardReader.read(...) }` (e.g. a
+    /// WorkbenchViewModel refreshing visibility) can resolve `ouro` through that same global
+    /// during the window and append an `ouro work card …` line to THIS log — pollution this
+    /// harness can't attribute. The repair tests only assert about the `repair` command they
+    /// drove, so filter to `repair` invocations: this still proves the repair argv exactly,
+    /// without being flaky against unrelated concurrent `ouro` reads.
+    func repairInvocations() throws -> [[String]] {
+        try invocations().filter { $0.first == "repair" }
     }
 }

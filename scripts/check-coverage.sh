@@ -19,6 +19,11 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 COVERAGE_DIRS=(
   "Sources/OuroWorkbenchCore"
   "Sources/OuroWorkbenchShellAdapter"
+  # U5 Unit 3: gate ONLY the views file (a single-file entry), NOT its sibling
+  # WorkbenchViewModel.swift in the same directory — that file holds the live-PTY /
+  # live-subprocess machinery that is intentionally ungated. A path ending in
+  # `.swift` is matched as an exact file; a path without one is matched as a directory.
+  "Sources/OuroWorkbenchAppViews/WorkbenchViews.swift"
 )
 
 if [ -d /Applications ]; then
@@ -49,7 +54,16 @@ with open('.build/wb-coverage.json') as fh:
     data = json.load(fh)
 
 def is_covered_source(filename):
-    return any(f'/{source_dir}/' in filename for source_dir in coverage_dirs)
+    # An entry ending in `.swift` is an exact-file gate (match the path suffix so
+    # only THAT file is held to 100%, not its directory siblings). Any other entry
+    # is a directory gate (match the `/dir/` path segment).
+    for entry in coverage_dirs:
+        if entry.endswith('.swift'):
+            if filename.endswith('/' + entry) or filename == entry:
+                return True
+        elif f'/{entry}/' in filename:
+            return True
+    return False
 
 files = [f for f in data['data'][0]['files'] if is_covered_source(f['filename'])]
 if not files:
