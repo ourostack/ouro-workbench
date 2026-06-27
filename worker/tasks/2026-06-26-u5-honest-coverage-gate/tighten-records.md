@@ -73,7 +73,7 @@ exactly those).
 
 ---
 
-## Class 2 — WorkbenchMenuBarController (PR #344, v0.1.176)
+## Class 2 — WorkbenchMenuBarController (PR #344, v0.1.177)
 
 **Carve before:** the whole NSMenu/NSStatusItem AppKit controller (residual-baseline.md K1 #1) —
 an `NSObject`, not a SwiftUI view, so ViewInspector has no driver; carved wholesale.
