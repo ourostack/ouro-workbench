@@ -61,5 +61,34 @@ final class AboutSheetTests: XCTestCase {
         XCTAssertNoThrow(try ViewSnapshotHost.snapshotText(of: AboutSheet(model: try makeVM())),
                          "the default init (live CFBundleVersion ?? dev) renders")
     }
+
+    // MARK: - Class 8 — the openRepository / copyVersion I/O actions, DRIVEN via injected seams
+    //
+    // The action closures are passed into the opaque shell `AppShellAboutView`, which ViewInspector
+    // cannot descend. Hoisting the I/O to the `openURL` / `copyToPasteboard` seams (default = the
+    // real NSWorkspace/NSPasteboard) lets a test inject recording stubs and invoke the actions
+    // directly, asserting WHICH url / version string flows. Prod byte-identical.
+
+    /// `openRepository()` sends the repo URL through the `openURL` seam (the "View Repository" action).
+    func testAbout_openRepository_sendsRepoURLThroughSeam() throws {
+        var opened: URL?
+        var sheet = AboutSheet(model: try makeVM(), buildHash: "x")
+        sheet.openURL = { opened = $0 }
+        sheet.openRepository()
+        XCTAssertEqual(opened, WorkbenchShellAboutPresentation(buildHash: "x").repositoryURL,
+                       "openRepository sends the about presentation's repository URL")
+        XCTAssertEqual(opened?.absoluteString, "https://github.com/\(WorkbenchRelease.repository)")
+    }
+
+    /// `copyVersion()` sends the version line through the `copyToPasteboard` seam.
+    func testAbout_copyVersion_copiesVersionLineThroughSeam() throws {
+        var copied: String?
+        var sheet = AboutSheet(model: try makeVM(), buildHash: "deadbeef")
+        sheet.copyToPasteboard = { copied = $0 }
+        sheet.copyVersion()
+        XCTAssertEqual(copied, WorkbenchShellAboutPresentation(buildHash: "deadbeef").versionLine,
+                       "copyVersion copies the version line for the build hash")
+        XCTAssertTrue(copied?.contains("Build deadbeef") == true, "the copied string carries the hash")
+    }
 }
 #endif

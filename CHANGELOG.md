@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.184 - Final-floor coverage tightening
+
+- Internal: drives the last reachable view regions to test coverage (the decision-row "taught" confirmation, the About sheet's open-repository / copy-version actions, the command-palette selection clamp) via injectable seams and a pure-function extraction, and removes a provably-dead onboarding branch. No user-facing behavior change.
+
 ## 0.1.183 - About-sheet & autonomy-pill coverage tightening
 
 - Internal: the About sheet's build-hash render and the autonomy pill's login-item readiness mapping are now driven to test coverage via an injectable build-hash seam and an extracted pure status-mapping function. No user-facing behavior change.

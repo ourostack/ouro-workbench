@@ -269,3 +269,48 @@ was **`1205 lines / 238 regions uncovered`**. Allowlist set to the exact minimum
 
 (GitSessionStatus.swift's live-git flake recurred on this probe run — the same pre-existing
 environmental flake in an untouched Core file; cleared on the final run.)
+
+---
+
+## Class 8 — final-floor pass (PR #352, v0.1.184) — driven the independent-audit findings
+
+After the #351 summary, an independent adversarial floor audit found ~5 regions the 238-region
+"floor" had MIS-classified as irreducible (against the campaign's own proven patterns). Class 8
+drives them + deletes a dead branch:
+
+- **DecisionLogRow.taught** — the #351 reason ("8-param memberwise init inconvenient") was wrong:
+  `@State private var taught` (private+defaulted) is excluded from the synthesized memberwise init,
+  and init-seeded `@State` DOES re-evaluate the branch. Added an explicit init mirroring the
+  memberwise signature (every param keeps its default → all call sites unchanged) + `initialTaught`.
+  Drives the `if taught { "Sent to boss" }` arm + a gate negative control.
+- **AboutSheet openRepository / copyVersion** — hoisted the NSWorkspace.open / NSPasteboard.setString
+  I/O to `openURL` / `copyToPasteboard` seams (default = real, prod byte-identical), invoked the
+  `openRepository()`/`copyVersion()` methods directly with recording stubs (the GitHubIssueFiler/#332
+  closure-seam pattern), asserting which url / version string flows.
+- **CommandPaletteSheet moveSelection** — extracted the clamp `min(max(current+delta,0),count-1)` to
+  a behavior-identical `static clampedSelection(current:delta:count:)`; `moveSelection` is a 1-line
+  forwarder. Unit-tested the static fn by value (5 cases: down/up/upper-clamp/lower-clamp/empty). The
+  `.onKeyPress` BINDINGS stay the genuine floor (no ViewInspector driver).
+- **OnboardingReadinessView "Optional checks" dead branch** — DELETED at source (the audit's
+  recommendation): the nested `if isReady { if !repairSteps.isEmpty { … } }` is provably unreachable
+  by the AN-006 invariant (`isReady ⟺ repairSteps.isEmpty`, test-asserted), so deletion removes the
+  regions cleanly (no carve). The existing `testE4_ready` snapshot is unchanged (the dead arm never
+  rendered).
+- **ReportBug "Create Report"** — RE-VERIFIED as genuine floor (the audit asked): a direct tap
+  signal-5 TRAPS on `NSApp.keyWindow` at WorkbenchViewModel.swift:5193. `NSApp` is the global
+  `NSApplication!` IUO, nil in the headless xctest process. The prior carve was correct (only the
+  precise mechanism is the `NSApp` IUO, not the `keyWindow` optional access). Kept carved.
+
+Mutation-verified (taught gate, clampedSelection clamp, openRepository url → RED, reverted).
+
+**CI-measured result (Coverage job, run 28301926487):** residual printed by the probe `1185 222` was
+**`1170 lines / 227 regions uncovered`**. Allowlist set to the exact minimum **`1170 227`** (was
+`1205 238`). **Driven+deleted out: 35 lines / 11 regions.**
+
+### This is the IRREDUCIBLE FLOOR
+The remaining 227 regions are exhaustively the genuine-floor classes the operator directive named as
+KEEP-carved: WorkbenchRootView Scene root, live-PTY `TerminalPane` NSViewRepresentable, the 4 literal
+`runModal()` syscalls, `NSApp.terminate`/`showWorkbench` windows-loops, the ReportBug `NSApp` IUO
+trap, `.onKeyPress` bindings, `.popover{}` content descent, `.task{}` bindings/infinite-loops,
+NSWindow chrome, and llvm-cov-synthesized autoclosure/stored-default artifacts. Total campaign:
+**1729/379 → 1170/227 = 559 lines / 152 regions driven+deleted out (40% of the carved regions).**

@@ -125,8 +125,35 @@ final class DecisionLogRowInteractionTests: XCTestCase {
         // EFFECT: the onTeach closure fired with the reinforce polarity (true).
         XCTAssertEqual(taughtPolarity, true,
                        "tapping the reinforce option fires onTeach(true)")
-        // NOTE: the L2713 `if taught` TRUE re-render arm is the recorded carve — ViewInspector
-        // re-seeds @State per inspect, so the "Sent to boss" branch never re-evaluates here.
+    }
+
+    // MARK: - Class 8 — the `if taught` TRUE arm ("Sent to boss"), DRIVEN via the init seam
+
+    /// `initialTaught: true` seeds the @State so the `if taught` TRUE arm renders the "Sent to
+    /// boss" confirmation instead of the Teach Menu (the previously-carved post-toggle arm).
+    func testRow_initialTaught_rendersSentToBossArm() throws {
+        let row = DecisionLogRow(
+            decision: decision(kind: .escalate),
+            timeZone: .gmt, locale: Self.clockLocale,
+            onTeach: { _ in },
+            initialTaught: true)
+        let tree = try ViewSnapshotHost.snapshotText(of: row)
+        XCTAssertTrue(tree.contains("Sent to boss"), "taught: the confirmation arm renders:\n\(tree)")
+        XCTAssertFalse(tree.contains("Teach the boss"), "taught: the Teach Menu is replaced")
+    }
+
+    /// The taught gate flips the tree (negative control): untaught shows the Menu, taught shows
+    /// the confirmation.
+    func testRow_taughtGate_flipsTree() throws {
+        let untaught = try ViewSnapshotHost.snapshotText(of: DecisionLogRow(
+            decision: decision(kind: .escalate), timeZone: .gmt, locale: Self.clockLocale,
+            onTeach: { _ in }))
+        let taught = try ViewSnapshotHost.snapshotText(of: DecisionLogRow(
+            decision: decision(kind: .escalate), timeZone: .gmt, locale: Self.clockLocale,
+            onTeach: { _ in }, initialTaught: true))
+        XCTAssertNotEqual(untaught, taught, "the taught gate must flip the tree")
+        XCTAssertTrue(untaught.contains("Teach the boss") && !untaught.contains("Sent to boss"))
+        XCTAssertTrue(taught.contains("Sent to boss") && !taught.contains("Teach the boss"))
     }
 
     /// The "Always ask me" option fires onTeach(false) — the OTHER Teach polarity (defense in

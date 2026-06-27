@@ -168,7 +168,7 @@ final class ReportBugSheetInteractionTests: XCTestCase {
                          "filing: the spinner renders")
     }
 
-    // MARK: - Footer button (`:2567`) — "Create Report" (`:2579`) is the live-AppKit carve
+    // MARK: - Footer buttons (`:2567` Open Reports Folder, `:2579` Create Report)
 
     /// "Open Reports Folder" `Button { model.revealBugReportsFolder() }` (`:2567`).
     /// Creates + opens the (hermetic temp) bug-reports folder.
@@ -177,6 +177,16 @@ final class ReportBugSheetInteractionTests: XCTestCase {
         try ReportBugSheet(model: model).inspect().find(button: "Open Reports Folder").tap()
         XCTAssertNil(model.errorMessage, "revealing the hermetic temp folder does not error")
     }
+
+    // MARK: - "Create Report" (`:2579`) — CONFIRMED genuine floor (NSApp IUO trap)
+    //
+    // Re-verified for Class 8 (the audit asked): tapping "Create Report" → submitBugReport() →
+    // captureKeyWindowPNG() → `let candidate = NSApp.keyWindow` at WorkbenchViewModel.swift:5193.
+    // `NSApp` is the global `NSApplication!` IUO, which is nil in the headless xctest process (no
+    // running NSApplication), so the implicit unwrap TRAPS (signal 5) — confirmed by a direct
+    // tap attempt. This is a genuine live-AppKit dependency with no inject seam at the tap site;
+    // it stays carved (the prior carve was correct; only the precise mechanism is the NSApp IUO,
+    // not the keyWindow optional access). Every other ReportBug region is driven above.
 
     // MARK: - Negative control (P2 mutation-verified)
 

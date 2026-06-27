@@ -151,5 +151,36 @@ final class CommandPaletteSheetInteractionTests: XCTestCase {
         XCTAssertNil(model.pendingPaletteCommand,
                      "onSubmit on an empty list hits the guard return and pends nothing")
     }
+
+    // MARK: - Class 8 — clampedSelection (the ↑/↓ keyboard-nav math), DRIVEN as a pure static fn
+    //
+    // `moveSelection(by:)` is reached only from the two `.onKeyPress` closures, which ViewInspector
+    // 0.10.3 cannot drive. The clamp math is extracted to a behavior-identical
+    // `static func clampedSelection(current:delta:count:)`, unit-tested here by value. The
+    // `.onKeyPress` BINDINGS themselves remain the genuine floor.
+
+    func testClampedSelection_movesDownWithinBounds() {
+        XCTAssertEqual(CommandPaletteSheet.clampedSelection(current: 0, delta: 1, count: 5), 1)
+        XCTAssertEqual(CommandPaletteSheet.clampedSelection(current: 2, delta: 1, count: 5), 3)
+    }
+
+    func testClampedSelection_movesUpWithinBounds() {
+        XCTAssertEqual(CommandPaletteSheet.clampedSelection(current: 3, delta: -1, count: 5), 2)
+    }
+
+    func testClampedSelection_clampsAtUpperBound() {
+        XCTAssertEqual(CommandPaletteSheet.clampedSelection(current: 4, delta: 1, count: 5), 4,
+                       "delta past the end clamps to count-1")
+    }
+
+    func testClampedSelection_clampsAtLowerBound() {
+        XCTAssertEqual(CommandPaletteSheet.clampedSelection(current: 0, delta: -1, count: 5), 0,
+                       "delta below 0 clamps to 0")
+    }
+
+    func testClampedSelection_emptyListReturnsCurrentUnchanged() {
+        XCTAssertEqual(CommandPaletteSheet.clampedSelection(current: 0, delta: 1, count: 0), 0,
+                       "an empty list is a no-op (the guard returns current)")
+    }
 }
 #endif

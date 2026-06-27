@@ -103,8 +103,10 @@ MailboxClient.swift 1 1
 #      * AutonomyStatusPopover — covered standalone (own suite); its `.onAppear` focus is carved.
 #      * AboutSheet — DRIVEN (coverage Class 7, v0.1.183): the build-hash arm is seamed via
 #        `init(model:buildHash:)` (prod default = the live CFBundleVersion ?? "dev"), so the about
-#        presentation + version-line render is driven deterministically. Only the openRepository
-#        (NSWorkspace) / copyVersion (NSPasteboard) action closures stay carved (in-process I/O).
+#        presentation + version-line render is driven deterministically. The openRepository /
+#        copyVersion actions are now DRIVEN too (coverage Class 8, v0.1.184): hoisted to the
+#        `openURL` / `copyToPasteboard` seams (default = real NSWorkspace/NSPasteboard), invoked
+#        directly with recording stubs (asserts which url / version string flows).
 #        WindowChromeConfigurator — NSWindow chrome (irreducible).
 #
 #  (2) B-records per-view carves (b*-records.md + b4-carve-records.md), all
@@ -120,17 +122,24 @@ MailboxClient.swift 1 1
 #        v0.1.181): AgentDetailView.showsInspector, SessionDetailView.showsInspector +
 #        showsTranscriptSheet, and HarnessStatusSheet.isRefreshing are now DRIVEN via injectable
 #        `init(... initial<X>:)` seams (prod default unchanged) — the gated disclosure/inspector/
-#        sheet/disabled arms render under ViewInspector. Still carved: taught (DecisionLogRow has
-#        no synthesizable init), selectedIndex (CommandPaletteSheet keyboard nav), and
-#        customBossIsPresented (BossSelectorView popover) — candidates for a later class.
+#        sheet/disabled arms render under ViewInspector. taught is now DRIVEN too (coverage
+#        Class 8, v0.1.184): DecisionLogRow gained an explicit init mirroring the memberwise one
+#        + `initialTaught` seam, so the `if taught { "Sent to boss" }` arm renders. CommandPalette
+#        moveSelection's clamp math is extracted to a unit-tested `static clampedSelection(...)`
+#        (Class 8); only its `.onKeyPress` BINDINGS stay carved. customBossIsPresented
+#        (BossSelectorView popover) stays carved (its BossAgentNamePopover content is covered
+#        standalone; only the `.popover` descent is the floor).
 #      * .task / .onChange / .onAppear toolchain-untestable closures (ViewInspector 0.10.3
 #        has no .task driver) — HarnessStatusSheet/.task, WorkbenchSidebarView refresh-loop,
 #        WorkbenchOnboardingSheet bootstrap.
-#      * button-action closures reached ONLY from a tap whose target traps in-process
-#        (ReportBug submitBugReport -> NSApp.keyWindow IUO is nil in xctest).
-#      * the structurally-DEAD OnboardingReadinessView "Optional checks" branch — proven
-#        unreachable by the AN-006 invariant (isReady <=> repairSteps.isEmpty), asserted by
-#        OnboardingReadinessViewTests.testE4_AN006_readyImpliesEmptyRepairSteps. NOT padding.
+#      * button-action closures reached ONLY from a tap whose target traps in-process — ReportBug
+#        "Create Report" -> submitBugReport -> captureKeyWindowPNG -> `NSApp.keyWindow` at
+#        WorkbenchViewModel.swift:5193 traps: `NSApp` is the global `NSApplication!` IUO, nil in the
+#        headless xctest process (re-verified for Class 8 — a direct tap signal-5 traps). Genuine
+#        live-AppKit floor; every other ReportBug region is driven.
+#      * (REMOVED in coverage Class 8, v0.1.184: the structurally-DEAD OnboardingReadinessView
+#        "Optional checks" branch — `if isReady { if !repairSteps.isEmpty { … } }`, unreachable by
+#        the AN-006 invariant — was DELETED at source rather than carved, removing its regions.)
 #      * llvm-cov-synthesized autoclosure/stored-default regions that EXECUTE (the value
 #        renders) but whose region-entry counter Apple Swift 6.0.3 does not increment
 #        (TerminalFocusView.chrome, NewTerminalSessionSheet `?? home`).
@@ -163,7 +172,15 @@ MailboxClient.swift 1 1
 # Coverage Class 7 (v0.1.183) DROVE AboutSheet build-hash (init seam) + AutonomyStatusButton
 # loginItemCheck (extracted static fn, 4 arms): 1224/242 → 1205/238 (19 lines / 4 regions driven OUT).
 # Measured on the Coverage job at run 28300196247 (probe-then-set: the probe 1195/228 forced the gate
-# to print the exact residual `1205 lines / 238 regions`). Verified minimal: lowering EITHER number by
-# 1 makes the gate FAIL. (NOTE: GitSessionStatus.swift's live-git flake recurred on the probe run — a
-# pre-existing environmental flake in an untouched Core file; it clears on re-run.)
-WorkbenchViews.swift 1205 238
+# to print the exact residual `1205 lines / 238 regions`).
+# Coverage Class 8 (v0.1.184 — the FINAL-FLOOR pass) DROVE the last reachable arms an independent
+# adversarial audit found still-drivable: DecisionLogRow.taught (explicit-init + initialTaught seam),
+# AboutSheet openRepository/copyVersion (openURL/copyToPasteboard seams), CommandPaletteSheet
+# moveSelection clamp (extracted static clampedSelection), and DELETED the AN-006-dead
+# OnboardingReadinessView "Optional checks" branch. ReportBug "Create Report" re-verified as genuine
+# floor (NSApp IUO trap). 1205/238 → 1170/227 (35 lines / 11 regions driven+deleted OUT). Measured on
+# the Coverage job at run 28301926487 (probe-then-set: the probe 1185/222 forced the gate to print the
+# exact residual `1170 lines / 227 regions`). Verified minimal: lowering EITHER number by 1 fails.
+# This is the IRREDUCIBLE FLOOR — every remaining region is live-PTY/Scene/runModal/NSApp-trap/
+# .task/.onKeyPress/.popover-descent/NSWindow-chrome/llvm-synth (see the per-class notes above).
+WorkbenchViews.swift 1170 227
