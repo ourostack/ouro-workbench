@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.175 - Menu-command coverage tightening
+
+- Internal: the global menu-bar command dispatch (`⌘`-shortcuts for new terminal, command palette, split panes, font size, rename, etc.) is now driven to 100% test coverage by extracting its switch into a directly-testable free function. No user-facing behavior change — the extraction is byte-identical to the prior dispatch.
+
 ## 0.1.174 - Shared shell dependency refresh
 
 - Internal: refreshes the pinned `ouro-native-apple-app-shell` revision to keep Workbench dogfooding the current shared native app shell. No user-facing behavior change.
