@@ -269,3 +269,61 @@ was **`1205 lines / 238 regions uncovered`**. Allowlist set to the exact minimum
 
 (GitSessionStatus.swift's live-git flake recurred on this probe run — the same pre-existing
 environmental flake in an untouched Core file; cleared on the final run.)
+
+---
+
+## Campaign summary — final per-class breakdown (allowlist 379 → 238 regions)
+
+`WorkbenchViews.swift` allowlist went from **1729 lines / 379 regions** to **1205 lines / 238
+regions** across 7 driven classes (v0.1.175 → v0.1.183) — **524 lines / 141 regions driven out**
+(37% of the carved regions). Every driven region: prod-byte-identical seam/extraction → INVOKED →
+effect-asserted → mutation-verified → CI-measured exact minimum via probe-then-set.
+
+| Class | Target | Regions | Mechanism | PR / version |
+|---|---|---|---|---|
+| 1 | handleMenuCommand | 379→342 | extract switch → free `dispatchMenuCommand` + model NSOpenPanel/SavePanel seams | #341 / 0.1.175 |
+| 2 | WorkbenchMenuBarController | 342→301 | widen init → fresh-instance direct unit tests | #344 / 0.1.177 |
+| 3 | sheet NSOpenPanel value-flows | 301→287 | inject `chooseDirectory` closure (×4 sheets) | #345 / 0.1.178 |
+| 4 | BossDashboard showsAdvanced | 287→276 | `init(initialShowsAdvanced:)` seam | #346 / 0.1.179 |
+| 5 | LoginItemController + MachineRuntimeView | 276→252 | inject `LaunchAgentLoginItem` + controller (FileManager, not SMAppService) | #347 / 0.1.180 |
+| 6 | @State disclosure/inspector/refresh | 252→242 | `init(initial<X>:)` on AgentDetail/SessionDetail/HarnessStatus | #348 / 0.1.181 |
+| 7 | AboutSheet build-hash + autonomy loginItemCheck | 242→238 | `init(buildHash:)` + extract `static loginItemCheck(for:)` | #349 / 0.1.183 |
+
+Two inherited Core-gate flakes also fixed mid-campaign (scope-pure): the shell-dep freshness drift
+(#342, v0.1.174) and the MailboxClient:192 CI-synthesized resume-epilogue flake (#350, v0.1.182,
+allowlisted 1/1 mirroring DaemonLiveness:159).
+
+### The irreducibly-kept 238 regions (per-class justification)
+
+- **WorkbenchRootView Scene root** — the SwiftUI `Scene` (WindowGroup/NavigationSplitView,
+  `.commands{}` wiring, the 1-line `handleMenuCommand` forwarder, `init(diagnostics:)`): not
+  constructible/inspectable in-process (the arms it dispatches ARE driven via the free fn).
+- **WorkbenchMenuBarController** residue: `quitApp` (`NSApp.terminate` kills the test process),
+  `showWorkbench`'s two `NSApp.windows` loop BODIES (no windows in xctest), the NSStatusBar/NSImage
+  construction.
+- **SessionDetailView / DetailSplitContainer live-PTY** — `TerminalPane(session:)`
+  NSViewRepresentable (the D3 live-pseudoterminal carve; the inspector/transcript arms ARE driven).
+- **The four sheets' literal `runModal()`** syscall lines (inside the default `chooseDirectory`
+  closures; the panel config + value-flow ARE driven).
+- **`.task {}` closures** (ViewInspector 0.10.3 has no driver) — HarnessStatusSheet/.task,
+  WorkbenchSidebarView refresh-loop, WorkbenchOnboardingSheet bootstrap, the root `.task` lifecycle.
+- **`.onKeyPress` handlers + `moveSelection`** (CommandPaletteSheet — no key-press driver; the
+  selection method is reached only from those handlers).
+- **`.popover{}` content DESCENT** (AutonomyStatusButton / BossSelectorView — ViewInspector can't
+  descend `.popover`; the popover CONTENT structs are covered standalone in their own suites).
+- **`@State` arms with no synthesizable init seam** — DecisionLogRow.taught (8-param memberwise
+  init; the `taught=true` action IS driven, only the post-toggle `if taught` render arm remains;
+  covered conceptually by the C4 snapshot suite), BossSelectorView.customBossIsPresented setter.
+- **NSApp-trapping action closures** — ReportBug `submitBugReport` (`NSApp.keyWindow` IUO nil in
+  xctest), AboutSheet `openRepository`/`copyVersion` (NSWorkspace/NSPasteboard in-process I/O).
+- **NSWindow chrome** — WindowChromeConfigurator (AppKit window configuration).
+- **The structurally-DEAD OnboardingReadinessView "Optional checks" branch** (proven unreachable by
+  the AN-006 invariant, asserted by a test).
+- **llvm-cov-synthesized autoclosure/stored-default artifacts** that EXECUTE but whose region-entry
+  counter Apple Swift 6.0.3 does not increment (TerminalFocusView.chrome, NewTerminalSessionSheet
+  `?? home`).
+
+These are the genuine irreducible floor: live-PTY NSViewRepresentable bodies, literal
+`runModal()`/`NSApp.terminate` syscalls, NSWindow chrome, `.task`/`.onKeyPress`/`.popover`-descent
+ViewInspector gaps, NSApp-trapping closures, proven-dead branches, and llvm-synthesized artifacts —
+exactly the classes the operator directive named as KEEP-carved.
