@@ -73,8 +73,13 @@ DaemonLiveness.swift 1 1
 #
 #  (2) B-records per-view carves (b*-records.md + b4-carve-records.md), all
 #      `--show-regions`-legit:
-#      * modal NSOpenPanel().runModal() — chooseWorkingDirectory/chooseRootPath in the
-#        New/Edit Terminal sheets (blocks on a live GUI modal in-process).
+#      * modal NSOpenPanel().runModal() — TIGHTENED (coverage Class 3, v0.1.178): the four
+#        chooseWorkingDirectory/chooseRootPath methods (New/Edit Terminal + New/Edit Workspace
+#        sheets) are seamed behind an injectable `chooseDirectory` closure (default = the real
+#        runModal()); the "Choose" tap now drives the panel CONFIGURATION + the post-selection
+#        `if let url { rootPath/workingDirectory = url.path }` value-flow (asserted via the
+#        captured panel; cancel arm covered too). Only the literal runModal() inside each
+#        default closure stays carved.
 #      * @State default autoclosures with no init seam (isRefreshing / taught /
 #        showsInspector / selectedIndex / customBossIsPresented) + .disabled short-circuits.
 #      * .task / .onChange / .onAppear toolchain-untestable closures (ViewInspector 0.10.3
@@ -97,6 +102,10 @@ DaemonLiveness.swift 1 1
 # Coverage Class 2 (v0.1.177) DROVE the WorkbenchMenuBarController logic (see the K1 note above):
 # 1650/342 → 1650→1487 / 342→301 (163 lines / 41 regions driven OUT of the carve).
 # Measured on the Coverage job at run 28297036990 (probe-then-set: the probe value 1500/270 forced
-# the gate to print the exact residual `1487 lines / 301 regions`). Verified minimal: lowering
-# EITHER number by 1 makes the gate FAIL (the count-1 check).
-WorkbenchViews.swift 1487 301
+# the gate to print the exact residual `1487 lines / 301 regions`).
+# Coverage Class 3 (v0.1.178) DROVE the four chooseRootPath/chooseWorkingDirectory NSOpenPanel
+# value-flows (seamed behind chooseDirectory): 1487/301 → 1406/287 (81 lines / 14 regions driven OUT).
+# Measured on the Coverage job at run 28297944555 (probe-then-set: the probe 1450/280 forced the gate
+# to print the exact residual `1406 lines / 287 regions`). Verified minimal: lowering EITHER number by
+# 1 makes the gate FAIL (the count-1 check).
+WorkbenchViews.swift 1406 287

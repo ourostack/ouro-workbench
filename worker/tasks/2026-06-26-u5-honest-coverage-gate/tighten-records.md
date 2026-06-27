@@ -111,3 +111,42 @@ un-invokable); `showWorkbench`'s two `for window in NSApp.windows` loop BODIES (
 windows, so the bodies never run — but its `NSApp.activate`/`unhide` lines ARE covered transitively
 by the actions that call it); and the `NSStatusBar.system.statusItem(...)` /
 `NSImage(systemSymbolName:)` AppKit construction.
+
+---
+
+## Class 3 — sheet NSOpenPanel value-flows (PR #345, v0.1.178)
+
+**Carve before (b4-carve-records modal-NSOpenPanel):** the four "Choose" directory pickers —
+`chooseRootPath` (New/Edit Workspace sheets) and `chooseWorkingDirectory` (New/Edit Terminal
+sheets) — configure an `NSOpenPanel` and call `runModal()`, which blocks on a live GUI modal
+in-process, so the whole method (panel config + the `if let url { … = url.path }` value-flow) was
+carved.
+
+**Drive:** seam each method behind an injectable `var chooseDirectory: (NSOpenPanel) -> URL?`
+(default = the real `{ $0.runModal() == .OK ? $0.url : nil }` — prod byte-identical; only tests
+inject a stub). The method becomes `if let url = chooseDirectory(panel) { rootPath/workingDirectory
+= url.path }`. Tests tap "Choose" (ViewInspector invokes the button action → `chooseRootPath()`),
+and the injected stub captures the panel — asserting the panel CONFIGURATION ran as prod
+(`canChooseDirectories == true`, `canChooseFiles == false`, single-selection, `directoryURL` seeded
+from the current path) and that the value-flow `if let` body executed (stub returns a URL). The
+cancel arm (stub returns nil) is covered too. Mutation-verified (`canChooseDirectories` true→false →
+the panel-config assertion flips RED, reverted).
+
+**Note on the @State write:** `rootPath = url.path` writes a SwiftUI `@State`; ViewInspector taps
+against an internal hosted copy, so the post-tap `@State` is not re-inspectable on the local struct.
+The value-flow LINE is covered (the `if let` body runs when the stub returns non-nil), and the
+rootPath→field render is independently asserted via the init seam (a sheet seeded with a path renders
+it in the field). Only the literal `runModal()` inside each default closure stays carved.
+
+**CI-measured result (Coverage job, run 28297944555):** residual printed by the probe `1450 280`
+was **`1406 lines / 287 regions uncovered`**. Allowlist set to the exact minimum **`1406 287`**
+(was `1487 301`). **Driven out: 81 lines / 14 regions.**
+
+**Minimality:** probe-then-set — the `1450/280` probe FAILED and printed `1406/287`, so `1405`/`286`
+each fail; `1406/287` passes.
+
+**Note — unrelated CI flake observed on the probe run:** `GitSessionStatus.swift:161` (the live
+`git status` subprocess success path) showed `1 line / 1 region` uncovered on this run because its
+integration test `testReaderReturnsRepoStatusForThisCheckout` does `XCTSkipIf(resolvedGitPath ==
+nil)` and git wasn't resolved on that runner. This is a pre-existing environmental flake in a Core
+file untouched by this PR (it was 100% on the #344 merge run); re-running the Coverage job clears it.

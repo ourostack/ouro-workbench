@@ -126,6 +126,27 @@ final class EditTerminalGroupSheetTests: XCTestCase {
             ouroAgentInventory: OuroAgentInventory(agentBundlesURL: agentBundles))
     }
 
+    // MARK: - Class 3 — chooseRootPath() NSOpenPanel value-flow via the injected seam
+
+    func testSheet_chooseTap_drivesPanelConfiguredFromRootPath() throws {
+        var view = try sheet(project: project(rootPath: "/tmp/u4-seed"))
+        var captured: NSOpenPanel?
+        view.chooseDirectory = { panel in captured = panel; return URL(fileURLWithPath: "/tmp/chosen") }
+        try view.inspect().find(button: "Choose").tap()
+        let panel = try XCTUnwrap(captured, "the Choose tap runs chooseRootPath → chooseDirectory(panel)")
+        XCTAssertTrue(panel.canChooseDirectories, "panel configured to choose directories")
+        XCTAssertFalse(panel.canChooseFiles, "panel configured to NOT choose files")
+        XCTAssertEqual(panel.directoryURL?.path, "/tmp/u4-seed", "panel seeded with the current rootPath")
+    }
+
+    func testSheet_chooseTap_cancelArm_runs() throws {
+        var view = try sheet(project: project())
+        var invoked = false
+        view.chooseDirectory = { _ in invoked = true; return nil }
+        XCTAssertNoThrow(try view.inspect().find(button: "Choose").tap())
+        XCTAssertTrue(invoked, "the seam was invoked (cancel arm → no rootPath write)")
+    }
+
     // MARK: - the Cancel button action `{ dismiss() }`
 
     func testSheet_cancelTap_invokesDismiss() throws {

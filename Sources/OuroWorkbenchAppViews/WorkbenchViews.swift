@@ -9980,6 +9980,13 @@ struct NewTerminalGroupSheet: View {
     @State private var name: String
     @State private var rootPath: String
 
+    /// Seam: resolve a directory URL from the configured "Choose" panel. Defaults to the
+    /// real `panel.runModal()` syscall (`.OK ? panel.url : nil`), which blocks on a live GUI
+    /// modal and so can't run in-process. A test injects a stub so the post-selection
+    /// value-flow (`rootPath = url.path`) is driven without the modal. Only the literal
+    /// `runModal()` lives behind the default — the panel configuration runs as prod.
+    var chooseDirectory: (NSOpenPanel) -> URL? = { $0.runModal() == .OK ? $0.url : nil }
+
     // The `@State` seeds default to an empty name + the machine home root (the prod
     // behavior the sidebar's "New Workspace" presents). The seam parameters keep that
     // default UNCHANGED at every production call site while letting a test drive the
@@ -10050,7 +10057,7 @@ struct NewTerminalGroupSheet: View {
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
         panel.directoryURL = URL(fileURLWithPath: rootPath, isDirectory: true)
-        if panel.runModal() == .OK, let url = panel.url {
+        if let url = chooseDirectory(panel) {
             rootPath = url.path
         }
     }
@@ -10062,6 +10069,11 @@ struct EditTerminalGroupSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var name: String
     @State private var rootPath: String
+
+    /// Seam: the "Choose" directory picker. Default = the real `runModal()` syscall; a test
+    /// injects a stub to drive the post-selection `rootPath = url.path` value-flow. Only the
+    /// literal `runModal()` is behind the default.
+    var chooseDirectory: (NSOpenPanel) -> URL? = { $0.runModal() == .OK ? $0.url : nil }
 
     init(model: WorkbenchViewModel, project: WorkbenchProject) {
         self.model = model
@@ -10115,7 +10127,7 @@ struct EditTerminalGroupSheet: View {
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
         panel.directoryURL = URL(fileURLWithPath: rootPath, isDirectory: true)
-        if panel.runModal() == .OK, let url = panel.url {
+        if let url = chooseDirectory(panel) {
             rootPath = url.path
         }
     }
@@ -10130,6 +10142,11 @@ struct NewTerminalSessionSheet: View {
     @State private var trusted: Bool
     @State private var autoResume = true
     @State private var notes = ""
+
+    /// Seam: the "Choose" working-directory picker. Default = the real `runModal()` syscall;
+    /// a test injects a stub to drive the post-selection `workingDirectory = url.path`
+    /// value-flow. Only the literal `runModal()` is behind the default.
+    var chooseDirectory: (NSOpenPanel) -> URL? = { $0.runModal() == .OK ? $0.url : nil }
 
     // `initialName` / `initialCommand` default to empty and `initialTrusted` to true (the
     // prod behavior the ⌘N sheet presents UNCHANGED); the seam params let a test seed the
@@ -10239,7 +10256,7 @@ struct NewTerminalSessionSheet: View {
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
         panel.directoryURL = URL(fileURLWithPath: workingDirectory, isDirectory: true)
-        if panel.runModal() == .OK, let url = panel.url {
+        if let url = chooseDirectory(panel) {
             workingDirectory = url.path
         }
     }
@@ -10255,6 +10272,11 @@ struct EditTerminalSessionSheet: View {
     @State private var trusted: Bool
     @State private var autoResume: Bool
     @State private var notes: String
+
+    /// Seam: the "Choose" working-directory picker. Default = the real `runModal()` syscall;
+    /// a test injects a stub to drive the post-selection `workingDirectory = url.path`
+    /// value-flow. Only the literal `runModal()` is behind the default.
+    var chooseDirectory: (NSOpenPanel) -> URL? = { $0.runModal() == .OK ? $0.url : nil }
 
     init(model: WorkbenchViewModel, entry: ProcessEntry) {
         self.model = model
@@ -10347,7 +10369,7 @@ struct EditTerminalSessionSheet: View {
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
         panel.directoryURL = URL(fileURLWithPath: workingDirectory, isDirectory: true)
-        if panel.runModal() == .OK, let url = panel.url {
+        if let url = chooseDirectory(panel) {
             workingDirectory = url.path
         }
     }
