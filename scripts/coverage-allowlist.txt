@@ -178,7 +178,9 @@ MailboxClient.swift 1 1
 # AboutSheet openRepository/copyVersion (openURL/copyToPasteboard seams), CommandPaletteSheet
 # moveSelection clamp (extracted static clampedSelection), and DELETED the AN-006-dead
 # OnboardingReadinessView "Optional checks" branch. ReportBug "Create Report" re-verified as genuine
-# floor (NSApp IUO trap). Lowering 1205/238 by the now-covered + deleted regions.
-# PROBE VALUE (Class 8): set deliberately below the true residual to force the Coverage job to print
-# the EXACT remaining uncovered line/region count; the next commit sets it to the CI-measured minimum.
-WorkbenchViews.swift 1185 222
+# floor (NSApp IUO trap). 1205/238 → 1170/227 (35 lines / 11 regions driven+deleted OUT). Measured on
+# the Coverage job at run 28301926487 (probe-then-set: the probe 1185/222 forced the gate to print the
+# exact residual `1170 lines / 227 regions`). Verified minimal: lowering EITHER number by 1 fails.
+# This is the IRREDUCIBLE FLOOR — every remaining region is live-PTY/Scene/runModal/NSApp-trap/
+# .task/.onKeyPress/.popover-descent/NSWindow-chrome/llvm-synth (see the per-class notes above).
+WorkbenchViews.swift 1170 227
