@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.182 - Coverage-gate flake fix (MailboxClient)
+
+- Internal: adds a deterministic test for the mailbox default-loader success path and allowlists a single CI-toolchain-synthesized resume-after-await region that flakily fails to register coverage (same class as the existing DaemonLiveness entry). No user-facing behavior change.
+
 ## 0.1.181 - Disclosure-panel coverage tightening
 
 - Internal: the agent/session detail inspectors, the session transcript sheet, and the Harness Status refresh-in-flight state are now driven to test coverage via injectable initial-state seams. No user-facing behavior change — every panel still starts collapsed.

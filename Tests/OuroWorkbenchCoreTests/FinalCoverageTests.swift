@@ -248,6 +248,28 @@ final class FinalCoverageTests: XCTestCase {
         XCTAssertEqual(payload.value, 7)
     }
 
+    // DIRECT success path of the public `defaultDataLoader(url:)` convenience overload (which
+    // delegates to `defaultDataLoader(url:session:.shared)`). A globally-registered URLProtocol
+    // stub intercepts `.shared` and returns a 200 HTTPURLResponse, so the awaited delegation
+    // RETURNS NORMALLY — exercising the resume-after-await epilogue (the closing brace at
+    // MailboxClient.swift:192) which the throw-path test (testDefaultDataLoaderRejectsNonHTTP…)
+    // skips. The CI-toolchain-synthesized region there increments only on this normal-return path.
+    func testDefaultDataLoaderUrlOverloadReturnsHTTPResponseViaSharedSession() async throws {
+        let body = Data("{\"ok\":true}".utf8)
+        MailboxStubURLProtocol.respond = { url in
+            (body, HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+        }
+        URLProtocol.registerClass(MailboxStubURLProtocol.self)
+        defer {
+            URLProtocol.unregisterClass(MailboxStubURLProtocol.self)
+            MailboxStubURLProtocol.respond = nil
+        }
+        let url = URL(string: "https://mailbox.test/events")!
+        let (data, response) = try await MailboxClient.defaultDataLoader(url: url)
+        XCTAssertEqual(data, body, "the stubbed body is returned through the .shared overload")
+        XCTAssertEqual(response.statusCode, 200, "the 200 HTTPURLResponse is returned")
+    }
+
     // The percent-encode fallback returns the raw value when the encoder can't represent it.
     func testMailboxPercentEncodedFallsBackToRawValue() {
         XCTAssertEqual(

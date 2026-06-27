@@ -36,6 +36,21 @@ SessionActivityReader.swift 0 1
 # toolchain-synthesized resume epilogue is structurally uncountable. Minimal 1/1.
 DaemonLiveness.swift 1 1
 
+# MailboxClient.swift:192 -- the resume-after-await epilogue (the closing brace of the public
+# convenience overload `defaultDataLoader(url:)`, which delegates to
+# `defaultDataLoader(url:, session: .shared)`). Same CI-toolchain-synthesized region class as
+# DaemonLiveness:159: Apple Swift 6.0.3 llvm-cov synthesizes a region here that increments only
+# when the inner awaited `.shared` call returns under a specific timing, so it FLAKILY fails to
+# increment on CI (main passed Coverage on 5 prior runs, then flaked here — the source is unchanged
+# since #225). The success path is now exercised by TWO deterministic tests through a globally-
+# registered URLProtocol stub on `.shared`: `testMailboxClientDefaultLoaderFetchesViaSharedSession`
+# (via `MailboxClient().fetch`) and the direct
+# `testDefaultDataLoaderUrlOverloadReturnsHTTPResponseViaSharedSession` (added here, kept — the
+# better, most-direct test); the throw path is covered by `testDefaultDataLoaderRejectsNonHTTP…`.
+# The overload's behavior is fully exercised; only this toolchain-synthesized resume epilogue is
+# structurally uncountable on CI. Minimal 1/1.
+MailboxClient.swift 1 1
+
 # WorkbenchViews.swift (U5 Unit 3) — the per-file-100% views gate. The U5 B-series drove
 # every REACHABLE region of the in-process-testable view structs to 100% (snapshot
 # INVOCATION + effect-assert + mutation RED->GREEN per the b*-records.md ledgers). The one
