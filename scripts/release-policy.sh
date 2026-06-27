@@ -473,12 +473,14 @@ required_ci = [
     "scripts/release-policy.sh selftest-package-guards",
     "scripts/release-policy.sh selftest-shell-dependency-watch",
     "scripts/release-policy.sh selftest-paths",
-    "scripts/check-shell-boundary.sh --selftest",
-    "scripts/check-shell-boundary.sh",
 ]
 for needle in required_ci:
     if needle not in ci:
         raise SystemExit(f"ci.yml must contain {needle!r}")
+ci_lines = {line.strip() for line in ci.splitlines()}
+for line in ("run: scripts/check-shell-boundary.sh --selftest", "run: scripts/check-shell-boundary.sh"):
+    if line not in ci_lines:
+        raise SystemExit(f"ci.yml must contain an exact {line!r} step")
 
 required_preflight = [
     "scripts/release-policy.sh freshness --mode pr",
@@ -487,12 +489,14 @@ required_preflight = [
     "scripts/release-policy.sh selftest-shell-dependency-watch",
     "scripts/release-policy.sh selftest-paths",
     "scripts/check-shell-dependency.sh",
-    "scripts/check-shell-boundary.sh --selftest",
-    "scripts/check-shell-boundary.sh",
 ]
 for needle in required_preflight:
     if needle not in preflight:
         raise SystemExit(f"preflight.sh must contain {needle!r}")
+preflight_lines = {line.strip() for line in preflight.splitlines()}
+for line in ("scripts/check-shell-boundary.sh --selftest", "scripts/check-shell-boundary.sh"):
+    if line not in preflight_lines:
+        raise SystemExit(f"preflight.sh must contain an exact {line!r} call")
 
 required_auto = [
     "scripts/release-policy.sh release-exists",
