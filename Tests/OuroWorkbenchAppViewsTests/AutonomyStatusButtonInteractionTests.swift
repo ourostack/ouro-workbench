@@ -69,5 +69,54 @@ final class AutonomyStatusButtonInteractionTests: XCTestCase {
         let model = try makeVM(bossName: "boss")
         try AutonomyStatusButton(model: model).inspect().find(ViewType.Button.self).callOnAppear()
     }
+
+    // MARK: - Class 7 — the loginItemCheck switch arms, DRIVEN as a pure static function
+    //
+    // `loginItemCheck` maps `LaunchAgentLoginItemStatus → AutonomyReadinessCheck`. The view's
+    // live `loginItem.status` reports only ONE status, so 3 of the 4 arms were carved. Extracting
+    // it to a behavior-identical `static func loginItemCheck(for:)` makes every arm directly
+    // unit-testable + mutation-verifiable (each arm's detail + severity is asserted by value).
+
+    func testLoginItemCheck_enabledArm() {
+        let check = AutonomyStatusButton.loginItemCheck(for: .enabled)
+        XCTAssertEqual(check.id, "open-at-login")
+        XCTAssertEqual(check.label, "Open at Login")
+        XCTAssertEqual(check.detail, "Workbench will reopen after a computer restart.")
+        XCTAssertEqual(check.state, .ok, "enabled → ok")
+    }
+
+    func testLoginItemCheck_needsUpdateArm() {
+        let check = AutonomyStatusButton.loginItemCheck(for: .needsUpdate)
+        XCTAssertEqual(check.detail, "Login item points at a different app bundle and needs an update.")
+        XCTAssertEqual(check.state, .warning, "needsUpdate → warning")
+    }
+
+    func testLoginItemCheck_notInstalledArm() {
+        let check = AutonomyStatusButton.loginItemCheck(for: .notInstalled)
+        XCTAssertEqual(check.detail, "Workbench will not reopen automatically after restart.")
+        XCTAssertEqual(check.state, .warning, "notInstalled → warning")
+    }
+
+    func testLoginItemCheck_appBundleMissingArm() {
+        let check = AutonomyStatusButton.loginItemCheck(for: .appBundleMissing)
+        XCTAssertEqual(check.detail, "The installed app bundle is missing.")
+        XCTAssertEqual(check.state, .blocker, "appBundleMissing → blocker")
+    }
+
+    /// Integration: the `init(model:loginItem:)` seam folds the injected controller's check into
+    /// the rendered pill — an appBundleMissing controller still renders the boss-set pill (the
+    /// body reads the folded snapshot). Drives the seam end-to-end.
+    func testButton_injectedController_rendersFoldedPill() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("c7asb-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let item = LaunchAgentLoginItem(
+            appURL: root.appendingPathComponent("missing.app", isDirectory: true), homeURL: root)
+        let controller = LoginItemController(loginItem: item)
+        XCTAssertEqual(controller.status, .appBundleMissing, "provenance: injected appBundleMissing")
+        let tree = try ViewSnapshotHost.snapshotText(
+            of: AutonomyStatusButton(model: try makeVM(bossName: "boss"), loginItem: controller))
+        XCTAssertTrue(tree.contains("TTFA"), "the pill renders with the injected check folded in:\n\(tree)")
+    }
 }
 #endif
