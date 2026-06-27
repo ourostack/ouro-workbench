@@ -74,7 +74,10 @@ DaemonLiveness.swift 1 1
 #        (TerminalFocusView.chrome, NewTerminalSessionSheet `?? home`).
 #
 # The counts below are the EXACT CI-measured (Apple Swift 6.0.3) genuine-carve totals — NOT
-# a sum of records (B4-redo re-drove 50 of B4's 69; record counts overlap). Verified minimal:
-# lowering EITHER number by 1 makes the gate FAIL (the count-1 check). [PLACEHOLDER pending
-# the post-SessionAttentionBanner CI Coverage measurement.]
-WorkbenchViews.swift 1850 410
+# a sum of records (B4-redo re-drove 50 of B4's 69; record counts overlap). The K1 scene/menu/
+# AppKit shells are the bulk (~844 lines); the rest are the per-view b-records carves above.
+# Measured on the Coverage job at commit 821f50c (after driving SessionAttentionBanner +
+# AgentActionsCard/AgentLanesCard/NeedsYouEntryRow/SessionStatusRowView/HarnessActionRow/
+# OnboardingBossChoiceRow to 100%). Verified minimal: lowering EITHER number by 1 makes the
+# gate FAIL (the count-1 check — see finale-drive-records.md).
+WorkbenchViews.swift 1729 379
