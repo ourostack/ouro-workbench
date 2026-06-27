@@ -80,4 +80,4 @@ DaemonLiveness.swift 1 1
 # AgentActionsCard/AgentLanesCard/NeedsYouEntryRow/SessionStatusRowView/HarnessActionRow/
 # OnboardingBossChoiceRow to 100%). Verified minimal: lowering EITHER number by 1 makes the
 # gate FAIL (the count-1 check — see finale-drive-records.md).
-WorkbenchViews.swift 1729 379
+WorkbenchViews.swift 1728 379
