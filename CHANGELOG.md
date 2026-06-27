@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.174 - Shared shell dependency refresh
+
+- Internal: refreshes the pinned `ouro-native-apple-app-shell` revision to keep Workbench dogfooding the current shared native app shell. No user-facing behavior change.
+
 ## 0.1.155 - Workbench visibility plane
 
 - Adds a read-only `workbench_visibility` MCP tool and native boss-pane visibility strip that combine Workbench session/decision counts with the selected Ouro agent's durable Work Card. Unknown claim verification state is represented explicitly as unavailable/unknown rather than false zeroes, and redacted Work Card next-action summaries are not expanded in Workbench output.
