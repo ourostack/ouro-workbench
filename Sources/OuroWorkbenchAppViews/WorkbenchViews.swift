@@ -8747,7 +8747,12 @@ struct SessionDetailView: View {
 /// detected "why" (e.g. "Waiting on you · Proceed? (y/N)"), color-coded to the
 /// attention state via the shared `AttentionState.health*` helpers, with a
 /// direct "Jump to prompt" affordance for the waiting/blocked cases.
-private struct SessionAttentionBanner: View {
+// U5: private->internal so the per-file-100% gate can drive this banner's body + the
+// `state` switch + both `offersJumpToPrompt` arms via a direct snapshot. Its only prod
+// call site is inside `SessionDetailView` (a live-PTY K1 view ViewInspector can't descend),
+// so without this seam the banner is unreachable by a test. Same module, pure presentation —
+// no behavior change.
+struct SessionAttentionBanner: View {
     var banner: SessionDetailAttentionPresentation.Banner
     var onJump: () -> Void
 
