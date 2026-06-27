@@ -51,6 +51,20 @@ DaemonLiveness.swift 1 1
 # structurally uncountable on CI. Minimal 1/1.
 MailboxClient.swift 1 1
 
+# GitSessionStatus.swift:161 -- `return GitSessionStatus.parse(porcelainV2: …)`, the live-git
+# SUCCESS path, reached only when the guard `Date().timeIntervalSince(start) < timeout &&
+# terminationStatus == 0` passes. Same intermittent-coverage class as MailboxClient:192 /
+# DaemonLiveness:159: the source is UNCHANGED since #144, and main passed Coverage on many prior
+# runs before flaking here (99.2% line / 98.4% region). Root cause is a TIMING race — on a loaded
+# CI runner the elapsed subprocess launch+reap time can exceed the test's timeout, making the
+# `< timeout` arm flakily false and skipping :161. PREFER-COVER applied:
+# `testReaderParsesSuccessfulGitOutputFromResolvedGitPath` now uses a GENEROUS 60s timeout (was 1s)
+# with an inject-`resolvedGitPath` stub-git script that exits in ms — so the deterministic success
+# path reliably reaches :161 (no weakening: the SAME parsed result is asserted). This 1/1 entry is
+# the belt-and-suspenders fallback (the #350 / DaemonLiveness precedent: keep the better test AND
+# allowlist) so the exact-100% gate can't flake-RED main on the residual timing/synth jitter.
+GitSessionStatus.swift 1 1
+
 # WorkbenchViews.swift (U5 Unit 3) — the per-file-100% views gate. The U5 B-series drove
 # every REACHABLE region of the in-process-testable view structs to 100% (snapshot
 # INVOCATION + effect-assert + mutation RED->GREEN per the b*-records.md ledgers). The one
