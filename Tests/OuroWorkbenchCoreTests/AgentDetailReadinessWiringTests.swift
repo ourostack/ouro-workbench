@@ -209,7 +209,7 @@ final class AgentDetailReadinessWiringTests: XCTestCase {
             // the status-card snapshot test reaches it via `@testable import`), dropping
             // `private` from its declaration line.
             from: "\nstruct AgentStatusCard: View {",
-            to: "\nprivate struct AgentLanesCard: View {"
+            to: "\nstruct AgentLanesCard: View {"
         )
     }
 }

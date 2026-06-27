@@ -64,8 +64,11 @@ final class NeedsYouEntryRowDriveTests: XCTestCase {
 
     func testNeedsYou_untrustedBlocker_trustAndResumeArm() throws {
         let id = UUID(uuidString: "C5000010-0000-0000-0000-000000000010")!
+        // An UNTRUSTED + non-autoResume entry with a `.needsRecovery` run → the planner
+        // classifies the action as `.manualActionNeeded` with `blocker == .untrusted`
+        // (the RecoverySheet `bothModel` recipe) → `recoveryTrustFixAvailable == true`.
         let e = entry(id, name: "needs-trust", trust: .untrusted, autoResume: false)
-        let model = try makeVM(state: state(e, run(id, .manualActionNeeded)))
+        let model = try makeVM(state: state(e, run(id, .needsRecovery)))
         let loaded = model.state.processEntries.first ?? e
         XCTAssertTrue(model.recoveryTrustFixAvailable(for: loaded),
                       "provenance: an untrusted manual-recovery entry → the Trust & resume arm")
@@ -91,8 +94,13 @@ final class NeedsYouEntryRowDriveTests: XCTestCase {
         try row.inspect().find(button: "Start fresh").tap()
         XCTAssertEqual(model.pendingStartFresh?.id, loaded.id,
                        "Start fresh arms the pending-start-fresh confirmation (requestStartFresh)")
-        // The onJump trailing closure (the "Open" icon button).
-        try row.inspect().find(button: "Open").tap()
+        // The onJump trailing closure (the "Open" icon button — `.iconOnly` label, so match on
+        // the underlying Label title rather than `find(button:)`, mirroring RecoverySheet's tests).
+        let openButtons = try row.inspect().findAll(ViewType.Button.self).filter {
+            (try? $0.labelView().label().title().text().string()) == "Open"
+        }
+        XCTAssertFalse(openButtons.isEmpty, "the row renders an Open jump button")
+        try openButtons[0].tap()
         XCTAssertTrue(jumped, "tapping Open fires the onJump callback")
     }
 }

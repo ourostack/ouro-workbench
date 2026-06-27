@@ -335,7 +335,7 @@ final class BossMCPPillVerdictWiringTests: XCTestCase {
         // its declaration line; the slice still bounds the card at `AgentLanesCard`.
         let body = try WorkbenchAppSource.sourceSlice(
             from: "\nstruct AgentStatusCard: View {",
-            to: "private struct AgentLanesCard: View {"
+            to: "struct AgentLanesCard: View {"
         )
         XCTAssertTrue(
             body.contains("BossMCPPillPresentation.tone("),
@@ -375,7 +375,7 @@ final class BossMCPPillVerdictWiringTests: XCTestCase {
         // from its decl line; the slice still bounds the row at `HarnessActionRow`.
         let body = try WorkbenchAppSource.sourceSlice(
             from: "struct HarnessAgentRow: View {",
-            to: "private struct HarnessActionRow: View {"
+            to: "struct HarnessActionRow: View {"
         )
         // The harness-diagnostic pill (entry.mcpStatus / entry.toolsInjection) must route
         // through the seam — no longer the status-only harnessShortLabel / harnessTint pair.

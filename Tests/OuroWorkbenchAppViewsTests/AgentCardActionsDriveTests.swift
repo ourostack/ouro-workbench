@@ -54,18 +54,14 @@ final class AgentCardActionsDriveTests: XCTestCase {
     }
 
     // MARK: - AgentActionsCard
-
-    /// "Run ouro check" `Button { model.repairAgent(agent) }`. With the launcher seamed,
-    /// repairAgent creates the repair terminal session and records an action-log entry.
-    func testActionsCard_runOuroCheck_createsRepairSession() throws {
-        let model = try makeVM()
-        let agent = record("alpha")
-        let before = model.state.actionLog.count
-        try AgentActionsCard(agent: agent, model: model).inspect().find(button: "Run ouro check").tap()
-        XCTAssertTrue(model.state.actionLog.contains { $0.action == "repairAgent" },
-                      "Run ouro check runs repairAgent (logged); the session launch is seamed spawn-free")
-        XCTAssertGreaterThan(model.state.actionLog.count, before, "an action-log entry was recorded")
-    }
+    //
+    // CARVE (recorded): the "Run ouro check" button's action `{ model.repairAgent(agent) }`.
+    // `repairAgent` builds a `CustomTerminalSessionDraft` running `ouro check --agent <name>`
+    // and creates+launches it — a LIVE-SUBPROCESS action (the #332 class). It is already driven
+    // through the `AgentTitleStripInteractionTests` "Run ouro check…" tap (the model method is
+    // covered there); driving it a second time HERE would shell out to the real `ouro` toolchain
+    // on PATH and pollute the shared headless-`ouro` harness other suites use. The four other
+    // bundle-action buttons are pure flag/Finder ops — driven below.
 
     /// "Open agent.json" `Button { model.openAgentConfig(agent) }` — opens the config (no
     /// modal); tapping drives the action region with no error surfaced.

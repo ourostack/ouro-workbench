@@ -30,21 +30,32 @@ final class HarnessActionRowAndBossChoiceDriveTests: XCTestCase {
 
     // MARK: - HarnessActionRow `if isBusy { ProgressView }`
 
-    /// `isBusy == true` renders the in-flight `ProgressView` (the TRUE arm); the action
-    /// closure also fires on tap. A negative control (`isBusy == false`) has NO ProgressView.
-    func testHarnessActionRow_isBusy_rendersProgressViewAndAction() throws {
-        var fired = false
+    /// `isBusy == true` renders the in-flight `ProgressView` (the TRUE arm) AND disables the
+    /// button (`.disabled(isBusy)`). `isBusy == false` renders NO ProgressView and the action
+    /// fires on tap. Drives both arms of `if isBusy`, both `.disabled(isBusy)` states, and the
+    /// action closure (via the enabled row — ViewInspector refuses to tap a disabled button).
+    func testHarnessActionRow_isBusyArm_andEnabledAction() throws {
+        // Busy: the ProgressView arm renders; the button is disabled (can't tap).
         let busy = HarnessActionRow(title: "Bring back online", systemImage: "bolt.heart",
-                                    help: "repair", isUrgent: true, isBusy: true, action: { fired = true })
+                                    help: "repair", isUrgent: true, isBusy: true, action: {})
         XCTAssertNoThrow(try busy.inspect().find(ViewType.ProgressView.self),
                          "isBusy == true renders the in-flight ProgressView")
-        try busy.inspect().find(button: "Bring back online").tap()
-        XCTAssertTrue(fired, "the row's action closure fires on tap")
 
-        let idle = HarnessActionRow(title: "Bring back online", systemImage: "bolt.heart",
-                                    help: "repair", isUrgent: false, isBusy: false, action: {})
-        XCTAssertThrowsError(try idle.inspect().find(ViewType.ProgressView.self),
+        // Idle: NO ProgressView, button enabled → the action closure fires on tap (urgent arm).
+        var fired = false
+        let idleUrgent = HarnessActionRow(title: "Bring back online", systemImage: "bolt.heart",
+                                          help: "repair", isUrgent: true, isBusy: false, action: { fired = true })
+        XCTAssertThrowsError(try idleUrgent.inspect().find(ViewType.ProgressView.self),
                              "isBusy == false renders NO ProgressView (negative control)")
+        try idleUrgent.inspect().find(button: "Bring back online").tap()
+        XCTAssertTrue(fired, "the enabled row's action closure fires on tap")
+
+        // The non-urgent button-style arm also renders + taps (the `else` of `if isUrgent`).
+        var firedQuiet = false
+        let idleQuiet = HarnessActionRow(title: "Connect tools", systemImage: "link",
+                                         help: "connect", isUrgent: false, isBusy: false, action: { firedQuiet = true })
+        try idleQuiet.inspect().find(button: "Connect tools").tap()
+        XCTAssertTrue(firedQuiet, "the non-urgent (bordered) row's action also fires")
     }
 
     // MARK: - OnboardingBossChoiceRow boss-pick action
@@ -56,8 +67,10 @@ final class HarnessActionRowAndBossChoiceDriveTests: XCTestCase {
         let choice = OnboardingBossChoice(
             name: "new-boss", detail: "installed", status: .ready, isSelected: false)
         XCTAssertEqual(model.state.boss.agentName, "old-boss", "precondition: a different boss")
+        // The whole row is a single Button (its label is an HStack with Text(choice.name));
+        // tap the only Button rather than match a nested text via find(button:).
         try OnboardingBossChoiceRow(choice: choice, model: model)
-            .inspect().find(button: "new-boss").tap()
+            .inspect().find(ViewType.Button.self).tap()
         XCTAssertEqual(model.state.boss.agentName, "new-boss",
                        "picking the row registers + selects the new boss")
     }
