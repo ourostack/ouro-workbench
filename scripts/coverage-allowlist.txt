@@ -114,8 +114,7 @@ DaemonLiveness.swift 1 1
 # Measured on the Coverage job at run 28297944555 (probe-then-set: the probe 1450/280 forced the gate
 # to print the exact residual `1406 lines / 287 regions`).
 # Coverage Class 4 (v0.1.179) DROVE the BossDashboardView showsAdvanced expanded arm (init seam):
-# lowering 1406/287 by the now-covered expanded-block + ternary + onChange + toggle regions.
-# PROBE VALUE (Class 4): set deliberately below the true residual to force the Coverage job to print
-# the EXACT remaining uncovered line/region count for WorkbenchViews.swift; the next commit sets it to
-# that CI-measured minimum and proves the count-1 check fails.
-WorkbenchViews.swift 1370 265
+# 1406/287 → 1346/276 (60 lines / 11 regions driven OUT). Measured on the Coverage job at run
+# 28298452535 (probe-then-set: the probe 1370/265 forced the gate to print the exact residual
+# `1346 lines / 276 regions`). Verified minimal: lowering EITHER number by 1 makes the gate FAIL.
+WorkbenchViews.swift 1346 276
