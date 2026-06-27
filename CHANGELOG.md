@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.177 - Menu-bar controller coverage tightening
+
+- Internal: the menu-bar status-item controller (its icon refresh, menu rebuild, and Show/Jump/Recovery/Watch/Check-In actions) is now driven to 100% test coverage via direct unit tests on a freshly-constructed controller. No user-facing behavior change — only the controller's `init` visibility was widened so tests can isolate it from the singleton.
+
 ## 0.1.175 - Menu-command coverage tightening
 
 - Internal: the global menu-bar command dispatch (`⌘`-shortcuts for new terminal, command palette, split panes, font size, rename, etc.) is now driven to 100% test coverage by extracting its switch into a directly-testable free function. No user-facing behavior change — the extraction is byte-identical to the prior dispatch.

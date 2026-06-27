@@ -70,3 +70,44 @@ menu wiring + `WindowGroup`/`NavigationSplitView`/`init(diagnostics:)` — all b
 non-executable `@StateObject` Scene root, genuinely un-constructible/un-inspectable in-process. The
 literal `runModal()` syscall lines inside the two workspace-panel default closures (the seam isolates
 exactly those).
+
+---
+
+## Class 2 — WorkbenchMenuBarController (PR #344, v0.1.177)
+
+**Carve before:** the whole NSMenu/NSStatusItem AppKit controller (residual-baseline.md K1 #1) —
+an `NSObject`, not a SwiftUI view, so ViewInspector has no driver; carved wholesale.
+
+**Drive:**
+- Widened `init` private→internal (prod byte-identical — `shared` is the sole production
+  construction site and runs the identical body) so a test builds a FRESH, isolated controller, not
+  the singleton (no cross-test menu-bar-item contention). Also widened `model`/`menu`/`statusItem`
+  for assertion. No logic change.
+- `WorkbenchMenuBarControllerTests` drives every reachable region + branch: `attach`; `refreshIcon`
+  (no-model early-return / no-active-sessions empty title / active-count title + running tooltip);
+  `setVisible`; the `menuNeedsUpdate`→`rebuildMenu` build (guard-no-model FALSE arm; sessions-empty
+  vs non-empty; the `count==1 ? "" : "s"` singular/plural ternary both arms; the per-session jump
+  rows; `recoverable > 0` TRUE (needs-recovery fixture) + FALSE; the watch on/off ternary both
+  arms); and the `@objc` actions (`jumpToSession` guard-pass + guard-fail; `openRecoverySheet`;
+  `toggleBossWatch` model + no-model guard; `quickAskBoss` unreachable-boss + running-guard).
+  Invoked the `@objc` actions via `perform(Selector)` (Obj-C dispatch reaches private @objc).
+- Mutation-verified: `refreshIcon` active-count title (`" \(n)"`→`" X\(n)"`) and the watch ternary
+  (arms swapped) each flip RED, then reverted.
+
+**Self-inflicted bug caught en route:** the first test fixture used UUID strings starting `MENB…`,
+which are NOT valid hex → `UUID(uuidString:)!` trapped in the static initializer (signal 5). Fixed
+to a valid hex prefix. Also: `WorkspaceState.bossWatchEnabled` DEFAULTS to `true` — the watch-off
+fixture now sets it explicitly so the on/off menu arms are deterministic.
+
+**CI-measured result (Coverage job, run 28297036990):** residual printed by the probe `1500 270`
+was **`1487 lines / 301 regions uncovered`**. Allowlist set to the exact minimum **`1487 301`**
+(was `1650 342`). **Driven out: 163 lines / 41 regions.** All 4 CI jobs green at the final value.
+
+**Minimality:** probe-then-set is the count-1 proof — the `1500/270` probe FAILED and printed
+`1487/301` (the gate reports `count - covered`), so `1486`/`300` each fail; `1487/301` passes.
+
+**Irreducibly kept (this class):** `quitApp` (`NSApp.terminate(nil)` would kill the test process —
+un-invokable); `showWorkbench`'s two `for window in NSApp.windows` loop BODIES (the xctest app has no
+windows, so the bodies never run — but its `NSApp.activate`/`unhide` lines ARE covered transitively
+by the actions that call it); and the `NSStatusBar.system.statusItem(...)` /
+`NSImage(systemSymbolName:)` AppKit construction.

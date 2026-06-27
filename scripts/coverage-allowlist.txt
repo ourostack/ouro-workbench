@@ -55,7 +55,15 @@ DaemonLiveness.swift 1 1
 #        reaches it remain carved (behind the non-executable @StateObject Scene root). The two
 #        model NSOpenPanel/NSSavePanel modal calls the `.openWorkspace`/`.saveWorkspace` arms
 #        reach are seamed (chooseWorkspaceOpenURL/SaveURL) and driven too.
-#      * WorkbenchMenuBarController — NSMenu/NSStatusItem AppKit menu-bar controller.
+#      * WorkbenchMenuBarController — TIGHTENED (coverage Class 2, v0.1.177): the controller's
+#        LOGIC (attach/refreshIcon/setVisible, the menuNeedsUpdate→rebuildMenu menu build with
+#        all its arms — no-model / sessions empty-singular-plural / recovery on-off / watch
+#        on-off — and the @objc actions jumpToSession/openRecoverySheet/toggleBossWatch/
+#        quickAskBoss) is DRIVEN to 100% by WorkbenchMenuBarControllerTests (fresh isolated
+#        controller via the widened init; menu/model/status-item side-effects asserted;
+#        mutation-verified). Irreducibly carved: quitApp (`NSApp.terminate` would kill the
+#        test process), showWorkbench's two `for window in NSApp.windows` loop BODIES (the
+#        xctest app has no windows), and the NSStatusBar/NSImage(systemSymbolName:) construction.
 #      * LoginItemController / MachineRuntimeView — SMAppService login-item (system svc).
 #      * SessionDetailView / DetailSplitState — the live-PTY detail/split (TerminalPane
 #        NSViewRepresentable; the D3-class carve).
@@ -84,11 +92,11 @@ DaemonLiveness.swift 1 1
 # The counts below are the EXACT CI-measured (Apple Swift 6.0.3) genuine-carve totals — NOT
 # a sum of records (B4-redo re-drove 50 of B4's 69; record counts overlap). The K1 scene/menu/
 # AppKit shells are the bulk; the rest are the per-view b-records carves above.
-# Coverage PR#1 (v0.1.175) DROVE the handleMenuCommand dispatch arms: the ~30-arm switch was
-# extracted to the free dispatchMenuCommand fn (prod byte-identical) and is now 100% covered by
-# DispatchMenuCommandTests (every arm + branch invoked, effect-asserted, mutation-verified).
-# That lowered the prior 1729/379 to 1650/342 — 79 lines / 37 regions driven OUT of the carve.
-# Measured on the Coverage job at run 28296121880 (probe-then-set protocol: the probe value
-# 1600/330 forced the gate to print the exact residual `1650 lines / 342 regions`). Verified
-# minimal: lowering EITHER number by 1 makes the gate FAIL (the count-1 check).
-WorkbenchViews.swift 1650 342
+# Coverage Class 1 (v0.1.175) DROVE the handleMenuCommand dispatch arms (extracted to the free
+# dispatchMenuCommand fn): 1729/379 → 1650/342 (79 lines / 37 regions).
+# Coverage Class 2 (v0.1.177) DROVE the WorkbenchMenuBarController logic (see the K1 note above):
+# 1650/342 → 1650→1487 / 342→301 (163 lines / 41 regions driven OUT of the carve).
+# Measured on the Coverage job at run 28297036990 (probe-then-set: the probe value 1500/270 forced
+# the gate to print the exact residual `1487 lines / 301 regions`). Verified minimal: lowering
+# EITHER number by 1 makes the gate FAIL (the count-1 check).
+WorkbenchViews.swift 1487 301
