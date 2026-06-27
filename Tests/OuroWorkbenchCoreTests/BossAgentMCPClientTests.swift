@@ -239,6 +239,7 @@ final class BossAgentMCPClientTests: XCTestCase {
         XCTAssertNil(try BossAgentMCPClient.extractTextIfMatching(line: "not json", id: 2))
         XCTAssertNil(try BossAgentMCPClient.extractTextIfMatching(line: #"{"jsonrpc":"2.0","id":true}"#, id: 2))
         XCTAssertNil(try BossAgentMCPClient.extractTextIfMatching(line: #"{"jsonrpc":"2.0","id":2.5}"#, id: 2))
+        XCTAssertNil(try BossAgentMCPClient.extractTextIfMatching(line: #"{"jsonrpc":"2.0","id":{},"result":{"content":[{"type":"text","text":"object id"}],"isError":false}}"#, id: 2))
     }
 
     func testReadsFinalResponseWithoutTrailingNewline() async throws {
@@ -526,6 +527,37 @@ final class BossAgentMCPClientTests: XCTestCase {
         XCTAssertNil(BossAgentMCPClient.rawLineIfMatching(line: "not json", id: 2))
         // JSON but non-object id → nil.
         XCTAssertNil(BossAgentMCPClient.rawLineIfMatching(line: #"{"id":true,"result":{}}"#, id: 2))
+        XCTAssertNil(BossAgentMCPClient.rawLineIfMatching(line: #"{"id":{},"result":{}}"#, id: 2))
+    }
+
+    func testListToolNamesReadsResponseSplitAcrossStdoutChunks() async throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OuroWorkbenchMCPClientTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        let mockOuro = temporaryDirectory.appendingPathComponent("ouro")
+        let script = """
+        #!/bin/sh
+        read initialize
+        read tools_list
+        printf '%s' '{"jsonrpc":"2.0","id":2,'
+        sleep 0.05
+        printf '%s\\n' '"result":{"tools":[{"name":"workbench_status"}]}}'
+        read _hold
+        """
+        try script.write(to: mockOuro, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: mockOuro.path)
+        let oldPath = getenv("PATH").map { String(cString: $0) }
+        setenv("PATH", "\(temporaryDirectory.path):\(oldPath ?? "")", 1)
+        defer {
+            if let oldPath { setenv("PATH", oldPath, 1) } else { unsetenv("PATH") }
+        }
+
+        let names = try await BossAgentMCPClient(timeoutNanoseconds: 2_000_000_000)
+            .listToolNames(agentName: "slugger")
+
+        XCTAssertEqual(names, ["workbench_status"])
     }
 
     func testListToolNamesReadsFinalLineWithoutTrailingNewline() async throws {
