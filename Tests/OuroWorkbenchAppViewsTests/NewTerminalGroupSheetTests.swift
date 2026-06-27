@@ -148,6 +148,46 @@ final class NewTerminalGroupSheetTests: XCTestCase {
             "the onChange skip arm (typed name, no clobber) executes")
     }
 
+    // MARK: - Class 3 — chooseRootPath() NSOpenPanel value-flow via the injected seam
+    //
+    // The "Choose" button's `chooseRootPath()` was carved (modal-NSOpenPanel): it configures an
+    // NSOpenPanel and calls runModal(), which blocks on a live GUI modal in-process. The
+    // `chooseDirectory` seam (default = the real runModal()) lets a test tap "Choose" and drive
+    // the method end-to-end: the panel CONFIGURATION runs as prod (asserted via the captured
+    // panel) and the `if let url = chooseDirectory(panel) { rootPath = url.path }` value-flow
+    // executes. Only the literal runModal() (inside the default closure) stays carved.
+
+    func testSheet_chooseTap_drivesPanelConfiguredFromRootPath() throws {
+        var sheet = NewTerminalGroupSheet(model: try makeVM(), initialName: "X", initialRootPath: "/tmp/seed-root")
+        var captured: NSOpenPanel?
+        sheet.chooseDirectory = { panel in captured = panel; return URL(fileURLWithPath: "/tmp/chosen") }
+        try sheet.inspect().find(button: "Choose").tap()
+        let panel = try XCTUnwrap(captured, "the Choose tap runs chooseRootPath → chooseDirectory(panel)")
+        XCTAssertTrue(panel.canChooseDirectories, "panel configured to choose directories")
+        XCTAssertFalse(panel.canChooseFiles, "panel configured to NOT choose files")
+        XCTAssertFalse(panel.allowsMultipleSelection, "single-selection panel")
+        XCTAssertEqual(panel.directoryURL?.path, "/tmp/seed-root", "panel seeded with the current rootPath")
+    }
+
+    /// The value-flow `rootPath = url.path` feeds the "Root Path" TextField — proven via the
+    /// init seam: a sheet seeded with a chosen path renders it in the field (the same write the
+    /// tap performs into `@State rootPath`).
+    func testSheet_rootPathValueRendersInField() throws {
+        let view = NewTerminalGroupSheet(model: try makeVM(), initialName: "X", initialRootPath: "/tmp/chosen-xyz")
+        let tree = try ViewSnapshotHost.snapshotText(of: view)
+        XCTAssertTrue(tree.contains("/tmp/chosen-xyz"),
+                      "the rootPath value renders in the Root-Path field:\n\(tree)")
+    }
+
+    /// Cancel arm of the seam: returning nil (operator cancelled) leaves rootPath unchanged.
+    func testSheet_chooseTap_cancelArm_leavesRootPath() throws {
+        var sheet = NewTerminalGroupSheet(model: try makeVM(), initialName: "X", initialRootPath: "/tmp/seed-root")
+        var invoked = false
+        sheet.chooseDirectory = { _ in invoked = true; return nil }
+        XCTAssertNoThrow(try sheet.inspect().find(button: "Choose").tap(), "Choose cancel arm runs without throwing")
+        XCTAssertTrue(invoked, "the seam was invoked (and returned nil → no rootPath write)")
+    }
+
     // MARK: - L10018 — the Cancel button action `{ dismiss() }`
 
     func testSheet_cancelTap_invokesDismiss() throws {

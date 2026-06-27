@@ -177,6 +177,28 @@ final class EditTerminalSessionSheetTests: XCTestCase {
         return try TerminalSessionController(plan: plan, onStarted: { _ in }, onOutput: {}, onTerminated: { _ in })
     }
 
+    // MARK: - Class 3 — chooseWorkingDirectory() NSOpenPanel value-flow via the injected seam
+
+    func testSheet_chooseTap_drivesPanelConfiguredFromWorkingDirectory() throws {
+        var view = try sheet(for: entry(kind: .shell))
+        var captured: NSOpenPanel?
+        view.chooseDirectory = { panel in captured = panel; return URL(fileURLWithPath: "/tmp/chosen") }
+        try view.inspect().find(button: "Choose").tap()
+        let panel = try XCTUnwrap(captured, "the Choose tap runs chooseWorkingDirectory → chooseDirectory(panel)")
+        XCTAssertTrue(panel.canChooseDirectories, "panel configured to choose directories")
+        XCTAssertFalse(panel.canChooseFiles, "panel configured to NOT choose files")
+        XCTAssertEqual(panel.directoryURL?.path, "/tmp/u4",
+                       "panel seeded with the entry's working directory")
+    }
+
+    func testSheet_chooseTap_cancelArm_runs() throws {
+        var view = try sheet(for: entry(kind: .shell))
+        var invoked = false
+        view.chooseDirectory = { _ in invoked = true; return nil }
+        XCTAssertNoThrow(try view.inspect().find(button: "Choose").tap())
+        XCTAssertTrue(invoked, "the seam was invoked (cancel arm → no workingDirectory write)")
+    }
+
     // MARK: - the Cancel button action `{ dismiss() }`
 
     func testSheet_cancelTap_invokesDismiss() throws {
