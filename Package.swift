@@ -37,6 +37,7 @@ let package = Package(
             name: "OuroWorkbenchShellAdapter",
             dependencies: [
                 "OuroWorkbenchCore",
+                .product(name: "OuroAppShellContract", package: "ouro-native-apple-app-shell"),
                 .product(name: "OuroAppShellUI", package: "ouro-native-apple-app-shell")
             ]
         ),
@@ -78,7 +79,8 @@ let package = Package(
             name: "OuroWorkbenchCoreTests",
             dependencies: [
                 "OuroWorkbenchCore",
-                "OuroWorkbenchShellAdapter"
+                "OuroWorkbenchShellAdapter",
+                .product(name: "OuroAppShellConsumerTesting", package: "ouro-native-apple-app-shell")
             ]
         ),
         // Proves the extracted views library is `@testable import`-able and that a

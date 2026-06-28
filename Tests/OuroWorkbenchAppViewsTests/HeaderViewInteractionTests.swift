@@ -103,7 +103,7 @@ final class HeaderViewInteractionTests: XCTestCase {
                     name: "\(WorkbenchRelease.artifactNamePrefix)0.1.999-build.275-abcdef0.manifest.json",
                     downloadURL: "https://example.test/manifest.json", size: 500)
             ],
-            assetNamingPolicy: .workbench(namePrefix: WorkbenchRelease.artifactNamePrefix),
+            assetNamingPolicy: WorkbenchReleasePolicy.assetNamingPolicy,
             detail: "0.1.999 update available")
     }
 

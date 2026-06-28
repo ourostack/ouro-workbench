@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.187 - Shared shell contract adoption
+
+- Internal: adopts the shared Ouro app shell contract and consumer assertion kit so Workbench proves its app identity, direct-download update policy, About surface, keyboard shortcut reference, utility windows, and Settings entry point stay aligned with the native app shell. The updater now uses the generic build-matched release policy helpers instead of the Workbench-specific compatibility shim.
+
 ## 0.1.186 - Coverage-gate flake hardening (proactive sweep)
 
 - Internal: makes the daemon-liveness reachability tests timing-robust (generous timeouts remove CI launch-jitter races on the status-mapping success paths) and documents the gate-flakiness diagnosis/handling protocol in the coverage allowlist + gate script. No user-facing behavior change; no test weakening.

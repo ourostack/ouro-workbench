@@ -18,7 +18,11 @@ final class ReleaseUpdateTests: XCTestCase {
         XCTAssertEqual(identity.userAgent, WorkbenchRelease.userAgent(version: WorkbenchRelease.version))
         XCTAssertEqual(configuration.releasesURL, identity.releasesAPIURL)
         XCTAssertEqual(shellConfiguration.identity, identity)
-        XCTAssertEqual(shellConfiguration.releasePolicy, .workbench(namePrefix: WorkbenchRelease.artifactNamePrefix))
+        XCTAssertEqual(shellConfiguration.releasePolicy, WorkbenchReleasePolicy.releaseUpdatePolicy)
+        XCTAssertEqual(
+            shellConfiguration.releasePolicy,
+            .buildMatchedPrerelease(namePrefix: WorkbenchRelease.artifactNamePrefix)
+        )
         XCTAssertEqual(shellConfiguration.releasesURL, identity.releasesAPIURL)
         XCTAssertTrue(shellConfiguration.includePrereleases)
     }

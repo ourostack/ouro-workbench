@@ -1,9 +1,74 @@
 import XCTest
+import OuroAppShellConsumerTesting
 import OuroAppShellUI
 @testable import OuroWorkbenchCore
 @testable import OuroWorkbenchShellAdapter
 
 final class WorkbenchShellPresentationTests: XCTestCase {
+    func testShellContractIsValidAndDeclaresSharedSurfaces() {
+        let contract = WorkbenchShellContract.contract
+
+        OuroAppShellContractAssertions.assertValid(contract)
+        OuroAppShellContractAssertions.assertRequiresShellFirstSurfaces(
+            contract,
+            WorkbenchShellContract.requiredSurfaces
+        )
+    }
+
+    func testShellContractMatchesRuntimeIdentityReleaseAndShortcutSurfaces() {
+        let contract = WorkbenchShellContract.contract
+
+        XCTAssertEqual(contract.identity.appName, WorkbenchRelease.appName)
+        XCTAssertEqual(contract.identity.bundleIdentifier, WorkbenchRelease.bundleIdentifier)
+        XCTAssertEqual(contract.identity.repository, WorkbenchRelease.repository)
+        XCTAssertEqual(contract.identity.version, WorkbenchRelease.version)
+        XCTAssertEqual(contract.identity.userAgent, WorkbenchRelease.userAgent())
+        XCTAssertEqual(contract.identity.distributionChannel, .directDownload)
+        XCTAssertEqual(contract.identity.releasePageURL.absoluteString, "https://github.com/ourostack/ouro-workbench/releases/latest")
+
+        XCTAssertEqual(contract.releaseUpdates?.policy, WorkbenchReleasePolicy.releaseUpdatePolicy)
+        XCTAssertEqual(contract.releaseUpdates?.supportsInstallAndRelaunch, true)
+        XCTAssertEqual(contract.releaseUpdates?.supportsReleasePage, true)
+
+        XCTAssertEqual(contract.about?.subtitle, WorkbenchShellAboutPresentation.subtitle)
+        XCTAssertEqual(contract.about?.repositoryURL?.absoluteString, "https://github.com/ourostack/ouro-workbench")
+
+        XCTAssertEqual(contract.commandReference?.title, WorkbenchShellCommandReference.title)
+        XCTAssertEqual(contract.commandReference?.commandCount, WorkbenchShellCommandReference.items.count)
+        XCTAssertEqual(contract.commandReference?.sections, WorkbenchShellCommandReference.sectionOrder)
+        XCTAssertEqual(contract.commandReference?.entryPoint, "Ouro Workbench > Keyboard Shortcuts")
+    }
+
+    func testShellContractDocumentsUtilityWindowsAndSettingsEntryPoint() {
+        let contract = WorkbenchShellContract.contract
+
+        XCTAssertEqual(contract.utilityWindows.map(\.id), [
+            "about",
+            "keyboard-shortcuts",
+            "settings"
+        ])
+        XCTAssertEqual(contract.utilityWindows.map(\.title), [
+            "About Ouro Workbench",
+            WorkbenchShellCommandReference.title,
+            "Settings"
+        ])
+        XCTAssertEqual(contract.utilityWindows.map(\.surface), [
+            .about,
+            .keyboardShortcuts,
+            .settings
+        ])
+        XCTAssertEqual(contract.settings?.entryPoint, "Ouro Workbench > Settings (Command ,)")
+        XCTAssertEqual(contract.settings?.appOwnedSections, [
+            "Terminal",
+            "Appearance",
+            "Workbench Chrome",
+            "Startup",
+            "Software Updates",
+            "Boss",
+            "Advanced"
+        ])
+    }
+
     func testAboutPresentationBuildsShellModelFromWorkbenchReleaseIdentity() {
         let presentation = WorkbenchShellAboutPresentation(buildHash: "abc1234")
         let model = presentation.model
@@ -292,7 +357,7 @@ final class WorkbenchShellPresentationTests: XCTestCase {
                     size: 500
                 )
             ],
-            assetNamingPolicy: .workbench(namePrefix: WorkbenchRelease.artifactNamePrefix),
+            assetNamingPolicy: WorkbenchReleasePolicy.assetNamingPolicy,
             detail: "\(latestVersion ?? "no release") \(status.rawValue)"
         )
     }

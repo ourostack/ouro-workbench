@@ -52,7 +52,7 @@ public struct ReleaseUpdateConfiguration: Equatable, Sendable {
     var appShellConfiguration: OuroAppShellCore.ReleaseUpdateConfiguration {
         OuroAppShellCore.ReleaseUpdateConfiguration(
             identity: appShellIdentity,
-            releasePolicy: .workbench(namePrefix: WorkbenchRelease.artifactNamePrefix),
+            releasePolicy: WorkbenchReleasePolicy.releaseUpdatePolicy,
             releasesURL: releasesURL
         )
     }
@@ -107,7 +107,7 @@ public struct ReleaseUpdateChecker: Sendable {
             from: data,
             currentVersion: currentVersion,
             currentBuild: currentBuild,
-            assetNamingPolicy: .workbench(namePrefix: WorkbenchRelease.artifactNamePrefix),
+            assetNamingPolicy: WorkbenchReleasePolicy.assetNamingPolicy,
             includePrereleases: true
         )
     }

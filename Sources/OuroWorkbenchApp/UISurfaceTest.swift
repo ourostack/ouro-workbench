@@ -361,7 +361,7 @@ final class WorkbenchUISurfaceTester {
             tagName: "v\(WorkbenchRelease.version)",
             htmlURL: "https://github.com/\(WorkbenchRelease.repository)/releases/latest",
             assets: [],
-            assetNamingPolicy: .workbench(namePrefix: WorkbenchRelease.artifactNamePrefix),
+            assetNamingPolicy: WorkbenchReleasePolicy.assetNamingPolicy,
             detail: "Ouro Workbench is current."
         )
     }
@@ -387,7 +387,7 @@ final class WorkbenchUISurfaceTester {
                     size: 500
                 )
             ],
-            assetNamingPolicy: .workbench(namePrefix: WorkbenchRelease.artifactNamePrefix),
+            assetNamingPolicy: WorkbenchReleasePolicy.assetNamingPolicy,
             detail: "Ouro Workbench 0.1.999 is available."
         )
     }
