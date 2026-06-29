@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.190 - View-model coverage (provider-config / vault-onboarding flows)
+## 0.1.191 - View-model coverage (provider-config / vault-onboarding flows)
 
 - Internal: drives the provider-config form and vault-onboarding state transitions to test coverage. No user-facing behavior change.
 
