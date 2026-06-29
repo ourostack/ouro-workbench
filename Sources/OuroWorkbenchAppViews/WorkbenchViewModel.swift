@@ -8701,7 +8701,7 @@ public final class WorkbenchViewModel: ObservableObject {
     /// boss inspect (`workbench_onboarding_status`) + remediate (issue onboarding actions) +
     /// narrate. From here the human is never asked to run anything; applied actions land in
     /// `bossAppliedActions`. On a S2 park, surface the native provider form (the one touchpoint).
-    private func completeFirstRunBootstrap(result: BootstrapResult, agentName: String) {
+    func completeFirstRunBootstrap(result: BootstrapResult, agentName: String) {
         firstRunBootstrapIsRunning = false
         let presentation = firstRunDrive.present(result: result, activeStep: nil)
         firstRunPresentation = presentation
@@ -8893,7 +8893,7 @@ public final class WorkbenchViewModel: ObservableObject {
     /// re-authorized via `authorizeEntryless` under `trustedOnboarding`); it never relies on
     /// `ouro` default-agent resolution. We re-guard here so a path that skipped validation can't
     /// verify the wrong agent.
-    private func startVerifyProvider(action: BossWorkbenchAction, source: String) -> String {
+    func startVerifyProvider(action: BossWorkbenchAction, source: String) -> String {
         let agentName = (action.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !agentName.isEmpty else {
             return finishBossAction(
@@ -8924,7 +8924,7 @@ public final class WorkbenchViewModel: ObservableObject {
     /// Kick off a headless `refreshProvider` remediation (`ouro provider refresh --agent`). Same
     /// shape as `verifyProvider`: explicit agent name, immediate ack, recovery truth from the
     /// POST-command probe. Carries no secret — it re-pushes already-stored vault creds.
-    private func startRefreshProvider(action: BossWorkbenchAction, source: String) -> String {
+    func startRefreshProvider(action: BossWorkbenchAction, source: String) -> String {
         let agentName = (action.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !agentName.isEmpty else {
             return finishBossAction(
@@ -9032,7 +9032,7 @@ public final class WorkbenchViewModel: ObservableObject {
     /// existing post-start verify-probe classification, never an exit code. No agent name — the
     /// daemon is machine-scoped infrastructure. Reuses the SAME `daemonManager` the check-in
     /// path uses so the agent-issued ensure and the implicit check-in ensure share one config.
-    private func startEnsureDaemon(action: BossWorkbenchAction, source: String) -> String {
+    func startEnsureDaemon(action: BossWorkbenchAction, source: String) -> String {
         let manager = daemonManager
         Task { [weak self] in
             let start = await manager.ensureRunning()
@@ -9060,7 +9060,7 @@ public final class WorkbenchViewModel: ObservableObject {
     /// the action log, a window screenshot) and lands a durable unfiled status. The resulting
     /// bundle is revealable + File-as-Issue-able exactly like a human-created one; filing to
     /// GitHub stays human-gated.
-    private func startReportBug(action: BossWorkbenchAction, source: String) -> String {
+    func startReportBug(action: BossWorkbenchAction, source: String) -> String {
         let note = (action.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !note.isEmpty else {
             return finishBossAction(
@@ -9084,7 +9084,7 @@ public final class WorkbenchViewModel: ObservableObject {
     /// Surface the recovery-truth outcome of a completed onboarding action. Mirrors
     /// `completeRepairAgent`: human-facing (seam-free) line → `bossAppliedActions`; raw audit
     /// detail → action log; `succeeded` is the recovery truth (from the post-command probe).
-    private func completeOnboardingAction(
+    func completeOnboardingAction(
         action: BossWorkbenchAction,
         source: String,
         targetName: String,

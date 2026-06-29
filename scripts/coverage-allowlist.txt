@@ -292,4 +292,11 @@ WorkbenchViews.swift 1170 223
 # exact residual on run 28351698539, Coverage job — the PROBE 4820/1420 PASSed so the gate printed
 # the exact `4795 line, 1414 region exempt`). Set to the STABLE MAX 4799/1415 = the CI residual + the
 # file's documented class-(C) oscillation tolerance (+4/+1, per the cluster-4/5 precedent).
-WorkbenchViewModel.swift 4799 1415
+# Cluster 7 (onboarding remediation handlers, v0.1.197): drives the start* dispatchers
+# (startVerifyProvider / startRefreshProvider / startEnsureDaemon / startReportBug — their empty-name/
+# missing-note skip guards + in-flight ack arms), completeOnboardingAction (the settled-outcome fold +
+# the needs-manual-while-watching branch), and completeFirstRunBootstrap (the handoff / provider-gate /
+# failed presentation arms) — all widened private->internal. The async remediation Task (daemon/
+# provider/MCP probe) stays the boundary; only the synchronous return is driven. PROBE value below —
+# the CI Coverage job prints the exact residual, then this is set to the stable max.
+WorkbenchViewModel.swift 4680 1380

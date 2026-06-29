@@ -199,13 +199,20 @@ final class BossActionLogPendingWiringTests: XCTestCase {
 
     /// The body of one `private func <name>(` up to the next `\n    private func `.
     private func handlerBody(named name: String, in source: String) throws -> String {
+        // Match `func <name>(` so the slice is robust to a VM-GATE visibility-widen
+        // (private→internal) of the handler: the coverage campaign widens these handlers to make
+        // their synchronous arms unit-testable, which drops the `private` keyword. We pin the
+        // STRUCTURE (the in-flight ack contract), not the access level.
         let start = try XCTUnwrap(
-            source.range(of: "private func \(name)(")?.lowerBound,
+            source.range(of: "func \(name)(")?.lowerBound,
             "could not find handler \(name)"
         )
         let after = source.index(start, offsetBy: 1)
-        let end = source.range(of: "\n    private func ", range: after..<source.endIndex)?.lowerBound
-            ?? source.endIndex
+        // Stop at the NEXT member declaration — either a `private func ` or a widened `func ` (the
+        // first whichever comes first), so a widened sibling can't extend the slice past the body.
+        let nextPrivate = source.range(of: "\n    private func ", range: after..<source.endIndex)?.lowerBound
+        let nextInternal = source.range(of: "\n    func ", range: after..<source.endIndex)?.lowerBound
+        let end = [nextPrivate, nextInternal].compactMap { $0 }.min() ?? source.endIndex
         return String(source[start..<end])
     }
 

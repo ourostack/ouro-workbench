@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.198 - View-model coverage (onboarding remediation handlers)
+
+- Internal: drives the onboarding remediation dispatchers (verify/refresh provider, ensure daemon, report bug — their skip-guard and in-flight-ack arms), the settled-outcome fold, and the first-run bootstrap completion (handoff / provider-gate / failed presentation arms) to test coverage. No user-facing behavior change.
+
 ## 0.1.197 - Terminal leak-reaper seam pin
 
 - Internal: tightens the source-pin tests around the persistent-screen quit seam so delete/archive must pass the entry id through `quitPersistentScreenForEntry`, and the seam must keep defaulting to the real bounded quit helper. No user-facing behavior change.
