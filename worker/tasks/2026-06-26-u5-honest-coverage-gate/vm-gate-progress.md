@@ -14,10 +14,15 @@ VERSION bump; flaky-region protocol applied.
 | 3 | #360 | 0.1.191 | provider-config form + vault-onboarding flows | 5182 / 1532 |
 | 4 | #361 | 0.1.192 | release-update / bug-report / support-diagnostics / recovery-drill | 5098 / 1514 |
 | (flake-fix) | #364 | 0.1.193 | VM allowlist → STABLE MAX (absorb async oscillation; class-C) | **5102 / 1515** |
-| 5 | #366 | 0.1.194 | markTerminated + applyAttentionSignal + exit-notification decision/throttle | **4916 / 1451** |
+| 5 | #366 | 0.1.195 | markTerminated + applyAttentionSignal + exit-notification decision/throttle | **4916 / 1451** |
+| 6 | #367 | 0.1.196 | deleteCustomSession/archive + revealLatestTranscript + requestStop/confirmStop + applySessionIdBackfills | **4799 / 1415** |
 
 Cluster 5 result: CI residual 4912/1450 (190 lines / 65 regions driven OUT of 5102/1515); allowlist
 set to STABLE MAX 4916/1451 (+4/+1 class-C oscillation tolerance, per the cluster-4 precedent).
+Cluster 6 result: CI residual 4795/1414 (121 lines / 37 regions driven OUT of 4916/1451); allowlist
+set to STABLE MAX 4799/1415. New seam: `quitPersistentScreenForEntry` (routes BOTH delete + archive;
+its TerminalLeakReaperWiringTests source-pins were updated to the new marker — the
+source-introspection-test caveat the ledger flagged). `applySessionIdBackfills` widened private→internal.
 
 NOTE (cluster 5): local full-suite coverage is NOT reliably runnable in this worktree env — the
 pre-existing `ReportBugSheetInteractionTests` reveal/copy taps call

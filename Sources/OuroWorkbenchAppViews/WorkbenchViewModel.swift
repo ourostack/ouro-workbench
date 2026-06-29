@@ -692,6 +692,16 @@ public final class WorkbenchViewModel: ObservableObject {
         NSWorkspace.shared.activateFileViewerSelecting(urls)
     }
 
+    /// Seam: quit the persistent `ouro-wb-<id>` screen for an entry (the archive / delete cleanup).
+    /// Defaults to the real `quitPersistentScreenIfNeeded`, whose body fire-and-forgets a live
+    /// `screen -X quit` subprocess (off-main, the genuine-machinery boundary; #332 — that child can
+    /// outlive an in-process test and orphan past teardown). A test injects a recorder so the
+    /// archive/delete value-flow (the entry/run removal + reselect + action-log) is driven without
+    /// spawning `screen`. Only the literal subprocess inside the default closure stays carved.
+    lazy var quitPersistentScreenForEntry: @MainActor (UUID) -> Void = { [weak self] entryId in
+        self?.quitPersistentScreenIfNeeded(forEntryId: entryId)
+    }
+
     /// Seam: resolve a directory URL from the configured "Open Workspace…" panel.
     /// Defaults to the real `panel.runModal()` syscall path (`.OK ? panel.url : nil`),
     /// which blocks on a live GUI modal and so cannot run in-process. A test injects a
@@ -7487,7 +7497,7 @@ public final class WorkbenchViewModel: ObservableObject {
         // replace the entry with its archived form. A detached-but-alive session
         // would otherwise keep its screen + child process running forever. No-op
         // when its screen isn't live.
-        quitPersistentScreenIfNeeded(forEntryId: entry.id)
+        quitPersistentScreenForEntry(entry.id)
         do {
             let archived = try customSessionManager.archivedEntry(entry)
             replaceEntry(archived)
@@ -7557,7 +7567,7 @@ public final class WorkbenchViewModel: ObservableObject {
         // remove the entry (and lose the id needed to derive the session name).
         // A detached-but-alive session would otherwise leak its screen + process
         // forever. No-op when its screen isn't live.
-        quitPersistentScreenIfNeeded(forEntryId: entry.id)
+        quitPersistentScreenForEntry(entry.id)
         state.processEntries.removeAll { $0.id == entry.id }
         state.processRuns.removeAll { $0.entryId == entry.id }
         pendingDeleteSession = nil
@@ -9512,7 +9522,11 @@ public final class WorkbenchViewModel: ObservableObject {
     /// `terminalSessionId == nil` against the CURRENT state (not the snapshot the
     /// scan ran on) so a concurrent recovery/relaunch that already set an id is
     /// never clobbered. Persists once if anything changed.
-    private func applySessionIdBackfills(_ backfills: [UUID: String]) {
+    ///
+    /// VM-GATE: widened private→internal so the (runId→sessionId) write-fold (the nil-guard,
+    /// the empty-input no-op, the clobber-protection) is directly unit-testable. The async
+    /// `ps`-backed scan that PRODUCES the backfills stays the genuine-machinery boundary.
+    func applySessionIdBackfills(_ backfills: [UUID: String]) {
         guard !backfills.isEmpty else { return }
         var didMutate = false
         for (runId, sessionId) in backfills {
