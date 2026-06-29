@@ -477,9 +477,9 @@ WorkbenchViews.swift 1170 223
 # → .failed (runner never called) — arms the existing #384 .failed-fold test never reaches.
 # presentSaveWorkspacePanel write arm (non-nil seam → encode+atomic write + cancelled no-op),
 # installWorkbenchMCP install/catch fold, openWorkspaceConfig(at:) missing-dir error. Local discovery
-# before = 2798/1001. PROBE 2680/935 below — set BELOW main's 2779/993 so the CI Coverage job prints the
-# exact residual; tighten to the stable max post-CI with the WIDE upfront buffer (+30 line / +6 region off
-# observed-max). NOT the floor yet — clusters 18+ continue (applyBossAction/performCommand sync dispatch,
-# submitBugReport assembly up to NSApp.keyWindow, installReleaseUpdate/submitProviderConfig async-Task
-# prologues, load salvage arms, the small-decl tail).
-WorkbenchViewModel.swift 2680 935
+# before = 2798/1001. CI residual 2749/987 -> 2623/967 (126 lines / 20 regions driven OUT; run 28382677235
+# — PROBE 2680/935 failed on region 967>935; the clone-fold is line-heavy). Set to the STABLE MAX 2653/973
+# with the WIDE upfront buffer (+30 line / +6 region off observed-max). NOT the floor yet — clusters 18+
+# continue (applyBossAction/performCommand sync dispatch, submitBugReport assembly up to NSApp.keyWindow,
+# installReleaseUpdate/submitProviderConfig async-Task prologues, load salvage arms, the small-decl tail).
+WorkbenchViewModel.swift 2653 973
