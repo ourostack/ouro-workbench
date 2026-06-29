@@ -410,4 +410,17 @@ WorkbenchViews.swift 1170 223
 # class-(C) oscillation tolerance (+6 lines / +3 regions, the detached-machinery line-axis amplitude).
 # NOT padding: the count-1 no-padding proof holds on the stable-coverable portion; the oscillating
 # async/timing detached-Task/subprocess boundary lines get the explicit +6/+3.
-WorkbenchViewModel.swift 3087 1079
+# Cluster 13 (FINAL mop-up, v0.1.206): 19 tests drive the last directly-testable arms — windowTitle
+# (5 focus/boss formatting arms), stepTerminalSearch no-session guard, exportWorkspaceConfig (rel-vs-abs
+# working-dir arms), presentSaveWorkspacePanel no-project/no-terminals guards (panel seams neutralized in
+# makeVM — the default chooseWorkspaceSaveURL/OpenURL call NSSavePanel.runModal() which DEADLOCKS headless
+# xctest, so the test helper returns nil), flushPendingOutput no-pending guard (widened private->internal;
+# no slicer), restoreDetailLayout (persisted-split / single-pane). TRIMMED OUT (deadlocked xctest; deferred
+# to a future seam-based cluster): the live-SwiftTerm stepTerminalSearch find arms, the NSSavePanel-write
+# presentSaveWorkspacePanel arms, the markOutput 2s-debounce-Task arms. NOTE: this is NOT the floor — the
+# allowlist is still ~1054 regions with ~700-900 DRIVABLE regions still carved (machinery-touching decls
+# whose LOGIC drives via seams: subprocess runners, notification posters, NSApp/relaunch, async-Task
+# prologues + the ~258-decl logic tail). Clusters 14+ continue the drive toward the true ~150-350 floor.
+# CI residual 3087/1079 -> 3034/1054 (53 lines / 25 regions driven OUT; run 28372778212 — the PROBE
+# 2950/1040 FAILED both axes). Set to the STABLE MAX 3040/1057 (+6 line / +3 region wide class-(C) buffer).
+WorkbenchViewModel.swift 3040 1057
