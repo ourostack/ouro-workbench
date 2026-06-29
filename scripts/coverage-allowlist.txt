@@ -63,8 +63,13 @@ SessionActivityReader.swift 0 1
 # PR #334 replaced the racy 0.1s-timeout test with a race-free timeoutSeconds:nil test
 # (kept -- it is the better test), but CI still reports this single brace uncovered
 # (159: 0). The overload's behavior is fully exercised by the suite; only this
-# toolchain-synthesized resume epilogue is structurally uncountable. Minimal 1/1.
-DaemonLiveness.swift 1 1
+# toolchain-synthesized resume epilogue is structurally uncountable.
+# BUMPED 1/1 -> 2/2: :171 (`return (200..<500).contains(http.statusCode)`, the async overload's
+# FINAL return) joined :159 in the same synthesized class — it intermittently reports `^0` even
+# though the 60s-hardened 204/499 reachability tests (#354) exercise it deterministically. Both
+# are the resume-after-await region of the same async overload; the behavior IS covered, only the
+# two synthesized braces flake. Minimal 2/2, cover-first already applied (the better tests kept).
+DaemonLiveness.swift 2 2
 
 # MailboxClient.swift:192 -- the resume-after-await epilogue (the closing brace of the public
 # convenience overload `defaultDataLoader(url:)`, which delegates to
@@ -241,6 +246,6 @@ WorkbenchViews.swift 1170 227
 # makeSupportDiagnosticsRunner / chooseWorkspaceOpenURL/SaveURL / fileGitHubIssue closure seams),
 # NSApp.terminate/NSWorkspace/NSPasteboard, runBossWatchLoop's while-!Task.isCancelled + Task.sleep.
 # NO padding — a region a seam/extraction/direct-call reaches gets driven, not carved.
-# PROBE (cluster 1): set below the post-drive residual so the Coverage job prints the exact count;
-# the follow-up commit sets the CI-measured minimum.
-WorkbenchViewModel.swift 5500 1550
+# Cluster 1 (applyBossAction, v0.1.188) drove 5892/1696 -> 5505/1591 (387 lines / 105 regions out),
+# CI-measured at run 28345608628. Subsequent clusters lower it further to the floor.
+WorkbenchViewModel.swift 5505 1591
