@@ -43,6 +43,19 @@ grep -Fq "Package.resolved VERSION CHANGELOG.md Sources/OuroWorkbenchCore/Workbe
 grep -Fq "CHANGELOG.md" "$helper" || fail "$helper must update CHANGELOG.md with each version bump"
 grep -Fq "Shared shell dependency refresh" "$helper" || fail "$helper must name the shell-refresh changelog entry"
 grep -Fq "pin location mismatch" "$checker" || fail "$checker must validate the shell pin location"
+! grep -Fq "git ls-remote" "$checker" || fail "$checker must not require every shell main commit to be pinned"
+grep -Fq "Shell CI/contract-only commits are intentionally ignored" "$checker" \
+  || fail "$checker must document why non-package shell commits are ignored"
+grep -Fq "git clone --quiet --filter=blob:none --no-checkout --single-branch --branch main" "$checker" \
+  || fail "$checker must inspect shell main history"
+grep -Fq 'git -C "$tmp" log -n 1 --format=%H HEAD -- Package.swift Sources' "$checker" \
+  || fail "$checker must compare against the latest package-relevant shell commit"
+grep -Fq 'git -C "$tmp" merge-base --is-ancestor "$package_revision" "$resolved_revision"' "$checker" \
+  || fail "$checker must accept pins that contain the latest package-relevant shell commit"
+grep -Fq "latest package-relevant" "$checker" \
+  || fail "$checker must report the package-relevant shell revision when stale"
+grep -Fq "has no newer package-relevant shell changes" "$checker" \
+  || fail "$checker must explain fresh pins behind shell main tip"
 
 fallback_tmp="$(mktemp -d)"
 (
