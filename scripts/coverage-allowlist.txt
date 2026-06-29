@@ -506,4 +506,14 @@ WorkbenchViews.swift 1170 223
 # (101 lines / 32 regions driven OUT; run 28388... Coverage job 84111525687 — the PROBE 2440/920 PASSed
 # so the gate reported the exact `2396 line, 913 region exempt`). Set to the STABLE MAX 2426/919 = the
 # CI residual + this file's documented class-(C) oscillation tolerance (+30 line / +6 region).
-WorkbenchViewModel.swift 2426 919
+# Cluster 20 (v0.1.218, PROBE): drives the small-decl status-line/color/format tail — bossWorkbenchMCP
+# StatusLine (5 untested status arms) + StatusColor (4) + ActionTitle, supportDiagnosticsStatusColor (3)
+# + supportDiagnosticsURL, bossWatchStatusColor (3) + bossWatchStatusLine (error/last-run), mailbox
+# StatusLine (2), transcriptSearchStatusLine (empty/press-search), ouroAgentStatusLine (populated),
+# stopConfirmationTitle (2), startFreshConfirmationMessage. Test-only (no source change). These are
+# pure computed-prop/format arms the view tests only PARTIALLY hit (one seeded status per snapshot).
+# 2426/919 -> CI residual 2375/897 (21 lines / 16 regions driven OUT; Coverage job 84115583575 — the
+# PROBE 2360/895 failed on both axes so the gate printed the exact `2375 lines / 897 regions uncovered`).
+# Set to the STABLE MAX 2405/903 = the CI residual + this file's documented class-(C) oscillation
+# tolerance (+30 line / +6 region).
+WorkbenchViewModel.swift 2405 903
