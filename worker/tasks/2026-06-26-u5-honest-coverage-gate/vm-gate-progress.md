@@ -21,6 +21,7 @@ VERSION bump; flaky-region protocol applied.
 | 9 | #373 | 0.1.200 | BIG BATCH: commandPaletteItems (all cmd arms) + load (normal/first-run/lossy-salvage/quarantine) + startup reconcile/recover/auto-resume + reapOrphanedScreen + reclassify/backfill folds + prepareForTermination + stopAll + drainExternalActionRequests | **3906 / 1259** |
 | 10 | #375 | 0.1.201 | BIG BATCH: start*SelectLane/RegisterMCP/RepairAgent (skip+ack; the 3 carried from #369/#372/#374) + scan/startBossReconstruction guards + beginVault/credentialRotation/completeVault + runOnboardingRepairStepNatively + surfaceNativeRepairLine + makeFirstRunBootstrapEffects + openDeskBridgeSetup + installWorkbenchMCP | **3523 / 1209** |
 | 11 | #377 | 0.1.202 | checkForReleaseUpdate + installReleaseUpdate/runAutoUpdateCheckIfDue/stagePendingUpdate guards + releaseUpdateStatusLine/Color + bugReportSessions/AgentNames/ExtraSections + reveal/openSupportDiagnostics + ensureDaemonRunningOnLaunch | **3376 / 1161** |
+| 12 | #379 | 0.1.204 | performCommand payload arms (select/useAsBoss/config/reveal/repair + no-agent guards) + selectAgent/selectBoss/openAgentConfig/revealAgentBundle/repairAgent + recordBossDecisions + reconcileWaitingSessionsIntoInbox + escalateWithheldBossInput + deleteGroup/moveSessionEntries/moveGroups/openWorkspaceConfig import-apply (rebased onto #378) | **3087 / 1079** |
 
 Cluster 5 result: CI residual 4912/1450 (190 lines / 65 regions driven OUT of 5102/1515); allowlist
 set to STABLE MAX 4916/1451 (+4/+1 class-C oscillation tolerance, per the cluster-4 precedent).
@@ -102,9 +103,40 @@ submitBugReport captureKeyWindowPNG->NSApp.keyWindow (documented floor), readLog
 regions driven OUT of 3523/1209; run 28360595827 — PROBE 3354/1157 failed on both axes). Allowlist set
 to STABLE MAX 3376/1161 with a WIDER +6 line / +3 region buffer (vs the usual +4/+2) to pre-absorb this
 file's known ~11-line detached-machinery oscillation off the observed residual in ONE shot (no second-
-run round-trip needed). Green on the first re-CI.
+run round-trip needed). Green on the first re-CI (after one re-run of a class-(A) DaemonLiveness
+URLSession-timeout flake, unrelated to the VM).
+Cluster 12 (boss / command-dispatch / workspace, v0.1.203, open PR): 30 tests drive performCommand's
+payload dispatch arms (.selectAgent / .useSelectedAgentAsBoss / .openSelectedAgentConfig /
+.revealSelectedAgentBundle / .repairSelectedAgent / .manageAgents, each + the focusedAgentForCommand
+resolve + "No agent is selected" else-arm), the dispatch targets selectAgent (all 4 arms) / selectBoss /
+openAgentConfig / revealAgentBundle (revealFileViewerSelectingURLs seam) / repairAgent (launchTerminalSession
+seam), recordBossDecisions (empty-parse + recorded-decision), reconcileWaitingSessionsIntoInbox,
+escalateWithheldBossInput (widened private->internal; record-once + dedupe), deleteGroup (last-ws / non-empty
+/ empty arms), moveSessionEntries / moveGroups reorder, openWorkspaceConfig import-apply (created +
+alreadyPresent). PROACTIVELY caught a CI-break: two WiringTests (BossWatchBackoffBump / BossAutonomyKillSwitch)
+pin `private func runBossCheckIn(` — so the fork LEFT that private overload alone and drove via the public
+entry (the only widen is escalateWithheldBossInput, no slicer). Carved: the `Task { runBossQuickQuestion/
+refreshWorkspace }` detached dispatches, runExternalActionPump while-loop+Task.sleep, the private runBossCheckIn
+daemon/MCP overload, openAgentConfig's NSWorkspace.open, the recoverUnconfirmed/sweepOrphaned prologue
+(ReplayDedup-pinned). LOCAL crashed once on a headless `.shared`-URLSession network test (SIGTRAP signal-5,
+the documented MailboxClient/DataLoader env flake) — re-ran clean. LOCAL drove 3249/1135 → 3042/1066. CI
+residual 3082/1077 (294 lines / 84 regions driven OUT of 3376/1161; run 28362618793 — PROBE 3042/1066
+failed both axes). Standalone STABLE MAX was 3088/1080. THEN the re-CI red-ed the release-freshness gate:
+a concurrent PR #378 (`test(vm): keep cold-start hatch coverage hermetic`, by the operator) merged to
+main + the auto-release published v0.1.203, so #379's v0.1.203 collided ("version must be greater than
+latest published release"). REBASED #379 onto #378's main (clean, no source conflict) + re-bumped to
+v0.1.204. #378 itself drove additional VM lines (cold-start hatch) but left the allowlist at the
+cluster-11 ceiling, so the combined residual is LOWER — re-measured rebased local 2971/1059 (vs the
+standalone 3000/1060). LOCAL-ONLY GOTCHA: #378's new test `testSubmit_coldStartHatch_setsInFlightFlag_
+returnsNil` asserts "repo root must start clean" — it tripped on the stray untracked `SerpentGuide.ouro/`
+scratch dir in this worktree root (NOT in any PR, NOT on a clean CI checkout); moved it aside for the
+clean local measurement, restored after. CI combined residual 3081/1076 (run 28363875708 — essentially
+the standalone; #378's coverage overlapped what was already covered). Allowlist set to STABLE MAX
+3087/1079 (+6/+3). LESSON: each merged VM PR auto-publishes a release, and the release-freshness gate
+requires VERSION > latest published — so a concurrent merge between branch-creation and CI forces a
+rebase + VERSION re-bump. Branch each batch off the ABSOLUTE latest main right before pushing.
 
-SOURCE-INTROSPECTION CAVEAT (reconfirmed, clusters 6+7+8+9): BEFORE widening a `private func` for a
+SOURCE-INTROSPECTION CAVEAT (reconfirmed, clusters 6+7+8+9+12): BEFORE widening a `private func` for a
 cluster, `grep -rln '<funcName>' Tests/` for a WiringTest that slices `private func <name>` — update
 its slicer to a `private`-agnostic match in the SAME PR (else CI reds on Swift tests + Coverage).
 
