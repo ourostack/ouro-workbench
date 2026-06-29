@@ -126,6 +126,7 @@ preflight_release_policy() {
   run_step "Verify release freshness policy"
   scripts/release-policy.sh freshness --mode pr --base-ref "$PR_BASE_REF"
   scripts/release-policy.sh selftest-pr-base
+  scripts/release-policy.sh selftest-release-api-fallback
   scripts/release-policy.sh selftest-package-guards
   scripts/release-policy.sh selftest-shell-dependency-watch
   scripts/release-policy.sh selftest-paths

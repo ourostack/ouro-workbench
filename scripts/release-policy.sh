@@ -21,6 +21,7 @@ Usage:
   scripts/release-policy.sh freshness [--mode auto|pr|main] [--base-ref REF] [--repo OWNER/REPO]
   scripts/release-policy.sh release-exists --version X.Y.Z [--repo OWNER/REPO]
   scripts/release-policy.sh selftest-pr-base
+  scripts/release-policy.sh selftest-release-api-fallback
   scripts/release-policy.sh selftest-package-guards
   scripts/release-policy.sh selftest-shell-dependency-watch
   scripts/release-policy.sh selftest-paths
@@ -125,7 +126,62 @@ semver_lt() {
 
 release_list_json() {
   local repo="$1"
-  gh release list --repo "$repo" --exclude-drafts --limit 100 --json tagName,isPrerelease,isLatest
+  local json
+  if command -v gh >/dev/null 2>&1 \
+    && json="$(gh release list --repo "$repo" --exclude-drafts --limit 100 --json tagName,isPrerelease,isLatest 2>/dev/null)" \
+    && printf '%s' "$json" | json_valid; then
+    printf '%s\n' "$json"
+    return 0
+  fi
+
+  release_list_rest_json "$repo"
+}
+
+json_valid() {
+  python3 -c 'import json, sys; json.load(sys.stdin)' >/dev/null 2>&1
+}
+
+github_api_get() {
+  local url="$1"
+  local token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+  local args=(-fsSL -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28")
+  if [[ -n "$token" ]]; then
+    if curl "${args[@]}" -H "Authorization: Bearer $token" "$url"; then
+      return 0
+    fi
+  fi
+  curl "${args[@]}" "$url"
+}
+
+github_repo_api_url() {
+  local repo="$1"
+  [[ "$repo" == */* ]] || return 2
+  printf 'https://api.github.com/repos/%s' "$repo"
+}
+
+url_encode() {
+  python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$1"
+}
+
+release_list_rest_json() {
+  local repo="$1"
+  local api
+  api="$(github_repo_api_url "$repo")" || return $?
+  github_api_get "$api/releases?per_page=100" | python3 -c '
+import json
+import sys
+
+releases = json.load(sys.stdin)
+print(json.dumps([
+    {
+        "tagName": release.get("tag_name", ""),
+        "isPrerelease": bool(release.get("prerelease")),
+        "isLatest": False,
+    }
+    for release in releases
+    if not release.get("draft")
+]))
+'
 }
 
 latest_release_tag() {
@@ -159,7 +215,35 @@ sys.exit(1)
 release_view_json() {
   local repo="$1"
   local tag="$2"
-  gh release view "$tag" --repo "$repo" --json tagName,targetCommitish,url,isPrerelease
+  local json
+  if command -v gh >/dev/null 2>&1 \
+    && json="$(gh release view "$tag" --repo "$repo" --json tagName,targetCommitish,url,isPrerelease 2>/dev/null)" \
+    && printf '%s' "$json" | json_valid; then
+    printf '%s\n' "$json"
+    return 0
+  fi
+
+  release_view_rest_json "$repo" "$tag"
+}
+
+release_view_rest_json() {
+  local repo="$1"
+  local tag="$2"
+  local api encoded_tag
+  api="$(github_repo_api_url "$repo")" || return $?
+  encoded_tag="$(url_encode "$tag")"
+  github_api_get "$api/releases/tags/$encoded_tag" | python3 -c '
+import json
+import sys
+
+release = json.load(sys.stdin)
+print(json.dumps({
+    "tagName": release.get("tag_name", ""),
+    "targetCommitish": release.get("target_commitish", ""),
+    "url": release.get("html_url", ""),
+    "isPrerelease": bool(release.get("prerelease")),
+}))
+'
 }
 
 latest_release_json() {
@@ -420,6 +504,75 @@ selftest_pr_base_mode() {
   printf 'release policy PR base selftest ok\n'
 }
 
+selftest_release_api_fallback_mode() {
+  local tmp old_path release_list release_json target
+  tmp="$(mktemp -d /tmp/ouro-workbench-release-api-fallback.XXXXXX)"
+  old_path="$PATH"
+  trap 'PATH="$old_path"; rm -rf "$tmp"' RETURN
+
+  cat > "$tmp/gh" <<'SH'
+#!/usr/bin/env bash
+printf 'invalid character '\''d'\'' after object key\n' >&2
+exit 1
+SH
+  cat > "$tmp/curl" <<'SH'
+#!/usr/bin/env bash
+url=""
+had_auth=0
+for arg in "$@"; do
+  case "$arg" in
+    "Authorization: Bearer stale-token") had_auth=1 ;;
+    https://api.github.com/*) url="$arg" ;;
+  esac
+done
+if [[ "$had_auth" == "1" ]]; then
+  exit 22
+fi
+
+case "$url" in
+  https://api.github.com/repos/ourostack/ouro-workbench/releases?per_page=100)
+    cat <<'JSON'
+[
+  {"tag_name":"v9.9.10-beta.1","draft":false,"prerelease":true,"target_commitish":"beta-sha","html_url":"https://example.test/beta"},
+  {"tag_name":"v9.9.9","draft":false,"prerelease":false,"target_commitish":"stable-sha","html_url":"https://example.test/stable"},
+  {"tag_name":"v10.0.0-draft.1","draft":true,"prerelease":true,"target_commitish":"draft-sha","html_url":"https://example.test/draft"}
+]
+JSON
+    ;;
+  https://api.github.com/repos/ourostack/ouro-workbench/releases/tags/v9.9.10-beta.1)
+    cat <<'JSON'
+{"tag_name":"v9.9.10-beta.1","draft":false,"prerelease":true,"target_commitish":"beta-sha","html_url":"https://example.test/beta"}
+JSON
+    ;;
+  *)
+    printf 'unexpected curl URL: %s\n' "$url" >&2
+    exit 22
+    ;;
+esac
+SH
+  chmod +x "$tmp/gh" "$tmp/curl"
+  PATH="$tmp:$PATH"
+  GH_TOKEN=stale-token
+
+  release_list="$(release_list_json "ourostack/ouro-workbench")" \
+    || fail "release API fallback selftest could not list releases"
+  printf '%s' "$release_list" | release_list_has_tag "v9.9.10-beta.1" \
+    || fail "release API fallback selftest did not surface prerelease"
+  if printf '%s' "$release_list" | release_list_has_tag "v10.0.0-draft.1"; then
+    fail "release API fallback selftest must filter drafts"
+  fi
+  [[ "$(printf '%s' "$release_list" | latest_release_tag)" == "v9.9.10-beta.1" ]] \
+    || fail "release API fallback selftest did not preserve prerelease-aware ordering"
+
+  release_json="$(release_view_json "ourostack/ouro-workbench" "v9.9.10-beta.1")" \
+    || fail "release API fallback selftest could not view release"
+  target="$(printf '%s' "$release_json" | json_get targetCommitish)"
+  [[ "$target" == "beta-sha" ]] \
+    || fail "release API fallback selftest targetCommitish was $target"
+
+  echo "release API fallback selftest ok"
+}
+
 selftest_paths_mode() {
   local must_gate=(
     Sources/OuroWorkbenchApp/main.swift
@@ -470,6 +623,7 @@ required_ci = [
     "fetch-depth: 0",
     "scripts/release-policy.sh freshness",
     "scripts/release-policy.sh selftest-pr-base",
+    "scripts/release-policy.sh selftest-release-api-fallback",
     "scripts/release-policy.sh selftest-package-guards",
     "scripts/release-policy.sh selftest-shell-dependency-watch",
     "scripts/release-policy.sh selftest-paths",
@@ -487,6 +641,7 @@ required_preflight = [
     "scripts/preflight.sh --selftest",
     "scripts/release-policy.sh freshness --mode pr",
     "scripts/release-policy.sh selftest-pr-base",
+    "scripts/release-policy.sh selftest-release-api-fallback",
     "scripts/release-policy.sh selftest-package-guards",
     "scripts/release-policy.sh selftest-shell-dependency-watch",
     "scripts/release-policy.sh selftest-paths",
@@ -587,6 +742,7 @@ case "$cmd" in
   freshness) freshness_mode "$@" ;;
   release-exists) release_exists_mode "$@" ;;
   selftest-pr-base) selftest_pr_base_mode "$@" ;;
+  selftest-release-api-fallback) selftest_release_api_fallback_mode "$@" ;;
   selftest-package-guards) selftest_package_guards_mode "$@" ;;
   selftest-shell-dependency-watch) selftest_shell_dependency_watch_mode "$@" ;;
   selftest-paths) selftest_paths_mode "$@" ;;
