@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.192 - View-model coverage (release/bug/diagnostics handlers)
+
+- Internal: drives the release-update, bug-report, support-diagnostics, and recovery-drill handlers' synchronous logic to test coverage. No user-facing behavior change.
+
 ## 0.1.191 - View-model coverage (provider-config / vault-onboarding flows)
 
 - Internal: drives the provider-config form and vault-onboarding state transitions to test coverage. No user-facing behavior change.
