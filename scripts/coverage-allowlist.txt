@@ -250,5 +250,6 @@ WorkbenchViews.swift 1170 227
 # Cluster 2 (performCommand, v0.1.189): 5505/1591 -> 5407/1542 (98 lines / 49 regions; run 28346126436).
 # Cluster 3 (provider-config/vault flows, v0.1.190): 5407/1542 -> 5182/1532 (225 lines / 10 regions;
 # the submit arms are line-heavy but their async-Task bodies dominate the regions; run 28346662711).
+# Cluster 4 (release/bug/diagnostics, v0.1.192): 5182/1532 -> 5098/1514 (84 lines / 18 regions; run 28347653915).
 # Subsequent clusters lower it further to the floor.
-WorkbenchViewModel.swift 5050 1505
+WorkbenchViewModel.swift 5098 1514
