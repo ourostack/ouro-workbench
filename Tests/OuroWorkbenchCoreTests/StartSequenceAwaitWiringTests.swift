@@ -200,7 +200,7 @@ final class StartSequenceAwaitWiringTests: XCTestCase {
         let body = try WorkbenchAppSource.sourceSlice(
             in: try WorkbenchAppSource.appSource(),
             from: "private func recover(_ entry: ProcessEntry, recoveryPlan: RecoveryPlan) {",
-            to: "\n    private func applyBossAction"
+            to: "\n    func applyBossAction"
         )
         XCTAssertTrue(
             body.contains("await start(entry, with: plan)"),
