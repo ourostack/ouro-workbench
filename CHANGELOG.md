@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.221 - Shared shell dependency refresh
+
+- Internal: refreshes `ouro-native-apple-app-shell` to `5c67503a30e0` and bumps Workbench for release/update freshness. No user-facing behavior change.
+
 ## 0.1.220 - View-model coverage (recovery-title + live-prompt floor sliver)
 
 - Internal: covers the recovery-button-title arms the recoverable-entry view routes around (manual-action-needed → "Manual Recovery", running-run / no-plan → "Recover") and the boss-action live-prompt nil-transcript guard. Test-only — no production change. This is the final thin pure-logic sliver before the view-model's genuine machinery floor. No user-facing behavior change.
