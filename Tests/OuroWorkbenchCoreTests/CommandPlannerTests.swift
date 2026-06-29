@@ -576,6 +576,33 @@ final class CommandPlannerTests: XCTestCase {
         XCTAssertEqual(plan.recoveryAction, .autoResume)
     }
 
+    /// Mutation-testing hardening: the undetected-agent autoResume fallback must
+    /// tag its plan `kind: .resume`, NOT inherit `launchPlan`'s `.launch` default.
+    /// `kind` drives the plain operator sentence shown post-launch, so a fallback
+    /// resume mislabeled as a fresh launch is a user-visible regression. The
+    /// existing undetected-fallback test asserted executable/arguments/action but
+    /// not `kind`, and `testAutoResumeRecoveryPlanIsKindResume` covers only the
+    /// *detected*-agent native-resume path — so removing `plan.kind = .resume` on
+    /// the undetected fallback survived. This pins it.
+    func testAutoResumeForUndetectedAgentFallbackPlanIsKindResume() throws {
+        let entry = ProcessEntry(
+            projectId: UUID(),
+            name: "Unknown TUI",
+            kind: .terminalAgent,
+            executable: "aider",
+            arguments: ["--yes"],
+            workingDirectory: "/Users/example/project",
+            trust: .trusted,
+            autoResume: true
+        )
+
+        // No detected agentKind → nativeResumePlan takes the undetected fallback
+        // branch, which returns a launchPlan re-tagged as a resume.
+        let plan = try WorkbenchCommandPlanner().recoveryPlan(for: entry, latestRun: nil, action: .autoResume)
+
+        XCTAssertEqual(plan.kind, .resume, "an undetected-agent autoResume fallback is a resume, not a fresh launch")
+    }
+
     func testRespawnForCustomAgentKindUsesCheckpointPrompt() throws {
         let entry = ProcessEntry(
             projectId: UUID(),
