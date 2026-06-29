@@ -361,4 +361,27 @@ WorkbenchViews.swift 1170 223
 # +2 region margin for further oscillation of those detached-machinery lines. NOT padding — these are
 # genuine subprocess/detached-Task boundary lines (already-carve-class machinery), not stable logic;
 # the count-1 no-padding proof still holds on the stable-coverable portion.
-WorkbenchViewModel.swift 3523 1209
+# Cluster 11 (release-update / bug-report / diagnostics / daemon tail, v0.1.202): 28 tests drive
+# checkForReleaseUpdate (success via injected dataLoader stub / loader-throw .unavailable),
+# installReleaseUpdate (re-entrancy guard / snapshot-nil / planner-failure arms), runAutoUpdateCheckIfDue
+# (once-guard / policy-disabled-gate / enabled-and-due), stagePendingUpdate + applyStagedUpdateOnQuitIfNeeded
+# (skip guards; widened private->internal), releaseUpdateStatusLine + releaseUpdateStatusColor (every arm),
+# bugReportSessions (widened) + bugReportAgentNames + bugReportExtraSections, revealSupportDiagnostics +
+# openSupportDiagnosticsFolder (reveal-via-seam), ensureDaemonRunningOnLaunch (empty-boss-name guard +
+# injected DaemonManager(probe:.up) resumed arm). Carved as genuine machinery: applyReleaseUpdateAndTerminate
+# (NSApp.terminate + WorkbenchUpdateInstaller.applyAndRelaunch spawns /bin/sh to ditto/mv the LIVE app
+# bundle — destructive), the installer.stage network download, submitBugReport's captureKeyWindowPNG ->
+# NSApp.keyWindow headless IUO trap (the documented floor), readLoginShellPath (login-shell subprocess —
+# one of the WIDE class-(C) oscillation lines). The 4 widens are pure access-widen (no WiringTest slicer
+# referenced any). Local (Swift 6.3.3) drove 3418/1185 -> 3354/1157 (64 lines / 28 regions OUT). PROBE
+# 3354/1157 below — set BELOW main's current 3523/1209 so the CI Coverage job prints the exact residual;
+# tighten to the stable max post-CI (measure off the observed max given this file's wide oscillation).
+# 3523/1209 -> 3370/1158 (153 lines / 51 regions driven OUT; CI-measured exact residual on run
+# 28360595827 — the PROBE 3354/1157 FAILED on both axes (line 3370>3354, region 1158>1157), so the
+# Coverage gate printed the exact `3370 lines / 1158 regions uncovered`). Set to the STABLE MAX
+# 3376/1161 = the CI residual + a WIDER class-(C) oscillation tolerance (+6 lines / +3 regions, NOT the
+# usual +4/+2 — this file's readLoginShellPath()/spawnScreenQuit() detached-machinery lines oscillate
+# on the LINE axis by up to ~11 between runs, as cluster 10 proved; setting off the observed residual +6
+# absorbs that without a second-run round-trip). NOT padding: the count-1 no-padding proof holds on the
+# stable-coverable portion; the genuine detached-Task/subprocess boundary lines get the explicit +6/+3.
+WorkbenchViewModel.swift 3376 1161

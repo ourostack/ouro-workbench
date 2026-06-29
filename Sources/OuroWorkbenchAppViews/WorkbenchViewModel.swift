@@ -427,7 +427,9 @@ public final class WorkbenchViewModel: ObservableObject {
     /// "Update" badge). The downloaded + verified bundle is held in
     /// `pendingStagedUpdate`.
     @Published var stagedUpdateVersion: String?
-    private var pendingStagedUpdate: WorkbenchUpdateInstaller.Staged?
+    // VM-GATE: widened private->internal so a test can set/clear the staged-update so the
+    // stage-skip guard + the apply-on-quit guards are directly drivable. No behavior change.
+    var pendingStagedUpdate: WorkbenchUpdateInstaller.Staged?
     /// Set while a *manual* "Install & Relaunch" is mid-flight so the quit-time
     /// hook doesn't also try to apply (which would double-swap / fight the
     /// relaunch helper).
@@ -4782,7 +4784,10 @@ public final class WorkbenchViewModel: ObservableObject {
     /// Download + verify the update in the background and hold it for apply-on-
     /// quit. Failures are intentionally quiet — the manual "Check for Updates…"
     /// flow surfaces errors; the badge just won't appear.
-    private func stagePendingUpdate(from snapshot: ReleaseUpdateSnapshot) async {
+    // VM-GATE: widened private->internal so the stage-skip guard (already-staged) + the
+    // planner-failure guard (a non-update snapshot → no installer.stage) are directly drivable.
+    // The installer.stage download/verify is the genuine-machinery boundary. No behavior change.
+    func stagePendingUpdate(from snapshot: ReleaseUpdateSnapshot) async {
         guard pendingStagedUpdate == nil else { return }
         guard case let .success(plan) = WorkbenchUpdatePlanner.plan(from: snapshot) else { return }
         let installer = WorkbenchUpdateInstaller(
@@ -4809,7 +4814,11 @@ public final class WorkbenchViewModel: ObservableObject {
     /// quit" path. Skipped during a factory reset (the early return in
     /// `prepareForTermination`) and when a manual Install & Relaunch is already
     /// applying.
-    private func applyStagedUpdateOnQuitIfNeeded() {
+    // VM-GATE: widened private->internal so the apply-on-quit guard arms (auto-update off /
+    // no staged update) are directly drivable. The with-staged body spawns the bundle-swap
+    // helper (WorkbenchUpdateInstaller.applyOnQuit) — that is the genuine-machinery boundary,
+    // NOT driven here. No behavior change.
+    func applyStagedUpdateOnQuitIfNeeded() {
         guard autoUpdateEnabled, !isApplyingManualUpdate, let staged = pendingStagedUpdate else {
             return
         }
@@ -5161,7 +5170,10 @@ public final class WorkbenchViewModel: ObservableObject {
     /// Flatten the live workspace into render-ready report rows. Skips archived
     /// sessions; status comes from the latest run, attention/trust/friend from
     /// the entry, and the branch from the cached git status.
-    private func bugReportSessions() -> [BugReportSession] {
+    // VM-GATE: widened private->internal so the report-row flatten (archived filter + the
+    // per-entry status/attention/trust/branch projection) is directly drivable without the
+    // NSApp-trapping submitBugReport path. No behavior change.
+    func bugReportSessions() -> [BugReportSession] {
         state.processEntries
             .filter { !$0.isArchived }
             .map { entry in
