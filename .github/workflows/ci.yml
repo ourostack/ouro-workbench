@@ -68,7 +68,7 @@ jobs:
         run: swift package resolve
 
       - name: Run tests
-        run: swift test -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete
+        run: scripts/check-swift-tests.sh
 
   native-scenario-verifier:
     name: Native scenario verifier

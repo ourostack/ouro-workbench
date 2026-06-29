@@ -105,13 +105,61 @@ public extension SessionFriend {
         let name = trimmedFull.isEmpty ? user : trimmedFull
         return SessionFriend(id: user, name: name, kind: .human, trust: .family)
     }
+
+    /// Boundary resolver for app/MCP surfaces that want the machine owner but
+    /// must keep XCTest rendering hermetic. `NSFullUserName()` can wake
+    /// Contacts/CoreData/XPC on macOS; under XCTest we use the short username
+    /// unless a live lookup is explicitly requested.
+    static func resolvedMachineOwner(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        username: () -> String = NSUserName,
+        fullName: () -> String = NSFullUserName,
+        classLookup: (String) -> AnyClass? = NSClassFromString
+    ) -> SessionFriend? {
+        let user = username().trimmingCharacters(in: .whitespaces)
+        if isRunningUnderXCTest(environment: environment, classLookup: classLookup),
+           environment["OURO_WORKBENCH_LIVE_OWNER_NAME"] != "1" {
+            return machineOwner(username: user, fullName: "")
+        }
+        return machineOwner(username: user, fullName: fullName())
+    }
+
+    /// Display name companion for `resolvedMachineOwner(...)`.
+    static func resolvedMachineOwnerName(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        username: () -> String = NSUserName,
+        fullName: () -> String = NSFullUserName,
+        classLookup: (String) -> AnyClass? = NSClassFromString
+    ) -> String {
+        let user = username().trimmingCharacters(in: .whitespaces)
+        let fallback = user.isEmpty ? "the operator" : user
+        return resolvedMachineOwner(
+            environment: environment,
+            username: { user },
+            fullName: fullName,
+            classLookup: classLookup
+        )?.name ?? fallback
+    }
+
+    private static func isRunningUnderXCTest(
+        environment: [String: String],
+        classLookup: (String) -> AnyClass?
+    ) -> Bool {
+        if environment["XCTestConfigurationFilePath"] != nil {
+            return true
+        }
+        if classLookup("XCTestCase") != nil || classLookup("XCTest.XCTestCase") != nil {
+            return true
+        }
+        return false
+    }
 }
 
 public extension WorkspaceState {
     /// The friend governing a session: its own assigned friend if set, otherwise
     /// its group's `defaultFriend`, otherwise the injected `fallback` (the
-    /// machine owner, resolved at the boundary). Stays pure — the OS read lives
-    /// in `SessionFriend.machineOwner()`, not here — so resolution is testable.
+    /// machine owner, resolved at the boundary). Stays pure: live OS reads stay in
+    /// `SessionFriend.resolvedMachineOwner()`, not here, so resolution is testable.
     /// A nil result (no assignment, no default, no fallback) means unassigned,
     /// which the boss never auto-advances.
     func effectiveFriend(for entry: ProcessEntry, fallback: SessionFriend? = nil) -> SessionFriend? {

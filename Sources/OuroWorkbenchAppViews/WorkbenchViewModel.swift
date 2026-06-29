@@ -591,8 +591,9 @@ public final class WorkbenchViewModel: ObservableObject {
     private let bossDashboardBuilder = BossDashboardBuilder()
     private let visibilityBuilder = WorkbenchVisibilityBuilder()
     private let workCardReader: OuroWorkCardReader
-    private let bossBridgePlanner = BossAgentBridgePlanner(ownerName: WorkbenchViewModel.resolvedOwnerName())
-    private let bossPromptBuilder = BossAgentPromptBuilder(ownerName: WorkbenchViewModel.resolvedOwnerName())
+    private let bossBridgePlanner: BossAgentBridgePlanner
+    private let bossPromptBuilder: BossAgentPromptBuilder
+    private let ownerDisplayName: String
     private let autonomyReadinessBuilder = AutonomyReadinessBuilder()
     private let harnessStatusBuilder = HarnessStatusBuilder()
     private let changeSummarizer = WorkspaceChangeSummarizer()
@@ -883,6 +884,7 @@ public final class WorkbenchViewModel: ObservableObject {
         executableHealthChecker: ExecutableHealthChecker = ExecutableHealthChecker(),
         releaseUpdateChecker: ReleaseUpdateChecker = ReleaseUpdateChecker(),
         workCardReader: OuroWorkCardReader = OuroWorkCardReader(),
+        ownerNameProvider: () -> String = { WorkbenchViewModel.resolvedOwnerName() },
         autoLaunchResumableForE2E: Bool = false
     ) {
         self.paths = paths
@@ -903,6 +905,10 @@ public final class WorkbenchViewModel: ObservableObject {
         self.executableHealthChecker = executableHealthChecker
         self.releaseUpdateChecker = releaseUpdateChecker
         self.workCardReader = workCardReader
+        let ownerName = ownerNameProvider()
+        self.ownerDisplayName = ownerName
+        self.bossBridgePlanner = BossAgentBridgePlanner(ownerName: ownerName)
+        self.bossPromptBuilder = BossAgentPromptBuilder(ownerName: ownerName)
         self.externalActionQueue = WorkbenchActionRequestQueue(paths: paths)
         self.proposalQueue = AgentProposalQueue(paths: paths)
         self.state = WorkspaceState()
@@ -6548,7 +6554,7 @@ public final class WorkbenchViewModel: ObservableObject {
         guard !inputs.isEmpty else {
             return
         }
-        let machineOwner = SessionFriend.machineOwner()
+        let machineOwner = Self.resolvedMachineOwner()
         for input in inputs {
             let entry = input.entry.flatMap { processEntry(matching: $0) }
             let friend = entry.flatMap { state.effectiveFriend(for: $0, fallback: machineOwner) }
@@ -7901,7 +7907,7 @@ public final class WorkbenchViewModel: ObservableObject {
         // instead" toggle is honored here, not just on the decisions path. The
         // existing denial handling below escalates a withheld sendInput to the
         // inbox + logs "Skipped" — a kill-switch denial flows through it for free.
-        let machineOwner = SessionFriend.machineOwner()
+        let machineOwner = Self.resolvedMachineOwner()
         let effectiveFriend = state.effectiveFriend(for: entry, fallback: machineOwner)
         let autoAdvanceContext = BossAutoAdvanceContext(
             autoAdvanceEnabled: bossAutoAdvanceEnabled,
@@ -8076,7 +8082,7 @@ public final class WorkbenchViewModel: ObservableObject {
         proposedInput: String?,
         reason: String
     ) {
-        let machineOwner = SessionFriend.machineOwner()
+        let machineOwner = Self.resolvedMachineOwner()
         let friend = state.effectiveFriend(for: entry, fallback: machineOwner)
         // Deduped like the decisions channel: a repeated boss-watch tick over the
         // same still-unanswered prompt re-proposes the same withheld input, so
@@ -8891,17 +8897,40 @@ public final class WorkbenchViewModel: ObservableObject {
         NSUserName()
     }
 
-    /// The machine owner's display name (full name, username fallback) — woven into
-    /// the boss's check-in questions and quick-question chips so the agent reports on
-    /// the ACTUAL operator, never a hardcoded name. Static so property initializers
-    /// (the prompt builders) can resolve it before `self` exists.
-    static func resolvedOwnerName() -> String {
-        SessionFriend.machineOwner()?.name ?? NSUserName()
+    /// The machine owner used at AppKit/boss boundaries. Under XCTest this must not
+    /// call `NSFullUserName()`: that API can wake Contacts/CoreData/XPC services and
+    /// pollute otherwise-hermetic view/rendering logs. Production still resolves the
+    /// full display name unless XCTest is running without the explicit live-name opt-in.
+    nonisolated static func resolvedMachineOwner(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        username: () -> String = NSUserName,
+        fullName: () -> String = NSFullUserName,
+        classLookup: (String) -> AnyClass? = NSClassFromString
+    ) -> SessionFriend? {
+        SessionFriend.resolvedMachineOwner(
+            environment: environment,
+            username: username,
+            fullName: fullName,
+            classLookup: classLookup
+        )
     }
 
-    /// Instance accessor for `resolvedOwnerName()`, used to substitute the `{{owner}}`
-    /// token in the quick-question chips and per-session questions.
-    private var ownerDisplayName: String { Self.resolvedOwnerName() }
+    /// The machine owner's display name (full name, username fallback) — woven into
+    /// the boss's check-in questions and quick-question chips so the agent reports on
+    /// the ACTUAL operator, never a hardcoded name.
+    nonisolated public static func resolvedOwnerName(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        username: () -> String = NSUserName,
+        fullName: () -> String = NSFullUserName,
+        classLookup: (String) -> AnyClass? = NSClassFromString
+    ) -> String {
+        SessionFriend.resolvedMachineOwnerName(
+            environment: environment,
+            username: username,
+            fullName: fullName,
+            classLookup: classLookup
+        )
+    }
 
     /// Run an onboarding repair step APP-EXECUTED (headless, no pane), classifying from a
     /// post-command verify probe — the human-as-hands path is gone. Maps the step id to the

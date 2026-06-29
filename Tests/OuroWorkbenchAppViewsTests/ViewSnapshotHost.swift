@@ -170,13 +170,24 @@ enum ViewSnapshotHost {
             )
         }
 
-        // An Image → its SF Symbol / asset name.
-        if let name = try? view.image().actualImage().name() {
-            return ViewSnapshotNode(
-                viewType: "Image",
-                image: name,
-                label: label, value: value, id: id
-            )
+        // An Image → its SF Symbol / asset name. Prefer ViewInspector's semantic
+        // image label because `Image(systemName:)` exposes the symbol there without
+        // forcing AppKit/SF Symbols image materialization under XCTest.
+        if let image = try? view.image() {
+            if let name = try? image.labelView().string(locale: locale) {
+                return ViewSnapshotNode(
+                    viewType: "Image",
+                    image: name,
+                    label: label, value: value, id: id
+                )
+            }
+            if let name = try? image.actualImage().name() {
+                return ViewSnapshotNode(
+                    viewType: "Image",
+                    image: name,
+                    label: label, value: value, id: id
+                )
+            }
         }
 
         // A non-content node that nonetheless carries an accessibility label/value/id

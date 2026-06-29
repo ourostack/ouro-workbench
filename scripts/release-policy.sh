@@ -473,6 +473,7 @@ required_ci = [
     "scripts/release-policy.sh selftest-package-guards",
     "scripts/release-policy.sh selftest-shell-dependency-watch",
     "scripts/release-policy.sh selftest-paths",
+    "scripts/check-swift-tests.sh",
 ]
 for needle in required_ci:
     if needle not in ci:
@@ -490,10 +491,19 @@ required_preflight = [
     "scripts/release-policy.sh selftest-shell-dependency-watch",
     "scripts/release-policy.sh selftest-paths",
     "scripts/check-shell-dependency.sh",
+    "scripts/check-swift-tests.sh",
 ]
 for needle in required_preflight:
     if needle not in preflight:
         raise SystemExit(f"preflight.sh must contain {needle!r}")
+coverage = Path("scripts/check-coverage.sh").read_text(encoding="utf-8")
+swift_tests = Path("scripts/check-swift-tests.sh").read_text(encoding="utf-8")
+for script_name, script_body in {
+    "scripts/check-coverage.sh": coverage,
+    "scripts/check-swift-tests.sh": swift_tests,
+}.items():
+    if "scripts/check-test-log-noise.sh" not in script_body:
+        raise SystemExit(f"{script_name} must call scripts/check-test-log-noise.sh")
 preflight_lines = {line.strip() for line in preflight.splitlines()}
 for line in ("scripts/check-shell-boundary.sh --selftest", "scripts/check-shell-boundary.sh"):
     if line not in preflight_lines:
