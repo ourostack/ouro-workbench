@@ -9594,7 +9594,7 @@ public final class WorkbenchViewModel: ObservableObject {
     /// that already moved on. The detected `reason` is persisted onto the entry
     /// (and cleared when the signal clears) so the header banner and the boss
     /// snapshot read the SAME "why" line.
-    private func applyAttentionSignal(_ classification: AttentionClassification, entryId: UUID, runId: UUID) {
+    func applyAttentionSignal(_ classification: AttentionClassification, entryId: UUID, runId: UUID) {
         guard activeSessions[entryId]?.plan.runId == runId,
               let entry = state.processEntries.first(where: { $0.id == entryId }),
               !entry.isArchived else {
@@ -9668,7 +9668,7 @@ public final class WorkbenchViewModel: ObservableObject {
         let isVaultOnboardingSession = entryId == vaultOnboardingEntryID && runId == vaultOnboardingRunID
         let detachedPersistentSession = isCurrentSession
             && !manuallyTerminated
-            && currentPlan?.persistentSessionName.map(persistentSessionIsListed) == true
+            && currentPlan?.persistentSessionName.map(persistentSessionLister) == true
         if detachedPersistentSession {
             activeSessions[entryId] = nil
             if terminalFocusEntryID == entryId {
@@ -9733,11 +9733,7 @@ public final class WorkbenchViewModel: ObservableObject {
                     let entryName = state.processEntries.first(where: { $0.id == entryId })?.name
                         ?? "Terminal"
                     let needsAttention = nextRunStatus == .manualActionNeeded
-                    postUnexpectedExitNotification(
-                        entryName: entryName,
-                        exitCode: status.exitCode,
-                        needsAttention: needsAttention
-                    )
+                    postExitNotification(entryName, status.exitCode, needsAttention)
                 }
             }
         }
@@ -9812,6 +9808,32 @@ public final class WorkbenchViewModel: ObservableObject {
             )
             UNUserNotificationCenter.current().add(request)
         }
+    }
+
+    /// Seam: whether a detached `screen` session with this name is currently
+    /// listed (the detach-vs-crash decision in `markTerminated`). Defaults to
+    /// the real `persistentSessionIsListed`, whose body runs a live `screen -ls`
+    /// subprocess (the genuine-machinery boundary — it cannot run in-process).
+    /// A test injects a stub returning `true`/`false` so the detached-persistent
+    /// branch body (`.needsBossReview` summary + run `.needsRecovery` rewrite +
+    /// the vault-onboarding 0-fold) is driven without spawning `screen`. Only the
+    /// literal subprocess inside the default closure stays carved.
+    lazy var persistentSessionLister: @MainActor (String) -> Bool = { [weak self] name in
+        self?.persistentSessionIsListed(name) ?? false
+    }
+
+    /// Seam: post the macOS unexpected-exit user notification. Defaults to the real
+    /// `postUnexpectedExitNotification`, whose body touches `UNUserNotificationCenter.current()`
+    /// — which raises `bundleProxyForCurrentProcess is nil` in the headless xctest process (no
+    /// app bundle). A test injects a recording stub so `markTerminated`'s notification-DECISION
+    /// logic (the `!manuallyTerminated` / `!exitedCleanly` / `shouldPostExitNotification` throttle
+    /// gate + the entryName / needsAttention param composition) is driven without the system
+    /// notification center. Only the `UNUserNotificationCenter` syscall inside the default closure
+    /// (and its non-Sendable authorization-callback body) stays carved.
+    lazy var postExitNotification: @MainActor (_ entryName: String, _ exitCode: Int32?, _ needsAttention: Bool) -> Void = {
+        [weak self] entryName, exitCode, needsAttention in
+        self?.postUnexpectedExitNotification(
+            entryName: entryName, exitCode: exitCode, needsAttention: needsAttention)
     }
 
     /// Whether a detached `screen` session with this name is currently

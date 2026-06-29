@@ -14,6 +14,18 @@ VERSION bump; flaky-region protocol applied.
 | 3 | #360 | 0.1.191 | provider-config form + vault-onboarding flows | 5182 / 1532 |
 | 4 | #361 | 0.1.192 | release-update / bug-report / support-diagnostics / recovery-drill | 5098 / 1514 |
 | (flake-fix) | #364 | 0.1.193 | VM allowlist → STABLE MAX (absorb async oscillation; class-C) | **5102 / 1515** |
+| 5 | #366 | 0.1.194 | markTerminated + applyAttentionSignal + exit-notification decision/throttle | **4916 / 1451** |
+
+Cluster 5 result: CI residual 4912/1450 (190 lines / 65 regions driven OUT of 5102/1515); allowlist
+set to STABLE MAX 4916/1451 (+4/+1 class-C oscillation tolerance, per the cluster-4 precedent).
+
+NOTE (cluster 5): local full-suite coverage is NOT reliably runnable in this worktree env — the
+pre-existing `ReportBugSheetInteractionTests` reveal/copy taps call
+`NSWorkspace.activateFileViewerSelecting` / `NSPasteboard`, which BLOCK in headless macOS here
+(NSServicesMenuHandler, no window server). So cluster 5 uses the campaign's documented
+probe-then-set via the CI Coverage job (PR #366 carries a PROBE allowlist 4950/1490; read the exact
+residual off CI, then set the stable max). New seams: `persistentSessionLister`,
+`postExitNotification` (both prod byte-identical, @MainActor).
 
 Start residual (scoping): 5892 lines / 1696 regions (44.0% line / 40.7% region).
 Current (main): **5102 lines / 1515 regions** — the STABLE MAX (the bare 5098/1514 minimum red-ed
