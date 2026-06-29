@@ -5,14 +5,23 @@ autopilot (merge on CI-green, no per-cluster approval). Each region: invoked + e
 mutation-verified; allowlist set to the CI-measured exact minimum (probe-then-set); scope-pure;
 VERSION bump; flaky-region protocol applied.
 
-## ⏸️ RECOMMENDED RESUME POINT (durable checkpoint — 2026-06-29, post-cluster-21)
+## 🏁 STOP+REPORT — GENUINE CANDIDATE FLOOR REACHED (2026-06-29, post-cluster-22)
 
-**State to resume from:** main @ v0.1.219 (`WorkbenchRelease.version` = "0.1.219", VERSION file = 0.1.219),
-VM allowlist `WorkbenchViewModel.swift 2314 876`. Clusters 1-21 all merged & CI-green (#394 `baed73b`;
-#395 `f075fc8`; #396 `aeaace8`; cluster 21 = PR #398 `62762d1`). 0 open VM PRs, 0 leftover
-`coverage/vm-*` branches. This run drove the VM allowlist 2653/973 → **2314/876** across clusters 18-21
-(CI residual now 2284/870; 369 lines / 103 regions out this run). CI residuals: c18 2497/945, c19
-2396/913, c20 2375/897, c21 2284/870.
+**State:** main @ v0.1.220 (`WorkbenchRelease.version` = "0.1.220", VERSION file = 0.1.220), VM allowlist
+`WorkbenchViewModel.swift 2307 872` (CI residual 2277/866). Clusters 1-22 all merged & CI-green (#394
+`baed73b`; #395 `f075fc8`; #396 `aeaace8`; #398 `62762d1`; cluster 22 = PR #399 `5daed56`). 0 open VM
+PRs, 0 leftover `coverage/vm-*` branches. This run drove the VM allowlist 2653/973 → **2307/872** across
+clusters 18-22 (CI residual 2375/897→2277/866 net of the run; 376 lines / 107 regions out this run).
+CI residuals: c18 2497/945, c19 2396/913, c20 2375/897, c21 2284/870, c22 2277/866.
+
+**🔴 HELD FOR COORDINATOR AUDIT.** The residual is at the genuine candidate floor — every remaining
+region matches a carve class (see FLOOR FINDING below). The honest floor for THIS file is ~700-850
+regions, NOT the STEP-1 ~150-350 guess. Each cluster's yield decayed: c18=28, c19=32, c20=16, c21=27,
+c22=4 regions — the last cluster harvested the final 4-region sliver. Further drivable logic is
+sub-region slivers requiring fragile state-seeding; the no-padding rule says do NOT lock a floor below
+this by carving drivable logic, and the no-overclaim rule says do NOT chase slivers past the genuine
+floor. Coordinator: independently audit whether 866 is the honest floor for this async/subprocess-
+orchestration file, or re-scope if a machinery-seam strategy could drive the detached-Task bodies.
 
 ### 🏁 FLOOR FINDING (cluster-21 fork, evidence-backed — supersedes the STEP-1 ~150-350 guess)
 **The genuine floor for THIS file is ~700-850 REGIONS, NOT ~150-350.** The STEP-1 scope undercounted
@@ -25,11 +34,43 @@ drivable slivers → ~1 more thin cluster (22), then STOP+REPORT for the coordin
 Do NOT chase sub-region slivers below ~820-850 — the honest floor is materially higher than 350 for
 this file specifically.
 
-### Remaining cluster-22 thin slivers (from the cluster-21 fork)
-recoveryButtonTitle(:4559) uncovered arms (.manualActionNeeded/.noAction/nil-plan — need state.processRuns
-seeding so RecoveryPlanner derives the action), bossActionLivePrompt(:8087) nil-tail guard + parse path
-(seeded transcript), any last status-line/computed arms. After cluster 22 the residual should stabilize
-≈2260-2280 / ≈860-870 with every remaining region a carve class → STOP+REPORT.
+### 🔬 FLOOR BREAKDOWN (for the coordinator's independent audit — residual 2277 lines / 866 regions)
+The 866-region residual is overwhelmingly genuine-carve. Evidence (grep of the 11,237-line file):
+- **65 detached dispatch bodies** — 24 `Task.detached { … }` + 41 `Task { await … }`. Each body is the
+  awaited-runner line of an async handler whose SYNC prologue + extracted MainActor.run result-fold are
+  ALREADY DRIVEN (clusters 1-19 extracted applyVaultCompletionResult / applyColdStartConfigResult /
+  applyBugReportBundleResult byte-identically; the remaining detached bodies await a subprocess/MCP/
+  network runner that can't run headless). Multi-region each → the bulk of the residual.
+- **11 `Process()` subprocess lines** — runProviderCheckProcess / readLoginShellPath /
+  listLiveScreenSessionNames / psBackedProcessLines / the spawnPersistentScreenQuit + spawnScreenQuit
+  default-closure bodies. Driven UP TO the syscall via the closure seams (providerCheckRunner /
+  persistentSessionLister / spawnPersistentScreenQuit); the literal `Process().run()/.waitUntilExit()`
+  carves.
+- **10 `UNUserNotificationCenter`** — postNeedsMeNotification / postUnexpectedExitNotification
+  `requestAuthorization{…center.add…}` callback bodies (content-build extracted+driven via the static
+  helpers + the sink seams; the auth-callback + `.add` carve — the callback never fires headless).
+- **9 `NSApp`** — terminateApp / applyReleaseUpdateAndTerminate / captureKeyWindowPNG live-window arm /
+  resetToFirstRun (driven via terminateApp / applyStagedUpdateAndRelaunch / killAll+relaunch seams; the
+  literal `NSApp.terminate`/`.keyWindow` IUO trap carves).
+- **~39 while-loops + 3 `Task.sleep`** — runBossWatchLoop / runExternalActionPump `while !Task.isCancelled`
+  + sleep (no ViewInspector/.task driver; infinite-poll bodies carve).
+- **5 live-PTY `TerminalHostView`/NSView bodies** — `attach`/`scheduleTerminalRedraws`/`applyThemeBacking`/
+  pending-redraw work-items (require a live PTY + window server).
+- **The source-pinned private `runBossCheckIn(…)` MCP overload** — WiringTest-pinned `private func`
+  (BossWatchBackoffBump / BossAutonomyKillSwitch slice its source; widening would break those pins).
+- **llvm-synth / oscillation regions** — Apple Swift 6.0.3 synthesized autoclosure/resume-epilogue
+  braces (the documented +30/+6 oscillation buffer absorbs these).
+
+**HONEST FLOOR: ~700-850 regions** for THIS file. The STEP-1 scope's ~150-350 estimate undercounted the
+machinery density — it counted ~107 literal-syscall LINES but missed that the 65 detached-`Task` bodies
+are each MULTI-REGION carves (the awaited-runner line + the resume epilogue + any inner branches that
+only execute when the runner returns). The VM is the async/subprocess-ORCHESTRATION half of the U5 split;
+the views half (WorkbenchViews.swift, floored at 1170/223) is the rendering half. The two halves have
+fundamentally different floor densities. **Coordinator decision point:** is 866 the honest floor, or is
+there a machinery-seam strategy (e.g. injecting a fake awaited-runner that returns synchronously) that
+could drive a chunk of the 65 detached bodies' result-folds? Clusters 14-19 already applied that strategy
+where the runner was a pure closure seam; the remaining detached bodies await runners that aren't yet
+seamed (and seaming them is a larger production change than the test-only campaign scope allows).
 
 ⚠️ THE TAIL IS THINNING — approaching the genuine ~150-350 floor band. The big dispatch decls
 (applyBossAction, performCommand, submitProviderConfig/BugReport/ReleaseUpdate, cold-start/vault folds,
@@ -99,6 +140,7 @@ GENUINE CARVE (the floor — do NOT drive): TerminalHostView NSView bodies (`_li
 | 19 | #395 | 0.1.217 | APPLY-BODY + ENTRY-LESS DISPATCH (test-only): applyOnboardingProposal apply-body (per-group create/dedup/skip-on-empty-WD folds + persisted result + import summary; only the not-ready/no-proposal guards were covered) + applyBossAction 7 entry-less dispatch arms (.requestProviderConfig/.verifyProvider/.refreshProvider/.selectLane/.registerWorkbenchMCP/.ensureDaemon/.reportBug via validate→authorize→dispatch). DENY arm = unreachable (validation name-checks first) → carved. load() store-I/O arms deferred (non-injectable private store + slicer). | **2426 / 919** (CI 2396/913) |
 | 20 | #396 | 0.1.218 | SMALL-DECL STATUS-LINE/COLOR TAIL (test-only): bossWorkbenchMCPStatusLine (5 untested arms) + StatusColor (4) + ActionTitle + supportDiagnosticsStatusColor (3) + supportDiagnosticsURL + bossWatchStatusColor (3) + bossWatchStatusLine (error/last-run) + mailboxStatusLine (2) + transcriptSearchStatusLine (empty/press-search) + ouroAgentStatusLine (populated) + stopConfirmationTitle (2) + startFreshConfirmationMessage. Pure computed-prop arms view tests only partially hit. | **2405 / 903** (CI 2375/897) |
 | 21 | #398 | 0.1.219 | COMPUTED-VAR MICRO-TAIL (test-only): confirmation Binding<Bool> get/set-clear arms (errorIsPresented/deleteConfirmationIsPresented/deleteGroupConfirmationIsPresented/stopConfirmationIsPresented) + onboardingHasConfigGap (nil-guard + blocker-contains, both arms) + recentActionLogEntries (sort) + currentSearchOptions + releaseUpdateURL/canAutoPresentOnboardingOnLaunch/bossMCPCommand/deskBridgePlan delegations. | **2314 / 876** (CI 2284/870) |
+| 22 | #399 | 0.1.220 | FINAL FLOOR SLIVER (test-only): recoveryButtonTitle .manualActionNeeded→"Manual Recovery" (view-route-around arm) + .noAction/nil-plan→"Recover" (seeded processRuns) + bossActionLivePrompt nil-transcript guard. **GENUINE CANDIDATE FLOOR — held for coordinator audit.** | **2307 / 872** (CI 2277/866) |
 
 Cluster 5 result: CI residual 4912/1450 (190 lines / 65 regions driven OUT of 5102/1515); allowlist
 set to STABLE MAX 4916/1451 (+4/+1 class-C oscillation tolerance, per the cluster-4 precedent).
