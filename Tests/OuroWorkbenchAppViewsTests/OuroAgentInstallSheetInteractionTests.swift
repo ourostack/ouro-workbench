@@ -18,17 +18,34 @@ import OuroWorkbenchCore
 /// **Provenance (P2).** `model` via the hermetic `makeVM` store seam (AN-001 dual-injection).
 /// The `@State` seeds use the C6 prod-byte-identical `init(initialRemote:…)` seam (default = the
 /// prior literals). A VALID `initialRemote` enables the "Clone Agent" button so its action runs;
-/// the clone targets a non-resolvable remote so `cloneAgentHeadless` folds to `.failed` honestly.
+/// the clone runner is injected so the interaction test never shells out to the local `ouro` CLI
+/// or depends on network resolution.
 ///
 /// **Async (P2/P3).** `startClone()` spawns a `Task` that awaits `model.cloneAgentHeadless`. The
-/// test awaits the model's REAL async clone directly (the same call the Task makes) to assert the
-/// honest `.failed` fold — proving the Task's body region is reachable + non-vacuous (the clone
-/// produces a deterministic failure for the unresolvable remote, no `/Users/` leak).
+/// interaction test waits for the tapped Task to hit the injected runner; a separate model-fold
+/// test awaits `cloneAgentHeadless` directly with the same injected runner to assert the honest
+/// `.failed` copy. The view action stays proven without live subprocesses or repo-root output.
 ///
 /// **Non-vacuity (P2 — mutation-verified).** Neutering `startClone`'s `cloneState = .cloning`
 /// assignment makes the post-tap busy state never appear → the busy-arm assertion goes RED.
 @MainActor
 final class OuroAgentInstallSheetInteractionTests: XCTestCase {
+
+    private actor CloneRunnerProbe {
+        private var plans: [OuroAgentInstallPlan] = []
+
+        func record(_ plan: OuroAgentInstallPlan) {
+            plans.append(plan)
+        }
+
+        var callCount: Int {
+            plans.count
+        }
+
+        var commandLines: [String] {
+            return plans.map(\.commandLine)
+        }
+    }
 
     private func makeVM() throws -> WorkbenchViewModel {
         let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
@@ -42,6 +59,31 @@ final class OuroAgentInstallSheetInteractionTests: XCTestCase {
             bossWorkbenchMCPRegistrar: BossWorkbenchMCPRegistrar(agentBundlesURL: agentBundles),
             ouroAgentInventory: OuroAgentInventory(agentBundlesURL: agentBundles)
         )
+    }
+
+    private func repoRootOuroArtifacts() throws -> [String] {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        return try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "ouro" }
+            .map(\.lastPathComponent)
+            .sorted()
+    }
+
+    private func waitForCloneRunnerCalls(
+        _ probe: CloneRunnerProbe,
+        atLeast expectedCount: Int,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        for _ in 0..<20 {
+            let callCount = await probe.callCount
+            if callCount >= expectedCount {
+                return
+            }
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        let callCount = await probe.callCount
+        XCTFail("expected at least \(expectedCount) clone runner call(s), got \(callCount)", file: file, line: line)
     }
 
     /// The secondary "Cancel" button (`:6392`, idle → "Cancel") runs `dismiss()`. Under
@@ -64,24 +106,50 @@ final class OuroAgentInstallSheetInteractionTests: XCTestCase {
 
     /// The "Clone Agent" button (`:6396`) runs `startClone()` (`:6435/6438/6440`): it sets
     /// `cloneState = .cloning` then spawns the async clone Task. The button is ENABLED by a valid
-    /// `initialRemote`. The tap colours the action + `startClone` body; the Task's clone is the
-    /// REAL `model.cloneAgentHeadless`, awaited here directly to assert its honest `.failed` fold
-    /// for the unresolvable remote.
+    /// `initialRemote`. The tap colours the action + `startClone` body; the Task's clone uses the
+    /// injected runner, so the interaction stays hermetic.
     func testInstall_cloneAgent_runsStartCloneAndClonesHeadless() async throws {
         let model = try makeVM()
+        let probe = CloneRunnerProbe()
+        model.runCloneAgent = { plan in
+            await probe.record(plan)
+            return .exited(code: 12)
+        }
+        XCTAssertEqual(try repoRootOuroArtifacts(), [], "precondition: repo root must start clean")
         // Enabled: a present remote + valid (blank) name → `canClone == true`.
-        let sheet = OuroAgentInstallSheet(model: model, initialRemote: "git@github.com:org/does-not-exist.git")
+        let remote = "git@github.com:org/repo.git"
+        let sheet = OuroAgentInstallSheet(model: model, initialRemote: remote)
         // Tap the enabled "Clone Agent" button → runs the action closure + `startClone()` body.
         try sheet.inspect().find(button: "Clone Agent").tap()
-        // The Task awaits `model.cloneAgentHeadless`; await the SAME real async clone directly to
-        // assert the honest deterministic failure fold (the Task's body region is thereby reachable
-        // and non-vacuous).
-        let result = await model.cloneAgentHeadless(remote: "git@github.com:org/does-not-exist.git", agentName: "")
-        guard case .failed = result else {
-            return XCTFail("the unresolvable remote must fold to .failed, got \(result)")
+        await waitForCloneRunnerCalls(probe, atLeast: 1)
+        let commandLines = await probe.commandLines
+        XCTAssertEqual(commandLines.count, 1, "the tapped task should run the injected clone once")
+        XCTAssertTrue(
+            commandLines.allSatisfy { $0.contains(remote) },
+            "the injected runner still receives the native clone command"
+        )
+        XCTAssertEqual(try repoRootOuroArtifacts(), [], "the injected clone runner must not create repo-root bundles")
+    }
+
+    func testCloneAgentHeadless_usesInjectedRunnerForFailureFold() async throws {
+        let model = try makeVM()
+        let probe = CloneRunnerProbe()
+        model.runCloneAgent = { plan in
+            await probe.record(plan)
+            return .exited(code: 12)
         }
+        XCTAssertEqual(try repoRootOuroArtifacts(), [], "precondition: repo root must start clean")
+        let remote = "git@github.com:org/repo.git"
+        let result = await model.cloneAgentHeadless(remote: remote, agentName: "")
+        guard case .failed = result else {
+            return XCTFail("the injected non-zero clone result must fold to .failed, got \(result)")
+        }
+        let commandLines = await probe.commandLines
+        XCTAssertEqual(commandLines.count, 1, "the model fold should call the injected clone once")
+        XCTAssertTrue(commandLines.allSatisfy { $0.contains(remote) }, "the injected runner receives the native clone command")
         XCTAssertNotNil(result.inlineMessage, "the failed fold carries a seam-free inline message")
         XCTAssertFalse(result.inlineMessage?.contains("/Users/") ?? false, "no machine-path leak in the failure copy")
+        XCTAssertEqual(try repoRootOuroArtifacts(), [], "the injected clone runner must not create repo-root bundles")
     }
 
     // MARK: - Non-vacuity (P2 — the busy state proves startClone's assignment ran)

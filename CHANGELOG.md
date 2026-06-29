@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.204 - Hermetic install-sheet clone interactions
+
+- Internal: routes the install-sheet headless clone through an injectable runner seam so interaction tests can prove the button action and clone-result fold without invoking the live `ouro` CLI, touching the network, or leaving repo-root `.ouro` bundles. No user-facing behavior change.
+
 ## 0.1.202 - View-model coverage (release-update / bug-report / diagnostics)
 
 - Internal: drives a batch of view-model release-update and diagnostics logic to test coverage — the check-for-update success/unavailable arms, the install/auto-update re-entrancy and policy guards, the staged-update skip guards, the release-status line/color computed properties, the bug-report session/section projections, the support-diagnostics reveal/open arms, and the daemon-ensure-on-launch guard. The bundle-swap relaunch, key-window screenshot, network download, and login-shell subprocess stay the carved boundary. No user-facing behavior change.
