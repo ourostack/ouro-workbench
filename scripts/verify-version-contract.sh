@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VERSION_FILE="$ROOT_DIR/VERSION"
+CHANGELOG_FILE="$ROOT_DIR/CHANGELOG.md"
 PACKAGE_SOURCE="$ROOT_DIR/Package.swift"
 eval "$("$ROOT_DIR/scripts/read-workbench-release.sh")"
 
@@ -14,6 +15,11 @@ fail() {
 [[ -f "$VERSION_FILE" ]] || fail "missing VERSION file"
 version="$(tr -d '[:space:]' < "$VERSION_FILE")"
 [[ "$version" =~ ^[0-9]+[.][0-9]+[.][0-9]+([-.][0-9A-Za-z.]+)?$ ]] || fail "VERSION is not semver-like: $version"
+
+[[ -f "$CHANGELOG_FILE" ]] || fail "missing CHANGELOG.md"
+first_changelog_release="$(grep -E '^## [0-9]+[.][0-9]+[.][0-9]+([-.][0-9A-Za-z.]+)?( |$)' "$CHANGELOG_FILE" | head -n 1 || true)"
+[[ "$first_changelog_release" == "## $version "* || "$first_changelog_release" == "## $version" ]] \
+  || fail "CHANGELOG.md first release entry is '${first_changelog_release:-<none>}', expected VERSION $version"
 
 [[ "$WORKBENCH_VERSION" == "$version" ]] || fail "WorkbenchRelease.version is $WORKBENCH_VERSION, expected $version"
 [[ "$WORKBENCH_BUNDLE_IDENTIFIER" =~ ^[A-Za-z0-9][A-Za-z0-9.-]+$ ]] || fail "bundle identifier is not identifier-like: $WORKBENCH_BUNDLE_IDENTIFIER"

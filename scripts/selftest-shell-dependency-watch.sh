@@ -24,8 +24,10 @@ grep -Fq "ouro-native-apple-app-shell-main-updated" "$workflow" || fail "$workfl
 grep -Fq "schedule:" "$workflow" || fail "$workflow must have a scheduled check"
 grep -Fq "$helper" "$workflow" || fail "$workflow must run $helper"
 grep -Fq "automation/ouro-workbench-refresh-shell-dependency" "$workflow" || fail "$workflow must use the stable automation branch"
-grep -Fq "Package.resolved VERSION Sources/OuroWorkbenchCore/WorkbenchRelease.swift" "$workflow" \
-  || fail "$workflow must stage only the shell pin and version files"
+grep -Fq "Package.resolved VERSION CHANGELOG.md Sources/OuroWorkbenchCore/WorkbenchRelease.swift" "$workflow" \
+  || fail "$workflow must stage the shell pin, changelog, and version files"
+grep -Fq "CHANGELOG.md" "$helper" || fail "$helper must update CHANGELOG.md with each version bump"
+grep -Fq "Shared shell dependency refresh" "$helper" || fail "$helper must name the shell-refresh changelog entry"
 grep -Fq "pin location mismatch" "$checker" || fail "$checker must validate the shell pin location"
 
 tmp="$(mktemp -d)"
