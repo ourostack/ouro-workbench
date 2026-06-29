@@ -98,7 +98,7 @@ final class BossAgentPromptBuilderTests: XCTestCase {
             summary: summary,
             executableHealth: [:],
             gitStatus: [:],
-            machineFriend: SessionFriend.machineOwner(),
+            machineFriend: SessionFriend.machineOwner(username: "ari", fullName: "Ari Mendelow"),
             waitingPrompts: [:]
         )
 
@@ -408,7 +408,7 @@ final class BossAgentPromptBuilderTests: XCTestCase {
             summary: summary,
             executableHealth: [:],
             gitStatus: [:],
-            machineFriend: SessionFriend.machineOwner(),
+            machineFriend: SessionFriend.machineOwner(username: "ari", fullName: "Ari Mendelow"),
             waitingPrompts: [:]
         )
         // The in-flight ack reports an honest pending status, never "ok".

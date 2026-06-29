@@ -99,6 +99,53 @@ final class SessionFriendTests: XCTestCase {
         XCTAssertNil(SessionFriend.machineOwner(username: "  ", fullName: "Whoever"))
     }
 
+    func testResolvedMachineOwnerSkipsLiveFullNameUnderXCTest() {
+        var fullNameCalled = false
+        let owner = SessionFriend.resolvedMachineOwner(
+            environment: ["XCTestConfigurationFilePath": "/tmp/test.xctestconfiguration"],
+            username: { "ari" },
+            fullName: {
+                fullNameCalled = true
+                return "Ari Mendelow"
+            },
+            classLookup: { _ in nil }
+        )
+
+        XCTAssertFalse(fullNameCalled)
+        XCTAssertEqual(owner?.id, "ari")
+        XCTAssertEqual(owner?.name, "ari")
+    }
+
+    func testResolvedMachineOwnerHonorsLiveNameOptInUnderXCTest() {
+        var fullNameCalled = false
+        let owner = SessionFriend.resolvedMachineOwner(
+            environment: [
+                "XCTestConfigurationFilePath": "/tmp/test.xctestconfiguration",
+                "OURO_WORKBENCH_LIVE_OWNER_NAME": "1"
+            ],
+            username: { "ari" },
+            fullName: {
+                fullNameCalled = true
+                return "Ari Mendelow"
+            },
+            classLookup: { _ in nil }
+        )
+
+        XCTAssertTrue(fullNameCalled)
+        XCTAssertEqual(owner?.name, "Ari Mendelow")
+    }
+
+    func testResolvedMachineOwnerNameFallsBackToOperatorWhenNoUsername() {
+        let name = SessionFriend.resolvedMachineOwnerName(
+            environment: ["XCTestConfigurationFilePath": "/tmp/test.xctestconfiguration"],
+            username: { "   " },
+            fullName: { XCTFail("fullName must not be called under XCTest"); return "Ari Mendelow" },
+            classLookup: { _ in nil }
+        )
+
+        XCTAssertEqual(name, "the operator")
+    }
+
     // MARK: - Boss prompt visibility
 
     func testBossPromptShowsFriendAndUnassigned() {

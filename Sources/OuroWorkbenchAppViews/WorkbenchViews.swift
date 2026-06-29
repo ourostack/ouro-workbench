@@ -6221,17 +6221,11 @@ struct ProviderConfigSheet: View {
     @State private var values: [String: String] = [:]
     @State private var message: String?
 
-    /// AN-007 / Q3 — the seed for the `humanName` `@State`, made injectable with a default
-    /// that equals the prior behavior (`@State private var humanName = NSFullUserName()`).
-    /// Production is BYTE-IDENTICAL: the default still evaluates to `NSFullUserName()` at the
-    /// only call site (`ProviderConfigSheet(model:)`, `:529`), so the rendered "Your name"
-    /// field reads the machine full user name exactly as before. A SNAPSHOT test injects a
-    /// fixed value (e.g. "Test User") so the committed reference never carries the machine
-    /// user name (a P3 determinism leak — the name flows into the bound
-    /// `TextField("Your name", text: $humanName)` and the harness captures bound `TextField`
-    /// values via AN-002). The same minimal-source-seam shape as the C4 `DecisionLogRow`
-    /// `timeZone`/`locale` defaults and `Date.workbenchTimeText`'s `.autoupdatingCurrent`.
-    init(model: WorkbenchViewModel, initialHumanName: String = NSFullUserName()) {
+    /// AN-007 / Q3 — the seed for the `humanName` `@State`, made injectable. Production resolves
+    /// the machine owner's full display name through `WorkbenchViewModel.resolvedOwnerName()`;
+    /// tests receive that function's XCTest-safe short-name fallback so traversing dormant sheet
+    /// builders never wakes Contacts/CoreData/XPC just to snapshot an unrelated surface.
+    init(model: WorkbenchViewModel, initialHumanName: String = WorkbenchViewModel.resolvedOwnerName()) {
         self.model = model
         self._humanName = State(initialValue: initialHumanName)
     }

@@ -36,7 +36,7 @@ final class BossInjectionGateWiringTests: XCTestCase {
             "the context's friend must be the session's effective friend (F3)"
         )
         XCTAssertTrue(
-            body.contains("SessionFriend.machineOwner()"),
+            body.contains("resolvedMachineOwner()"),
             "the effective friend must fall back to the machine owner, as the decisions channel does (F3)"
         )
 

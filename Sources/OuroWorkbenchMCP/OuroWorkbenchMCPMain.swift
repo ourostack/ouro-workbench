@@ -296,7 +296,7 @@ final class WorkbenchMCPServer {
             dashboard: mailboxDashboardReader.read(boss: state.boss),
             executableHealth: executableHealth,
             gitStatus: gitStatus,
-            machineFriend: SessionFriend.machineOwner(),
+            machineFriend: SessionFriend.resolvedMachineOwner(),
             waitingPrompts: waitingPrompts,
             autonomyVerdict: autonomyVerdict
         )

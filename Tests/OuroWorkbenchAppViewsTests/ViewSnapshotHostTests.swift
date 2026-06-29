@@ -54,6 +54,13 @@ final class ViewSnapshotHostTests: XCTestCase {
         XCTAssertTrue(text.contains(#"image="infinity""#), text)
     }
 
+    func testHost_systemImageName_carriesSemanticLabel() throws {
+        let text = try ViewSnapshotHost.snapshotText(
+            of: Image(systemName: "arrow.clockwise.circle.fill")
+        )
+        XCTAssertTrue(text.contains(#"image="arrow.clockwise.circle.fill""#), text)
+    }
+
     func testHost_sidebarEmptyRow_carriesTextAndAXLabel() throws {
         let text = try ViewSnapshotHost.snapshotText(of: SidebarWorkspaceEmptyRow())
         XCTAssertTrue(text.contains(#"text="No tabs yet""#), text)

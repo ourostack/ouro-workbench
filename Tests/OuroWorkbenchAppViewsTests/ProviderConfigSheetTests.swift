@@ -21,14 +21,13 @@ import OuroWorkbenchCore
 ///     honest "Finish setup" vault-recovery affordance.
 ///
 /// **Q3 — the cluster's headline determinism fix (a real prod leak, now closed).**
-/// `humanName` seeded its `@State` default from `NSFullUserName()`, which flows into the bound
-/// `TextField("Your name", text: $humanName)` (`:6176`) and is captured in the snapshot via
-/// AN-002 (the harness reads bound `TextField` values). On this machine `NSFullUserName()` is
-/// "Microsoft" → it would land in a committed reference (a P3 violation). The fix makes the seed
-/// injectable (`init(model:initialHumanName:)`, default `NSFullUserName()` → prod byte-identical)
-/// and these tests inject a FIXED name ("Test User"), then ASSERT the rendered tree contains
-/// "Test User" AND `!tree.contains(NSFullUserName())` (the no-machine-name guard). This proves
-/// the injection is actually COVERED (the humanName field renders) — not bypassed.
+/// `humanName` seeded its `@State` default from the live macOS full-name lookup, which flows into
+/// the bound `TextField("Your name", text: $humanName)` (`:6176`) and is captured in the snapshot
+/// via AN-002 (the harness reads bound `TextField` values). The fix makes the seed injectable
+/// (`init(model:initialHumanName:)`, defaulting to the production lookup) and these tests inject a
+/// FIXED name ("Test User"), then ASSERT the rendered tree contains "Test User" and no short user
+/// name leak. The tests intentionally never call the full-name lookup: on macOS that can wake
+/// Contacts/CoreData/XPC services and pollute hermetic rendering logs.
 ///
 /// **Provenance (P2).** `model` via the hermetic `makeVM` store seam (AN-001 dual-injection: a
 /// temp `agentBundlesURL` into BOTH the registrar AND the inventory). Every state is reached by
@@ -38,7 +37,7 @@ import OuroWorkbenchCore
 ///
 /// **Determinism (P3).** No clock / UUID; the only machine value is the injected (fixed)
 /// `humanName`. The `form.title`/subtitle/credential labels are static Core copy. Byte-identical
-/// twice; no `/Users/` leak; no `NSFullUserName()` leak (asserted per state).
+/// twice; no `/Users/` leak; no machine-user leak (asserted per state).
 ///
 /// **Non-vacuity (P2).** Each flag flips a CAPTURED node: the new-agent title/field/button vs the
 /// existing-agent title/button; the message caption appears/vanishes; the in-flight label/spinner;
@@ -46,8 +45,20 @@ import OuroWorkbenchCore
 @MainActor
 final class ProviderConfigSheetTests: XCTestCase {
 
-    /// A fixed, machine-independent human name injected in place of `NSFullUserName()`.
+    /// A fixed, machine-independent human name injected in place of the live full-name lookup.
     private static let fixedHumanName = "Test User"
+
+    private static var machineUsername: String {
+        NSUserName().trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func assertNoMachineLeak(_ tree: String, name: String, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertFalse(tree.contains("/Users/"), "\(name): no machine-path leak:\n\(tree)", file: file, line: line)
+        let username = Self.machineUsername
+        if !username.isEmpty {
+            XCTAssertFalse(tree.contains(username), "\(name): no short-user leak:\n\(tree)", file: file, line: line)
+        }
+    }
 
     private func makeVM() throws -> WorkbenchViewModel {
         let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
@@ -120,7 +131,7 @@ final class ProviderConfigSheetTests: XCTestCase {
     // MARK: - Q3 determinism (P3 — the injected humanName renders, no machine-name leak)
 
     /// The injected fixed name reaches the rendered "Your name" `TextField` (proving the Q3
-    /// injection is COVERED, not bypassed), and NO machine `NSFullUserName()` leaks into the tree.
+    /// injection is COVERED, not bypassed), and NO machine user/path leaks into the tree.
     func testProviderConfig_humanNameInjected_noMachineNameLeak() throws {
         for (name, configure) in [
             ("existingAgent", { (m: WorkbenchViewModel) in m.providerConfigIsNewAgent = false }),
@@ -129,8 +140,7 @@ final class ProviderConfigSheetTests: XCTestCase {
             let tree = try ViewSnapshotHost.snapshotText(of: try sheet(configure))
             XCTAssertTrue(tree.contains(Self.fixedHumanName),
                           "\(name): the injected fixed human name must render in the bound TextField:\n\(tree)")
-            XCTAssertFalse(tree.contains(NSFullUserName()),
-                           "\(name): the machine NSFullUserName() must NOT leak into the tree (Q3):\n\(tree)")
+            assertNoMachineLeak(tree, name: "\(name) Q3")
         }
     }
 
@@ -148,8 +158,7 @@ final class ProviderConfigSheetTests: XCTestCase {
             let a = try ViewSnapshotHost.snapshotText(of: try sheet(configure))
             let b = try ViewSnapshotHost.snapshotText(of: try sheet(configure))
             XCTAssertEqual(a, b, "\(name) must be byte-identical twice")
-            XCTAssertFalse(a.contains("/Users/"), "\(name): no machine-path leak:\n\(a)")
-            XCTAssertFalse(a.contains(NSFullUserName()), "\(name): no machine-name leak:\n\(a)")
+            assertNoMachineLeak(a, name: name)
         }
     }
 

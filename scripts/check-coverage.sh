@@ -26,6 +26,14 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
+test_log=""
+profile_root=""
+cleanup() {
+  [ -z "${test_log:-}" ] || rm -f "$test_log"
+  [ -z "${profile_root:-}" ] || rm -rf "$profile_root"
+}
+trap cleanup EXIT
+
 COVERAGE_DIRS=(
   "Sources/OuroWorkbenchCore"
   "Sources/OuroWorkbenchShellAdapter"
@@ -46,12 +54,73 @@ if [ -d /Applications ]; then
 fi
 
 if [ "${1:-}" != "--no-build" ]; then
-  echo "==> swift test --enable-code-coverage"
-  swift test --enable-code-coverage
+  profile_root="$(mktemp -d -t ouro-workbench-coverage-profiles.XXXXXX)"
+
+  # `swift test --enable-code-coverage` with no filter runs every XCTest target in
+  # one long AppKit process. On macOS that all-target process can wake the
+  # Contacts/CoreData XPC store during test discovery/rendering even though each
+  # target-selected suite is hermetic. Run the coverage gate in target shards,
+  # enforce the no-Contacts-noise contract per shard, then merge the saved raw
+  # profiles so the line+region gate below is still computed over every test.
+  run_coverage_shard() {
+    local name="$1"
+    local filter="$2"
+    local shard_dir="$profile_root/$name"
+    local raw_count=0
+    mkdir -p "$shard_dir"
+
+    if [ -d .build ]; then
+      find .build -path '*/codecov/*.profraw' -exec rm -f {} +
+      find .build -path '*/codecov/default.profdata' -exec rm -f {} +
+    fi
+
+    test_log="$(mktemp -t "ouro-workbench-coverage-$name.XXXXXX.log")"
+    echo "==> swift test --enable-code-coverage --filter '$filter'"
+    set +e
+    swift test --enable-code-coverage --filter "$filter" 2>&1 | tee "$test_log"
+    test_status="${PIPESTATUS[0]}"
+    set -e
+
+    scripts/check-test-log-noise.sh "coverage shard '$name'" "$test_log"
+    if [ "$test_status" -ne 0 ]; then
+      echo ""
+      echo "FAIL: coverage shard '$name' failed." >&2
+      exit "$test_status"
+    fi
+
+    while IFS= read -r -d '' raw; do
+      cp "$raw" "$shard_dir/"
+      raw_count=$((raw_count + 1))
+    done < <(find .build -path '*/codecov/*.profraw' -print0)
+    if [ "$raw_count" -eq 0 ]; then
+      echo "FAIL: coverage shard '$name' produced no raw coverage profiles." >&2
+      exit 1
+    fi
+
+    rm -f "$test_log"
+    test_log=""
+  }
+
+  run_coverage_shard "appviews" "OuroWorkbenchAppViewsTests"
+  run_coverage_shard "core" "OuroWorkbenchCoreTests|OuroWorkbenchShellAdapterTests"
+
+  raw_profiles=()
+  while IFS= read -r -d '' raw; do
+    raw_profiles+=("$raw")
+  done < <(find "$profile_root" -name '*.profraw' -print0)
+  if [ "${#raw_profiles[@]}" -eq 0 ]; then
+    echo "FAIL: no coverage profiles were saved from the coverage shards." >&2
+    exit 1
+  fi
+  mkdir -p .build
+  xcrun llvm-profdata merge -sparse "${raw_profiles[@]}" -o .build/wb-coverage.profdata
 fi
 
 bin="$(find .build -name '*PackageTests' -type f -path '*MacOS*' ! -path '*dSYM*' | head -1)"
-prof="$(find .build -name 'default.profdata' | head -1)"
+prof=".build/wb-coverage.profdata"
+if [ ! -f "$prof" ]; then
+  prof="$(find .build -name 'default.profdata' | head -1)"
+fi
 if [ -z "$bin" ] || [ -z "$prof" ]; then
   echo "error: could not locate coverage artifacts (binary='$bin' profdata='$prof')" >&2
   exit 1

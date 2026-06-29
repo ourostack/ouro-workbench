@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.211 - Hermetic Swift-test and coverage shards
+
+- Internal: runs CI Swift tests and coverage in explicit AppViews and Core target shards, fails any shard that emits live Contacts/CoreData/XPC noise, merges raw profiles before enforcing the existing line+region gate, and routes owner-name resolution through XCTest-safe seams so app-view rendering no longer calls the live macOS full-name lookup. No user-facing behavior change.
+
 ## 0.1.210 - View-model coverage (notification content + logic tail)
 
 - Internal: extracts the need-you and unexpected-exit notification title/body/subtitle composition into pure helpers (byte-identical) so the wording logic is directly testable, drives the needs-me baseline/decision guards, and covers a batch of remaining view-model logic (terminal-focus guard, workspace-config-from-directory error arm, first-run bootstrap effects, auto-launch toggle guard, terminal-search guard). Only the notification-center post syscall remains carved. No user-facing behavior change.

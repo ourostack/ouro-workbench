@@ -150,7 +150,7 @@ preflight_generated_scenario_matrix() {
 
 preflight_swift_tests() {
   run_step "Run Swift tests"
-  swift test "${SWIFT_STRICT_FLAGS[@]}"
+  scripts/check-swift-tests.sh
 }
 
 preflight_ui_probes() {
