@@ -457,5 +457,18 @@ WorkbenchViews.swift 1170 223
 # upfront buffer (+30 line / +6 region) to pre-absorb this file's detached-machinery line-axis oscillation
 # (it hit +29 lines in cluster 14) in ONE shot — avoids a 2nd CI round-trip. NOT padding: the genuine
 # detached-Task/subprocess boundary lines toggle covered↔uncovered between runs; the count-1 no-padding
-# proof holds on the stable-coverable portion. NOT the floor yet — clusters 16+ continue.
-WorkbenchViewModel.swift 2833 1007
+# proof holds on the stable-coverable portion.
+# Cluster 16 (tail sweep, v0.1.211): 12 tests. EXTRACTED applyVaultCompletionResult from
+# completeVaultOnboarding's re-probe Task's MainActor.run body (byte-identical — the Task now calls it)
+# so the .ready (clear flags + reset flavor + dismiss) / .failed (flavored line + keep form) fold drives
+# directly; the detached runColdStartProviderCheck re-probe stays the boundary. Drove applyOnboardingProposal
+# (not-ready / no-proposal guards), openProviderConfig (explicit-name + empty→boss fallback; widened),
+# completeRepairAgent (repaired-prepend / needs-manual-while-watching / off-watch-silent; widened),
+# makeFirstRunBootstrapEffects struct-build, openWorkspaceConfig(at:) missing-dir error. VaultOnboarding
+# wiring slicer extended past the extraction (14 wiring tests pass). Local discovery before = 2840/1008.
+# CI residual 2803/1001 -> 2749/987 (54 lines / 14 regions driven OUT; run 28379715706 — PROBE 2740/965
+# FAILED both axes). Set to the STABLE MAX 2779/993 with the WIDE upfront buffer (+30 line / +6 region off
+# observed-max, per the cluster-14/15 oscillation lesson — pre-absorbs the detached-machinery line-axis
+# toggle in one shot). NOT the floor yet — clusters 17+ continue (applyBossAction/performCommand dispatch
+# arms, submitBugReport assembly, cloneAgentHeadless via a clone-runner seam, the small-decl tail).
+WorkbenchViewModel.swift 2779 993

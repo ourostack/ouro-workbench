@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.212 - View-model coverage (vault-completion fold + onboarding/repair tail)
+
+- Internal: extracts the vault-onboarding completion result-handling out of its background re-probe task into a pure helper (byte-identical) so the ready/failed fold is directly testable, and covers a batch of remaining onboarding logic (import-proposal guards, provider-config open, repair-agent completion, first-run bootstrap effects, workspace-config-from-directory). The async re-probe / subprocess boundaries stay carved. No user-facing behavior change.
+
 ## 0.1.211 - Hermetic Swift-test and coverage shards
 
 - Internal: runs CI Swift tests and coverage in explicit AppViews and Core target shards, fails any shard that emits live Contacts/CoreData/XPC noise, merges raw profiles before enforcing the existing line+region gate, and routes owner-name resolution through XCTest-safe seams so app-view rendering no longer calls the live macOS full-name lookup. No user-facing behavior change.
