@@ -5,6 +5,34 @@ autopilot (merge on CI-green, no per-cluster approval). Each region: invoked + e
 mutation-verified; allowlist set to the CI-measured exact minimum (probe-then-set); scope-pure;
 VERSION bump; flaky-region protocol applied.
 
+## ⏸️ RECOMMENDED RESUME POINT (durable checkpoint — 2026-06-29)
+
+**State to resume from:** main @ v0.1.214, VM allowlist `WorkbenchViewModel.swift 2653 973`. Clusters
+1-17 all merged & CI-green. 0 open VM PRs, 0 leftover `coverage/vm-*` branches. This run drove the VM
+allowlist 4637/1392 (after #368) → **2653/973** (1984 lines / 419 regions out, ~30% of the run-start
+region residual) across clusters 8-17.
+
+**⚠️ 973 is NOT the true floor — it is a pause point.** ~620 regions of DRIVABLE logic remain carved.
+The genuine-carve floor is ~150-350 regions (per the STEP-1 scope: ~107 syscall lines + ~49 async-loop
+lines). Do NOT relabel 973 as the floor.
+
+**To resume (next continuation):** keep running the proven loop — one open VM PR at a time, fork
+discover-and-drive a tail batch, CI-hang-verify (fake EVERY machinery seam in makeVM; run the new test
+class hang-guarded), probe-then-set the stable-max with the WIDE upfront buffer (+30 line / +6 region
+off the observed CI residual — this file's detached-machinery lines oscillate up to ~+29), rebase +
+re-bump VERSION on the near-constant operator-PR churn, merge on green. Branch off the LATEST main.
+The cluster-18+ drive targets are in the "REMAINING DRIVABLE (cluster 18+)" section below + the
+"NOT THE FLOOR" section further down. STOP+REPORT for the coordinator's independent audit ONLY when the
+allowlist is genuinely in the ~150-350 band and consists solely of the narrow carve classes.
+
+### REMAINING DRIVABLE (cluster 18+) — the diminishing-yield tail (~15-40 regions/cluster)
+- `applyBossAction` (~53) / `performCommand` (~69) residual SYNC dispatch arms — carve the `Task { await … }` detached dispatches.
+- `submitBugReport` (~39) + its nested `diagnosticsError` (~71) — drive the report assembly UP TO `captureKeyWindowPNG`→`NSApp.keyWindow` (the documented headless-IUO carve at ~:5200). Read the existing WorkbenchViewModelReleaseBugDiagTests first.
+- `installReleaseUpdate` (~39) / `submitProviderConfig` (~35) / `stagePendingUpdate` (~19) — the SYNC prologue + the reachable `MainActor.run` result-handling closure; carve the detached `Task` awaited-runner line (extract the result-handling like cluster-16's `applyVaultCompletionResult` did).
+- `load()` (~27) salvage/migration arms, `groupCreated`(~60, in applyOnboardingProposal's apply-body), `makeFirstRunBootstrapEffects` residual.
+- The scattered small-decl tail (3-25 line state/format/guard/fold decls — discover via the skipped-suite coverage map).
+GENUINE CARVE (the floor — do NOT drive): TerminalHostView NSView bodies (`_lightTheme`/`attach`/`pendingRedrawWorkItems`/`scheduleTerminalRedraws`/`applyThemeBacking`/`window`), the literal subprocess Process lines (`runProviderCheckProcess`/`readLoginShellPath`/`listLiveScreenSessionNames`/`psBackedProcessLines`), `UNUserNotificationCenter.add`, `NSApp.terminate`/`keyWindow`, the `runBossCheckIn(…)` MCP overload (WiringTest-pinned `private func`), the `runExternalActionPump`/`runBossWatchLoop` while-loops + `Task.sleep`, the detached-Task awaited-runner lines, llvm-synth/oscillation regions.
+
 ## Landed clusters (all merged to main, CI-green)
 
 | Cluster | PR | Version | What | VM allowlist after |
