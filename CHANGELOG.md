@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.220 - View-model coverage (recovery-title + live-prompt floor sliver)
+
+- Internal: covers the recovery-button-title arms the recoverable-entry view routes around (manual-action-needed → "Manual Recovery", running-run / no-plan → "Recover") and the boss-action live-prompt nil-transcript guard. Test-only — no production change. This is the final thin pure-logic sliver before the view-model's genuine machinery floor. No user-facing behavior change.
+
 ## 0.1.219 - View-model coverage (computed-var micro-tail)
 
 - Internal: covers the still-untested directly-callable computed properties — the confirmation `Binding<Bool>` get/set-clear arms (error / delete-session / delete-group / stop-session), the onboarding-config-gap fold (nil-guard + blocker-step contains, both arms), the recent-action-log sort, the search-options projection, and the release-URL / auto-present-onboarding / boss-MCP-command / desk-bridge-plan delegations. Test-only — no production change. No user-facing behavior change.

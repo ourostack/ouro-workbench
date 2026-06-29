@@ -529,4 +529,18 @@ WorkbenchViews.swift 1170 223
 # PROBE 2340/880 PASSed so the gate reported the exact `2284 line, 870 region exempt`). Set to the
 # STABLE MAX 2314/876 = the CI residual + this file's documented class-(C) oscillation tolerance
 # (+30 line / +6 region).
-WorkbenchViewModel.swift 2314 876
+# Cluster 22 (v0.1.220, PROBE — the FINAL thin sliver): drives recoveryButtonTitle's .manualActionNeeded
+# →"Manual Recovery" arm (the RecoverableEntryRow view documents this as UNREACHABLE there) + the
+# .noAction/nil-plan →"Recover" arms (via seeded processRuns so RecoveryPlanner derives the action) +
+# bossActionLivePrompt's nil-transcript guard →"". Test-only (no source change). AFTER this the residual
+# is at the genuine candidate floor: every remaining region is a carve class (detached-Task bodies,
+# Process/notification/NSApp lines, live-PTY NSView, infinite loops, source-pinned runBossCheckIn MCP
+# overload, llvm-synth). 2314/876 -> CI residual 2277/866 (7 lines / 4 regions driven OUT; Coverage job
+# 84122715925 — the PROBE 2270/862 failed on both axes so the gate printed the exact `2277 lines / 866
+# regions uncovered`). Set to the STABLE MAX 2307/872 = the CI residual + this file's documented
+# class-(C) oscillation tolerance (+30 line / +6 region). === GENUINE CANDIDATE FLOOR REACHED ===
+# Every remaining region is a carve class (detached-Task bodies, Process/notification/NSApp lines,
+# live-PTY TerminalHostView NSView bodies, infinite while-loops + Task.sleep, source-pinned private
+# runBossCheckIn MCP overload, llvm-synth). The honest floor for THIS async/subprocess-orchestration
+# file is ~700-850 regions — materially above the STEP-1 ~150-350 guess. Held for coordinator audit.
+WorkbenchViewModel.swift 2307 872
