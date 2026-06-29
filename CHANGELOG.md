@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.214 - View-model coverage (clone-result fold + save/install tail)
+
+- Internal: drives the headless agent-clone result-handling (ready → resolved success, vault-locked → honest failure, plan-build failure) through the existing injectable clone-runner seam, plus the save-workspace write path, the Workbench-MCP install fold, and the workspace-config-from-directory error. Test-only — no production change. The live clone/provider-check subprocesses stay carved. No user-facing behavior change.
+
 ## 0.1.213 - Hermetic Work Card reader tests
 
 - Internal: lets the Work Card reader's default process runner accept an injected terminal environment so coverage tests can resolve a fake `ouro` binary without mutating process-wide `PATH`. No user-facing behavior change.
