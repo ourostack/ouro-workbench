@@ -401,8 +401,10 @@ WorkbenchViews.swift 1170 223
 # (207 lines / 69 regions OUT). 3376/1161 -> 3082/1077 (294 lines / 84 regions driven OUT; CI-measured
 # exact residual on run 28362618793 — the PROBE 3042/1066 FAILED on both axes (line 3082>3042, region
 # 1077>1066), so the Coverage gate printed the exact `3082 lines / 1077 regions uncovered`). Set to the
-# STABLE MAX 3088/1080 = the CI residual + the file's established WIDE class-(C) oscillation tolerance
-# (+6 lines / +3 regions, the detached-machinery line-axis amplitude this file carries). NOT padding:
-# the count-1 no-padding proof holds on the stable-coverable portion; the oscillating async/timing
-# detached-Task/subprocess boundary lines get the explicit +6/+3.
-WorkbenchViewModel.swift 3088 1080
+# STABLE MAX 3088/1080 (standalone, pre-#378). REBASED onto #378 (`test(vm): keep cold-start hatch
+# coverage hermetic`, which itself drove additional VM lines but left the allowlist at the cluster-11
+# value) + re-bumped to v0.1.204 (v0.1.203 collided with the just-published release + #378's bump).
+# The combined residual is lower than the standalone — re-measured: PROBE 2971/1059 below (the rebased
+# local residual; set BELOW so the CI Coverage job prints the exact combined Swift-6.0.3 residual);
+# tighten to the stable max post-CI (+6/+3 off the observed residual, per this file's wide oscillation).
+WorkbenchViewModel.swift 2971 1059
