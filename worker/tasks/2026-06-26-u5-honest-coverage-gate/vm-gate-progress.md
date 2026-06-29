@@ -21,7 +21,7 @@ VERSION bump; flaky-region protocol applied.
 | 9 | #373 | 0.1.200 | BIG BATCH: commandPaletteItems (all cmd arms) + load (normal/first-run/lossy-salvage/quarantine) + startup reconcile/recover/auto-resume + reapOrphanedScreen + reclassify/backfill folds + prepareForTermination + stopAll + drainExternalActionRequests | **3906 / 1259** |
 | 10 | #375 | 0.1.201 | BIG BATCH: start*SelectLane/RegisterMCP/RepairAgent (skip+ack; the 3 carried from #369/#372/#374) + scan/startBossReconstruction guards + beginVault/credentialRotation/completeVault + runOnboardingRepairStepNatively + surfaceNativeRepairLine + makeFirstRunBootstrapEffects + openDeskBridgeSetup + installWorkbenchMCP | **3523 / 1209** |
 | 11 | #377 | 0.1.202 | checkForReleaseUpdate + installReleaseUpdate/runAutoUpdateCheckIfDue/stagePendingUpdate guards + releaseUpdateStatusLine/Color + bugReportSessions/AgentNames/ExtraSections + reveal/openSupportDiagnostics + ensureDaemonRunningOnLaunch | **3376 / 1161** |
-| 12 | (open) | 0.1.203 | performCommand payload arms (select/useAsBoss/config/reveal/repair + no-agent guards) + selectAgent/selectBoss/openAgentConfig/revealAgentBundle/repairAgent + recordBossDecisions + reconcileWaitingSessionsIntoInbox + escalateWithheldBossInput + deleteGroup/moveSessionEntries/moveGroups/openWorkspaceConfig import-apply | PROBE 3042/1066 |
+| 12 | #379 | 0.1.203 | performCommand payload arms (select/useAsBoss/config/reveal/repair + no-agent guards) + selectAgent/selectBoss/openAgentConfig/revealAgentBundle/repairAgent + recordBossDecisions + reconcileWaitingSessionsIntoInbox + escalateWithheldBossInput + deleteGroup/moveSessionEntries/moveGroups/openWorkspaceConfig import-apply | **3088 / 1080** |
 
 Cluster 5 result: CI residual 4912/1450 (190 lines / 65 regions driven OUT of 5102/1515); allowlist
 set to STABLE MAX 4916/1451 (+4/+1 class-C oscillation tolerance, per the cluster-4 precedent).
@@ -119,8 +119,9 @@ entry (the only widen is escalateWithheldBossInput, no slicer). Carved: the `Tas
 refreshWorkspace }` detached dispatches, runExternalActionPump while-loop+Task.sleep, the private runBossCheckIn
 daemon/MCP overload, openAgentConfig's NSWorkspace.open, the recoverUnconfirmed/sweepOrphaned prologue
 (ReplayDedup-pinned). LOCAL crashed once on a headless `.shared`-URLSession network test (SIGTRAP signal-5,
-the documented MailboxClient/DataLoader env flake) — re-ran clean. LOCAL drove 3249/1135 → 3042/1066. PROBE
-3042/1066; CI prints exact → stable max (+6/+3 off observed, per this file's oscillation).
+the documented MailboxClient/DataLoader env flake) — re-ran clean. LOCAL drove 3249/1135 → 3042/1066. CI
+residual 3082/1077 (294 lines / 84 regions driven OUT of 3376/1161; run 28362618793 — PROBE 3042/1066
+failed both axes). Allowlist set to STABLE MAX 3088/1080 (+6/+3 off the observed residual).
 
 SOURCE-INTROSPECTION CAVEAT (reconfirmed, clusters 6+7+8+9+12): BEFORE widening a `private func` for a
 cluster, `grep -rln '<funcName>' Tests/` for a WiringTest that slices `private func <name>` — update
