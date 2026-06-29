@@ -466,8 +466,9 @@ WorkbenchViews.swift 1170 223
 # completeRepairAgent (repaired-prepend / needs-manual-while-watching / off-watch-silent; widened),
 # makeFirstRunBootstrapEffects struct-build, openWorkspaceConfig(at:) missing-dir error. VaultOnboarding
 # wiring slicer extended past the extraction (14 wiring tests pass). Local discovery before = 2840/1008.
-# PROBE 2740/965 below — set BELOW main's 2833/1007 so the CI Coverage job prints the exact residual;
-# tighten to the stable max post-CI with the WIDE upfront buffer (+30 line / +6 region off observed-max,
-# per the cluster-14/15 oscillation lesson). NOT the floor yet — clusters 17+ continue (applyBossAction/
-# performCommand dispatch arms, submitBugReport assembly, cloneAgentHeadless via a clone-runner seam).
-WorkbenchViewModel.swift 2740 965
+# CI residual 2803/1001 -> 2749/987 (54 lines / 14 regions driven OUT; run 28379715706 — PROBE 2740/965
+# FAILED both axes). Set to the STABLE MAX 2779/993 with the WIDE upfront buffer (+30 line / +6 region off
+# observed-max, per the cluster-14/15 oscillation lesson — pre-absorbs the detached-machinery line-axis
+# toggle in one shot). NOT the floor yet — clusters 17+ continue (applyBossAction/performCommand dispatch
+# arms, submitBugReport assembly, cloneAgentHeadless via a clone-runner seam, the small-decl tail).
+WorkbenchViewModel.swift 2779 993
