@@ -234,7 +234,13 @@ final class VaultOnboardingWiringTests: XCTestCase {
 
     private func completeVaultOnboardingMethod() throws -> String {
         let source = try WorkbenchAppSource.appSource()
-        return try WorkbenchAppSource.sourceSlice(in: source, from: "func completeVaultOnboarding(", to: "\n    func ")
+        // `completeVaultOnboarding`'s re-probe Task folds the machine result via the byte-identical
+        // extracted `applyVaultCompletionResult` (the .ready/.failed arms live there now), so the
+        // slice spans BOTH methods — stop at `openProviderConfig`, the next decl after the extraction.
+        return try WorkbenchAppSource.sourceSlice(
+            in: source,
+            from: "func completeVaultOnboarding(",
+            to: "/// Open the native provider-config form in response to a non-secret-bearing")
     }
 
     private func markTerminatedMethod() throws -> String {

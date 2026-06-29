@@ -8485,49 +8485,60 @@ public final class WorkbenchViewModel: ObservableObject {
                 reprobeVerdict: verdict
             )
             await MainActor.run {
-                guard let self else { return }
-                self.providerConfigColdStartInFlight = false
-                // Always refresh inventory/readiness so the bundle surfaces with its TRUE state.
-                self.refreshOuroAgents()
-                self.refreshOnboardingReadiness()
-                self.runOnboardingProviderChecksIfNeeded()
-                switch state {
-                case .ready:
-                    // Verified working — reuse F1's EXACT cold-start `.ready` side-effects, and
-                    // clear the needs-vault flag so the form stops offering "Finish setup".
-                    self.providerConfigNeedsVaultSetup = false
-                    self.providerConfigColdStartProvider = nil
-                    self.providerConfigColdStartMessage = nil
-                    // Reset to the default flavor so a later onboarding attempt isn't mis-flavored.
-                    self.vaultOnboardingFlavor = .onboarding
-                    self.runFirstRunBootstrap()
-                    self.recordActionLog(
-                        source: "native",
-                        action: "completeVaultOnboarding",
-                        targetName: agentName,
-                        result: "finish-setup recovery verified ready",
-                        succeeded: true
-                    )
-                    self.isProviderConfigPresented = false
-                case let .failed(reason):
-                    // Honest failure: surface the seam-free Core human line and KEEP "Finish setup"
-                    // available for retry (do NOT dismiss, do NOT clear the flag, do NOT log success).
-                    // F6 — flavor the copy so an existing-agent ROTATION failure reads as a reconnect,
-                    // not first-time setup.
-                    self.providerConfigColdStartMessage =
-                        VaultOnboardingMachine.humanLine(for: state, agentName: agentName, flavor: flavor)
-                    self.recordActionLog(
-                        source: "native",
-                        action: "completeVaultOnboarding",
-                        targetName: agentName,
-                        result: "finish-setup recovery did not verify (outcome: \(reason.rawValue))",
-                        succeeded: false
-                    )
-                default:
-                    // afterVaultTerminal only ever returns .ready or .failed; this is unreachable.
-                    break
-                }
+                self?.applyVaultCompletionResult(state, agentName: agentName, flavor: flavor)
             }
+        }
+    }
+
+    /// VM-GATE: the synchronous main-actor result-handling fold of `completeVaultOnboarding`'s
+    /// re-probe Task, extracted byte-identically so the `.ready` (clear flags + runFirstRunBootstrap
+    /// + dismiss) and `.failed` (surface flavored human line, keep "Finish setup") arms are directly
+    /// unit-testable. The detached re-probe Task (`runColdStartProviderCheck`) stays the boundary.
+    func applyVaultCompletionResult(
+        _ state: VaultOnboardingState,
+        agentName: String,
+        flavor: VaultOnboardingFlavor
+    ) {
+        providerConfigColdStartInFlight = false
+        // Always refresh inventory/readiness so the bundle surfaces with its TRUE state.
+        refreshOuroAgents()
+        refreshOnboardingReadiness()
+        runOnboardingProviderChecksIfNeeded()
+        switch state {
+        case .ready:
+            // Verified working — reuse F1's EXACT cold-start `.ready` side-effects, and
+            // clear the needs-vault flag so the form stops offering "Finish setup".
+            providerConfigNeedsVaultSetup = false
+            providerConfigColdStartProvider = nil
+            providerConfigColdStartMessage = nil
+            // Reset to the default flavor so a later onboarding attempt isn't mis-flavored.
+            vaultOnboardingFlavor = .onboarding
+            runFirstRunBootstrap()
+            recordActionLog(
+                source: "native",
+                action: "completeVaultOnboarding",
+                targetName: agentName,
+                result: "finish-setup recovery verified ready",
+                succeeded: true
+            )
+            isProviderConfigPresented = false
+        case let .failed(reason):
+            // Honest failure: surface the seam-free Core human line and KEEP "Finish setup"
+            // available for retry (do NOT dismiss, do NOT clear the flag, do NOT log success).
+            // F6 — flavor the copy so an existing-agent ROTATION failure reads as a reconnect,
+            // not first-time setup.
+            providerConfigColdStartMessage =
+                VaultOnboardingMachine.humanLine(for: state, agentName: agentName, flavor: flavor)
+            recordActionLog(
+                source: "native",
+                action: "completeVaultOnboarding",
+                targetName: agentName,
+                result: "finish-setup recovery did not verify (outcome: \(reason.rawValue))",
+                succeeded: false
+            )
+        default:
+            // afterVaultTerminal only ever returns .ready or .failed; this is unreachable.
+            break
         }
     }
 
@@ -8538,7 +8549,9 @@ public final class WorkbenchViewModel: ObservableObject {
     /// only ASK the app to open the form; the human supplies the credential inside the native
     /// form, which never routes through the agent's context/transcript. The effect here is a
     /// single published flag flip that presents the form — the one human touchpoint.
-    private func openProviderConfig(action: BossWorkbenchAction, source: String) -> String {
+    // VM-GATE: widened private->internal so the empty-name→boss fallback + the form-present + ack
+    // are directly unit-testable. Pure access-widen, no behavior change.
+    func openProviderConfig(action: BossWorkbenchAction, source: String) -> String {
         // Seed the form with the explicit agent name if the action named one (never relied on
         // for credentials — only to label which agent the form is connecting a provider for).
         let agentName = (action.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -8604,7 +8617,10 @@ public final class WorkbenchViewModel: ObservableObject {
     /// the raw audit detail (carrying `ouro repair --agent <name>`) to the action log. The
     /// `succeeded` flag is the recovery truth — true ONLY when the post-command probe reads
     /// healthy (`repaired`), never off the exit code.
-    private func completeRepairAgent(
+    // VM-GATE: widened private->internal so the recovery-truth fold (bossAppliedActions prepend +
+    // action-log + the needs-manual-while-watching error surface) is directly unit-testable. Pure
+    // access-widen, no behavior change.
+    func completeRepairAgent(
         action: BossWorkbenchAction,
         source: String,
         outcome: AgentRepairOutcome
