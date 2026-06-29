@@ -350,10 +350,15 @@ WorkbenchViews.swift 1170 223
 # force). Local (Swift 6.3.3) drove 3795/1237 -> 3429/1188 (366 lines / 49 regions OUT). PROBE 3429/1188
 # below — set BELOW main's current 3906/1259 so the CI Coverage job (Swift 6.0.3, measures higher than
 # local) both lowers AND prints the exact residual; tighten to the stable max post-CI.
-# 3906/1259 -> 3508/1205 (398 lines / 54 regions driven OUT; CI-measured exact residual on run
-# 28358230024 — the PROBE 3429/1188 FAILED on both axes (line 3508>3429, region 1205>1188), so the
-# Coverage gate printed the exact `3508 lines / 1205 regions uncovered`). Set to the STABLE MAX
-# 3512/1207 = the CI residual + the file's documented class-(C) oscillation tolerance (+4 lines /
-# +2 regions, per the cluster-4/5/6/7/8/9 precedent). NOT padding: the count-1 no-padding proof holds
-# on the stable-coverable portion; the oscillating async/timing regions get the explicit +4/+2.
-WorkbenchViewModel.swift 3512 1207
+# 3906/1259 -> 3508/1205 (398 lines / 54 regions driven OUT). Two CI Coverage runs measured the
+# residual at 3508/1205 (run 28358230024) then 3519/1207 (run 28358524573) — a class-(C) GATED-FILE
+# OSCILLATION with an unusually WIDE +11-LINE amplitude this batch. The oscillating lines are
+# DETACHED-machinery call sites whose region counter toggles covered→uncovered depending on whether
+# the `Task.detached` ran before the profdata snapshot: `WorkbenchViewModel.readLoginShellPath()`
+# (:4055, inside prepareLoginShellEnvironment's Task.detached) and `WorkbenchViewModel.spawnScreenQuit(`
+# (:10818, the genuine-machinery default closure body). Per the flaky-region protocol, set to the
+# STABLE MAX covering the observed post-merge max: 3523/1209 = the observed-max 3519/1207 + a +4 line /
+# +2 region margin for further oscillation of those detached-machinery lines. NOT padding — these are
+# genuine subprocess/detached-Task boundary lines (already-carve-class machinery), not stable logic;
+# the count-1 no-padding proof still holds on the stable-coverable portion.
+WorkbenchViewModel.swift 3523 1209
