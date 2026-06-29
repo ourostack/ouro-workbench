@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.227 - Command-planner coverage (mutation-testing hardening)
+
+- Internal: continues the mutation-testing pilot on the logic core, this time on `CommandPlanner.swift` (already at gated 100% line+region). A mutation pass over its executable lines (relational/logical/boolean swaps, constant alterations, side-effecting-statement removal) found one vacuous-coverage gap: the undetected-agent `autoResume` fallback re-tags its plan `kind: .resume`, but the fallback test asserted executable/arguments/action — not `kind` — and the existing kind-`.resume` test covers only the *detected*-agent native-resume path, so removing that tag survived (the plan silently stayed `.launch`, which would mislabel a fallback resume as a fresh launch in the post-launch operator sentence). Adds one behavior-asserting test, verified to fail on the mutant and pass on the original. Test-only — no production change. The module's other 39 covered mutants were already killed by the suite; one further survivor (`plan.checkpointPromptDelivery = .positional` on the respawn positional path) is genuinely equivalent — the field's init default is already `.positional`, so the assignment is a no-op — and is intentionally left unkilled. No user-facing behavior change.
+
 ## 0.1.226 - Release API fallback
 
 - Internal: release freshness checks now fall back to GitHub's REST release API when the GitHub CLI keyring or JSON path is unhealthy. This keeps local preflight, release policy checks, and shell-refresh validation usable during long-running agent sessions without weakening version freshness gates. No user-facing behavior change.
