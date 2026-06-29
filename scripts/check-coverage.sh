@@ -34,6 +34,11 @@ COVERAGE_DIRS=(
   # live-subprocess machinery that is intentionally ungated. A path ending in
   # `.swift` is matched as an exact file; a path without one is matched as a directory.
   "Sources/OuroWorkbenchAppViews/WorkbenchViews.swift"
+  # VM-GATE campaign STEP 1 (SCOPING): wire the VM file into the gate to MEASURE its
+  # residual on CI. No allowlist entry yet — the gate WILL FAIL and dump the exact
+  # uncovered line/region count, which is the scoping data. The per-cluster drive then
+  # lowers it to the irreducible floor before this becomes a permanent gate entry.
+  "Sources/OuroWorkbenchAppViews/WorkbenchViewModel.swift"
 )
 
 if [ -d /Applications ]; then
