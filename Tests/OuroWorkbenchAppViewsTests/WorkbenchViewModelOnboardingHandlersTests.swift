@@ -3,7 +3,7 @@ import XCTest
 import OuroWorkbenchCore
 @testable import OuroWorkbenchAppViews
 
-/// VM-GATE cluster 7 — the onboarding remediation handlers:
+/// VM-GATE clusters 7 + 10 — the onboarding remediation handlers:
 /// the `start*` dispatchers (`startVerifyProvider` `:8896`, `startRefreshProvider` `:8927`,
 /// `startSelectLane`, `startRegisterWorkbenchMCP`, `startEnsureDaemon` `:9035`, `startReportBug`
 /// `:9063`), `completeOnboardingAction` (`:9087`), and `completeFirstRunBootstrap` (`:8704`).
@@ -33,7 +33,51 @@ final class WorkbenchViewModelOnboardingHandlersTests: XCTestCase {
         BossWorkbenchAction(action: kind, text: text, name: name)
     }
 
+    private func laneAction(
+        name: String? = nil,
+        lane: ProviderLane? = nil,
+        provider: String? = nil,
+        model: String? = nil
+    ) -> BossWorkbenchAction {
+        BossWorkbenchAction(action: .selectLane, name: name, lane: lane, provider: provider, model: model)
+    }
+
+    // MARK: - onboarding scan/reconstruction synchronous guards
+
+    func testScanForOnboardingSessions_alreadyScanning_isNoOp() throws {
+        let m = try makeVM()
+        m.onboardingIsScanning = true
+        m.scanForOnboardingSessions()
+        XCTAssertTrue(m.onboardingIsScanning, "the re-entrancy guard leaves the existing scan alone")
+        XCTAssertFalse(m.state.actionLog.contains { $0.action == "scanOnboardingSessions" },
+                       "the guard returns before the scan Task records a result")
+    }
+
+    func testScanForOnboardingSessions_notReady_refreshesWithoutStartingScan() throws {
+        let m = try makeVM()
+        m.onboardingIsScanning = false
+        m.scanForOnboardingSessions()
+        XCTAssertFalse(m.onboardingIsScanning, "not-ready onboarding returns before setting the scanning flag")
+        XCTAssertFalse(m.state.actionLog.contains { $0.action == "scanOnboardingSessions" },
+                       "not-ready onboarding returns before the scan Task")
+    }
+
+    func testStartBossReconstruction_notReady_refreshesWithoutHandoff() throws {
+        let m = try makeVM()
+        m.startBossReconstruction()
+        XCTAssertFalse(m.onboardingReconstructionHandedOff,
+                       "not-ready onboarding returns before handing reconstruction to the boss")
+        XCTAssertFalse(m.state.actionLog.contains { $0.action == "startBossReconstruction" },
+                       "not-ready onboarding returns before recording a handoff")
+    }
+
     // MARK: - start* empty-name guards (the "Skipped …" arm)
+
+    func testStartRepairAgent_missingName_skips() throws {
+        let m = try makeVM()
+        let result = m.startRepairAgent(action: action(.repairAgent, name: "  "), source: "test")
+        XCTAssertEqual(result, "Skipped repairAgent: missing explicit agent name")
+    }
 
     func testStartVerifyProvider_missingName_skips() throws {
         let m = try makeVM()
@@ -45,6 +89,21 @@ final class WorkbenchViewModelOnboardingHandlersTests: XCTestCase {
         let m = try makeVM()
         let result = m.startRefreshProvider(action: action(.refreshProvider, name: ""), source: "test")
         XCTAssertEqual(result, "Skipped refreshProvider: missing explicit agent name")
+    }
+
+    func testStartSelectLane_missingPayload_skips() throws {
+        let m = try makeVM()
+        let result = m.startSelectLane(
+            action: laneAction(name: "alpha", lane: .inner, provider: "anthropic", model: "  "),
+            source: "test"
+        )
+        XCTAssertEqual(result, "Skipped selectLane: missing explicit agent name, lane, provider, or model")
+    }
+
+    func testStartRegisterWorkbenchMCP_missingName_skips() throws {
+        let m = try makeVM()
+        let result = m.startRegisterWorkbenchMCP(action: action(.registerWorkbenchMCP, name: ""), source: "test")
+        XCTAssertEqual(result, "Skipped registerWorkbenchMCP: missing explicit agent name")
     }
 
     func testStartReportBug_missingNote_skips() throws {

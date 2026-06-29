@@ -19,6 +19,7 @@ VERSION bump; flaky-region protocol applied.
 | 7 | #368 | 0.1.198 | start* onboarding handlers (verify/refresh/ensureDaemon/reportBug skip+ack arms) + completeOnboardingAction + completeFirstRunBootstrap | **4637 / 1392** |
 | 8 | #371 | 0.1.199 | runBossWatchTick guard/no-wake + registerBossWatchFailure + applyExternalActionRequests + triggerEventDrivenBossCheckIn | **4552 / 1378** |
 | 9 | #373 | 0.1.200 | BIG BATCH: commandPaletteItems (all cmd arms) + load (normal/first-run/lossy-salvage/quarantine) + startup reconcile/recover/auto-resume + reapOrphanedScreen + reclassify/backfill folds + prepareForTermination + stopAll + drainExternalActionRequests | **3906 / 1259** |
+| 10 | #376 | 0.1.201 | onboarding guard tail: scan/reconstruction not-ready guards + repair/select/register-MCP skip guards | **3829 / 1247 local cap; tighten from CI log if lower** |
 
 Cluster 5 result: CI residual 4912/1450 (190 lines / 65 regions driven OUT of 5102/1515); allowlist
 set to STABLE MAX 4916/1451 (+4/+1 class-C oscillation tolerance, per the cluster-4 precedent).
@@ -43,7 +44,7 @@ VM PR at a time (prior doers opened 2 concurrently → conflicts on WorkbenchVie
 + VERSION; do NOT). The #369 (old cluster 8) startup-reconcile PR was CLOSED by the coordinator as
 superseded (its applyExternalActionRequests overlap landed in #371; its base was behind main's
 allowlist). Cluster 9 re-drove the startup-reconcile/state-load area fresh + much larger.
-Cluster 9 (BIG BATCH, startup / state-load / session lifecycle, v0.1.200, open PR): 39 tests drive
+Cluster 9 (BIG BATCH, startup / state-load / session lifecycle, v0.1.200, #373): 39 tests drive
 commandPaletteItems (all conditional command arms present+absent), load() (normal / first-run-forced /
 lossy-salvage `.salvageBeforeResave` / unreadable `.moved` quarantine — via seeded state files),
 reconcileStartupAttentionWithLiveSessions, recoverEligibleSessionsOnStartup,
@@ -58,9 +59,16 @@ arm (store-internal, not seed-forceable). CI residual 3902/1257 (650 lines / 121
 of 4552/1378; run 28356481057 — the PROBE 3856/1252 FAILED on both axes, so the gate printed the
 exact count). Allowlist set to STABLE MAX 3906/1259 (+4 line / +2 region class-(C) buffer). The
 #369→#372 startup-reconcile path (resurrected by a leftover prior-doer process as a 2nd concurrent
-PR) was CLOSED by the coordinator as superseded — #373 drove its substantive scope + much more. The 5
-onboarding skip-guards unique to #372 (scanForOnboardingSessions / startBossReconstruction /
-startSelectLane / startRegisterWorkbenchMCP / startRepairAgent) are carried forward into Batch 2.
+PR) was CLOSED by the coordinator as superseded — #373 drove its substantive scope + much more.
+
+Cluster 10 (onboarding guard tail, v0.1.201, #376): drives the remaining synchronous onboarding
+guards carried forward from the closed superseded startup-reconcile path: scanForOnboardingSessions re-entrancy and
+not-ready returns, startBossReconstruction not-ready return, startRepairAgent missing-name return,
+startSelectLane missing-payload return, and startRegisterWorkbenchMCP missing-name return. Local
+baseline on origin/main measured 3913/1263 while GitHub CI's accepted #373 cap is 3906/1259. Two
+branch-local coverage runs measured 3825/1247 and 3829/1238, so this branch starts with the
+local-stable 3829/1247 cap and tightens from the PR Coverage log if GitHub reports a lower exact
+residual.
 
 SOURCE-INTROSPECTION CAVEAT (reconfirmed, clusters 6+7+8+9): BEFORE widening a `private func` for a
 cluster, `grep -rln '<funcName>' Tests/` for a WiringTest that slices `private func <name>` — update
@@ -75,14 +83,17 @@ residual off CI, then set the stable max). New seams: `persistentSessionLister`,
 `postExitNotification` (both prod byte-identical, @MainActor).
 
 Start residual (scoping): 5892 lines / 1696 regions (44.0% line / 40.7% region).
-Current (main): **5102 lines / 1515 regions** — the STABLE MAX (the bare 5098/1514 minimum red-ed
-main post-merge on an oscillating async region; set to the post-merge-observed stable count per the
-class-(C) GATED-FILE OSCILLATION protocol). 51.4% line / 47.0% region.
-Driven so far: **794 lines / 182 regions** out.
+Current (main): **3906 lines / 1259 regions** — the #373 STABLE MAX (CI exact 3902/1257 +4/+2
+startup/async class-(C) tolerance). Cluster 10 branch-local cap: **3829 lines / 1247 regions** until
+the PR Coverage log gives a tighter GitHub-runner exact count.
+Driven so far on main: **1986 lines / 437 regions** out. Cluster 10 branch-local delta: **+77 lines /
++12 regions** beyond main's stable cap, or **+84 lines / +16 regions** versus the same-machine
+origin/main baseline.
 
 Test suites added (all in Tests/OuroWorkbenchAppViewsTests/):
 WorkbenchViewModelBossActionTests, WorkbenchViewModelPerformCommandTests,
-WorkbenchViewModelOnboardingFlowsTests, WorkbenchViewModelReleaseBugDiagTests.
+WorkbenchViewModelOnboardingFlowsTests, WorkbenchViewModelReleaseBugDiagTests,
+WorkbenchViewModelStartupStateTests, WorkbenchViewModelOnboardingHandlersTests.
 
 ## Remaining drivable clusters (biggest-first, from vm-uncovered-lines.txt / vm-gate-scope.md)
 

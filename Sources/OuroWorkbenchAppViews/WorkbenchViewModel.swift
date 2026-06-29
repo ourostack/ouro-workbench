@@ -8456,7 +8456,9 @@ public final class WorkbenchViewModel: ObservableObject {
     /// re-authorized via `authorizeEntryless` under `trustedOnboarding`); it never relies on
     /// `ouro` default-agent resolution. We re-guard here so a code path that skipped validation
     /// still can't run an agent-less repair (which could repair the wrong agent).
-    private func startRepairAgent(action: BossWorkbenchAction, source: String) -> String {
+    // VM-GATE: internal (was private) so the missing-agent guard is directly unit-testable. The
+    // async repair Task remains the genuine-machinery boundary; no behavior change.
+    func startRepairAgent(action: BossWorkbenchAction, source: String) -> String {
         let agentName = (action.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !agentName.isEmpty else {
             return finishBossAction(
@@ -8973,7 +8975,9 @@ public final class WorkbenchViewModel: ObservableObject {
     /// Kick off a headless `selectLane` remediation (`ouro use --agent --lane --provider
     /// --model`). CONFIG-ONLY — carries no secret. Re-guards the fully-specified payload (agent
     /// name + lane + provider + model); any missing piece skips before any command runs.
-    private func startSelectLane(action: BossWorkbenchAction, source: String) -> String {
+    // VM-GATE: internal (was private) so the missing-payload guard is directly unit-testable. The
+    // async lane-selection Task remains the genuine-machinery boundary; no behavior change.
+    func startSelectLane(action: BossWorkbenchAction, source: String) -> String {
         let agentName = (action.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !agentName.isEmpty,
               let lane = action.lane,
@@ -9009,7 +9013,9 @@ public final class WorkbenchViewModel: ObservableObject {
     /// This WRAPS the registrar's cleanup (`bossWorkbenchMCPRegistrar.install`, now a stale-entry
     /// cleanup) + snapshot (binary-present + bundle-clean) as an agent-issuable action; recovery
     /// truth comes from the POST-command registrar SNAPSHOT, never the cleanup throw.
-    private func startRegisterWorkbenchMCP(action: BossWorkbenchAction, source: String) -> String {
+    // VM-GATE: internal (was private) so the missing-agent guard is directly unit-testable. The
+    // async MCP-registration Task remains the genuine-machinery boundary; no behavior change.
+    func startRegisterWorkbenchMCP(action: BossWorkbenchAction, source: String) -> String {
         let agentName = (action.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !agentName.isEmpty else {
             return finishBossAction(

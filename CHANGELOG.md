@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.201 - View-model coverage (onboarding guard tail)
+
+- Internal: drives the remaining synchronous onboarding scan/reconstruction guards plus the repair-agent, lane-selection, and Workbench-MCP registration skip guards to test coverage. The async remediation tasks stay the boundary. No user-facing behavior change.
+
 ## 0.1.200 - View-model coverage (startup / state-load / session lifecycle)
 
 - Internal: drives a large batch of view-model startup and persistence logic to test coverage — the command-palette descriptor builder (every conditional command arm), state load + first-run-forced + lossy-salvage paths, startup attention reconciliation, the auto-resume-on-launch and orphan-screen-reaper guards, and the flushed-run reclassify/backfill folds. The orphan `screen` quit is seamed; the live `screen`/NSApp/async-scan boundaries stay carved. No user-facing behavior change.

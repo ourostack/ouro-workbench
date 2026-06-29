@@ -334,4 +334,12 @@ WorkbenchViews.swift 1170 223
 # class-(C) oscillation tolerance (+4 lines / +2 regions, per the cluster-4/5/6/7/8 precedent — this
 # batch is startup/async/screen-reaper timing-dense). NOT padding: the count-1 no-padding proof holds
 # on the stable-coverable portion; the oscillating async/timing regions get the explicit +4/+2.
-WorkbenchViewModel.swift 3906 1259
+# Cluster 10 (onboarding guard tail, v0.1.201): drives scanForOnboardingSessions' re-entrancy and
+# not-ready guards, startBossReconstruction's not-ready guard, and startRepairAgent/startSelectLane/
+# startRegisterWorkbenchMCP skip guards via direct internal calls. The async scan/reconstruction/
+# remediation Tasks stay the genuine-machinery boundary. Local evidence on the same machine measured
+# main at 3913/1263 and this branch's two local runs at 3825/1247 then 3829/1238, so the local
+# stable max is 3829/1247 (84 lines / 16 regions better than the same-machine baseline). GitHub CI
+# is the final source of truth for the exact stable cap because the local toolchain currently reports
+# +7 lines / +4 regions over the already-accepted CI main cap (3906/1259).
+WorkbenchViewModel.swift 3829 1247
