@@ -16,7 +16,8 @@ VERSION bump; flaky-region protocol applied.
 | (flake-fix) | #364 | 0.1.193 | VM allowlist → STABLE MAX (absorb async oscillation; class-C) | **5102 / 1515** |
 | 5 | #366 | 0.1.195 | markTerminated + applyAttentionSignal + exit-notification decision/throttle | **4916 / 1451** |
 | 6 | #367 | 0.1.196 | deleteCustomSession/archive + revealLatestTranscript + requestStop/confirmStop + applySessionIdBackfills | **4799 / 1415** |
-| 7 | #368 | 0.1.197 | start* onboarding handlers (verify/refresh/ensureDaemon/reportBug skip+ack arms) + completeOnboardingAction + completeFirstRunBootstrap | **4637 / 1392** |
+| 7 | #368 | 0.1.198 | start* onboarding handlers (verify/refresh/ensureDaemon/reportBug skip+ack arms) + completeOnboardingAction + completeFirstRunBootstrap | **4637 / 1392** |
+| 8 | #371 | 0.1.199 | runBossWatchTick guard/no-wake + registerBossWatchFailure + applyExternalActionRequests + triggerEventDrivenBossCheckIn | **4552 / 1378** |
 
 Cluster 5 result: CI residual 4912/1450 (190 lines / 65 regions driven OUT of 5102/1515); allowlist
 set to STABLE MAX 4916/1451 (+4/+1 class-C oscillation tolerance, per the cluster-4 precedent).
@@ -29,8 +30,12 @@ set to STABLE MAX 4637/1392. Widened private→internal: startVerifyProvider/sta
 startEnsureDaemon/startReportBug/completeOnboardingAction/completeFirstRunBootstrap. The
 BossActionLogPendingWiringTests `handlerBody` source-slicer was made `private`-agnostic (match `func
 <name>(` + stop at the next private OR internal func) so the widen didn't break its source-pins.
+Cluster 8 result: CI residual 4548/1377 (85 lines / 14 regions driven OUT of 4637/1392); allowlist
+set to STABLE MAX 4552/1378. Widened private→internal: registerBossWatchFailure /
+applyExternalActionRequests / triggerEventDrivenBossCheckIn (ReplayDedupWiringTests'
+applyExternalActionRequests slicer made `private`-agnostic). runBossWatchTick already internal.
 
-SOURCE-INTROSPECTION CAVEAT (reconfirmed, clusters 6+7): BEFORE widening a `private func` for a
+SOURCE-INTROSPECTION CAVEAT (reconfirmed, clusters 6+7+8): BEFORE widening a `private func` for a
 cluster, `grep -rln '<funcName>' Tests/` for a WiringTest that slices `private func <name>` — update
 its slicer to a `private`-agnostic match in the SAME PR (else CI reds on Swift tests + Coverage).
 
