@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.201 - View-model coverage (onboarding / provider / vault)
+
+- Internal: drives a large batch of view-model onboarding logic to test coverage — the boss-issued onboarding dispatchers (select-lane / register-MCP / repair-agent skip-guard + in-flight-ack arms), the onboarding-session scan and boss-reconstruction guards, the vault-onboarding and credential-rotation begin/complete flows, the native repair-step dispatch + surface-line fold, the first-run bootstrap effects wiring, the desk-bridge setup launch, and the Workbench-MCP install fold. The async remediation runner / cold-start hatch / re-probe tasks stay the boundary. No user-facing behavior change.
+
 ## 0.1.200 - View-model coverage (startup / state-load / session lifecycle)
 
 - Internal: drives a large batch of view-model startup and persistence logic to test coverage — the command-palette descriptor builder (every conditional command arm), state load + first-run-forced + lossy-salvage paths, startup attention reconciliation, the auto-resume-on-launch and orphan-screen-reaper guards, and the flushed-run reclassify/backfill folds. The orphan `screen` quit is seamed; the live `screen`/NSApp/async-scan boundaries stay carved. No user-facing behavior change.

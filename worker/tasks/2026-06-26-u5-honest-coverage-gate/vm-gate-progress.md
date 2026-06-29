@@ -19,6 +19,7 @@ VERSION bump; flaky-region protocol applied.
 | 7 | #368 | 0.1.198 | start* onboarding handlers (verify/refresh/ensureDaemon/reportBug skip+ack arms) + completeOnboardingAction + completeFirstRunBootstrap | **4637 / 1392** |
 | 8 | #371 | 0.1.199 | runBossWatchTick guard/no-wake + registerBossWatchFailure + applyExternalActionRequests + triggerEventDrivenBossCheckIn | **4552 / 1378** |
 | 9 | #373 | 0.1.200 | BIG BATCH: commandPaletteItems (all cmd arms) + load (normal/first-run/lossy-salvage/quarantine) + startup reconcile/recover/auto-resume + reapOrphanedScreen + reclassify/backfill folds + prepareForTermination + stopAll + drainExternalActionRequests | **3906 / 1259** |
+| 10 | #375 | 0.1.201 | BIG BATCH: start*SelectLane/RegisterMCP/RepairAgent (skip+ack; the 3 carried from #369/#372/#374) + scan/startBossReconstruction guards + beginVault/credentialRotation/completeVault + runOnboardingRepairStepNatively + surfaceNativeRepairLine + makeFirstRunBootstrapEffects + openDeskBridgeSetup + installWorkbenchMCP | **3523 / 1209** |
 
 Cluster 5 result: CI residual 4912/1450 (190 lines / 65 regions driven OUT of 5102/1515); allowlist
 set to STABLE MAX 4916/1451 (+4/+1 class-C oscillation tolerance, per the cluster-4 precedent).
@@ -61,6 +62,28 @@ exact count). Allowlist set to STABLE MAX 3906/1259 (+4 line / +2 region class-(
 PR) was CLOSED by the coordinator as superseded — #373 drove its substantive scope + much more. The 5
 onboarding skip-guards unique to #372 (scanForOnboardingSessions / startBossReconstruction /
 startSelectLane / startRegisterWorkbenchMCP / startRepairAgent) are carried forward into Batch 2.
+The leftover process re-pushed the SAME superseded work a THIRD time as #374
+(`vm-cluster9-startup-reconcile`, stale df59ac1 base, allowlist 4288/1336 which would REGRESS main) —
+also CLOSED + branch deleted on the same supersession basis.
+Cluster 10 (BIG BATCH, onboarding / provider / vault, v0.1.201, open PR): 32 tests drive the boss-
+issued onboarding dispatchers startSelectLane / startRegisterWorkbenchMCP / startRepairAgent (skip-
+guard + in-flight-ack arms — the 3 carried-forward guards), scanForOnboardingSessions +
+startBossReconstruction guards, beginVaultOnboarding / beginCredentialRotation / completeVaultOnboarding
+(sync prologue; the detached re-probe Task is the boundary), runOnboardingRepairStepNatively (all 5
+arms) + surfaceNativeRepairLine, makeFirstRunBootstrapEffects, openDeskBridgeSetup, installWorkbenchMCP.
+Widened private→internal (6 funcs + 4 vault vars; NO WiringTest slicer referenced any). Carved: every
+start* runner Task body, submitProviderConfig's coldStartHatch Task, completeVaultOnboarding re-probe
+Task, runCloneProviderCheck (live `ouro check`), the begin* createCustomSession-nil launch-fail guards.
+DEAD-CODE FLAG (for coordinator): `looksLikeOnboardingQuestion` is a `private extension String` var
+with NO callers in the VM — not drivable, not machinery; a deletion candidate (NOT touched here).
+CI residual 3508/1205 (398 lines / 54 regions driven OUT of 3906/1259; run 28358230024). NOTE: this
+batch hit a WIDE class-(C) oscillation — two CI runs measured 3508/1205 then 3519/1207 (+11 LINES),
+the toggling lines being detached-machinery call sites (readLoginShellPath() inside a Task.detached :4055,
+spawnScreenQuit( default-closure body :10818) whose region counter flakes on whether the detached Task
+ran before the profdata snapshot. The first stable-max 3512/1207 (+4/+2 off the lower run) RED-ed the
+re-run on line 3519>3512. Re-set to STABLE MAX 3523/1209 = observed-max 3519/1207 + (+4 line / +2 region)
+margin. LESSON: when a batch touches detached-Task/subprocess boundary lines, the line-axis oscillation
+can exceed the usual +4 — measure TWO runs (or set off the observed max) before trusting the buffer.
 
 SOURCE-INTROSPECTION CAVEAT (reconfirmed, clusters 6+7+8+9): BEFORE widening a `private func` for a
 cluster, `grep -rln '<funcName>' Tests/` for a WiringTest that slices `private func <name>` — update
