@@ -276,6 +276,11 @@ WorkbenchViews.swift 1170 223
 # live `screen -ls` listing (detach-vs-crash) is seamed behind `persistentSessionLister`; the macOS
 # unexpected-exit notification (UNUserNotificationCenter, which traps "bundleProxyForCurrentProcess
 # is nil" headless) is seamed behind `postExitNotification`; only the literal subprocess /
-# notification-center syscalls inside those default closures stay carved. PROBE value below — the CI
-# Coverage job prints the exact residual, then this is set to the stable max.
-WorkbenchViewModel.swift 4950 1490
+# notification-center syscalls inside those default closures stay carved. 5102/1515 -> 4912/1450
+# (190 lines / 65 regions driven OUT; CI-measured exact residual on run 28350530700, Coverage job
+# 83982290158, via the PROBE 4950/1490 which PASSed -> the gate printed the exact `4912 line, 1450
+# region exempt`). Set to the STABLE MAX 4916/1451 = the CI residual + the file's documented class-(C)
+# oscillation tolerance (+4 lines / +1 region, the same delta cluster 4's bare minimum flaked by;
+# see the v0.1.193 FLAKY-TOLERANCE note above). NOT padding — the count-1 no-padding proof holds on
+# the stable-coverable portion; the oscillating async/timing regions get the explicit +4/+1.
+WorkbenchViewModel.swift 4916 1451
