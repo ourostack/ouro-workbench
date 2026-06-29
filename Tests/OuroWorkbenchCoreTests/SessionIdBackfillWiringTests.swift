@@ -69,7 +69,7 @@ final class SessionIdBackfillWiringTests: XCTestCase {
         let source = try WorkbenchAppSource.appSource()
         let reclassify = try WorkbenchAppSource.sourceSlice(
             in: source,
-            from: "private func reclassifyAttentionForFlushedRuns",
+            from: "func reclassifyAttentionForFlushedRuns",
             to: "\n    nonisolated private static func classifyTranscriptTail"
         )
         XCTAssertTrue(
@@ -104,7 +104,7 @@ final class SessionIdBackfillWiringTests: XCTestCase {
         let source = try WorkbenchAppSource.appSource()
         return try WorkbenchAppSource.sourceSlice(
             in: source,
-            from: "private func backfillSessionIdsForFlushedRuns",
+            from: "func backfillSessionIdsForFlushedRuns",
             to: "nonisolated private static func classifyTranscriptTail"
         )
     }

@@ -140,8 +140,25 @@ final class TerminalLeakReaperWiringTests: XCTestCase {
             "the reaper must reuse the cached live-session set (no second screen -ls probe)"
         )
         XCTAssertTrue(
-            body.contains("spawnScreenQuit"),
-            "the reaper must quit each orphan via the shared spawnScreenQuit"
+            body.contains("spawnPersistentScreenQuit"),
+            "the reaper must quit each orphan via the injectable spawnPersistentScreenQuit seam (whose default routes to the shared off-main+watchdog spawnScreenQuit — see testReaperQuitSeamDefaultsToSharedSpawnScreenQuit)"
+        )
+    }
+
+    func testReaperQuitSeamDefaultsToSharedSpawnScreenQuit() throws {
+        // VM-GATE cluster 9 — the reaper's per-orphan quit was seamed behind the
+        // injectable `spawnPersistentScreenQuit` so a test can drive the orphan-loop
+        // value-flow without spawning `screen`. Its DEFAULT must still route to the
+        // shared off-main + 1.5s-watchdog `spawnScreenQuit` so the genuine-machinery
+        // guarantee (a wedged screen socket can't hang a worker thread) is preserved.
+        let seam = try WorkbenchAppSource.sourceSlice(
+            in: try WorkbenchAppSource.appSource(),
+            from: "var spawnPersistentScreenQuit",
+            to: "\n    private var manuallyTerminatedRunIDs"
+        )
+        XCTAssertTrue(
+            seam.contains("WorkbenchViewModel.spawnScreenQuit(arguments:") || seam.contains("spawnScreenQuit(arguments:"),
+            "the spawnPersistentScreenQuit seam default must route to the shared spawnScreenQuit (off-main + watchdog), not a bespoke spawn"
         )
     }
 

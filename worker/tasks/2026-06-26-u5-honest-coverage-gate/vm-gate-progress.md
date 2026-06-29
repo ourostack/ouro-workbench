@@ -18,6 +18,7 @@ VERSION bump; flaky-region protocol applied.
 | 6 | #367 | 0.1.196 | deleteCustomSession/archive + revealLatestTranscript + requestStop/confirmStop + applySessionIdBackfills | **4799 / 1415** |
 | 7 | #368 | 0.1.198 | start* onboarding handlers (verify/refresh/ensureDaemon/reportBug skip+ack arms) + completeOnboardingAction + completeFirstRunBootstrap | **4637 / 1392** |
 | 8 | #371 | 0.1.199 | runBossWatchTick guard/no-wake + registerBossWatchFailure + applyExternalActionRequests + triggerEventDrivenBossCheckIn | **4552 / 1378** |
+| 9 | #373 | 0.1.200 | BIG BATCH: commandPaletteItems (all cmd arms) + load (normal/first-run/lossy-salvage/quarantine) + startup reconcile/recover/auto-resume + reapOrphanedScreen + reclassify/backfill folds + prepareForTermination + stopAll + drainExternalActionRequests | **3906 / 1259** |
 
 Cluster 5 result: CI residual 4912/1450 (190 lines / 65 regions driven OUT of 5102/1515); allowlist
 set to STABLE MAX 4916/1451 (+4/+1 class-C oscillation tolerance, per the cluster-4 precedent).
@@ -35,7 +36,33 @@ set to STABLE MAX 4552/1378. Widened private→internal: registerBossWatchFailur
 applyExternalActionRequests / triggerEventDrivenBossCheckIn (ReplayDedupWiringTests'
 applyExternalActionRequests slicer made `private`-agnostic). runBossWatchTick already internal.
 
-SOURCE-INTROSPECTION CAVEAT (reconfirmed, clusters 6+7+8): BEFORE widening a `private func` for a
+CADENCE CHANGE (cluster 9 onward, per coordinator): the prior per-tiny-cluster cadence had too much
+CI/merge/conflict overhead at the ~250-decl tail scale. Switched to BIG BATCHES (~30-50 decls / a big
+chunk of the residual per PR) so the whole tail lands in ~4-6 PRs. STRICT SERIALIZE: exactly ONE open
+VM PR at a time (prior doers opened 2 concurrently → conflicts on WorkbenchViewModel.swift + allowlist
++ VERSION; do NOT). The #369 (old cluster 8) startup-reconcile PR was CLOSED by the coordinator as
+superseded (its applyExternalActionRequests overlap landed in #371; its base was behind main's
+allowlist). Cluster 9 re-drove the startup-reconcile/state-load area fresh + much larger.
+Cluster 9 (BIG BATCH, startup / state-load / session lifecycle, v0.1.200, open PR): 39 tests drive
+commandPaletteItems (all conditional command arms present+absent), load() (normal / first-run-forced /
+lossy-salvage `.salvageBeforeResave` / unreadable `.moved` quarantine — via seeded state files),
+reconcileStartupAttentionWithLiveSessions, recoverEligibleSessionsOnStartup,
+launchAutoResumeSessionsOnStartup, reapOrphanedScreenSessions (per-orphan quit seamed behind NEW
+`spawnPersistentScreenQuit`; default routes to shared spawnScreenQuit, TerminalLeakReaper pin updated
++ default-routing pin added), reclassifyAttentionForFlushedRuns + backfillSessionIdsForFlushedRuns
+(widened private→internal, SessionIdBackfill slicers made private-agnostic), prepareForTermination,
+stopAllRunningSessions, drainExternalActionRequests. Carved: resetToFirstRun (NSApp.terminate +
+relaunch subprocess), live `screen -ls` Process/Pipe/kill, the literal Process in the
+spawnPersistentScreenQuit default closure, the async ps-backed backfill scan, load()'s `.moveFailed`
+arm (store-internal, not seed-forceable). CI residual 3902/1257 (650 lines / 121 regions driven OUT
+of 4552/1378; run 28356481057 — the PROBE 3856/1252 FAILED on both axes, so the gate printed the
+exact count). Allowlist set to STABLE MAX 3906/1259 (+4 line / +2 region class-(C) buffer). The
+#369→#372 startup-reconcile path (resurrected by a leftover prior-doer process as a 2nd concurrent
+PR) was CLOSED by the coordinator as superseded — #373 drove its substantive scope + much more. The 5
+onboarding skip-guards unique to #372 (scanForOnboardingSessions / startBossReconstruction /
+startSelectLane / startRegisterWorkbenchMCP / startRepairAgent) are carried forward into Batch 2.
+
+SOURCE-INTROSPECTION CAVEAT (reconfirmed, clusters 6+7+8+9): BEFORE widening a `private func` for a
 cluster, `grep -rln '<funcName>' Tests/` for a WiringTest that slices `private func <name>` — update
 its slicer to a `private`-agnostic match in the SAME PR (else CI reds on Swift tests + Coverage).
 

@@ -491,7 +491,9 @@ public final class WorkbenchViewModel: ObservableObject {
     private var onboardingProviderCheckTasks: [String: Task<Void, Never>] = [:]
     /// Set once `resetToFirstRun()` begins; suppresses all persistence so the
     /// wiped state file isn't rewritten before the relaunch.
-    private var isResettingToFirstRun = false
+    /// VM-GATE: internal (was private) so a test can drive `prepareForTermination`'s reset guard
+    /// arm without invoking the NSApp-terminating `resetToFirstRun`. No behavior change.
+    var isResettingToFirstRun = false
     /// Set for the duration of `load()`'s body; suppresses `save()` so the
     /// `@Published` selection/layout assignments load() makes (which each fire a
     /// `didSet` → `save()`) can't atomically overwrite `stateURL` before the
@@ -618,7 +620,9 @@ public final class WorkbenchViewModel: ObservableObject {
     /// in this Core type; the App-side methods below are thin wiring that inject the real effects
     /// and publish its output.
     private let firstRunDrive = FirstRunBootstrapDrive()
-    private let externalActionQueue: WorkbenchActionRequestQueue
+    // VM-GATE: internal (was private) so a test can enqueue into the SAME queue directory the VM
+    // drains, driving `drainExternalActionRequests`'s real read+apply path. No behavior change.
+    let externalActionQueue: WorkbenchActionRequestQueue
     /// Transport for the boss's `workbench_propose` CAPABILITY. The card reads
     /// pending proposals from here and writes the operator's `result()` back. This
     /// is purely OPT-IN surfacing — it never gates any other flow; an unanswered
@@ -721,6 +725,17 @@ public final class WorkbenchViewModel: ObservableObject {
         panel.runModal() == .OK ? panel.url : nil
     }
 
+    /// Seam: quit a persistent `screen` session by argv — the startup orphan reaper's per-orphan
+    /// quit, which targets a session NAME (not an entry id), so it can't use the entry-keyed
+    /// `quitPersistentScreenForEntry`. Defaults to the shared off-main + 1.5s-watchdog
+    /// `spawnScreenQuit` (the genuine-machinery boundary — a real `screen -X quit` subprocess). A
+    /// test injects a recorder so the reaper's orphan-loop value-flow (the environment build + the
+    /// per-orphan iteration) is driven without spawning `screen`. Only the literal `Process()` inside
+    /// the default closure stays carved. `@Sendable` — `spawnScreenQuit` is `nonisolated`.
+    var spawnPersistentScreenQuit: @Sendable (_ arguments: [String], _ environment: [String: String]) -> Void = { arguments, environment in
+        WorkbenchViewModel.spawnScreenQuit(arguments: arguments, environment: environment)
+    }
+
     private var manuallyTerminatedRunIDs = Set<UUID>()
     /// F13 — the entry id + runId of the in-flight vault-onboarding recovery terminal (the one-shot
     /// `ouro vault create && auth && refresh` chain), captured at launch so `markTerminated` can
@@ -748,8 +763,10 @@ public final class WorkbenchViewModel: ObservableObject {
     /// how often a burst of such events can kick a check-in.
     private var lastEventDrivenCheckInAt: Date?
     private let eventDrivenCheckInCooldown: TimeInterval = 15
-    private var didAttemptStartupRecovery = false
-    private var didAttemptAutoResumeLaunch = false
+    // VM-GATE: internal (was private) so a test can pre-set the once-per-launch guards to drive
+    // both the already-attempted no-op arm and the first-attempt arm. No behavior change.
+    var didAttemptStartupRecovery = false
+    var didAttemptAutoResumeLaunch = false
     /// F11a Defect 2 — entries with a `start(_:with:)` currently in flight. Now
     /// that `start` is `async` (it may `await` a `screen` quit before the
     /// `-D -RR` relaunch), a second start for the SAME entry could run on the
@@ -767,7 +784,9 @@ public final class WorkbenchViewModel: ObservableObject {
     /// `knownEntryIds` would make the reaper quit EVERY live `screen` — including
     /// reattachable survivors (F8-class "kill the wrong thing"). `false` until a
     /// load actually restores state.
-    private var stateLoadSucceeded = false
+    /// VM-GATE: internal (was private) so a test can set the reaper's load-success gate to drive
+    /// both the failed-load no-op arm and the succeeded-load reap arm. No behavior change.
+    var stateLoadSucceeded = false
     /// Last time we posted an unexpected-exit notification per entry, to
     /// throttle banner spam when a session crash-loops or several are
     /// recovered at once.
@@ -6884,9 +6903,9 @@ public final class WorkbenchViewModel: ObservableObject {
         }
         let environment = TerminalEnvironment().valuesWithResolvedPath()
         for name in orphans {
-            Self.spawnScreenQuit(
-                arguments: PersistentTerminalSession.terminateArguments(sessionName: name),
-                environment: environment
+            spawnPersistentScreenQuit(
+                PersistentTerminalSession.terminateArguments(sessionName: name),
+                environment
             )
         }
     }
@@ -9459,7 +9478,9 @@ public final class WorkbenchViewModel: ObservableObject {
     /// session is waiting on the human. Conservatively transitions only
     /// active/idle → waitingOnHuman and waitingOnHuman → active (when the agent
     /// resumed), never disturbing `.needsBossReview` / `.blocked`.
-    private func reclassifyAttentionForFlushedRuns(_ runIds: [UUID]) {
+    // VM-GATE: widened private->internal so the per-run guard (no-live-session / no-transcript skip)
+    // + the back-fill hand-off are directly unit-testable. Pure access-widen, no behavior change.
+    func reclassifyAttentionForFlushedRuns(_ runIds: [UUID]) {
         for runId in runIds {
             guard let session = activeSessions.values.first(where: { $0.plan.runId == runId }),
                   let transcriptPath = session.plan.transcriptPath else {
@@ -9492,7 +9513,10 @@ public final class WorkbenchViewModel: ObservableObject {
     /// `(runId → sessionId)` writes are safe (never clobbering a non-empty id,
     /// never handing two same-cwd runs the same id), and applies them on the main
     /// actor — each guarded by `== nil` so a concurrent write can't be overwritten.
-    private func backfillSessionIdsForFlushedRuns(_ runIds: [UUID]) {
+    // VM-GATE: widened private->internal so the no-candidate guard (no live, still-id-less terminal-
+    // agent run → no scan Task spawned) is directly unit-testable. Pure access-widen, no behavior
+    // change. The async `ps`-backed scan that PRODUCES the backfills stays the machinery boundary.
+    func backfillSessionIdsForFlushedRuns(_ runIds: [UUID]) {
         // Only do the (cheap) scan when at least one flushed run is a live,
         // still-id-less terminal-agent run — otherwise there's nothing to fill.
         let candidateRunIds = Set(runIds)

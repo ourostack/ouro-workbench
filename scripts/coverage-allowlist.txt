@@ -313,4 +313,25 @@ WorkbenchViews.swift 1170 223
 # 28353930296 — the PROBE 4570/1370 FAILED on region 1377>1370, so the gate printed the exact
 # `4548 lines / 1377 regions uncovered`). Set to the STABLE MAX 4552/1378 = the CI residual + the
 # file's documented class-(C) oscillation tolerance (+4/+1, per the cluster-4/5/6/7 precedent).
-WorkbenchViewModel.swift 4552 1378
+# Cluster 9 (startup / state-load / session lifecycle, v0.1.200): a LARGE batch (39 tests) drives the
+# command-palette descriptor builder `commandPaletteItems` (every conditional command arm, present
+# AND absent), `load()` (normal / first-run-forced / lossy-salvage `.salvageBeforeResave` /
+# unreadable `.moved` quarantine catch arms — driven by seeding the temp-dir state file before VM
+# construction), `reconcileStartupAttentionWithLiveSessions`, `recoverEligibleSessionsOnStartup`,
+# `launchAutoResumeSessionsOnStartup`, `reapOrphanedScreenSessions` (the per-orphan `screen -X quit`
+# seamed behind the NEW `spawnPersistentScreenQuit`; default routes to the shared off-main+watchdog
+# spawnScreenQuit — TerminalLeakReaperWiringTests pin updated + a new default-routing pin added),
+# `reclassifyAttentionForFlushedRuns` + `backfillSessionIdsForFlushedRuns` (widened private->internal;
+# SessionIdBackfillWiringTests slicers made private-agnostic), `prepareForTermination`,
+# `stopAllRunningSessions`, `drainExternalActionRequests`. Carved as genuine machinery: `resetToFirstRun`
+# (NSApp.terminate + relaunch subprocess), the live `screen -ls` Process/Pipe/kill, the literal Process
+# inside the spawnPersistentScreenQuit default closure, the async `ps`-backed backfill scan, and
+# load()'s `.moveFailed` arm (only reachable when the store's quarantine move throws — not
+# deterministically forceable from a seeded file). 4552/1378 -> 3902/1257 (650 lines / 121 regions
+# driven OUT; CI-measured exact residual on run 28356481057 — the PROBE 3856/1252 FAILED on both axes
+# (line 3902>3856, region 1257>1252), so the Coverage gate printed the exact `3902 lines / 1257
+# regions uncovered`). Set to the STABLE MAX 3906/1259 = the CI residual + the file's documented
+# class-(C) oscillation tolerance (+4 lines / +2 regions, per the cluster-4/5/6/7/8 precedent — this
+# batch is startup/async/screen-reaper timing-dense). NOT padding: the count-1 no-padding proof holds
+# on the stable-coverable portion; the oscillating async/timing regions get the explicit +4/+2.
+WorkbenchViewModel.swift 3906 1259
