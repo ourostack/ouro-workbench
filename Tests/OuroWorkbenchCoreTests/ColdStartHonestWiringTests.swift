@@ -55,8 +55,46 @@ final class ColdStartHonestWiringTests: XCTestCase {
             "the runner result must no longer be swallowed with try? — F1 reads the exit"
         )
         XCTAssertTrue(
-            body.contains("await ColdStartHatchRunner.runHeadless(plan: plan)"),
-            "the runner must still be awaited (now for its result)"
+            body.contains("await self?.runColdStartHatch(plan)"),
+            "the cold-start branch must still await the runner result through the injectable seam"
+        )
+        XCTAssertFalse(
+            body.contains("ColdStartHatchRunner.runHeadless(plan: plan)"),
+            "the cold-start branch must not call the live runner directly; tests inject the seam"
+        )
+        let source = try WorkbenchAppSource.appSource()
+        XCTAssertTrue(
+            source.contains("var runColdStartHatch") && source.contains("await ColdStartHatchRunner.runHeadless(plan: plan)"),
+            "the injectable hatch seam must default to the production runner"
+        )
+    }
+
+    func testColdStartOnlyRunsLiveProviderProbeAfterCleanHatchExit() throws {
+        let body = try coldStartBranch()
+        XCTAssertTrue(
+            body.contains("if exit == 0"),
+            "the branch must only run the live post-hatch provider probe after a clean hatch exit"
+        )
+
+        let probeCallCount = body.components(separatedBy: "runColdStartProviderCheck(agentName: resolvedAgent, lane: \"outward\")").count - 1
+        XCTAssertEqual(
+            probeCallCount,
+            1,
+            "the cold-start branch should have one live provider probe call, inside the clean-exit guard"
+        )
+
+        let guardSlice = try WorkbenchAppSource.sourceSlice(
+            in: body,
+            from: "if exit == 0 {",
+            to: "let outcome = ProviderConfigForm.classifyColdStart"
+        )
+        XCTAssertTrue(
+            guardSlice.contains("runColdStartProviderCheck(agentName: resolvedAgent, lane: \"outward\")"),
+            "the provider probe must sit inside the clean-exit guard"
+        )
+        XCTAssertTrue(
+            guardSlice.contains("verdict = nil"),
+            "failed or unlaunched hatches must classify without attempting a live provider check"
         )
     }
 

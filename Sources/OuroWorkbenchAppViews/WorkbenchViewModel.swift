@@ -681,6 +681,13 @@ public final class WorkbenchViewModel: ObservableObject {
         try SupportDiagnosticsRunner(resourceDirectory: resourceDirectory).run()
     }
 
+    /// Runs a headless cold-start hatch. Defaults to the real `ouro hatch` subprocess; tests inject
+    /// a deterministic result so coverage of the cold-start state transition cannot create agent
+    /// bundles in the repository root while the full suite keeps running.
+    var runColdStartHatch: @Sendable (BootstrapAgentProvisionPlan) async -> ColdStartRunResult = { plan in
+        await ColdStartHatchRunner.runHeadless(plan: plan)
+    }
+
     /// Launches a constructed terminal session — the boundary where `start()` forks
     /// the live `screen`/agent subprocess (via `LocalProcessTerminalView.startProcess`).
     /// Defaults to calling the real `session.start()`; an interaction test that taps a
@@ -8135,13 +8142,20 @@ public final class WorkbenchViewModel: ObservableObject {
             // cold-start wording so a prior rotation can't leave a stale "Reconnecting…" label here.
             providerConfigInFlightLabel = "Creating your agent…"
             Task { [weak self] in
-                let run = await ColdStartHatchRunner.runHeadless(plan: plan)
+                let run = await self?.runColdStartHatch(plan) ?? .launchFailed
                 // `.launchFailed` → nil (never ran); `.exited` → its real code.
                 let exit = run.exitCode
                 // The cold-start configures the OUTWARD lane (the one onboarding surfaces; for a
                 // fresh agent both lanes collapse to the same provider). Probe it on a short budget
                 // so a flaky-daemon hang degrades to "couldn't confirm" fast — not a 90s freeze.
-                let verdict = await self?.runColdStartProviderCheck(agentName: resolvedAgent, lane: "outward")
+                // If hatch did not exit cleanly, skip the live check; the classifier already knows
+                // no post-hatch state can be trusted.
+                let verdict: ProviderConnectionVerdict?
+                if exit == 0 {
+                    verdict = await self?.runColdStartProviderCheck(agentName: resolvedAgent, lane: "outward")
+                } else {
+                    verdict = nil
+                }
                 let outcome = ProviderConfigForm.classifyColdStart(hatchExitCode: exit, checkVerdict: verdict)
                 await MainActor.run {
                     guard let self else { return }
