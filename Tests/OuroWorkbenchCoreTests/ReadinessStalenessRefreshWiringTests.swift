@@ -127,7 +127,8 @@ final class ReadinessStalenessRefreshWiringTests: XCTestCase {
         return try WorkbenchAppSource.sourceSlice(
             in: source,
             from: "func refreshAgentOutwardReadiness() {",
-            to: "\n    private func runColdStartProviderCheck("
+            // VM-GATE: `private`-agnostic — runColdStartProviderCheck was widened private->internal.
+            to: "\n    func runColdStartProviderCheck("
         )
     }
 }

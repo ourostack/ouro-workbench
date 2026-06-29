@@ -143,5 +143,32 @@ final class WorkbenchViewModelReleaseBugDiagTests: XCTestCase {
         m.runRecoveryDrill()
         XCTAssertNotNil(m.recoveryDrillResult, "the drill ran and set its result")
     }
+
+    // MARK: - fileLastBugReportAsGitHubIssue (.failure async fold — ZERO production change)
+    //
+    // VM-GATE FINAL FLOOR (#5): the `fileGitHubIssue` seam already exists + is wired (the success
+    // test injects `{ … in .success(...) }`). This injects `{ … in .failure(.cliMissing) }` to drive
+    // the previously-uncovered `.failure` arm: clear the filing flag, surface the error, record the
+    // failure action-log line. Mirror of applyBugReportBundleResult's `.failure` arm. The detached
+    // filing Task spawns no `gh` (the seam returns synchronously); we poll the published flag like
+    // ReportBugSheetInteractionTests does.
+
+    func testFileIssue_failure_surfacesErrorAndLogsFailure() async throws {
+        let m = try makeVM()
+        m.lastBugReportURL = URL(fileURLWithPath: "/tmp/vmrbd/bug-report")
+        m.fileGitHubIssue = { _, _, _, _, _, _, _, _ in .failure(.cliMissing) }
+        let logBefore = m.state.actionLog.count
+        m.fileLastBugReportAsGitHubIssue()
+        XCTAssertTrue(m.bugReportIssueIsFiling, "filing sets the in-flight flag synchronously")
+        for _ in 0..<500 where m.bugReportIssueIsFiling { await Task.yield() }
+        XCTAssertFalse(m.bugReportIssueIsFiling, "the .failure arm clears the in-flight flag")
+        XCTAssertEqual(
+            m.bugReportIssueError, GitHubIssueFilingError.cliMissing.localizedDescription,
+            "the .failure arm surfaces the localized filing error")
+        XCTAssertNil(m.bugReportIssueURL, "no issue URL is set on failure")
+        XCTAssertEqual(m.state.actionLog.count, logBefore + 1, "the .failure arm records ONE action-log entry")
+        XCTAssertEqual(m.state.actionLog.first?.action, "fileBugReportIssue")
+        XCTAssertFalse(m.state.actionLog.first?.succeeded ?? true, "the failure log entry is marked NOT succeeded")
+    }
 }
 #endif

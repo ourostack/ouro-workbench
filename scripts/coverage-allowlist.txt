@@ -543,4 +543,4 @@ WorkbenchViews.swift 1170 223
 # live-PTY TerminalHostView NSView bodies, infinite while-loops + Task.sleep, source-pinned private
 # runBossCheckIn MCP overload, llvm-synth). The honest floor for THIS async/subprocess-orchestration
 # file is ~700-850 regions — materially above the STEP-1 ~150-350 guess. Held for coordinator audit.
-WorkbenchViewModel.swift 2307 872
+WorkbenchViewModel.swift 2295 860

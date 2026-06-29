@@ -683,6 +683,19 @@ public final class WorkbenchViewModel: ObservableObject {
         try SupportDiagnosticsRunner(resourceDirectory: resourceDirectory).run()
     }
 
+    /// Scans for recent + workbench session candidates during onboarding import. Defaults to the
+    /// real `RecentSessionScanner().scan() + .scanWorkbench(state:)` (byte-identical to the prior
+    /// inline body). A test injects a synchronous fake candidate list so the post-scan fold in
+    /// `scanForOnboardingSessions` (set-candidates → build-proposal → clear-scanning-flag →
+    /// recordActionLog) is driven without touching the live filesystem scanner. `@Sendable` because
+    /// it is invoked inside `Task.detached`. Mirrors the `providerCheckRunner` seam.
+    var scanForOnboardingSessionsRunner: @Sendable (_ state: WorkspaceState) -> [RecentSessionCandidate] = { state in
+        let scanner = RecentSessionScanner()
+        let discovered = scanner.scan()
+        let existing = scanner.scanWorkbench(state: state)
+        return discovered + existing
+    }
+
     /// Runs a headless cold-start hatch. Defaults to the real `ouro hatch` subprocess; tests inject
     /// a deterministic result so coverage of the cold-start state transition cannot create agent
     /// bundles in the repository root while the full suite keeps running.
@@ -5584,13 +5597,14 @@ public final class WorkbenchViewModel: ObservableObject {
     /// deliberately do NOT use `ouro vault status` here — it HANGS under a flaky daemon (observed:
     /// never returned). `ouro check` is responsive and we already own its classifier. A nil verdict
     /// folds into `.failed(.couldNotConfirm)` (never a false green).
-    private func runColdStartProviderCheck(agentName: String, lane: String) async -> ProviderConnectionVerdict? {
-        await Task.detached(priority: .userInitiated) {
-            guard let result = Self.runProviderCheckProcess(
-                agentName: agentName,
-                lane: lane,
-                timeoutSeconds: 15
-            ) else {
+    // VM-GATE: widened private->internal + routed through the `providerCheckRunner` seam (whose
+    // DEFAULT closure IS `runProviderCheckProcess`, so production behavior is byte-identical) so the
+    // per-verdict fold (nil-guard / timedOut → nil / classify → verdict) is unit-testable without
+    // spawning `ouro check` — mirrors its siblings `runCloneProviderCheck` / `runOnboardingProviderCheck`.
+    func runColdStartProviderCheck(agentName: String, lane: String) async -> ProviderConnectionVerdict? {
+        let runner = providerCheckRunner
+        return await Task.detached(priority: .userInitiated) {
+            guard let result = runner(agentName, lane, 15) else {
                 return nil
             }
             // Past the budget the runner terminated the process — treat as "couldn't confirm"
@@ -5690,12 +5704,13 @@ public final class WorkbenchViewModel: ObservableObject {
         onboardingIsScanning = true
         onboardingImportSummaryHasImports = false
         let currentState = state
+        // VM-GATE: route the scan through the `scanForOnboardingSessionsRunner` seam (default =
+        // the real `RecentSessionScanner` scan, byte-identical) so the post-scan fold below is
+        // drivable without the live filesystem scanner.
+        let runner = scanForOnboardingSessionsRunner
         Task {
             let candidates = await Task.detached(priority: .userInitiated) {
-                let scanner = RecentSessionScanner()
-                let discovered = scanner.scan()
-                let existing = scanner.scanWorkbench(state: currentState)
-                return discovered + existing
+                runner(currentState)
             }.value
             onboardingCandidates = candidates
             onboardingProposal = onboardingProposalBuilder.build(candidates: candidates)

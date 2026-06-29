@@ -56,11 +56,12 @@ final class WorkbenchViewModelMachinerySeamTests: XCTestCase {
         m.launchTerminalSession = { _ in }
         m.chooseWorkspaceSaveURL = { _ in nil }
         m.chooseWorkspaceOpenURL = { _ in nil }
-        // Machinery neutralized by default — no live subprocess / quit / relaunch.
+        // Machinery neutralized by default — no live subprocess / quit / relaunch / filesystem scan.
         m.providerCheckRunner = { _, _, _ in nil }
         m.terminateApp = {}
         m.killAllPersistentScreensOnReset = {}
         m.relaunchAfterExitOnReset = {}
+        m.scanForOnboardingSessionsRunner = { _ in [] }
         return (m, paths)
     }
 
@@ -226,6 +227,215 @@ final class WorkbenchViewModelMachinerySeamTests: XCTestCase {
         // The factory reset removes the workspace state file so the next launch bootstraps fresh.
         XCTAssertFalse(FileManager.default.fileExists(atPath: paths.stateURL.path),
                        "the reset removes the persisted workspace state")
+    }
+
+    // MARK: - runColdStartProviderCheck (via providerCheckRunner seam)
+    //
+    // VM-GATE FINAL FLOOR (#1): the cold-start probe was rerouted from a DIRECT
+    // `Self.runProviderCheckProcess(...)` call to `providerCheckRunner(agentName, lane, 15)` (the
+    // seam's DEFAULT closure IS runProviderCheckProcess, so production is byte-identical) + widened
+    // private→internal. Its per-verdict fold now drives without spawning `ouro check`, exactly like
+    // its already-seamed siblings runCloneProviderCheck / runOnboardingProviderCheck.
+
+    func testColdStartProviderCheck_launchFailure_isNil() async throws {
+        let m = try makeVM()
+        m.providerCheckRunner = { _, _, _ in nil }
+        let verdict = await m.runColdStartProviderCheck(agentName: "scout", lane: "outward")
+        XCTAssertNil(verdict, "a nil runner result → nil (couldn't confirm, never a false-green)")
+    }
+
+    func testColdStartProviderCheck_timedOut_isNil() async throws {
+        let m = try makeVM()
+        m.providerCheckRunner = { _, _, _ in
+            ProviderCheckProcessResult(timedOut: true, terminationStatus: 0, output: readyVerdictOutput)
+        }
+        let verdict = await m.runColdStartProviderCheck(agentName: "scout", lane: "outward")
+        XCTAssertNil(verdict, "a timeout → nil even if truncated output looked ready")
+    }
+
+    func testColdStartProviderCheck_working_classifiesWorking_onShortBudget() async throws {
+        let m = try makeVM()
+        let captured = OuroBox<(String, String, TimeInterval)?>(nil)
+        m.providerCheckRunner = { agent, lane, budget in
+            captured.value = (agent, lane, budget)
+            return ProviderCheckProcessResult(timedOut: false, terminationStatus: 0, output: readyVerdictOutput)
+        }
+        let verdict = await m.runColdStartProviderCheck(agentName: "scout", lane: "outward")
+        XCTAssertEqual(verdict, .working, "a ready verdict line classifies .working")
+        // mutation-verified: the seam received the agent/lane + the SHORT 15s cold-start budget.
+        XCTAssertEqual(captured.value?.0, "scout")
+        XCTAssertEqual(captured.value?.1, "outward")
+        XCTAssertEqual(captured.value?.2, 15, "the cold-start probe uses the SHORT 15s budget")
+    }
+
+    func testColdStartProviderCheck_unauthorized_classifiesUnauthorized() async throws {
+        let m = try makeVM()
+        m.providerCheckRunner = { _, _, _ in
+            ProviderCheckProcessResult(timedOut: false, terminationStatus: 0, output: unauthorizedVerdictOutput)
+        }
+        let verdict = await m.runColdStartProviderCheck(agentName: "scout", lane: "outward")
+        XCTAssertEqual(verdict, .unauthorized)
+    }
+
+    // MARK: - refreshAgentOutwardReadiness (TaskGroup verdict-store + in-flight-clear fold)
+    //
+    // VM-GATE FINAL FLOOR (#2): the per-agent outward-readiness TaskGroup folds each
+    // runColdStartProviderCheck verdict into `agentOutwardVerdicts` (when non-nil) + clears the
+    // `agentChecksInFlight` flag. Unblocked by #1 routing through the seam — drive via the REAL
+    // fold (not a direct verdict injection), polling the published effect.
+
+    func testRefreshAgentOutwardReadiness_workingVerdict_storesVerdictAndClearsInFlight() async throws {
+        let m = try makeVM()
+        m.providerCheckRunner = { _, _, _ in
+            ProviderCheckProcessResult(timedOut: false, terminationStatus: 0, output: readyVerdictOutput)
+        }
+        m.ouroAgents = [
+            OuroAgentRecord(
+                name: "scout", bundlePath: "/tmp/scout", configPath: "/tmp/scout/config.json",
+                status: .ready, detail: "ready",
+                humanFacing: OuroAgentLane(provider: "openai", model: "gpt-5"))
+        ]
+        m.refreshAgentOutwardReadiness()
+        XCTAssertTrue(m.agentChecksInFlight.contains("scout"), "the target is marked in-flight up front")
+        for _ in 0..<500 where m.agentOutwardVerdicts["scout"] == nil { await Task.yield() }
+        XCTAssertEqual(m.agentOutwardVerdicts["scout"], .working, "the fold stores the working verdict")
+        XCTAssertFalse(m.agentChecksInFlight.contains("scout"), "the fold clears the in-flight flag")
+    }
+
+    func testRefreshAgentOutwardReadiness_nilVerdict_leavesNoVerdictButClearsInFlight() async throws {
+        let m = try makeVM()
+        m.providerCheckRunner = { _, _, _ in nil }  // couldn't confirm → nil → no verdict stored
+        m.ouroAgents = [
+            OuroAgentRecord(
+                name: "scout", bundlePath: "/tmp/scout", configPath: "/tmp/scout/config.json",
+                status: .ready, detail: "ready",
+                humanFacing: OuroAgentLane(provider: "openai", model: "gpt-5"))
+        ]
+        m.refreshAgentOutwardReadiness()
+        for _ in 0..<500 where m.agentChecksInFlight.contains("scout") { await Task.yield() }
+        XCTAssertNil(m.agentOutwardVerdicts["scout"], "a nil verdict leaves no verdict → 'not verified'")
+        XCTAssertFalse(m.agentChecksInFlight.contains("scout"), "the in-flight flag is still cleared on nil")
+    }
+
+    func testRefreshAgentOutwardReadiness_noConfiguredTargets_isNoOp() throws {
+        let m = try makeVM()
+        // A config-ready agent with NO outward lane configured is not a probe target.
+        m.ouroAgents = [
+            OuroAgentRecord(
+                name: "scout", bundlePath: "/tmp/scout", configPath: "/tmp/scout/config.json",
+                status: .ready, detail: "ready", humanFacing: nil)
+        ]
+        m.refreshAgentOutwardReadiness()
+        XCTAssertTrue(m.agentChecksInFlight.isEmpty, "no configured outward lane → nothing goes in-flight")
+    }
+
+    // MARK: - runOnboardingProviderChecksIfNeeded (generation/cancellation-race serialTask fold)
+    //
+    // VM-GATE FINAL FLOOR (#4): the serialTask runs the lanes sequentially behind per-lane
+    // generation + cancellation guards, storing each awaited runOnboardingProviderCheck result into
+    // `onboardingProviderChecks`. The awaited runner is already seamed (via providerCheckRunner) —
+    // this drives the race-guarded store fold.
+
+    func testRunOnboardingProviderChecksIfNeeded_readyAgent_storesPassedResult() async throws {
+        let m = try makeVM(boss: "scout")
+        m.providerCheckRunner = { _, _, _ in
+            ProviderCheckProcessResult(timedOut: false, terminationStatus: 0, output: readyVerdictOutput)
+        }
+        m.ouroAgents = [
+            OuroAgentRecord(
+                name: "scout", bundlePath: "/tmp/scout", configPath: "/tmp/scout/config.json",
+                status: .ready, detail: "ready",
+                humanFacing: OuroAgentLane(provider: "openai", model: "gpt-5"),
+                agentFacing: OuroAgentLane(provider: "openai", model: "gpt-5"))  // lanes collapse → outward only
+        ]
+        m.runOnboardingProviderChecksIfNeeded()
+        // Marked running up front (the generation-stamp + running arm).
+        XCTAssertEqual(m.onboardingProviderChecks["outward"]?.state, .running, "the lane is marked running up front")
+        for _ in 0..<500 where m.onboardingProviderChecks["outward"]?.state == .running { await Task.yield() }
+        XCTAssertEqual(m.onboardingProviderChecks["outward"]?.state, .passed,
+                       "the serialTask folds the working verdict into a .passed result")
+    }
+
+    func testRunOnboardingProviderChecksIfNeeded_notReadyAgent_isNoOp() throws {
+        let m = try makeVM(boss: "scout")
+        m.ouroAgents = [
+            OuroAgentRecord(
+                name: "scout", bundlePath: "/tmp/scout", configPath: "/tmp/scout/config.json",
+                status: .missingConfig, detail: "needs config",
+                humanFacing: OuroAgentLane(provider: "openai", model: "gpt-5"))
+        ]
+        m.runOnboardingProviderChecksIfNeeded()
+        XCTAssertTrue(m.onboardingProviderChecks.isEmpty, "a non-ready selected agent runs no checks")
+    }
+
+    func testRunOnboardingProviderChecksIfNeeded_alreadyPassed_skipsRecheck() throws {
+        let m = try makeVM(boss: "scout")
+        m.ouroAgents = [
+            OuroAgentRecord(
+                name: "scout", bundlePath: "/tmp/scout", configPath: "/tmp/scout/config.json",
+                status: .ready, detail: "ready",
+                humanFacing: OuroAgentLane(provider: "openai", model: "gpt-5"),
+                agentFacing: OuroAgentLane(provider: "openai", model: "gpt-5"))
+        ]
+        // Seed the outward lane already passed → the collect loop's `.passed` guard skips it, and
+        // with no lanes to check the method returns before stamping `.running`.
+        m.onboardingProviderChecks["outward"] = OnboardingProviderCheckResult(
+            lane: "outward", state: .passed, detail: "already good")
+        m.runOnboardingProviderChecksIfNeeded()
+        XCTAssertEqual(m.onboardingProviderChecks["outward"]?.state, .passed,
+                       "an already-passed lane is not re-marked running (the no-lanes-to-check guard)")
+    }
+
+    // MARK: - scanForOnboardingSessions (post-scan candidate/proposal/log fold via the runner seam)
+    //
+    // VM-GATE FINAL FLOOR (#3): the scan was routed through the NEW `scanForOnboardingSessionsRunner`
+    // seam (default = the real RecentSessionScanner scan, byte-identical). Inject a fake candidate
+    // list to drive the post-scan fold: set-candidates → build-proposal → clear-scanning-flag →
+    // recordActionLog.
+
+    func testScanForOnboardingSessions_foldsInjectedCandidatesIntoProposal() async throws {
+        let m = try makeVM()
+        // The scan only runs once readiness is ready — seed a ready snapshot so the guard passes.
+        m.onboardingReadiness = OnboardingReadiness(
+            state: .ready, headline: "Ready", detail: "all set", selectedBossName: "boss", repairSteps: [])
+        let candidate = RecentSessionCandidate(
+            id: "cand-1", source: .claudeCode, agentKind: nil, title: "Recent work",
+            workingDirectory: "/tmp/repo", lastActiveAt: Date(),
+            resumeCommand: ["echo", "resume"], summary: "a recent session",
+            evidencePaths: ["/tmp/repo/.evidence"], confidence: 0.9)
+        m.scanForOnboardingSessionsRunner = { _ in [candidate] }
+        let logBefore = m.state.actionLog.count
+        m.scanForOnboardingSessions()
+        XCTAssertTrue(m.onboardingIsScanning, "the scan sets the in-flight flag up front")
+        for _ in 0..<500 where m.onboardingIsScanning { await Task.yield() }
+        XCTAssertEqual(m.onboardingCandidates, [candidate], "the fold stores the scanned candidates")
+        XCTAssertFalse(m.onboardingProposal?.groups.isEmpty ?? true,
+                       "the fold builds a non-empty proposal from the candidates")
+        XCTAssertEqual(m.state.actionLog.count, logBefore + 1, "the fold records ONE action-log entry")
+        XCTAssertEqual(m.state.actionLog.first?.action, "scanOnboardingSessions")
+        XCTAssertTrue(m.state.actionLog.first?.result.contains("1 recent session") ?? false,
+                      "the log reports the candidate count")
+    }
+
+    func testScanForOnboardingSessions_notReady_refreshesAndDoesNotScan() throws {
+        let m = try makeVM()
+        m.onboardingReadiness = OnboardingReadiness(
+            state: .needsCredentials, headline: "Connect", detail: "needs credentials",
+            selectedBossName: "boss", repairSteps: [])
+        let scanned = OuroBox<Bool>(false)
+        m.scanForOnboardingSessionsRunner = { _ in scanned.value = true; return [] }
+        m.scanForOnboardingSessions()
+        XCTAssertFalse(m.onboardingIsScanning, "a not-ready readiness routes to refresh, never scans")
+        XCTAssertFalse(scanned.value, "the runner seam is not invoked when readiness is not ready")
+    }
+
+    func testScanForOnboardingSessions_alreadyScanning_isNoOp() throws {
+        let m = try makeVM()
+        m.onboardingIsScanning = true
+        let scanned = OuroBox<Bool>(false)
+        m.scanForOnboardingSessionsRunner = { _ in scanned.value = true; return [] }
+        m.scanForOnboardingSessions()
+        XCTAssertFalse(scanned.value, "the already-scanning guard returns before invoking the runner")
     }
 }
 
