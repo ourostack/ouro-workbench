@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.218 - View-model coverage (status-line/color small-decl tail)
+
+- Internal: covers the directly-callable status-line / status-color / format-helper arms that the view tests only partially exercised — the Workbench-MCP registration status line (5 untested status arms) + status color (all 4) + action title, the support-diagnostics status color + URL, the boss-watch status color + line (error/last-run arms), the mailbox status line, the transcript-search status line (empty + press-search arms), the local-agents status line (populated arm), the stop-confirmation title, and the start-fresh confirmation copy. Test-only — no production change. No user-facing behavior change.
+
 ## 0.1.217 - View-model coverage (onboarding-import apply-body + boss-action entry-less dispatch)
 
 - Internal: covers the onboarding-import apply-body (per-group create/dedup/skip-on-empty-working-directory folds, the durable-write persisted result, and the import summary) and the boss-action entry-less dispatch arms (requestProviderConfig / verifyProvider / refreshProvider / selectLane / registerWorkbenchMCP / ensureDaemon / reportBug, each through the validate→authorize→dispatch path). Test-only — no production change. The downstream remediation tasks' detached subprocess/MCP bodies, the unreachable defense-in-depth authorize-DENY arm, and the state-store I/O failure arms stay carved. No user-facing behavior change.
