@@ -435,7 +435,8 @@ WorkbenchViews.swift 1170 223
 # runProviderCheckProcess Process body, WorkbenchUpdateInstaller.applyAndRelaunch bundle-swap, NSApp.terminate,
 # killAllPersistentScreens/relaunchAfterExit subprocesses. Local full-suite coverage unreliable here (the
 # HeaderView SNAPSHOT tests flake headless + the documented subprocess-test instability), so CI probe-then-set.
-# PROBE 2820/980 below — set BELOW main's 3040/1057 so the CI Coverage job prints the exact residual; tighten
-# to the stable max post-CI (+6/+3 off the observed residual). NOT the floor yet — clusters 15+ continue
+# CI residual 3040/1057 -> 2836/1022 (198 lines / 32 regions driven OUT; run 28374833688 — the PROBE
+# 2820/980 FAILED both axes; the provider-check classifier arms are line-heavy). Set to the STABLE MAX
+# 2842/1025 (+6 line / +3 region wide class-(C) buffer). NOT the floor yet — clusters 15+ continue
 # (notification-poster content-build needs a content-extraction refactor, deferred; + the ~258-decl tail).
-WorkbenchViewModel.swift 2820 980
+WorkbenchViewModel.swift 2842 1025
