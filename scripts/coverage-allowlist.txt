@@ -312,8 +312,11 @@ WorkbenchViews.swift 1170 223
 # scanForOnboardingSessions / startBossReconstruction synchronous guards, and the missing-payload /
 # empty-name guard arms of startSelectLane / startRegisterWorkbenchMCP / startRepairAgent (NOT
 # covered by cluster 7 — each returns "Skipped …" BEFORE its runner Task → no `ouro` subprocess).
-# The async runner/scan subprocesses stay the genuine-machinery boundary. PROBE 4600/1385 (set
-# BELOW the current 4637/1392 so the gate both lowers AND prints the exact CI residual; tighten to
-# the stable max post-CI per the probe-then-set protocol, with the +2 region buffer the cluster-7
-# oscillation revealed this file needs).
-WorkbenchViewModel.swift 4600 1385
+# The async runner/scan subprocesses stay the genuine-machinery boundary. 4637/1392 -> 4313/1341
+# (324 lines / 51 regions driven OUT; CI-measured exact residual on run 28353965020, Coverage job
+# 83992626585 — the PROBE 4600/1385 PASSed so the gate printed the exact `4313 line, 1341 region
+# exempt`). Set to the STABLE MAX 4317/1343 = the CI residual + the file's documented class-(C)
+# oscillation tolerance (+4 lines / +2 regions — the amplitude cluster 7's re-run revealed; see the
+# v0.1.197 FLAKY-TOLERANCE note above). NOT padding — the count-1 no-padding proof holds on the
+# stable-coverable portion; the oscillating async/timing regions get the explicit +4/+2.
+WorkbenchViewModel.swift 4317 1343

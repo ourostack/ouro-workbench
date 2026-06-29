@@ -17,7 +17,7 @@ VERSION bump; flaky-region protocol applied.
 | 5 | #366 | 0.1.195 | markTerminated + applyAttentionSignal + exit-notification decision/throttle | **4916 / 1451** |
 | 6 | #367 | 0.1.196 | deleteCustomSession/archive + revealLatestTranscript + requestStop/confirmStop + applySessionIdBackfills | **4799 / 1415** |
 | 7 | #368 | 0.1.198 | start* onboarding handlers (verify/refresh/ensureDaemon/reportBug skip+ack arms) + completeOnboardingAction + completeFirstRunBootstrap | **4637 / 1392** |
-| 8 | #369 | 0.1.199 | reconcileStartupAttention + launchAutoResume + reapOrphanedScreen + applyExternalActionRequests + scan/startBossReconstruction/selectLane/registerMCP/repairAgent guards | PROBE 4600/1385 |
+| 8 | #369 | 0.1.199 | reconcileStartupAttention + launchAutoResume + reapOrphanedScreen + applyExternalActionRequests + scan/startBossReconstruction/selectLane/registerMCP/repairAgent guards | **4317 / 1343** |
 
 Cluster 5 result: CI residual 4912/1450 (190 lines / 65 regions driven OUT of 5102/1515); allowlist
 set to STABLE MAX 4916/1451 (+4/+1 class-C oscillation tolerance, per the cluster-4 precedent).
@@ -39,8 +39,11 @@ quitHelper pin is unaffected). `applyExternalActionRequests` + `backfillSessionI
 widened private→internal (ReplayDedup/SessionIdBackfill wiring markers → `func` form). MULTI-AGENT
 NOTE: this PR was rebased onto main AFTER #368 (a concurrent cluster-7 PR) merged — its start*
 verify/refresh tests were DROPPED as duplicates of #368, leaving the non-overlapping remainder.
-PROBE 4600/1385 — read the exact CI residual, then set the stable max (+4 lines / +2 regions, the
-oscillation amplitude cluster 7 revealed).
+Cluster 8 result: CI residual 4313/1341 (324 lines / 51 regions driven OUT of 4637/1392 — measured
+on the FULL suite, so cumulative with #368's merged tests); allowlist set to STABLE MAX **4317/1343**
+(+4 lines / +2 regions, the oscillation amplitude cluster 7's re-run revealed). The PROBE 4600/1385
+PASSed (gate printed `4313 line, 1341 region exempt`). 50.9% line uncovered remaining — the floor is
+nearing the genuine-machinery tail.
 
 SOURCE-INTROSPECTION CAVEAT (reconfirmed, clusters 6+7+8): BEFORE widening a `private func` for a
 cluster, `grep -rln '<funcName>' Tests/` for a WiringTest that slices `private func <name>` — update
