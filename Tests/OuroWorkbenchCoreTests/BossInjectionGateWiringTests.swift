@@ -61,7 +61,7 @@ final class BossInjectionGateWiringTests: XCTestCase {
     private func applyBossActionBody() throws -> String {
         let source = try WorkbenchAppSource.appSource()
         let start = try XCTUnwrap(
-            source.range(of: "private func applyBossAction(_ action: BossWorkbenchAction, source: String, requestId: UUID? = nil) -> String {")?.upperBound,
+            source.range(of: "func applyBossAction(_ action: BossWorkbenchAction, source: String, requestId: UUID? = nil) -> String {")?.upperBound,
             "could not find applyBossAction in the App source"
         )
         let tail = source[start...]

@@ -7597,7 +7597,11 @@ public final class WorkbenchViewModel: ObservableObject {
         }
     }
 
-    private func applyBossAction(_ action: BossWorkbenchAction, source: String, requestId: UUID? = nil) -> String {
+    // VM-GATE: widened private→internal so the per-arm boss-action dispatch (validate / replay-dedup
+    // / entryless-auth / entry-auth / handler dispatch) is directly unit-testable. Pure access-widen,
+    // no behavior change; the production callers (applyBossActions, applyExternalActionRequests) are
+    // unchanged.
+    func applyBossAction(_ action: BossWorkbenchAction, source: String, requestId: UUID? = nil) -> String {
         // Make the originating requestId available to every action-log write this
         // apply triggers (#U24), then clear it so an operator action that runs
         // next never inherits a stale id.

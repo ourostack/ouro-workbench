@@ -29,11 +29,14 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 COVERAGE_DIRS=(
   "Sources/OuroWorkbenchCore"
   "Sources/OuroWorkbenchShellAdapter"
-  # U5 Unit 3: gate ONLY the views file (a single-file entry), NOT its sibling
-  # WorkbenchViewModel.swift in the same directory — that file holds the live-PTY /
-  # live-subprocess machinery that is intentionally ungated. A path ending in
-  # `.swift` is matched as an exact file; a path without one is matched as a directory.
+  # U5 Unit 3: gate the views file (a single-file entry). A path ending in `.swift` is
+  # matched as an exact file; a path without one is matched as a directory.
   "Sources/OuroWorkbenchAppViews/WorkbenchViews.swift"
+  # VM-GATE campaign: the VM file is now GATED too — its sibling logic half of the U5 split.
+  # It enters at its CI-measured residual allowlist and the per-cluster drive lowers it to the
+  # irreducible floor (live-PTY/subprocess syscalls + .task loops + llvm-synth artifacts), same
+  # as how WorkbenchViews.swift landed (379→227). See coverage-allowlist.txt + vm-gate-scope.md.
+  "Sources/OuroWorkbenchAppViews/WorkbenchViewModel.swift"
 )
 
 if [ -d /Applications ]; then

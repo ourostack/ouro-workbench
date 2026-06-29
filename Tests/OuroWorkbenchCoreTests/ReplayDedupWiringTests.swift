@@ -200,7 +200,7 @@ final class ReplayDedupWiringTests: XCTestCase {
     private func applyBossActionPrelude() throws -> String {
         try WorkbenchAppSource.sourceSlice(
             in: try WorkbenchAppSource.appSource(),
-            from: "private func applyBossAction(_ action: BossWorkbenchAction, source: String, requestId: UUID? = nil) -> String {",
+            from: "func applyBossAction(_ action: BossWorkbenchAction, source: String, requestId: UUID? = nil) -> String {",
             to: "\n        switch action.action {"
         )
     }

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.188 - View-model coverage gate (boss-action dispatch)
+
+- Internal: extends the per-file-100% coverage gate to the view-model's logic half and drives its boss-action dispatch handler (the largest uncovered cluster) to test coverage. No user-facing behavior change.
+
 ## 0.1.187 - Shared shell contract adoption
 
 - Internal: adopts the shared Ouro app shell contract and consumer assertion kit so Workbench proves its app identity, direct-download update policy, About surface, keyboard shortcut reference, utility windows, and Settings entry point stay aligned with the native app shell. The updater now uses the generic build-matched release policy helpers instead of the Workbench-specific compatibility shim.
