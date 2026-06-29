@@ -57,8 +57,17 @@ final class CloneHonestWiringTests: XCTestCase {
             "runHeadless must no longer throw — F7 reads the CloneRunResult (B-1 timeout distinction)"
         )
         XCTAssertTrue(
-            body.contains("await CloneAgentRunner.runHeadless(plan: plan)"),
-            "the runner must be awaited for its CloneRunResult"
+            body.contains("await runCloneAgent(plan)"),
+            "the clone branch must await the runner result through the injectable seam"
+        )
+        XCTAssertFalse(
+            body.contains("CloneAgentRunner.runHeadless(plan: plan)"),
+            "the clone branch must not call the live runner directly; tests inject the seam"
+        )
+        let source = try WorkbenchAppSource.appSource()
+        XCTAssertTrue(
+            source.contains("var runCloneAgent") && source.contains("await CloneAgentRunner.runHeadless(plan: plan)"),
+            "the injectable clone seam must default to the production runner"
         )
     }
 
@@ -191,7 +200,7 @@ final class CloneHonestWiringTests: XCTestCase {
     /// diff baseline) and the refresh must precede the resolver read (it's synchronous).
     func testCloneSnapshotsTheRosterBeforeTheClone() throws {
         let body = try cloneBranch()
-        guard let runRange = body.range(of: "await CloneAgentRunner.runHeadless(plan: plan)") else {
+        guard let runRange = body.range(of: "await runCloneAgent(plan)") else {
             return XCTFail("expected the runner await")
         }
         let beforeRun = String(body[body.startIndex..<runRange.lowerBound])

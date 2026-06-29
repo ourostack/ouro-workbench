@@ -688,6 +688,13 @@ public final class WorkbenchViewModel: ObservableObject {
         await ColdStartHatchRunner.runHeadless(plan: plan)
     }
 
+    /// Runs a headless agent clone. Defaults to the real `ouro clone` subprocess; interaction tests
+    /// inject a deterministic result so tapping the install sheet cannot depend on the local `ouro`
+    /// CLI, network reachability, or repo-root bundle side effects.
+    var runCloneAgent: @Sendable (OuroAgentInstallPlan) async -> CloneRunResult = { plan in
+        await CloneAgentRunner.runHeadless(plan: plan)
+    }
+
     /// Launches a constructed terminal session — the boundary where `start()` forks
     /// the live `screen`/agent subprocess (via `LocalProcessTerminalView.startProcess`).
     /// Defaults to calling the real `session.start()`; an interaction test that taps a
@@ -2898,7 +2905,7 @@ public final class WorkbenchViewModel: ObservableObject {
         // not-yet-flushed bundle is never probed mid-clone); everything else fails safe with the
         // classifier's per-cause copy. The SAFETY INVARIANT lives in the pure classifier: exit-0
         // alone is NEVER ready — it needs a present agent.json AND a positive `.working` probe.
-        let run = await CloneAgentRunner.runHeadless(plan: plan)
+        let run = await runCloneAgent(plan)
 
         // Always re-probe the roster so the cloned bundle surfaces with its TRUE state (a
         // credential-less / dead clone shows as needs-credentials, not ready — never vanishes). This
