@@ -334,4 +334,20 @@ WorkbenchViews.swift 1170 223
 # class-(C) oscillation tolerance (+4 lines / +2 regions, per the cluster-4/5/6/7/8 precedent — this
 # batch is startup/async/screen-reaper timing-dense). NOT padding: the count-1 no-padding proof holds
 # on the stable-coverable portion; the oscillating async/timing regions get the explicit +4/+2.
-WorkbenchViewModel.swift 3906 1259
+# Cluster 10 (onboarding / provider / vault, v0.1.201): a LARGE batch (32 tests) drives the boss-issued
+# onboarding dispatchers `startSelectLane` / `startRegisterWorkbenchMCP` / `startRepairAgent` (the
+# skip-guard + in-flight-ack arms — the 3 carried forward from the superseded #369/#372/#374), the
+# `scanForOnboardingSessions` + `startBossReconstruction` guards, the vault flows `beginVaultOnboarding`
+# / `beginCredentialRotation` / `completeVaultOnboarding` (sync prologue; the detached re-probe Task is
+# the boundary), `runOnboardingRepairStepNatively` (all 5 arms) + `surfaceNativeRepairLine`,
+# `makeFirstRunBootstrapEffects` (effects-struct wiring), `openDeskBridgeSetup`, `installWorkbenchMCP`.
+# All 6 widened funcs are pure private->internal access-widens (no WiringTest slicer referenced any of
+# them). Carved as genuine machinery: every start* runner Task body (LaneSelection/MCP/AgentRepair/
+# ProviderVerify = `ouro` subprocess/MCP), submitProviderConfig's `.coldStartHatch` detached Task
+# (ColdStartHatchRunner.runHeadless subprocess), completeVaultOnboarding's re-probe Task,
+# runCloneProviderCheck (live `ouro check`), and the begin*Onboarding createCustomSession-returns-nil
+# launch-failure guards (only in a degenerate no-project state the fixtures can't deterministically
+# force). Local (Swift 6.3.3) drove 3795/1237 -> 3429/1188 (366 lines / 49 regions OUT). PROBE 3429/1188
+# below — set BELOW main's current 3906/1259 so the CI Coverage job (Swift 6.0.3, measures higher than
+# local) both lowers AND prints the exact residual; tighten to the stable max post-CI.
+WorkbenchViewModel.swift 3429 1188

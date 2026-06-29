@@ -741,14 +741,18 @@ public final class WorkbenchViewModel: ObservableObject {
     /// `ouro vault create && auth && refresh` chain), captured at launch so `markTerminated` can
     /// recognize ITS exit (and only its exit) and re-probe. Both nil when no recovery is in flight.
     /// The agent name is held too so the re-probe + `.ready` log name the right agent.
-    private var vaultOnboardingEntryID: UUID?
-    private var vaultOnboardingRunID: UUID?
-    private var vaultOnboardingAgentName: String?
+    // VM-GATE: internal (was private) so the begin*/complete vault-onboarding flows can be asserted
+    // against the captured exit-match markers (the synchronous launch path sets them; the detached
+    // re-probe clears them). Pure access-widen, no behavior change.
+    var vaultOnboardingEntryID: UUID?
+    var vaultOnboardingRunID: UUID?
+    var vaultOnboardingAgentName: String?
     /// F6 — which flavor the in-flight vault terminal is (onboarding = F13 first-time setup, or
     /// rotation = an existing agent reconnecting). Captured at launch so `completeVaultOnboarding`
     /// surfaces the correctly-flavored seam-free copy on a failed re-probe. Defaults to onboarding
     /// (F13's behavior) and is reset there so a stale flavor can't leak across attempts.
-    private var vaultOnboardingFlavor: VaultOnboardingFlavor = .onboarding
+    // VM-GATE: internal (was private) so a test can assert the onboarding-vs-rotation flavor capture.
+    var vaultOnboardingFlavor: VaultOnboardingFlavor = .onboarding
     private var bossWatchBaselineState: WorkspaceState?
     private var bossWatchTickIsRunning = false
     /// FIX4 — the periodic Boss Watch poll loop's lifetime is now owned by the
@@ -8456,7 +8460,10 @@ public final class WorkbenchViewModel: ObservableObject {
     /// re-authorized via `authorizeEntryless` under `trustedOnboarding`); it never relies on
     /// `ouro` default-agent resolution. We re-guard here so a code path that skipped validation
     /// still can't run an agent-less repair (which could repair the wrong agent).
-    private func startRepairAgent(action: BossWorkbenchAction, source: String) -> String {
+    // VM-GATE: widened private->internal so the synchronous skip-guard ("Skipped repairAgent: …")
+    // and the in-flight-ack arms are directly unit-testable. The async repair runner Task stays the
+    // boundary. Pure access-widen, no behavior change.
+    func startRepairAgent(action: BossWorkbenchAction, source: String) -> String {
         let agentName = (action.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !agentName.isEmpty else {
             return finishBossAction(
@@ -8594,7 +8601,11 @@ public final class WorkbenchViewModel: ObservableObject {
     ///   S2 the native provider form as the ONE human gate (parks if creds absent),
     ///   S3 `ProviderRefreshRunner`, S4 `ProviderVerifyRunner`, S5 `WorkbenchMCPRegistrationRunner`,
     ///   and the handoff edge = the first successful `BossAgentMCPClient.status` round-trip.
-    private func makeFirstRunBootstrapEffects(agentName: String) -> BootstrapStepEffects {
+    // VM-GATE: widened private->internal so the effects-struct construction (the per-step @Sendable
+    // closure wiring) is directly unit-testable by invoking it and asserting a BootstrapStepEffects is
+    // produced. The closure BODIES (each awaits a subprocess/MCP runner) stay the machinery boundary.
+    // Pure access-widen, no behavior change.
+    func makeFirstRunBootstrapEffects(agentName: String) -> BootstrapStepEffects {
         let manager = daemonManager
         // Capture the bundles URL (Sendable) and rebuild a fresh inventory inside the @Sendable
         // closures — `OuroAgentInventory` holds a non-Sendable `FileManager`, so we don't capture
@@ -8798,7 +8809,10 @@ public final class WorkbenchViewModel: ObservableObject {
     /// existing recovery-truth runner: `repair-agent-config` → `AgentRepairRunner`;
     /// `check-outward` / `check-inner` → `ProviderVerifyRunner` (lane-scoped). The Setup Assistant
     /// never hands a raw `ouro …` command to the human; the seam-free ack copy is pure Core.
-    private func runOnboardingRepairStepNatively(_ step: OnboardingRepairStep) {
+    // VM-GATE: widened private->internal so the per-step dispatch (the in-progress ack append + the
+    // repair-agent / check-* / repair-*-provider / default arm routing) is directly unit-testable. The
+    // async repair/verify runner Tasks stay the boundary. Pure access-widen, no behavior change.
+    func runOnboardingRepairStepNatively(_ step: OnboardingRepairStep) {
         let agentName = (onboardingReadiness?.selectedBossName ?? state.boss.agentName)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !agentName.isEmpty else { return }
@@ -8860,7 +8874,10 @@ public final class WorkbenchViewModel: ObservableObject {
     /// Surface a natively-run onboarding repair step's recovery truth: seam-free line →
     /// `bossAppliedActions`; raw audit detail → action log; `succeeded` is the post-command probe
     /// truth, never an exit code. Then re-probe readiness so the surface reflects the new state.
-    private func surfaceNativeRepairLine(
+    // VM-GATE: widened private->internal so the recovery-truth fold (bossAppliedActions prepend +
+    // action-log + watch-error-on-needs-manual) is directly unit-testable. Pure access-widen, no
+    // behavior change.
+    func surfaceNativeRepairLine(
         humanFacingLine: String,
         auditDetail: String,
         targetName: String,
@@ -8973,7 +8990,10 @@ public final class WorkbenchViewModel: ObservableObject {
     /// Kick off a headless `selectLane` remediation (`ouro use --agent --lane --provider
     /// --model`). CONFIG-ONLY — carries no secret. Re-guards the fully-specified payload (agent
     /// name + lane + provider + model); any missing piece skips before any command runs.
-    private func startSelectLane(action: BossWorkbenchAction, source: String) -> String {
+    // VM-GATE: widened private->internal so the synchronous skip-guard ("Skipped selectLane: …") and
+    // the in-flight-ack arms are directly unit-testable. The async lane-selection runner Task stays
+    // the boundary. Pure access-widen, no behavior change.
+    func startSelectLane(action: BossWorkbenchAction, source: String) -> String {
         let agentName = (action.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !agentName.isEmpty,
               let lane = action.lane,
@@ -9009,7 +9029,10 @@ public final class WorkbenchViewModel: ObservableObject {
     /// This WRAPS the registrar's cleanup (`bossWorkbenchMCPRegistrar.install`, now a stale-entry
     /// cleanup) + snapshot (binary-present + bundle-clean) as an agent-issuable action; recovery
     /// truth comes from the POST-command registrar SNAPSHOT, never the cleanup throw.
-    private func startRegisterWorkbenchMCP(action: BossWorkbenchAction, source: String) -> String {
+    // VM-GATE: widened private->internal so the synchronous skip-guard ("Skipped registerWorkbenchMCP:
+    // …") and the in-flight-ack arms are directly unit-testable. The async registration runner Task
+    // stays the boundary. Pure access-widen, no behavior change.
+    func startRegisterWorkbenchMCP(action: BossWorkbenchAction, source: String) -> String {
         let agentName = (action.name ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !agentName.isEmpty else {
             return finishBossAction(
