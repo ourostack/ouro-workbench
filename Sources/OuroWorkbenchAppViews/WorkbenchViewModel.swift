@@ -9510,7 +9510,10 @@ public final class WorkbenchViewModel: ObservableObject {
     /// Apply all coalesced output timestamps to `state` in one mutation and
     /// persist once. Called on the debounce and eagerly before a run
     /// terminates so the final freshness isn't lost.
-    private func flushPendingOutput() {
+    // VM-GATE: widened private->internal so the no-pending guard + the per-run
+    // lastOutputAt fold (didMutate→save) are directly unit-testable. Pure
+    // access-widen, no behavior change.
+    func flushPendingOutput() {
         outputFlushTask = nil
         guard !pendingOutputTimestamps.isEmpty else { return }
         var didMutate = false

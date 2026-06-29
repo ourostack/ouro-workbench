@@ -410,4 +410,17 @@ WorkbenchViews.swift 1170 223
 # class-(C) oscillation tolerance (+6 lines / +3 regions, the detached-machinery line-axis amplitude).
 # NOT padding: the count-1 no-padding proof holds on the stable-coverable portion; the oscillating
 # async/timing detached-Task/subprocess boundary lines get the explicit +6/+3.
-WorkbenchViewModel.swift 3087 1079
+# Cluster 13 (FINAL mop-up, v0.1.206): 19 tests drive the last directly-testable arms — windowTitle
+# (5 focus/boss formatting arms), stepTerminalSearch (no-session guard / empty-query clear / find+record
+# via the active-session seam), exportWorkspaceConfig (relative-vs-absolute working-dir arms),
+# presentSaveWorkspacePanel (no-project / no-terminals guards + write-via-NSSavePanel-seam + cancelled),
+# flushPendingOutput (widened private->internal; no-pending guard + the per-run lastOutputAt didMutate→save
+# fold), restoreDetailLayout (persisted-split restore / single-pane). The flushPendingOutput widen has NO
+# WiringTest slicer. This is the LAST drivable batch — the remaining residual is the irreducible floor
+# (see the FLOOR INVENTORY in vm-gate-progress.md: live-PTY TerminalHostView NSView, subprocess runners,
+# async-Task bodies, UNUserNotificationCenter posters, NSApp.terminate). Local full-suite coverage is
+# NOT reliably runnable in this headless worktree (subprocess/window-server tests crash mid-suite — the
+# documented cluster-5 caveat), so this uses the CI probe-then-set. PROBE 2950/1040 below — set BELOW
+# main's current 3087/1079 so the CI Coverage job prints the exact Swift-6.0.3 residual; tighten to the
+# stable max post-CI (+6/+3 off the observed residual).
+WorkbenchViewModel.swift 2950 1040

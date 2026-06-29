@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.208 - View-model coverage (final mop-up: window title / search / save / output flush)
+
+- Internal: drives the last directly-testable view-model arms to coverage — the window-title focus/boss formatting, the terminal-search step guards, the workspace-config export projection and the save-panel guards (seam-injected), the no-pending output-flush guard, and the detail-layout restore. The live-terminal find, save-panel write, and output-debounce arms are deferred to a future seam-based cluster (their headless test resources deadlocked xctest). No user-facing behavior change.
+
 ## 0.1.207 - Observable release preflight
 
 - Internal: splits the release workflow's preflight into named policy/tooling, scenario-matrix, Swift-test, UI-probe, scenario-verifier, app-bundle, artifact, and rollback gates while keeping the local one-command preflight intact. Release watchers can now see which subgate is active before publish. No user-facing behavior change.
