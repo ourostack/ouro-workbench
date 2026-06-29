@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.192 - Shared shell doctor pin
+
+- Internal: pins the merged shared app-shell adoption doctor release so Workbench's shell freshness and boundary gates validate against the current Ouro app shell.
+
 ## 0.1.191 - View-model coverage (provider-config / vault-onboarding flows)
 
 - Internal: drives the provider-config form and vault-onboarding state transitions to test coverage. No user-facing behavior change.
