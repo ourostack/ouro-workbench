@@ -5,13 +5,21 @@ autopilot (merge on CI-green, no per-cluster approval). Each region: invoked + e
 mutation-verified; allowlist set to the CI-measured exact minimum (probe-then-set); scope-pure;
 VERSION bump; flaky-region protocol applied.
 
-## ⏸️ RECOMMENDED RESUME POINT (durable checkpoint — 2026-06-29, post-cluster-19)
+## ⏸️ RECOMMENDED RESUME POINT (durable checkpoint — 2026-06-29, post-cluster-20)
 
-**State to resume from:** main @ v0.1.217 (`WorkbenchRelease.version` = "0.1.217", VERSION file = 0.1.217),
-VM allowlist `WorkbenchViewModel.swift 2426 919`. Clusters 1-19 all merged & CI-green (cluster 18 = PR
-#394 `baed73b`; cluster 19 = PR #395 `f075fc8`). 0 open VM PRs, 0 leftover `coverage/vm-*` branches.
-This run drove the VM allowlist 2653/973 → **2426/919** across clusters 18-19 (CI residual now 2396/913;
-257 lines / 60 regions out this run). Cluster 18: CI 2497/945. Cluster 19: CI 2396/913.
+**State to resume from:** main @ v0.1.218 (`WorkbenchRelease.version` = "0.1.218", VERSION file = 0.1.218),
+VM allowlist `WorkbenchViewModel.swift 2405 903`. Clusters 1-20 all merged & CI-green (cluster 18 = PR
+#394 `baed73b`; cluster 19 = PR #395 `f075fc8`; cluster 20 = PR #396 `aeaace8`). 0 open VM PRs, 0
+leftover `coverage/vm-*` branches. This run drove the VM allowlist 2653/973 → **2405/903** across
+clusters 18-20 (CI residual now 2375/897; 278 lines / 76 regions out this run). Cluster 18: CI 2497/945.
+Cluster 19: CI 2396/913. Cluster 20: CI 2375/897 (yield dropping — small-decl tail).
+
+⚠️ DIMINISHING YIELD: cluster 20 drove only 21 lines / 16 regions (small-decl status-line/color tail).
+Remaining cluster-21+ small-decl candidates (from the cluster-20 fork): recoveryButtonTitle(:4559),
+bossActionLivePrompt(:8087), deskBridgePlan(:5887), checkInHelpText(:158), ouroAgentStatusLine ready-count
+arm, any remaining status-line/color arms. After those the residual is overwhelmingly genuine-carve
+(detached-Task bodies, subprocess/notification/NSApp lines, live-PTY NSView, infinite loops, source-pinned
+MCP overload, llvm-synth). STOP+REPORT for the coordinator's audit when every remaining region is a carve.
 
 ⚠️ THE TAIL IS THINNING — approaching the genuine ~150-350 floor band. The big dispatch decls
 (applyBossAction, performCommand, submitProviderConfig/BugReport/ReleaseUpdate, cold-start/vault folds,
@@ -79,6 +87,7 @@ GENUINE CARVE (the floor — do NOT drive): TerminalHostView NSView bodies (`_li
 | 17 | #390 | 0.1.214 | TAIL SWEEP (test-only): cloneAgentHeadless result-fold (.ready resolve / vault-locked fail / plan-build throw via existing runCloneAgent+providerCheckRunner seams) + presentSaveWorkspacePanel write + installWorkbenchMCP fold + openWorkspaceConfig(at:) | **2653 / 973** |
 | 18 | #394 | 0.1.216 | COLD-START/BUG-REPORT FOLDS + CMD-DISPATCH TAIL: applyColdStartConfigResult (extracted byte-identical from submitProviderConfig cold-start MainActor.run fold) .ready/.needsVaultSetup/.failed + submitProviderConfig sync arms (rotation/.invalid/.unsupportedColdStartSink) + applyBugReportBundleResult (extracted byte-identical from submitBugReport writer Task switch) .success/.failure + postNeedsMeNotificationSink seam (mirrors postExitNotification) → notifyAboutNewNeedsMeItems final dispatch + installReleaseUpdate staged fast-path + performCommand no-selection guards + seamed dispatches | **2527 / 951** (CI 2497/945) |
 | 19 | #395 | 0.1.217 | APPLY-BODY + ENTRY-LESS DISPATCH (test-only): applyOnboardingProposal apply-body (per-group create/dedup/skip-on-empty-WD folds + persisted result + import summary; only the not-ready/no-proposal guards were covered) + applyBossAction 7 entry-less dispatch arms (.requestProviderConfig/.verifyProvider/.refreshProvider/.selectLane/.registerWorkbenchMCP/.ensureDaemon/.reportBug via validate→authorize→dispatch). DENY arm = unreachable (validation name-checks first) → carved. load() store-I/O arms deferred (non-injectable private store + slicer). | **2426 / 919** (CI 2396/913) |
+| 20 | #396 | 0.1.218 | SMALL-DECL STATUS-LINE/COLOR TAIL (test-only): bossWorkbenchMCPStatusLine (5 untested arms) + StatusColor (4) + ActionTitle + supportDiagnosticsStatusColor (3) + supportDiagnosticsURL + bossWatchStatusColor (3) + bossWatchStatusLine (error/last-run) + mailboxStatusLine (2) + transcriptSearchStatusLine (empty/press-search) + ouroAgentStatusLine (populated) + stopConfirmationTitle (2) + startFreshConfirmationMessage. Pure computed-prop arms view tests only partially hit. | **2405 / 903** (CI 2375/897) |
 
 Cluster 5 result: CI residual 4912/1450 (190 lines / 65 regions driven OUT of 5102/1515); allowlist
 set to STABLE MAX 4916/1451 (+4/+1 class-C oscillation tolerance, per the cluster-4 precedent).
