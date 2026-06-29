@@ -462,6 +462,24 @@ final class AgentReadinessBootstrapTests: XCTestCase {
         XCTAssertTrue(verified.auditDetail.localizedCaseInsensitiveContains("passed"))
     }
 
+    /// Mutation-testing hardening: the `.stillDegraded` and `.needsManual` audit
+    /// detail content (not just non-emptiness/distinctness) is pinned. The
+    /// existing coverage only asserted the `.verified` line's "passed" wording
+    /// plus distinctness, so the degraded/manual audit copy was executed but its
+    /// content unasserted — a mutated word in the string survived.
+    func testStillDegradedAndNeedsManualAuditDetailContentIsPinned() {
+        let degraded = BootstrapStepOutcome(step: .vaultSync, recovery: .stillDegraded)
+        let manual = BootstrapStepOutcome(step: .verifyCredentials, recovery: .needsManual)
+        XCTAssertEqual(
+            degraded.auditDetail,
+            "\(BootstrapStep.vaultSync.auditLabel): post-effect verify still degraded; halted (no false 'done')."
+        )
+        XCTAssertEqual(
+            manual.auditDetail,
+            "\(BootstrapStep.verifyCredentials.auditLabel): could not complete automatically; manual recovery required."
+        )
+    }
+
     func testAwaitingHandoffHumanCopyIsSeamFree() {
         let result = BootstrapResult(phase: .awaitingHandoff, stepOutcomes: [])
         assertNoCliSeam(result.humanFacingLine)
