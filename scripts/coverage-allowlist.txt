@@ -441,6 +441,21 @@ WorkbenchViews.swift 1170 223
 # between runs depending on whether the detached Task ran before the profdata snapshot). The first stable-max
 # 2842/1025 (+6/+3 off the lower run) RED-ed the re-run. Re-set to STABLE MAX 2871/1029 = observed-max
 # 2865/1026 + (+6 line / +3 region) margin. NOT padding — these are genuine detached-Task/subprocess boundary
-# lines (already-carve-class machinery), not stable logic. NOT the floor yet — clusters 15+ continue
-# (notification-poster content-build needs a content-extraction refactor, deferred; + the ~258-decl tail).
-WorkbenchViewModel.swift 2871 1029
+# lines (already-carve-class machinery), not stable logic.
+# Cluster 15 (notification content-extraction + logic tail, v0.1.210): 15 tests. EXTRACTED the
+# notification title/body/subtitle composition into pure static helpers needsMeNotificationContent /
+# unexpectedExitNotificationContent (byte-identical — the posters now call them) so the wording logic
+# drives directly (single/multi-item, total-waiting subtitle, clean-exit/signal/needs-attention arms);
+# carve ONLY the UNUserNotificationCenter.requestAuthorization/.add. Widened seenNeedsMeIDs /
+# seenNeedsMeBaselineEstablished / notifyAboutNewNeedsMeItems (no slicer) to drive the watch-off-reset /
+# first-refresh-baseline / no-new-items caller guards. Logic tail: focusTerminal not-running guard,
+# openWorkspaceConfig(at:) missing-dir error, makeFirstRunBootstrapEffects struct-build,
+# setAutoLaunchResumableOnStartup no-change guard, stepTerminalSearch no-session guard. Deferred:
+# completeVaultOnboarding's detached re-probe Task body (future provider-check-seam cluster). Local
+# discovery before = 2881/1028. CI residual 2865/1026 -> 2803/1001 (62 lines / 25 regions driven OUT;
+# run 28377205373 — the PROBE 2790/995 FAILED both axes). Set to the STABLE MAX 2833/1007 with a WIDE
+# upfront buffer (+30 line / +6 region) to pre-absorb this file's detached-machinery line-axis oscillation
+# (it hit +29 lines in cluster 14) in ONE shot — avoids a 2nd CI round-trip. NOT padding: the genuine
+# detached-Task/subprocess boundary lines toggle covered↔uncovered between runs; the count-1 no-padding
+# proof holds on the stable-coverable portion. NOT the floor yet — clusters 16+ continue.
+WorkbenchViewModel.swift 2833 1007
