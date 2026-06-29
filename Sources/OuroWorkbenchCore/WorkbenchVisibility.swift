@@ -533,15 +533,28 @@ public struct OuroWorkCardReader: Sendable {
     private let runner: WorkCardCommandRunner
 
     public init() {
-        self.executable = "/usr/bin/env"
-        self.timeout = 4
-        self.runner = Self.defaultRunner
+        self.init(environment: TerminalEnvironment())
     }
 
-    public init(executable: String = "/usr/bin/env", timeout: TimeInterval = 4) {
+    public init(environment: TerminalEnvironment) {
+        self.init(executable: "/usr/bin/env", timeout: 4, environment: environment)
+    }
+
+    public init(
+        executable: String = "/usr/bin/env",
+        timeout: TimeInterval = 4,
+        environment: TerminalEnvironment = TerminalEnvironment()
+    ) {
         self.executable = executable
         self.timeout = timeout
-        self.runner = Self.defaultRunner
+        self.runner = { executable, arguments, timeout in
+            try Self.defaultRunner(
+                executable: executable,
+                arguments: arguments,
+                timeout: timeout,
+                environment: environment
+            )
+        }
     }
 
     public init(
@@ -622,10 +635,24 @@ public struct OuroWorkCardReader: Sendable {
         arguments: [String],
         timeout: TimeInterval
     ) throws -> WorkCardCommandResult {
+        try defaultRunner(
+            executable: executable,
+            arguments: arguments,
+            timeout: timeout,
+            environment: TerminalEnvironment()
+        )
+    }
+
+    public static func defaultRunner(
+        executable: String,
+        arguments: [String],
+        timeout: TimeInterval,
+        environment: TerminalEnvironment
+    ) throws -> WorkCardCommandResult {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
-        process.environment = TerminalEnvironment().valuesWithResolvedPath()
+        process.environment = environment.valuesWithResolvedPath()
 
         let stdoutPipe = Pipe()
         let stderrPipe = Pipe()

@@ -94,6 +94,23 @@ final class TerminalEnvironmentTests: XCTestCase {
         XCTAssertTrue(comps.contains("/Users/test/.ouro-cli/bin"))
     }
 
+    func testExplicitEnvironmentCanIgnoreCapturedLoginShellPath() {
+        // Hermetic tests that inject a fake CLI path must not be shadowed by a
+        // process-wide captured login PATH left by another full-shard test.
+        let saved = TerminalEnvironment.loginShellPath
+        defer { TerminalEnvironment.loginShellPath = saved }
+        TerminalEnvironment.loginShellPath = "/shadow/bin:/usr/bin"
+
+        let environment = TerminalEnvironment(
+            values: ["HOME": "/Users/test", "PATH": "/fake/bin"],
+            usesCapturedLoginShellPath: false
+        ).valuesWithResolvedPath()
+        let comps = (environment["PATH"] ?? "").components(separatedBy: ":")
+
+        XCTAssertEqual(comps.first, "/fake/bin")
+        XCTAssertFalse(comps.contains("/shadow/bin"))
+    }
+
     func testLoginShellCaptureArgumentsAreInteractive() {
         // REGRESSION GUARD for the multi-week "can't get past connect" onboarding bug: the PATH
         // capture MUST run an INTERACTIVE shell. nvm/node/ouro-cli live in `.zshrc`, which a shell

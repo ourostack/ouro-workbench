@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.213 - Hermetic Work Card reader tests
+
+- Internal: lets the Work Card reader's default process runner accept an injected terminal environment so coverage tests can resolve a fake `ouro` binary without mutating process-wide `PATH`. No user-facing behavior change.
+
 ## 0.1.212 - View-model coverage (vault-completion fold + onboarding/repair tail)
 
 - Internal: extracts the vault-onboarding completion result-handling out of its background re-probe task into a pure helper (byte-identical) so the ready/failed fold is directly testable, and covers a batch of remaining onboarding logic (import-proposal guards, provider-config open, repair-agent completion, first-run bootstrap effects, workspace-config-from-directory). The async re-probe / subprocess boundaries stay carved. No user-facing behavior change.

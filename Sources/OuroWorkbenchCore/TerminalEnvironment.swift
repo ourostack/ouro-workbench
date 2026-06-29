@@ -45,6 +45,7 @@ public struct WorkbenchSessionContext: Equatable, Sendable {
 public struct TerminalEnvironment: Equatable, Sendable {
     public var values: [String: String]
     public var workbenchContext: WorkbenchSessionContext?
+    public var usesCapturedLoginShellPath: Bool
 
     /// The user's real interactive-login-shell PATH (captured via `loginShellCaptureArguments`),
     /// captured once at app launch. A hardcoded dir list can NEVER locate a version-manager `node`
@@ -68,10 +69,12 @@ public struct TerminalEnvironment: Equatable, Sendable {
 
     public init(
         values: [String: String] = ProcessInfo.processInfo.environment,
-        workbenchContext: WorkbenchSessionContext? = nil
+        workbenchContext: WorkbenchSessionContext? = nil,
+        usesCapturedLoginShellPath: Bool = true
     ) {
         self.values = values
         self.workbenchContext = workbenchContext
+        self.usesCapturedLoginShellPath = usesCapturedLoginShellPath
     }
 
     public func mergedWithTerminalDefaults() -> [String] {
@@ -108,7 +111,7 @@ public struct TerminalEnvironment: Equatable, Sendable {
         // version-manager `node` + `ouro` resolve. `resolvedPath` then layers the
         // known fallback dirs on top (deduped), so behaviour is unchanged when no
         // login PATH was captured.
-        if let loginPath = Self.loginShellPath, !loginPath.isEmpty {
+        if usesCapturedLoginShellPath, let loginPath = Self.loginShellPath, !loginPath.isEmpty {
             let existing = merged["PATH"] ?? ""
             merged["PATH"] = existing.isEmpty ? loginPath : "\(loginPath):\(existing)"
         }
