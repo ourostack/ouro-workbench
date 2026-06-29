@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.189 - View-model coverage (command-palette dispatch)
+
+- Internal: drives the view-model's command-palette dispatch (both `performCommand` overloads) to test coverage. No user-facing behavior change.
+
 ## 0.1.188 - View-model coverage gate (boss-action dispatch)
 
 - Internal: extends the per-file-100% coverage gate to the view-model's logic half and drives its boss-action dispatch handler (the largest uncovered cluster) to test coverage. No user-facing behavior change.
