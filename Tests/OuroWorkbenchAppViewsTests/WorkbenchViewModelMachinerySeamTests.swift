@@ -123,6 +123,31 @@ final class WorkbenchViewModelMachinerySeamTests: XCTestCase {
         XCTAssertTrue(result.detail.contains("couldn't confirm"), "the .indeterminate copy")
     }
 
+    // VM-GATE FINAL FLOOR: the two remaining non-working verdict arms of runOnboardingProviderCheck
+    // (.vaultLocked + .unreachable) — the sibling tests above only drove .working/.unauthorized/
+    // .indeterminate. Each is drivable via the same providerCheckRunner seam with a verdict-line that
+    // the F2 classifier maps to that verdict; no production change.
+
+    func testOnboardingProviderCheck_vaultLocked_isFailedReconnectCredentialsCopy() async throws {
+        let m = try makeVM()
+        m.providerCheckRunner = { _, _, _ in
+            ProviderCheckProcessResult(timedOut: false, terminationStatus: 0, output: vaultLockedVerdictOutput)
+        }
+        let result = await m.runOnboardingProviderCheck(agentName: "scout", lane: "main")
+        XCTAssertEqual(result.state, .failed, "a .vaultLocked verdict → .failed")
+        XCTAssertTrue(result.detail.contains("couldn't unlock your saved credentials"), "the .vaultLocked copy")
+    }
+
+    func testOnboardingProviderCheck_unreachable_isFailedCheckNetworkCopy() async throws {
+        let m = try makeVM()
+        m.providerCheckRunner = { _, _, _ in
+            ProviderCheckProcessResult(timedOut: false, terminationStatus: 0, output: unreachableVerdictOutput)
+        }
+        let result = await m.runOnboardingProviderCheck(agentName: "scout", lane: "main")
+        XCTAssertEqual(result.state, .failed, "an .unreachable verdict → .failed")
+        XCTAssertTrue(result.detail.contains("couldn't reach this connection's provider"), "the .unreachable copy")
+    }
+
     // MARK: - runCloneProviderCheck (via providerCheckRunner seam)
 
     func testCloneProviderCheck_launchFailure_isNil() async throws {
@@ -455,4 +480,8 @@ private final class OuroBox<T>: @unchecked Sendable {
 /// provider-check seam closures can use them without capturing the `@MainActor` test class.
 private let readyVerdictOutput = "scout main openai / gpt-5: ready"
 private let unauthorizedVerdictOutput = "scout main openai / gpt-5: failed (401 unauthorized)"
+// `unknown (… vault …)` routes through classifyUnknown → .vaultLocked; `failed (fetch failed)`
+// routes through matchesUnreachable → .unreachable.
+private let vaultLockedVerdictOutput = "scout main openai / gpt-5: unknown (vault locked)"
+private let unreachableVerdictOutput = "scout main openai / gpt-5: failed (fetch failed)"
 #endif
