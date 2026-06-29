@@ -16,6 +16,7 @@ VERSION bump; flaky-region protocol applied.
 | (flake-fix) | #364 | 0.1.193 | VM allowlist → STABLE MAX (absorb async oscillation; class-C) | **5102 / 1515** |
 | 5 | #366 | 0.1.195 | markTerminated + applyAttentionSignal + exit-notification decision/throttle | **4916 / 1451** |
 | 6 | #367 | 0.1.196 | deleteCustomSession/archive + revealLatestTranscript + requestStop/confirmStop + applySessionIdBackfills | **4799 / 1415** |
+| 7 | #368 | 0.1.197 | start* onboarding handlers (verify/refresh/ensureDaemon/reportBug skip+ack arms) + completeOnboardingAction + completeFirstRunBootstrap | **4637 / 1392** |
 
 Cluster 5 result: CI residual 4912/1450 (190 lines / 65 regions driven OUT of 5102/1515); allowlist
 set to STABLE MAX 4916/1451 (+4/+1 class-C oscillation tolerance, per the cluster-4 precedent).
@@ -23,6 +24,15 @@ Cluster 6 result: CI residual 4795/1414 (121 lines / 37 regions driven OUT of 49
 set to STABLE MAX 4799/1415. New seam: `quitPersistentScreenForEntry` (routes BOTH delete + archive;
 its TerminalLeakReaperWiringTests source-pins were updated to the new marker — the
 source-introspection-test caveat the ledger flagged). `applySessionIdBackfills` widened private→internal.
+Cluster 7 result: CI residual 4633/1391 (166 lines / 24 regions driven OUT of 4799/1415); allowlist
+set to STABLE MAX 4637/1392. Widened private→internal: startVerifyProvider/startRefreshProvider/
+startEnsureDaemon/startReportBug/completeOnboardingAction/completeFirstRunBootstrap. The
+BossActionLogPendingWiringTests `handlerBody` source-slicer was made `private`-agnostic (match `func
+<name>(` + stop at the next private OR internal func) so the widen didn't break its source-pins.
+
+SOURCE-INTROSPECTION CAVEAT (reconfirmed, clusters 6+7): BEFORE widening a `private func` for a
+cluster, `grep -rln '<funcName>' Tests/` for a WiringTest that slices `private func <name>` — update
+its slicer to a `private`-agnostic match in the SAME PR (else CI reds on Swift tests + Coverage).
 
 NOTE (cluster 5): local full-suite coverage is NOT reliably runnable in this worktree env — the
 pre-existing `ReportBugSheetInteractionTests` reveal/copy taps call
