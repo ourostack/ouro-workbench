@@ -546,10 +546,11 @@ WorkbenchViews.swift 1170 223
 # verdict-store/in-flight-clear fold; a NEW scanForOnboardingSessionsRunner seam → the scan post-fold;
 # the runOnboardingProviderChecksIfNeeded serialTask store fold; the fileLastBugReportAsGitHubIssue
 # .failure arm via the existing fileGitHubIssue seam; PLUS the last two runOnboardingProviderCheck
-# verdict arms (.vaultLocked + .unreachable). 2307/872 -> CI residual 2263/862 (the PROBE 2295/860
-# RED-ed the region axis so the gate printed the exact `2263 lines / 862 regions uncovered`; Coverage
-# job 84133779212), then the 2 added verdict arms tightened it further. Set to the STABLE MAX +
-# documented class-(C) oscillation tolerance (+25 line / +4 region off the post-arm residual).
+# verdict arms (.vaultLocked + .unreachable). 2307/872 -> the PROBE 2295/860 RED-ed the region axis so
+# the gate printed the exact `2263 lines / 862 regions uncovered` (Coverage job 84133779212); the 2
+# added verdict arms then tightened it further to the GREEN-pass exact residual **2247 lines / 859
+# regions** (Coverage job 84135599140). Set to the STABLE MAX 2280/864 = residual + this file's
+# documented class-(C) oscillation tolerance (its detached-machinery lines oscillate up to ~+29).
 # === GENUINE FINAL FLOOR ===  Every remaining region is a carve class: the detached-Task awaited-
 # runner BODIES (each multi-region), the literal Process()/UNUserNotificationCenter.add/NSApp.terminate/
 # NSApp.keyWindow syscall lines, the live-PTY TerminalHostView NSView bodies, the runBossWatchLoop/

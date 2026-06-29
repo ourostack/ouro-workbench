@@ -45,9 +45,16 @@ tests) green confirms no slicer regression. Allowlist set to PROBE `2295 860` pe
 match remote main (build + HeaderView snapshots byte-identical at the new pin — no regen). Committed as
 a separate `chore(deps)` commit.
 
-**Expected:** allowlist STABLE MAX ~2280-2292 lines / ~854-857 regions (driving ~15-18 out of 872) —
-the audit-confirmed GENUINE FINAL FLOOR. Once CI reports the exact residual, set the stable max, merge
-on green, then mark FINAL FLOOR + STOP+REPORT for the coordinator.
+**RESULT (all 4 CI jobs green on PR #401):** the GREEN-pass exact residual is **2247 lines / 859
+regions** (down from cluster-22's 2277/866 — 30 lines / 7 regions driven OUT this cluster). Allowlist
+set to the STABLE MAX `2280 864` (residual + this file's documented class-(C) line-oscillation tolerance,
+which runs up to ~+29 on the detached-machinery lines). This is the **GENUINE FINAL FLOOR**: every
+remaining region is a carve class (detached-Task awaited-runner BODIES, literal Process/notification/
+NSApp syscall lines, live-PTY TerminalHostView NSViews, the runBossWatchLoop/runExternalActionPump
+infinite while-loops + Task.sleep, the source-pinned private runBossCheckIn MCP overload, the
+serialTask cancellation-RACE `continue` arms — non-deterministic to seed — and llvm-synth/oscillation
+artifacts). The audit confirmed nothing else is drivable; merge on green, then this is the campaign's
+terminal state for this file.
 
 ## 🏁 STOP+REPORT — GENUINE CANDIDATE FLOOR REACHED (2026-06-29, post-cluster-22)
 
@@ -185,7 +192,7 @@ GENUINE CARVE (the floor — do NOT drive): TerminalHostView NSView bodies (`_li
 | 20 | #396 | 0.1.218 | SMALL-DECL STATUS-LINE/COLOR TAIL (test-only): bossWorkbenchMCPStatusLine (5 untested arms) + StatusColor (4) + ActionTitle + supportDiagnosticsStatusColor (3) + supportDiagnosticsURL + bossWatchStatusColor (3) + bossWatchStatusLine (error/last-run) + mailboxStatusLine (2) + transcriptSearchStatusLine (empty/press-search) + ouroAgentStatusLine (populated) + stopConfirmationTitle (2) + startFreshConfirmationMessage. Pure computed-prop arms view tests only partially hit. | **2405 / 903** (CI 2375/897) |
 | 21 | #398 | 0.1.219 | COMPUTED-VAR MICRO-TAIL (test-only): confirmation Binding<Bool> get/set-clear arms (errorIsPresented/deleteConfirmationIsPresented/deleteGroupConfirmationIsPresented/stopConfirmationIsPresented) + onboardingHasConfigGap (nil-guard + blocker-contains, both arms) + recentActionLogEntries (sort) + currentSearchOptions + releaseUpdateURL/canAutoPresentOnboardingOnLaunch/bossMCPCommand/deskBridgePlan delegations. | **2314 / 876** (CI 2284/870) |
 | 22 | #399 | 0.1.220 | FINAL FLOOR SLIVER (test-only): recoveryButtonTitle .manualActionNeeded→"Manual Recovery" (view-route-around arm) + .noAction/nil-plan→"Recover" (seeded processRuns) + bossActionLivePrompt nil-transcript guard. **GENUINE CANDIDATE FLOOR — held for coordinator audit.** | **2307 / 872** (CI 2277/866) |
-| 23 | #401 | 0.1.221 | FINAL-FLOOR DRIVE (audit-identified 5 missed decls + 2 verdict arms; 2 byte-identical seam indirections, rest test-only): runColdStartProviderCheck rerouted to the providerCheckRunner seam (+private→internal; 3 wiring slicers made private-agnostic) → nil/timedOut/classify fold + refreshAgentOutwardReadiness TaskGroup verdict-store/in-flight-clear fold + scanForOnboardingSessions post-scan fold via NEW scanForOnboardingSessionsRunner seam + runOnboardingProviderChecksIfNeeded serialTask store fold + fileLastBugReportAsGitHubIssue .failure arm via existing fileGitHubIssue seam + the last 2 runOnboardingProviderCheck verdict arms (.vaultLocked/.unreachable). Shell-dep churn rebased inline (704102→5c67503). PROBE 2295/860 RED-ed region axis → exact CI residual **2263/862**; 2 added verdict arms tightened further; STABLE MAX set. **GENUINE FINAL FLOOR.** | **2280 / 864** (CI 2263/862 pre-arms) |
+| 23 | #401 | 0.1.221 | FINAL-FLOOR DRIVE (audit-identified 5 missed decls + 2 verdict arms; 2 byte-identical seam indirections, rest test-only): runColdStartProviderCheck rerouted to the providerCheckRunner seam (+private→internal; 3 wiring slicers made private-agnostic) → nil/timedOut/classify fold + refreshAgentOutwardReadiness TaskGroup verdict-store/in-flight-clear fold + scanForOnboardingSessions post-scan fold via NEW scanForOnboardingSessionsRunner seam + runOnboardingProviderChecksIfNeeded serialTask store fold + fileLastBugReportAsGitHubIssue .failure arm via existing fileGitHubIssue seam + the last 2 runOnboardingProviderCheck verdict arms (.vaultLocked/.unreachable). Shell-dep churn rebased inline (704102→5c67503). PROBE 2295/860 RED-ed region axis → exact 2263/862; 2 verdict arms tightened to the GREEN-pass exact residual **2247/859**; STABLE MAX set, all 4 CI jobs green. **GENUINE FINAL FLOOR.** | **2280 / 864** (CI residual 2247/859) |
 
 Cluster 5 result: CI residual 4912/1450 (190 lines / 65 regions driven OUT of 5102/1515); allowlist
 set to STABLE MAX 4916/1451 (+4/+1 class-C oscillation tolerance, per the cluster-4 precedent).
