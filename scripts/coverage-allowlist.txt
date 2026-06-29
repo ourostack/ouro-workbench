@@ -302,4 +302,12 @@ WorkbenchViews.swift 1170 223
 # 28352539280 — the PROBE 4680/1380 FAILED on region 1391>1380, so the gate printed the exact
 # `4633 lines / 1391 regions uncovered`). Set to the STABLE MAX 4637/1392 = the CI residual + the
 # file's documented class-(C) oscillation tolerance (+4/+1, per the cluster-4/5/6 precedent).
-WorkbenchViewModel.swift 4637 1392
+# Cluster 8 (boss-watch / external-action flows, v0.1.199): drives runBossWatchTick (the enabled/
+# in-flight guard + the no-wake `shouldAskBoss == false` arm that records the run + baseline and
+# returns synchronously), registerBossWatchFailure (the backoff bump + watching/off-watch error
+# surfacing), applyExternalActionRequests (the per-request applyBossAction + markApplied fold +
+# bossAppliedActions surfacing), and triggerEventDrivenBossCheckIn (the disabled-watch gate) — the
+# latter three widened private->internal (ReplayDedupWiringTests' applyExternalActionRequests slicer
+# made private-agnostic). The async check-in / drain Tasks stay the boundary. PROBE value below —
+# the CI Coverage job prints the exact residual, then this is set to the stable max.
+WorkbenchViewModel.swift 4570 1370

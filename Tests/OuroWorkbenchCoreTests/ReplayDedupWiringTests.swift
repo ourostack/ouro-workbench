@@ -208,7 +208,7 @@ final class ReplayDedupWiringTests: XCTestCase {
     private func applyExternalActionRequests() throws -> String {
         try WorkbenchAppSource.sourceSlice(
             in: try WorkbenchAppSource.appSource(),
-            from: "private func applyExternalActionRequests(_ requests: [WorkbenchActionRequest]) {",
+            from: "func applyExternalActionRequests(_ requests: [WorkbenchActionRequest]) {",
             to: "\n    /// Refresh the set of live persistent"
         )
     }
