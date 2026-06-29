@@ -23,6 +23,7 @@ VERSION bump; flaky-region protocol applied.
 | 11 | #377 | 0.1.202 | checkForReleaseUpdate + installReleaseUpdate/runAutoUpdateCheckIfDue/stagePendingUpdate guards + releaseUpdateStatusLine/Color + bugReportSessions/AgentNames/ExtraSections + reveal/openSupportDiagnostics + ensureDaemonRunningOnLaunch | **3376 / 1161** |
 | 12 | #379 | 0.1.204 | performCommand payload arms (select/useAsBoss/config/reveal/repair + no-agent guards) + selectAgent/selectBoss/openAgentConfig/revealAgentBundle/repairAgent + recordBossDecisions + reconcileWaitingSessionsIntoInbox + escalateWithheldBossInput + deleteGroup/moveSessionEntries/moveGroups/openWorkspaceConfig import-apply (rebased onto #378) | **3087 / 1079** |
 | 13 | #382 | 0.1.208 | mop-up (TRIMMED, CI-safe): windowTitle (5) + stepTerminalSearch no-session guard + exportWorkspaceConfig + presentSaveWorkspacePanel guards + flushPendingOutput no-pending + restoreDetailLayout | **3040 / 1057** |
+| 14 | #385 | 0.1.209 | MACHINERY-SEAM drive: providerCheckRunner seam → runOnboardingProviderCheck/runCloneProviderCheck classify arms + terminateApp/applyStagedUpdateAndRelaunch seams → applyReleaseUpdateAndTerminate (.launched/.failed) + kill/relaunch seams → resetToFirstRun + DELETE looksLikeOnboardingQuestion dead code | **2871 / 1029** (osc; off observed-max) |
 
 Cluster 5 result: CI residual 4912/1450 (190 lines / 65 regions driven OUT of 5102/1515); allowlist
 set to STABLE MAX 4916/1451 (+4/+1 class-C oscillation tolerance, per the cluster-4 precedent).

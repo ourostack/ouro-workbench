@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.209 - View-model coverage (machinery-seam drive: provider checks / release-terminate / first-run reset)
+
+- Internal: seams the provider-check subprocess runner, the app-terminate / staged-update relaunch, and the first-run-reset kill/relaunch behind injectable closures (each default byte-identical to the prior behavior) so the surrounding logic is directly testable — the onboarding/clone provider-check classification arms, the release-update launched/failed-to-launch arms, and the first-run-reset state wipe + ordering. Deletes an unused dead-code helper. Only the literal subprocess / NSApp.terminate / bundle-swap lines remain carved. No user-facing behavior change.
+
 ## 0.1.208 - View-model coverage (final mop-up: window title / search / save / output flush)
 
 - Internal: drives the last directly-testable view-model arms to coverage — the window-title focus/boss formatting, the terminal-search step guards, the workspace-config export projection and the save-panel guards (seam-injected), the no-pending output-flush guard, and the detail-layout restore. The live-terminal find, save-panel write, and output-debounce arms are deferred to a future seam-based cluster (their headless test resources deadlocked xctest). No user-facing behavior change.

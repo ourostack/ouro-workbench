@@ -433,7 +433,8 @@ public final class WorkbenchViewModel: ObservableObject {
     /// Set while a *manual* "Install & Relaunch" is mid-flight so the quit-time
     /// hook doesn't also try to apply (which would double-swap / fight the
     /// relaunch helper).
-    private var isApplyingManualUpdate = false
+    // VM-GATE: internal (was private) so applyReleaseUpdateAndTerminate's .launched arm is assertable.
+    var isApplyingManualUpdate = false
     private var autoUpdateCheckStartedThisSession = false
     @Published var supportDiagnosticsResult: SupportDiagnosticsResult?
     @Published var supportDiagnosticsIsCollecting = false
@@ -752,6 +753,49 @@ public final class WorkbenchViewModel: ObservableObject {
         WorkbenchViewModel.spawnScreenQuit(arguments: arguments, environment: environment)
     }
 
+    /// Seam: run the `ouro check --agent <n> --lane <l>` provider probe and return its parsed
+    /// `ProviderCheckProcessResult` (or `nil` on launch failure). Defaults to the real
+    /// `runProviderCheckProcess`, whose body spawns a live `ouro` subprocess (the genuine-machinery
+    /// boundary). A test injects a fake result so the result-MAPPING logic in
+    /// `runOnboardingProviderCheck` / `runCloneProviderCheck` (the nil-guard → "still setting up",
+    /// the `timedOut` → "taking longer"/`nil`, and the `ProviderCheckClassifier` verdict → per-state
+    /// `OnboardingProviderCheckResult` / `ProviderConnectionVerdict` fold) is driven without spawning
+    /// `ouro`. Only the literal `Process()` inside the default closure stays carved. `@Sendable` —
+    /// `runProviderCheckProcess` is `nonisolated static`, called from a `Task.detached`.
+    var providerCheckRunner: @Sendable (_ agentName: String, _ lane: String, _ timeoutSeconds: TimeInterval) -> ProviderCheckProcessResult? = { agentName, lane, timeoutSeconds in
+        WorkbenchViewModel.runProviderCheckProcess(agentName: agentName, lane: lane, timeoutSeconds: timeoutSeconds)
+    }
+
+    /// Seam: quit the app. Defaults to the real `NSApp.terminate(nil)` (the genuine-machinery
+    /// boundary — it tears down the process, so it cannot run in-process). A test injects a no-op so
+    /// the state-fold that PRECEDES the quit on the update-install + first-run-reset paths
+    /// (`applyReleaseUpdateAndTerminate`'s `.launched` arm: `isApplyingManualUpdate` + the success
+    /// action-log; `resetToFirstRun`'s wipe) is driven without killing the test process. Only the
+    /// literal `NSApp.terminate` inside the default closure stays carved.
+    var terminateApp: () -> Void = { NSApp.terminate(nil) }
+
+    /// Seam: apply a staged update + relaunch. Defaults to the real
+    /// `WorkbenchUpdateInstaller.applyAndRelaunch` (which swaps the live app bundle on disk + spawns
+    /// the relaunch helper — destructive machinery). A test injects a stub returning `.launched` /
+    /// `.failedToLaunch(...)` so `applyReleaseUpdateAndTerminate`'s BOTH outcome arms (the launched
+    /// success-log + the failed-to-launch error/status restore + log) are driven without touching the
+    /// real bundle. Only the literal installer call inside the default closure stays carved.
+    var applyStagedUpdateAndRelaunch: (_ staged: WorkbenchUpdateInstaller.Staged, _ destination: URL) -> WorkbenchUpdateInstaller.ApplyLaunchResult = { staged, destination in
+        WorkbenchUpdateInstaller.applyAndRelaunch(staged: staged, destinationBundle: destination)
+    }
+
+    /// Seam: quit every live `ouro-wb-*` persistent screen session on the factory-reset path.
+    /// Defaults to the real `killAllPersistentScreens` (a `screen -ls` + per-orphan `screen -X quit`
+    /// subprocess fan-out — genuine machinery). A test injects a no-op so `resetToFirstRun`'s
+    /// state-fold (the persistence-suppression flag, the live-terminal terminate loop, the factory
+    /// data wipe) is driven without spawning `screen`.
+    var killAllPersistentScreensOnReset: () -> Void = { WorkbenchViewModel.killAllPersistentScreens() }
+
+    /// Seam: spawn the detached "wait-then-reopen" relaunch helper on the factory-reset path.
+    /// Defaults to the real `relaunchAfterExit` (`/bin/sh` subprocess — genuine machinery). A test
+    /// injects a no-op so the reset state-fold is driven without spawning the helper.
+    var relaunchAfterExitOnReset: () -> Void = { WorkbenchViewModel.relaunchAfterExit() }
+
     private var manuallyTerminatedRunIDs = Set<UUID>()
     /// F13 — the entry id + runId of the in-flight vault-onboarding recovery terminal (the one-shot
     /// `ouro vault create && auth && refresh` chain), captured at launch so `markTerminated` can
@@ -978,7 +1022,7 @@ public final class WorkbenchViewModel: ObservableObject {
         for entry in state.processEntries where activeSessions[entry.id] != nil {
             terminate(entry)
         }
-        Self.killAllPersistentScreens()
+        killAllPersistentScreensOnReset()
 
         // 2) Back up + remove the workspace state (so the next launch bootstraps
         //    fresh — the bootstrapper treats a missing file as first run) and
@@ -993,8 +1037,8 @@ public final class WorkbenchViewModel: ObservableObject {
         UserDefaults.standard.synchronize()
 
         // 3) Relaunch a fresh instance once this one exits, then quit.
-        Self.relaunchAfterExit()
-        NSApp.terminate(nil)
+        relaunchAfterExitOnReset()
+        terminateApp()
     }
 
     /// Quit every live `ouro-wb-*` persistent screen session (best-effort,
@@ -3096,13 +3140,13 @@ public final class WorkbenchViewModel: ObservableObject {
     /// `ProviderCheckClassifier` (never the exit code — `ouro check` exits 0 in every state). Returns
     /// `nil` on a timeout / launch failure so the classifier degrades to "couldn't confirm" rather
     /// than false-greening a clean-but-unauthenticated clone (gap #1 / B-3).
-    private func runCloneProviderCheck(agentName: String, lane: String) async -> ProviderConnectionVerdict? {
-        await Task.detached(priority: .userInitiated) {
-            guard let result = Self.runProviderCheckProcess(
-                agentName: agentName,
-                lane: lane,
-                timeoutSeconds: 15
-            ) else {
+    // VM-GATE: widened private->internal so the result-mapping (nil-guard / timedOut-guard /
+    // classifier-verdict fold) is unit-testable via the injected `providerCheckRunner` seam. Pure
+    // access-widen, no behavior change; the real `ouro check` subprocess stays behind the seam default.
+    func runCloneProviderCheck(agentName: String, lane: String) async -> ProviderConnectionVerdict? {
+        let runner = providerCheckRunner
+        return await Task.detached(priority: .userInitiated) {
+            guard let result = runner(agentName, lane, 15) else {
                 return nil
             }
             // Past the budget the runner terminated the process — treat as "couldn't confirm"
@@ -4716,15 +4760,16 @@ public final class WorkbenchViewModel: ObservableObject {
         }
     }
 
-    private func applyReleaseUpdateAndTerminate(
+    // VM-GATE: widened private->internal so BOTH apply-outcome arms (the .launched success-log +
+    // isApplyingManualUpdate set, and the .failedToLaunch error/status restore + log) are unit-testable
+    // via the injected `applyStagedUpdateAndRelaunch` + `terminateApp` seams. Pure access-widen, no
+    // behavior change; the real bundle-swap + NSApp.terminate stay behind the seam defaults.
+    func applyReleaseUpdateAndTerminate(
         staged: WorkbenchUpdateInstaller.Staged,
         successLog: String
     ) {
         releaseUpdateIsInstalling = true
-        switch WorkbenchUpdateInstaller.applyAndRelaunch(
-            staged: staged,
-            destinationBundle: Bundle.main.bundleURL
-        ) {
+        switch applyStagedUpdateAndRelaunch(staged, Bundle.main.bundleURL) {
         case .launched:
             isApplyingManualUpdate = true
             recordActionLog(
@@ -4733,7 +4778,7 @@ public final class WorkbenchViewModel: ObservableObject {
                 result: successLog,
                 succeeded: true
             )
-            NSApp.terminate(nil)
+            terminateApp()
         case let .failedToLaunch(message):
             pendingStagedUpdate = staged
             stagedUpdateVersion = staged.releaseLabel
@@ -5541,13 +5586,13 @@ public final class WorkbenchViewModel: ObservableObject {
         }.value
     }
 
-    private func runOnboardingProviderCheck(agentName: String, lane: String) async -> OnboardingProviderCheckResult {
-        await Task.detached(priority: .userInitiated) {
-            guard let result = Self.runProviderCheckProcess(
-                agentName: agentName,
-                lane: lane,
-                timeoutSeconds: 90
-            ) else {
+    // VM-GATE: widened private->internal so the per-verdict result fold (nil-guard / timedOut /
+    // the .working→.passed + each non-working→.failed copy) is unit-testable via the injected
+    // `providerCheckRunner` seam. Pure access-widen, no behavior change.
+    func runOnboardingProviderCheck(agentName: String, lane: String) async -> OnboardingProviderCheckResult {
+        let runner = providerCheckRunner
+        return await Task.detached(priority: .userInitiated) {
+            guard let result = runner(agentName, lane, 90) else {
                 return OnboardingProviderCheckResult(
                     lane: lane,
                     state: .failed,
@@ -11027,33 +11072,6 @@ private extension LocalProcessTerminalView {
         // and other TUIs were rendering black-and-white in 0.1.25.
         installColors(theme.ansiPalette)
         layer?.backgroundColor = theme.background.cgColor
-    }
-}
-
-private extension String {
-    var looksLikeOnboardingQuestion: Bool {
-        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            return false
-        }
-        if trimmed.contains("?") {
-            return true
-        }
-        let questionPrefixes = [
-            "what ",
-            "why ",
-            "how ",
-            "which ",
-            "when ",
-            "where ",
-            "who ",
-            "should ",
-            "do i ",
-            "does ",
-            "can you tell",
-            "help me understand"
-        ]
-        return questionPrefixes.contains { trimmed.hasPrefix($0) }
     }
 }
 

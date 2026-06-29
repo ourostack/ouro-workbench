@@ -250,8 +250,8 @@ final class CloneHonestWiringTests: XCTestCase {
         )
         let probe = try WorkbenchAppSource.sourceSlice(
             in: source,
-            from: "private func runCloneProviderCheck",
-            to: "\n    private func "
+            from: "func runCloneProviderCheck",
+            to: "\n    func selectBoss("
         )
         XCTAssertTrue(
             probe.contains("ProviderCheckClassifier"),

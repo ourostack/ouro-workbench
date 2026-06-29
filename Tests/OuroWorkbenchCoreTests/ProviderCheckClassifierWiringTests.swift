@@ -14,7 +14,7 @@ final class ProviderCheckClassifierWiringTests: XCTestCase {
         let source = try WorkbenchAppSource.appSource()
         let body = try WorkbenchAppSource.sourceSlice(
             in: source,
-            from: "private func runOnboardingProviderCheck(agentName: String, lane: String) async",
+            from: "func runOnboardingProviderCheck(agentName: String, lane: String) async",
             to: "func scanForOnboardingSessions()"
         )
 
@@ -29,8 +29,8 @@ final class ProviderCheckClassifierWiringTests: XCTestCase {
             "provider checks must not block on readDataToEndOfFile before observing the timeout"
         )
         XCTAssertTrue(
-            body.contains("Self.runProviderCheckProcess("),
-            "runOnboardingProviderCheck must use the bounded provider-check process runner"
+            body.contains("runner(agentName, lane, 90)"),
+            "runOnboardingProviderCheck must use the bounded provider-check runner seam"
         )
         XCTAssertTrue(
             body.contains("stdout: result.output"),
@@ -51,7 +51,7 @@ final class ProviderCheckClassifierWiringTests: XCTestCase {
         let source = try WorkbenchAppSource.appSource()
         let body = try WorkbenchAppSource.sourceSlice(
             in: source,
-            from: "private func runOnboardingProviderCheck(agentName: String, lane: String) async",
+            from: "func runOnboardingProviderCheck(agentName: String, lane: String) async",
             to: "func scanForOnboardingSessions()"
         )
 
@@ -78,7 +78,7 @@ final class ProviderCheckClassifierWiringTests: XCTestCase {
         let source = try WorkbenchAppSource.appSource()
         let body = try WorkbenchAppSource.sourceSlice(
             in: source,
-            from: "private func runOnboardingProviderCheck(agentName: String, lane: String) async",
+            from: "func runOnboardingProviderCheck(agentName: String, lane: String) async",
             to: "func scanForOnboardingSessions()"
         )
 
