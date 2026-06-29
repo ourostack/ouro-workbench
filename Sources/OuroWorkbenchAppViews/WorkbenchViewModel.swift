@@ -6227,15 +6227,20 @@ public final class WorkbenchViewModel: ObservableObject {
     /// IDs of needs-me items we've already notified the user about. We never
     /// notify on the very first dashboard refresh of a process — otherwise
     /// every launch dumps the entire stale backlog as banners.
-    private var seenNeedsMeIDs: Set<String> = []
-    private var seenNeedsMeBaselineEstablished = false
+    /// VM-GATE: internal (was private) so a test can drive `notifyAboutNewNeedsMeItems`'s
+    /// baseline/seen-set decision arms directly. No behavior change.
+    var seenNeedsMeIDs: Set<String> = []
+    var seenNeedsMeBaselineEstablished = false
 
     /// Detect newly-arrived needs-me items and post a macOS user notification
     /// so the user can leave Workbench in the background and trust it to
     /// ping them when something needs human input. Only runs while Boss Watch
     /// is enabled — without Watch the user isn't in autonomous mode and
     /// notifications would be unsolicited.
-    private func notifyAboutNewNeedsMeItems(
+    /// VM-GATE: widened private->internal so the watch-off-reset / no-availability / baseline-establish
+    /// / no-new-items decision arms are directly unit-testable (the post itself is the seamed boundary).
+    /// No behavior change.
+    func notifyAboutNewNeedsMeItems(
         previous: BossDashboardSnapshot?,
         current: BossDashboardSnapshot?
     ) {
@@ -6264,13 +6269,15 @@ public final class WorkbenchViewModel: ObservableObject {
         postNeedsMeNotification(for: newItems, total: current.needsMeItems.count)
     }
 
-    private func postNeedsMeNotification(
-        for newItems: [MailboxNeedsMeItem],
-        total: Int
-    ) {
-        // Compose primitives outside the closure; UNNotificationRequest isn't
-        // Sendable so we build the request inside the auth callback.
-        let bossName = state.boss.agentName
+    /// Pure composition of the needs-me notification's title/body/subtitle from the new items +
+    /// total + boss name. Extracted from `postNeedsMeNotification` (byte-identical logic) so the
+    /// single-vs-multi-item title/body and the total-waiting subtitle arms are directly unit-testable
+    /// without the `UNUserNotificationCenter` syscall. No behavior change.
+    static func needsMeNotificationContent(
+        newItems: [MailboxNeedsMeItem],
+        total: Int,
+        bossName: String
+    ) -> (title: String, body: String, subtitle: String) {
         let title: String
         let body: String
         if newItems.count == 1, let item = newItems.first {
@@ -6283,6 +6290,17 @@ public final class WorkbenchViewModel: ObservableObject {
         let subtitle = total > newItems.count
             ? "\(total) total waiting on you"
             : ""
+        return (title, body, subtitle)
+    }
+
+    private func postNeedsMeNotification(
+        for newItems: [MailboxNeedsMeItem],
+        total: Int
+    ) {
+        // Compose primitives outside the closure; UNNotificationRequest isn't
+        // Sendable so we build the request inside the auth callback.
+        let (title, body, subtitle) = Self.needsMeNotificationContent(
+            newItems: newItems, total: total, bossName: state.boss.agentName)
         let identifier = "ouro.workbench.needsme.\(UUID().uuidString)"
         let center = UNUserNotificationCenter.current()
         center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
@@ -9914,15 +9932,16 @@ public final class WorkbenchViewModel: ObservableObject {
     /// requests authorization; thereafter the system handles permission
     /// state. We never block on the auth request — if it's denied the post
     /// silently fails, which is the correct macOS behavior.
-    private func postUnexpectedExitNotification(
+    /// Pure composition of the unexpected-exit notification's title/body/subtitle from the entry
+    /// name + exit code + needs-attention flag. Extracted from `postUnexpectedExitNotification`
+    /// (byte-identical logic) so the needs-attention-vs-clean title, the exit-code-vs-signal body,
+    /// and the recovery-sheet subtitle arms are directly unit-testable without the
+    /// `UNUserNotificationCenter` syscall. No behavior change.
+    static func unexpectedExitNotificationContent(
         entryName: String,
         exitCode: Int32?,
         needsAttention: Bool
-    ) {
-        // Capture only primitives in the closure so UNNotificationRequest
-        // (non-Sendable) is constructed inside the authorization callback's
-        // execution context, not transferred across it. Mirrors the macOS
-        // recommendation for sandbox / strict-concurrency builds.
+    ) -> (title: String, body: String, subtitle: String) {
         let title = needsAttention ? "\(entryName) needs attention" : "\(entryName) exited"
         let body: String
         if let code = exitCode {
@@ -9933,6 +9952,20 @@ public final class WorkbenchViewModel: ObservableObject {
         let subtitle = needsAttention
             ? "Recovery couldn't auto-resume — open the Recovery sheet."
             : ""
+        return (title, body, subtitle)
+    }
+
+    private func postUnexpectedExitNotification(
+        entryName: String,
+        exitCode: Int32?,
+        needsAttention: Bool
+    ) {
+        // Capture only primitives in the closure so UNNotificationRequest
+        // (non-Sendable) is constructed inside the authorization callback's
+        // execution context, not transferred across it. Mirrors the macOS
+        // recommendation for sandbox / strict-concurrency builds.
+        let (title, body, subtitle) = Self.unexpectedExitNotificationContent(
+            entryName: entryName, exitCode: exitCode, needsAttention: needsAttention)
         let identifier = "ouro.workbench.exit.\(UUID().uuidString)"
         let center = UNUserNotificationCenter.current()
         center.requestAuthorization(options: [.alert, .sound]) { granted, _ in

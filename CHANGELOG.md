@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.210 - View-model coverage (notification content + logic tail)
+
+- Internal: extracts the need-you and unexpected-exit notification title/body/subtitle composition into pure helpers (byte-identical) so the wording logic is directly testable, drives the needs-me baseline/decision guards, and covers a batch of remaining view-model logic (terminal-focus guard, workspace-config-from-directory error arm, first-run bootstrap effects, auto-launch toggle guard, terminal-search guard). Only the notification-center post syscall remains carved. No user-facing behavior change.
+
 ## 0.1.209 - View-model coverage (machinery-seam drive: provider checks / release-terminate / first-run reset)
 
 - Internal: seams the provider-check subprocess runner, the app-terminate / staged-update relaunch, and the first-run-reset kill/relaunch behind injectable closures (each default byte-identical to the prior behavior) so the surrounding logic is directly testable — the onboarding/clone provider-check classification arms, the release-update launched/failed-to-launch arms, and the first-run-reset state wipe + ordering. Deletes an unused dead-code helper. Only the literal subprocess / NSApp.terminate / bundle-swap lines remain carved. No user-facing behavior change.
