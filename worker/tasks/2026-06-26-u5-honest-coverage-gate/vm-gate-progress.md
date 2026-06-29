@@ -12,10 +12,13 @@ VERSION bump; flaky-region protocol applied.
 | (gate-wire + 1) | #357 | 0.1.188 | gate VM + `applyBossAction` full dispatch | 5505 / 1591 |
 | 2 | #358 | 0.1.189 | `performCommand` (both overloads) dispatch | 5407 / 1542 |
 | 3 | #360 | 0.1.191 | provider-config form + vault-onboarding flows | 5182 / 1532 |
-| 4 | #361 | 0.1.192 | release-update / bug-report / support-diagnostics / recovery-drill | **5098 / 1514** |
+| 4 | #361 | 0.1.192 | release-update / bug-report / support-diagnostics / recovery-drill | 5098 / 1514 |
+| (flake-fix) | #364 | 0.1.193 | VM allowlist → STABLE MAX (absorb async oscillation; class-C) | **5102 / 1515** |
 
 Start residual (scoping): 5892 lines / 1696 regions (44.0% line / 40.7% region).
-Current (main): **5098 lines / 1514 regions (51.5% line / 47.0% region).**
+Current (main): **5102 lines / 1515 regions** — the STABLE MAX (the bare 5098/1514 minimum red-ed
+main post-merge on an oscillating async region; set to the post-merge-observed stable count per the
+class-(C) GATED-FILE OSCILLATION protocol). 51.4% line / 47.0% region.
 Driven so far: **794 lines / 182 regions** out.
 
 Test suites added (all in Tests/OuroWorkbenchAppViewsTests/):
@@ -58,3 +61,7 @@ autoclosure/resume-epilogue artifacts.
   (BossInjectionGate/ReplayDedup/StartSequenceAwait) were updated to the `func` marker — watch for
   similar source-introspection tests when widening other private funcs.
 - DaemonLiveness allowlist is at 2/2 (the :159 + :171 synthesized epilogues).
+- LESSON (#364): set each VM cluster's allowlist to the STABLE MAX, not the bare PR-time minimum —
+  the VM's async/timing regions oscillate ±1 between runs, so the bare minimum reds main post-merge.
+  Probe-then-set gives the PR-time floor; add a small buffer (or re-measure post-merge) for the
+  oscillating regions, documented as class-(C) tolerance. Cover-first the identifiable timing-races.
