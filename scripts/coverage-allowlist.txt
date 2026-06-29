@@ -435,8 +435,12 @@ WorkbenchViews.swift 1170 223
 # runProviderCheckProcess Process body, WorkbenchUpdateInstaller.applyAndRelaunch bundle-swap, NSApp.terminate,
 # killAllPersistentScreens/relaunchAfterExit subprocesses. Local full-suite coverage unreliable here (the
 # HeaderView SNAPSHOT tests flake headless + the documented subprocess-test instability), so CI probe-then-set.
-# CI residual 3040/1057 -> 2836/1022 (198 lines / 32 regions driven OUT; run 28374833688 — the PROBE
-# 2820/980 FAILED both axes; the provider-check classifier arms are line-heavy). Set to the STABLE MAX
-# 2842/1025 (+6 line / +3 region wide class-(C) buffer). NOT the floor yet — clusters 15+ continue
+# CI residual 3040/1057 -> 2836/1022 (198 lines / 32 regions driven OUT; run 28374833688). Two CI runs
+# measured 2836/1022 then 2865/1026 — a WIDE +29-LINE oscillation (the provider-check Task.detached call
+# sites joined the readLoginShellPath/spawnScreenQuit detached-machinery lines that toggle covered↔uncovered
+# between runs depending on whether the detached Task ran before the profdata snapshot). The first stable-max
+# 2842/1025 (+6/+3 off the lower run) RED-ed the re-run. Re-set to STABLE MAX 2871/1029 = observed-max
+# 2865/1026 + (+6 line / +3 region) margin. NOT padding — these are genuine detached-Task/subprocess boundary
+# lines (already-carve-class machinery), not stable logic. NOT the floor yet — clusters 15+ continue
 # (notification-poster content-build needs a content-extraction refactor, deferred; + the ~258-decl tail).
-WorkbenchViewModel.swift 2842 1025
+WorkbenchViewModel.swift 2871 1029
