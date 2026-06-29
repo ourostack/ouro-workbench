@@ -452,7 +452,10 @@ WorkbenchViews.swift 1170 223
 # openWorkspaceConfig(at:) missing-dir error, makeFirstRunBootstrapEffects struct-build,
 # setAutoLaunchResumableOnStartup no-change guard, stepTerminalSearch no-session guard. Deferred:
 # completeVaultOnboarding's detached re-probe Task body (future provider-check-seam cluster). Local
-# discovery before = 2881/1028; PROBE 2790/995 below — set BELOW main's 2871/1029 so the CI Coverage job
-# prints the exact residual; tighten to the stable max post-CI with a WIDE buffer (this file's
-# detached-machinery line-axis oscillates up to ~+29, so set off observed-max + ~6). NOT the floor yet.
-WorkbenchViewModel.swift 2790 995
+# discovery before = 2881/1028. CI residual 2865/1026 -> 2803/1001 (62 lines / 25 regions driven OUT;
+# run 28377205373 — the PROBE 2790/995 FAILED both axes). Set to the STABLE MAX 2833/1007 with a WIDE
+# upfront buffer (+30 line / +6 region) to pre-absorb this file's detached-machinery line-axis oscillation
+# (it hit +29 lines in cluster 14) in ONE shot — avoids a 2nd CI round-trip. NOT padding: the genuine
+# detached-Task/subprocess boundary lines toggle covered↔uncovered between runs; the count-1 no-padding
+# proof holds on the stable-coverable portion. NOT the floor yet — clusters 16+ continue.
+WorkbenchViewModel.swift 2833 1007
