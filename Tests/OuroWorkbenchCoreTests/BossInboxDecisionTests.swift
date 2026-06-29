@@ -824,4 +824,159 @@ final class BossInboxDecisionTests: XCTestCase {
         let trimmed = WorkspaceState.trimmedToCap(log, cap: 2, now: now)
         XCTAssertEqual(trimmed.map(\.id), [openNew.id, openOld.id], "resolved evicted; both open kept even though that holds at the cap")
     }
+
+    // MARK: - Boundary & contract hardening (mutation-testing pilot)
+    //
+    // The tests below pin behaviors that the suite *executed* but did not
+    // *assert* — each was found by a mutation-testing pilot on this module: a
+    // single covered operator / constant was mutated and no test failed (a
+    // vacuous-coverage gap). Each test fails on the corresponding mutant and
+    // passes on the original, killing it.
+
+    /// Kills `until <= now` → `until < now` in `DecisionTriage.isOpen`. An
+    /// elapsed snooze resurfaces *inclusively*: a snooze whose deadline is
+    /// exactly `now` is open. The existing tests only used clearly-past / clearly-
+    /// future deadlines, never the exact `until == now` boundary, so the strict-
+    /// vs-inclusive comparison was unasserted.
+    func testSnoozeIsOpenAtExactlyTheDeadlineInstant() {
+        let now = Date()
+        let triage = DecisionTriage.snoozed(until: now)
+        XCTAssertTrue(triage.isOpen(at: now), "a snooze that elapses exactly at `now` is open (inclusive boundary)")
+        // One nanosecond before the deadline it is still hidden.
+        XCTAssertFalse(triage.isOpen(at: now.addingTimeInterval(-0.000_001)), "still active just before the deadline")
+        // And the public decision wrapper agrees at the boundary.
+        let d = BossInboxDecision(source: "b", prompt: "p", kind: .escalate, reasoning: "r", triage: .snoozed(until: now))
+        XCTAssertTrue(d.isOpenForTriage(at: now), "isOpenForTriage is inclusive at the deadline too")
+    }
+
+    /// Kills `case critical = 3` → `= 4`. The severity raw values are a fixed
+    /// contract: a contiguous `0...3` (`Int`-backed `Codable` wire format + the
+    /// `InboxSeverityGroup.id`). The existing tests asserted only relative
+    /// ordering and `count <= 4`, never the absolute raw values.
+    func testSeverityRawValuesAreTheContiguousContract() {
+        XCTAssertEqual(DecisionSeverity.low.rawValue, 0)
+        XCTAssertEqual(DecisionSeverity.normal.rawValue, 1)
+        XCTAssertEqual(DecisionSeverity.elevated.rawValue, 2)
+        XCTAssertEqual(DecisionSeverity.critical.rawValue, 3)
+        // The group id is the raw value, so it inherits the same contract.
+        XCTAssertEqual(InboxSeverityGroup(severity: .critical, decisions: []).id, 3)
+    }
+
+    /// Kills `lhs.rawValue < rhs.rawValue` → `<=` in `DecisionSeverity.<`. The
+    /// `Comparable` conformance must be irreflexive: a severity is never less
+    /// than itself. The `<=` mutant makes `sev < sev` true, which the existing
+    /// ordering tests (all distinct severities) never exercised.
+    func testSeverityComparableIsIrreflexive() {
+        for sev in DecisionSeverity.allCases {
+            XCTAssertFalse(sev < sev, "\(sev) must not be less than itself (strict <)")
+        }
+        // And a strict pair stays strict in exactly one direction.
+        XCTAssertTrue(DecisionSeverity.normal < .critical)
+        XCTAssertFalse(DecisionSeverity.critical < .normal)
+    }
+
+    /// Kills `DateComponents(hour: 0, minute: 0, second: 0)` → `second: 1` (and
+    /// the minute/hour siblings) in `untilEndOfDay`. The target instant is the
+    /// next midnight to the *exact second*; the prior test used `accuracy: 1`,
+    /// which tolerated a one-second drift in the `second:` component. Pin it
+    /// exactly so a shifted target field fails.
+    func testUntilEndOfDayTargetsExactMidnightToTheSecond() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        // 2026-06-03 21:30:15 UTC → next midnight 2026-06-04 00:00:00 = 2h29m45s.
+        var comps = DateComponents()
+        comps.year = 2026; comps.month = 6; comps.day = 3
+        comps.hour = 21; comps.minute = 30; comps.second = 15
+        comps.timeZone = TimeZone(identifier: "UTC")
+        let now = calendar.date(from: comps)!
+        let interval = WorkbenchTriageInterval.untilEndOfDay(now: now, calendar: calendar)
+        // 2h29m45s = 8985s, asserted to the half-second so a 1s / 60s / 1h drift
+        // in the matched midnight components is caught.
+        XCTAssertEqual(interval, 2 * 3600 + 29 * 60 + 45, accuracy: 0.5, "next midnight is matched to the exact second")
+    }
+
+    /// Kills `max(60, …)` → `max(61, …)` in `untilEndOfDay`. The clamp floor is
+    /// exactly 60 seconds ("at least a minute"). The prior test only asserted
+    /// `>= 60`, which `61` also satisfies. Drive the clamp with a `now` whose
+    /// real distance to midnight is BELOW 60s, and assert the result is exactly
+    /// 60 (not 61).
+    func testUntilEndOfDayClampFloorIsExactlySixtySeconds() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "UTC")!
+        // 23:59:30 → 30s to midnight, below the floor, so it clamps to exactly 60.
+        var comps = DateComponents()
+        comps.year = 2026; comps.month = 6; comps.day = 3
+        comps.hour = 23; comps.minute = 59; comps.second = 30
+        comps.timeZone = TimeZone(identifier: "UTC")
+        let now = calendar.date(from: comps)!
+        let interval = WorkbenchTriageInterval.untilEndOfDay(now: now, calendar: calendar)
+        XCTAssertEqual(interval, 60, accuracy: 0.001, "the clamp floor is exactly 60s, not 61")
+    }
+
+    /// Kills `decisionLogCap = 200` → `201`. The cap is a fixed contract that
+    /// matches the action log's cap; the existing tests referenced it only
+    /// relatively (`decisionLogCap + N`), so the absolute value was unasserted.
+    func testDecisionLogCapIsTwoHundred() {
+        XCTAssertEqual(WorkspaceState.decisionLogCap, 200, "the newest-first decision-log cap is fixed at 200")
+    }
+
+    /// Kills `dedupScanWindow = 50` → `51`. The dedup scan window is a fixed
+    /// bound; the existing tests used it only relatively (filling exactly
+    /// `dedupScanWindow` rows), so the absolute value was unasserted.
+    func testDedupScanWindowIsFifty() {
+        XCTAssertEqual(WorkspaceState.dedupScanWindow, 50, "the dedup scan window is fixed at 50")
+    }
+
+    /// Kills `stride(from: log.count - 1, through: 0, by: -1)` → `through: 1` in
+    /// `trimmedToCap`. The eviction sweep must reach index 0 (the NEWEST row).
+    /// Build an over-cap log whose ONLY evictable (resolved) row is the newest
+    /// one, with every older row an open escalation that may not be dropped. The
+    /// `through: 1` mutant never inspects index 0, finds nothing evictable, and
+    /// returns the log unchanged (still over cap); the original evicts the newest
+    /// resolved row and lands at the cap.
+    func testTrimmedToCapEvictsTheNewestRowWhenItIsTheOnlyEvictableOne() {
+        let now = Date()
+        let cap = 3
+        // Newest-first: index 0 is a RESOLVED (evictable) row; indices 1...cap are
+        // OPEN escalations (never evictable). Length cap+1 → overage 1.
+        let resolvedNewest = resolvedEscalation(prompt: "resolved-newest", at: now)
+        var log: [BossInboxDecision] = [resolvedNewest]
+        for i in 0..<cap {
+            log.append(openEscalation(prompt: "open-\(i)? (y/N)", at: now.addingTimeInterval(Double(-i - 1))))
+        }
+        XCTAssertEqual(log.count, cap + 1)
+
+        let trimmed = WorkspaceState.trimmedToCap(log, cap: cap, now: now)
+        XCTAssertEqual(trimmed.count, cap, "the lone evictable row (the newest) is dropped, landing exactly at the cap")
+        XCTAssertFalse(
+            trimmed.contains(where: { $0.id == resolvedNewest.id }),
+            "the newest row IS evicted when it is the only resolved/evictable one — the sweep must reach index 0"
+        )
+    }
+
+    /// Kills `if lhs.element.occurredAt != rhs.element.occurredAt` → `==` in the
+    /// `openInbox` sort. Within one severity tier, ordering is by recency
+    /// (newer first); the enumeration offset is only the *final* tie-breaker for
+    /// equal dates. The existing recency test happened to have log-offset order
+    /// agree with date order, so flipping the guard didn't change the result.
+    /// Here the newest-by-DATE row is deliberately placed LAST in the log
+    /// (highest offset) so date order and offset order DISAGREE — the date
+    /// comparison must win.
+    func testOpenInboxRecencyBeatsLogOffsetWithinASeverityTier() {
+        let now = Date()
+        var state = WorkspaceState()
+        // Same (elevated) severity. Put the NEWEST-dated decision at the TAIL of
+        // the log (largest enumerated offset) and the oldest at the head, so the
+        // recency comparison and the offset tie-breaker pull in opposite
+        // directions. recordDecision prepends, so record newest-date LAST.
+        let oldDate = escalate(prompt: "Old date, head of log? (y/N)", at: now.addingTimeInterval(-100))
+        let newDate = escalate(prompt: "New date, tail of log? (y/N)", at: now)
+        state.decisionLog = [oldDate, newDate] // index 0 = older date, index 1 = newer date
+        let inbox = state.openInbox(now: now)
+        XCTAssertEqual(
+            inbox.map(\.id),
+            [newDate.id, oldDate.id],
+            "within a tier, the newer-dated decision sorts first even though it sits later in the log"
+        )
+    }
 }
