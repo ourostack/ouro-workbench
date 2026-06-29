@@ -85,18 +85,27 @@ final class ProviderVerifyTests: XCTestCase {
         let defaultVerifyRunner = ProviderVerifyRunner(verifyProbe: { _, _ in .healthy })
         let defaultOutcome = await defaultVerifyRunner.verify(agentName: "   ", lane: nil)
         XCTAssertFalse(defaultOutcome.commandAttempted)
-        let defaultCommandOutcome = await defaultVerifyRunner.verify(agentName: "slugger", lane: nil)
-        XCTAssertTrue(defaultCommandOutcome.commandAttempted)
-        XCTAssertEqual(defaultCommandOutcome.truth, .verified)
-        let didRun = ProviderVerifyBoolFlag()
-        let runner = ProviderVerifyRunner(
-            runVerify: { _, _ in didRun.set() },
+        XCTAssertEqual(defaultOutcome.truth, .needsManual)
+
+        let didRunNonEmpty = ProviderVerifyBoolFlag()
+        let nonEmptyRunner = ProviderVerifyRunner(
+            runVerify: { _, _ in didRunNonEmpty.set() },
+            verifyProbe: { _, _ in .healthy }
+        )
+        let commandOutcome = await nonEmptyRunner.verify(agentName: "slugger", lane: nil)
+        XCTAssertTrue(didRunNonEmpty.value)
+        XCTAssertTrue(commandOutcome.commandAttempted)
+        XCTAssertEqual(commandOutcome.truth, .verified)
+
+        let didRunEmpty = ProviderVerifyBoolFlag()
+        let emptyRunner = ProviderVerifyRunner(
+            runVerify: { _, _ in didRunEmpty.set() },
             verifyProbe: { _, _ in .healthy }
         )
 
-        let outcome = await runner.verify(agentName: "   ", lane: nil)
+        let outcome = await emptyRunner.verify(agentName: "   ", lane: nil)
 
-        XCTAssertFalse(didRun.value, "command must NOT run without an explicit agent name")
+        XCTAssertFalse(didRunEmpty.value, "command must NOT run without an explicit agent name")
         XCTAssertEqual(outcome.truth, .needsManual)
         XCTAssertFalse(outcome.commandAttempted)
     }
