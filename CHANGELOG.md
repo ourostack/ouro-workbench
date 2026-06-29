@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.224 - Package-relevant shell freshness
+
+- Internal: treats shared shell CI and downstream-contract commits as fresh when the pinned shell package code has not changed, breaking the consumer-refresh/downstream-contract loop without weakening package-code freshness. No user-facing behavior change.
+
 ## 0.1.223 - Shared shell dependency refresh
 
 - Internal: refreshes `ouro-native-apple-app-shell` to `9f1db0b40afa` and bumps Workbench for release/update freshness. No user-facing behavior change.
