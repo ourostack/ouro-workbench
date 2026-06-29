@@ -516,4 +516,17 @@ WorkbenchViews.swift 1170 223
 # PROBE 2360/895 failed on both axes so the gate printed the exact `2375 lines / 897 regions uncovered`).
 # Set to the STABLE MAX 2405/903 = the CI residual + this file's documented class-(C) oscillation
 # tolerance (+30 line / +6 region).
-WorkbenchViewModel.swift 2405 903
+# Cluster 21 (v0.1.219, PROBE): drives the computed-var micro-tail — the confirmation Binding<Bool>
+# get/set-clear arms (errorIsPresented/deleteConfirmationIsPresented/deleteGroupConfirmationIsPresented/
+# stopConfirmationIsPresented), onboardingHasConfigGap (nil-guard + blocker-contains, both arms),
+# recentActionLogEntries (sort), currentSearchOptions, and the releaseUpdateURL/canAutoPresentOnboarding
+# OnLaunch/bossMCPCommand/deskBridgePlan delegations. Test-only (no source change). NOTE: this is near
+# the genuine floor — the ~875-region residual is now ~600-750 GENUINE-CARVE (65 detached-Task bodies +
+# 11 Process + 10 UNUserNotificationCenter + 9 NSApp + ~39 while-loops + live-PTY NSView + source-pinned
+# runBossCheckIn MCP overload + llvm-synth). The honest floor for THIS file is ~700-850 regions (the
+# async/subprocess-orchestration half of the U5 split is far denser than the STEP-1 ~150-350 guess).
+# 2405/903 -> CI residual 2284/870 (91 lines / 27 regions driven OUT; Coverage job 84119435255 — the
+# PROBE 2340/880 PASSed so the gate reported the exact `2284 line, 870 region exempt`). Set to the
+# STABLE MAX 2314/876 = the CI residual + this file's documented class-(C) oscillation tolerance
+# (+30 line / +6 region).
+WorkbenchViewModel.swift 2314 876
