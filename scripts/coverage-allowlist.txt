@@ -240,9 +240,11 @@ GitSessionStatus.swift 1 1
 # floor (NSApp IUO trap). 1205/238 → 1170/227 (35 lines / 11 regions driven+deleted OUT). Measured on
 # the Coverage job at run 28301926487 (probe-then-set: the probe 1185/222 forced the gate to print the
 # exact residual `1170 lines / 227 regions`). Verified minimal: lowering EITHER number by 1 fails.
-# This is the IRREDUCIBLE FLOOR — every remaining region is live-PTY/Scene/runModal/NSApp-trap/
+# Coverage follow-up (v0.1.194): direct ProviderCheckOutputBuffer coverage + MachineRuntimeView
+# Support-Diagnostics button taps drove the deterministic buffer and action-closure regions,
+# tightening the views floor to 1170/223. This is the IRREDUCIBLE FLOOR — every remaining region is live-PTY/Scene/runModal/NSApp-trap/
 # .task/.onKeyPress/.popover-descent/NSWindow-chrome/llvm-synth (see the per-class notes above).
-WorkbenchViews.swift 1170 227
+WorkbenchViews.swift 1170 223
 
 # WorkbenchViewModel.swift (VM-GATE campaign) — the logic half of the U5 split, now GATED and being
 # driven to its floor cluster-by-cluster (scope: worker/tasks/.../vm-gate-scope.md). The file entered

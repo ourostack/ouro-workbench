@@ -667,12 +667,12 @@ public final class WorkbenchViewModel: ObservableObject {
         )
     }
 
-    /// Builds the support-diagnostics runner for a resource directory. Defaults to
-    /// the real `SupportDiagnosticsRunner` (whose `run()` spawns the collector
-    /// script); a test injects a factory returning a runner whose `run()` does not
-    /// shell out. `@Sendable` because the produced runner is used inside `Task.detached`.
-    var makeSupportDiagnosticsRunner: @Sendable (URL?) -> SupportDiagnosticsRunner = { resourceDirectory in
-        SupportDiagnosticsRunner(resourceDirectory: resourceDirectory)
+    /// Runs support diagnostics for a resource directory. Defaults to the real
+    /// `SupportDiagnosticsRunner.run()` path (which spawns the collector script);
+    /// tests inject a synchronous result/error closure so no child process launches.
+    /// `@Sendable` because it is invoked inside `Task.detached`.
+    var runSupportDiagnostics: @Sendable (URL?) throws -> SupportDiagnosticsResult = { resourceDirectory in
+        try SupportDiagnosticsRunner(resourceDirectory: resourceDirectory).run()
     }
 
     /// Launches a constructed terminal session — the boundary where `start()` forks
@@ -685,6 +685,12 @@ public final class WorkbenchViewModel: ObservableObject {
     /// past teardown — a CI-only signal-1 teardown crash (#332, same class as the gh /
     /// diagnostics orphans). `@MainActor`-isolated; the session is only ever started on main.
     var launchTerminalSession: (TerminalSessionController) -> Void = { $0.start() }
+
+    /// Reveals file URLs in Finder. Defaults to AppKit's live file-viewer call; tests inject a
+    /// recorder so interaction coverage can tap "Reveal…" buttons without launching Finder.
+    var revealFileViewerSelectingURLs: ([URL]) -> Void = { urls in
+        NSWorkspace.shared.activateFileViewerSelecting(urls)
+    }
 
     /// Seam: resolve a directory URL from the configured "Open Workspace…" panel.
     /// Defaults to the real `panel.runModal()` syscall path (`.OK ? panel.url : nil`),
@@ -2402,7 +2408,7 @@ public final class WorkbenchViewModel: ObservableObject {
         let targetPath = FileManager.default.fileExists(atPath: agent.configPath)
             ? agent.configPath
             : agent.bundlePath
-        NSWorkspace.shared.activateFileViewerSelecting([
+        revealFileViewerSelectingURLs([
             URL(fileURLWithPath: targetPath)
         ])
     }
@@ -4798,13 +4804,13 @@ public final class WorkbenchViewModel: ObservableObject {
         supportDiagnosticsIsCollecting = true
         supportDiagnosticsError = nil
 
-        // #332 seam: build via the (default = real) factory so a test can inject a
-        // runner whose `run()` does not spawn the collector child. Prod is unchanged.
-        let runner = makeSupportDiagnosticsRunner(Bundle.main.resourceURL)
+        // #332 seam: run via the (default = real) closure so a test can inject a
+        // result/error path that does not spawn the collector child. Prod is unchanged.
+        let runSupportDiagnostics = runSupportDiagnostics
         Task {
             let outcome = await Task.detached(priority: .userInitiated) {
                 do {
-                    return Result<SupportDiagnosticsResult, Error>.success(try runner.run())
+                    return Result<SupportDiagnosticsResult, Error>.success(try runSupportDiagnostics(Bundle.main.resourceURL))
                 } catch {
                     return Result<SupportDiagnosticsResult, Error>.failure(error)
                 }
@@ -4836,7 +4842,7 @@ public final class WorkbenchViewModel: ObservableObject {
         guard let supportDiagnosticsURL else {
             return
         }
-        NSWorkspace.shared.activateFileViewerSelecting([supportDiagnosticsURL])
+        revealFileViewerSelectingURLs([supportDiagnosticsURL])
         recordActionLog(
             source: "native",
             action: "revealSupportDiagnostics",
@@ -4927,9 +4933,9 @@ public final class WorkbenchViewModel: ObservableObject {
             BugReportComposer.directoryName(date: Date(), note: directoryNote),
             isDirectory: true
         )
-        // #332 seam: build via the (default = real) factory so a test can inject a
-        // runner whose `run()` does not spawn the collector child. Prod is unchanged.
-        let runner = makeSupportDiagnosticsRunner(Bundle.main.resourceURL)
+        // #332 seam: run via the (default = real) closure so a test can inject a
+        // result/error path that does not spawn the collector child. Prod is unchanged.
+        let runSupportDiagnostics = runSupportDiagnostics
 
         Task {
             let bundle = await Task.detached(priority: .userInitiated) { () -> Result<BugReportBundle, Error> in
@@ -4938,7 +4944,7 @@ public final class WorkbenchViewModel: ObservableObject {
                 var diagnosticsArchive: URL?
                 var diagnosticsError: String?
                 do {
-                    diagnosticsArchive = try runner.run().archiveURL
+                    diagnosticsArchive = try runSupportDiagnostics(Bundle.main.resourceURL).archiveURL
                 } catch {
                     diagnosticsError = error.localizedDescription
                 }
@@ -5013,7 +5019,7 @@ public final class WorkbenchViewModel: ObservableObject {
             revealBugReportsFolder()
             return
         }
-        NSWorkspace.shared.activateFileViewerSelecting([lastBugReportURL])
+        revealFileViewerSelectingURLs([lastBugReportURL])
     }
 
     func copyBugReportPath() {
@@ -7262,7 +7268,7 @@ public final class WorkbenchViewModel: ObservableObject {
             )
             return
         }
-        NSWorkspace.shared.activateFileViewerSelecting([transcriptURL])
+        revealFileViewerSelectingURLs([transcriptURL])
         recordActionLog(
             source: "native",
             action: "revealTranscript",

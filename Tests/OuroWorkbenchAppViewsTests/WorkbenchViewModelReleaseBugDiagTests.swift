@@ -9,7 +9,7 @@ import OuroWorkbenchCore
 /// are state-transition + I/O-orchestration logic; the SYNCHRONOUS arms (the in-flight guards, the
 /// flag sets, the no-URL error arms, the pure recovery-drill run) are directly INVOKE-able +
 /// effect-asserted + mutation-verified. The async subprocess Tasks use the existing closure seams
-/// (`makeSupportDiagnosticsRunner`, `fileGitHubIssue`) so no child orphans (#332).
+/// (`runSupportDiagnostics`, `fileGitHubIssue`) so no child orphans (#332).
 @MainActor
 final class WorkbenchViewModelReleaseBugDiagTests: XCTestCase {
 
@@ -23,8 +23,10 @@ final class WorkbenchViewModelReleaseBugDiagTests: XCTestCase {
             paths: paths,
             bossWorkbenchMCPRegistrar: BossWorkbenchMCPRegistrar(agentBundlesURL: agentBundles),
             ouroAgentInventory: OuroAgentInventory(agentBundlesURL: agentBundles))
-        // No-op the diagnostics runner: a nil resource dir makes run() throw before spawning a child.
-        m.makeSupportDiagnosticsRunner = { _ in SupportDiagnosticsRunner(resourceDirectory: nil) }
+        // No-op the diagnostics runner directly so tests never construct or spawn a child process.
+        m.runSupportDiagnostics = { _ in
+            throw SupportDiagnosticsRunnerError.scriptMissing(["test no-op"])
+        }
         return m
     }
 
@@ -58,7 +60,7 @@ final class WorkbenchViewModelReleaseBugDiagTests: XCTestCase {
 
     func testCopySupportDiagnosticsPath_noZip_setsError() throws {
         let m = try makeVM()
-        m.collectSupportDiagnostics()   // no result set yet (async never completes here)
+        m.collectSupportDiagnostics()   // no result set yet synchronously
         m.supportDiagnosticsResult = nil
         m.copySupportDiagnosticsPath()
         XCTAssertEqual(m.errorMessage, "No support diagnostics zip has been collected yet")

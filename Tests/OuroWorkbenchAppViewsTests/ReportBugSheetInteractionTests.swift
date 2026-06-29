@@ -86,10 +86,13 @@ final class ReportBugSheetInteractionTests: XCTestCase {
     // MARK: - Success-box buttons (`:2509`, `:2515`, `:2522`)
 
     /// "Reveal in Finder" `Button { model.revealLastBugReport() }` (`:2509`). Reveals the
-    /// saved bundle via `NSWorkspace.activateFileViewerSelecting` (no modal).
+    /// saved bundle through the injected Finder seam.
     func testReportBug_revealButton_tapRunsReveal() throws {
         let model = try savedModel()
+        var revealedURLs: [URL] = []
+        model.revealFileViewerSelectingURLs = { revealedURLs = $0 }
         try ReportBugSheet(model: model).inspect().find(button: "Reveal in Finder").tap()
+        XCTAssertEqual(revealedURLs, [Self.fixedBundleURL])
     }
 
     /// "Copy Path" `Button { model.copyBugReportPath() }` (`:2515`). Writes the bundle

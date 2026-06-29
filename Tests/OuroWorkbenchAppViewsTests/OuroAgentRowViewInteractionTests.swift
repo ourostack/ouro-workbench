@@ -104,12 +104,16 @@ final class OuroAgentRowViewInteractionTests: XCTestCase {
         XCTAssertNotNil(model.errorMessage, "Connect tools runs installWorkbenchMCP → the hermetic install fails honestly")
     }
 
-    /// "Reveal Bundle" (`:6051`) runs `revealAgentBundle` (a live Finder GUI action; no-op for the
-    /// hermetic path). The tap runs the closure for coverage — observable signal is "no throw".
+    /// "Reveal Bundle" (`:6051`) runs `revealAgentBundle`; the Finder boundary is injected so the
+    /// tap has an observable target URL and never launches Finder in-process.
     func testRow_revealBundle_runsAction() throws {
         let model = try makeVM(bossName: "someone-else")
+        var revealedURLs: [URL] = []
+        model.revealFileViewerSelectingURLs = { revealedURLs = $0 }
         let row = OuroAgentRowView(agent: record(name: "alpha-agent"), model: model)
-        XCTAssertNoThrow(try row.inspect().find(button: "Reveal Bundle").tap())
+        try row.inspect().find(button: "Reveal Bundle").tap()
+        XCTAssertEqual(revealedURLs, [URL(fileURLWithPath: "AgentBundles/alpha-agent.ouro")],
+                       "Reveal Bundle targets the bundle, not its nested agent.json")
     }
 
     /// "Remove Agent" (`:6062`) ARMS the confirmation (sets `agentPendingRemoval`) — it never

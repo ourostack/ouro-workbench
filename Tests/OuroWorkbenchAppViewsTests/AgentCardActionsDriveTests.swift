@@ -14,7 +14,7 @@ import OuroWorkbenchCore
 ///
 /// **Provenance (P2).** `model` via a hermetic bundle VM (a real installed agent.json so
 /// the record classifies). The config / reveal / sheet actions set `@Published` flags or
-/// open Finder (no modal); "Run ouro check" runs `repairAgent` which drives a session
+/// drive an injected Finder reveal seam; "Run ouro check" runs `repairAgent` which drives a session
 /// launch — the `#332` `launchTerminalSession` no-op is injected so no `screen` spawns.
 ///
 /// **Carves:** none — every action region here is driven.
@@ -71,11 +71,16 @@ final class AgentCardActionsDriveTests: XCTestCase {
     }
 
     /// "Reveal in Finder" `Button { model.revealAgentBundle(agent) }` — reveals the bundle
-    /// via NSWorkspace (no modal).
+    /// through the injected Finder seam.
     func testActionsCard_revealBundle_runs() throws {
         let model = try makeVM()
+        var revealedURLs: [URL] = []
+        model.revealFileViewerSelectingURLs = { revealedURLs = $0 }
         try AgentActionsCard(agent: record("alpha"), model: model)
             .inspect().find(button: "Reveal in Finder").tap()
+        XCTAssertEqual(revealedURLs.map(\.path), [
+            bundleRoot.appendingPathComponent("AgentBundles/alpha.ouro").path
+        ])
     }
 
     /// The "Add Another…" menu's `Button { model.presentNewAgentProviderConfigForm() }` —

@@ -169,5 +169,50 @@ final class MachineRuntimeViewCarveTests: XCTestCase {
         XCTAssertTrue(failed.contains("failed: could not write archive"), "failed: the error status:\n\(failed)")
         XCTAssertFalse(failed.contains("Reveal"), "failed: no Reveal button")
     }
+
+    // MARK: - Action closures (the deterministic support-diagnostics buttons)
+
+    /// The Support Diagnostics "Collect" button executes `model.collectSupportDiagnostics()`.
+    /// Use the existing no-child seam so the tap only proves the view action path and does not
+    /// spawn the collector in-process.
+    func testCarve_collectButton_tapStartsCollection() throws {
+        let view = try view(.notRun)
+        view.model.runSupportDiagnostics = { _ in
+            throw SupportDiagnosticsRunnerError.scriptMissing(["test no-op"])
+        }
+
+        XCTAssertFalse(view.model.supportDiagnosticsIsCollecting, "precondition")
+        try view.inspect().find(button: "Collect").tap()
+
+        XCTAssertTrue(view.model.supportDiagnosticsIsCollecting,
+                      "tapping Collect routes through MachineRuntimeView to collectSupportDiagnostics")
+    }
+
+    /// The "Reveal" button is only present when an archive exists; tapping it records the model
+    /// action after calling the injected Finder reveal seam.
+    func testCarve_revealButton_tapRunsAction() throws {
+        let view = try view(.collected)
+        var revealedURLs: [URL] = []
+        view.model.revealFileViewerSelectingURLs = { revealedURLs = $0 }
+        let before = view.model.state.actionLog.count
+
+        try view.inspect().find(button: "Reveal").tap()
+
+        XCTAssertEqual(view.model.state.actionLog.count, before + 1)
+        XCTAssertEqual(view.model.state.actionLog.first?.action, "revealSupportDiagnostics")
+        XCTAssertEqual(revealedURLs, [result().archiveURL])
+    }
+
+    /// The "Copy Path" button is also archive-gated; tapping it copies through the model seam and
+    /// logs the action.
+    func testCarve_copyPathButton_tapRunsAction() throws {
+        let view = try view(.collected)
+        let before = view.model.state.actionLog.count
+
+        try view.inspect().find(button: "Copy Path").tap()
+
+        XCTAssertEqual(view.model.state.actionLog.count, before + 1)
+        XCTAssertEqual(view.model.state.actionLog.first?.action, "copySupportDiagnosticsPath")
+    }
 }
 #endif
