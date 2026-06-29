@@ -20,6 +20,7 @@ VERSION bump; flaky-region protocol applied.
 | 8 | #371 | 0.1.199 | runBossWatchTick guard/no-wake + registerBossWatchFailure + applyExternalActionRequests + triggerEventDrivenBossCheckIn | **4552 / 1378** |
 | 9 | #373 | 0.1.200 | BIG BATCH: commandPaletteItems (all cmd arms) + load (normal/first-run/lossy-salvage/quarantine) + startup reconcile/recover/auto-resume + reapOrphanedScreen + reclassify/backfill folds + prepareForTermination + stopAll + drainExternalActionRequests | **3906 / 1259** |
 | 10 | #375 | 0.1.201 | BIG BATCH: start*SelectLane/RegisterMCP/RepairAgent (skip+ack; the 3 carried from #369/#372/#374) + scan/startBossReconstruction guards + beginVault/credentialRotation/completeVault + runOnboardingRepairStepNatively + surfaceNativeRepairLine + makeFirstRunBootstrapEffects + openDeskBridgeSetup + installWorkbenchMCP | **3523 / 1209** |
+| 11 | (open) | 0.1.202 | checkForReleaseUpdate + installReleaseUpdate/runAutoUpdateCheckIfDue/stagePendingUpdate guards + releaseUpdateStatusLine/Color + bugReportSessions/AgentNames/ExtraSections + reveal/openSupportDiagnostics + ensureDaemonRunningOnLaunch | PROBE 3354/1157 |
 
 Cluster 5 result: CI residual 4912/1450 (190 lines / 65 regions driven OUT of 5102/1515); allowlist
 set to STABLE MAX 4916/1451 (+4/+1 class-C oscillation tolerance, per the cluster-4 precedent).
@@ -84,6 +85,20 @@ ran before the profdata snapshot. The first stable-max 3512/1207 (+4/+2 off the 
 re-run on line 3519>3512. Re-set to STABLE MAX 3523/1209 = observed-max 3519/1207 + (+4 line / +2 region)
 margin. LESSON: when a batch touches detached-Task/subprocess boundary lines, the line-axis oscillation
 can exceed the usual +4 — measure TWO runs (or set off the observed max) before trusting the buffer.
+The leftover process re-pushed a 4th time as #376 (`vm-cluster10-onboarding-guards`, +104, pre-#375
+base) — a strict SUBSET of #375 (same 6 guards, fewer tests) that would revert #375's test file and
+regress the allowlist; CLOSED + branch deleted.
+Cluster 11 (release-update / bug-report / diagnostics / daemon tail, v0.1.202, open PR): 28 tests drive
+checkForReleaseUpdate (success via injected dataLoader / loader-throw .unavailable), installReleaseUpdate
+(re-entrancy / snapshot-nil / planner-failure guards), runAutoUpdateCheckIfDue (once-guard / policy-gate /
+enabled-due), stagePendingUpdate + applyStagedUpdateOnQuitIfNeeded (skip guards; widened), the
+releaseUpdateStatusLine/Color computed props (every arm), bugReportSessions (widened) + bugReportAgentNames
++ bugReportExtraSections, reveal/openSupportDiagnostics, ensureDaemonRunningOnLaunch (empty-name guard +
+injected DaemonManager(probe:.up) resumed arm). This batch is SMALLER (64 lines local) because the
+release/bug/diag area is machinery-dense — carved: applyReleaseUpdateAndTerminate (NSApp.terminate +
+applyAndRelaunch /bin/sh bundle-swap, DESTRUCTIVE in-test), installer.stage network download,
+submitBugReport captureKeyWindowPNG->NSApp.keyWindow (documented floor), readLoginShellPath subprocess.
+4 widens, no slicer touched. LOCAL drove 3418/1185 → 3354/1157. PROBE 3354/1157; CI prints exact → stable max.
 
 SOURCE-INTROSPECTION CAVEAT (reconfirmed, clusters 6+7+8+9): BEFORE widening a `private func` for a
 cluster, `grep -rln '<funcName>' Tests/` for a WiringTest that slices `private func <name>` — update

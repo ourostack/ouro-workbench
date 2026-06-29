@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.202 - View-model coverage (release-update / bug-report / diagnostics)
+
+- Internal: drives a batch of view-model release-update and diagnostics logic to test coverage — the check-for-update success/unavailable arms, the install/auto-update re-entrancy and policy guards, the staged-update skip guards, the release-status line/color computed properties, the bug-report session/section projections, the support-diagnostics reveal/open arms, and the daemon-ensure-on-launch guard. The bundle-swap relaunch, key-window screenshot, network download, and login-shell subprocess stay the carved boundary. No user-facing behavior change.
+
 ## 0.1.201 - View-model coverage (onboarding / provider / vault)
 
 - Internal: drives a large batch of view-model onboarding logic to test coverage — the boss-issued onboarding dispatchers (select-lane / register-MCP / repair-agent skip-guard + in-flight-ack arms), the onboarding-session scan and boss-reconstruction guards, the vault-onboarding and credential-rotation begin/complete flows, the native repair-step dispatch + surface-line fold, the first-run bootstrap effects wiring, the desk-bridge setup launch, and the Workbench-MCP install fold. The async remediation runner / cold-start hatch / re-probe tasks stay the boundary. No user-facing behavior change.
