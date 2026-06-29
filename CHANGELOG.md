@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.219 - View-model coverage (computed-var micro-tail)
+
+- Internal: covers the still-untested directly-callable computed properties — the confirmation `Binding<Bool>` get/set-clear arms (error / delete-session / delete-group / stop-session), the onboarding-config-gap fold (nil-guard + blocker-step contains, both arms), the recent-action-log sort, the search-options projection, and the release-URL / auto-present-onboarding / boss-MCP-command / desk-bridge-plan delegations. Test-only — no production change. No user-facing behavior change.
+
 ## 0.1.218 - View-model coverage (status-line/color small-decl tail)
 
 - Internal: covers the directly-callable status-line / status-color / format-helper arms that the view tests only partially exercised — the Workbench-MCP registration status line (5 untested status arms) + status color (all 4) + action title, the support-diagnostics status color + URL, the boss-watch status color + line (error/last-run arms), the mailbox status line, the transcript-search status line (empty + press-search arms), the local-agents status line (populated arm), the stop-confirmation title, and the start-fresh confirmation copy. Test-only — no production change. No user-facing behavior change.
