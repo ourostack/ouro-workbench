@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.223 - Shared shell dependency refresh
+
+- Internal: refreshes `ouro-native-apple-app-shell` to `9f1db0b40afa` and bumps Workbench for release/update freshness. No user-facing behavior change.
+
 ## 0.1.222 - View-model coverage (final-floor machinery-seam drive)
 
 - Internal: drives the last drivable view-model regions through the campaign's machinery-seam pattern — reroutes the cold-start provider check through the existing provider-check runner seam (whose default IS the real subprocess, so production behavior is byte-identical) so its per-verdict fold drives without spawning `ouro check`; this in turn unblocks the outward-readiness task-group fold (verdict store + in-flight clear) and the onboarding provider-check serial-task store fold; adds a session-scan runner seam (default = the real recent-session scanner, byte-identical) so the onboarding-import post-scan fold (set-candidates → build-proposal → clear-flag → log) drives without the live filesystem scanner; drives the file-bug-report-as-GitHub-issue failure arm through the existing issue-filer seam; and covers the last two onboarding provider-check verdict arms (vault-locked + unreachable). The only production changes are the two byte-identical seam indirections; everything else is test-only. The detached subprocess/network bodies behind the seam defaults, the live-PTY terminal views, the literal syscall lines, the infinite poll-loops, and the serial-task cancellation-race arms (which only fire under live concurrency) stay carved at the genuine floor. No user-facing behavior change.

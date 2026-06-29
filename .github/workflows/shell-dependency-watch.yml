@@ -115,7 +115,45 @@ jobs:
             echo "- \`./scripts/generate-release-notes.sh >/dev/null\`"
           } > "$body"
 
-          existing="$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // ""')"
+          repo="${GITHUB_REPOSITORY:-ourostack/ouro-workbench}"
+
+          write_manual_pr_summary() {
+            local reason="$1"
+            reason="${reason//$'\n'/ }"
+            local compare_url="https://github.com/${repo}/compare/main...${branch}"
+            {
+              echo "## Shell dependency refresh needs a PR"
+              echo
+              echo "The refresh branch was pushed successfully, but this workflow could not open or update the pull request automatically."
+              echo
+              echo "- Reason: ${reason}"
+              echo "- Branch: \`${branch}\`"
+              echo "- Compare: ${compare_url}"
+              echo
+              echo "Manual PR command:"
+              echo '```sh'
+              printf 'gh pr create --repo "%s" --base main --head "%s" --title "%s" --fill\n' "$repo" "$branch" "$title"
+              echo '```'
+            } | tee -a "${GITHUB_STEP_SUMMARY:-/dev/null}"
+          }
+
+          run_pr_command() {
+            local action="$1"
+            shift
+            local output
+            local status
+            set +e
+            output="$("$@" 2>&1)"
+            status=$?
+            set -e
+            printf '%s\n' "$output"
+            if [ "$status" -ne 0 ]; then
+              write_manual_pr_summary "${action} failed with exit ${status}: ${output}"
+              exit 0
+            fi
+          }
+
+          existing="$(gh pr list --repo "$repo" --head "$branch" --state open --json number --jq '.[0].number // ""')"
           if [ "$have_remote_branch" = "true" ] && [ "$(git rev-parse HEAD^{tree})" = "$(git rev-parse "origin/$branch^{tree}")" ]; then
             if [ -n "$existing" ]; then
               echo "Existing refresh PR #${existing} already has the desired tree; leaving it untouched."
@@ -127,8 +165,8 @@ jobs:
           fi
 
           if [ -n "$existing" ]; then
-            gh pr edit "$existing" --title "$title" --body-file "$body"
-            gh pr comment "$existing" --body "Updated by Shell Dependency Watch for \`ouro-native-apple-app-shell@${shell_revision}\`."
+            run_pr_command "updating refresh PR #${existing}" gh pr edit "$existing" --repo "$repo" --title "$title" --body-file "$body"
+            run_pr_command "commenting on refresh PR #${existing}" gh pr comment "$existing" --repo "$repo" --body "Updated by Shell Dependency Watch for \`ouro-native-apple-app-shell@${shell_revision}\`."
           else
-            gh pr create --base main --head "$branch" --title "$title" --body-file "$body"
+            run_pr_command "creating refresh PR" gh pr create --repo "$repo" --base main --head "$branch" --title "$title" --body-file "$body"
           fi
