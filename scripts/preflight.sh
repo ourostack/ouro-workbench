@@ -4,6 +4,10 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+scripts/check-shell-dependency.sh
+scripts/check-shell-boundary.sh --selftest
+scripts/check-shell-boundary.sh
+
 RUN_DEEP="false"
 RUN_ONLY="all"
 RUN_SELFTEST="false"
@@ -105,10 +109,6 @@ if [[ "$RUN_SELFTEST" == "true" ]]; then
   printf 'preflight CLI selftest ok\n'
   exit 0
 fi
-
-scripts/check-shell-dependency.sh
-scripts/check-shell-boundary.sh --selftest
-scripts/check-shell-boundary.sh
 
 eval "$("$ROOT_DIR/scripts/read-workbench-release.sh")"
 

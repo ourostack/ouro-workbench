@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.215 - Shell preflight adoption check ordering
+
+- Internal: moves the shared app-shell dependency and boundary checks to the first guaranteed top-level commands in Workbench preflight, before the selftest exit path, so the shell doctor and live downstream CI can prove the adoption contract directly. No user-facing behavior change.
+
 ## 0.1.214 - View-model coverage (clone-result fold + save/install tail)
 
 - Internal: drives the headless agent-clone result-handling (ready → resolved success, vault-locked → honest failure, plan-build failure) through the existing injectable clone-runner seam, plus the save-workspace write path, the Workbench-MCP install fold, and the workspace-config-from-directory error. Test-only — no production change. The live clone/provider-check subprocesses stay carved. No user-facing behavior change.
