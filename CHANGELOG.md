@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.199 - View-model coverage (startup reconcile / external-action apply)
+
+- Internal: drives the startup-reconcile + external-action handlers (startup attention reconciliation, auto-resume-on-launch, the orphan-screen reaper, the external-action apply/feed fold, onboarding-scan guards, and the boss-action select-lane / register-MCP / repair-agent skip guards) to test coverage. The orphan `screen` quit is seamed; the async runner/scan subprocesses stay carved. No user-facing behavior change.
+
 ## 0.1.198 - View-model coverage (onboarding remediation handlers)
 
 - Internal: drives the onboarding remediation dispatchers (verify/refresh provider, ensure daemon, report bug — their skip-guard and in-flight-ack arms), the settled-outcome fold, and the first-run bootstrap completion (handoff / provider-gate / failed presentation arms) to test coverage. No user-facing behavior change.
