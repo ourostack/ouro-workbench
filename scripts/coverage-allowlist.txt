@@ -228,3 +228,19 @@ GitSessionStatus.swift 1 1
 # This is the IRREDUCIBLE FLOOR — every remaining region is live-PTY/Scene/runModal/NSApp-trap/
 # .task/.onKeyPress/.popover-descent/NSWindow-chrome/llvm-synth (see the per-class notes above).
 WorkbenchViews.swift 1170 227
+
+# WorkbenchViewModel.swift (VM-GATE campaign) — the logic half of the U5 split, now GATED and being
+# driven to its floor cluster-by-cluster (scope: worker/tasks/.../vm-gate-scope.md). The file entered
+# the gate at its CI-measured residual `5892 lines / 1696 regions` (44.0% line / 40.7% region); each
+# per-cluster PR drives a batch of business-logic regions (boss-action dispatch, command dispatch,
+# onboarding/vault/provider flows, release/bug/diagnostics via the existing closure seams, attention/
+# notification/parsing) and LOWERS these counts to the new CI-measured minimum. The genuine-carve
+# floor (~107 syscall lines + the .task poll loops + llvm-synth artifacts): live-PTY
+# TerminalSessionController.start()/TerminalPane, literal Process()/run()/waitUntilExit()/Pipe()/
+# FileHandle subprocess lines (driven UP TO the syscall via launchTerminalSession /
+# makeSupportDiagnosticsRunner / chooseWorkspaceOpenURL/SaveURL / fileGitHubIssue closure seams),
+# NSApp.terminate/NSWorkspace/NSPasteboard, runBossWatchLoop's while-!Task.isCancelled + Task.sleep.
+# NO padding — a region a seam/extraction/direct-call reaches gets driven, not carved.
+# PROBE (cluster 1): set below the post-drive residual so the Coverage job prints the exact count;
+# the follow-up commit sets the CI-measured minimum.
+WorkbenchViewModel.swift 5500 1550
