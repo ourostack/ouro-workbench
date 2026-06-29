@@ -112,9 +112,8 @@ final class OuroAgentRowViewInteractionTests: XCTestCase {
         model.revealFileViewerSelectingURLs = { revealedURLs = $0 }
         let row = OuroAgentRowView(agent: record(name: "alpha-agent"), model: model)
         try row.inspect().find(button: "Reveal Bundle").tap()
-        XCTAssertEqual(revealedURLs.count, 1)
-        XCTAssertTrue(revealedURLs[0].path.contains("AgentBundles/alpha-agent.ouro"),
-                      "Reveal Bundle targets the agent bundle path, got \(revealedURLs[0].path)")
+        XCTAssertEqual(revealedURLs, [URL(fileURLWithPath: "AgentBundles/alpha-agent.ouro")],
+                       "Reveal Bundle targets the bundle, not its nested agent.json")
     }
 
     /// "Remove Agent" (`:6062`) ARMS the confirmation (sets `agentPendingRemoval`) — it never

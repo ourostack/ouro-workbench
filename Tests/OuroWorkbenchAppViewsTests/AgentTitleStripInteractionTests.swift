@@ -124,9 +124,8 @@ final class AgentTitleStripInteractionTests: XCTestCase {
         var revealedURLs: [URL] = []
         view.model.revealFileViewerSelectingURLs = { revealedURLs = $0 }
         try view.inspect().find(button: "Reveal Bundle in Finder").tap()
-        XCTAssertEqual(revealedURLs.count, 1)
-        XCTAssertTrue(revealedURLs[0].path.contains("AgentBundles/alpha-agent.ouro"),
-                      "Reveal Bundle targets the agent bundle path, got \(revealedURLs[0].path)")
+        XCTAssertEqual(revealedURLs, [URL(fileURLWithPath: "AgentBundles/alpha-agent.ouro")],
+                       "Reveal Bundle targets the bundle, not its nested agent.json")
     }
 
     /// "Run ouro check…" → `repairAgent`. It builds a repair terminal session via

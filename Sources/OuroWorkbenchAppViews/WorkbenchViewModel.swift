@@ -667,12 +667,12 @@ public final class WorkbenchViewModel: ObservableObject {
         )
     }
 
-    /// Builds the support-diagnostics runner for a resource directory. Defaults to
-    /// the real `SupportDiagnosticsRunner` (whose `run()` spawns the collector
-    /// script); a test injects a factory returning a runner whose `run()` does not
-    /// shell out. `@Sendable` because the produced runner is used inside `Task.detached`.
-    var makeSupportDiagnosticsRunner: @Sendable (URL?) -> SupportDiagnosticsRunner = { resourceDirectory in
-        SupportDiagnosticsRunner(resourceDirectory: resourceDirectory)
+    /// Runs support diagnostics for a resource directory. Defaults to the real
+    /// `SupportDiagnosticsRunner.run()` path (which spawns the collector script);
+    /// tests inject a synchronous result/error closure so no child process launches.
+    /// `@Sendable` because it is invoked inside `Task.detached`.
+    var runSupportDiagnostics: @Sendable (URL?) throws -> SupportDiagnosticsResult = { resourceDirectory in
+        try SupportDiagnosticsRunner(resourceDirectory: resourceDirectory).run()
     }
 
     /// Launches a constructed terminal session — the boundary where `start()` forks
@@ -4804,13 +4804,13 @@ public final class WorkbenchViewModel: ObservableObject {
         supportDiagnosticsIsCollecting = true
         supportDiagnosticsError = nil
 
-        // #332 seam: build via the (default = real) factory so a test can inject a
-        // runner whose `run()` does not spawn the collector child. Prod is unchanged.
-        let runner = makeSupportDiagnosticsRunner(Bundle.main.resourceURL)
+        // #332 seam: run via the (default = real) closure so a test can inject a
+        // result/error path that does not spawn the collector child. Prod is unchanged.
+        let runSupportDiagnostics = runSupportDiagnostics
         Task {
             let outcome = await Task.detached(priority: .userInitiated) {
                 do {
-                    return Result<SupportDiagnosticsResult, Error>.success(try runner.run())
+                    return Result<SupportDiagnosticsResult, Error>.success(try runSupportDiagnostics(Bundle.main.resourceURL))
                 } catch {
                     return Result<SupportDiagnosticsResult, Error>.failure(error)
                 }
@@ -4933,9 +4933,9 @@ public final class WorkbenchViewModel: ObservableObject {
             BugReportComposer.directoryName(date: Date(), note: directoryNote),
             isDirectory: true
         )
-        // #332 seam: build via the (default = real) factory so a test can inject a
-        // runner whose `run()` does not spawn the collector child. Prod is unchanged.
-        let runner = makeSupportDiagnosticsRunner(Bundle.main.resourceURL)
+        // #332 seam: run via the (default = real) closure so a test can inject a
+        // result/error path that does not spawn the collector child. Prod is unchanged.
+        let runSupportDiagnostics = runSupportDiagnostics
 
         Task {
             let bundle = await Task.detached(priority: .userInitiated) { () -> Result<BugReportBundle, Error> in
@@ -4944,7 +4944,7 @@ public final class WorkbenchViewModel: ObservableObject {
                 var diagnosticsArchive: URL?
                 var diagnosticsError: String?
                 do {
-                    diagnosticsArchive = try runner.run().archiveURL
+                    diagnosticsArchive = try runSupportDiagnostics(Bundle.main.resourceURL).archiveURL
                 } catch {
                     diagnosticsError = error.localizedDescription
                 }

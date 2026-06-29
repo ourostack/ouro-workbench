@@ -177,7 +177,9 @@ final class MachineRuntimeViewCarveTests: XCTestCase {
     /// spawn the collector in-process.
     func testCarve_collectButton_tapStartsCollection() throws {
         let view = try view(.notRun)
-        view.model.makeSupportDiagnosticsRunner = { _ in SupportDiagnosticsRunner(resourceDirectory: nil) }
+        view.model.runSupportDiagnostics = { _ in
+            throw SupportDiagnosticsRunnerError.scriptMissing(["test no-op"])
+        }
 
         XCTAssertFalse(view.model.supportDiagnosticsIsCollecting, "precondition")
         try view.inspect().find(button: "Collect").tap()
@@ -198,7 +200,7 @@ final class MachineRuntimeViewCarveTests: XCTestCase {
 
         XCTAssertEqual(view.model.state.actionLog.count, before + 1)
         XCTAssertEqual(view.model.state.actionLog.first?.action, "revealSupportDiagnostics")
-        XCTAssertEqual(revealedURLs.map(\.lastPathComponent), ["ouro-support.zip"])
+        XCTAssertEqual(revealedURLs, [result().archiveURL])
     }
 
     /// The "Copy Path" button is also archive-gated; tapping it copies through the model seam and
