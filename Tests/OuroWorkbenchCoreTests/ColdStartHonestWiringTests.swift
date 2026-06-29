@@ -145,10 +145,13 @@ final class ColdStartHonestWiringTests: XCTestCase {
             source.contains("func runColdStartProviderCheck"),
             "a dedicated short-budget cold-start probe method must exist"
         )
+        // VM-GATE: `private`-agnostic — runColdStartProviderCheck was widened private->internal so
+        // its per-verdict fold drives through the `providerCheckRunner` seam. Slice on the bare
+        // `func` marker and bound the slice on the next decl (the internal runOnboardingProviderCheck).
         let probe = try WorkbenchAppSource.sourceSlice(
             in: source,
-            from: "private func runColdStartProviderCheck",
-            to: "\n    private func "
+            from: "func runColdStartProviderCheck",
+            to: "\n    func runOnboardingProviderCheck"
         )
         XCTAssertTrue(
             probe.contains("ProviderCheckClassifier"),
