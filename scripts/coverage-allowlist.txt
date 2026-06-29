@@ -249,4 +249,4 @@ WorkbenchViews.swift 1170 227
 # Cluster 1 (applyBossAction, v0.1.188): 5892/1696 -> 5505/1591 (387 lines / 105 regions).
 # Cluster 2 (performCommand, v0.1.189): 5505/1591 -> 5407/1542 (98 lines / 49 regions; run 28346126436).
 # Subsequent clusters lower it further to the floor.
-WorkbenchViewModel.swift 5407 1542
+WorkbenchViewModel.swift 5250 1490

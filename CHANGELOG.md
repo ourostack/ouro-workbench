@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.190 - View-model coverage (provider-config / vault-onboarding flows)
+
+- Internal: drives the provider-config form and vault-onboarding state transitions to test coverage. No user-facing behavior change.
+
 ## 0.1.189 - View-model coverage (command-palette dispatch)
 
 - Internal: drives the view-model's command-palette dispatch (both `performCommand` overloads) to test coverage. No user-facing behavior change.
