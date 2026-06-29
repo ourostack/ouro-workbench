@@ -138,22 +138,28 @@ final class WorkbenchVisibilityTests: XCTestCase {
 
     func testWorkCardReaderDecodesJSONAndReportsFailures() {
         let fakeRoot = try! coverageBatch2TemporaryDirectory()
-        let oldPath = try! coverageBatch2InstallFakeOuro(
-            in: fakeRoot,
-            body: "cat <<'JSON'\n\(availableWorkCardJSON)\nJSON\n"
+        let environment = TerminalEnvironment(
+            values: try! coverageBatch2FakeOuroEnvironment(
+                in: fakeRoot,
+                body: "cat <<'JSON'\n\(availableWorkCardJSON)\nJSON\n"
+            ),
+            usesCapturedLoginShellPath: false
         )
         defer {
-            setenv("PATH", oldPath, 1)
             try? FileManager.default.removeItem(at: fakeRoot)
         }
 
-        let defaultReader = OuroWorkCardReader()
+        let defaultReader = OuroWorkCardReader(environment: environment)
         if case let .available(card) = defaultReader.read(agent: "slugger") {
             XCTAssertEqual(card.agent, "slugger")
         } else {
             XCTFail("Expected default reader to execute the PATH-resolved ouro work card command")
         }
-        let configuredDefaultRunner = OuroWorkCardReader(executable: "/usr/bin/env", timeout: 1)
+        let configuredDefaultRunner = OuroWorkCardReader(
+            executable: "/usr/bin/env",
+            timeout: 1,
+            environment: environment
+        )
         if case let .available(card) = configuredDefaultRunner.read(agent: "slugger") {
             XCTAssertEqual(card.claims.counts.verified, 7)
         } else {
