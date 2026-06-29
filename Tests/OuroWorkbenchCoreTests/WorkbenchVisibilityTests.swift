@@ -420,6 +420,225 @@ final class WorkbenchVisibilityTests: XCTestCase {
         XCTAssertEqual(invalid.string, "")
     }
 
+    // MARK: - Field-preservation & boundary hardening (mutation-testing pilot)
+    //
+    // Each test below pins a behavior the suite executed but did not assert,
+    // found by a mutation-testing pass on WorkbenchVisibility.swift. The big
+    // cluster is memberwise-init field preservation: the existing round-trip
+    // test compared a decoded value against a value built with the SAME
+    // initializer, so a field dropped UNIFORMLY (init + round-trip) stayed
+    // equal and the drop survived. These tests assert each field's VALUE
+    // directly, so dropping any one assignment (→ nil) fails.
+
+    /// Kills the `AgentWorkCountsVisibility` memberwise-init field drops
+    /// (returnObligations / activePackets / evolutionCases / waitingOnHuman /
+    /// unverifiedClaims / staleRiskyClaims). Distinct values so each dropped
+    /// assignment (→ nil) is caught individually.
+    func testAgentWorkCountsVisibilityPreservesEveryField() {
+        let counts = AgentWorkCountsVisibility(
+            owed: 10,
+            returnObligations: 20,
+            activePackets: 30,
+            evolutionCases: 40,
+            waitingOnHuman: 50,
+            unverifiedClaims: 60,
+            staleRiskyClaims: 70
+        )
+        XCTAssertEqual(counts.owed, 10)
+        XCTAssertEqual(counts.returnObligations, 20)
+        XCTAssertEqual(counts.activePackets, 30)
+        XCTAssertEqual(counts.evolutionCases, 40)
+        XCTAssertEqual(counts.waitingOnHuman, 50)
+        XCTAssertEqual(counts.unverifiedClaims, 60)
+        XCTAssertEqual(counts.staleRiskyClaims, 70)
+    }
+
+    /// Kills the `AgentWorkClaimsVisibility` memberwise-init field drops
+    /// (unverified / partial / failed / unverifiable / staleRisky). Distinct
+    /// values so each dropped assignment is caught.
+    func testAgentWorkClaimsVisibilityPreservesEveryField() {
+        let claims = AgentWorkClaimsVisibility(
+            available: true,
+            unavailableReason: "partial",
+            unverified: 11,
+            partial: 22,
+            failed: 33,
+            unverifiable: 44,
+            staleRisky: 55,
+            verified: 66
+        )
+        XCTAssertEqual(claims.unverified, 11)
+        XCTAssertEqual(claims.partial, 22)
+        XCTAssertEqual(claims.failed, 33)
+        XCTAssertEqual(claims.unverifiable, 44)
+        XCTAssertEqual(claims.staleRisky, 55)
+        XCTAssertEqual(claims.verified, 66)
+    }
+
+    /// Kills the `AgentWorkNextActionVisibility` memberwise-init `self.source`
+    /// drop: the source must survive the initializer (the round-trip test only
+    /// compared against a self-constructed value).
+    func testNextActionVisibilityPreservesSource() {
+        let source = OuroWorkCardSource(kind: "claim", locator: "arc/x.json", freshness: "fresh", redaction: "none")
+        let nextAction = AgentWorkNextActionVisibility(actor: "agent", summary: "Act", source: source)
+        XCTAssertEqual(nextAction.source, source, "the source must round-trip through the initializer")
+    }
+
+    /// Kills the `WorkbenchVisibilitySnapshot.init` `schemaVersion: Int = 1`
+    /// default flip. The snapshot's schema version is a wire contract; the
+    /// builder constructs the snapshot WITHOUT passing `schemaVersion`, so the
+    /// default must be 1. (Default-arg mutations need a clean build to verify
+    /// the RED direction — the thunk is cached incrementally; CI builds clean.)
+    func testSnapshotSchemaVersionDefaultsToOne() {
+        let snapshot = WorkbenchVisibilityBuilder().build(
+            state: WorkspaceState(boss: BossAgentSelection(agentName: "slugger")),
+            workCard: .unavailable(WorkbenchVisibilityIssue(code: "x", severity: "unavailable", source: "s", detail: "d")),
+            now: now
+        )
+        XCTAssertEqual(snapshot.schemaVersion, 1, "the visibility snapshot schema version is pinned at 1")
+    }
+
+    /// Kills the attention-count filter `==` → `!=` flips
+    /// (waitingOnHuman / blocked / needsBossReview) in `workspaceVisibility`.
+    /// The existing build test had exactly one entry per attention state, so a
+    /// `!=` filter produced the SAME count (symmetric). Use ASYMMETRIC counts
+    /// (2 waiting, 1 blocked, 3 needs-review, 1 other) so each filter's count is
+    /// distinct from its complement.
+    func testWorkspaceAttentionCountsUseTheCorrectPredicate() {
+        let project = WorkbenchProject(name: "Harness", rootPath: "/repo")
+        func entry(_ name: String, _ attention: AttentionState) -> ProcessEntry {
+            ProcessEntry(projectId: project.id, name: name, kind: .terminalAgent, executable: "codex", workingDirectory: "/repo", attention: attention)
+        }
+        let entries = [
+            entry("w1", .waitingOnHuman), entry("w2", .waitingOnHuman),       // 2 waiting
+            entry("b1", .blocked),                                            // 1 blocked
+            entry("r1", .needsBossReview), entry("r2", .needsBossReview), entry("r3", .needsBossReview), // 3 review
+            entry("o1", .idle)                                                // 1 other
+        ]
+        let state = WorkspaceState(boss: BossAgentSelection(agentName: "slugger"), projects: [project], processEntries: entries)
+        let snapshot = WorkbenchVisibilityBuilder().build(
+            state: state,
+            workCard: .unavailable(WorkbenchVisibilityIssue(code: "x", severity: "unavailable", source: "s", detail: "d")),
+            now: now
+        )
+        // 7 active entries; complements would be 5/6/4 — all distinct from 2/1/3.
+        XCTAssertEqual(snapshot.workspace.activeSessions, 7)
+        XCTAssertEqual(snapshot.workspace.waitingOnHumanSessions, 2, "counts entries waiting on a human, not the complement")
+        XCTAssertEqual(snapshot.workspace.blockedSessions, 1, "counts blocked entries, not the complement")
+        XCTAssertEqual(snapshot.workspace.needsBossReviewSessions, 3, "counts needs-boss-review entries, not the complement")
+    }
+
+    /// Kills the `read` degraded-derivation `||` → `&&` flips: a Work Card is
+    /// degraded if its `status == "degraded"` OR it carries a degraded/
+    /// unavailable issue. The existing tests only used cards whose STATUS was
+    /// already "degraded", so the issues-based path (status NOT degraded, but a
+    /// degraded/unavailable issue present) never independently drove the result.
+    func testReadDerivesDegradedFromIssuesEvenWhenStatusIsNotDegraded() throws {
+        var card = try JSONDecoder().decode(OuroWorkCard.self, from: Data(availableWorkCardJSON.utf8))
+        // Status stays "available" (from availableWorkCardJSON) but inject an
+        // UNAVAILABLE issue — the issues-based arm must still mark it degraded.
+        card.degraded.status = "available"
+        card.degraded.issues = [
+            OuroWorkCardIssue(
+                code: "claims_unavailable",
+                severity: "unavailable",
+                source: OuroWorkCardSource(kind: "claim_store", locator: "arc/claims", freshness: "unknown", redaction: "private_ref"),
+                detail: "Claim ledger is not wired yet."
+            )
+        ]
+        let data = try JSONEncoder().encode(card)
+        let reader = OuroWorkCardReader(runner: { _, _, _ in
+            WorkCardCommandResult(exitCode: 0, stdout: String(decoding: data, as: UTF8.self), stderr: "")
+        })
+        guard case .degraded = reader.read(agent: "slugger") else {
+            return XCTFail("a non-degraded status with a degraded/unavailable issue must read degraded")
+        }
+    }
+
+    /// Kills the `build` dedup guard `$0.code == "claims_unavailable"` → `!=`.
+    /// When claims are unavailable AND the card already carries a
+    /// `claims_unavailable` issue (and ONLY that issue), the builder must NOT add
+    /// a second one. The existing test had OTHER issues alongside it, which
+    /// masked the `!=` flip (the `!contains` still saw a non-matching code).
+    func testBuildDoesNotDuplicateAnExistingClaimsUnavailableIssue() throws {
+        var card = try JSONDecoder().decode(OuroWorkCard.self, from: Data(sampleWorkCardJSON.utf8))
+        // ONLY a claims_unavailable issue — no other issue to mask the dedup.
+        card.degraded.issues = [
+            OuroWorkCardIssue(
+                code: "claims_unavailable",
+                severity: "unavailable",
+                source: OuroWorkCardSource(kind: "claim_store", locator: "arc/claims", freshness: "unknown", redaction: "private_ref"),
+                detail: "Claim ledger is not wired yet."
+            )
+        ]
+        card.claims.available = false
+
+        let snapshot = WorkbenchVisibilityBuilder().build(
+            state: WorkspaceState(boss: BossAgentSelection(agentName: "slugger")),
+            workCard: .degraded(card),
+            now: now
+        )
+        XCTAssertEqual(
+            snapshot.readiness.issues.filter { $0.code == "claims_unavailable" }.count, 1,
+            "an existing claims_unavailable issue must not be duplicated, even when it is the only issue"
+        )
+    }
+
+    /// Kills the `sanitizedDiagnostic` clamp boundary: `limit: 500` default and
+    /// `count > limit`. The existing test used a 600-char input (clearly over
+    /// the limit), so `limit: 501` and `> → >=` both still truncated. Drive the
+    /// EXACT boundary: a 500-char diagnostic is NOT truncated (`500 > 500` is
+    /// false); a 501-char one IS (and to exactly 500 + "...").
+    func testSanitizedDiagnosticTruncatesExactlyAtTheLimitBoundary() {
+        func detail(forErrorOfLength n: Int) -> String {
+            let reader = OuroWorkCardReader(runner: { _, _, _ in
+                throw NSError(domain: "x", code: 1, userInfo: [NSLocalizedDescriptionKey: String(repeating: "a", count: n)])
+            })
+            guard case let .unavailable(issue) = reader.read(agent: "slugger") else {
+                return ""
+            }
+            return issue.detail
+        }
+        // Exactly at the limit: not truncated (no ellipsis, full length kept).
+        let atLimit = detail(forErrorOfLength: 500)
+        XCTAssertEqual(atLimit.count, 500, "a diagnostic exactly at the limit is not truncated")
+        XCTAssertFalse(atLimit.hasSuffix("..."), "no ellipsis at exactly the limit")
+        // One over the limit: truncated to 500 chars + the ellipsis.
+        let overLimit = detail(forErrorOfLength: 501)
+        XCTAssertTrue(overLimit.hasSuffix("..."), "one char over the limit is truncated")
+        XCTAssertEqual(overLimit.count, 503, "truncated body is exactly the 500-char limit plus the 3-char ellipsis")
+    }
+
+    /// Kills the render `lines.append("Issues:")` drop: when there are issues,
+    /// the rendered text carries an "Issues:" header before the list. The
+    /// existing tests asserted issue CONTENT but not the header line.
+    func testRenderIncludesIssuesHeaderWhenIssuesPresent() {
+        let snapshot = WorkbenchVisibilityBuilder().build(
+            state: WorkspaceState(boss: BossAgentSelection(agentName: "slugger")),
+            workCard: .unavailable(WorkbenchVisibilityIssue(code: "work_card_unreadable", severity: "unavailable", source: "ouro work card", detail: "missing")),
+            now: now
+        )
+        let text = WorkbenchVisibilityTextRenderer().render(snapshot)
+        XCTAssertTrue(text.contains("\nIssues:\n"), "the rendered text carries an 'Issues:' header before the issue list")
+    }
+
+    /// Kills the `ProcessOutputBuffer.append` exact-boundary mutants
+    /// (`chunk.count > remaining` → `>=`, and `data.count < limit` → `<=`). A
+    /// chunk that EXACTLY fills the remaining capacity is appended whole with NO
+    /// truncation marker; the existing test only crossed the boundary (chunk
+    /// LARGER than remaining), so the equality case was unasserted.
+    func testProcessOutputBufferAppendsAnExactlyFillingChunkWithoutTruncation() {
+        // Empty buffer, append a chunk whose size == the limit: fits exactly, no marker.
+        let exact = ProcessOutputBuffer(limit: 5)
+        exact.append(Data("abcde".utf8))
+        XCTAssertEqual(exact.string, "abcde", "a chunk that exactly fills the buffer is not truncated")
+
+        // Fill exactly, then a further append is dropped + marked truncated
+        // (the `data.count < limit` guard rejects an append once full).
+        exact.append(Data("f".utf8))
+        XCTAssertEqual(exact.string, "abcde\n[output truncated]", "appending to an already-full buffer truncates")
+    }
+
     private var sampleWorkCardJSON: String {
         """
         {
