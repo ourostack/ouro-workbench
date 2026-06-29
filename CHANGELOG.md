@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.195 - View-model coverage (exit/attention reconciliation)
+
+- Internal: drives the session exit/attention reconciliation logic (`markTerminated`, `applyAttentionSignal`, the unexpected-exit notification decision + throttle) to test coverage. The live `screen -ls` listing and the macOS notification post are seamed; only the literal subprocess / notification-center syscalls stay carved. No user-facing behavior change.
+
 ## 0.1.194 - View coverage follow-up
 
 - Internal: covers the provider-check output buffer and support-diagnostics button action paths, tightening the Workbench views coverage allowlist without changing user-facing behavior.

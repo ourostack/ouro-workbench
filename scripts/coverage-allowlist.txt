@@ -271,4 +271,11 @@ WorkbenchViews.swift 1170 223
 # the stable-coverable portion; the oscillating region gets an explicit +1). GOING FORWARD each VM
 # cluster sets the stable max (cover-first the timing-races; tolerate the genuinely-synthesized).
 # Subsequent clusters lower it further to the floor.
-WorkbenchViewModel.swift 5102 1515
+# Cluster 5 (markTerminated + applyAttentionSignal + exit-notification decision/throttle +
+# applyPendingOutput fold, v0.1.194): drives the session exit/attention reconciliation logic. The
+# live `screen -ls` listing (detach-vs-crash) is seamed behind `persistentSessionLister`; the macOS
+# unexpected-exit notification (UNUserNotificationCenter, which traps "bundleProxyForCurrentProcess
+# is nil" headless) is seamed behind `postExitNotification`; only the literal subprocess /
+# notification-center syscalls inside those default closures stay carved. PROBE value below — the CI
+# Coverage job prints the exact residual, then this is set to the stable max.
+WorkbenchViewModel.swift 4950 1490
