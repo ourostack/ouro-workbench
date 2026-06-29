@@ -110,5 +110,44 @@ if count != 1:
 path.write_text(updated, encoding="utf-8")
 PY
 
+shell_revision="$(
+  python3 - "$identity" <<'PY'
+import json
+import sys
+
+identity = sys.argv[1]
+with open("Package.resolved", encoding="utf-8") as fh:
+    data = json.load(fh)
+for pin in data.get("pins", []):
+    if pin.get("identity") == identity:
+        revision = pin.get("state", {}).get("revision", "")
+        if not revision:
+            raise SystemExit(f"missing {identity} revision")
+        print(revision)
+        raise SystemExit(0)
+raise SystemExit(f"Package.resolved has no pin for {identity}")
+PY
+)"
+
+python3 - "$next_version" "$identity" "$shell_revision" <<'PY'
+from pathlib import Path
+import sys
+
+next_version, identity, shell_revision = sys.argv[1:4]
+path = Path("CHANGELOG.md")
+text = path.read_text(encoding="utf-8")
+heading = f"## {next_version} "
+if heading in text:
+    raise SystemExit(f"CHANGELOG.md already contains an entry for {next_version}")
+entry = (
+    f"## {next_version} - Shared shell dependency refresh\n\n"
+    f"- Internal: refreshes `{identity}` to `{shell_revision[:12]}` and bumps Workbench for release/update freshness. No user-facing behavior change.\n\n"
+)
+marker = "# Changelog\n\n"
+if marker not in text:
+    raise SystemExit("CHANGELOG.md does not start with the expected changelog heading")
+path.write_text(text.replace(marker, marker + entry, 1), encoding="utf-8")
+PY
+
 ./scripts/verify-version-contract.sh
 echo "Prepared $identity refresh for Ouro Workbench v$next_version."
