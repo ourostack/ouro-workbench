@@ -20,7 +20,7 @@ VERSION bump; flaky-region protocol applied.
 | 8 | #371 | 0.1.199 | runBossWatchTick guard/no-wake + registerBossWatchFailure + applyExternalActionRequests + triggerEventDrivenBossCheckIn | **4552 / 1378** |
 | 9 | #373 | 0.1.200 | BIG BATCH: commandPaletteItems (all cmd arms) + load (normal/first-run/lossy-salvage/quarantine) + startup reconcile/recover/auto-resume + reapOrphanedScreen + reclassify/backfill folds + prepareForTermination + stopAll + drainExternalActionRequests | **3906 / 1259** |
 | 10 | #375 | 0.1.201 | BIG BATCH: start*SelectLane/RegisterMCP/RepairAgent (skip+ack; the 3 carried from #369/#372/#374) + scan/startBossReconstruction guards + beginVault/credentialRotation/completeVault + runOnboardingRepairStepNatively + surfaceNativeRepairLine + makeFirstRunBootstrapEffects + openDeskBridgeSetup + installWorkbenchMCP | **3523 / 1209** |
-| 11 | (open) | 0.1.202 | checkForReleaseUpdate + installReleaseUpdate/runAutoUpdateCheckIfDue/stagePendingUpdate guards + releaseUpdateStatusLine/Color + bugReportSessions/AgentNames/ExtraSections + reveal/openSupportDiagnostics + ensureDaemonRunningOnLaunch | PROBE 3354/1157 |
+| 11 | #377 | 0.1.202 | checkForReleaseUpdate + installReleaseUpdate/runAutoUpdateCheckIfDue/stagePendingUpdate guards + releaseUpdateStatusLine/Color + bugReportSessions/AgentNames/ExtraSections + reveal/openSupportDiagnostics + ensureDaemonRunningOnLaunch | **3376 / 1161** |
 
 Cluster 5 result: CI residual 4912/1450 (190 lines / 65 regions driven OUT of 5102/1515); allowlist
 set to STABLE MAX 4916/1451 (+4/+1 class-C oscillation tolerance, per the cluster-4 precedent).
@@ -98,7 +98,11 @@ injected DaemonManager(probe:.up) resumed arm). This batch is SMALLER (64 lines 
 release/bug/diag area is machinery-dense — carved: applyReleaseUpdateAndTerminate (NSApp.terminate +
 applyAndRelaunch /bin/sh bundle-swap, DESTRUCTIVE in-test), installer.stage network download,
 submitBugReport captureKeyWindowPNG->NSApp.keyWindow (documented floor), readLoginShellPath subprocess.
-4 widens, no slicer touched. LOCAL drove 3418/1185 → 3354/1157. PROBE 3354/1157; CI prints exact → stable max.
+4 widens, no slicer touched. LOCAL drove 3418/1185 → 3354/1157. CI residual 3370/1158 (153 lines / 51
+regions driven OUT of 3523/1209; run 28360595827 — PROBE 3354/1157 failed on both axes). Allowlist set
+to STABLE MAX 3376/1161 with a WIDER +6 line / +3 region buffer (vs the usual +4/+2) to pre-absorb this
+file's known ~11-line detached-machinery oscillation off the observed residual in ONE shot (no second-
+run round-trip needed). Green on the first re-CI.
 
 SOURCE-INTROSPECTION CAVEAT (reconfirmed, clusters 6+7+8+9): BEFORE widening a `private func` for a
 cluster, `grep -rln '<funcName>' Tests/` for a WiringTest that slices `private func <name>` — update

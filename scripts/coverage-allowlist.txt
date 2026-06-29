@@ -376,4 +376,12 @@ WorkbenchViews.swift 1170 223
 # referenced any). Local (Swift 6.3.3) drove 3418/1185 -> 3354/1157 (64 lines / 28 regions OUT). PROBE
 # 3354/1157 below — set BELOW main's current 3523/1209 so the CI Coverage job prints the exact residual;
 # tighten to the stable max post-CI (measure off the observed max given this file's wide oscillation).
-WorkbenchViewModel.swift 3354 1157
+# 3523/1209 -> 3370/1158 (153 lines / 51 regions driven OUT; CI-measured exact residual on run
+# 28360595827 — the PROBE 3354/1157 FAILED on both axes (line 3370>3354, region 1158>1157), so the
+# Coverage gate printed the exact `3370 lines / 1158 regions uncovered`). Set to the STABLE MAX
+# 3376/1161 = the CI residual + a WIDER class-(C) oscillation tolerance (+6 lines / +3 regions, NOT the
+# usual +4/+2 — this file's readLoginShellPath()/spawnScreenQuit() detached-machinery lines oscillate
+# on the LINE axis by up to ~11 between runs, as cluster 10 proved; setting off the observed residual +6
+# absorbs that without a second-run round-trip). NOT padding: the count-1 no-padding proof holds on the
+# stable-coverable portion; the genuine detached-Task/subprocess boundary lines get the explicit +6/+3.
+WorkbenchViewModel.swift 3376 1161
