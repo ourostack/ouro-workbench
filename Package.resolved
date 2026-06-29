@@ -1,5 +1,5 @@
 {
-  "originHash" : "6c5266f3ebd6b95344cdf0916e077cfb9853ec2e9ef0dd2d9d3d0e5724ff04e7",
+  "originHash" : "d63a1cf852efbb19a0c0bddb96489d8d4ed0541732a09c7ee54ef7acbcfe7b42",
   "pins" : [
     {
       "identity" : "ouro-native-apple-app-shell",
@@ -7,7 +7,7 @@
       "location" : "https://github.com/ourostack/ouro-native-apple-app-shell.git",
       "state" : {
         "branch" : "main",
-        "revision" : "d9f38b882c8d22d4952dae53f282d1769fab3f15"
+        "revision" : "68200a4e4b52124320ba0f34dbcdf39c455fbd90"
       }
     },
     {
