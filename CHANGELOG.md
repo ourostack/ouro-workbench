@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.200 - View-model coverage (startup / state-load / session lifecycle)
+
+- Internal: drives a large batch of view-model startup and persistence logic to test coverage — the command-palette descriptor builder (every conditional command arm), state load + first-run-forced + lossy-salvage paths, startup attention reconciliation, the auto-resume-on-launch and orphan-screen-reaper guards, and the flushed-run reclassify/backfill folds. The orphan `screen` quit is seamed; the live `screen`/NSApp/async-scan boundaries stay carved. No user-facing behavior change.
+
 ## 0.1.199 - View-model coverage (boss-watch / external-action flows)
 
 - Internal: drives the boss-watch tick guard + no-wake arms, the boss-watch failure backoff bump, the external-action apply/mark-applied fold, and the event-driven check-in cooldown gate to test coverage. The async check-in / drain tasks stay the boundary. No user-facing behavior change.
