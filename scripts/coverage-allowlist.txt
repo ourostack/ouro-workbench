@@ -469,6 +469,17 @@ WorkbenchViews.swift 1170 223
 # CI residual 2803/1001 -> 2749/987 (54 lines / 14 regions driven OUT; run 28379715706 — PROBE 2740/965
 # FAILED both axes). Set to the STABLE MAX 2779/993 with the WIDE upfront buffer (+30 line / +6 region off
 # observed-max, per the cluster-14/15 oscillation lesson — pre-absorbs the detached-machinery line-axis
-# toggle in one shot). NOT the floor yet — clusters 17+ continue (applyBossAction/performCommand dispatch
-# arms, submitBugReport assembly, cloneAgentHeadless via a clone-runner seam, the small-decl tail).
-WorkbenchViewModel.swift 2779 993
+# toggle in one shot).
+# Cluster 17 (clone-result fold + save/install tail, v0.1.213): 7 tests, TEST-ONLY (the runCloneAgent +
+# providerCheckRunner closure seams already existed). Drives cloneAgentHeadless's result-fold (the big
+# remaining block ~91 lines): .exited(0)+landed-bundle+ready-verdict → .succeeded resolve (the only
+# success-logging arm), vault-locked verdict → .failed + non-success audit, empty-remote plan-build throw
+# → .failed (runner never called) — arms the existing #384 .failed-fold test never reaches.
+# presentSaveWorkspacePanel write arm (non-nil seam → encode+atomic write + cancelled no-op),
+# installWorkbenchMCP install/catch fold, openWorkspaceConfig(at:) missing-dir error. Local discovery
+# before = 2798/1001. CI residual 2749/987 -> 2623/967 (126 lines / 20 regions driven OUT; run 28382677235
+# — PROBE 2680/935 failed on region 967>935; the clone-fold is line-heavy). Set to the STABLE MAX 2653/973
+# with the WIDE upfront buffer (+30 line / +6 region off observed-max). NOT the floor yet — clusters 18+
+# continue (applyBossAction/performCommand sync dispatch, submitBugReport assembly up to NSApp.keyWindow,
+# installReleaseUpdate/submitProviderConfig async-Task prologues, load salvage arms, the small-decl tail).
+WorkbenchViewModel.swift 2653 973
