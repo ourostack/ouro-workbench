@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.199 - View-model coverage (boss-watch / external-action flows)
+
+- Internal: drives the boss-watch tick guard + no-wake arms, the boss-watch failure backoff bump, the external-action apply/mark-applied fold, and the event-driven check-in cooldown gate to test coverage. The async check-in / drain tasks stay the boundary. No user-facing behavior change.
+
 ## 0.1.198 - View-model coverage (onboarding remediation handlers)
 
 - Internal: drives the onboarding remediation dispatchers (verify/refresh provider, ensure daemon, report bug — their skip-guard and in-flight-ack arms), the settled-outcome fold, and the first-run bootstrap completion (handoff / provider-gate / failed presentation arms) to test coverage. No user-facing behavior change.

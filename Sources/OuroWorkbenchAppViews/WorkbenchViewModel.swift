@@ -3810,7 +3810,7 @@ public final class WorkbenchViewModel: ObservableObject {
     /// only-when-there's-something-to-do path. Respects Boss Watch being on,
     /// never overlaps a running check-in, and is rate-limited so a burst of
     /// events coalesces into one ask.
-    private func triggerEventDrivenBossCheckIn() {
+    func triggerEventDrivenBossCheckIn() {
         let now = Date()
         guard BossWatchEventPolicy.shouldTriggerCheckIn(
             watchEnabled: bossWatchIsEnabled,
@@ -6256,7 +6256,7 @@ public final class WorkbenchViewModel: ObservableObject {
     /// escalation can't drift between them. (F8 — the daemon-down path previously bailed WITHOUT
     /// arming the retry, so a dead daemon hot-looped every poll forever.) A *manual* check-in is
     /// never gated by the backoff; only the automatic loop/event triggers consult `mayAttempt`.
-    private func registerBossWatchFailure(auditDetail: String) {
+    func registerBossWatchFailure(auditDetail: String) {
         let result = BossWatchBackoff.registerFailure(
             consecutiveFailures: bossWatchConsecutiveFailures,
             now: Date()
@@ -6730,7 +6730,7 @@ public final class WorkbenchViewModel: ObservableObject {
     /// the app crashes before `confirmApplied` deletes the `processing/` file.
     /// Moving `markApplied` after the confirm — or dropping it — reopens the
     /// double-execute bug, which is why `ReplayDedupWiringTests` index-pins this.
-    private func applyExternalActionRequests(_ requests: [WorkbenchActionRequest]) {
+    func applyExternalActionRequests(_ requests: [WorkbenchActionRequest]) {
         let results = requests.map { request -> String in
             // Stamp the originating requestId onto the action-log entry this
             // apply writes (#U24), so the boss's queued request and the
