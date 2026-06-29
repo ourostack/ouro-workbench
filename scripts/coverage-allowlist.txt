@@ -248,5 +248,7 @@ WorkbenchViews.swift 1170 227
 # NO padding — a region a seam/extraction/direct-call reaches gets driven, not carved.
 # Cluster 1 (applyBossAction, v0.1.188): 5892/1696 -> 5505/1591 (387 lines / 105 regions).
 # Cluster 2 (performCommand, v0.1.189): 5505/1591 -> 5407/1542 (98 lines / 49 regions; run 28346126436).
+# Cluster 3 (provider-config/vault flows, v0.1.190): 5407/1542 -> 5182/1532 (225 lines / 10 regions;
+# the submit arms are line-heavy but their async-Task bodies dominate the regions; run 28346662711).
 # Subsequent clusters lower it further to the floor.
-WorkbenchViewModel.swift 5407 1542
+WorkbenchViewModel.swift 5182 1532
