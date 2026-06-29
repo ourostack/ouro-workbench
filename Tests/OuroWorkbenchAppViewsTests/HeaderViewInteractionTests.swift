@@ -44,6 +44,7 @@ final class HeaderViewInteractionTests: XCTestCase {
         // forks a real `screen` child that orphans past teardown (CI signal-1 crash). Inject a
         // no-op launcher so those paths run without spawning a subprocess.
         model.launchTerminalSession = { _ in }
+        model.recentWorkspacePaths = []
         return model
     }
 
@@ -81,6 +82,7 @@ final class HeaderViewInteractionTests: XCTestCase {
         // teardown (CI signal-1 crash). Inject a no-op launcher so the recover-all path runs but
         // no subprocess spawns.
         model.launchTerminalSession = { _ in }
+        model.recentWorkspacePaths = []
         return model
     }
 

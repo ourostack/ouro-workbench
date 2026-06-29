@@ -46,11 +46,13 @@ final class HeaderViewTests: XCTestCase {
         let agentBundles = tmp.appendingPathComponent("AgentBundles", isDirectory: true)
         let paths = WorkbenchPaths(rootURL: tmp)
         try WorkbenchStore(paths: paths).save(state)
-        return WorkbenchViewModel(
+        let model = WorkbenchViewModel(
             paths: paths,
             bossWorkbenchMCPRegistrar: BossWorkbenchMCPRegistrar(agentBundlesURL: agentBundles),
             ouroAgentInventory: OuroAgentInventory(agentBundlesURL: agentBundles)
         )
+        model.recentWorkspacePaths = []
+        return model
     }
 
     private static let projectId = UUID(uuidString: "00000000-0000-0000-0000-0000000000AB")!

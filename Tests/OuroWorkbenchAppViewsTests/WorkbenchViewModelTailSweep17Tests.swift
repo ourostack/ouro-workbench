@@ -3,6 +3,10 @@ import XCTest
 import OuroWorkbenchCore
 @testable import OuroWorkbenchAppViews
 
+/// File-private, nonisolated copy for XCTest setUp/tearDown cleanup. Keep this
+/// synchronized with `WorkbenchViewModel.recentWorkspacePathsDefaultsKey`.
+private let tailSweepRecentsKey = "ouro.workbench.recentWorkspacePaths"
+
 /// VM-GATE cluster 17 — tail sweep continuing toward the irreducible floor.
 ///
 /// Drives the still-uncovered *logic* of machinery-touching decls via the existing
@@ -31,6 +35,26 @@ final class WorkbenchViewModelTailSweep17Tests: XCTestCase {
     private static let projectId = UUID(uuidString: "C17F1A00-0000-0000-0000-0000000000A1")!
     private static let wsId = UUID(uuidString: "C17F1A00-0000-0000-0000-0000000000B1")!
     private static let entryId = UUID(uuidString: "C17F1A00-0000-0000-0000-0000000000E1")!
+
+    // `setUp`/`tearDown` are inherited `nonisolated`, so snapshot+restore the
+    // shared defaults key through a nonisolated box. XCTest runs these serially.
+    nonisolated(unsafe) private var savedRecents: Any?
+
+    override func setUp() {
+        super.setUp()
+        savedRecents = UserDefaults.standard.object(forKey: tailSweepRecentsKey)
+        UserDefaults.standard.removeObject(forKey: tailSweepRecentsKey)
+    }
+
+    override func tearDown() {
+        if let savedRecents {
+            UserDefaults.standard.set(savedRecents, forKey: tailSweepRecentsKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: tailSweepRecentsKey)
+        }
+        savedRecents = nil
+        super.tearDown()
+    }
 
     /// Build a hermetic VM. EVERY machinery seam is faked so no test can reach live
     /// machinery (the CI-hang lesson): clone + provider-check return nil/failure by
@@ -151,6 +175,8 @@ final class WorkbenchViewModelTailSweep17Tests: XCTestCase {
     // MARK: - presentSaveWorkspacePanel write arm (seam returns a real URL)
 
     func testPresentSaveWorkspacePanel_writesConfigViaSeam() throws {
+        XCTAssertEqual(tailSweepRecentsKey, WorkbenchViewModel.recentWorkspacePathsDefaultsKey,
+                       "setUp/tearDown cleanup must track the production recent-workspace key")
         let (m, _) = try makeVM()
         // Give the project a terminal so it isn't the no-terminals guard.
         m.state.processEntries = [ProcessEntry(
