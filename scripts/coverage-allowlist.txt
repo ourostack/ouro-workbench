@@ -496,4 +496,14 @@ WorkbenchViews.swift 1170 223
 # (+30 line / +6 region — the WIDE buffer this detached-machinery-dense file needs; the count-1
 # no-padding proof holds on the stable-coverable portion, the oscillating async/subprocess regions
 # get the explicit +30/+6).
-WorkbenchViewModel.swift 2527 951
+# Cluster 19 (v0.1.217): drives applyOnboardingProposal's apply-body (per-group create/dedup/
+# skip-on-empty-working-dir folds + persisted result + import summary; only the not-ready/no-proposal
+# guards were covered before) + applyBossAction's 7 entry-less dispatch arms (.requestProviderConfig/
+# .verifyProvider/.refreshProvider/.selectLane/.registerWorkbenchMCP/.ensureDaemon/.reportBug through
+# the validate->authorize->dispatch path). Test-only (no source change). Carved: the start* handlers'
+# detached subprocess/MCP Task bodies, the unreachable defense-in-depth authorize-DENY arm (validation
+# name-checks first), the non-injectable state-store I/O failure arms. 2527/951 -> CI residual 2396/913
+# (101 lines / 32 regions driven OUT; run 28388... Coverage job 84111525687 — the PROBE 2440/920 PASSed
+# so the gate reported the exact `2396 line, 913 region exempt`). Set to the STABLE MAX 2426/919 = the
+# CI residual + this file's documented class-(C) oscillation tolerance (+30 line / +6 region).
+WorkbenchViewModel.swift 2426 919

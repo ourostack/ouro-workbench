@@ -5,12 +5,21 @@ autopilot (merge on CI-green, no per-cluster approval). Each region: invoked + e
 mutation-verified; allowlist set to the CI-measured exact minimum (probe-then-set); scope-pure;
 VERSION bump; flaky-region protocol applied.
 
-## ⏸️ RECOMMENDED RESUME POINT (durable checkpoint — 2026-06-29)
+## ⏸️ RECOMMENDED RESUME POINT (durable checkpoint — 2026-06-29, post-cluster-18)
 
-**State to resume from:** main @ v0.1.214, VM allowlist `WorkbenchViewModel.swift 2653 973`. Clusters
-1-17 all merged & CI-green. 0 open VM PRs, 0 leftover `coverage/vm-*` branches. This run drove the VM
-allowlist 4637/1392 (after #368) → **2653/973** (1984 lines / 419 regions out, ~30% of the run-start
-region residual) across clusters 8-17.
+**State to resume from:** main @ v0.1.216 (`WorkbenchRelease.version` = "0.1.216", VERSION file = 0.1.216),
+VM allowlist `WorkbenchViewModel.swift 2527 951`. Clusters 1-18 all merged & CI-green (cluster 18 = PR
+#394, squash `baed73b`). 0 open VM PRs, 0 leftover `coverage/vm-*` branches. Cluster 18 drove the VM
+allowlist 2653/973 → **2527/951** (CI residual 2497/945; 156 lines / 28 regions out).
+
+⚠️ REBASE GOTCHA (cluster 18 hit this): when an operator PR merges between branch-creation and CI, the
+branch goes DIRTY and **CI does not even run until you rebase**. After rebasing, you MUST bump BOTH the
+VERSION file AND `Sources/OuroWorkbenchCore/WorkbenchRelease.swift`'s `public static let version` to
+match (the `verify-version-contract.sh` gate fails Swift-tests + App-bundle if they differ) AND renumber
+the CHANGELOG top entry to the new VERSION. Branch off the ABSOLUTE latest main right before pushing.
+
+**Prior checkpoint (pre-cluster-18):** main @ v0.1.214, allowlist 2653/973. Clusters 1-17 merged. This
+earlier run drove 4637/1392 (after #368) → 2653/973 across clusters 8-17.
 
 **⚠️ 973 is NOT the true floor — it is a pause point.** ~620 regions of DRIVABLE logic remain carved.
 The genuine-carve floor is ~150-350 regions (per the STEP-1 scope: ~107 syscall lines + ~49 async-loop
@@ -55,6 +64,7 @@ GENUINE CARVE (the floor — do NOT drive): TerminalHostView NSView bodies (`_li
 | 15 | #386 | 0.1.210 | NOTIFICATION content-extraction (needsMe/unexpectedExit title-body-subtitle → pure static helpers; carve only center.add) + needsMe baseline/decision guards + logic tail (focusTerminal/openWorkspaceConfig(at:)/makeFirstRunBootstrapEffects/setAutoLaunchResumableOnStartup/stepTerminalSearch guards) | **2833 / 1007** |
 | 16 | #388 | 0.1.212 | TAIL SWEEP: extract applyVaultCompletionResult from completeVaultOnboarding re-probe Task (byte-identical) → .ready/.failed fold + applyOnboardingProposal/openProviderConfig/completeRepairAgent/makeFirstRunBootstrapEffects/openWorkspaceConfig(at:) arms (VaultOnboarding wiring slicer extended; rebased onto #387) | **2779 / 993** |
 | 17 | #390 | 0.1.214 | TAIL SWEEP (test-only): cloneAgentHeadless result-fold (.ready resolve / vault-locked fail / plan-build throw via existing runCloneAgent+providerCheckRunner seams) + presentSaveWorkspacePanel write + installWorkbenchMCP fold + openWorkspaceConfig(at:) | **2653 / 973** |
+| 18 | #394 | 0.1.216 | COLD-START/BUG-REPORT FOLDS + CMD-DISPATCH TAIL: applyColdStartConfigResult (extracted byte-identical from submitProviderConfig cold-start MainActor.run fold) .ready/.needsVaultSetup/.failed + submitProviderConfig sync arms (rotation/.invalid/.unsupportedColdStartSink) + applyBugReportBundleResult (extracted byte-identical from submitBugReport writer Task switch) .success/.failure + postNeedsMeNotificationSink seam (mirrors postExitNotification) → notifyAboutNewNeedsMeItems final dispatch + installReleaseUpdate staged fast-path + performCommand no-selection guards + seamed dispatches | **2527 / 951** |
 
 Cluster 5 result: CI residual 4912/1450 (190 lines / 65 regions driven OUT of 5102/1515); allowlist
 set to STABLE MAX 4916/1451 (+4/+1 class-C oscillation tolerance, per the cluster-4 precedent).
