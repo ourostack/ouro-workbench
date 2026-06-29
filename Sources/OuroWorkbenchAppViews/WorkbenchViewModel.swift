@@ -702,6 +702,17 @@ public final class WorkbenchViewModel: ObservableObject {
         self?.quitPersistentScreenIfNeeded(forEntryId: entryId)
     }
 
+    /// Seam: quit a persistent `screen` session by argv — the startup orphan reaper's per-orphan
+    /// quit, which targets a session NAME (not an entry id), so it can't use the entry-keyed
+    /// `quitPersistentScreenForEntry`. Defaults to the shared off-main + 1.5s-watchdog
+    /// `spawnScreenQuit` (the genuine-machinery boundary — a real `screen -X quit` subprocess). A
+    /// test injects a recorder so the reaper's orphan-loop value-flow (the environment build + the
+    /// per-orphan iteration) is driven without spawning `screen`. Only the literal `Process()` inside
+    /// the default closure stays carved. `@Sendable` — `spawnScreenQuit` is `nonisolated`.
+    var spawnPersistentScreenQuit: @Sendable (_ arguments: [String], _ environment: [String: String]) -> Void = { arguments, environment in
+        WorkbenchViewModel.spawnScreenQuit(arguments: arguments, environment: environment)
+    }
+
     /// Seam: resolve a directory URL from the configured "Open Workspace…" panel.
     /// Defaults to the real `panel.runModal()` syscall path (`.OK ? panel.url : nil`),
     /// which blocks on a live GUI modal and so cannot run in-process. A test injects a
@@ -6730,6 +6741,11 @@ public final class WorkbenchViewModel: ObservableObject {
     /// the app crashes before `confirmApplied` deletes the `processing/` file.
     /// Moving `markApplied` after the confirm — or dropping it — reopens the
     /// double-execute bug, which is why `ReplayDedupWiringTests` index-pins this.
+    // VM-GATE: widened private->internal so the synchronous apply path (map -> applyBossAction ->
+    // markApplied -> bossAppliedActions feed; the detached confirm/clear Task is the boundary) is
+    // directly unit-testable with a synchronous action. Pure access-widen, no behavior change; the
+    // production callers (drainExternalActionRequests, recoverUnconfirmedExternalActionRequests) are
+    // unchanged.
     func applyExternalActionRequests(_ requests: [WorkbenchActionRequest]) {
         let results = requests.map { request -> String in
             // Stamp the originating requestId onto the action-log entry this
@@ -6884,9 +6900,9 @@ public final class WorkbenchViewModel: ObservableObject {
         }
         let environment = TerminalEnvironment().valuesWithResolvedPath()
         for name in orphans {
-            Self.spawnScreenQuit(
-                arguments: PersistentTerminalSession.terminateArguments(sessionName: name),
-                environment: environment
+            spawnPersistentScreenQuit(
+                PersistentTerminalSession.terminateArguments(sessionName: name),
+                environment
             )
         }
     }
@@ -9492,7 +9508,9 @@ public final class WorkbenchViewModel: ObservableObject {
     /// `(runId → sessionId)` writes are safe (never clobbering a non-empty id,
     /// never handing two same-cwd runs the same id), and applies them on the main
     /// actor — each guarded by `== nil` so a concurrent write can't be overwritten.
-    private func backfillSessionIdsForFlushedRuns(_ runIds: [UUID]) {
+    // VM-GATE: widened private->internal so the no-candidate guard arm (no scan Task spawned) is
+    // directly unit-testable. Pure access-widen, no behavior change.
+    func backfillSessionIdsForFlushedRuns(_ runIds: [UUID]) {
         // Only do the (cheap) scan when at least one flushed run is a live,
         // still-id-less terminal-agent run — otherwise there's nothing to fill.
         let candidateRunIds = Set(runIds)

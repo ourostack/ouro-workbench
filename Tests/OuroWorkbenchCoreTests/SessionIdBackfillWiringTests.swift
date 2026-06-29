@@ -104,7 +104,7 @@ final class SessionIdBackfillWiringTests: XCTestCase {
         let source = try WorkbenchAppSource.appSource()
         return try WorkbenchAppSource.sourceSlice(
             in: source,
-            from: "private func backfillSessionIdsForFlushedRuns",
+            from: "func backfillSessionIdsForFlushedRuns",
             to: "nonisolated private static func classifyTranscriptTail"
         )
     }

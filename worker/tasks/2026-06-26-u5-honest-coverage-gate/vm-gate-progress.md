@@ -18,6 +18,7 @@ VERSION bump; flaky-region protocol applied.
 | 6 | #367 | 0.1.196 | deleteCustomSession/archive + revealLatestTranscript + requestStop/confirmStop + applySessionIdBackfills | **4799 / 1415** |
 | 7 | #368 | 0.1.198 | start* onboarding handlers (verify/refresh/ensureDaemon/reportBug skip+ack arms) + completeOnboardingAction + completeFirstRunBootstrap | **4637 / 1392** |
 | 8 | #371 | 0.1.199 | runBossWatchTick guard/no-wake + registerBossWatchFailure + applyExternalActionRequests + triggerEventDrivenBossCheckIn | **4552 / 1378** |
+| 9 | #374 (supersedes #372) | 0.1.200 | reconcileStartupAttention + launchAutoResume + reapOrphanedScreen + applyExternalActionRequests + scan/startBossReconstruction/selectLane/registerMCP/repairAgent guards | **4288 / 1336** |
 
 Cluster 5 result: CI residual 4912/1450 (190 lines / 65 regions driven OUT of 5102/1515); allowlist
 set to STABLE MAX 4916/1451 (+4/+1 class-C oscillation tolerance, per the cluster-4 precedent).
@@ -34,8 +35,18 @@ Cluster 8 result: CI residual 4548/1377 (85 lines / 14 regions driven OUT of 463
 set to STABLE MAX 4552/1378. Widened private→internal: registerBossWatchFailure /
 applyExternalActionRequests / triggerEventDrivenBossCheckIn (ReplayDedupWiringTests'
 applyExternalActionRequests slicer made `private`-agnostic). runBossWatchTick already internal.
-
-SOURCE-INTROSPECTION CAVEAT (reconfirmed, clusters 6+7+8): BEFORE widening a `private func` for a
+Cluster 9 result: CI residuals 4284/1334 and 4282/1332 across #372's final two Coverage jobs;
+allowlist set to STABLE MAX 4288/1336 (higher observed residual +4/+2 class-C oscillation tolerance,
+per the cluster-7 observed region oscillation). Drives the startup-reconcile + external-action-apply + onboarding-scan
+logic + the start* handlers cluster 7 did NOT take (selectLane / registerWorkbenchMCP / repairAgent
+skip guards). New seam: `spawnPersistentScreenQuit` (argv-based reaper quit; default = the shared
+off-main+watchdog `spawnScreenQuit`; reaper wiring-pin updated + a seam-default-routing pin added —
+NOTE: the per-entry `quitPersistentScreenIfNeeded` STAYS on `Self.spawnScreenQuit` so #370's
+quitHelper pin is unaffected). `applyExternalActionRequests` + `backfillSessionIdsForFlushedRuns`
+widened private→internal (ReplayDedup/SessionIdBackfill wiring markers → `func` form). MULTI-AGENT
+NOTE: this PR was rebased onto main AFTER #368 (a concurrent cluster-7 PR) merged — its start*
+verify/refresh tests were DROPPED as duplicates of #368, leaving the non-overlapping remainder.
+SOURCE-INTROSPECTION CAVEAT (reconfirmed, clusters 6+7+8+9): BEFORE widening a `private func` for a
 cluster, `grep -rln '<funcName>' Tests/` for a WiringTest that slices `private func <name>` — update
 its slicer to a `private`-agnostic match in the SAME PR (else CI reds on Swift tests + Coverage).
 
@@ -48,31 +59,23 @@ residual off CI, then set the stable max). New seams: `persistentSessionLister`,
 `postExitNotification` (both prod byte-identical, @MainActor).
 
 Start residual (scoping): 5892 lines / 1696 regions (44.0% line / 40.7% region).
-Current (main): **5102 lines / 1515 regions** — the STABLE MAX (the bare 5098/1514 minimum red-ed
-main post-merge on an oscillating async region; set to the post-merge-observed stable count per the
-class-(C) GATED-FILE OSCILLATION protocol). 51.4% line / 47.0% region.
-Driven so far: **794 lines / 182 regions** out.
+Current (after #374, superseding #372): **4288 lines / 1336 regions** — the STABLE MAX (CI exact 4284/1334 plus the
+documented +4/+2 class-(C) oscillation tolerance). 59.1% line / 52.0% region.
+Driven so far: **1604 lines / 360 regions** out.
 
 Test suites added (all in Tests/OuroWorkbenchAppViewsTests/):
 WorkbenchViewModelBossActionTests, WorkbenchViewModelPerformCommandTests,
-WorkbenchViewModelOnboardingFlowsTests, WorkbenchViewModelReleaseBugDiagTests.
+WorkbenchViewModelOnboardingFlowsTests, WorkbenchViewModelReleaseBugDiagTests,
+WorkbenchViewModelStartupReconcileTests.
 
 ## Remaining drivable clusters (biggest-first, from vm-uncovered-lines.txt / vm-gate-scope.md)
 
-- `markTerminated` (L9639, ~107) — exit/attention reconciliation logic (machinery-touching;
-  the notification/attention LOGIC drives, the NSUserNotification/post is the boundary).
 - `load` (L9864, ~89) — state load/migration (FileManager-backed; the migration LOGIC drives via
   the hermetic store, the literal file read is the seam).
-- onboarding tail: `completeFirstRunBootstrap` (54), `runOnboardingProviderCheck` (57, process
-  seam), `runOnboardingRepairStepNatively` (42), `makeFirstRunBootstrapEffects` (39),
-  `scanForOnboardingSessions` (30), the start* handlers (startRepairAgent/startVerifyProvider/
-  startSelectLane/startRegisterWorkbenchMCP/startRefreshProvider/startEnsureDaemon — each ~25-36).
-- attention/notification: `applyAttentionSignal` (38), `reconcileStartupAttentionWithLiveSessions`
-  (42), `postNeedsMeNotification` (37), `postUnexpectedExitNotification` (36), `applyAttentionSignal`.
-- session lifecycle: `deleteCustomSession` (30), `launchAutoResumeSessionsOnStartup` (31),
-  `backfillSessionIdsForFlushedRuns` (25), `revealLatestTranscript` (28).
-- boss flows: `runBossCheckIn` (33), `runBossWatchTick` (37), `applyExternalActionRequests` (28),
-  `runExternalActionPump` (28).
+- onboarding tail: `runOnboardingProviderCheck` (57, process seam),
+  `runOnboardingRepairStepNatively` (42), `makeFirstRunBootstrapEffects` (39).
+- attention/notification: `postNeedsMeNotification` (37), `postUnexpectedExitNotification` (36).
+- boss flows: `runBossCheckIn` (33), `runExternalActionPump` (28).
 - the long tail of ~250 smaller logic decls (3-25 lines each).
 
 ## Genuine-carve floor (do NOT drive — ~107 syscall lines + async loops + llvm-synth)
