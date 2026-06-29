@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.217 - View-model coverage (onboarding-import apply-body + boss-action entry-less dispatch)
+
+- Internal: covers the onboarding-import apply-body (per-group create/dedup/skip-on-empty-working-directory folds, the durable-write persisted result, and the import summary) and the boss-action entry-less dispatch arms (requestProviderConfig / verifyProvider / refreshProvider / selectLane / registerWorkbenchMCP / ensureDaemon / reportBug, each through the validate→authorize→dispatch path). Test-only — no production change. The downstream remediation tasks' detached subprocess/MCP bodies, the unreachable defense-in-depth authorize-DENY arm, and the state-store I/O failure arms stay carved. No user-facing behavior change.
+
 ## 0.1.216 - View-model coverage (cold-start/bug-report folds + command-dispatch tail)
 
 - Internal: extracts the provider-config cold-start result-handling and the bug-report writer result-handling out of their background tasks into pure helpers (both byte-identical) so the cold-start ready/needs-vault/failed folds and the bug-report success/failure folds are directly testable, adds a needs-me notification sink seam (mirroring the exit-notification seam) so the new-items dispatch drives without the live notification center, and covers the remaining provider-config sync arms, the staged release-update fast path, and the command-palette no-selection guards plus seamed dispatches. Test-only — no production change. The detached hatch/writer tasks, the live notification-center add, and the live installer download stay carved. No user-facing behavior change.
