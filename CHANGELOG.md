@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.194 - View coverage follow-up
+
+- Internal: covers the provider-check output buffer and support-diagnostics button action paths, tightening the Workbench views coverage allowlist without changing user-facing behavior.
+
 ## 0.1.193 - View-model coverage-gate flake tolerance
 
 - Internal: sets the view-model coverage allowlist to its stable maximum to absorb an oscillating async/timing region that intermittently reds the gate post-merge (same flaky-region class as the existing tolerated entries). No user-facing behavior change.

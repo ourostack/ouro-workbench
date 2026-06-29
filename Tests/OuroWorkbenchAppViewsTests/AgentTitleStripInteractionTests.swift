@@ -21,10 +21,8 @@ import OuroWorkbenchCore
 /// so the chevron's `showsInspector.toggle()` is observable.
 ///
 /// **Carves (genuinely-unreachable / live-side-effect — recorded for Unit 3):**
-///   - "Reveal Bundle in Finder" → `revealAgentBundle` calls `NSWorkspace.activateFileViewerSelecting`,
-///     a live Finder GUI action with no `@Published` side-effect; for a non-existent hermetic path
-///     it is a no-op. Its region IS executed by the tap (the closure runs) — we tap it for coverage
-///     and assert "no throw" (the B2 Refresh-Status precedent), NOT a carve.
+///   - "Reveal Bundle in Finder" → `revealAgentBundle` drives the injected Finder reveal seam;
+///     the test asserts the target URL so the action is observable without launching Finder.
 ///   - "Run ouro check…" / "Create Another Agent…" / "Clone an Agent…" / "Refresh Agents" / the
 ///     disclosure toggle / "Use as Boss" / "Open agent.json…" are all DRIVEN with asserted effects.
 @MainActor
@@ -119,12 +117,16 @@ final class AgentTitleStripInteractionTests: XCTestCase {
                       "the error is the missing-config message: \(view.model.errorMessage ?? "nil")")
     }
 
-    /// "Reveal Bundle in Finder" → `revealAgentBundle` (a live Finder GUI action with no
-    /// `@Published` effect; a no-op for the hermetic path). The tap runs the closure for
-    /// coverage — the observable signal is "no throw" (the B2 Refresh-Status precedent).
+    /// "Reveal Bundle in Finder" → `revealAgentBundle`, proving the selected URL through the
+    /// injected Finder reveal seam.
     func testStrip_menu_revealBundle_runsAction() throws {
         let view = try strip(boss: "x", agentName: "alpha-agent")
-        XCTAssertNoThrow(try view.inspect().find(button: "Reveal Bundle in Finder").tap())
+        var revealedURLs: [URL] = []
+        view.model.revealFileViewerSelectingURLs = { revealedURLs = $0 }
+        try view.inspect().find(button: "Reveal Bundle in Finder").tap()
+        XCTAssertEqual(revealedURLs.count, 1)
+        XCTAssertTrue(revealedURLs[0].path.contains("AgentBundles/alpha-agent.ouro"),
+                      "Reveal Bundle targets the agent bundle path, got \(revealedURLs[0].path)")
     }
 
     /// "Run ouro check…" → `repairAgent`. It builds a repair terminal session via

@@ -686,6 +686,12 @@ public final class WorkbenchViewModel: ObservableObject {
     /// diagnostics orphans). `@MainActor`-isolated; the session is only ever started on main.
     var launchTerminalSession: (TerminalSessionController) -> Void = { $0.start() }
 
+    /// Reveals file URLs in Finder. Defaults to AppKit's live file-viewer call; tests inject a
+    /// recorder so interaction coverage can tap "Reveal…" buttons without launching Finder.
+    var revealFileViewerSelectingURLs: ([URL]) -> Void = { urls in
+        NSWorkspace.shared.activateFileViewerSelecting(urls)
+    }
+
     /// Seam: resolve a directory URL from the configured "Open Workspace…" panel.
     /// Defaults to the real `panel.runModal()` syscall path (`.OK ? panel.url : nil`),
     /// which blocks on a live GUI modal and so cannot run in-process. A test injects a
@@ -2402,7 +2408,7 @@ public final class WorkbenchViewModel: ObservableObject {
         let targetPath = FileManager.default.fileExists(atPath: agent.configPath)
             ? agent.configPath
             : agent.bundlePath
-        NSWorkspace.shared.activateFileViewerSelecting([
+        revealFileViewerSelectingURLs([
             URL(fileURLWithPath: targetPath)
         ])
     }
@@ -4836,7 +4842,7 @@ public final class WorkbenchViewModel: ObservableObject {
         guard let supportDiagnosticsURL else {
             return
         }
-        NSWorkspace.shared.activateFileViewerSelecting([supportDiagnosticsURL])
+        revealFileViewerSelectingURLs([supportDiagnosticsURL])
         recordActionLog(
             source: "native",
             action: "revealSupportDiagnostics",
@@ -5013,7 +5019,7 @@ public final class WorkbenchViewModel: ObservableObject {
             revealBugReportsFolder()
             return
         }
-        NSWorkspace.shared.activateFileViewerSelecting([lastBugReportURL])
+        revealFileViewerSelectingURLs([lastBugReportURL])
     }
 
     func copyBugReportPath() {
@@ -7262,7 +7268,7 @@ public final class WorkbenchViewModel: ObservableObject {
             )
             return
         }
-        NSWorkspace.shared.activateFileViewerSelecting([transcriptURL])
+        revealFileViewerSelectingURLs([transcriptURL])
         recordActionLog(
             source: "native",
             action: "revealTranscript",
