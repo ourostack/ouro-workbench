@@ -25,6 +25,14 @@ final class WorkbenchViewModelOnboardingFlowsTests: XCTestCase {
             ouroAgentInventory: OuroAgentInventory(agentBundlesURL: agentBundles))
     }
 
+    private func repoRootOuroArtifacts() throws -> [String] {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        return try FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "ouro" }
+            .map(\.lastPathComponent)
+            .sorted()
+    }
+
     // MARK: - Form openers (flag-set state transitions)
 
     func testPresentProviderConfigForm_setsFlagsForExistingAgent() throws {
@@ -90,11 +98,17 @@ final class WorkbenchViewModelOnboardingFlowsTests: XCTestCase {
                       "unsupported-sink arm: \(msg ?? "nil")")
     }
 
-    func testSubmit_coldStartHatch_setsInFlightFlag_returnsNil() throws {
+    func testSubmit_coldStartHatch_setsInFlightFlag_returnsNil() async throws {
         let m = try makeVM()
         m.providerConfigAgentName = "fresh-agent"
-        // anthropic supports cold-start → the .coldStartHatch arm: in-flight flag set, nil return
-        // (the async hatch Task is the machinery boundary; the synchronous flag-set is driven).
+        XCTAssertEqual(try repoRootOuroArtifacts(), [], "precondition: repo root must start clean")
+        m.runColdStartHatch = { _ in
+            try? await Task.sleep(nanoseconds: 10_000_000)
+            return .launchFailed
+        }
+        // anthropic supports cold-start → the .coldStartHatch arm: in-flight flag set, nil return.
+        // The hatch runner is injected so this synchronous-state test cannot launch the live
+        // `ouro hatch` process and leave a bundle in the package root while the full suite continues.
         let fields = WorkbenchProvider.anthropic.credentialFields
         var values: [String: String] = [:]
         for f in fields { values[f.key] = "sk-test-credential" }
@@ -102,6 +116,8 @@ final class WorkbenchViewModelOnboardingFlowsTests: XCTestCase {
         XCTAssertNil(msg, "cold-start path returns nil (hatch in flight, form stays open)")
         XCTAssertTrue(m.providerConfigColdStartInFlight, "cold-start sets the in-flight flag")
         XCTAssertEqual(m.providerConfigInFlightLabel, "Creating your agent…", "cold-start spinner label")
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertEqual(try repoRootOuroArtifacts(), [], "the injected hatch runner must not create repo-root bundles")
     }
 
     func testSubmit_existingAgent_routesToRotation_returnsNil() throws {
