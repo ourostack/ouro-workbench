@@ -21,7 +21,7 @@ VERSION bump; flaky-region protocol applied.
 | 9 | #373 | 0.1.200 | BIG BATCH: commandPaletteItems (all cmd arms) + load (normal/first-run/lossy-salvage/quarantine) + startup reconcile/recover/auto-resume + reapOrphanedScreen + reclassify/backfill folds + prepareForTermination + stopAll + drainExternalActionRequests | **3906 / 1259** |
 | 10 | #375 | 0.1.201 | BIG BATCH: start*SelectLane/RegisterMCP/RepairAgent (skip+ack; the 3 carried from #369/#372/#374) + scan/startBossReconstruction guards + beginVault/credentialRotation/completeVault + runOnboardingRepairStepNatively + surfaceNativeRepairLine + makeFirstRunBootstrapEffects + openDeskBridgeSetup + installWorkbenchMCP | **3523 / 1209** |
 | 11 | #377 | 0.1.202 | checkForReleaseUpdate + installReleaseUpdate/runAutoUpdateCheckIfDue/stagePendingUpdate guards + releaseUpdateStatusLine/Color + bugReportSessions/AgentNames/ExtraSections + reveal/openSupportDiagnostics + ensureDaemonRunningOnLaunch | **3376 / 1161** |
-| 12 | #379 | 0.1.204 | performCommand payload arms (select/useAsBoss/config/reveal/repair + no-agent guards) + selectAgent/selectBoss/openAgentConfig/revealAgentBundle/repairAgent + recordBossDecisions + reconcileWaitingSessionsIntoInbox + escalateWithheldBossInput + deleteGroup/moveSessionEntries/moveGroups/openWorkspaceConfig import-apply | PROBE 2971/1059 (rebased onto #378) |
+| 12 | #379 | 0.1.204 | performCommand payload arms (select/useAsBoss/config/reveal/repair + no-agent guards) + selectAgent/selectBoss/openAgentConfig/revealAgentBundle/repairAgent + recordBossDecisions + reconcileWaitingSessionsIntoInbox + escalateWithheldBossInput + deleteGroup/moveSessionEntries/moveGroups/openWorkspaceConfig import-apply (rebased onto #378) | **3087 / 1079** |
 
 Cluster 5 result: CI residual 4912/1450 (190 lines / 65 regions driven OUT of 5102/1515); allowlist
 set to STABLE MAX 4916/1451 (+4/+1 class-C oscillation tolerance, per the cluster-4 precedent).
@@ -130,8 +130,11 @@ cluster-11 ceiling, so the combined residual is LOWER — re-measured rebased lo
 standalone 3000/1060). LOCAL-ONLY GOTCHA: #378's new test `testSubmit_coldStartHatch_setsInFlightFlag_
 returnsNil` asserts "repo root must start clean" — it tripped on the stray untracked `SerpentGuide.ouro/`
 scratch dir in this worktree root (NOT in any PR, NOT on a clean CI checkout); moved it aside for the
-clean local measurement, restored after. Re-set the allowlist to PROBE 2971/1059; CI prints the exact
-combined residual → stable max (+6/+3).
+clean local measurement, restored after. CI combined residual 3081/1076 (run 28363875708 — essentially
+the standalone; #378's coverage overlapped what was already covered). Allowlist set to STABLE MAX
+3087/1079 (+6/+3). LESSON: each merged VM PR auto-publishes a release, and the release-freshness gate
+requires VERSION > latest published — so a concurrent merge between branch-creation and CI forces a
+rebase + VERSION re-bump. Branch each batch off the ABSOLUTE latest main right before pushing.
 
 SOURCE-INTROSPECTION CAVEAT (reconfirmed, clusters 6+7+8+9+12): BEFORE widening a `private func` for a
 cluster, `grep -rln '<funcName>' Tests/` for a WiringTest that slices `private func <name>` — update

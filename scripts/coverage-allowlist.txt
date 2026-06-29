@@ -404,7 +404,10 @@ WorkbenchViews.swift 1170 223
 # STABLE MAX 3088/1080 (standalone, pre-#378). REBASED onto #378 (`test(vm): keep cold-start hatch
 # coverage hermetic`, which itself drove additional VM lines but left the allowlist at the cluster-11
 # value) + re-bumped to v0.1.204 (v0.1.203 collided with the just-published release + #378's bump).
-# The combined residual is lower than the standalone — re-measured: PROBE 2971/1059 below (the rebased
-# local residual; set BELOW so the CI Coverage job prints the exact combined Swift-6.0.3 residual);
-# tighten to the stable max post-CI (+6/+3 off the observed residual, per this file's wide oscillation).
-WorkbenchViewModel.swift 2971 1059
+# The combined residual is essentially the standalone (｟#378's coverage overlapped what was already
+# covered｠): CI-measured exact combined residual 3081/1076 on run 28363875708 (the PROBE 2971/1059
+# FAILED both axes). Set to the STABLE MAX 3087/1079 = the CI residual + the file's established WIDE
+# class-(C) oscillation tolerance (+6 lines / +3 regions, the detached-machinery line-axis amplitude).
+# NOT padding: the count-1 no-padding proof holds on the stable-coverable portion; the oscillating
+# async/timing detached-Task/subprocess boundary lines get the explicit +6/+3.
+WorkbenchViewModel.swift 3087 1079
