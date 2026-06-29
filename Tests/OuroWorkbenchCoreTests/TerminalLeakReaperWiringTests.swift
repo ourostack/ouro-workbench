@@ -82,7 +82,7 @@ final class TerminalLeakReaperWiringTests: XCTestCase {
             to: "\n    private func recover(_ entry: ProcessEntry, recoveryPlan:"
         )
         let quitIndex = try XCTUnwrap(
-            body.range(of: "quitPersistentScreenIfNeeded")?.lowerBound,
+            body.range(of: "quitPersistentScreenForEntry")?.lowerBound,
             "deleteCustomSession must quit the persistent screen"
         )
         let removeIndex = try XCTUnwrap(
@@ -102,7 +102,7 @@ final class TerminalLeakReaperWiringTests: XCTestCase {
             to: "\n    func restoreCustomSession"
         )
         let quitIndex = try XCTUnwrap(
-            body.range(of: "quitPersistentScreenIfNeeded")?.lowerBound,
+            body.range(of: "quitPersistentScreenForEntry")?.lowerBound,
             "archiveCustomSession must quit the persistent screen"
         )
         let replaceIndex = try XCTUnwrap(

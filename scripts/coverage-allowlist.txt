@@ -283,4 +283,11 @@ WorkbenchViews.swift 1170 223
 # oscillation tolerance (+4 lines / +1 region, the same delta cluster 4's bare minimum flaked by;
 # see the v0.1.193 FLAKY-TOLERANCE note above). NOT padding — the count-1 no-padding proof holds on
 # the stable-coverable portion; the oscillating async/timing regions get the explicit +4/+1.
-WorkbenchViewModel.swift 4916 1451
+# Cluster 6 (session lifecycle, v0.1.196): drives deleteCustomSession / archiveCustomSession (the
+# persistent-screen quit seamed behind `quitPersistentScreenForEntry`), revealLatestTranscript (all 3
+# arms; the Finder reveal via #365's `revealFileViewerSelectingURLs` seam), requestStop/confirmStop,
+# requestDeleteCustomSession, and applySessionIdBackfills (widened private->internal; the nil-guard /
+# empty / clobber-protect write-fold). Only the literal `screen -X quit` subprocess inside the
+# default seam stays carved. PROBE value below — the CI Coverage job prints the exact residual, then
+# this is set to the stable max.
+WorkbenchViewModel.swift 4820 1420

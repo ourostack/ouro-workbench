@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.196 - View-model coverage (session lifecycle)
+
+- Internal: drives the session-lifecycle handlers (delete/archive custom session, reveal latest transcript, the stop-confirmation gate, the session-id backfill write-fold) to test coverage. The persistent-screen quit is seamed; only the literal subprocess stays carved. No user-facing behavior change.
+
 ## 0.1.195 - View-model coverage (exit/attention reconciliation)
 
 - Internal: drives the session exit/attention reconciliation logic (`markTerminated`, `applyAttentionSignal`, the unexpected-exit notification decision + throttle) to test coverage. The live `screen -ls` listing and the macOS notification post are seamed; only the literal subprocess / notification-center syscalls stay carved. No user-facing behavior change.
