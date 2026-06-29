@@ -411,16 +411,16 @@ WorkbenchViews.swift 1170 223
 # NOT padding: the count-1 no-padding proof holds on the stable-coverable portion; the oscillating
 # async/timing detached-Task/subprocess boundary lines get the explicit +6/+3.
 # Cluster 13 (FINAL mop-up, v0.1.206): 19 tests drive the last directly-testable arms — windowTitle
-# (5 focus/boss formatting arms), stepTerminalSearch (no-session guard / empty-query clear / find+record
-# via the active-session seam), exportWorkspaceConfig (relative-vs-absolute working-dir arms),
-# presentSaveWorkspacePanel (no-project / no-terminals guards + write-via-NSSavePanel-seam + cancelled),
-# flushPendingOutput (widened private->internal; no-pending guard + the per-run lastOutputAt didMutate→save
-# fold), restoreDetailLayout (persisted-split restore / single-pane). The flushPendingOutput widen has NO
-# WiringTest slicer. This is the LAST drivable batch — the remaining residual is the irreducible floor
-# (see the FLOOR INVENTORY in vm-gate-progress.md: live-PTY TerminalHostView NSView, subprocess runners,
-# async-Task bodies, UNUserNotificationCenter posters, NSApp.terminate). Local full-suite coverage is
-# NOT reliably runnable in this headless worktree (subprocess/window-server tests crash mid-suite — the
-# documented cluster-5 caveat), so this uses the CI probe-then-set. PROBE 2950/1040 below — set BELOW
-# main's current 3087/1079 so the CI Coverage job prints the exact Swift-6.0.3 residual; tighten to the
-# stable max post-CI (+6/+3 off the observed residual).
-WorkbenchViewModel.swift 2950 1040
+# (5 focus/boss formatting arms), stepTerminalSearch no-session guard, exportWorkspaceConfig (rel-vs-abs
+# working-dir arms), presentSaveWorkspacePanel no-project/no-terminals guards (panel seams neutralized in
+# makeVM — the default chooseWorkspaceSaveURL/OpenURL call NSSavePanel.runModal() which DEADLOCKS headless
+# xctest, so the test helper returns nil), flushPendingOutput no-pending guard (widened private->internal;
+# no slicer), restoreDetailLayout (persisted-split / single-pane). TRIMMED OUT (deadlocked xctest; deferred
+# to a future seam-based cluster): the live-SwiftTerm stepTerminalSearch find arms, the NSSavePanel-write
+# presentSaveWorkspacePanel arms, the markOutput 2s-debounce-Task arms. NOTE: this is NOT the floor — the
+# allowlist is still ~1054 regions with ~700-900 DRIVABLE regions still carved (machinery-touching decls
+# whose LOGIC drives via seams: subprocess runners, notification posters, NSApp/relaunch, async-Task
+# prologues + the ~258-decl logic tail). Clusters 14+ continue the drive toward the true ~150-350 floor.
+# CI residual 3087/1079 -> 3034/1054 (53 lines / 25 regions driven OUT; run 28372778212 — the PROBE
+# 2950/1040 FAILED both axes). Set to the STABLE MAX 3040/1057 (+6 line / +3 region wide class-(C) buffer).
+WorkbenchViewModel.swift 3040 1057

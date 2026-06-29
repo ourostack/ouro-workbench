@@ -22,7 +22,7 @@ VERSION bump; flaky-region protocol applied.
 | 10 | #375 | 0.1.201 | BIG BATCH: start*SelectLane/RegisterMCP/RepairAgent (skip+ack; the 3 carried from #369/#372/#374) + scan/startBossReconstruction guards + beginVault/credentialRotation/completeVault + runOnboardingRepairStepNatively + surfaceNativeRepairLine + makeFirstRunBootstrapEffects + openDeskBridgeSetup + installWorkbenchMCP | **3523 / 1209** |
 | 11 | #377 | 0.1.202 | checkForReleaseUpdate + installReleaseUpdate/runAutoUpdateCheckIfDue/stagePendingUpdate guards + releaseUpdateStatusLine/Color + bugReportSessions/AgentNames/ExtraSections + reveal/openSupportDiagnostics + ensureDaemonRunningOnLaunch | **3376 / 1161** |
 | 12 | #379 | 0.1.204 | performCommand payload arms (select/useAsBoss/config/reveal/repair + no-agent guards) + selectAgent/selectBoss/openAgentConfig/revealAgentBundle/repairAgent + recordBossDecisions + reconcileWaitingSessionsIntoInbox + escalateWithheldBossInput + deleteGroup/moveSessionEntries/moveGroups/openWorkspaceConfig import-apply (rebased onto #378) | **3087 / 1079** |
-| 13 | (open) | 0.1.206 | FINAL mop-up: windowTitle (5 arms) + stepTerminalSearch + exportWorkspaceConfig + presentSaveWorkspacePanel (seam) + flushPendingOutput + restoreDetailLayout | PROBE 2950/1040 |
+| 13 | #382 | 0.1.208 | mop-up (TRIMMED, CI-safe): windowTitle (5) + stepTerminalSearch no-session guard + exportWorkspaceConfig + presentSaveWorkspacePanel guards + flushPendingOutput no-pending + restoreDetailLayout | **3040 / 1057** |
 
 Cluster 5 result: CI residual 4912/1450 (190 lines / 65 regions driven OUT of 5102/1515); allowlist
 set to STABLE MAX 4916/1451 (+4/+1 class-C oscillation tolerance, per the cluster-4 precedent).
@@ -149,28 +149,38 @@ deadlocks xctest at startup — markOutput 2s-sleep Tasks / NSSavePanel / live S
 run-loop resources that deadlock in aggregate; the documented cluster-5 condition, count-sensitive). Tests
 are correct (pass individually + in small groups); used CI probe-then-set. PROBE 2950/1040.
 
-=== CANDIDATE FLOOR (after cluster 13) — the irreducible genuine-machinery residual ===
-This COMPLETES the WorkbenchViewModel coverage drive. The remaining uncovered residual is genuine
-machinery that no test can reach in-process, grouped by class:
-- LIVE-AppKit NSView: `TerminalHostView` (attach / pendingRedrawWorkItems / scheduleTerminalRedraws /
-  applyThemeBacking / window), `_lightTheme` — live SwiftTerm/NSView, no in-process driver.
-- SUBPROCESS runners (literal Process()/Pipe()/run()/waitUntilExit()/FileHandle, driven UP TO the
-  syscall via closure seams): runProviderCheckProcess (:3022), readLoginShellPath (:4081),
-  listLiveScreenSessionNames (:6970), psBackedProcessLines (:9658), runCloneProviderCheck,
-  runOnboardingProviderCheck.
-- NSApp.terminate: prepareForTermination (:997), applyReleaseUpdateAndTerminate (:4736).
-- UNUserNotificationCenter.add (the content-build+add boundary; decision/throttle LOGIC driven by
-  cluster 5): postNeedsMeNotification (:6242), postUnexpectedExitNotification (:9892).
-- DETACHED-Task bodies (the async runner is the boundary; the synchronous prologue is driven):
-  submitProviderConfig coldStartHatch, installReleaseUpdate stage, completeVaultOnboarding re-probe.
-- INFINITE poll loops: runExternalActionPump / runBossWatchLoop (while !Task.isCancelled + Task.sleep).
-- Private runBossCheckIn(...) MCP overload (WiringTest-pinned `private func` source marker).
-- llvm-synth resume-epilogue/autoclosure braces — the class-(C) oscillation lines (readLoginShellPath/
-  spawnScreenQuit detached-call sites that toggle covered↔uncovered between runs; absorbed by the
-  documented +6/+3 stable-max buffer).
-CANDIDATE FLOOR allowlist: cluster-13 CI residual + buffer (set post-CI). Run-start was 4637/1392
-(after #368); after clusters 8-13 the VM is at ~3000/1050-ish — driven ~1640+ lines / ~340+ regions
-out across this run. STOP+REPORT to coordinator for independent audit at this floor.
+=== NOT THE FLOOR — coordinator correction (after cluster 13) ===
+CORRECTION: cluster 13's ~1054 regions is NOT the floor — it is PADDED. The STEP-1 scope
+(vm-gate-scope.md) is authoritative: genuine-carve = ONLY ~107 literal syscall lines + ~49 async-loop
+lines (≈150-350 REGIONS). The earlier "candidate floor" framing WRONGLY conflated "a decl that CONTAINS
+a syscall" with "a genuine carve." The correct rule: for a subprocess-runner / notification-poster /
+NSApp-terminate / async-Task decl, you DRIVE its LOGIC (arg-build, parse, classify, result-fold,
+decision arms, error paths, sync prologue, MainActor.run result-handling) via a closure-injection SEAM
+and carve ONLY the literal `Process()/.run()/.waitUntilExit()` / `UNUserNotificationCenter.add` /
+`NSApp.terminate` / detached-`Task{...}`-body line. ~700-900 DRIVABLE regions are STILL carved at 1057.
+CLUSTERS 14+ (continue, big batches, one PR at a time, stable-max) — seam+drive the LOGIC of:
+- SUBPROCESS runners: runProviderCheckProcess(:3022) / runCloneProviderCheck / runOnboardingProviderCheck
+  (add a `providerCheckRunner` seam, default = Self.runProviderCheckProcess; inject a fake
+  ProviderCheckProcessResult; drive nil-guard→failed / timedOut→failed / classify→result arms),
+  readLoginShellPath(:4081) / listLiveScreenSessionNames(:6970) / psBackedProcessLines(:9658) (drive the
+  arg-build + the parse-helper feed; carve the literal Process line).
+- NOTIFICATION posters: postNeedsMeNotification(:6242) / postUnexpectedExitNotification(:9892) — add a
+  notification-sink seam (mirror the existing `postExitNotification`); drive the content-build +
+  granted-guard + decision/throttle; carve only UNUserNotificationCenter.add.
+- NSApp/relaunch: applyReleaseUpdateAndTerminate(:4736) (drive the staged-swap arg-build + success-log;
+  carve NSApp.terminate + the /bin/sh exec), resetToFirstRun (drive the reset-state logic; carve
+  terminate/relaunch). prepareForTermination's survivor state-fold already driven by cluster 9.
+- ASYNC-Task prologues: submitProviderConfig coldStartHatch / installReleaseUpdate stage /
+  completeVaultOnboarding re-probe — drive the sync prologue + the reachable MainActor.run
+  result-handling closure; carve only the detached body's awaited-runner line.
+- The ~258-decl pure-logic tail (fully drivable per STEP-1).
+- DELETE looksLikeOnboardingQuestion (dead `private extension String`, L11033-11058, no callers) at
+  SOURCE — not a carve.
+GENUINELY-undrivable floor (the ~150-350 target): live-PTY TerminalHostView NSView bodies, the literal
+syscall lines, the detached-Task BODIES (not their prologues), the infinite poll-loop bodies, the
+source-pinned private runBossCheckIn MCP overload, and llvm-synth/oscillation regions.
+PROGRESS: run-start 4637/1392 (after #368) → after clusters 8-13: 3040/1057 (driven ~1597 lines / 335
+regions out this run). KEEP DRIVING to ~150-350, THEN STOP+REPORT for the coordinator's audit.
 
 SOURCE-INTROSPECTION CAVEAT (reconfirmed, clusters 6+7+8+9+12): BEFORE widening a `private func` for a
 cluster, `grep -rln '<funcName>' Tests/` for a WiringTest that slices `private func <name>` — update
