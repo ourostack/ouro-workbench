@@ -52,11 +52,13 @@ final class HeaderCollapsedInboxBadgeTests: XCTestCase {
         state.decisionLog = decisionLog
         state.bossPaneCollapsed = collapsed
         try WorkbenchStore(paths: paths).save(state)
-        return WorkbenchViewModel(
+        let model = WorkbenchViewModel(
             paths: paths,
             bossWorkbenchMCPRegistrar: BossWorkbenchMCPRegistrar(agentBundlesURL: agentBundles),
             ouroAgentInventory: OuroAgentInventory(agentBundlesURL: agentBundles)
         )
+        model.recentWorkspacePaths = []
+        return model
     }
 
     /// An OPEN, un-triaged escalate decision → the door resolves clock-independently.
