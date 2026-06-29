@@ -5,12 +5,25 @@ autopilot (merge on CI-green, no per-cluster approval). Each region: invoked + e
 mutation-verified; allowlist set to the CI-measured exact minimum (probe-then-set); scope-pure;
 VERSION bump; flaky-region protocol applied.
 
-## ⏸️ RECOMMENDED RESUME POINT (durable checkpoint — 2026-06-29, post-cluster-18)
+## ⏸️ RECOMMENDED RESUME POINT (durable checkpoint — 2026-06-29, post-cluster-19)
 
-**State to resume from:** main @ v0.1.216 (`WorkbenchRelease.version` = "0.1.216", VERSION file = 0.1.216),
-VM allowlist `WorkbenchViewModel.swift 2527 951`. Clusters 1-18 all merged & CI-green (cluster 18 = PR
-#394, squash `baed73b`). 0 open VM PRs, 0 leftover `coverage/vm-*` branches. Cluster 18 drove the VM
-allowlist 2653/973 → **2527/951** (CI residual 2497/945; 156 lines / 28 regions out).
+**State to resume from:** main @ v0.1.217 (`WorkbenchRelease.version` = "0.1.217", VERSION file = 0.1.217),
+VM allowlist `WorkbenchViewModel.swift 2426 919`. Clusters 1-19 all merged & CI-green (cluster 18 = PR
+#394 `baed73b`; cluster 19 = PR #395 `f075fc8`). 0 open VM PRs, 0 leftover `coverage/vm-*` branches.
+This run drove the VM allowlist 2653/973 → **2426/919** across clusters 18-19 (CI residual now 2396/913;
+257 lines / 60 regions out this run). Cluster 18: CI 2497/945. Cluster 19: CI 2396/913.
+
+⚠️ THE TAIL IS THINNING — approaching the genuine ~150-350 floor band. The big dispatch decls
+(applyBossAction, performCommand, submitProviderConfig/BugReport/ReleaseUpdate, cold-start/vault folds,
+onboarding-import apply-body) are all DRIVEN. What remains is the SMALL-DECL LOGIC TAIL (scattered 3-25
+line computed-props / format helpers / guard mutators) + the genuine floor. Cluster 20+ harvests the
+small-decl tail; STOP+REPORT when every remaining region is a literal-machinery/Task-body/live-PTY-NSView/
+infinite-loop/source-pinned-MCP/llvm-synth carve.
+
+⚠️ READING THE CI RESIDUAL: when the Coverage gate PASSES, its `allow WorkbenchViewModel.swift (N line,
+M region exempt)` line reports the EXACT actual uncovered count (not the allowlist max) — so a PROBE set
+JUST ABOVE the residual still reveals the true count on a GREEN run (no need to force a RED). When it
+FAILS it prints the `(ul lines / ur regions uncovered)` summary + the per-line detail.
 
 ⚠️ REBASE GOTCHA (cluster 18 hit this): when an operator PR merges between branch-creation and CI, the
 branch goes DIRTY and **CI does not even run until you rebase**. After rebasing, you MUST bump BOTH the
@@ -64,7 +77,8 @@ GENUINE CARVE (the floor — do NOT drive): TerminalHostView NSView bodies (`_li
 | 15 | #386 | 0.1.210 | NOTIFICATION content-extraction (needsMe/unexpectedExit title-body-subtitle → pure static helpers; carve only center.add) + needsMe baseline/decision guards + logic tail (focusTerminal/openWorkspaceConfig(at:)/makeFirstRunBootstrapEffects/setAutoLaunchResumableOnStartup/stepTerminalSearch guards) | **2833 / 1007** |
 | 16 | #388 | 0.1.212 | TAIL SWEEP: extract applyVaultCompletionResult from completeVaultOnboarding re-probe Task (byte-identical) → .ready/.failed fold + applyOnboardingProposal/openProviderConfig/completeRepairAgent/makeFirstRunBootstrapEffects/openWorkspaceConfig(at:) arms (VaultOnboarding wiring slicer extended; rebased onto #387) | **2779 / 993** |
 | 17 | #390 | 0.1.214 | TAIL SWEEP (test-only): cloneAgentHeadless result-fold (.ready resolve / vault-locked fail / plan-build throw via existing runCloneAgent+providerCheckRunner seams) + presentSaveWorkspacePanel write + installWorkbenchMCP fold + openWorkspaceConfig(at:) | **2653 / 973** |
-| 18 | #394 | 0.1.216 | COLD-START/BUG-REPORT FOLDS + CMD-DISPATCH TAIL: applyColdStartConfigResult (extracted byte-identical from submitProviderConfig cold-start MainActor.run fold) .ready/.needsVaultSetup/.failed + submitProviderConfig sync arms (rotation/.invalid/.unsupportedColdStartSink) + applyBugReportBundleResult (extracted byte-identical from submitBugReport writer Task switch) .success/.failure + postNeedsMeNotificationSink seam (mirrors postExitNotification) → notifyAboutNewNeedsMeItems final dispatch + installReleaseUpdate staged fast-path + performCommand no-selection guards + seamed dispatches | **2527 / 951** |
+| 18 | #394 | 0.1.216 | COLD-START/BUG-REPORT FOLDS + CMD-DISPATCH TAIL: applyColdStartConfigResult (extracted byte-identical from submitProviderConfig cold-start MainActor.run fold) .ready/.needsVaultSetup/.failed + submitProviderConfig sync arms (rotation/.invalid/.unsupportedColdStartSink) + applyBugReportBundleResult (extracted byte-identical from submitBugReport writer Task switch) .success/.failure + postNeedsMeNotificationSink seam (mirrors postExitNotification) → notifyAboutNewNeedsMeItems final dispatch + installReleaseUpdate staged fast-path + performCommand no-selection guards + seamed dispatches | **2527 / 951** (CI 2497/945) |
+| 19 | #395 | 0.1.217 | APPLY-BODY + ENTRY-LESS DISPATCH (test-only): applyOnboardingProposal apply-body (per-group create/dedup/skip-on-empty-WD folds + persisted result + import summary; only the not-ready/no-proposal guards were covered) + applyBossAction 7 entry-less dispatch arms (.requestProviderConfig/.verifyProvider/.refreshProvider/.selectLane/.registerWorkbenchMCP/.ensureDaemon/.reportBug via validate→authorize→dispatch). DENY arm = unreachable (validation name-checks first) → carved. load() store-I/O arms deferred (non-injectable private store + slicer). | **2426 / 919** (CI 2396/913) |
 
 Cluster 5 result: CI residual 4912/1450 (190 lines / 65 regions driven OUT of 5102/1515); allowlist
 set to STABLE MAX 4916/1451 (+4/+1 class-C oscillation tolerance, per the cluster-4 precedent).
