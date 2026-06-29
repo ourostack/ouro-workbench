@@ -765,4 +765,71 @@ final class HarnessStatusTests: XCTestCase {
         // Register requires a known-actionable MCP status; nil isn't actionable.
         XCTAssertFalse(offer.isAvailable(.registerWorkbenchMCP))
     }
+
+    // MARK: - Boundary & contract hardening (mutation-testing pilot)
+    //
+    // Each test below pins a behavior the suite executed but did not assert,
+    // found by a mutation-testing pass on HarnessStatus.swift: a single covered
+    // operator / default / assignment was mutated and no test failed. Each fails
+    // on the corresponding mutant and passes on the original, killing it.
+
+    /// Kills `unavailableReason == nil && status != nil` → `||` in
+    /// `HarnessDaemonStatus.state`. A non-reachable daemon is `.attention` ONLY
+    /// when the read succeeded (`unavailableReason == nil`) AND reported a status
+    /// (`status != nil`); a FAILED read that also happens to carry a stale status
+    /// string is `.blocked`, not `.attention`. The `||` mutant would wrongly call
+    /// that `.attention`. No existing test built a daemon with BOTH a status and
+    /// an `unavailableReason`, so the conjunction was unasserted.
+    func testDaemonStateIsBlockedWhenReadFailedEvenIfAStatusStringIsPresent() {
+        // A failed read (unavailableReason set) that still carries a status string.
+        let daemon = HarnessDaemonStatus(status: "running", unavailableReason: "connection refused")
+        XCTAssertFalse(daemon.isReachable, "an explicit unavailableReason makes it unreachable")
+        XCTAssertEqual(
+            daemon.state, .blocked,
+            "a failed read is .blocked even if a stale status string is present — needs BOTH no-reason AND a status to be .attention"
+        )
+        // Control: a successful read reporting a non-running status IS .attention
+        // (only one input differs — unavailableReason is nil), so the test pins the
+        // conjunction, not just one term.
+        let answered = HarnessDaemonStatus(status: "degraded")
+        XCTAssertEqual(answered.state, .attention, "a successful non-running read is .attention")
+    }
+
+    /// Kills the `isChecking: Bool = false` default in `HarnessAgentEntry.init`.
+    /// A freshly-built entry with NO in-flight check and NO live verdict is
+    /// `.unverified` (config-only, never a false green), NOT `.checking`. The
+    /// readiness seam consults a live verdict BEFORE `isChecking`, so the existing
+    /// `verdict: .working` tests never reach the `isChecking` branch — flipping
+    /// the default to `true` survived. This builds a verdict-less entry that
+    /// relies on the default and reaches that branch.
+    func testAgentEntryDefaultsToNotCheckingSoVerdictlessReadyBundleIsUnverified() {
+        // No `isChecking:` argument (relies on the default) and no verdict, so the
+        // readiness falls through to the in-flight check.
+        let entry = HarnessAgentEntry(name: "slugger", status: .ready, detail: "ready", isSelectedBoss: true)
+        XCTAssertEqual(
+            entry.liveReadiness, .unverified,
+            "a config-ready bundle with no verdict and no in-flight check is unverified by default, not checking"
+        )
+        XCTAssertFalse(entry.isReady)
+        XCTAssertTrue(entry.isPending, "unverified is pending, not a problem")
+        XCTAssertFalse(entry.isProblem)
+    }
+
+    /// Kills the removal of `self.mcpDetail = mcpDetail` in
+    /// `HarnessBossReachability.init`. The detail string is surfaced by the
+    /// Harness Status detail row (it drives the secondary MCP line), so it must
+    /// round-trip through the initializer. Dropping the assignment leaves it nil
+    /// regardless of the argument, which no existing test caught.
+    func testBossReachabilityPreservesMCPDetail() {
+        let reachability = HarnessBossReachability(
+            agentName: "slugger",
+            bundleIsInstalled: true,
+            mcpStatus: .registered,
+            mcpDetail: "registered at ~/.ouro/mcp.json"
+        )
+        XCTAssertEqual(
+            reachability.mcpDetail, "registered at ~/.ouro/mcp.json",
+            "mcpDetail must survive the initializer — the detail row renders it"
+        )
+    }
 }
