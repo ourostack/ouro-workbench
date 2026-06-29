@@ -35,9 +35,10 @@ func assertViewSnapshotText(
     store: ViewSnapshotStore,
     record: Bool = isRecordingFromEnvironment(),
     file: StaticString = #filePath,
-    line: UInt = #line
+    line: UInt = #line,
+    fail: (String, StaticString, UInt) -> Void = { XCTFail($0, file: $1, line: $2) }
 ) throws {
-    try compareOrFail(text, named: name, store: store, record: record, file: file, line: line)
+    try compareOrFail(text, named: name, store: store, record: record, file: file, line: line, fail: fail)
 }
 
 /// Shared compare/record + failure-reporting core.
@@ -48,7 +49,8 @@ private func compareOrFail(
     store: ViewSnapshotStore,
     record: Bool,
     file: StaticString,
-    line: UInt
+    line: UInt,
+    fail: (String, StaticString, UInt) -> Void = { XCTFail($0, file: $1, line: $2) }
 ) throws {
     let outcome = try store.compareOrRecord(actual: text, named: name, recording: record)
     switch outcome {
@@ -67,7 +69,7 @@ private func compareOrFail(
         return
     case .mismatch(let mismatch):
         attach(mismatch.actual, named: "\(name).actual")
-        XCTFail(mismatch.message, file: file, line: line)
+        fail(mismatch.message, file, line)
     }
 }
 
