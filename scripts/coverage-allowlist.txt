@@ -248,4 +248,4 @@ WorkbenchViews.swift 1170 227
 # NO padding — a region a seam/extraction/direct-call reaches gets driven, not carved.
 # Cluster 1 (applyBossAction, v0.1.188) drove 5892/1696 -> 5505/1591 (387 lines / 105 regions out),
 # CI-measured at run 28345608628. Subsequent clusters lower it further to the floor.
-WorkbenchViewModel.swift 5505 1591
+WorkbenchViewModel.swift 5350 1530
