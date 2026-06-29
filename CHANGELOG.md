@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.226 - Release API fallback
+
+- Internal: release freshness checks now fall back to GitHub's REST release API when the GitHub CLI keyring or JSON path is unhealthy. This keeps local preflight, release policy checks, and shell-refresh validation usable during long-running agent sessions without weakening version freshness gates. No user-facing behavior change.
+
 ## 0.1.225 - Boss-inbox decision coverage (mutation-testing hardening)
 
 - Internal: hardens the `BossInboxDecision` test suite against vacuous coverage found by a mutation-testing pilot. The module was already at gated 100% line+region, but a mutation pass (single covered operators/constants mutated, suite re-run) surfaced nine spots that were *executed but not asserted*: the inclusive snooze-elapsed boundary (`until <= now`), the `DecisionSeverity` raw-value contract (`0...3`) and its strict-`<` irreflexivity, the "until end of day" next-midnight match (exact-second) and its 60-second clamp floor, the `decisionLogCap` (200) and `dedupScanWindow` (50) constants, the cap-trim eviction sweep reaching the newest row (index 0), and the open-inbox within-tier recency tie-break beating log offset. Adds nine behavior-asserting tests, each verified to fail on its mutant and pass on the original. Test-only — no production change. Three further surviving mutants are genuinely equivalent (strict comparisons reached only after an inequality guard, and a unique-`enumerated()`-offset tie-break) and are intentionally left unkilled. No user-facing behavior change.

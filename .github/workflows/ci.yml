@@ -41,6 +41,9 @@ jobs:
       - name: Verify release policy PR base handling
         run: scripts/release-policy.sh selftest-pr-base
 
+      - name: Verify release API fallback
+        run: scripts/release-policy.sh selftest-release-api-fallback
+
       - name: Verify release package guard
         run: scripts/release-policy.sh selftest-package-guards
 
