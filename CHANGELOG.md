@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.207 - Observable release preflight
+
+- Internal: splits the release workflow's preflight into named policy/tooling, scenario-matrix, Swift-test, UI-probe, scenario-verifier, app-bundle, artifact, and rollback gates while keeping the local one-command preflight intact. Release watchers can now see which subgate is active before publish. No user-facing behavior change.
+
 ## 0.1.206 - Release history freshness guard
 
 - Internal: requires the top changelog release entry to match `VERSION`, backfills the missing `0.1.203` release notes, and teaches the shell-dependency refresh automation to create and stage changelog entries with its version bumps. No user-facing behavior change.

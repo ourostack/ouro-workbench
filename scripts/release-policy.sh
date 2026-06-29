@@ -483,6 +483,7 @@ for line in ("run: scripts/check-shell-boundary.sh --selftest", "run: scripts/ch
         raise SystemExit(f"ci.yml must contain an exact {line!r} step")
 
 required_preflight = [
+    "scripts/preflight.sh --selftest",
     "scripts/release-policy.sh freshness --mode pr",
     "scripts/release-policy.sh selftest-pr-base",
     "scripts/release-policy.sh selftest-package-guards",
@@ -510,8 +511,41 @@ if "grep -E '^(Sources/" in auto_release:
 
 if "scripts/release-policy.sh freshness --mode main" not in release:
     raise SystemExit("release.yml must verify release freshness in main mode")
-if "scripts/preflight.sh" not in release:
-    raise SystemExit("release.yml must run scripts/preflight.sh before publishing")
+release_lines = [line.strip() for line in release.splitlines()]
+required_release_preflight = [
+    ("- name: Run release preflight - policy and tooling", "run: scripts/preflight.sh --only release-policy"),
+    ("- name: Run release preflight - generated scenario matrix", "run: scripts/preflight.sh --only generated-scenario-matrix"),
+    ("- name: Run release preflight - Swift tests", "run: scripts/preflight.sh --only swift-tests"),
+    ("- name: Run release preflight - UI probes", "run: scripts/preflight.sh --only ui-probes"),
+    ("- name: Run release preflight - native scenario verifier", "run: scripts/preflight.sh --only required-scenario-verifier"),
+    ("- name: Run release preflight - app bundle", "run: scripts/preflight.sh --only app-bundle"),
+    ("- name: Run release preflight - app artifact", "run: scripts/preflight.sh --only app-artifact"),
+    ("- name: Run release preflight - install rollback", "run: scripts/preflight.sh --only install-rollback"),
+]
+cursor = 0
+for step_name, run_line in required_release_preflight:
+    try:
+        step_index = release_lines.index(step_name, cursor)
+    except ValueError:
+        raise SystemExit(f"release.yml must contain ordered step {step_name!r}")
+    try:
+        run_index = release_lines.index(run_line, step_index + 1)
+    except ValueError:
+        raise SystemExit(f"release.yml must run {run_line!r} inside {step_name!r}")
+    next_step_index = next(
+        (index for index in range(step_index + 1, len(release_lines)) if release_lines[index].startswith("- name: ")),
+        len(release_lines),
+    )
+    if run_index >= next_step_index:
+        raise SystemExit(f"release.yml must run {run_line!r} before the next workflow step")
+    cursor = run_index + 1
+try:
+    generate_notes_index = release_lines.index("- name: Generate release notes", cursor)
+    publish_index = release_lines.index("- name: Publish GitHub Release", generate_notes_index + 1)
+except ValueError:
+    raise SystemExit("release.yml must generate release notes and publish only after every release preflight gate")
+if publish_index <= cursor:
+    raise SystemExit("release.yml must finish every release preflight gate before publishing")
 PY
   printf 'release package guard selftest ok\n'
 }

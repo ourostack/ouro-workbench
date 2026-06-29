@@ -122,11 +122,13 @@ final class ViewSnapshotStoreTests: XCTestCase {
     @MainActor
     func testAssertViewSnapshot_mismatch_reportsFailureAndAttaches() throws {
         try assertViewSnapshotText("EXPECTED", named: "iota", store: store)  // record EXPECTED
-        // The mismatch must drive the assertion's fail+attach branch. `XCTExpectFailure`
-        // captures the XCTFail so the suite stays green while we exercise the path.
-        XCTExpectFailure("intentional mismatch exercises the fail+attach branch") {
-            try? assertViewSnapshotText("DIFFERENT", named: "iota", store: store)
+        var failures: [(message: String, file: StaticString, line: UInt)] = []
+        try assertViewSnapshotText("DIFFERENT", named: "iota", store: store) { message, file, line in
+            failures.append((message: message, file: file, line: line))
         }
+        XCTAssertEqual(failures.count, 1)
+        XCTAssertTrue(failures[0].message.contains("iota.txt"), failures[0].message)
+        XCTAssertTrue(failures[0].message.contains("iota.actual.txt"), failures[0].message)
         // The .actual.txt artifact was written with the actual tree.
         let artifact = tempDir.appendingPathComponent("artifacts/iota.actual.txt")
         XCTAssertEqual(try String(contentsOf: artifact, encoding: .utf8), "DIFFERENT")
