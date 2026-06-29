@@ -5086,38 +5086,52 @@ public final class WorkbenchViewModel: ObservableObject {
                 }
             }.value
 
-            bugReportIsSubmitting = false
-            switch bundle {
-            case let .success(bundle):
-                lastBugReportURL = bundle.directoryURL
-                lastBugReportWarnings = bundle.warnings
-                lastBugReportNote = note
-                bugReportNote = ""
-                // A new bundle invalidates any prior issue link.
-                bugReportIssueURL = nil
-                bugReportIssueError = nil
-                // U30(a): persist the durable filed-status (unfiled, with the note + any
-                // collection warnings) next to the bundle, so "was this filed? where?"
-                // survives the sheet/app closing and a boss can read it back.
-                try? bugReportStatusStore.write(
-                    .unfiled(note: note, warnings: bundle.warnings),
-                    into: bundle.directoryURL
-                )
-                recordActionLog(
-                    source: source,
-                    action: "submitBugReport",
-                    result: "Wrote \(bundle.directoryURL.lastPathComponent) (unfiled)",
-                    succeeded: true
-                )
-            case let .failure(error):
-                bugReportError = error.localizedDescription
-                recordActionLog(
-                    source: source,
-                    action: "submitBugReport",
-                    result: "Failed: \(error.localizedDescription)",
-                    succeeded: false
-                )
-            }
+            applyBugReportBundleResult(bundle, note: note, source: source)
+        }
+    }
+
+    /// VM-GATE: the synchronous main-actor result-handling fold of `submitBugReport`'s detached
+    /// writer Task, extracted byte-identically so the `.success` (record URL/warnings + clear note +
+    /// invalidate prior issue link + persist unfiled status + success log) and `.failure` (surface
+    /// the error + failure log) arms are directly unit-testable. The detached writer Task (which runs
+    /// the support-diagnostics collector + `BugReportWriter.write` off-main) stays the boundary, as
+    /// does `captureKeyWindowPNG()`'s live-window screenshot.
+    func applyBugReportBundleResult(
+        _ bundle: Result<BugReportBundle, Error>,
+        note: String,
+        source: String
+    ) {
+        bugReportIsSubmitting = false
+        switch bundle {
+        case let .success(bundle):
+            lastBugReportURL = bundle.directoryURL
+            lastBugReportWarnings = bundle.warnings
+            lastBugReportNote = note
+            bugReportNote = ""
+            // A new bundle invalidates any prior issue link.
+            bugReportIssueURL = nil
+            bugReportIssueError = nil
+            // U30(a): persist the durable filed-status (unfiled, with the note + any
+            // collection warnings) next to the bundle, so "was this filed? where?"
+            // survives the sheet/app closing and a boss can read it back.
+            try? bugReportStatusStore.write(
+                .unfiled(note: note, warnings: bundle.warnings),
+                into: bundle.directoryURL
+            )
+            recordActionLog(
+                source: source,
+                action: "submitBugReport",
+                result: "Wrote \(bundle.directoryURL.lastPathComponent) (unfiled)",
+                succeeded: true
+            )
+        case let .failure(error):
+            bugReportError = error.localizedDescription
+            recordActionLog(
+                source: source,
+                action: "submitBugReport",
+                result: "Failed: \(error.localizedDescription)",
+                succeeded: false
+            )
         }
     }
 
@@ -6272,7 +6286,20 @@ public final class WorkbenchViewModel: ObservableObject {
         guard !newItems.isEmpty else {
             return
         }
-        postNeedsMeNotification(for: newItems, total: current.needsMeItems.count)
+        postNeedsMeNotificationSink(newItems, current.needsMeItems.count)
+    }
+
+    /// Seam: post the macOS needs-me user notification. Defaults to the real
+    /// `postNeedsMeNotification`, whose body touches `UNUserNotificationCenter.current()` — which
+    /// raises `bundleProxyForCurrentProcess is nil` in the headless xctest process (no app bundle).
+    /// A test injects a recording stub so `notifyAboutNewNeedsMeItems`'s notification-DECISION logic
+    /// (the watch-off baseline reset / no-availability / baseline-establish / no-new-items gates +
+    /// the final new-items dispatch) is driven without the system notification center. Only the
+    /// `UNUserNotificationCenter` syscall inside the default closure (and its non-Sendable
+    /// authorization-callback body) stays carved. Mirrors `postExitNotification`.
+    lazy var postNeedsMeNotificationSink: @MainActor (_ newItems: [MailboxNeedsMeItem], _ total: Int) -> Void = {
+        [weak self] newItems, total in
+        self?.postNeedsMeNotification(for: newItems, total: total)
     }
 
     /// Pure composition of the needs-me notification's title/body/subtitle from the new items +
@@ -8237,69 +8264,82 @@ public final class WorkbenchViewModel: ObservableObject {
                 }
                 let outcome = ProviderConfigForm.classifyColdStart(hatchExitCode: exit, checkVerdict: verdict)
                 await MainActor.run {
-                    guard let self else { return }
-                    self.providerConfigColdStartInFlight = false
-                    // Always refresh inventory/readiness so the just-created bundle surfaces with
-                    // its TRUE state (a credential-less hatch shows as needs-credentials, not ready).
-                    self.refreshOuroAgents()
-                    self.refreshOnboardingReadiness()
-                    self.runOnboardingProviderChecksIfNeeded()
-                    switch outcome {
-                    case .ready:
-                        // Verified working — the existing success side-effects + dismiss + success log.
-                        // R4b — re-run the parked first-run bootstrap. S2's gate now reads
-                        // `credentialsPresent` (the agent was hatched WITH a usable credential), so
-                        // the re-run crosses S2 → S3→S5 → the handoff probe, flipping to agent-driven
-                        // mode. `runFirstRunBootstrap` no-ops if a run is already in flight or already
-                        // handed off, so this is safe even outside the parked first-run path.
-                        self.runFirstRunBootstrap()
-                        self.recordActionLog(
-                            source: "native",
-                            action: "providerConfigColdStart",
-                            targetName: resolvedAgent,
-                            // Audit lane only — carries the raw `ouro hatch` verb (NOT the credential).
-                            result: "ran `ouro hatch --agent \(resolvedAgent) --provider \(provider.providerFlagValue)` (cold-start; verified ready)",
-                            succeeded: true
-                        )
-                        self.isProviderConfigPresented = false
-                    case .needsVaultSetup:
-                        // F13 — the agent EXISTS but the headless hatch couldn't persist the
-                        // credential (a fresh agent has no vault, and creating one needs an
-                        // interactive TTY secret). This is the recoverable case: keep the form open,
-                        // surface the seam-free outcome line, AND offer "Finish setup" — which runs
-                        // the documented `ouro vault create && auth && refresh` recovery chain in a
-                        // native terminal. Stash the provider so the chain can name it; the
-                        // credential itself is gone (ephemeral hatch argv) and is re-collected
-                        // interactively in that terminal.
-                        self.providerConfigColdStartMessage = outcome.humanFacingLine(agentName: resolvedAgent)
-                        self.providerConfigNeedsVaultSetup = true
-                        self.providerConfigColdStartProvider = provider
-                        self.recordActionLog(
-                            source: "native",
-                            action: "providerConfigColdStart",
-                            targetName: resolvedAgent,
-                            result: "ran `ouro hatch --agent \(resolvedAgent) --provider \(provider.providerFlagValue)` (cold-start; outcome: \(outcome.auditReason))",
-                            succeeded: false
-                        )
-                    case .failed:
-                        // Honest failure: keep the form open, surface the seam-free outcome line,
-                        // and route to the onboarding readiness surface (which owns the
-                        // .needsCredentials repair step). Do NOT dismiss and do NOT log success.
-                        // NOT recoverable via finish-setup: a `.failed` cold-start never produced a
-                        // usable bundle, so the vault flag stays false.
-                        self.providerConfigColdStartMessage = outcome.humanFacingLine(agentName: resolvedAgent)
-                        self.recordActionLog(
-                            source: "native",
-                            action: "providerConfigColdStart",
-                            targetName: resolvedAgent,
-                            result: "ran `ouro hatch --agent \(resolvedAgent) --provider \(provider.providerFlagValue)` (cold-start; outcome: \(outcome.auditReason))",
-                            succeeded: false
-                        )
-                    }
+                    self?.applyColdStartConfigResult(outcome, resolvedAgent: resolvedAgent, provider: provider)
                 }
             }
             // No synchronous dismiss / success-log: the truth is only known after the probe above.
             return nil
+        }
+    }
+
+    /// VM-GATE: the synchronous main-actor result-handling fold of `submitProviderConfig`'s detached
+    /// cold-start Task, extracted byte-identically so the `.ready` (refresh + re-run bootstrap +
+    /// dismiss + success log), `.needsVaultSetup` (surface line + arm "Finish setup" + non-success
+    /// log), and `.failed` (surface line + non-success log, no dismiss) arms are directly
+    /// unit-testable. The detached hatch Task (`runColdStartHatch` + `runColdStartProviderCheck`)
+    /// stays the boundary.
+    func applyColdStartConfigResult(
+        _ outcome: ColdStartOutcome,
+        resolvedAgent: String,
+        provider: WorkbenchProvider
+    ) {
+        providerConfigColdStartInFlight = false
+        // Always refresh inventory/readiness so the just-created bundle surfaces with
+        // its TRUE state (a credential-less hatch shows as needs-credentials, not ready).
+        refreshOuroAgents()
+        refreshOnboardingReadiness()
+        runOnboardingProviderChecksIfNeeded()
+        switch outcome {
+        case .ready:
+            // Verified working — the existing success side-effects + dismiss + success log.
+            // R4b — re-run the parked first-run bootstrap. S2's gate now reads
+            // `credentialsPresent` (the agent was hatched WITH a usable credential), so
+            // the re-run crosses S2 → S3→S5 → the handoff probe, flipping to agent-driven
+            // mode. `runFirstRunBootstrap` no-ops if a run is already in flight or already
+            // handed off, so this is safe even outside the parked first-run path.
+            runFirstRunBootstrap()
+            recordActionLog(
+                source: "native",
+                action: "providerConfigColdStart",
+                targetName: resolvedAgent,
+                // Audit lane only — carries the raw `ouro hatch` verb (NOT the credential).
+                result: "ran `ouro hatch --agent \(resolvedAgent) --provider \(provider.providerFlagValue)` (cold-start; verified ready)",
+                succeeded: true
+            )
+            isProviderConfigPresented = false
+        case .needsVaultSetup:
+            // F13 — the agent EXISTS but the headless hatch couldn't persist the
+            // credential (a fresh agent has no vault, and creating one needs an
+            // interactive TTY secret). This is the recoverable case: keep the form open,
+            // surface the seam-free outcome line, AND offer "Finish setup" — which runs
+            // the documented `ouro vault create && auth && refresh` recovery chain in a
+            // native terminal. Stash the provider so the chain can name it; the
+            // credential itself is gone (ephemeral hatch argv) and is re-collected
+            // interactively in that terminal.
+            providerConfigColdStartMessage = outcome.humanFacingLine(agentName: resolvedAgent)
+            providerConfigNeedsVaultSetup = true
+            providerConfigColdStartProvider = provider
+            recordActionLog(
+                source: "native",
+                action: "providerConfigColdStart",
+                targetName: resolvedAgent,
+                result: "ran `ouro hatch --agent \(resolvedAgent) --provider \(provider.providerFlagValue)` (cold-start; outcome: \(outcome.auditReason))",
+                succeeded: false
+            )
+        case .failed:
+            // Honest failure: keep the form open, surface the seam-free outcome line,
+            // and route to the onboarding readiness surface (which owns the
+            // .needsCredentials repair step). Do NOT dismiss and do NOT log success.
+            // NOT recoverable via finish-setup: a `.failed` cold-start never produced a
+            // usable bundle, so the vault flag stays false.
+            providerConfigColdStartMessage = outcome.humanFacingLine(agentName: resolvedAgent)
+            recordActionLog(
+                source: "native",
+                action: "providerConfigColdStart",
+                targetName: resolvedAgent,
+                result: "ran `ouro hatch --agent \(resolvedAgent) --provider \(provider.providerFlagValue)` (cold-start; outcome: \(outcome.auditReason))",
+                succeeded: false
+            )
         }
     }
 

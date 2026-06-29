@@ -482,4 +482,18 @@ WorkbenchViews.swift 1170 223
 # with the WIDE upfront buffer (+30 line / +6 region off observed-max). NOT the floor yet — clusters 18+
 # continue (applyBossAction/performCommand sync dispatch, submitBugReport assembly up to NSApp.keyWindow,
 # installReleaseUpdate/submitProviderConfig async-Task prologues, load salvage arms, the small-decl tail).
-WorkbenchViewModel.swift 2653 973
+# Cluster 18 (v0.1.216): drives submitProviderConfig cold-start result-fold (.ready/
+# .needsVaultSetup/.failed via the extracted byte-identical applyColdStartConfigResult) + its sync
+# arms (existing-agent rotation / .invalid / .unsupportedColdStartSink), submitBugReport's
+# .success/.failure fold (extracted byte-identical applyBugReportBundleResult), notifyAboutNewNeedsMeItems
+# final new-items dispatch (new postNeedsMeNotificationSink seam, mirroring postExitNotification),
+# installReleaseUpdate's staged fast-path, and performCommand's no-selection guards + seamed dispatches.
+# Carved: the detached hatch/writer Task awaited-runner lines, UNUserNotificationCenter.add, the live
+# installer.stage download, captureKeyWindowPNG's live-window arm. 2653/973 -> CI residual 2497/945
+# (156 lines / 28 regions driven OUT; run 28387808451, Coverage job 84106918811 — the PROBE 2550/940
+# failed on both axes so the gate printed the exact `2497 lines / 945 regions uncovered`). Set to the
+# STABLE MAX 2527/951 = the CI residual + this file's documented class-(C) oscillation tolerance
+# (+30 line / +6 region — the WIDE buffer this detached-machinery-dense file needs; the count-1
+# no-padding proof holds on the stable-coverable portion, the oscillating async/subprocess regions
+# get the explicit +30/+6).
+WorkbenchViewModel.swift 2527 951

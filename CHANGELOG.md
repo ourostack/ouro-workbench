@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.216 - View-model coverage (cold-start/bug-report folds + command-dispatch tail)
+
+- Internal: extracts the provider-config cold-start result-handling and the bug-report writer result-handling out of their background tasks into pure helpers (both byte-identical) so the cold-start ready/needs-vault/failed folds and the bug-report success/failure folds are directly testable, adds a needs-me notification sink seam (mirroring the exit-notification seam) so the new-items dispatch drives without the live notification center, and covers the remaining provider-config sync arms, the staged release-update fast path, and the command-palette no-selection guards plus seamed dispatches. Test-only — no production change. The detached hatch/writer tasks, the live notification-center add, and the live installer download stay carved. No user-facing behavior change.
+
 ## 0.1.215 - Shell preflight adoption check ordering
 
 - Internal: moves the shared app-shell dependency and boundary checks to the first guaranteed top-level commands in Workbench preflight, before the selftest exit path, so the shell doctor and live downstream CI can prove the adoption contract directly. No user-facing behavior change.
