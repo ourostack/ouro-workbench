@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.200 - View-model coverage (startup reconcile / external-action apply)
+
+- Internal: drives the startup-reconcile + external-action handlers (startup attention reconciliation, auto-resume-on-launch, the orphan-screen reaper, the external-action apply/feed fold, onboarding-scan guards, and the boss-action select-lane / register-MCP / repair-agent skip guards) to test coverage. The orphan `screen` quit is seamed; the async runner/scan subprocesses stay carved. No user-facing behavior change.
+
 ## 0.1.199 - View-model coverage (boss-watch / external-action flows)
 
 - Internal: drives the boss-watch tick guard + no-wake arms, the boss-watch failure backoff bump, the external-action apply/mark-applied fold, and the event-driven check-in cooldown gate to test coverage. The async check-in / drain tasks stay the boundary. No user-facing behavior change.

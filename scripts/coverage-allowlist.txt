@@ -313,4 +313,21 @@ WorkbenchViews.swift 1170 223
 # 28353930296 — the PROBE 4570/1370 FAILED on region 1377>1370, so the gate printed the exact
 # `4548 lines / 1377 regions uncovered`). Set to the STABLE MAX 4552/1378 = the CI residual + the
 # file's documented class-(C) oscillation tolerance (+4/+1, per the cluster-4/5/6/7 precedent).
-WorkbenchViewModel.swift 4552 1378
+# Cluster 9 (startup reconcile / external-action apply, v0.1.200): drives
+# reconcileStartupAttentionWithLiveSessions (no-change / live-survivor calm+save),
+# launchAutoResumeSessionsOnStartup (pref-off / once-per-launch guards), reapOrphanedScreenSessions
+# (stateLoad-gate / no-orphans / orphan-loop — the per-orphan `screen -X quit` seamed behind
+# `spawnPersistentScreenQuit`, default = the shared off-main+watchdog spawnScreenQuit),
+# applyExternalActionRequests (widened private->internal; the synchronous map->applyBossAction->
+# markApplied->feed fold), backfillSessionIdsForFlushedRuns no-candidate guard (widened), the
+# scanForOnboardingSessions / startBossReconstruction synchronous guards, and the missing-payload /
+# empty-name guard arms of startSelectLane / startRegisterWorkbenchMCP / startRepairAgent (NOT
+# covered by cluster 7 — each returns "Skipped …" BEFORE its runner Task → no `ouro` subprocess).
+# The async runner/scan subprocesses stay the genuine-machinery boundary. 4552/1378 -> observed
+# CI residuals 4284/1334 (run 28355621236, Coverage job 83997796203) and 4282/1332 (run
+# 28356245809, Coverage job 83999810214). Set to the STABLE MAX 4288/1336 = the higher observed
+# residual + the file's documented class-(C) oscillation
+# tolerance (+4 lines / +2 regions — the amplitude cluster 7's re-run revealed; see the v0.1.197
+# FLAKY-TOLERANCE note above). NOT padding — the count-1 no-padding proof holds on the
+# stable-coverable portion; the oscillating async/timing regions get the explicit +4/+2.
+WorkbenchViewModel.swift 4288 1336
