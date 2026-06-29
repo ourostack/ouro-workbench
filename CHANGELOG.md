@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.197 - Terminal leak-reaper seam pin
+
+- Internal: tightens the source-pin tests around the persistent-screen quit seam so delete/archive must pass the entry id through `quitPersistentScreenForEntry`, and the seam must keep defaulting to the real bounded quit helper. No user-facing behavior change.
+
 ## 0.1.196 - View-model coverage (session lifecycle)
 
 - Internal: drives the session-lifecycle handlers (delete/archive custom session, reveal latest transcript, the stop-confirmation gate, the session-id backfill write-fold) to test coverage. The persistent-screen quit is seamed; only the literal subprocess stays carved. No user-facing behavior change.

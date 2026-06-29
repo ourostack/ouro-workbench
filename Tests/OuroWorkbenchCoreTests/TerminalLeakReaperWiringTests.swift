@@ -73,6 +73,14 @@ final class TerminalLeakReaperWiringTests: XCTestCase {
         )
     }
 
+    func testEntryQuitSeamDefaultsToTheRealHelper() throws {
+        let body = try entryQuitSeam()
+        XCTAssertTrue(
+            body.contains("quitPersistentScreenIfNeeded(forEntryId: entryId)"),
+            "the injectable per-entry quit seam must default to the real persistent-screen cleanup helper"
+        )
+    }
+
     // MARK: delete / archive call the quit BEFORE mutating state
 
     func testDeleteCustomSessionQuitsScreenBeforeRemovingTheEntry() throws {
@@ -82,8 +90,8 @@ final class TerminalLeakReaperWiringTests: XCTestCase {
             to: "\n    private func recover(_ entry: ProcessEntry, recoveryPlan:"
         )
         let quitIndex = try XCTUnwrap(
-            body.range(of: "quitPersistentScreenForEntry")?.lowerBound,
-            "deleteCustomSession must quit the persistent screen"
+            body.range(of: "quitPersistentScreenForEntry(entry.id)")?.lowerBound,
+            "deleteCustomSession must quit the persistent screen through the injectable per-entry seam"
         )
         let removeIndex = try XCTUnwrap(
             body.range(of: "state.processEntries.removeAll")?.lowerBound,
@@ -102,8 +110,8 @@ final class TerminalLeakReaperWiringTests: XCTestCase {
             to: "\n    func restoreCustomSession"
         )
         let quitIndex = try XCTUnwrap(
-            body.range(of: "quitPersistentScreenForEntry")?.lowerBound,
-            "archiveCustomSession must quit the persistent screen"
+            body.range(of: "quitPersistentScreenForEntry(entry.id)")?.lowerBound,
+            "archiveCustomSession must quit the persistent screen through the injectable per-entry seam"
         )
         let replaceIndex = try XCTUnwrap(
             body.range(of: "replaceEntry(")?.lowerBound,
@@ -184,6 +192,14 @@ final class TerminalLeakReaperWiringTests: XCTestCase {
             in: try WorkbenchAppSource.appSource(),
             from: "func quitPersistentScreenIfNeeded",
             to: "\n    }\n"
+        )
+    }
+
+    private func entryQuitSeam() throws -> String {
+        try WorkbenchAppSource.sourceSlice(
+            in: try WorkbenchAppSource.appSource(),
+            from: "lazy var quitPersistentScreenForEntry",
+            to: "\n\n    /// Seam: resolve"
         )
     }
 
