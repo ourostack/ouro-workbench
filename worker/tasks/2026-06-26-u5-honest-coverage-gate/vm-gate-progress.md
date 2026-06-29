@@ -136,6 +136,41 @@ the standalone; #378's coverage overlapped what was already covered). Allowlist 
 3087/1079 (+6/+3). LESSON: each merged VM PR auto-publishes a release, and the release-freshness gate
 requires VERSION > latest published — so a concurrent merge between branch-creation and CI forces a
 rebase + VERSION re-bump. Branch each batch off the ABSOLUTE latest main right before pushing.
+Cluster 13 (FINAL mop-up, v0.1.207 after 2 rebases, open PR #382): 19 tests drive the LAST directly-
+testable arms — windowTitle (5 focus/boss arms), stepTerminalSearch (no-session/empty/find), 
+exportWorkspaceConfig (rel-vs-abs working-dir arms), presentSaveWorkspacePanel (no-project/no-terminals
+guards + write-via-chooseWorkspaceSaveURL-seam + cancelled), flushPendingOutput (widened private->internal;
+no-pending guard + lastOutputAt didMutate->save fold) + markOutput, restoreDetailLayout (left private —
+PersistenceSalvageWiringTests-pinned; driven via init-seeding). Only widen: flushPendingOutput (no slicer).
+Rebased TWICE: onto #380 (install-sheet seam, v0.1.204) then #381 (changelog-freshness CI gate, v0.1.206),
+re-bumping 0.1.206→0.1.207 and renumbering the CHANGELOG entry to the top (#381's new gate requires the
+top entry to match VERSION). Local full-suite coverage HANGS in this headless worktree (the 19-test class
+deadlocks xctest at startup — markOutput 2s-sleep Tasks / NSSavePanel / live SwiftTerm terminals leave
+run-loop resources that deadlock in aggregate; the documented cluster-5 condition, count-sensitive). Tests
+are correct (pass individually + in small groups); used CI probe-then-set. PROBE 2950/1040.
+
+=== CANDIDATE FLOOR (after cluster 13) — the irreducible genuine-machinery residual ===
+This COMPLETES the WorkbenchViewModel coverage drive. The remaining uncovered residual is genuine
+machinery that no test can reach in-process, grouped by class:
+- LIVE-AppKit NSView: `TerminalHostView` (attach / pendingRedrawWorkItems / scheduleTerminalRedraws /
+  applyThemeBacking / window), `_lightTheme` — live SwiftTerm/NSView, no in-process driver.
+- SUBPROCESS runners (literal Process()/Pipe()/run()/waitUntilExit()/FileHandle, driven UP TO the
+  syscall via closure seams): runProviderCheckProcess (:3022), readLoginShellPath (:4081),
+  listLiveScreenSessionNames (:6970), psBackedProcessLines (:9658), runCloneProviderCheck,
+  runOnboardingProviderCheck.
+- NSApp.terminate: prepareForTermination (:997), applyReleaseUpdateAndTerminate (:4736).
+- UNUserNotificationCenter.add (the content-build+add boundary; decision/throttle LOGIC driven by
+  cluster 5): postNeedsMeNotification (:6242), postUnexpectedExitNotification (:9892).
+- DETACHED-Task bodies (the async runner is the boundary; the synchronous prologue is driven):
+  submitProviderConfig coldStartHatch, installReleaseUpdate stage, completeVaultOnboarding re-probe.
+- INFINITE poll loops: runExternalActionPump / runBossWatchLoop (while !Task.isCancelled + Task.sleep).
+- Private runBossCheckIn(...) MCP overload (WiringTest-pinned `private func` source marker).
+- llvm-synth resume-epilogue/autoclosure braces — the class-(C) oscillation lines (readLoginShellPath/
+  spawnScreenQuit detached-call sites that toggle covered↔uncovered between runs; absorbed by the
+  documented +6/+3 stable-max buffer).
+CANDIDATE FLOOR allowlist: cluster-13 CI residual + buffer (set post-CI). Run-start was 4637/1392
+(after #368); after clusters 8-13 the VM is at ~3000/1050-ish — driven ~1640+ lines / ~340+ regions
+out across this run. STOP+REPORT to coordinator for independent audit at this floor.
 
 SOURCE-INTROSPECTION CAVEAT (reconfirmed, clusters 6+7+8+9+12): BEFORE widening a `private func` for a
 cluster, `grep -rln '<funcName>' Tests/` for a WiringTest that slices `private func <name>` — update
