@@ -5,13 +5,14 @@ autopilot (merge on CI-green, no per-cluster approval). Each region: invoked + e
 mutation-verified; allowlist set to the CI-measured exact minimum (probe-then-set); scope-pure;
 VERSION bump; flaky-region protocol applied.
 
-## 🏁 CLUSTER 23 — FINAL-FLOOR DRIVE (the audit-identified 5 missed decls) — IN FLIGHT (PR #401)
+## 🏁 CLUSTER 23 — FINAL-FLOOR DRIVE — ✅ MERGED (PR #401, main `ba0fc87`, v0.1.222) — GENUINE FINAL FLOOR
 
-**State:** branched off main @ v0.1.220 (`82c4ef3`); PR #401 (`coverage/vm-final-floor-drive`),
-VERSION 0.1.221 + `WorkbenchRelease.version` synced + CHANGELOG 0.1.221 entry. An independent audit
-confirmed cluster 22's 2307/872 was ~15-18 regions SHORT — 5 front-half decls were wrongly carved
-that ARE drivable via the campaign's own already-shipped seam pattern. This cluster drives exactly
-those 5:
+**State:** MERGED to main @ `ba0fc87` as v0.1.222 (rebased 0.1.221→0.1.222 when PR #402's shell-refresh
+took 0.1.221 mid-flight; `WorkbenchRelease.version` synced + CHANGELOG 0.1.222 top entry). Branch
+deleted. Allowlist on main = **`WorkbenchViewModel.swift 2280 864`**. An independent audit confirmed
+cluster 22's 2307/872 was ~15-18 regions SHORT — 5 front-half decls were wrongly carved that ARE
+drivable via the campaign's own already-shipped seam pattern. This cluster drove exactly those 5
+(+ the 2 remaining runOnboardingProviderCheck verdict arms the audit-fork surfaced):
 
 1. **`runColdStartProviderCheck`** — rerouted the DIRECT `Self.runProviderCheckProcess(...)` call to
    `providerCheckRunner(agentName, lane, 15)` (the seam's DEFAULT closure IS `runProviderCheckProcess`,
@@ -40,21 +41,24 @@ Everything else is test-only. 12 new tests (11 in `WorkbenchViewModelMachinerySe
 `WorkbenchViewModelReleaseBugDiagTests`) — all hang-guard-verified locally green; full Core suite (2867
 tests) green confirms no slicer regression. Allowlist set to PROBE `2295 860` pending the CI residual.
 
-⚠️ Hit the documented **shell-dep churn** gotcha: `ouro-native-apple-app-shell` advanced upstream
-(704102 → 5c67503) mid-PR; the freshness gate red-ed 3 jobs until `Package.resolved` was bumped to
-match remote main (build + HeaderView snapshots byte-identical at the new pin — no regen). Committed as
-a separate `chore(deps)` commit.
+⚠️ Hit the documented **shell-dep churn** gotcha THREE times (this dep moves fast): the freshness gate
+compares `Package.resolved` against the LIVE remote shell `main` HEAD, which advanced 704102 → 5c67503
+(PR #402 merged this same bump to ouro-workbench main mid-flight) → 9f1db0b. Each churn red-ed App
+bundle + Swift tests on the stale pin; bumped + rebased inline each time (build + HeaderView snapshots
+byte-identical at every pin — no regen). When PR #402's shell-refresh took VERSION 0.1.221, rebased
+0.1.221 → 0.1.222 (the shell-dep commit auto-dropped as already-upstream) + renumbered the CHANGELOG
+top entry to 0.1.222.
 
-**RESULT (all 4 CI jobs green on PR #401):** the GREEN-pass exact residual is **2247 lines / 859
-regions** (down from cluster-22's 2277/866 — 30 lines / 7 regions driven OUT this cluster). Allowlist
-set to the STABLE MAX `2280 864` (residual + this file's documented class-(C) line-oscillation tolerance,
-which runs up to ~+29 on the detached-machinery lines). This is the **GENUINE FINAL FLOOR**: every
-remaining region is a carve class (detached-Task awaited-runner BODIES, literal Process/notification/
-NSApp syscall lines, live-PTY TerminalHostView NSViews, the runBossWatchLoop/runExternalActionPump
-infinite while-loops + Task.sleep, the source-pinned private runBossCheckIn MCP overload, the
-serialTask cancellation-RACE `continue` arms — non-deterministic to seed — and llvm-synth/oscillation
-artifacts). The audit confirmed nothing else is drivable; merge on green, then this is the campaign's
-terminal state for this file.
+**RESULT — ✅ MERGED (all 4 CI jobs green on PR #401, then post-merge main green):** the GREEN-pass exact
+residual is **2247 lines / 859 regions** (down from cluster-22's 2277/866 — 30 lines / 7 regions driven
+OUT this cluster). Allowlist on main = STABLE MAX **`2280 864`** (residual + this file's documented
+class-(C) line-oscillation tolerance, which runs up to ~+29 on the detached-machinery lines). This is
+the **GENUINE FINAL FLOOR**: every remaining region is a carve class (detached-Task awaited-runner
+BODIES, literal Process/notification/NSApp syscall lines, live-PTY TerminalHostView NSViews, the
+runBossWatchLoop/runExternalActionPump infinite while-loops + Task.sleep, the source-pinned private
+runBossCheckIn MCP overload, the serialTask cancellation-RACE `continue` arms — non-deterministic to
+seed — and llvm-synth/oscillation artifacts). The audit confirmed nothing else is drivable. This is the
+campaign's TERMINAL state for `WorkbenchViewModel.swift`.
 
 ## 🏁 STOP+REPORT — GENUINE CANDIDATE FLOOR REACHED (2026-06-29, post-cluster-22)
 
@@ -192,7 +196,7 @@ GENUINE CARVE (the floor — do NOT drive): TerminalHostView NSView bodies (`_li
 | 20 | #396 | 0.1.218 | SMALL-DECL STATUS-LINE/COLOR TAIL (test-only): bossWorkbenchMCPStatusLine (5 untested arms) + StatusColor (4) + ActionTitle + supportDiagnosticsStatusColor (3) + supportDiagnosticsURL + bossWatchStatusColor (3) + bossWatchStatusLine (error/last-run) + mailboxStatusLine (2) + transcriptSearchStatusLine (empty/press-search) + ouroAgentStatusLine (populated) + stopConfirmationTitle (2) + startFreshConfirmationMessage. Pure computed-prop arms view tests only partially hit. | **2405 / 903** (CI 2375/897) |
 | 21 | #398 | 0.1.219 | COMPUTED-VAR MICRO-TAIL (test-only): confirmation Binding<Bool> get/set-clear arms (errorIsPresented/deleteConfirmationIsPresented/deleteGroupConfirmationIsPresented/stopConfirmationIsPresented) + onboardingHasConfigGap (nil-guard + blocker-contains, both arms) + recentActionLogEntries (sort) + currentSearchOptions + releaseUpdateURL/canAutoPresentOnboardingOnLaunch/bossMCPCommand/deskBridgePlan delegations. | **2314 / 876** (CI 2284/870) |
 | 22 | #399 | 0.1.220 | FINAL FLOOR SLIVER (test-only): recoveryButtonTitle .manualActionNeeded→"Manual Recovery" (view-route-around arm) + .noAction/nil-plan→"Recover" (seeded processRuns) + bossActionLivePrompt nil-transcript guard. **GENUINE CANDIDATE FLOOR — held for coordinator audit.** | **2307 / 872** (CI 2277/866) |
-| 23 | #401 | 0.1.221 | FINAL-FLOOR DRIVE (audit-identified 5 missed decls + 2 verdict arms; 2 byte-identical seam indirections, rest test-only): runColdStartProviderCheck rerouted to the providerCheckRunner seam (+private→internal; 3 wiring slicers made private-agnostic) → nil/timedOut/classify fold + refreshAgentOutwardReadiness TaskGroup verdict-store/in-flight-clear fold + scanForOnboardingSessions post-scan fold via NEW scanForOnboardingSessionsRunner seam + runOnboardingProviderChecksIfNeeded serialTask store fold + fileLastBugReportAsGitHubIssue .failure arm via existing fileGitHubIssue seam + the last 2 runOnboardingProviderCheck verdict arms (.vaultLocked/.unreachable). Shell-dep churn rebased inline (704102→5c67503). PROBE 2295/860 RED-ed region axis → exact 2263/862; 2 verdict arms tightened to the GREEN-pass exact residual **2247/859**; STABLE MAX set, all 4 CI jobs green. **GENUINE FINAL FLOOR.** | **2280 / 864** (CI residual 2247/859) |
+| 23 | #401 | 0.1.222 | ✅ MERGED — FINAL-FLOOR DRIVE (audit-identified 5 missed decls + 2 verdict arms; 2 byte-identical seam indirections, rest test-only): runColdStartProviderCheck rerouted to the providerCheckRunner seam (+private→internal; 3 wiring slicers made private-agnostic) → nil/timedOut/classify fold + refreshAgentOutwardReadiness TaskGroup verdict-store/in-flight-clear fold + scanForOnboardingSessions post-scan fold via NEW scanForOnboardingSessionsRunner seam + runOnboardingProviderChecksIfNeeded serialTask store fold + fileLastBugReportAsGitHubIssue .failure arm via existing fileGitHubIssue seam + the last 2 runOnboardingProviderCheck verdict arms (.vaultLocked/.unreachable). Shell-dep churn rebased 3× (704102→5c67503→9f1db0b; #402 took 0.1.221 → rebumped 0.1.222). PROBE 2295/860 RED-ed region axis → exact 2263/862; 2 verdict arms tightened to the GREEN-pass exact residual **2247/859**; STABLE MAX set, all 4 CI jobs green, merged @ `ba0fc87`. **GENUINE FINAL FLOOR.** | **2280 / 864** (CI residual 2247/859) |
 
 Cluster 5 result: CI residual 4912/1450 (190 lines / 65 regions driven OUT of 5102/1515); allowlist
 set to STABLE MAX 4916/1451 (+4/+1 class-C oscillation tolerance, per the cluster-4 precedent).
