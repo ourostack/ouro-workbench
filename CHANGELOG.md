@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.205 - View-model coverage (boss / command dispatch / workspace)
+
+- Internal: drives a batch of view-model command-dispatch and workspace logic to test coverage — the command-palette dispatch arms (agent-select / use-as-boss / config / reveal / repair with their no-agent-selected guards), the agent-selection and boss-selection state transitions, the boss-decision record and waiting-into-inbox reconciliation, the withheld-input escalation fold, and the group delete / session reorder / workspace-config import-apply value-flows. The boss quick-question / MCP round-trip / workspace-refresh async tasks stay the boundary. No user-facing behavior change.
+
 ## 0.1.204 - Hermetic install-sheet clone interactions
 
 - Internal: routes the install-sheet headless clone through an injectable runner seam so interaction tests can prove the button action and clone-result fold without invoking the live `ouro` CLI, touching the network, or leaving repo-root `.ouro` bundles. No user-facing behavior change.

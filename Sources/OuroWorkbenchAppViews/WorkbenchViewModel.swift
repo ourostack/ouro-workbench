@@ -8003,7 +8003,10 @@ public final class WorkbenchViewModel: ObservableObject {
     /// mirroring how the decisions channel surfaces a blocked auto-advance:
     /// record an `escalate` decision into the same inbox the operator reviews
     /// (the action log already captured the "Skipped" line via `finishBossAction`).
-    private func escalateWithheldBossInput(
+    // VM-GATE: widened private->internal so the withheld-input escalation fold (recordDecisionIfNew
+    // + dedup-on-repeat + save-when-changed) is directly unit-testable. Pure access-widen, no
+    // behavior change; the boss-watch callers are unchanged.
+    func escalateWithheldBossInput(
         entry: ProcessEntry,
         source: String,
         prompt: String,

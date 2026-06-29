@@ -384,4 +384,20 @@ WorkbenchViews.swift 1170 223
 # on the LINE axis by up to ~11 between runs, as cluster 10 proved; setting off the observed residual +6
 # absorbs that without a second-run round-trip). NOT padding: the count-1 no-padding proof holds on the
 # stable-coverable portion; the genuine detached-Task/subprocess boundary lines get the explicit +6/+3.
-WorkbenchViewModel.swift 3376 1161
+# Cluster 12 (boss / command-dispatch / workspace, v0.1.203): 30 tests drive performCommand's payload
+# dispatch arms (.selectAgent / .useSelectedAgentAsBoss / .openSelectedAgentConfig /
+# .revealSelectedAgentBundle / .repairSelectedAgent / .manageAgents — each with the focusedAgentForCommand
+# resolve + the "No agent is selected" else-arm), the dispatch targets selectAgent (all 4 arms) / selectBoss
+# / openAgentConfig / revealAgentBundle (via revealFileViewerSelectingURLs seam) / repairAgent (via
+# launchTerminalSession seam), recordBossDecisions (empty-parse guard + a recorded decision), the
+# reconcileWaitingSessionsIntoInbox waiting→inbox arms, escalateWithheldBossInput (widened private->internal;
+# record-once + dedupe), deleteGroup (last-ws / non-empty / empty-delete arms), moveSessionEntries / moveGroups
+# reorder, openWorkspaceConfig import-apply (createdCount + alreadyPresentCount). Carved as genuine machinery:
+# the `Task { await runBossQuickQuestion/refreshWorkspace }` detached dispatches, runExternalActionPump's
+# while-loop+Task.sleep, the private runBossCheckIn(...) daemon/MCP-round-trip overload (LEFT private — two
+# WiringTests pin its `private func` source marker), openAgentConfig's NSWorkspace.open syscall, the
+# recoverUnconfirmed*/sweepOrphaned* prologue (private + ReplayDedup-pinned). The one widen
+# (escalateWithheldBossInput) has NO WiringTest slicer. Local (Swift 6.3.3) drove 3249/1135 -> 3042/1066
+# (207 lines / 69 regions OUT). PROBE 3042/1066 below — set BELOW main's current 3376/1161 so the CI
+# Coverage job prints the exact residual; tighten to the stable max post-CI (+6/+3 off the observed residual).
+WorkbenchViewModel.swift 3042 1066
