@@ -22,14 +22,14 @@ Reduce Workbench app-layer bulk around shell-adjacent UI and make current archit
 - A-038: Add A Cross-Repo "Normative Docs" Index
 
 ## Completion Criteria
-- [ ] A-006 has at least one narrow shell-adjacent view/view-model decomposition committed.
-- [ ] A-010 architecture docs describe shell ownership and dependency direction.
-- [ ] A-027 Workbench docs index distinguishes current normative docs from historical planning artifacts.
-- [ ] A-038 has Workbench index coverage and minimal cross-repo index updates where safe.
-- [ ] Stale `Set Up Workbench` and `⌘?` drift in touched Workbench docs/comments is corrected.
-- [ ] 100% test coverage on all new code.
-- [ ] All tests pass.
-- [ ] No warnings.
+- [x] A-006 has at least one narrow shell-adjacent view/view-model decomposition committed.
+- [x] A-010 architecture docs describe shell ownership and dependency direction.
+- [x] A-027 Workbench docs index distinguishes current normative docs from historical planning artifacts.
+- [x] A-038 has Workbench index coverage and minimal cross-repo index updates where safe.
+- [x] Stale `Set Up Workbench` and `⌘?` drift in touched Workbench docs/comments is corrected.
+- [x] 100% test coverage on all new code.
+- [x] All tests pass.
+- [x] No warnings.
 
 ## Code Coverage Requirements
 **MANDATORY: 100% coverage on all new code.**
@@ -74,7 +74,7 @@ Reduce Workbench app-layer bulk around shell-adjacent UI and make current archit
 **Output**: Cross-repo index commits or documented no-op evidence.
 **Acceptance**: Each touched repo has a current-docs entry point without changing implementation scope.
 
-### ⬜ Unit 4: Validation and Review
+### ✅ Unit 4: Validation and Review
 **What**: Run Swift/tests/docs validation, shell boundary checks, and a cold review of the diff against A-006/A-010/A-027/A-038.
 **Output**: Validation logs in the artifacts directory and final review notes.
 **Acceptance**: Relevant tests pass or blockers are recorded with exact commands/output.
@@ -99,3 +99,4 @@ Reduce Workbench app-layer bulk around shell-adjacent UI and make current archit
 - 2026-06-29 22:04 Unit 1 complete: extracted `ShortcutHelpSheet` into its own shell-adjacent app-view module, corrected the shortcut comment, and validated with `swift test --filter ShortcutHelpSheet` (5 tests, 0 failures).
 - 2026-06-29 22:07 Unit 2 complete: refreshed architecture shell-boundary docs, added `docs/INDEX.md`, fixed current-doc setup naming drift, and verified index links plus stale-string checks.
 - 2026-06-29 22:10 Unit 3 complete: added minimal docs indexes in Ouro MD (`01dbab5`) and shared shell (`2a5bedb`) on `worker/docs-index` branches.
+- 2026-06-29 22:12 Unit 4 complete: full `swift test` passed (4,476 tests, 1 skipped, 0 failures), shell boundary selftest/scan passed, shell dependency freshness passed, and cold diff review found no A-006/A-010/A-027/A-038 gaps.

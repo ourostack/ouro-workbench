@@ -1,0 +1,67 @@
+diff-summary
+ README.md                                          |     5 +-
+ .../OuroWorkbenchAppViews/ShortcutHelpSheet.swift  |    16 +
+ Sources/OuroWorkbenchAppViews/WorkbenchViews.swift |    11 -
+ .../WorkbenchAppSource.swift                       |     5 +
+ docs/INDEX.md                                      |    54 +
+ docs/architecture.md                               |    49 +
+ docs/guide.md                                      |     2 +-
+ ...6-06-29-2200-doing-architecture-docs-hygiene.md |   101 +
+ .../unit1-shortcut-help-test-rerun.log             |   233 +
+ .../unit1-shortcut-help-test.log                   |   475 +
+ .../unit2-docs-check-rerun.log                     |     2 +
+ .../unit2-docs-check.log                           |     3 +
+ .../unit4-app-source-retarget-rerun.log            |    73 +
+ .../unit4-shell-boundary-selftest.log              |     1 +
+ .../unit4-shell-boundary.log                       |     1 +
+ .../unit4-shell-dependency.log                     |     1 +
+ .../unit4-swift-test.log                           | 10305 +++++++++++++++++++
+ ...6-29-2200-planning-architecture-docs-hygiene.md |    69 +
+ 18 files changed, 11393 insertions(+), 13 deletions(-)
+
+changed-files
+README.md
+Sources/OuroWorkbenchAppViews/ShortcutHelpSheet.swift
+Sources/OuroWorkbenchAppViews/WorkbenchViews.swift
+Tests/OuroWorkbenchCoreTests/WorkbenchAppSource.swift
+docs/INDEX.md
+docs/architecture.md
+docs/guide.md
+worker/tasks/2026-06-29-2200-doing-architecture-docs-hygiene.md
+worker/tasks/2026-06-29-2200-doing-architecture-docs-hygiene/unit1-shortcut-help-test-rerun.log
+worker/tasks/2026-06-29-2200-doing-architecture-docs-hygiene/unit1-shortcut-help-test.log
+worker/tasks/2026-06-29-2200-doing-architecture-docs-hygiene/unit2-docs-check-rerun.log
+worker/tasks/2026-06-29-2200-doing-architecture-docs-hygiene/unit2-docs-check.log
+worker/tasks/2026-06-29-2200-doing-architecture-docs-hygiene/unit4-app-source-retarget-rerun.log
+worker/tasks/2026-06-29-2200-doing-architecture-docs-hygiene/unit4-shell-boundary-selftest.log
+worker/tasks/2026-06-29-2200-doing-architecture-docs-hygiene/unit4-shell-boundary.log
+worker/tasks/2026-06-29-2200-doing-architecture-docs-hygiene/unit4-shell-dependency.log
+worker/tasks/2026-06-29-2200-doing-architecture-docs-hygiene/unit4-swift-test.log
+worker/tasks/2026-06-29-2200-planning-architecture-docs-hygiene.md
+
+A-006 evidence
+ShortcutHelpSheet extracted
+   10817 Sources/OuroWorkbenchAppViews/WorkbenchViews.swift
+      16 Sources/OuroWorkbenchAppViews/ShortcutHelpSheet.swift
+   10833 total
+
+A-010/A-027/A-038 docs
+Workbench docs index exists
+docs/INDEX.md:7:## Normative Docs
+docs/INDEX.md:42:## Historical Planning Artifacts
+docs/architecture.md:59:## Shared Native App Shell Boundary
+docs/architecture.md:90:## Shell Control Deck
+
+stale current strings
+
+validation summaries
+Test Suite 'OuroWorkbenchPackageTests.xctest' passed at 2026-06-30 05:11:43.795.
+	 Executed 4476 tests, with 1 test skipped and 0 failures (0 unexpected) in 66.258 (66.650) seconds
+Test Suite 'All tests' passed at 2026-06-30 05:11:43.796.
+	 Executed 4476 tests, with 1 test skipped and 0 failures (0 unexpected) in 66.258 (66.653) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
+Shell boundary scan ok: /Users/arimendelow/Projects/ouro-workbench-worker-architecture-docs-hygiene
+shell dependency fresh: ouro-native-apple-app-shell@9f1db0b40afa352e347a0ecffe993af82e4a7356 (remote main 38a98a2b56ec7968861f57ccccec766c41c5dc2d has no newer package-relevant shell changes)
