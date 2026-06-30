@@ -59,7 +59,7 @@ Reduce Workbench app-layer bulk around shell-adjacent UI and make current archit
 **Output**: Evidence captured in the plan/doing docs and implementation choices.
 **Acceptance**: Audit item IDs, branch/worktree, source docs, and validation targets are recorded.
 
-### ⬜ Unit 1: Shell-Adjacent View Extraction
+### ✅ Unit 1: Shell-Adjacent View Extraction
 **What**: Move the shortcut help sheet out of `WorkbenchViews.swift` into its own app-view module without changing behavior.
 **Output**: New Swift file plus reduced `WorkbenchViews.swift` size.
 **Acceptance**: Shortcut help tests still pass and the new file compiles without warnings.
@@ -96,3 +96,4 @@ Reduce Workbench app-layer bulk around shell-adjacent UI and make current archit
 ## Progress Log
 - 2026-06-29 22:00 Created from planning doc.
 - 2026-06-29 22:00 Unit 0 complete: read audit rows A-006/A-010/A-027/A-038, Workbench AGENTS/README/architecture docs, docs inventory, and app-layer bulk targets.
+- 2026-06-29 22:04 Unit 1 complete: extracted `ShortcutHelpSheet` into its own shell-adjacent app-view module, corrected the shortcut comment, and validated with `swift test --filter ShortcutHelpSheet` (5 tests, 0 failures).

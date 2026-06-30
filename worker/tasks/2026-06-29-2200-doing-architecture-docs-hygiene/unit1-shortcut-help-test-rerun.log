@@ -1,0 +1,233 @@
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/13] Write sources
+[3/13] Write swift-version--58304C5D6DBC2206.txt
+[5/11] Emitting module OuroWorkbenchAppViews
+[6/11] Compiling OuroWorkbenchAppViews ShortcutHelpSheet.swift
+[7/12] Compiling OuroWorkbenchAppViews WorkbenchViews.swift
+[8/184] Compiling OuroWorkbenchApp main.swift
+[9/184] Compiling OuroWorkbenchApp OuroWorkbenchApp.swift
+[10/184] Emitting module OuroWorkbenchApp
+[11/184] Compiling OuroWorkbenchApp UISurfaceTest.swift
+[11/184] Write Objects.LinkFileList
+[12/184] Linking OuroWorkbench
+[13/184] Applying OuroWorkbench
+[15/184] Compiling OuroWorkbenchAppViewsTests AN002SerializerHardeningTests.swift
+[16/184] Compiling OuroWorkbenchAppViewsTests AboutSheetTests.swift
+[17/184] Compiling OuroWorkbenchAppViewsTests ActionLogViewStateSetTests.swift
+[18/184] Compiling OuroWorkbenchAppViewsTests AgentCardActionsDriveTests.swift
+[19/184] Compiling OuroWorkbenchAppViewsTests AgentDetailViewTests.swift
+[20/184] Compiling OuroWorkbenchAppViewsTests AgentHomeEmptyStateInteractionTests.swift
+[21/184] Compiling OuroWorkbenchAppViewsTests AgentHomeEmptyStateTests.swift
+[22/184] Compiling OuroWorkbenchAppViewsTests AgentInspectorPanelPathLeakTests.swift
+[23/184] Compiling OuroWorkbenchAppViewsTests AgentStatusCardInteractionTests.swift
+[24/184] Compiling OuroWorkbenchAppViewsTests AgentStatusCardTests.swift
+[25/184] Compiling OuroWorkbenchAppViewsTests AgentTitleStripInteractionTests.swift
+[26/184] Compiling OuroWorkbenchAppViewsTests AgentTitleStripTests.swift
+[27/184] Compiling OuroWorkbenchAppViewsTests AssertViewSnapshot.swift
+[28/184] Compiling OuroWorkbenchAppViewsTests AutonomyStatusButtonInteractionTests.swift
+[29/184] Compiling OuroWorkbenchAppViewsTests AutonomyStatusButtonTests.swift
+[30/184] Compiling OuroWorkbenchAppViewsTests AutonomyStatusCheckRowInteractionTests.swift
+[31/184] Compiling OuroWorkbenchAppViewsTests AutonomyStatusCheckRowTests.swift
+[32/184] Compiling OuroWorkbenchAppViewsTests AutonomyStatusPopoverInteractionTests.swift
+[33/184] Compiling OuroWorkbenchAppViewsTests AutonomyStatusPopoverStandaloneTests.swift
+[34/202] Emitting module OuroWorkbenchAppViewsTests
+[35/202] Compiling OuroWorkbenchAppViewsTests SessionDetailViewInactiveArmTests.swift
+[36/202] Compiling OuroWorkbenchAppViewsTests SessionInspectorAndTitleStripTests.swift
+[37/202] Compiling OuroWorkbenchAppViewsTests SessionInspectorPanelDriveTests.swift
+[38/202] Compiling OuroWorkbenchAppViewsTests SessionSplitAndOverflowTests.swift
+[39/202] Compiling OuroWorkbenchAppViewsTests SessionStatusBarDriveTests.swift
+[40/202] Compiling OuroWorkbenchAppViewsTests SessionStatusListViewStateSetTests.swift
+[41/202] Compiling OuroWorkbenchAppViewsTests SessionStatusRowViewDriveTests.swift
+[42/202] Compiling OuroWorkbenchAppViewsTests SessionTitleStripDriveTests.swift
+[43/202] Compiling OuroWorkbenchAppViewsTests SessionTranscriptSheetTests.swift
+[44/202] Compiling OuroWorkbenchAppViewsTests SettingsSheetInteractionTests.swift
+[45/202] Compiling OuroWorkbenchAppViewsTests SettingsSheetTests.swift
+[46/202] Compiling OuroWorkbenchAppViewsTests ShortcutHelpSheetInteractionTests.swift
+[47/202] Compiling OuroWorkbenchAppViewsTests ShortcutHelpSheetTests.swift
+[48/202] Compiling OuroWorkbenchAppViewsTests SidebarAgentRowInteractionTests.swift
+[49/202] Compiling OuroWorkbenchAppViewsTests SidebarAgentRowTests.swift
+[50/202] Compiling OuroWorkbenchAppViewsTests SidebarCountBadgeTests.swift
+[51/202] Compiling OuroWorkbenchAppViewsTests SidebarFilterFieldInteractionTests.swift
+[52/202] Compiling OuroWorkbenchAppViewsTests SidebarFilterFieldTests.swift
+[53/202] Compiling OuroWorkbenchAppViewsTests DecisionInboxSheetSubtitleLeafTests.swift
+[54/202] Compiling OuroWorkbenchAppViewsTests DecisionInboxSheetTests.swift
+[55/202] Compiling OuroWorkbenchAppViewsTests DecisionLogRowInteractionTests.swift
+[56/202] Compiling OuroWorkbenchAppViewsTests DecisionLogRowStateSetTests.swift
+[57/202] Compiling OuroWorkbenchAppViewsTests DecisionLogSheetInteractionTests.swift
+[58/202] Compiling OuroWorkbenchAppViewsTests DecisionLogSheetTests.swift
+[59/202] Compiling OuroWorkbenchAppViewsTests DispatchMenuCommandTests.swift
+[60/202] Compiling OuroWorkbenchAppViewsTests EditTerminalGroupSheetTests.swift
+[61/202] Compiling OuroWorkbenchAppViewsTests EditTerminalSessionSheetTests.swift
+[62/202] Compiling OuroWorkbenchAppViewsTests ElapsedTimePillDefaultArgTests.swift
+[63/202] Compiling OuroWorkbenchAppViewsTests EmptyPanePickerDriveTests.swift
+[64/202] Compiling OuroWorkbenchAppViewsTests FirstRunBootstrapViewTests.swift
+[65/202] Compiling OuroWorkbenchAppViewsTests FirstRunStepRowDoneLeafTests.swift
+[66/202] Compiling OuroWorkbenchAppViewsTests GitBranchChipLeafTests.swift
+[67/202] Compiling OuroWorkbenchAppViewsTests HabitHistoryPanelViewStateSetTests.swift
+[68/202] Compiling OuroWorkbenchAppViewsTests HarnessActionResultBannerInteractionTests.swift
+[69/202] Compiling OuroWorkbenchAppViewsTests HarnessActionResultBannerTests.swift
+[70/202] Compiling OuroWorkbenchAppViewsTests HarnessActionRowAndBossChoiceDriveTests.swift
+[71/202] Compiling OuroWorkbenchAppViewsTests HarnessAgentRowMcpToneLeafTests.swift
+[72/202] Compiling OuroWorkbenchAppViewsTests OuroAgentRowViewTests.swift
+[73/202] Compiling OuroWorkbenchAppViewsTests ProviderCheckOutputBufferTests.swift
+[74/202] Compiling OuroWorkbenchAppViewsTests ProviderConfigSheetInteractionTests.swift
+[75/202] Compiling OuroWorkbenchAppViewsTests ProviderConfigSheetTests.swift
+[76/202] Compiling OuroWorkbenchAppViewsTests RecoverableEntryRowAutoResumeLeafTests.swift
+[77/202] Compiling OuroWorkbenchAppViewsTests RecoveryDrillViewInteractionTests.swift
+[78/202] Compiling OuroWorkbenchAppViewsTests RecoveryDrillViewStateSetTests.swift
+[79/202] Compiling OuroWorkbenchAppViewsTests RecoverySheetInteractionTests.swift
+[80/202] Compiling OuroWorkbenchAppViewsTests RecoverySurfaceStateSetTests.swift
+[81/202] Compiling OuroWorkbenchAppViewsTests ReleaseUpdateViewInteractionTests.swift
+[82/202] Compiling OuroWorkbenchAppViewsTests ReportBugSheetCoreStateSetTests.swift
+[83/202] Compiling OuroWorkbenchAppViewsTests ReportBugSheetInteractionTests.swift
+[84/202] Compiling OuroWorkbenchAppViewsTests ReportBugSheetSuccessStateSetTests.swift
+[85/202] Compiling OuroWorkbenchAppViewsTests RunningSessionHeaderControlsDriveTests.swift
+[86/202] Compiling OuroWorkbenchAppViewsTests SU0InjectableClockTests.swift
+[87/202] Compiling OuroWorkbenchAppViewsTests SessionAttentionBannerTests.swift
+[88/202] Compiling OuroWorkbenchAppViewsTests SessionChipLeafTests.swift
+[89/202] Compiling OuroWorkbenchAppViewsTests SessionChipOnRowTests.swift
+[90/202] Compiling OuroWorkbenchAppViewsTests HarnessAgentRowTests.swift
+[91/202] Compiling OuroWorkbenchAppViewsTests HarnessSettingsReconfirmTests.swift
+[92/202] Compiling OuroWorkbenchAppViewsTests HarnessStatusSheetInteractionTests.swift
+[93/202] Compiling OuroWorkbenchAppViewsTests HarnessStatusSheetTests.swift
+[94/202] Compiling OuroWorkbenchAppViewsTests HeaderCollapsedInboxBadgeTests.swift
+[95/202] Compiling OuroWorkbenchAppViewsTests HeaderViewInteractionTests.swift
+[96/202] Compiling OuroWorkbenchAppViewsTests HeaderViewTests.swift
+[97/202] Compiling OuroWorkbenchAppViewsTests ImportSummaryBannerInteractionTests.swift
+[98/202] Compiling OuroWorkbenchAppViewsTests ImportSummaryBannerTests.swift
+[99/202] Compiling OuroWorkbenchAppViewsTests ImportabilityProofTests.swift
+[100/202] Compiling OuroWorkbenchAppViewsTests InactiveSurfaceAndTranscriptHistoryTests.swift
+[101/202] Compiling OuroWorkbenchAppViewsTests InactiveTerminalSurfaceDriveTests.swift
+[102/202] Compiling OuroWorkbenchAppViewsTests InboxDoorPillStateSetTests.swift
+[103/202] Compiling OuroWorkbenchAppViewsTests InlineRenameEditorInteractionTests.swift
+[104/202] Compiling OuroWorkbenchAppViewsTests InlineRenameEditorStateSetTests.swift
+[105/202] Compiling OuroWorkbenchAppViewsTests LanePanelTests.swift
+[106/202] Compiling OuroWorkbenchAppViewsTests LoginItemControllerTests.swift
+[107/202] Compiling OuroWorkbenchAppViewsTests MachineRuntimeViewCarveTests.swift
+[108/202] Compiling OuroWorkbenchAppViewsTests MachineRuntimeViewLoginRowsTests.swift
+[109/202] Compiling OuroWorkbenchAppViewsTests SidebarSurfaceStateSetTests.swift
+[110/202] Compiling OuroWorkbenchAppViewsTests TabStripSurfaceStateSetTests.swift
+[111/202] Compiling OuroWorkbenchAppViewsTests TerminalAgentRowDecoratedLeafTests.swift
+[112/202] Compiling OuroWorkbenchAppViewsTests TerminalAgentRowGitLabelInteractionTests.swift
+[113/202] Compiling OuroWorkbenchAppViewsTests TerminalAgentRowRunningLeafTests.swift
+[114/202] Compiling OuroWorkbenchAppViewsTests TerminalFocusViewTests.swift
+[115/202] Compiling OuroWorkbenchAppViewsTests TerminalRowContextMenuInteractionTests.swift
+[116/202] Compiling OuroWorkbenchAppViewsTests TerminalRowContextMenuStandaloneTests.swift
+[117/202] Compiling OuroWorkbenchAppViewsTests TerminalSearchBarTests.swift
+[118/202] Compiling OuroWorkbenchAppViewsTests TranscriptHistoryViewTests.swift
+[119/202] Compiling OuroWorkbenchAppViewsTests TranscriptRehydrationPreviewDriveTests.swift
+[120/202] Compiling OuroWorkbenchAppViewsTests TranscriptSearchViewInteractionTests.swift
+[121/202] Compiling OuroWorkbenchAppViewsTests TranscriptSearchViewStateSetTests.swift
+[122/202] Compiling OuroWorkbenchAppViewsTests ViewSnapshotHost.swift
+[123/202] Compiling OuroWorkbenchAppViewsTests ViewSnapshotHostTests.swift
+[124/202] Compiling OuroWorkbenchAppViewsTests ViewSnapshotNode.swift
+[125/202] Compiling OuroWorkbenchAppViewsTests ViewSnapshotProofTests.swift
+[126/202] Compiling OuroWorkbenchAppViewsTests ViewSnapshotStore.swift
+[127/202] Compiling OuroWorkbenchAppViewsTests MailboxWarningViewStateSetTests.swift
+[128/202] Compiling OuroWorkbenchAppViewsTests MarkdownMessageViewTests.swift
+[129/202] Compiling OuroWorkbenchAppViewsTests MetricChipStateSetTests.swift
+[130/202] Compiling OuroWorkbenchAppViewsTests NeedsYouEntryRowDriveTests.swift
+[131/202] Compiling OuroWorkbenchAppViewsTests NewTerminalGroupSheetTests.swift
+[132/202] Compiling OuroWorkbenchAppViewsTests NewTerminalSessionSheetTests.swift
+[133/202] Compiling OuroWorkbenchAppViewsTests OnboardingAgentProviderSummaryTests.swift
+[134/202] Compiling OuroWorkbenchAppViewsTests OnboardingBossChoiceLogicTests.swift
+[135/202] Compiling OuroWorkbenchAppViewsTests OnboardingBossChoiceViewTests.swift
+[136/202] Compiling OuroWorkbenchAppViewsTests OnboardingBossReconstructViewStateSetTests.swift
+[137/202] Compiling OuroWorkbenchAppViewsTests OnboardingFlowHeaderTests.swift
+[138/202] Compiling OuroWorkbenchAppViewsTests OnboardingPageContentTests.swift
+[139/202] Compiling OuroWorkbenchAppViewsTests OnboardingReadinessViewTests.swift
+[140/202] Compiling OuroWorkbenchAppViewsTests OnboardingRepairStepRowTests.swift
+[141/202] Compiling OuroWorkbenchAppViewsTests OuroAgentInstallSheetInteractionTests.swift
+[142/202] Compiling OuroWorkbenchAppViewsTests OuroAgentInstallSheetTests.swift
+[143/202] Compiling OuroWorkbenchAppViewsTests OuroAgentManagerViewAN001Tests.swift
+[144/202] Compiling OuroWorkbenchAppViewsTests OuroAgentManagerViewInteractionTests.swift
+[145/202] Compiling OuroWorkbenchAppViewsTests OuroAgentRowViewInteractionTests.swift
+[146/202] Compiling OuroWorkbenchAppViewsTests B10K4HelpersLogicTests.swift
+[147/202] Compiling OuroWorkbenchAppViewsTests BossActionReceiptStripStateSetTests.swift
+[148/202] Compiling OuroWorkbenchAppViewsTests BossAgentNamePopoverInteractionTests.swift
+[149/202] Compiling OuroWorkbenchAppViewsTests BossAgentNamePopoverStandaloneTests.swift
+[150/202] Compiling OuroWorkbenchAppViewsTests BossConversationViewTests.swift
+[151/202] Compiling OuroWorkbenchAppViewsTests BossDashboardViewStateSetTests.swift
+[152/202] Compiling OuroWorkbenchAppViewsTests BossNeedsMeCodingColumnsStateSetTests.swift
+[153/202] Compiling OuroWorkbenchAppViewsTests BossProposalCardStateSetTests.swift
+[154/202] Compiling OuroWorkbenchAppViewsTests BossSelectorViewInteractionTests.swift
+[155/202] Compiling OuroWorkbenchAppViewsTests BossSelectorViewTests.swift
+[156/202] Compiling OuroWorkbenchAppViewsTests BossWatchHeaderToggleInteractionTests.swift
+[157/202] Compiling OuroWorkbenchAppViewsTests BossWatchHeaderToggleTests.swift
+[158/202] Compiling OuroWorkbenchAppViewsTests BossWatchStatusViewClockTests.swift
+[159/202] Compiling OuroWorkbenchAppViewsTests BossWorkbenchMCPSetupViewTests.swift
+[160/202] Compiling OuroWorkbenchAppViewsTests CommandPaletteSheetInteractionTests.swift
+[161/202] Compiling OuroWorkbenchAppViewsTests CommandPaletteSheetTests.swift
+[162/202] Compiling OuroWorkbenchAppViewsTests CustomSessionManagementBarDriveTests.swift
+[163/202] Compiling OuroWorkbenchAppViewsTests DashboardStripStateSetTests.swift
+[164/202] Compiling OuroWorkbenchAppViewsTests DecisionInboxSheetInteractionTests.swift
+[165/202] Compiling OuroWorkbenchAppViewsTests ViewSnapshotStoreTests.swift
+[166/202] Compiling OuroWorkbenchAppViewsTests ViewTreeSerializer.swift
+[167/202] Compiling OuroWorkbenchAppViewsTests ViewTreeSerializerTests.swift
+[168/202] Compiling OuroWorkbenchAppViewsTests WorkbenchKeyboardAccessibilityContractTests.swift
+[169/202] Compiling OuroWorkbenchAppViewsTests WorkbenchMenuBarControllerTests.swift
+[170/202] Compiling OuroWorkbenchAppViewsTests WorkbenchOnboardingSheetTests.swift
+[171/202] Compiling OuroWorkbenchAppViewsTests WorkbenchSidebarViewInteractionTests.swift
+[172/202] Compiling OuroWorkbenchAppViewsTests WorkbenchUpdateInstallerTests.swift
+[173/202] Compiling OuroWorkbenchAppViewsTests WorkbenchViewModelBossActionTests.swift
+[174/202] Compiling OuroWorkbenchAppViewsTests WorkbenchViewModelBossCommandWorkspaceTests.swift
+[175/202] Compiling OuroWorkbenchAppViewsTests WorkbenchViewModelBossFlowsTests.swift
+[176/202] Compiling OuroWorkbenchAppViewsTests WorkbenchViewModelCluster18Tests.swift
+[177/202] Compiling OuroWorkbenchAppViewsTests WorkbenchViewModelCluster19Tests.swift
+[178/202] Compiling OuroWorkbenchAppViewsTests WorkbenchViewModelCluster20Tests.swift
+[179/202] Compiling OuroWorkbenchAppViewsTests WorkbenchViewModelCluster21Tests.swift
+[180/202] Compiling OuroWorkbenchAppViewsTests WorkbenchViewModelCluster22Tests.swift
+[181/202] Compiling OuroWorkbenchAppViewsTests WorkbenchViewModelFinalMopupTests.swift
+[182/202] Compiling OuroWorkbenchAppViewsTests WorkbenchViewModelMachinerySeamTests.swift
+[183/202] Compiling OuroWorkbenchAppViewsTests WorkbenchViewModelMarkTerminatedTests.swift
+[184/202] Compiling OuroWorkbenchAppViewsTests WorkbenchViewModelOnboardingFlowsTests.swift
+[185/202] Compiling OuroWorkbenchAppViewsTests WorkbenchViewModelOnboardingHandlersTests.swift
+[186/202] Compiling OuroWorkbenchAppViewsTests WorkbenchViewModelOnboardingProviderTests.swift
+[187/202] Compiling OuroWorkbenchAppViewsTests WorkbenchViewModelOwnerNameTests.swift
+[188/202] Compiling OuroWorkbenchAppViewsTests WorkbenchViewModelPerformCommandTests.swift
+[189/202] Compiling OuroWorkbenchAppViewsTests WorkbenchViewModelPostersTailTests.swift
+[190/202] Compiling OuroWorkbenchAppViewsTests WorkbenchViewModelReleaseBugDiagTests.swift
+[191/202] Compiling OuroWorkbenchAppViewsTests WorkbenchViewModelReleaseDiagTailTests.swift
+[192/202] Compiling OuroWorkbenchAppViewsTests WorkbenchViewModelSessionLifecycleTests.swift
+[193/202] Compiling OuroWorkbenchAppViewsTests WorkbenchViewModelStartupStateTests.swift
+[194/202] Compiling OuroWorkbenchAppViewsTests WorkbenchViewModelTailSweep17Tests.swift
+[195/202] Compiling OuroWorkbenchAppViewsTests WorkbenchViewModelTailSweepTests.swift
+[196/202] Compiling OuroWorkbenchAppViewsTests WorkspaceRowContextMenuInteractionTests.swift
+[197/202] Compiling OuroWorkbenchAppViewsTests WorkspaceRowContextMenuStandaloneTests.swift
+[198/202] Compiling OuroWorkbenchAppViewsTests WorkspaceSidebarRowInteractionTests.swift
+[199/202] Compiling OuroWorkbenchAppViewsTests WorkspaceTabContextMenuInteractionTests.swift
+[200/202] Compiling OuroWorkbenchAppViewsTests WorkspaceTabStripInteractionTests.swift
+[201/204] Emitting module OuroWorkbenchPackageTests
+[202/204] Compiling OuroWorkbenchPackageTests runner.swift
+[202/204] Write Objects.LinkFileList
+[203/204] Linking OuroWorkbenchPackageTests
+Build complete! (41.22s)
+Test Suite 'Selected tests' started at 2026-06-29 22:04:44.877.
+Test Suite 'OuroWorkbenchPackageTests.xctest' started at 2026-06-29 22:04:44.878.
+Test Suite 'ShortcutHelpSheetInteractionTests' started at 2026-06-29 22:04:44.878.
+Test Case '-[OuroWorkbenchAppViewsTests.ShortcutHelpSheetInteractionTests testShortcutHelp_doneButton_tapRunsDismiss]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.ShortcutHelpSheetInteractionTests testShortcutHelp_doneButton_tapRunsDismiss]' passed (0.394 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.ShortcutHelpSheetInteractionTests testShortcutHelp_rendersAndNoLeak]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.ShortcutHelpSheetInteractionTests testShortcutHelp_rendersAndNoLeak]' passed (0.179 seconds).
+Test Suite 'ShortcutHelpSheetInteractionTests' passed at 2026-06-30 05:04:45.451.
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.573 (0.573) seconds
+Test Suite 'ShortcutHelpSheetTests' started at 2026-06-30 05:04:45.451.
+Test Case '-[OuroWorkbenchAppViewsTests.ShortcutHelpSheetTests testShortcutHelp_determinism_byteIdenticalTwiceNoLeak]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.ShortcutHelpSheetTests testShortcutHelp_determinism_byteIdenticalTwiceNoLeak]' passed (0.330 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.ShortcutHelpSheetTests testShortcutHelp_fullMap]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.ShortcutHelpSheetTests testShortcutHelp_fullMap]' passed (0.165 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.ShortcutHelpSheetTests testShortcutHelp_nonVacuity_catalogueRowsReachTree]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.ShortcutHelpSheetTests testShortcutHelp_nonVacuity_catalogueRowsReachTree]' passed (0.173 seconds).
+Test Suite 'ShortcutHelpSheetTests' passed at 2026-06-30 05:04:46.120.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.668 (0.668) seconds
+Test Suite 'OuroWorkbenchPackageTests.xctest' passed at 2026-06-30 05:04:46.120.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 1.241 (1.242) seconds
+Test Suite 'Selected tests' passed at 2026-06-30 05:04:46.120.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 1.241 (1.243) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
