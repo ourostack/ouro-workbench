@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.233 - Architecture docs and shortcut help split
+
+- Internal: extracts the shortcut help sheet into its own app-view source file, refreshes the Workbench architecture and normative docs index for the shared native app shell boundary, updates current setup naming, and refreshes the shared shell package pin. No user-facing behavior change.
+
 ## 0.1.232 - Bug-report composer coverage (mutation-testing hardening)
 
 - Internal: mutation-hardens `BugReport.swift` (already at gated 100% line+region). The composer's docstring promises the bug-report `report.md` is "built by a pure function the tests can pin byte-for-byte" — but the existing tests only asserted `contains(...)` substrings, so the whole document SKELETON was rendered yet never pinned: every blank-line spacer, section header, table header/separator row, empty-state placeholder, the When-line timestamp, several session fields (friend / working-directory / git-branch), and the timestamp locale+format could all be dropped or altered undetected (~33 surviving mutants). Adds two golden-document tests that assert the FULL markdown byte-for-byte (volatile timestamps normalised, since that formatter sets no timezone), a timestamp-format test, absolute assertions for the truncation limit constants (the old test built `limit + 5` items so the constant's value was invariant), exact-boundary truncation tests (the old test only crossed the boundary by +5, so `count > limit → >=` survived), and a slug default-max-length test. Seven behavior-asserting tests, each verified to fail on its mutant and pass on the original. Test-only — no production change; coverage stays 100%. The remaining survivors are documented lower-value boundaries (private inline-truncation byte caps, GitHub-issue-title length defaults) and near-equivalents (atomic-write flags, the live `gh`/process-spawn plumbing the unit layer never executes). No user-facing behavior change.

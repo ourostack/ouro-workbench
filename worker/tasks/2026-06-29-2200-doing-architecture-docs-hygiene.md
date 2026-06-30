@@ -79,7 +79,7 @@ Reduce Workbench app-layer bulk around shell-adjacent UI and make current archit
 **Output**: Validation logs in the artifacts directory and final review notes.
 **Acceptance**: Relevant tests pass or blockers are recorded with exact commands/output.
 
-### ⬜ Unit 5: PR/Merge/Cleanup
+### 🔄 Unit 5: PR/Merge/Cleanup
 **What**: Push branches, open PRs, merge where safe, and clean terminal worktrees if terminal.
 **Output**: PR/merge evidence or residual blocker evidence.
 **Acceptance**: Branch state, PR URLs, merge/CI status, and any remaining blockers are recorded.
@@ -100,3 +100,4 @@ Reduce Workbench app-layer bulk around shell-adjacent UI and make current archit
 - 2026-06-29 22:07 Unit 2 complete: refreshed architecture shell-boundary docs, added `docs/INDEX.md`, fixed current-doc setup naming drift, and verified index links plus stale-string checks.
 - 2026-06-29 22:10 Unit 3 complete: added minimal docs indexes in Ouro MD (`01dbab5`) and shared shell (`2a5bedb`) on `worker/docs-index` branches.
 - 2026-06-29 22:12 Unit 4 complete: full `swift test` passed (4,476 tests, 1 skipped, 0 failures), shell boundary selftest/scan passed, shell dependency freshness passed, and cold diff review found no A-006/A-010/A-027/A-038 gaps.
+- 2026-06-29 22:27 Unit 5 CI repair: Workbench PR #415 failed release freshness because app/release-affecting files changed at version `0.1.232`, and failed shell dependency freshness because `Package.resolved` still pinned `ouro-native-apple-app-shell@9f1db0b`. Bumped Workbench to `0.1.233`, added the changelog entry, and refreshed the shared shell pin to `e4f1d9f`. Local repair gates passed: `scripts/verify-version-contract.sh`, `scripts/release-policy.sh freshness --mode pr --base-ref origin/main`, `scripts/check-shell-dependency.sh`, `scripts/check-shell-boundary.sh`, `scripts/release-policy.sh selftest-paths`, `scripts/release-policy.sh selftest-package-guards`, `swift test --filter WorkbenchAppSourceRetargetTests`, `swift test --filter ShortcutHelpSheet`, and full `swift test` (4,476 tests, 1 skipped, 0 failures).
