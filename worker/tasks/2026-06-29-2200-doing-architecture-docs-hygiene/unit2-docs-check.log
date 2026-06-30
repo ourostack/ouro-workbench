@@ -1,0 +1,3 @@
+stale-current-strings
+index-links
+-e:1:in `<main>': undefined method `scan' for main:Object (NoMethodError)

@@ -64,7 +64,7 @@ Reduce Workbench app-layer bulk around shell-adjacent UI and make current archit
 **Output**: New Swift file plus reduced `WorkbenchViews.swift` size.
 **Acceptance**: Shortcut help tests still pass and the new file compiles without warnings.
 
-### ⬜ Unit 2: Workbench Normative Docs Index
+### ✅ Unit 2: Workbench Normative Docs Index
 **What**: Refresh `docs/architecture.md`, add `docs/INDEX.md`, and fix stale setup/shortcut naming in touched Workbench docs/comments.
 **Output**: Architecture docs and Workbench docs index.
 **Acceptance**: Index classifies normative docs, product docs, runbooks/control decks, and historical planning artifacts.
@@ -97,3 +97,4 @@ Reduce Workbench app-layer bulk around shell-adjacent UI and make current archit
 - 2026-06-29 22:00 Created from planning doc.
 - 2026-06-29 22:00 Unit 0 complete: read audit rows A-006/A-010/A-027/A-038, Workbench AGENTS/README/architecture docs, docs inventory, and app-layer bulk targets.
 - 2026-06-29 22:04 Unit 1 complete: extracted `ShortcutHelpSheet` into its own shell-adjacent app-view module, corrected the shortcut comment, and validated with `swift test --filter ShortcutHelpSheet` (5 tests, 0 failures).
+- 2026-06-29 22:07 Unit 2 complete: refreshed architecture shell-boundary docs, added `docs/INDEX.md`, fixed current-doc setup naming drift, and verified index links plus stale-string checks.
