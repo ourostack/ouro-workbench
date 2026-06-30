@@ -1,8 +1,12 @@
 # Changelog
 
-## 0.1.234 - Shared shell policy contract adoption
+## 0.1.235 - Shared shell policy contract adoption
 
 - Internal: declares Workbench's shared shell settings, privacy diagnostics, and support-bundle redaction boundaries against the merged shell policy contract. Pins the shell dependency to the latest package-relevant shell revision so CI validates the app adapter without a local edited package override. No user-facing behavior change.
+
+## 0.1.234 - Shared shell command manifest
+
+- Internal: declares the Workbench shared-shell command manifest from the keyboard shortcut reference, pins the shell contract assertion, and cleans up small naming/comment drift around setup and the keyboard-shortcuts menu. No user-facing behavior change.
 
 ## 0.1.233 - Architecture docs and shortcut help split
 
