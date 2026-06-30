@@ -1,8 +1,8 @@
 # Changelog
 
-## 0.1.233 - Shared shell dependency refresh
+## 0.1.233 - Architecture docs and shortcut help split
 
-- Internal: refreshes `ouro-native-apple-app-shell` to `26603ab5a9c4` and bumps Workbench for release/update freshness. No user-facing behavior change.
+- Internal: extracts the shortcut help sheet into its own app-view source file, refreshes the Workbench architecture and normative docs index for the shared native app shell boundary, updates current setup naming, and refreshes the shared shell package pin. No user-facing behavior change.
 
 ## 0.1.232 - Bug-report composer coverage (mutation-testing hardening)
 
