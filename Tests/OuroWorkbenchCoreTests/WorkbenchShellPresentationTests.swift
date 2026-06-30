@@ -25,9 +25,11 @@ final class WorkbenchShellPresentationTests: XCTestCase {
         XCTAssertEqual(contract.identity.version, WorkbenchRelease.version)
         XCTAssertEqual(contract.identity.userAgent, WorkbenchRelease.userAgent())
         XCTAssertEqual(contract.identity.distributionChannel, .directDownload)
+        XCTAssertEqual(contract.identity.distributionChannel.descriptor.displayName, "Direct download")
         XCTAssertEqual(contract.identity.releasePageURL.absoluteString, "https://github.com/ourostack/ouro-workbench/releases/latest")
 
         XCTAssertEqual(contract.releaseUpdates?.policy, WorkbenchReleasePolicy.releaseUpdatePolicy)
+        XCTAssertEqual(contract.releaseUpdates?.installCapability, .directInstallAndRelaunch)
         XCTAssertEqual(contract.releaseUpdates?.supportsInstallAndRelaunch, true)
         XCTAssertEqual(contract.releaseUpdates?.supportsReleasePage, true)
 
@@ -198,9 +200,9 @@ final class WorkbenchShellPresentationTests: XCTestCase {
 
         XCTAssertEqual(presentation.state.kind, .current)
         XCTAssertEqual(presentation.state.statusLine, snapshot.detail)
-        XCTAssertEqual(presentation.state.metadata.map(\.label), ["Latest", "Current", "Channel"])
-        XCTAssertEqual(presentation.state.metadata.first?.value, snapshot.latestReleaseLabelForPrompt)
-        XCTAssertEqual(presentation.state.metadata[1].value, snapshot.currentReleaseLabelForPrompt)
+        XCTAssertEqual(presentation.state.metadata.map(\.label), ["Current", "Latest", "Channel"])
+        XCTAssertEqual(presentation.state.metadata.first?.value, snapshot.currentReleaseLabelForPrompt)
+        XCTAssertEqual(presentation.state.metadata[1].value, snapshot.latestReleaseLabelForPrompt)
         XCTAssertNil(presentation.badgeText)
         XCTAssertNil(presentation.promptRelease)
         XCTAssertFalse(presentation.state.canInstallUpdate)
