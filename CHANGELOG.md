@@ -1,8 +1,12 @@
 # Changelog
 
-## 0.1.233 - Shared shell policy contract adoption
+## 0.1.234 - Shared shell policy contract adoption
 
-- Internal: declares Workbench's shared shell settings, privacy diagnostics, and support-bundle redaction boundaries against the merged shell policy contract. Pins the shell dependency to the merged contract revision so CI validates the app adapter without a local edited package override. No user-facing behavior change.
+- Internal: declares Workbench's shared shell settings, privacy diagnostics, and support-bundle redaction boundaries against the merged shell policy contract. Pins the shell dependency to the latest package-relevant shell revision so CI validates the app adapter without a local edited package override. No user-facing behavior change.
+
+## 0.1.233 - Shared shell dependency refresh
+
+- Internal: refreshes `ouro-native-apple-app-shell` to `26603ab5a9c4` and bumps Workbench for release/update freshness. No user-facing behavior change.
 
 ## 0.1.232 - Bug-report composer coverage (mutation-testing hardening)
 
