@@ -56,6 +56,55 @@ developer processes.
    - OpenAI Codex, when a tab command resolves to `codex`.
    - Custom terminal/TUI agents created from native `New Terminal`.
 
+## Shared Native App Shell Boundary
+
+Workbench consumes `ouro-native-apple-app-shell` as the shared owner for
+reusable Ouro native app chrome. The shell package owns common app identity,
+about surfaces, command-reference presentation, release/update controls,
+utility-window presentation patterns, and the validation scripts that keep those
+surfaces from drifting back into app-specific code.
+
+Workbench keeps product-specific mapping in the `OuroWorkbenchShellAdapter`
+target:
+
+- `Sources/OuroWorkbenchShellAdapter/WorkbenchShellContract.swift` declares the
+  shell-facing surfaces Workbench exposes.
+- `Sources/OuroWorkbenchShellAdapter/WorkbenchShellPresentation.swift` maps
+  Workbench's domain catalogues, such as keyboard shortcuts, into shell UI
+  presentation models.
+
+The dependency direction is one-way:
+
+```text
+OuroWorkbenchCore -> OuroAppShellCore
+OuroWorkbenchShellAdapter -> OuroWorkbenchCore + OuroAppShellContract + OuroAppShellUI
+OuroWorkbenchAppViews -> OuroWorkbenchCore + OuroWorkbenchShellAdapter + OuroAppShellUI
+OuroWorkbenchApp -> OuroWorkbenchAppViews + adapter/core targets
+```
+
+Reusable shell behavior should move upstream to `ouro-native-apple-app-shell`.
+Workbench-specific labels, commands, and product decisions should stay in
+`OuroWorkbenchCore` or the shell adapter. App views may render shell UI types
+through the adapter, but should not grow reusable shell policy locally.
+
+## Shell Control Deck
+
+Workbench's shell boundary is enforced by repo-local scripts that delegate to
+the shared shell checkout when needed:
+
+- `scripts/check-shell-boundary.sh` runs the shared shell boundary scanner with
+  Workbench's allowlist.
+- `scripts/check-shell-dependency.sh` verifies Workbench's `Package.resolved`
+  pin still contains the latest package-relevant shared shell changes from
+  `main`.
+- `scripts/refresh-shell-dependency.sh` updates the shared shell dependency pin.
+- `scripts/preflight.sh` is the broad local validation entry point and includes
+  shell-boundary checks.
+
+Allowlist rows in `scripts/shell-boundary-allowlist.txt` should stay narrow:
+domain behavior and adapter glue are legitimate; reusable app chrome belongs in
+the shared shell.
+
 ## Terminal Process Model
 
 The visible terminal is a client, not the durable process owner:

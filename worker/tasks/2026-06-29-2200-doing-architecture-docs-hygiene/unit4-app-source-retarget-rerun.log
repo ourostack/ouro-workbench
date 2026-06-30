@@ -1,0 +1,73 @@
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/11] Write sources
+[3/11] Write swift-version--58304C5D6DBC2206.txt
+[5/7] Emitting module OuroWorkbenchCoreTests
+[6/7] Compiling OuroWorkbenchCoreTests WorkbenchAppSource.swift
+[7/51] Compiling OuroWorkbenchCoreTests WorkbenchAppSourceRetargetTests.swift
+[8/51] Compiling OuroWorkbenchCoreTests WorkbenchSurfacePolicyTests.swift
+[9/51] Compiling OuroWorkbenchCoreTests WorkspaceEditingAffordancesWiringTests.swift
+[10/51] Compiling OuroWorkbenchCoreTests WorkspaceExportImportRobustnessWiringTests.swift
+[11/51] Compiling OuroWorkbenchCoreTests WorkspaceHomeNamingTests.swift
+[12/51] Compiling OuroWorkbenchCoreTests WorkspaceNameDerivationTests.swift
+[13/51] Compiling OuroWorkbenchCoreTests WorkspaceRootValidationTests.swift
+[14/51] Compiling OuroWorkbenchCoreTests WorkspaceSidebarWiringTests.swift
+[15/51] Compiling OuroWorkbenchCoreTests BossForwardStatusWiringTests.swift
+[16/51] Compiling OuroWorkbenchCoreTests BossInjectionGateWiringTests.swift
+[17/51] Compiling OuroWorkbenchCoreTests BossMCPPillVerdictWiringTests.swift
+[18/51] Compiling OuroWorkbenchCoreTests BossProseHistoryWiringTests.swift
+[19/51] Compiling OuroWorkbenchCoreTests BossWatchActionableGateTests.swift
+[20/51] Compiling OuroWorkbenchCoreTests ProviderCheckClassifierWiringTests.swift
+[21/51] Compiling OuroWorkbenchCoreTests ProviderColdStartDeadEndWiringTests.swift
+[22/51] Compiling OuroWorkbenchCoreTests ReadinessActuatorStatusWiringTests.swift
+[23/51] Compiling OuroWorkbenchCoreTests ReadinessStalenessRefreshWiringTests.swift
+[24/51] Compiling OuroWorkbenchCoreTests ReplayDedupWiringTests.swift
+[25/51] Compiling OuroWorkbenchCoreTests ScreenPreflightWiringTests.swift
+[26/51] Compiling OuroWorkbenchCoreTests SessionIdBackfillWiringTests.swift
+[27/51] Compiling OuroWorkbenchCoreTests StartSequenceAwaitWiringTests.swift
+[28/51] Compiling OuroWorkbenchCoreTests CredentialRotationWiringTests.swift
+[29/51] Compiling OuroWorkbenchCoreTests DaemonChipAvailabilityWiringTests.swift
+[30/51] Compiling OuroWorkbenchCoreTests FirstRunBootstrapRetryWiringTests.swift
+[31/51] Compiling OuroWorkbenchCoreTests HarnessReadinessOverlayWiringTests.swift
+[32/51] Compiling OuroWorkbenchCoreTests ImportPersistenceHonestyWiringTests.swift
+[33/51] Compiling OuroWorkbenchCoreTests NavCheckInWiringTests.swift
+[34/51] Compiling OuroWorkbenchCoreTests OnboardingBossChoiceRowAccessibilityWiringTests.swift
+[35/51] Compiling OuroWorkbenchCoreTests OnboardingNarrativeTests.swift
+[36/51] Compiling OuroWorkbenchCoreTests PersistenceSalvageWiringTests.swift
+[37/51] Compiling OuroWorkbenchCoreTests AgentDetailReadinessWiringTests.swift
+[38/51] Compiling OuroWorkbenchCoreTests AgentReadinessOverlayWiringTests.swift
+[39/51] Compiling OuroWorkbenchCoreTests AgentStatusLineAndMenuReadinessWiringTests.swift
+[40/51] Compiling OuroWorkbenchCoreTests BossActionLogPendingWiringTests.swift
+[41/51] Compiling OuroWorkbenchCoreTests BossAutonomyKillSwitchWiringTests.swift
+[42/51] Compiling OuroWorkbenchCoreTests TerminalLeakReaperWiringTests.swift
+[43/51] Compiling OuroWorkbenchCoreTests VaultOnboardingFormSessionResetTests.swift
+[44/51] Compiling OuroWorkbenchCoreTests VaultOnboardingWiringTests.swift
+[45/51] Compiling OuroWorkbenchCoreTests WaitingReconcileWiringTests.swift
+[46/51] Compiling OuroWorkbenchCoreTests BossWatchBackoffBumpWiringTests.swift
+[47/51] Compiling OuroWorkbenchCoreTests BossWorkbenchInstallOverlayWiringTests.swift
+[48/51] Compiling OuroWorkbenchCoreTests CheckpointPromptDeliveryWiringTests.swift
+[49/51] Compiling OuroWorkbenchCoreTests CloneHonestWiringTests.swift
+[50/51] Compiling OuroWorkbenchCoreTests ColdStartHonestWiringTests.swift
+[50/52] Write Objects.LinkFileList
+[51/52] Linking OuroWorkbenchPackageTests
+Build complete! (4.95s)
+Test Suite 'Selected tests' started at 2026-06-29 22:10:18.800.
+Test Suite 'OuroWorkbenchPackageTests.xctest' started at 2026-06-29 22:10:18.801.
+Test Suite 'WorkbenchAppSourceRetargetTests' started at 2026-06-29 22:10:18.801.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchAppSourceRetargetTests testEveryLibFileIsExplicitlyOrdered]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchAppSourceRetargetTests testEveryLibFileIsExplicitlyOrdered]' passed (0.002 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchAppSourceRetargetTests testSelfReadingSliceRoutesThroughTheSharedReader]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchAppSourceRetargetTests testSelfReadingSliceRoutesThroughTheSharedReader]' passed (0.015 seconds).
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchAppSourceRetargetTests testUnionContainsBothExeAndLibSides]' started.
+Test Case '-[OuroWorkbenchCoreTests.WorkbenchAppSourceRetargetTests testUnionContainsBothExeAndLibSides]' passed (0.013 seconds).
+Test Suite 'WorkbenchAppSourceRetargetTests' passed at 2026-06-29 22:10:18.832.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.030 (0.031) seconds
+Test Suite 'OuroWorkbenchPackageTests.xctest' passed at 2026-06-29 22:10:18.832.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.030 (0.031) seconds
+Test Suite 'Selected tests' passed at 2026-06-29 22:10:18.832.
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.030 (0.032) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.

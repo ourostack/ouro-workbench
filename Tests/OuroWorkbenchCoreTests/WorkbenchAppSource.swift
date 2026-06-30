@@ -68,6 +68,11 @@ enum WorkbenchAppSource {
         // `WorkbenchRootView`→`WorkbenchMenuBarController` both stay in WorkbenchViews.swift, so no
         // pair straddles the new file boundary (M = 0 guard-slice retargets).
         "WorkbenchViews.swift",
+        // A-006 docs-hygiene lane: shell-adjacent shortcut reference sheet extracted from
+        // WorkbenchViews.swift. The sheet has dedicated render/interaction tests and no known
+        // cross-declaration source-slice guards, so it can sit immediately after the remaining
+        // view declarations without changing guarded adjacency.
+        "ShortcutHelpSheet.swift",
         "WorkbenchViewModel.swift",
         // U0 Unit 1 keystone — the one VM-free leaf view moved first (was @ line 4930 in the old
         // file; unguarded, so its position relative to the big file does not affect any slice).
