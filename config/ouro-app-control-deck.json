@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "app": {
+    "name": "Ouro Workbench",
+    "repository": "ourostack/ouro-workbench",
+    "shell_adapter": "Sources/OuroWorkbenchShellAdapter"
+  },
+  "shell": {
+    "package_identity": "ouro-native-apple-app-shell",
+    "url": "https://github.com/ourostack/ouro-native-apple-app-shell.git",
+    "branch": "main",
+    "freshness_guard": "scripts/check-shell-dependency.sh",
+    "boundary_guard": "scripts/check-shell-boundary.sh"
+  },
+  "dependency_policy": {
+    "branch_dependencies": [
+      {
+        "identity": "ouro-native-apple-app-shell",
+        "url": "https://github.com/ourostack/ouro-native-apple-app-shell.git",
+        "branch": "main",
+        "allowed_reason": "Shared shell intentionally tracks main and is guarded by scripts/check-shell-dependency.sh plus shell CI downstream checks."
+      }
+    ],
+    "non_shell_policy": "Direct non-shell dependencies must use exact or version requirements; floating branch requirements are rejected."
+  },
+  "coverage_policy": {
+    "allowlist_path": "scripts/coverage-allowlist.txt",
+    "owner": "Ouro Workbench product infrastructure",
+    "revalidation_command": "scripts/check-coverage.sh",
+    "entries": [
+      { "file": "BossAgentMCPClient.swift", "max_uncovered_lines": 1, "max_uncovered_regions": 2, "reason": "Unreachable read loop fallthrough." },
+      { "file": "SessionActivityReader.swift", "max_uncovered_lines": 0, "max_uncovered_regions": 1, "reason": "Swift coverage synthetic default-argument region." },
+      { "file": "DaemonLiveness.swift", "max_uncovered_lines": 2, "max_uncovered_regions": 2, "reason": "Swift coverage synthesized async epilogue regions after deterministic tests." },
+      { "file": "MailboxClient.swift", "max_uncovered_lines": 1, "max_uncovered_regions": 1, "reason": "Swift coverage synthesized async epilogue region after direct shared-session tests." },
+      { "file": "GitSessionStatus.swift", "max_uncovered_lines": 1, "max_uncovered_regions": 1, "reason": "Timing-sensitive live-git success path with deterministic test plus residual CI jitter tolerance." },
+      { "file": "WorkbenchViews.swift", "max_uncovered_lines": 1170, "max_uncovered_regions": 223, "reason": "AppKit/scene shell residual baseline for gated view surface." },
+      { "file": "WorkbenchViewModel.swift", "max_uncovered_lines": 2280, "max_uncovered_regions": 864, "reason": "Live PTY/subprocess/task-loop residual baseline for gated view model surface." }
+    ]
+  },
+  "scenario_digest_policy": {
+    "standard": {
+      "command": "swift run -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete OuroWorkbenchScenarioVerifier --out artifacts/workbench-scenario-verifier --no-samples --expect-rows 5000 --expect-matrix-rows 5000 --expect-deep-rows 0 --expect-render-passes 25000 --expect-coverage-digest 89292786bde2e133",
+      "coverage_digest": "89292786bde2e133",
+      "revalidation_command": "scripts/preflight.sh --only required-scenario-verifier"
+    },
+    "deep": {
+      "command": "swift run -Xswiftc -warnings-as-errors -Xswiftc -strict-concurrency=complete OuroWorkbenchScenarioVerifier --out artifacts/workbench-scenario-verifier-deep --no-samples --deep-scenarios 15000 --seed 20260525 --expect-rows 20000 --expect-matrix-rows 5000 --expect-deep-rows 15000 --expect-render-passes 100000 --expect-coverage-digest d205bd5c250d80ca",
+      "coverage_digest": "d205bd5c250d80ca",
+      "revalidation_command": "scripts/preflight.sh --deep --only deep-scenario-verifier"
+    }
+  }
+}
