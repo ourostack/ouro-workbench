@@ -173,7 +173,7 @@ public enum WorkbenchShellUpdatePresenter {
                 installError: installError,
                 stagedUpdateVersion: stagedUpdateVersion,
                 installPlan: snapshot.map { WorkbenchUpdatePlanner.plan(from: $0) }
-            ),
+            )
         )
         state.statusLine = statusLine(snapshot: snapshot, isChecking: isChecking, isInstalling: isInstalling)
         state.detail = detail(snapshot: snapshot, isChecking: isChecking, isInstalling: isInstalling, installStatus: installStatus) ?? state.detail
