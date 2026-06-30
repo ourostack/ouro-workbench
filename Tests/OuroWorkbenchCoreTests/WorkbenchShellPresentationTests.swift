@@ -77,14 +77,33 @@ final class WorkbenchShellPresentationTests: XCTestCase {
             .settings
         ])
         XCTAssertEqual(contract.settings?.entryPoint, "Ouro Workbench > Settings (Command ,)")
+        XCTAssertEqual(contract.settings?.sharedSections.map(\.kind), [
+            .updates,
+            .privacy,
+            .about,
+            .keyboardShortcuts
+        ])
         XCTAssertEqual(contract.settings?.appOwnedSections, [
             "Terminal",
             "Appearance",
             "Workbench Chrome",
             "Startup",
-            "Software Updates",
             "Boss",
             "Advanced"
+        ])
+        XCTAssertEqual(contract.privacyDiagnostics?.telemetryConsentEntryPoint, "Ouro Workbench > Settings")
+        XCTAssertEqual(contract.privacyDiagnostics?.privacyDocumentURL.absoluteString, "https://github.com/ourostack/ouro-workbench/blob/main/README.md#support-diagnostics")
+        XCTAssertEqual(contract.privacyDiagnostics?.diagnosticsExportDisclosure, "Support Diagnostics creates a local zip with system, app-bundle, login-item, runtime, and workspace summary evidence.")
+        XCTAssertEqual(contract.privacyDiagnostics?.supportBundleContents, [
+            "system evidence",
+            "app bundle evidence",
+            "login item evidence",
+            "runtime evidence",
+            "workspace summary evidence"
+        ])
+        XCTAssertEqual(contract.privacyDiagnostics?.redactionGuarantees, [
+            "no transcript contents by default",
+            "no raw workspace state by default"
         ])
     }
 
