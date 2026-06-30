@@ -200,7 +200,7 @@ scripts/install-app.sh --open
 
 Then run first-run setup in the app:
 
-1. Click the wand button or choose `Set Up Workbench` from the command palette.
+1. Click the wand button or choose `Set up a boss` from the command palette.
 2. Read the welcome page, then choose which local Ouro agent should be this
    Mac's boss. The boss is the operator's agent for this machine; it is not the
    Desk worker and it is not tied to any single terminal tab. Click anywhere on

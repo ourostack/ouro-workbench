@@ -117,7 +117,7 @@ The installed bundle also includes an Ouro-facing MCP server:
 Use the native `Workbench MCP` row in the boss dashboard to register that server
 with the selected Ouro boss agent.
 
-Use `Set Up Workbench` from the wand button or command palette for native
+Use `Set up a boss` from the wand button or command palette for native
 onboarding. The flow walks through Welcome, Choose Boss, Connect, and Import
 one page at a time. Boss agent rows are selectable across the whole row, and
 `Enable Tools` names the Workbench MCP registration step that lets the selected
