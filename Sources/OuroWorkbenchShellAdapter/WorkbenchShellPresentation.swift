@@ -166,7 +166,7 @@ public enum WorkbenchShellUpdatePresenter {
             presentation: ReleaseUpdatePresentationInput(
                 snapshot: snapshot,
                 channel: channel,
-                installCapability: WorkbenchShellContract.contract.releaseUpdates?.installCapability ?? .none,
+                installCapability: WorkbenchShellContract.releaseInstallCapability,
                 isChecking: isChecking,
                 isInstalling: isInstalling,
                 installStatus: installStatus,

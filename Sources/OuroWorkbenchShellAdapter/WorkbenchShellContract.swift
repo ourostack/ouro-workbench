@@ -11,6 +11,7 @@ public enum WorkbenchShellContract {
         .settings,
         .windowChrome
     ]
+    public static let releaseInstallCapability: ReleaseInstallCapability = .directInstallAndRelaunch
 
     public static var contract: OuroAppShellContract {
         OuroAppShellContract(
@@ -18,7 +19,7 @@ public enum WorkbenchShellContract {
             requiredSurfaces: requiredSurfaces,
             releaseUpdates: OuroAppShellReleaseUpdateContract(
                 policy: WorkbenchReleasePolicy.releaseUpdatePolicy,
-                installCapability: .directInstallAndRelaunch,
+                installCapability: releaseInstallCapability,
                 supportsReleasePage: true
             ),
             about: OuroAppShellAboutContract(
