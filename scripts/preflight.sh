@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 scripts/check-shell-dependency.sh
+scripts/check-app-control-deck.py
 scripts/check-shell-boundary.sh --selftest
 scripts/check-shell-boundary.sh
 
