@@ -18,7 +18,7 @@ public enum WorkbenchShellContract {
             requiredSurfaces: requiredSurfaces,
             releaseUpdates: OuroAppShellReleaseUpdateContract(
                 policy: WorkbenchReleasePolicy.releaseUpdatePolicy,
-                supportsInstallAndRelaunch: true,
+                installCapability: .directInstallAndRelaunch,
                 supportsReleasePage: true
             ),
             about: OuroAppShellAboutContract(

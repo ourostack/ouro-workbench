@@ -1,4 +1,5 @@
 import Foundation
+import OuroAppShellCore
 import OuroAppShellUI
 import OuroWorkbenchCore
 import SwiftUI
@@ -148,7 +149,7 @@ public struct WorkbenchShellUpdatePanelView: View {
 }
 
 public enum WorkbenchShellUpdatePresenter {
-    public static let channel = "Direct download"
+    public static let channel = WorkbenchShellContract.identity.distributionChannel
 
     public static func presentation(
         snapshot: ReleaseUpdateSnapshot?,
@@ -161,22 +162,25 @@ public enum WorkbenchShellUpdatePresenter {
         let badgeText = updateBadgeText(snapshot: snapshot, stagedUpdateVersion: stagedUpdateVersion)
         let promptRelease = updatePromptRelease(snapshot: snapshot, stagedUpdateVersion: stagedUpdateVersion)
         let releaseURL = releaseURL(snapshot: snapshot)
-        let state = ReleaseUpdateViewState(
-            kind: kind(
+        var state = ReleaseUpdateViewState.from(
+            presentation: ReleaseUpdatePresentationInput(
                 snapshot: snapshot,
+                channel: channel,
+                installCapability: WorkbenchShellContract.contract.releaseUpdates?.installCapability ?? .none,
                 isChecking: isChecking,
                 isInstalling: isInstalling,
+                installStatus: installStatus,
                 installError: installError,
-                stagedUpdateVersion: stagedUpdateVersion
+                stagedUpdateVersion: stagedUpdateVersion,
+                installPlan: snapshot.map { WorkbenchUpdatePlanner.plan(from: $0) }
             ),
-            statusLine: statusLine(snapshot: snapshot, isChecking: isChecking, isInstalling: isInstalling),
-            metadata: metadata(snapshot: snapshot, stagedUpdateVersion: stagedUpdateVersion),
-            detail: detail(snapshot: snapshot, isChecking: isChecking, isInstalling: isInstalling, installStatus: installStatus),
-            warning: warning(snapshot: snapshot, isChecking: isChecking, installError: installError),
-            canReviewUpdate: !isChecking && badgeText != nil,
-            canInstallUpdate: canInstall(snapshot: snapshot, isChecking: isChecking, isInstalling: isInstalling, stagedUpdateVersion: stagedUpdateVersion),
-            canOpenReleasePage: !isChecking && releaseURL != nil && snapshot?.status == .updateAvailable
         )
+        state.statusLine = statusLine(snapshot: snapshot, isChecking: isChecking, isInstalling: isInstalling)
+        state.detail = detail(snapshot: snapshot, isChecking: isChecking, isInstalling: isInstalling, installStatus: installStatus) ?? state.detail
+        state.warning = warning(snapshot: snapshot, isChecking: isChecking, installError: installError) ?? state.warning
+        state.canReviewUpdate = !isChecking && badgeText != nil
+        state.canInstallUpdate = canInstall(snapshot: snapshot, isChecking: isChecking, isInstalling: isInstalling, stagedUpdateVersion: stagedUpdateVersion)
+        state.canOpenReleasePage = !isChecking && releaseURL != nil && snapshot?.status == .updateAvailable
         return WorkbenchShellUpdatePresentation(
             state: state,
             badgeText: badgeText,
@@ -190,27 +194,6 @@ public enum WorkbenchShellUpdatePresenter {
             return nil
         }
         return URL(string: htmlURL)
-    }
-
-    private static func kind(
-        snapshot: ReleaseUpdateSnapshot?,
-        isChecking: Bool,
-        isInstalling: Bool,
-        installError: String?,
-        stagedUpdateVersion: String?
-    ) -> ReleaseUpdateStateKind {
-        if isChecking { return .checking }
-        if isInstalling { return .installing }
-        if installError != nil { return .failed }
-        if stagedUpdateVersion != nil { return .readyToRelaunch }
-        guard let status = snapshot?.status else {
-            return .notChecked
-        }
-        switch status {
-        case .current: return .current
-        case .updateAvailable: return .updateAvailable
-        case .unavailable: return .unavailable
-        }
     }
 
     private static func statusLine(
@@ -228,21 +211,6 @@ public enum WorkbenchShellUpdatePresenter {
             return "not checked"
         }
         return snapshot.detail
-    }
-
-    private static func metadata(
-        snapshot: ReleaseUpdateSnapshot?,
-        stagedUpdateVersion: String?
-    ) -> [ReleaseUpdateMetadataItem] {
-        var items: [ReleaseUpdateMetadataItem] = []
-        if let latest = snapshot?.latestReleaseLabelForPrompt ?? stagedUpdateVersion {
-            items.append(ReleaseUpdateMetadataItem(id: "latest", label: "Latest", value: latest))
-        }
-        if let current = snapshot?.currentReleaseLabelForPrompt {
-            items.append(ReleaseUpdateMetadataItem(id: "current", label: "Current", value: current))
-        }
-        items.append(ReleaseUpdateMetadataItem(id: "channel", label: "Channel", value: channel))
-        return items
     }
 
     private static func detail(
