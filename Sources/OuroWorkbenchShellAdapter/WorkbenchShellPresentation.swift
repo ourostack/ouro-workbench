@@ -1,5 +1,6 @@
 import Foundation
 import OuroAppShellCore
+import OuroAppShellContract
 import OuroAppShellUI
 import OuroWorkbenchCore
 import SwiftUI
@@ -73,6 +74,25 @@ public enum WorkbenchShellCommandReference {
             }
         }
     }
+
+    public static var manifest: OuroAppShellCommandSurfaceManifest {
+        OuroAppShellCommandSurfaceManifest(
+            commands: WorkbenchGuide.shortcutCategories.flatMap { category in
+                category.shortcuts.enumerated().map { index, shortcut in
+                    OuroAppShellCommandSurface(
+                        id: "\(category.id).\(index)",
+                        title: shortcut.summary,
+                        section: category.title,
+                        shortcut: shortcut.keys,
+                        menuPath: nil,
+                        commandPaletteTitle: shortcut.summary,
+                        referenceTitle: shortcut.summary
+                    )
+                }
+            }
+        )
+    }
+
 }
 
 public struct WorkbenchShellCommandReferenceView: View {

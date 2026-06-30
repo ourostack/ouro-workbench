@@ -13,6 +13,7 @@ final class WorkbenchShellPresentationTests: XCTestCase {
             contract,
             WorkbenchShellContract.requiredSurfaces
         )
+        OuroAppShellContractAssertions.assertCommandManifestMatchesReference(contract)
     }
 
     func testShellContractMatchesRuntimeIdentityReleaseAndShortcutSurfaces() {
@@ -39,6 +40,22 @@ final class WorkbenchShellPresentationTests: XCTestCase {
         XCTAssertEqual(contract.commandReference?.commandCount, WorkbenchShellCommandReference.items.count)
         XCTAssertEqual(contract.commandReference?.sections, WorkbenchShellCommandReference.sectionOrder)
         XCTAssertEqual(contract.commandReference?.entryPoint, "Ouro Workbench > Keyboard Shortcuts")
+        OuroAppShellContractAssertions.assertCommandManifest(
+            contract,
+            matches: WorkbenchShellCommandReference.manifest.commands
+        )
+    }
+
+    func testShellCommandManifestPinsShortcutSurfaceRows() {
+        let manifest = WorkbenchShellCommandReference.manifest
+
+        XCTAssertEqual(manifest.count, WorkbenchShellCommandReference.items.count)
+        XCTAssertEqual(manifest.sections, WorkbenchShellCommandReference.sectionOrder)
+        XCTAssertTrue(manifest.commands.contains { command in
+            command.title == "Show the keyboard shortcut help"
+                && command.shortcut == "⌘/"
+                && command.section == "App"
+        })
     }
 
     func testShellContractDocumentsUtilityWindowsAndSettingsEntryPoint() {

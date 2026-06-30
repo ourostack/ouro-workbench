@@ -32,6 +32,7 @@ public enum WorkbenchShellContract {
                 sections: WorkbenchShellCommandReference.sectionOrder,
                 entryPoint: "Ouro Workbench > Keyboard Shortcuts"
             ),
+            commandManifest: WorkbenchShellCommandReference.manifest,
             utilityWindows: [
                 .init(id: "about", surface: .about, title: "About Ouro Workbench"),
                 .init(id: "keyboard-shortcuts", surface: .keyboardShortcuts, title: WorkbenchShellCommandReference.title),
