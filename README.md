@@ -25,6 +25,9 @@ on the human, and what should keep moving.
 
 ## Guide
 
+Read [docs/INDEX.md](docs/INDEX.md) first when you need to distinguish current
+source-of-truth docs from historical planning artifacts.
+
 Read [docs/guide.md](docs/guide.md) for the operator mental model, first-run
 checklist, daily control loops, the attention inbox (the boss handling waiting
 prompts for you, preference-driven and audited), boss/Ouro integration, restart
