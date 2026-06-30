@@ -69,7 +69,7 @@ Reduce Workbench app-layer bulk around shell-adjacent UI and make current archit
 **Output**: Architecture docs and Workbench docs index.
 **Acceptance**: Index classifies normative docs, product docs, runbooks/control decks, and historical planning artifacts.
 
-### ⬜ Unit 3: Minimal Cross-Repo Docs Indexes
+### ✅ Unit 3: Minimal Cross-Repo Docs Indexes
 **What**: Add small `docs/INDEX.md` files to Ouro MD and shared shell if safe and docs-only.
 **Output**: Cross-repo index commits or documented no-op evidence.
 **Acceptance**: Each touched repo has a current-docs entry point without changing implementation scope.
@@ -98,3 +98,4 @@ Reduce Workbench app-layer bulk around shell-adjacent UI and make current archit
 - 2026-06-29 22:00 Unit 0 complete: read audit rows A-006/A-010/A-027/A-038, Workbench AGENTS/README/architecture docs, docs inventory, and app-layer bulk targets.
 - 2026-06-29 22:04 Unit 1 complete: extracted `ShortcutHelpSheet` into its own shell-adjacent app-view module, corrected the shortcut comment, and validated with `swift test --filter ShortcutHelpSheet` (5 tests, 0 failures).
 - 2026-06-29 22:07 Unit 2 complete: refreshed architecture shell-boundary docs, added `docs/INDEX.md`, fixed current-doc setup naming drift, and verified index links plus stale-string checks.
+- 2026-06-29 22:10 Unit 3 complete: added minimal docs indexes in Ouro MD (`01dbab5`) and shared shell (`2a5bedb`) on `worker/docs-index` branches.
