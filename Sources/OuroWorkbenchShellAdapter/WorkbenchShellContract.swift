@@ -38,14 +38,35 @@ public enum WorkbenchShellContract {
             ],
             settings: OuroAppShellSettingsContract(
                 entryPoint: "Ouro Workbench > Settings (Command ,)",
+                sharedSections: [
+                    .updates(entryPoint: "Ouro Workbench > Settings > Software Updates"),
+                    .privacy(entryPoint: "Ouro Workbench > Support Diagnostics"),
+                    .about(entryPoint: "Ouro Workbench > About Ouro Workbench"),
+                    .keyboardShortcuts(entryPoint: "Ouro Workbench > Keyboard Shortcuts")
+                ],
                 appOwnedSections: [
                     "Terminal",
                     "Appearance",
                     "Workbench Chrome",
                     "Startup",
-                    "Software Updates",
                     "Boss",
                     "Advanced"
+                ]
+            ),
+            privacyDiagnostics: OuroAppShellPrivacyDiagnosticsContract(
+                telemetryConsentEntryPoint: "Ouro Workbench > Settings",
+                privacyDocumentURL: URL(string: "https://github.com/ourostack/ouro-workbench/blob/main/README.md#support-diagnostics")!,
+                diagnosticsExportDisclosure: "Support Diagnostics creates a local zip with system, app-bundle, login-item, runtime, and workspace summary evidence.",
+                supportBundleContents: [
+                    "system evidence",
+                    "app bundle evidence",
+                    "login item evidence",
+                    "runtime evidence",
+                    "workspace summary evidence"
+                ],
+                redactionGuarantees: [
+                    "no transcript contents by default",
+                    "no raw workspace state by default"
                 ]
             )
         )
