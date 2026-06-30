@@ -54,7 +54,7 @@ Reduce Workbench app-layer bulk around shell-adjacent UI and make current archit
 
 **CRITICAL: Every unit header MUST start with status emoji (⬜ for new units).**
 
-### ⬜ Unit 0: Setup/Research
+### ✅ Unit 0: Setup/Research
 **What**: Read audit rows, repo instructions, architecture docs, app-view bulk targets, and docs inventory.
 **Output**: Evidence captured in the plan/doing docs and implementation choices.
 **Acceptance**: Audit item IDs, branch/worktree, source docs, and validation targets are recorded.
@@ -95,3 +95,4 @@ Reduce Workbench app-layer bulk around shell-adjacent UI and make current archit
 
 ## Progress Log
 - 2026-06-29 22:00 Created from planning doc.
+- 2026-06-29 22:00 Unit 0 complete: read audit rows A-006/A-010/A-027/A-038, Workbench AGENTS/README/architecture docs, docs inventory, and app-layer bulk targets.
