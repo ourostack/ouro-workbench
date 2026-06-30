@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.234 - Shared shell command manifest
+
+- Internal: declares the Workbench shared-shell command manifest from the keyboard shortcut reference, pins the shell contract assertion, and cleans up small naming/comment drift around setup and the keyboard-shortcuts menu. No user-facing behavior change.
+
 ## 0.1.233 - Architecture docs and shortcut help split
 
 - Internal: extracts the shortcut help sheet into its own app-view source file, refreshes the Workbench architecture and normative docs index for the shared native app shell boundary, updates current setup naming, and refreshes the shared shell package pin. No user-facing behavior change.
