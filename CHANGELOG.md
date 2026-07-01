@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.238 - Developer ID signing infrastructure
+
+- Internal: adds opt-in Developer ID signing/notarization release plumbing and manifest verification for future signed direct-download artifacts. Existing prerelease artifacts remain ad-hoc unless signing is explicitly enabled. No user-facing behavior change.
+
 ## 0.1.237 - Workbench shell-adjacent view decomposition
 
 - Internal: extracts the Workbench menu-command dispatch, command palette sheet, and settings sheet from the large Workbench view file into focused app-view sources, while preserving shell-boundary ownership and existing UX behavior. No user-facing behavior change.

@@ -54,5 +54,6 @@ jobs:
     with:
       tag: ${{ needs.decide.outputs.tag }}
       prerelease: true
+    secrets: inherit
     permissions:
       contents: write

@@ -48,6 +48,8 @@ expected_bundle_id="$(manifest_value bundleIdentifier)"
 expected_version="$(manifest_value version)"
 expected_build="$(manifest_value build)"
 expected_dirty="$(manifest_value gitDirty 2>/dev/null || printf 'false')"
+expected_signing_mode="$(manifest_value signingMode 2>/dev/null || printf 'ad-hoc')"
+expected_notarized="$(manifest_value notarized 2>/dev/null || printf 'false')"
 
 if [[ -z "$ARCHIVE_PATH" ]]; then
   ARCHIVE_PATH="$(dirname "$MANIFEST_PATH")/$archive_name"
@@ -60,6 +62,11 @@ fi
 [[ "$expected_bytes" =~ ^[0-9]+$ ]] || fail "manifest byte count is not numeric"
 [[ "$expected_build" =~ ^[0-9]+$ ]] || fail "manifest build is not numeric"
 [[ "$expected_dirty" == "true" || "$expected_dirty" == "false" ]] || fail "manifest gitDirty is not boolean"
+[[ "$expected_signing_mode" == "ad-hoc" || "$expected_signing_mode" == "developer-id" ]] || fail "manifest signingMode is not valid"
+[[ "$expected_notarized" == "true" || "$expected_notarized" == "false" ]] || fail "manifest notarized is not boolean"
+if [[ "$expected_signing_mode" == "developer-id" && "$expected_notarized" != "true" ]]; then
+  fail "developer-id artifacts must be notarized"
+fi
 [[ "$expected_version" =~ ^[0-9]+[.][0-9]+[.][0-9]+([-.][0-9A-Za-z.]+)?$ ]] || fail "manifest version is not semver-like"
 
 actual_sha256="$(shasum -a 256 "$ARCHIVE_PATH" | awk '{print $1}')"

@@ -40,12 +40,30 @@ while [[ $# -gt 0 ]]; do
 done
 
 INFO_PLIST="$APP_DIR/Contents/Info.plist"
+release_signing_mode="${OURO_RELEASE_SIGNING_MODE:-}"
+notarized=false
+
+truthy() {
+  case "$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')" in
+    1|true|yes|on) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
 plist_value() {
   /usr/libexec/PlistBuddy -c "Print :$1" "$INFO_PLIST"
 }
 
 "$ROOT_DIR/scripts/verify-app-bundle.sh" "$APP_DIR" >/dev/null
+
+if [[ "$release_signing_mode" == "developer-id" ]] || truthy "${OURO_REQUIRE_NOTARIZATION:-}"; then
+  release_signing_mode="developer-id"
+  "$ROOT_DIR/scripts/check-signing-readiness.sh"
+  "$ROOT_DIR/scripts/sign-notarize-app.sh" --app "$APP_DIR" --app-name "$WORKBENCH_APP_NAME"
+  notarized=true
+else
+  release_signing_mode="ad-hoc"
+fi
 
 version="$(plist_value CFBundleShortVersionString)"
 build="$(plist_value CFBundleVersion)"
@@ -80,6 +98,8 @@ printf '  "version": "%s",\n' "$version" >> "$manifest_path"
 printf '  "build": "%s",\n' "$build" >> "$manifest_path"
 printf '  "gitSha": "%s",\n' "$git_sha" >> "$manifest_path"
 printf '  "gitDirty": %s,\n' "$git_dirty" >> "$manifest_path"
+printf '  "signingMode": "%s",\n' "$release_signing_mode" >> "$manifest_path"
+printf '  "notarized": %s,\n' "$notarized" >> "$manifest_path"
 printf '  "archive": "%s",\n' "$archive_name" >> "$manifest_path"
 printf '  "sha256": "%s",\n' "$sha256" >> "$manifest_path"
 printf '  "bytes": %s,\n' "$bytes" >> "$manifest_path"
