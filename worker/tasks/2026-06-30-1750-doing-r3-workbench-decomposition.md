@@ -67,7 +67,7 @@ Extract the next Workbench shell-adjacent slices out of `WorkbenchViews.swift` s
 **Output**: Red/characterization log proving the existing dispatch contract is active before movement.
 **Acceptance**: The test target exercises the existing `WorkbenchMenuCommand` and `dispatchMenuCommand` paths before source movement.
 
-### ⬜ Unit 1b: Command Dispatch Extraction — Implementation
+### ✅ Unit 1b: Command Dispatch Extraction — Implementation
 **What**: Move `WorkbenchMenuCommand` and `dispatchMenuCommand` from `WorkbenchViews.swift` into `Sources/OuroWorkbenchAppViews/WorkbenchMenuCommand.swift`, preserving access and behavior.
 **Output**: New command dispatch file; `WorkbenchViews.swift` no longer declares the command enum or dispatch function.
 **Acceptance**: `DispatchMenuCommandTests` pass and `rg` shows the declarations in the new file only.
@@ -133,3 +133,4 @@ Extract the next Workbench shell-adjacent slices out of `WorkbenchViews.swift` s
 - 2026-06-30 17:50 Doing conversion review converged: granularity, validation, ambiguity, quality, and scrutiny probes found no BLOCKER/MAJOR findings.
 - 2026-06-30 17:59 Unit 0 complete: baseline dispatch, command palette, settings, release/update/diagnostics tail tests, and shell boundary validation passed; log saved to `unit-0-baseline.log`.
 - 2026-06-30 17:59 Unit 1a complete: `DispatchMenuCommandTests` passed pre-move in `unit-0-baseline.log` with 38 tests and zero failures.
+- 2026-06-30 18:02 Unit 1b complete: moved menu command enum, notification, and dispatch function to `Sources/OuroWorkbenchAppViews/WorkbenchMenuCommand.swift`; `DispatchMenuCommandTests` passed with 38 tests and zero failures.
