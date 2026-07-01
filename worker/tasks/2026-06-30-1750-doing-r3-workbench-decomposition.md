@@ -97,7 +97,7 @@ Extract the next Workbench shell-adjacent slices out of `WorkbenchViews.swift` s
 **Output**: Characterization logs proving settings render and interaction paths are covered before movement.
 **Acceptance**: Existing settings tests exercise the target surface before source movement.
 
-### ⬜ Unit 3b: Settings Sheet Extraction — Implementation
+### ✅ Unit 3b: Settings Sheet Extraction — Implementation
 **What**: Move `SettingsSheet` and `SettingsSection` from `WorkbenchViews.swift` into `Sources/OuroWorkbenchAppViews/SettingsSheet.swift`, preserving bindings and update panel embedding.
 **Output**: New settings file; `WorkbenchViews.swift` no longer declares the settings sheet types.
 **Acceptance**: Settings tests pass and `rg` shows settings declarations in the new file only.
@@ -139,3 +139,4 @@ Extract the next Workbench shell-adjacent slices out of `WorkbenchViews.swift` s
 - 2026-06-30 18:05 Unit 2b complete: moved `CommandPaletteSheet` into `Sources/OuroWorkbenchAppViews/CommandPaletteSheet.swift`; palette tests passed with 18 tests and zero failures.
 - 2026-06-30 18:05 Unit 2c complete: post-extraction palette tests, `swift build`, and `scripts/check-shell-boundary.sh` passed.
 - 2026-06-30 18:05 Unit 3a complete: `SettingsSheetTests` and `SettingsSheetInteractionTests` passed pre-move in `unit-0-baseline.log` with 14 tests and zero failures.
+- 2026-06-30 18:08 Unit 3b complete: moved `SettingsSheet` and `SettingsSection` into `Sources/OuroWorkbenchAppViews/SettingsSheet.swift`; settings tests passed with 14 tests and zero failures.
