@@ -1,0 +1,105 @@
+== Dispatch post-extraction ==
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/10] Write swift-version--58304C5D6DBC2206.txt
+Build complete! (0.22s)
+Test Suite 'Selected tests' started at 2026-06-30 18:02:43.673.
+Test Suite 'OuroWorkbenchPackageTests.xctest' started at 2026-06-30 18:02:43.674.
+Test Suite 'DispatchMenuCommandTests' started at 2026-06-30 18:02:43.674.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testAbout_presentsAbout]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testAbout_presentsAbout]' passed (0.023 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testBossCheckIn_withNoBoss_presentsOnboarding]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testBossCheckIn_withNoBoss_presentsOnboarding]' passed (0.003 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testBossCheckIn_withUnreachableBoss_presentsHarnessStatus]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testBossCheckIn_withUnreachableBoss_presentsHarnessStatus]' passed (0.004 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testCheckForUpdates_doesNotMutateSyncStateOrCrash]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testCheckForUpdates_doesNotMutateSyncStateOrCrash]' passed (0.003 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testClosePane_collapsesSplit]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testClosePane_collapsesSplit]' passed (0.007 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testCommandPalette_presentsPalette]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testCommandPalette_presentsPalette]' passed (0.022 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testFindInTerminal_presentsSearch]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testFindInTerminal_presentsSearch]' passed (0.202 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testFocusOtherPane_togglesActivePane]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testFocusOtherPane_togglesActivePane]' passed (0.004 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testFontDecrease_bumpsDown]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testFontDecrease_bumpsDown]' passed (0.005 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testFontIncrease_bumpsUp]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testFontIncrease_bumpsUp]' passed (0.004 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testFontReset_resetsToDefault]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testFontReset_resetsToDefault]' passed (0.003 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testJumpToAttention_emptyQueue_setsTransientMessage]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testJumpToAttention_emptyQueue_setsTransientMessage]' passed (0.003 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testJumpToAttention_withWaitingSession_jumps_noMessage]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testJumpToAttention_withWaitingSession_jumps_noMessage]' passed (0.006 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testNewTerminal_presentsNewSessionSheet]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testNewTerminal_presentsNewSessionSheet]' passed (0.003 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testNewTerminalTab_presentsNewSessionSheet]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testNewTerminalTab_presentsNewSessionSheet]' passed (0.003 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testNextGroup_cyclesProject]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testNextGroup_cyclesProject]' passed (0.006 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testNextTerminal_cyclesSelection]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testNextTerminal_cyclesSelection]' passed (0.003 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testOpenWorkspace_cancelArm_isNoOp]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testOpenWorkspace_cancelArm_isNoOp]' passed (0.787 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testOpenWorkspace_drivesOpenWorkspaceConfig]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testOpenWorkspace_drivesOpenWorkspaceConfig]' passed (0.327 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testPrevGroup_cyclesProject]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testPrevGroup_cyclesProject]' passed (0.012 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testPrevTerminal_cyclesSelection]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testPrevTerminal_cyclesSelection]' passed (0.006 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testRecentsKeyMatchesProductionConstant]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testRecentsKeyMatchesProductionConstant]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testRedraw_noActiveEntry_isNoOp]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testRedraw_noActiveEntry_isNoOp]' passed (0.008 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testRedraw_recordsActionLog]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testRedraw_recordsActionLog]' passed (0.024 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testRenameTab_opensInlineEditorOnSelectedTab]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testRenameTab_opensInlineEditorOnSelectedTab]' passed (0.003 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testRenameWorkspace_opensInlineEditorOnActiveWorkspace]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testRenameWorkspace_opensInlineEditorOnActiveWorkspace]' passed (0.003 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testReportBug_presentsReportBug]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testReportBug_presentsReportBug]' passed (0.005 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testSaveWorkspace_noTerminals_setsMessage_beforeModal]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testSaveWorkspace_noTerminals_setsMessage_beforeModal]' passed (0.004 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testSaveWorkspace_routesIntoSaveWorkspacePanel]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testSaveWorkspace_routesIntoSaveWorkspacePanel]' passed (0.208 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testSelectTerminal_selectsNthEntry]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testSelectTerminal_selectsNthEntry]' passed (0.007 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testSettings_presentsSettings]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testSettings_presentsSettings]' passed (0.004 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testShortcutsHelp_presentsShortcutHelp]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testShortcutsHelp_presentsShortcutHelp]' passed (0.005 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testSplitDown_opensHorizontalSplit]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testSplitDown_opensHorizontalSplit]' passed (0.004 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testSplitRight_opensVerticalSplit]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testSplitRight_opensVerticalSplit]' passed (0.015 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testStopSelected_noActiveEntry_isNoOp]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testStopSelected_noActiveEntry_isNoOp]' passed (0.027 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testStopSelected_onWaitingSession_queuesConfirmation]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testStopSelected_onWaitingSession_queuesConfirmation]' passed (0.049 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testToggleFocus_focusesSelectedSession]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testToggleFocus_focusesSelectedSession]' passed (0.058 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testToggleSidebar_firesTheClosure_notModel]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.DispatchMenuCommandTests testToggleSidebar_firesTheClosure_notModel]' passed (0.004 seconds).
+Test Suite 'DispatchMenuCommandTests' passed at 2026-06-30 18:02:45.544.
+	 Executed 38 tests, with 0 failures (0 unexpected) in 1.864 (1.870) seconds
+Test Suite 'OuroWorkbenchPackageTests.xctest' passed at 2026-06-30 18:02:45.544.
+	 Executed 38 tests, with 0 failures (0 unexpected) in 1.864 (1.870) seconds
+Test Suite 'Selected tests' passed at 2026-06-30 18:02:45.544.
+	 Executed 38 tests, with 0 failures (0 unexpected) in 1.864 (1.871) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
+== Swift build ==
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/9] Write swift-version--58304C5D6DBC2206.txt
+Build complete! (1.56s)
+== Shell boundary ==
+Typed shell boundary scan ok: /Users/arimendelow/Projects/ouro-workbench-worker-r3-decomposition
+Shell boundary scan ok: /Users/arimendelow/Projects/ouro-workbench-worker-r3-decomposition

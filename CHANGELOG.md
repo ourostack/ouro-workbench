@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.237 - Workbench shell-adjacent view decomposition
+
+- Internal: extracts the Workbench menu-command dispatch, command palette sheet, and settings sheet from the large Workbench view file into focused app-view sources, while preserving shell-boundary ownership and existing UX behavior. No user-facing behavior change.
+
 ## 0.1.236 - Shared shell policy contract adoption
 
 - Internal: declares Workbench's shared shell settings, privacy diagnostics, and support-bundle redaction boundaries against the merged shell policy contract. Pins the shell dependency to the latest package-relevant shell revision so CI validates the app adapter without a local edited package override. No user-facing behavior change.

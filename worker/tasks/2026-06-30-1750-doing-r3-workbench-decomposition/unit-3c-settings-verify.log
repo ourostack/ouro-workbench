@@ -1,0 +1,60 @@
+== Settings post-extraction ==
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/10] Write swift-version--58304C5D6DBC2206.txt
+Build complete! (0.19s)
+Test Suite 'Selected tests' started at 2026-06-30 18:09:13.143.
+Test Suite 'OuroWorkbenchPackageTests.xctest' started at 2026-06-30 18:09:13.144.
+Test Suite 'SettingsSheetInteractionTests' started at 2026-06-30 18:09:13.144.
+Test Case '-[OuroWorkbenchAppViewsTests.SettingsSheetInteractionTests testSettings_autoUpdateToggle_flipsSetter]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.SettingsSheetInteractionTests testSettings_autoUpdateToggle_flipsSetter]' passed (0.061 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.SettingsSheetInteractionTests testSettings_doneButton_tapRunsDismiss]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.SettingsSheetInteractionTests testSettings_doneButton_tapRunsDismiss]' passed (0.051 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.SettingsSheetInteractionTests testSettings_fontStepper_incrementCallsSetter]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.SettingsSheetInteractionTests testSettings_fontStepper_incrementCallsSetter]' passed (0.019 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.SettingsSheetInteractionTests testSettings_interaction_noLeak]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.SettingsSheetInteractionTests testSettings_interaction_noLeak]' passed (0.071 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.SettingsSheetInteractionTests testSettings_menuBarToggle_flipsSetter]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.SettingsSheetInteractionTests testSettings_menuBarToggle_flipsSetter]' passed (0.098 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.SettingsSheetInteractionTests testSettings_negativeControl_toggleSettersFlipModel]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.SettingsSheetInteractionTests testSettings_negativeControl_toggleSettersFlipModel]' passed (0.025 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.SettingsSheetInteractionTests testSettings_notificationPrefsButton_tapRunsOpen]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.SettingsSheetInteractionTests testSettings_notificationPrefsButton_tapRunsOpen]' passed (0.074 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.SettingsSheetInteractionTests testSettings_resetButton_resetsFontSize]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.SettingsSheetInteractionTests testSettings_resetButton_resetsFontSize]' passed (0.020 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.SettingsSheetInteractionTests testSettings_startupToggle_flipsSetter]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.SettingsSheetInteractionTests testSettings_startupToggle_flipsSetter]' passed (0.011 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.SettingsSheetInteractionTests testSettings_themePicker_selectCallsSetter]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.SettingsSheetInteractionTests testSettings_themePicker_selectCallsSetter]' passed (0.015 seconds).
+Test Suite 'SettingsSheetInteractionTests' passed at 2026-07-01 01:09:13.591.
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.446 (0.447) seconds
+Test Suite 'SettingsSheetTests' started at 2026-07-01 01:09:13.591.
+Test Case '-[OuroWorkbenchAppViewsTests.SettingsSheetTests testSettings_deterministic_byteIdenticalTwiceAndNoLeak]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.SettingsSheetTests testSettings_deterministic_byteIdenticalTwiceAndNoLeak]' passed (0.099 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.SettingsSheetTests testSettings_fontSize13_rendersComposition]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.SettingsSheetTests testSettings_fontSize13_rendersComposition]' passed (0.096 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.SettingsSheetTests testSettings_fontSize20_labelTracksModel]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.SettingsSheetTests testSettings_fontSize20_labelTracksModel]' passed (0.098 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.SettingsSheetTests testSettings_negativeControl_fontSizeLabelFlips]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.SettingsSheetTests testSettings_negativeControl_fontSizeLabelFlips]' passed (0.118 seconds).
+Test Suite 'SettingsSheetTests' passed at 2026-07-01 01:09:14.002.
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.411 (0.411) seconds
+Test Suite 'OuroWorkbenchPackageTests.xctest' passed at 2026-07-01 01:09:14.002.
+	 Executed 14 tests, with 0 failures (0 unexpected) in 0.857 (0.859) seconds
+Test Suite 'Selected tests' passed at 2026-07-01 01:09:14.003.
+	 Executed 14 tests, with 0 failures (0 unexpected) in 0.857 (0.860) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
+== Swift build ==
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/9] Write swift-version--58304C5D6DBC2206.txt
+Build complete! (0.74s)
+== Shell boundary ==
+Typed shell boundary scan ok: /Users/arimendelow/Projects/ouro-workbench-worker-r3-decomposition
+Shell boundary scan ok: /Users/arimendelow/Projects/ouro-workbench-worker-r3-decomposition
