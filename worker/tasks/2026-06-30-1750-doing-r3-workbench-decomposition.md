@@ -92,7 +92,7 @@ Extract the next Workbench shell-adjacent slices out of `WorkbenchViews.swift` s
 **Output**: Passing logs.
 **Acceptance**: Existing command palette coverage remains intact with no UX behavior change.
 
-### ⬜ Unit 3a: Settings Sheet Extraction — Tests
+### ✅ Unit 3a: Settings Sheet Extraction — Tests
 **What**: Run `SettingsSheetTests` and `SettingsSheetInteractionTests` against the pre-move settings sheet behavior and save logs.
 **Output**: Characterization logs proving settings render and interaction paths are covered before movement.
 **Acceptance**: Existing settings tests exercise the target surface before source movement.
@@ -138,3 +138,4 @@ Extract the next Workbench shell-adjacent slices out of `WorkbenchViews.swift` s
 - 2026-06-30 18:02 Unit 2a complete: `CommandPaletteSheetTests` and `CommandPaletteSheetInteractionTests` passed pre-move in `unit-0-baseline.log` with 18 tests and zero failures.
 - 2026-06-30 18:05 Unit 2b complete: moved `CommandPaletteSheet` into `Sources/OuroWorkbenchAppViews/CommandPaletteSheet.swift`; palette tests passed with 18 tests and zero failures.
 - 2026-06-30 18:05 Unit 2c complete: post-extraction palette tests, `swift build`, and `scripts/check-shell-boundary.sh` passed.
+- 2026-06-30 18:05 Unit 3a complete: `SettingsSheetTests` and `SettingsSheetInteractionTests` passed pre-move in `unit-0-baseline.log` with 14 tests and zero failures.
