@@ -68,6 +68,13 @@ enum WorkbenchAppSource {
         // `WorkbenchRootView`→`WorkbenchMenuBarController` both stay in WorkbenchViews.swift, so no
         // pair straddles the new file boundary (M = 0 guard-slice retargets).
         "WorkbenchViews.swift",
+        // R3 workbench decomposition: shell-adjacent menu dispatch, command palette, and settings
+        // sheets extracted from WorkbenchViews.swift. These have focused render/interaction tests
+        // and no known cross-declaration source-slice guards, so they sit with the view declarations
+        // they were split from.
+        "WorkbenchMenuCommand.swift",
+        "CommandPaletteSheet.swift",
+        "SettingsSheet.swift",
         // A-006 docs-hygiene lane: shell-adjacent shortcut reference sheet extracted from
         // WorkbenchViews.swift. The sheet has dedicated render/interaction tests and no known
         // cross-declaration source-slice guards, so it can sit immediately after the remaining

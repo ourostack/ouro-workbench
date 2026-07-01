@@ -1,6 +1,6 @@
 # Doing: R3 Workbench Decomposition
 
-**Status**: READY_FOR_EXECUTION
+**Status**: IN_REVIEW
 **Execution Mode**: direct
 **Created**: 2026-06-30 17:50
 **Planning**: ./2026-06-30-1750-planning-r3-workbench-decomposition.md
@@ -22,15 +22,15 @@ Extract the next Workbench shell-adjacent slices out of `WorkbenchViews.swift` s
 
 ## Completion Criteria
 
-- [ ] `WorkbenchViews.swift` loses the extracted command dispatch, command palette, and settings sheet declarations while all call sites continue compiling.
-- [ ] New files in `Sources/OuroWorkbenchAppViews/` own those declarations with no new shell-boundary allowlist rows.
-- [ ] Existing tests for `DispatchMenuCommand`, `CommandPaletteSheet`, `CommandPaletteSheetInteraction`, `SettingsSheet`, and `SettingsSheetInteraction` pass after the extraction.
-- [ ] `scripts/check-shell-boundary.sh` passes.
+- [x] `WorkbenchViews.swift` loses the extracted command dispatch, command palette, and settings sheet declarations while all call sites continue compiling.
+- [x] New files in `Sources/OuroWorkbenchAppViews/` own those declarations with no new shell-boundary allowlist rows.
+- [x] Existing tests for `DispatchMenuCommand`, `CommandPaletteSheet`, `CommandPaletteSheetInteraction`, `SettingsSheet`, and `SettingsSheetInteraction` pass after the extraction.
+- [x] `scripts/check-shell-boundary.sh` passes.
 - [ ] Required Workbench local validation and GitHub CI pass for the PR.
 - [ ] PR is merged to `main`, branch/worktree cleanup is complete, and no generated Packages noise remains.
-- [ ] 100% test coverage on all new code.
-- [ ] All tests pass.
-- [ ] No warnings.
+- [x] 100% test coverage on all new code.
+- [x] All tests pass.
+- [x] No warnings.
 
 ## Code Coverage Requirements
 
@@ -107,7 +107,7 @@ Extract the next Workbench shell-adjacent slices out of `WorkbenchViews.swift` s
 **Output**: Passing logs.
 **Acceptance**: Existing settings coverage remains intact with no UX behavior change.
 
-### ⬜ Unit 4: Full Local Validation
+### ✅ Unit 4: Full Local Validation
 **What**: Run shell boundary validation, focused test suite, full `swift test`, and `swift build`.
 **Output**: Validation logs in the artifacts directory.
 **Acceptance**: All required local validation passes without warnings; `git status` has no generated package/dependency noise.
@@ -141,3 +141,4 @@ Extract the next Workbench shell-adjacent slices out of `WorkbenchViews.swift` s
 - 2026-06-30 18:05 Unit 3a complete: `SettingsSheetTests` and `SettingsSheetInteractionTests` passed pre-move in `unit-0-baseline.log` with 14 tests and zero failures.
 - 2026-06-30 18:08 Unit 3b complete: moved `SettingsSheet` and `SettingsSection` into `Sources/OuroWorkbenchAppViews/SettingsSheet.swift`; settings tests passed with 14 tests and zero failures.
 - 2026-06-30 18:09 Unit 3c complete: post-extraction settings tests, `swift build`, and `scripts/check-shell-boundary.sh` passed.
+- 2026-06-30 18:19 Unit 4 complete: dependency checks, app control deck, shell boundary selftest/normal validation, generated scenario matrix diff check, package resolve, strict Swift test shards, UI surface probe, keyboard/a11y contract, and 5000-row native scenario verifier passed in `unit-4-local-validation.log`; initial coverage run exposed the new files missing from `WorkbenchAppSource.orderedLibFiles`, fixed in `Tests/OuroWorkbenchCoreTests/WorkbenchAppSource.swift`, then `WorkbenchAppSourceRetargetTests` and `scripts/check-coverage.sh` passed in `unit-4-coverage-rerun.log` with 100% line+region coverage aside documented structural exclusions.
