@@ -72,7 +72,7 @@ Extract the next Workbench shell-adjacent slices out of `WorkbenchViews.swift` s
 **Output**: New command dispatch file; `WorkbenchViews.swift` no longer declares the command enum or dispatch function.
 **Acceptance**: `DispatchMenuCommandTests` pass and `rg` shows the declarations in the new file only.
 
-### ⬜ Unit 1c: Command Dispatch Extraction — Coverage & Refactor
+### ✅ Unit 1c: Command Dispatch Extraction — Coverage & Refactor
 **What**: Run targeted dispatch tests and build checks; refactor imports or access only if needed.
 **Output**: Passing test/build logs.
 **Acceptance**: Command dispatch behavior is covered by existing tests with no warnings or shell-boundary allowlist changes.
@@ -134,3 +134,4 @@ Extract the next Workbench shell-adjacent slices out of `WorkbenchViews.swift` s
 - 2026-06-30 17:59 Unit 0 complete: baseline dispatch, command palette, settings, release/update/diagnostics tail tests, and shell boundary validation passed; log saved to `unit-0-baseline.log`.
 - 2026-06-30 17:59 Unit 1a complete: `DispatchMenuCommandTests` passed pre-move in `unit-0-baseline.log` with 38 tests and zero failures.
 - 2026-06-30 18:02 Unit 1b complete: moved menu command enum, notification, and dispatch function to `Sources/OuroWorkbenchAppViews/WorkbenchMenuCommand.swift`; `DispatchMenuCommandTests` passed with 38 tests and zero failures.
+- 2026-06-30 18:02 Unit 1c complete: post-extraction `DispatchMenuCommandTests`, `swift build`, and `scripts/check-shell-boundary.sh` passed.
