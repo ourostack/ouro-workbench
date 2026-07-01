@@ -77,7 +77,7 @@ Extract the next Workbench shell-adjacent slices out of `WorkbenchViews.swift` s
 **Output**: Passing test/build logs.
 **Acceptance**: Command dispatch behavior is covered by existing tests with no warnings or shell-boundary allowlist changes.
 
-### ⬜ Unit 2a: Command Palette Extraction — Tests
+### ✅ Unit 2a: Command Palette Extraction — Tests
 **What**: Run `CommandPaletteSheetTests` and `CommandPaletteSheetInteractionTests` against the pre-move command palette behavior and save logs.
 **Output**: Characterization logs proving grouped, empty, filtered, and interaction paths are covered before movement.
 **Acceptance**: Existing palette tests exercise the target surface before source movement.
@@ -135,3 +135,4 @@ Extract the next Workbench shell-adjacent slices out of `WorkbenchViews.swift` s
 - 2026-06-30 17:59 Unit 1a complete: `DispatchMenuCommandTests` passed pre-move in `unit-0-baseline.log` with 38 tests and zero failures.
 - 2026-06-30 18:02 Unit 1b complete: moved menu command enum, notification, and dispatch function to `Sources/OuroWorkbenchAppViews/WorkbenchMenuCommand.swift`; `DispatchMenuCommandTests` passed with 38 tests and zero failures.
 - 2026-06-30 18:02 Unit 1c complete: post-extraction `DispatchMenuCommandTests`, `swift build`, and `scripts/check-shell-boundary.sh` passed.
+- 2026-06-30 18:02 Unit 2a complete: `CommandPaletteSheetTests` and `CommandPaletteSheetInteractionTests` passed pre-move in `unit-0-baseline.log` with 18 tests and zero failures.
