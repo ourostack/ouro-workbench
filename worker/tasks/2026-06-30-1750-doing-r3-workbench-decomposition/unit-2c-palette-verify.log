@@ -1,0 +1,68 @@
+== Command palette post-extraction ==
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/10] Write swift-version--58304C5D6DBC2206.txt
+Build complete! (0.18s)
+Test Suite 'Selected tests' started at 2026-06-30 18:05:51.125.
+Test Suite 'OuroWorkbenchPackageTests.xctest' started at 2026-06-30 18:05:51.126.
+Test Suite 'CommandPaletteSheetInteractionTests' started at 2026-06-30 18:05:51.126.
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetInteractionTests testClampedSelection_clampsAtLowerBound]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetInteractionTests testClampedSelection_clampsAtLowerBound]' passed (0.001 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetInteractionTests testClampedSelection_clampsAtUpperBound]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetInteractionTests testClampedSelection_clampsAtUpperBound]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetInteractionTests testClampedSelection_emptyListReturnsCurrentUnchanged]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetInteractionTests testClampedSelection_emptyListReturnsCurrentUnchanged]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetInteractionTests testClampedSelection_movesDownWithinBounds]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetInteractionTests testClampedSelection_movesDownWithinBounds]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetInteractionTests testClampedSelection_movesUpWithinBounds]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetInteractionTests testClampedSelection_movesUpWithinBounds]' passed (0.000 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetInteractionTests testPalette_onAppear_resetsQuery]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetInteractionTests testPalette_onAppear_resetsQuery]' passed (0.052 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetInteractionTests testPalette_onChangeQuery_invokes]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetInteractionTests testPalette_onChangeQuery_invokes]' passed (0.003 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetInteractionTests testPalette_onChangeSelectedIndex_invokes]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetInteractionTests testPalette_onChangeSelectedIndex_invokes]' passed (0.014 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetInteractionTests testPalette_onDisappear_noPending_isNoOp]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetInteractionTests testPalette_onDisappear_noPending_isNoOp]' passed (0.003 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetInteractionTests testPalette_onDisappear_performsPendingCommand]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetInteractionTests testPalette_onDisappear_performsPendingCommand]' passed (0.003 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetInteractionTests testPalette_onSubmit_empty_guardReturnsNoCommand]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetInteractionTests testPalette_onSubmit_empty_guardReturnsNoCommand]' passed (0.007 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetInteractionTests testPalette_onSubmit_nonEmpty_runsSelectedCommand]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetInteractionTests testPalette_onSubmit_nonEmpty_runsSelectedCommand]' passed (0.005 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetInteractionTests testPalette_rowButton_tapSetsPendingCommand]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetInteractionTests testPalette_rowButton_tapSetsPendingCommand]' passed (0.053 seconds).
+Test Suite 'CommandPaletteSheetInteractionTests' passed at 2026-06-30 18:05:51.269.
+	 Executed 13 tests, with 0 failures (0 unexpected) in 0.142 (0.143) seconds
+Test Suite 'CommandPaletteSheetTests' started at 2026-06-30 18:05:51.269.
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetTests testPalette_determinism_byteIdenticalTwiceNoLeak]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetTests testPalette_determinism_byteIdenticalTwiceNoLeak]' passed (0.300 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetTests testPalette_filteredSubset]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetTests testPalette_filteredSubset]' passed (0.046 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetTests testPalette_groupedSections]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetTests testPalette_groupedSections]' passed (0.095 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetTests testPalette_negativeControl_emptyGateFlipsTree]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetTests testPalette_negativeControl_emptyGateFlipsTree]' passed (0.114 seconds).
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetTests testPalette_noMatches]' started.
+Test Case '-[OuroWorkbenchAppViewsTests.CommandPaletteSheetTests testPalette_noMatches]' passed (0.014 seconds).
+Test Suite 'CommandPaletteSheetTests' passed at 2026-07-01 01:05:51.838.
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.568 (0.569) seconds
+Test Suite 'OuroWorkbenchPackageTests.xctest' passed at 2026-07-01 01:05:51.838.
+	 Executed 18 tests, with 0 failures (0 unexpected) in 0.710 (0.712) seconds
+Test Suite 'Selected tests' passed at 2026-07-01 01:05:51.838.
+	 Executed 18 tests, with 0 failures (0 unexpected) in 0.710 (0.713) seconds
+◇ Test run started.
+↳ Testing Library Version: 1902
+↳ Target Platform: arm64e-apple-macos14.0
+✔ Test run with 0 tests in 0 suites passed after 0.001 seconds.
+== Swift build ==
+[0/1] Planning build
+[1/1] Compiling plugin GenerateManual
+[2/2] Compiling plugin GenerateDoccReference
+Building for debugging...
+[2/9] Write swift-version--58304C5D6DBC2206.txt
+Build complete! (0.91s)
+== Shell boundary ==
+Typed shell boundary scan ok: /Users/arimendelow/Projects/ouro-workbench-worker-r3-decomposition
+Shell boundary scan ok: /Users/arimendelow/Projects/ouro-workbench-worker-r3-decomposition
