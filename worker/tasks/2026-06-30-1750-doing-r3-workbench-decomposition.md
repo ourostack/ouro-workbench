@@ -82,7 +82,7 @@ Extract the next Workbench shell-adjacent slices out of `WorkbenchViews.swift` s
 **Output**: Characterization logs proving grouped, empty, filtered, and interaction paths are covered before movement.
 **Acceptance**: Existing palette tests exercise the target surface before source movement.
 
-### ⬜ Unit 2b: Command Palette Extraction — Implementation
+### ✅ Unit 2b: Command Palette Extraction — Implementation
 **What**: Move `CommandPaletteSheet` and its private row/section helpers from `WorkbenchViews.swift` into `Sources/OuroWorkbenchAppViews/CommandPaletteSheet.swift`, preserving behavior.
 **Output**: New command palette file; `WorkbenchViews.swift` no longer declares `CommandPaletteSheet`.
 **Acceptance**: Command palette tests pass and `rg` shows `CommandPaletteSheet` in the new file only.
@@ -136,3 +136,4 @@ Extract the next Workbench shell-adjacent slices out of `WorkbenchViews.swift` s
 - 2026-06-30 18:02 Unit 1b complete: moved menu command enum, notification, and dispatch function to `Sources/OuroWorkbenchAppViews/WorkbenchMenuCommand.swift`; `DispatchMenuCommandTests` passed with 38 tests and zero failures.
 - 2026-06-30 18:02 Unit 1c complete: post-extraction `DispatchMenuCommandTests`, `swift build`, and `scripts/check-shell-boundary.sh` passed.
 - 2026-06-30 18:02 Unit 2a complete: `CommandPaletteSheetTests` and `CommandPaletteSheetInteractionTests` passed pre-move in `unit-0-baseline.log` with 18 tests and zero failures.
+- 2026-06-30 18:05 Unit 2b complete: moved `CommandPaletteSheet` into `Sources/OuroWorkbenchAppViews/CommandPaletteSheet.swift`; palette tests passed with 18 tests and zero failures.
