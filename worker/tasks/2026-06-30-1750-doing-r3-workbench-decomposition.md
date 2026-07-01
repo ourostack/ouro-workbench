@@ -62,7 +62,7 @@ Extract the next Workbench shell-adjacent slices out of `WorkbenchViews.swift` s
 **Output**: Baseline logs in `./2026-06-30-1750-doing-r3-workbench-decomposition/`.
 **Acceptance**: Baseline either passes or any pre-existing failure is recorded and classified before extraction begins.
 
-### ⬜ Unit 1a: Command Dispatch Extraction — Tests
+### ✅ Unit 1a: Command Dispatch Extraction — Tests
 **What**: Run `DispatchMenuCommandTests` against the pre-move command dispatch behavior and save the log.
 **Output**: Red/characterization log proving the existing dispatch contract is active before movement.
 **Acceptance**: The test target exercises the existing `WorkbenchMenuCommand` and `dispatchMenuCommand` paths before source movement.
@@ -132,3 +132,4 @@ Extract the next Workbench shell-adjacent slices out of `WorkbenchViews.swift` s
 - 2026-06-30 17:50 Created from planning doc after planning reviewer gate convergence.
 - 2026-06-30 17:50 Doing conversion review converged: granularity, validation, ambiguity, quality, and scrutiny probes found no BLOCKER/MAJOR findings.
 - 2026-06-30 17:59 Unit 0 complete: baseline dispatch, command palette, settings, release/update/diagnostics tail tests, and shell boundary validation passed; log saved to `unit-0-baseline.log`.
+- 2026-06-30 17:59 Unit 1a complete: `DispatchMenuCommandTests` passed pre-move in `unit-0-baseline.log` with 38 tests and zero failures.
