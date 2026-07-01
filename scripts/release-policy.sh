@@ -585,6 +585,9 @@ selftest_paths_mode() {
     Package.resolved
     VERSION
     scripts/package-app.sh
+    scripts/check-signing-readiness.sh
+    scripts/prepare-ci-signing-assets.sh
+    scripts/sign-notarize-app.sh
     scripts/preflight.sh
     scripts/check-shell-boundary.sh
     scripts/shell-boundary-allowlist.txt
@@ -618,6 +621,9 @@ ci = Path(".github/workflows/ci.yml").read_text(encoding="utf-8")
 preflight = Path("scripts/preflight.sh").read_text(encoding="utf-8")
 auto_release = Path(".github/workflows/auto-release.yml").read_text(encoding="utf-8")
 release = Path(".github/workflows/release.yml").read_text(encoding="utf-8")
+archive = Path("scripts/archive-app-artifact.sh").read_text(encoding="utf-8")
+ci_signing = Path("scripts/prepare-ci-signing-assets.sh").read_text(encoding="utf-8")
+signer = Path("scripts/sign-notarize-app.sh").read_text(encoding="utf-8")
 
 required_ci = [
     "fetch-depth: 0",
@@ -628,6 +634,9 @@ required_ci = [
     "scripts/release-policy.sh selftest-shell-dependency-watch",
     "scripts/release-policy.sh selftest-paths",
     "scripts/check-swift-tests.sh",
+    "scripts/check-signing-readiness.sh --selftest",
+    "scripts/sign-notarize-app.sh --selftest",
+    "scripts/prepare-ci-signing-assets.sh",
 ]
 for needle in required_ci:
     if needle not in ci:
@@ -647,6 +656,9 @@ required_preflight = [
     "scripts/release-policy.sh selftest-paths",
     "scripts/check-shell-dependency.sh",
     "scripts/check-swift-tests.sh",
+    "scripts/check-signing-readiness.sh --selftest",
+    "scripts/sign-notarize-app.sh --selftest",
+    "scripts/prepare-ci-signing-assets.sh",
 ]
 for needle in required_preflight:
     if needle not in preflight:
@@ -667,6 +679,7 @@ for line in ("scripts/check-shell-boundary.sh --selftest", "scripts/check-shell-
 required_auto = [
     "scripts/release-policy.sh release-exists",
     "scripts/release-policy.sh freshness --mode main",
+    "secrets: inherit",
 ]
 for needle in required_auto:
     if needle not in auto_release:
@@ -676,6 +689,40 @@ if "grep -E '^(Sources/" in auto_release:
 
 if "scripts/release-policy.sh freshness --mode main" not in release:
     raise SystemExit("release.yml must verify release freshness in main mode")
+for needle in (
+    "OURO_RELEASE_SIGNING_MODE",
+    "OURO_CODESIGN_IDENTITY",
+    "OURO_NOTARY_PROFILE",
+    "APPLE_TEAM_ID",
+    "APPLE_DEVELOPER_ID_CERTIFICATE_BASE64",
+):
+    if needle not in release:
+        raise SystemExit(f"release.yml must expose signing env {needle!r}")
+for needle in (
+    "APPLE_DEVELOPER_ID_CERTIFICATE_BASE64",
+    "security import",
+    "APP_STORE_CONNECT_API_KEY_BASE64",
+    "GITHUB_ENV",
+):
+    if needle not in ci_signing:
+        raise SystemExit(f"prepare-ci-signing-assets.sh must contain {needle!r}")
+for needle in (
+    "OURO_RELEASE_SIGNING_MODE",
+    "OURO_REQUIRE_NOTARIZATION",
+    "scripts/sign-notarize-app.sh",
+    '"signingMode"',
+    '"notarized"',
+):
+    if needle not in archive:
+        raise SystemExit(f"archive-app-artifact.sh must contain {needle!r}")
+for needle in (
+    "--options runtime",
+    "xcrun notarytool submit",
+    "xcrun stapler staple",
+    "spctl --assess",
+):
+    if needle not in signer:
+        raise SystemExit(f"sign-notarize-app.sh must contain {needle!r}")
 release_lines = [line.strip() for line in release.splitlines()]
 required_release_preflight = [
     ("- name: Run release preflight - policy and tooling", "run: scripts/preflight.sh --only release-policy"),

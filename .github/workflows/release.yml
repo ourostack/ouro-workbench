@@ -86,7 +86,27 @@ jobs:
       - name: Run release preflight - app bundle
         run: scripts/preflight.sh --only app-bundle
 
+      - name: Prepare CI signing assets
+        env:
+          OURO_RELEASE_SIGNING_MODE: ${{ secrets.OURO_RELEASE_SIGNING_MODE }}
+          OURO_REQUIRE_NOTARIZATION: ${{ secrets.OURO_REQUIRE_NOTARIZATION }}
+          OURO_CODESIGN_IDENTITY: ${{ secrets.OURO_CODESIGN_IDENTITY }}
+          APPLE_DEVELOPER_ID_CERTIFICATE_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_BASE64 }}
+          APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+          APPLE_DEVELOPER_ID_CERTIFICATE_IDENTITY: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_IDENTITY }}
+          APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+          APP_STORE_CONNECT_API_PRIVATE_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY_BASE64 }}
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+        run: scripts/prepare-ci-signing-assets.sh
+
       - name: Run release preflight - app artifact
+        env:
+          OURO_RELEASE_SIGNING_MODE: ${{ secrets.OURO_RELEASE_SIGNING_MODE }}
+          OURO_CODESIGN_IDENTITY: ${{ secrets.OURO_CODESIGN_IDENTITY }}
+          OURO_NOTARY_PROFILE: ${{ secrets.OURO_NOTARY_PROFILE }}
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: scripts/preflight.sh --only app-artifact
 
       - name: Run release preflight - install rollback

@@ -133,6 +133,9 @@ preflight_release_policy() {
   scripts/release-policy.sh selftest-paths
 
   run_step "Verify release support tooling"
+  scripts/check-signing-readiness.sh --selftest
+  scripts/sign-notarize-app.sh --selftest
+  scripts/prepare-ci-signing-assets.sh
   scripts/smoke-package-shallow-guard.sh
   scripts/install-latest-app-artifact.sh --help >/dev/null
   scripts/install-latest-release.sh --help >/dev/null

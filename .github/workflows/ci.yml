@@ -47,6 +47,13 @@ jobs:
       - name: Verify release package guard
         run: scripts/release-policy.sh selftest-package-guards
 
+      - name: Verify signing and notarization script contracts
+        run: |
+          scripts/check-signing-readiness.sh
+          scripts/check-signing-readiness.sh --selftest
+          scripts/sign-notarize-app.sh --selftest
+          scripts/prepare-ci-signing-assets.sh
+
       - name: Verify shared shell dependency freshness
         run: scripts/check-shell-dependency.sh
 
