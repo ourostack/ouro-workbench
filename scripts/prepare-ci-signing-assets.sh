@@ -3,7 +3,7 @@
 # Prepares GitHub-hosted macOS runners for Developer ID signing by importing a
 # base64-encoded certificate into a temporary keychain and materializing a
 # base64-encoded App Store Connect API key file. No-ops unless signing is
-# explicitly required.
+# explicitly required or a signing identity is exposed to later release steps.
 set -euo pipefail
 
 require="${OURO_REQUIRE_NOTARIZATION:-}"
@@ -16,7 +16,25 @@ truthy() {
   esac
 }
 
-if [[ "$mode" != "developer-id" ]] && ! truthy "$require"; then
+needs_assets=0
+if [[ "$mode" == "developer-id" ]] || truthy "$require" || [[ -n "${OURO_CODESIGN_IDENTITY:-${DEVELOPER_ID_APPLICATION:-${APPLE_DEVELOPER_ID_CERTIFICATE_IDENTITY:-}}}" ]]; then
+  needs_assets=1
+fi
+
+if [[ "${1:-}" == "--selftest" ]]; then
+  GITHUB_ENV= OURO_RELEASE_SIGNING_MODE= OURO_REQUIRE_NOTARIZATION= OURO_CODESIGN_IDENTITY= DEVELOPER_ID_APPLICATION= APPLE_DEVELOPER_ID_CERTIFICATE_IDENTITY= "$0" >/tmp/ouro-workbench-ci-signing-assets-selftest.out
+  grep -F "ci signing assets: not required" /tmp/ouro-workbench-ci-signing-assets-selftest.out >/dev/null \
+    || { printf 'CI signing asset setup failed: selftest expected unsigned release to skip CI signing assets\n' >&2; exit 1; }
+  status=0
+  GITHUB_ENV="$(mktemp)" OURO_RELEASE_SIGNING_MODE= OURO_REQUIRE_NOTARIZATION= OURO_CODESIGN_IDENTITY="Developer ID Application: Example" APPLE_DEVELOPER_ID_CERTIFICATE_BASE64= APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD= "$0" >/tmp/ouro-workbench-ci-signing-assets-selftest.out 2>/tmp/ouro-workbench-ci-signing-assets-selftest.err || status=$?
+  [[ "$status" -ne 0 ]] || { printf 'CI signing asset setup failed: selftest expected identity without certificate to fail\n' >&2; exit 1; }
+  grep -F "APPLE_DEVELOPER_ID_CERTIFICATE_BASE64 is required" /tmp/ouro-workbench-ci-signing-assets-selftest.err >/dev/null \
+    || { printf 'CI signing asset setup failed: selftest did not exercise identity-triggered certificate import\n' >&2; exit 1; }
+  printf 'ci signing assets selftest ok\n'
+  exit 0
+fi
+
+if [[ "$needs_assets" -ne 1 ]]; then
   echo "ci signing assets: not required"
   exit 0
 fi

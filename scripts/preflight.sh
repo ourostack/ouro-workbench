@@ -133,6 +133,7 @@ preflight_release_policy() {
   scripts/release-policy.sh selftest-paths
 
   run_step "Verify release support tooling"
+  scripts/prepare-ci-signing-assets.sh --selftest
   scripts/check-signing-readiness.sh --selftest
   scripts/sign-notarize-app.sh --selftest
   scripts/prepare-ci-signing-assets.sh
