@@ -48,7 +48,7 @@ if CommandLine.arguments.contains("--keyboarda11ycontract") {
 
 if workbenchLaunchDiagnostics.action == .factoryResetForE2E {
     let paths = WorkbenchPaths(rootURL: workbenchLaunchDiagnostics.appSupportRoot!)
-    let defaultsDomain = "com.ourostack.workbench.e2e"
+    let defaultsDomain = "bot.ouro.workbench.e2e"
     let defaults = UserDefaults(suiteName: defaultsDomain) ?? .standard
     let result = WorkbenchFactoryReset.resetToFactoryDefaults(
         stateURL: paths.stateURL,

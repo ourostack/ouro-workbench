@@ -38,7 +38,7 @@ final class LaunchAgentLoginItemTests: XCTestCase {
         let plist = try XCTUnwrap(
             PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any]
         )
-        XCTAssertEqual(plist["Label"] as? String, "com.ourostack.workbench.login")
+        XCTAssertEqual(plist["Label"] as? String, "bot.ouro.workbench.login")
         XCTAssertEqual(plist["RunAtLoad"] as? Bool, true)
         XCTAssertEqual(plist["LimitLoadToSessionType"] as? String, "Aqua")
         XCTAssertEqual(plist["ProgramArguments"] as? [String], ["/usr/bin/open", appURL.path])
@@ -61,7 +61,7 @@ final class LaunchAgentLoginItemTests: XCTestCase {
             homeURL: root
         )
         let stalePlist: [String: Any] = [
-            "Label": "com.ourostack.workbench.login",
+            "Label": "bot.ouro.workbench.login",
             "ProgramArguments": ["/usr/bin/open", "/tmp/Old Ouro Workbench.app"],
             "RunAtLoad": true
         ]

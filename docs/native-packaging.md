@@ -122,7 +122,7 @@ terminal workspace size.
 
 The native app has an `Open at Login` control in the boss dashboard. It writes a
 machine-local LaunchAgent at
-`~/Library/LaunchAgents/com.ourostack.workbench.login.plist` that opens the
+`~/Library/LaunchAgents/bot.ouro.workbench.login.plist` that opens the
 installed app at login, so app startup can trigger workspace recovery after a
 computer restart. The LaunchAgent writes logs under
 `~/Library/Logs/OuroWorkbench/`.
@@ -134,7 +134,7 @@ rewrites the LaunchAgent for the current bundle path.
 Current bundle identity:
 
 - Bundle name: `Ouro Workbench`
-- Bundle identifier: `com.ourostack.workbench`
+- Bundle identifier: `bot.ouro.workbench`
 - Executable: `OuroWorkbench`
 - Version source: `VERSION`
 - Minimum macOS version: `14.0`

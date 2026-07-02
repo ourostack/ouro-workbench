@@ -25,7 +25,7 @@ public struct LaunchAgentLoginItem {
     public var fileManager: FileManager
 
     public init(
-        label: String = "com.ourostack.workbench.login",
+        label: String = "bot.ouro.workbench.login",
         appURL: URL,
         homeURL: URL = FileManager.default.homeDirectoryForCurrentUser,
         fileManager: FileManager = .default

@@ -56,7 +56,7 @@ final class WorkbenchUpdateTests: XCTestCase {
     func testVerificationUsesBuildAwareComparisonWhenDelegatingToShellVerifier() {
         let manifest = WorkbenchUpdateManifest(
             appName: "Ouro Workbench",
-            bundleIdentifier: "com.ourostack.workbench",
+            bundleIdentifier: "bot.ouro.workbench",
             version: "0.1.120",
             build: "199",
             archive: "OuroWorkbench-0.1.120-build.199-779ed85.zip",
@@ -69,7 +69,7 @@ final class WorkbenchUpdateTests: XCTestCase {
             downloadedArchiveName: "OuroWorkbench-0.1.120-build.199-779ed85.zip",
             downloadedSHA256: "ABC123",
             downloadedBytes: 3_600_000,
-            expectedBundleIdentifier: "com.ourostack.workbench",
+            expectedBundleIdentifier: "bot.ouro.workbench",
             currentVersion: "0.1.120",
             currentBuild: "198"
         )

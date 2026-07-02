@@ -12,7 +12,7 @@ final class WorkbenchReleaseTests: XCTestCase {
 
     func testReleaseMetadataIsValidForNativeBundleAndMCP() {
         XCTAssertEqual(WorkbenchRelease.appName, "Ouro Workbench")
-        XCTAssertEqual(WorkbenchRelease.bundleIdentifier, "com.ourostack.workbench")
+        XCTAssertEqual(WorkbenchRelease.bundleIdentifier, "bot.ouro.workbench")
         XCTAssertEqual(WorkbenchRelease.bundleExecutable, "OuroWorkbench")
         XCTAssertEqual(WorkbenchRelease.mcpExecutable, "OuroWorkbenchMCP")
         XCTAssertEqual(WorkbenchRelease.mcpServerName, "ouro-workbench")
