@@ -215,7 +215,7 @@ fi
   printf -- '-- screen sessions --\n'
   screen -ls 2>&1 || true
   printf '\n-- login item --\n'
-  launchctl print "gui/$(id -u)/com.ourostack.workbench.login" 2>&1 || true
+  launchctl print "gui/$(id -u)/bot.ouro.workbench.login" 2>&1 || true
   printf '\n-- recent crash reports --\n'
   recent_crash_reports
 } >"$bundle_dir/runtime.txt"

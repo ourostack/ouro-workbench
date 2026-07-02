@@ -48,7 +48,7 @@ Every feature earns its place against that line, or it's gone.
 ## Mechanics
 - **Reset to pristine FRE** (app must be quit): `pkill -if "Ouro Workbench.app/Contents/MacOS/OuroWorkbench"`;
   back up + remove `~/Library/Application Support/OuroWorkbench/workspace-state.json`;
-  `defaults delete com.ourostack.workbench`; `touch ~/Library/Application\ Support/OuroWorkbench/force-first-run-setup`;
+  `defaults delete bot.ouro.workbench`; `touch ~/Library/Application\ Support/OuroWorkbench/force-first-run-setup`;
   `open -a "Ouro Workbench"`.
 - **Build/install**: `Scripts/package-app.sh` (strict release) → `Scripts/install-app.sh`.
 - **Headless readiness probe**: `Scripts/onboarding-doctor.sh ouroboros`.
@@ -139,7 +139,7 @@ Choose Boss). Boss + migration machinery stays — demoted from forced ceremony 
   keep building the backlog (boss-MCP TDD units + UI units), drive-verify GUI in fresh-helper windows,
   build+install periodically, do a FINAL pristine reset before winding down.
 - **HANDBACK TASKS (do before operator wakes / at wind-down):** (1) build+install the latest; (2) reset
-  pristine — `rm workspace-state.json` (clears the boss=ouroboros I set), `defaults delete com.ourostack.workbench`,
+  pristine — `rm workspace-state.json` (clears the boss=ouroboros I set), `defaults delete bot.ouro.workbench`,
   `touch force-first-run-setup`; (3) **DISABLE open-at-login** — I toggled it ON in the U9 demo; it's a
   system login item (SMAppService), NOT cleared by the state reset — disable via the app's Settings
   ("Open at Login" toggle) or SMAppService before handback so the morning machine is truly pristine;

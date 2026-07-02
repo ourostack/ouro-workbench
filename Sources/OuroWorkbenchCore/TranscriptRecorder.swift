@@ -34,7 +34,7 @@ public final class TranscriptRecorder {
 
     public init(url: URL) throws {
         self.url = url
-        self.queue = DispatchQueue(label: "com.ourostack.workbench.transcript-recorder")
+        self.queue = DispatchQueue(label: "bot.ouro.workbench.transcript-recorder")
         try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(),
             withIntermediateDirectories: true
@@ -53,7 +53,7 @@ public final class TranscriptRecorder {
     /// exactly like the `url` init.
     init(unsafeHandle handle: FileHandle?, url: URL) {
         self.url = url
-        self.queue = DispatchQueue(label: "com.ourostack.workbench.transcript-recorder.test")
+        self.queue = DispatchQueue(label: "bot.ouro.workbench.transcript-recorder.test")
         self.box = HandleBox(handle)
     }
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.240 - Canonical bundle identity
+
+- Release: Ouro Workbench now uses the canonical `bot.ouro.workbench` identity across its app bundle, updater manifests, installer validation, login item label, defaults domains, support diagnostics, and native packaging docs. This keeps the second Ouro native app aligned with the shared `bot.ouro.<product>` App Store identity family.
+
 ## 0.1.239 - Apple ID notarization CI
 
 - Internal: passes Apple ID app-specific-password notarization secrets into the Developer ID artifact path and updates the release job label so signed preview releases no longer imply ad-hoc-only output. No user-facing behavior change.

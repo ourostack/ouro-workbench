@@ -21,7 +21,7 @@ final class WorkbenchFactoryResetTests: XCTestCase {
         // A real, isolated defaults domain standing in for the app's — seeded
         // with the kinds of prefs a factory reset must clear (font, theme,
         // onboarding flag), not just the onboarding flag.
-        let domain = "com.ourostack.workbench.test.\(UUID().uuidString)"
+        let domain = "bot.ouro.workbench.test.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: domain)!
         defer { defaults.removePersistentDomain(forName: domain) }
         defaults.set(15.0, forKey: "ouro.workbench.terminalFontSize")
@@ -51,7 +51,7 @@ final class WorkbenchFactoryResetTests: XCTestCase {
     }
 
     func testNoStateFileStillClearsPreferencesAndReturnsNil() {
-        let domain = "com.ourostack.workbench.test.\(UUID().uuidString)"
+        let domain = "bot.ouro.workbench.test.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: domain)!
         defer { defaults.removePersistentDomain(forName: domain) }
         defaults.set(true, forKey: "ouro.workbench.onboardingCompleted")
@@ -104,7 +104,7 @@ final class WorkbenchFactoryResetTests: XCTestCase {
         let staleMarker = dir.appendingPathComponent("force-first-run-setup")
         try Data("stale-before-reset".utf8).write(to: staleMarker)
 
-        let domain = "com.ourostack.workbench.test.\(UUID().uuidString)"
+        let domain = "bot.ouro.workbench.test.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: domain)!
         defer { defaults.removePersistentDomain(forName: domain) }
         defaults.set(true, forKey: "ouro.workbench.onboardingCompleted")
@@ -133,7 +133,7 @@ final class WorkbenchFactoryResetTests: XCTestCase {
         let rootFile = dir.appendingPathComponent("not-a-directory")
         try Data("file".utf8).write(to: rootFile)
 
-        let domain = "com.ourostack.workbench.test.\(UUID().uuidString)"
+        let domain = "bot.ouro.workbench.test.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: domain)!
         defer { defaults.removePersistentDomain(forName: domain) }
 
@@ -155,7 +155,7 @@ final class WorkbenchFactoryResetTests: XCTestCase {
         let dir = try makeTempDir()
         defer { try? fm.removeItem(at: dir) }
 
-        let domain = "com.ourostack.workbench.test.\(UUID().uuidString)"
+        let domain = "bot.ouro.workbench.test.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: domain)!
         defer { defaults.removePersistentDomain(forName: domain) }
 
@@ -180,7 +180,7 @@ final class WorkbenchFactoryResetTests: XCTestCase {
     }
 
     func testMoveFailureFallsBackToRemovingStateAndStillClearsPreferences() {
-        let domain = "com.ourostack.workbench.test.\(UUID().uuidString)"
+        let domain = "bot.ouro.workbench.test.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: domain)!
         defer { defaults.removePersistentDomain(forName: domain) }
         defaults.set(true, forKey: "ouro.workbench.onboardingCompleted")
