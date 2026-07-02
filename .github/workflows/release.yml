@@ -33,7 +33,7 @@ permissions:
 
 jobs:
   release:
-    name: Build ad-hoc-signed preview release
+    name: Build signed preview release
     runs-on: macos-14
     steps:
       - name: Check out repository
@@ -106,6 +106,8 @@ jobs:
           OURO_NOTARY_PROFILE: ${{ secrets.OURO_NOTARY_PROFILE }}
           APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           APP_STORE_CONNECT_API_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: scripts/preflight.sh --only app-artifact
 

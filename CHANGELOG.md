@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.239 - Apple ID notarization CI
+
+- Internal: passes Apple ID app-specific-password notarization secrets into the Developer ID artifact path and updates the release job label so signed preview releases no longer imply ad-hoc-only output. No user-facing behavior change.
+
 ## 0.1.238 - Developer ID signing infrastructure
 
 - Internal: adds opt-in Developer ID signing/notarization release plumbing and manifest verification for future signed direct-download artifacts. Existing prerelease artifacts remain ad-hoc unless signing is explicitly enabled. No user-facing behavior change.
