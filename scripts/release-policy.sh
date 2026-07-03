@@ -274,6 +274,7 @@ release_relevant_path() {
 
     # Shipped app, package resolution, public installer, and release scripts.
     Package.swift|Package.resolved|VERSION) return 0 ;;
+    distribution/*) return 0 ;;
     Sources/OuroWorkbenchApp/*|Sources/OuroWorkbenchAppViews/*) return 0 ;;
     Sources/OuroWorkbenchCore/*|Sources/OuroWorkbenchMCP/*|Sources/OuroWorkbenchShellAdapter/*) return 0 ;;
     web/*) return 0 ;;
@@ -584,6 +585,7 @@ selftest_paths_mode() {
     Package.swift
     Package.resolved
     VERSION
+    distribution/apple-distribution.json
     scripts/package-app.sh
     scripts/check-signing-readiness.sh
     scripts/prepare-ci-signing-assets.sh

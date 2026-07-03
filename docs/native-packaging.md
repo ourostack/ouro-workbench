@@ -139,6 +139,15 @@ Current bundle identity:
 - Version source: `VERSION`
 - Minimum macOS version: `14.0`
 
+The cross-app Apple distribution contract lives in
+`distribution/apple-distribution.json` and is validated by
+`scripts/check-apple-distribution-kit.sh`. That manifest is the shared-kit entry
+point for direct download, future Developer ID signing, TestFlight/App Store
+planning, and App Store Connect review-plan dry runs. The check is non-secret:
+it validates the manifest against `ourostack/apple-distribution-kit`, proves the
+store version matches `WorkbenchRelease.version`, and rejects committed Apple
+credential files.
+
 Public ad-hoc-signed preview releases are published by
 `.github/workflows/release.yml`. The workflow checks out full git history, runs
 `scripts/preflight.sh`, generates release notes, and attaches the verified app

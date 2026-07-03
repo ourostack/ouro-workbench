@@ -54,6 +54,21 @@ jobs:
           scripts/sign-notarize-app.sh --selftest
           scripts/prepare-ci-signing-assets.sh
 
+      - name: Check out Apple distribution kit
+        uses: actions/checkout@v6
+        with:
+          repository: ourostack/apple-distribution-kit
+          path: .ci/apple-distribution-kit
+
+      - name: Build Apple distribution kit
+        working-directory: .ci/apple-distribution-kit
+        run: |
+          npm ci
+          npm run build
+
+      - name: Verify Apple distribution kit adoption
+        run: scripts/check-apple-distribution-kit.sh
+
       - name: Verify shared shell dependency freshness
         run: scripts/check-shell-dependency.sh
 
