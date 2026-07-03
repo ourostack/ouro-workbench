@@ -18,6 +18,7 @@ PREFLIGHT_GATES=(
   release-policy
   generated-scenario-matrix
   swift-tests
+  coverage
   ui-probes
   required-scenario-verifier
   app-bundle
@@ -159,6 +160,11 @@ preflight_swift_tests() {
   scripts/check-swift-tests.sh
 }
 
+preflight_coverage() {
+  run_step "Enforce 100% line+region coverage gate"
+  scripts/check-coverage.sh
+}
+
 preflight_ui_probes() {
   run_step "Run native UI surface probe"
   swift run "${SWIFT_STRICT_FLAGS[@]}" OuroWorkbench --uisurfacetest
@@ -225,6 +231,7 @@ run_gate() {
     release-policy) preflight_release_policy ;;
     generated-scenario-matrix) preflight_generated_scenario_matrix ;;
     swift-tests) preflight_swift_tests ;;
+    coverage) preflight_coverage ;;
     ui-probes) preflight_ui_probes ;;
     required-scenario-verifier) preflight_required_scenario_verifier ;;
     app-bundle) preflight_app_bundle ;;

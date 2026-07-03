@@ -18,7 +18,7 @@
       "buildCommand": "scripts/package-app.sh",
       "packageCommand": "scripts/package-app.sh",
       "store": {
-        "version": "0.1.241",
+        "version": "0.1.242",
         "copyright": "Copyright \u00a9 2026 Ari Mendelow",
         "category": "DEVELOPER_TOOLS",
         "screenshots": [],
