@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "app": {
+    "name": "Ouro Workbench",
+    "bundleId": "bot.ouro.workbench",
+    "sku": "bot-ouro-workbench-macos",
+    "primaryLocale": "en-US"
+  },
+  "team": {
+    "teamId": "743GT2AJ24"
+  },
+  "channels": [
+    {
+      "id": "mac-app-store",
+      "platform": "macos",
+      "distribution": "app-store",
+      "bundleId": "bot.ouro.workbench",
+      "buildCommand": "scripts/package-app.sh",
+      "packageCommand": "scripts/package-app.sh",
+      "store": {
+        "version": "0.1.241",
+        "copyright": "Copyright \u00a9 2026 Ari Mendelow",
+        "category": "DEVELOPER_TOOLS",
+        "screenshots": [],
+        "exportCompliance": {
+          "usesEncryption": true,
+          "exempt": true
+        }
+      }
+    },
+    {
+      "id": "direct-download",
+      "platform": "macos",
+      "distribution": "developer-id",
+      "bundleId": "bot.ouro.workbench",
+      "buildCommand": "scripts/package-app.sh",
+      "packageCommand": "scripts/archive-app-artifact.sh"
+    }
+  ]
+}
