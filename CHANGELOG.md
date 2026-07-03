@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.242 - Local coverage gate in preflight
+
+- Internal: wires the per-file-100% line+region coverage gate (`scripts/check-coverage.sh`) into `scripts/preflight.sh` so coverage regressions are caught locally before push, now that the AppViews test suite no longer hangs locally. No user-facing behavior change.
+
 ## 0.1.241 - Apple distribution kit adoption
 
 - Internal: routes Workbench's Apple distribution readiness checks through the shared `apple-distribution-kit` contract, including explicit planning-stage blockers for App Store screenshots and privacy metadata. No user-facing behavior change.
