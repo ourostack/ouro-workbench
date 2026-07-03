@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.241 - Apple distribution kit adoption
+
+- Internal: routes Workbench's Apple distribution readiness checks through the shared `apple-distribution-kit` contract, including explicit planning-stage blockers for App Store screenshots and privacy metadata. No user-facing behavior change.
+
 ## 0.1.240 - Canonical bundle identity
 
 - Release: Ouro Workbench now uses the canonical `bot.ouro.workbench` identity across its app bundle, updater manifests, installer validation, login item label, defaults domains, support diagnostics, and native packaging docs. This keeps the second Ouro native app aligned with the shared `bot.ouro.<product>` App Store identity family.
