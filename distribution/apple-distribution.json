@@ -22,10 +22,6 @@
         "copyright": "Copyright \u00a9 2026 Ari Mendelow",
         "category": "DEVELOPER_TOOLS",
         "screenshots": [],
-        "privacy": {
-          "policyUrl": "https://ouro.bot/privacy/",
-          "collectsData": false
-        },
         "exportCompliance": {
           "usesEncryption": true,
           "exempt": true

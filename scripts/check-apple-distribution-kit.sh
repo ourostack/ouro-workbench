@@ -4,6 +4,8 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MANIFEST="$ROOT_DIR/distribution/apple-distribution.json"
 WRAPPER="$ROOT_DIR/scripts/apple-distribution-kit.sh"
+ARTIFACT_DIR="${APPLE_DISTRIBUTION_ARTIFACT_DIR:-$ROOT_DIR/.build/apple-distribution-kit}"
+REVIEW_PLAN="$ARTIFACT_DIR/app-store-review-plan.json"
 
 fail() {
   printf 'apple distribution kit check failed: %s\n' "$1" >&2
@@ -63,13 +65,32 @@ if (store.distribution !== "app-store") fail("mac-app-store distribution must be
 if (store.bundleId !== expectedBundleId) fail(`mac-app-store bundleId must be ${expectedBundleId}`);
 if (store.store?.version !== expectedVersion) fail(`store.version must be ${expectedVersion}`);
 if (store.store?.category !== "DEVELOPER_TOOLS") fail("store.category must be DEVELOPER_TOOLS");
-if (store.store?.privacy?.policyUrl !== "https://ouro.bot/privacy/") fail("privacy.policyUrl must be https://ouro.bot/privacy/");
+if (store.store?.privacy) fail("mac-app-store privacy metadata must remain unset until Workbench App Store privacy review is complete");
 
 console.log("Workbench apple distribution manifest contract ok");
 NODE
 
+mkdir -p "$ARTIFACT_DIR"
 "$WRAPPER" manifest validate --manifest "$MANIFEST" >/dev/null
-"$WRAPPER" plan --manifest "$MANIFEST" --mode dry-run --json >/dev/null
-"$WRAPPER" store review-plan --manifest "$MANIFEST" --channel mac-app-store --json >/dev/null
+"$WRAPPER" plan --manifest "$MANIFEST" --mode dry-run --json >"$ARTIFACT_DIR/distribution-plan.json"
+"$WRAPPER" store review-plan --manifest "$MANIFEST" --channel mac-app-store --artifact "$REVIEW_PLAN" --json >/dev/null
+
+node - "$REVIEW_PLAN" <<'NODE'
+const fs = require("node:fs");
+const plan = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+const blockerCodes = new Set((plan.blockers ?? []).map((blocker) => blocker.code));
+
+function fail(message) {
+  console.error(`store review-plan contract failed: ${message}`);
+  process.exit(1);
+}
+
+for (const code of ["screenshots-assets-required", "privacy-required"]) {
+  if (!blockerCodes.has(code)) fail(`expected planning-stage blocker ${code}`);
+}
+if ((plan.actions ?? []).length !== 0) fail("Workbench must not report final App Store review actions while launch blockers remain");
+
+console.log("Workbench App Store planning blockers recorded");
+NODE
 
 printf 'apple distribution kit check ok\n'
