@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.243 - Complete the version contract
+
+- Internal: `scripts/verify-version-contract.sh` now also asserts the Apple distribution manifest's `store.version` (`distribution/apple-distribution.json`) matches `VERSION`, so a version bump that forgets the manifest is caught in local preflight instead of only in CI. No user-facing behavior change.
+
 ## 0.1.242 - Local coverage gate in preflight
 
 - Internal: wires the per-file-100% line+region coverage gate (`scripts/check-coverage.sh`) into `scripts/preflight.sh` so coverage regressions are caught locally before push, now that the AppViews test suite no longer hangs locally. No user-facing behavior change.

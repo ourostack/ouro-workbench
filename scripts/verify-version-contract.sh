@@ -22,6 +22,13 @@ first_changelog_release="$(grep -E '^## [0-9]+[.][0-9]+[.][0-9]+([-.][0-9A-Za-z.
   || fail "CHANGELOG.md first release entry is '${first_changelog_release:-<none>}', expected VERSION $version"
 
 [[ "$WORKBENCH_VERSION" == "$version" ]] || fail "WorkbenchRelease.version is $WORKBENCH_VERSION, expected $version"
+
+manifest_file="$ROOT_DIR/distribution/apple-distribution.json"
+if [[ -f "$manifest_file" ]]; then
+  manifest_store_version="$(jq -r '.channels[] | select(.distribution == "app-store") | .store.version' "$manifest_file")"
+  [[ "$manifest_store_version" == "$version" ]] \
+    || fail "distribution/apple-distribution.json app-store store.version is '${manifest_store_version:-<none>}', expected VERSION $version"
+fi
 [[ "$WORKBENCH_BUNDLE_IDENTIFIER" =~ ^[A-Za-z0-9][A-Za-z0-9.-]+$ ]] || fail "bundle identifier is not identifier-like: $WORKBENCH_BUNDLE_IDENTIFIER"
 [[ "$WORKBENCH_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || fail "repository is not owner/repo: $WORKBENCH_REPOSITORY"
 [[ "$WORKBENCH_ARTIFACT_NAME_PREFIX" == "$WORKBENCH_BUNDLE_EXECUTABLE-" ]] || fail "artifact prefix does not derive from bundle executable"
