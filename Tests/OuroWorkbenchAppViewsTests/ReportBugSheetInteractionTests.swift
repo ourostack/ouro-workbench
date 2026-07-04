@@ -75,6 +75,21 @@ final class ReportBugSheetInteractionTests: XCTestCase {
         return model
     }
 
+    private func waitForIssueFilingToFinish(
+        _ model: WorkbenchViewModel,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        let deadline = ContinuousClock.now + .seconds(2)
+        while model.bugReportIssueIsFiling {
+            if ContinuousClock.now >= deadline {
+                XCTFail("bug report issue filing did not finish before timeout", file: file, line: line)
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+    }
+
     // MARK: - Cancel button (`:2444`)
 
     /// `Button("Cancel") { dismiss() }` — a pure environment dismiss.
@@ -111,13 +126,20 @@ final class ReportBugSheetInteractionTests: XCTestCase {
     /// `savedModel()`) returns a canned issue URL so the detached task completes WITHOUT
     /// shelling out to `gh` — exercising both the synchronous body and, after the detached
     /// `Task` resolves, the `.success` completion handler (no orphan, #332).
-    func testReportBug_fileIssueButton_tapStartsFiling() throws {
+    func testReportBug_fileIssueButton_tapStartsFiling() async throws {
         let model = try savedModel()
+        let logBefore = model.state.actionLog.count
         XCTAssertNil(model.bugReportIssueURL, "precondition: not yet filed → the file button shows")
         XCTAssertFalse(model.bugReportIssueIsFiling, "precondition: not filing")
         try ReportBugSheet(model: model).inspect().find(button: "File as GitHub Issue").tap()
         XCTAssertTrue(model.bugReportIssueIsFiling,
                       "tapping File as GitHub Issue flips bugReportIssueIsFiling synchronously")
+        await waitForIssueFilingToFinish(model)
+        XCTAssertEqual(model.bugReportIssueURL, Self.fixedIssueURL,
+                       "the .success completion handler stores the canned issue URL")
+        XCTAssertEqual(model.state.actionLog.count, logBefore + 1, "the success fold records one action-log entry")
+        XCTAssertEqual(model.state.actionLog.first?.action, "fileBugReportIssue")
+        XCTAssertTrue(model.state.actionLog.first?.succeeded ?? false)
     }
 
     /// The detached filing task drives the `.success` completion handler to its terminal state:
@@ -127,8 +149,7 @@ final class ReportBugSheetInteractionTests: XCTestCase {
     func testReportBug_fileIssueButton_completionLandsCannedURL() async throws {
         let model = try savedModel()
         try ReportBugSheet(model: model).inspect().find(button: "File as GitHub Issue").tap()
-        // Yield until the detached stub-filing Task resolves and updates the @Published state.
-        for _ in 0..<200 where model.bugReportIssueIsFiling { await Task.yield() }
+        await waitForIssueFilingToFinish(model)
         XCTAssertFalse(model.bugReportIssueIsFiling, "the filing completes (the in-flight flag clears)")
         XCTAssertEqual(model.bugReportIssueURL, Self.fixedIssueURL,
                        "the .success completion handler stores the canned issue URL")
@@ -196,7 +217,7 @@ final class ReportBugSheetInteractionTests: XCTestCase {
     /// The Copy-Path / file-issue actions each produce an observable side-effect (pasteboard
     /// path / filing flag). A no-op action would leave them unchanged — the mutation that
     /// breaks each guard.
-    func testReportBug_negativeControl_actionsProduceEffects() throws {
+    func testReportBug_negativeControl_actionsProduceEffects() async throws {
         let copyModel = try savedModel()
         NSPasteboard.general.clearContents()
         try ReportBugSheet(model: copyModel).inspect().find(button: "Copy Path").tap()
@@ -205,6 +226,8 @@ final class ReportBugSheetInteractionTests: XCTestCase {
         let fileModel = try savedModel()
         try ReportBugSheet(model: fileModel).inspect().find(button: "File as GitHub Issue").tap()
         XCTAssertTrue(fileModel.bugReportIssueIsFiling)
+        await waitForIssueFilingToFinish(fileModel)
+        XCTAssertEqual(fileModel.bugReportIssueURL, Self.fixedIssueURL)
     }
 
     // MARK: - Determinism (P3)

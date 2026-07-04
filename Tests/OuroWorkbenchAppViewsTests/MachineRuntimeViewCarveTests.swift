@@ -53,6 +53,21 @@ final class MachineRuntimeViewCarveTests: XCTestCase {
         )
     }
 
+    private func waitForSupportDiagnosticsToFinish(
+        _ model: WorkbenchViewModel,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        let deadline = ContinuousClock.now + .seconds(2)
+        while model.supportDiagnosticsIsCollecting {
+            if ContinuousClock.now >= deadline {
+                XCTFail("support diagnostics did not finish before timeout", file: file, line: line)
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+    }
+
     /// A FIXED, relative diagnostics archive (only its `lastPathComponent` is rendered visibly).
     private func result() -> SupportDiagnosticsResult {
         SupportDiagnosticsResult(
@@ -175,17 +190,26 @@ final class MachineRuntimeViewCarveTests: XCTestCase {
     /// The Support Diagnostics "Collect" button executes `model.collectSupportDiagnostics()`.
     /// Use the existing no-child seam so the tap only proves the view action path and does not
     /// spawn the collector in-process.
-    func testCarve_collectButton_tapStartsCollection() throws {
+    func testCarve_collectButton_tapStartsCollection() async throws {
         let view = try view(.notRun)
         view.model.runSupportDiagnostics = { _ in
             throw SupportDiagnosticsRunnerError.scriptMissing(["test no-op"])
         }
+        let before = view.model.state.actionLog.count
 
         XCTAssertFalse(view.model.supportDiagnosticsIsCollecting, "precondition")
         try view.inspect().find(button: "Collect").tap()
 
         XCTAssertTrue(view.model.supportDiagnosticsIsCollecting,
                       "tapping Collect routes through MachineRuntimeView to collectSupportDiagnostics")
+        await waitForSupportDiagnosticsToFinish(view.model)
+        XCTAssertEqual(
+            view.model.supportDiagnosticsError,
+            SupportDiagnosticsRunnerError.scriptMissing(["test no-op"]).localizedDescription,
+            "the tapped collection reaches the failure fold")
+        XCTAssertEqual(view.model.state.actionLog.count, before + 1)
+        XCTAssertEqual(view.model.state.actionLog.first?.action, "collectSupportDiagnostics")
+        XCTAssertFalse(view.model.state.actionLog.first?.succeeded ?? true)
     }
 
     /// The "Reveal" button is only present when an archive exists; tapping it records the model

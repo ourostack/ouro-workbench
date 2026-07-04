@@ -683,6 +683,10 @@ public final class WorkbenchViewModel: ObservableObject {
         try SupportDiagnosticsRunner(resourceDirectory: resourceDirectory).run()
     }
 
+    var loginShellPathReader: @Sendable () -> String? = {
+        WorkbenchViewModel.readLoginShellPath()
+    }
+
     /// Scans for recent + workbench session candidates during onboarding import. Defaults to the
     /// real `RecentSessionScanner().scan() + .scanWorkbench(state:)` (byte-identical to the prior
     /// inline body). A test injects a synchronous fake candidate list so the post-scan fold in
@@ -4130,8 +4134,9 @@ public final class WorkbenchViewModel: ObservableObject {
     /// reads as broken. Off-main, idempotent.
     func prepareLoginShellEnvironment() async {
         guard TerminalEnvironment.loginShellPath == nil else { return }
+        let reader = loginShellPathReader
         let captured = await Task.detached(priority: .userInitiated) {
-            WorkbenchViewModel.readLoginShellPath()
+            reader()
         }.value
         if let captured, !captured.isEmpty {
             TerminalEnvironment.loginShellPath = captured
@@ -6958,21 +6963,51 @@ public final class WorkbenchViewModel: ObservableObject {
     /// (e.g. an NFS home dir) hanging a worker thread forever. Fire-and-forget:
     /// the caller doesn't await the quit (use `terminatePersistentSessionAwaiting`
     /// when a quit must complete before a relaunch).
+    struct SpawnScreenQuitProcess: Sendable {
+        let processIdentifier: pid_t
+        let waitUntilExit: @Sendable () -> Void
+        let terminate: @Sendable () -> Void
+    }
+
+    nonisolated(unsafe) static var spawnScreenQuitScheduler: @Sendable (@escaping @Sendable () -> Void) -> Void = { work in
+        DispatchQueue.global(qos: .userInitiated).async(execute: work)
+    }
+
+    nonisolated(unsafe) static var spawnScreenQuitProcessStarter: @Sendable (
+        _ process: Process
+    ) throws -> SpawnScreenQuitProcess = { process in
+        final class ProcessBox: @unchecked Sendable {
+            let process: Process
+            init(_ process: Process) { self.process = process }
+        }
+
+        try process.run()
+        let box = ProcessBox(process)
+        return SpawnScreenQuitProcess(
+            processIdentifier: process.processIdentifier,
+            waitUntilExit: { box.process.waitUntilExit() },
+            terminate: { box.process.terminate() }
+        )
+    }
+
     nonisolated static func spawnScreenQuit(arguments: [String], environment: [String: String]) {
         let executable = PersistentTerminalSession.executable
-        DispatchQueue.global(qos: .userInitiated).async {
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: executable)
-            process.arguments = arguments
-            process.environment = environment
+        let scheduler = spawnScreenQuitScheduler
+        let starter = spawnScreenQuitProcessStarter
+        scheduler {
+            let screen = Process()
+            screen.executableURL = URL(fileURLWithPath: executable)
+            screen.arguments = arguments
+            screen.environment = environment
+            let process: SpawnScreenQuitProcess
             do {
-                try process.run()
+                process = try starter(screen)
             } catch {
                 // The screen session / socket may already be gone.
                 return
             }
             let finished = DispatchSemaphore(value: 0)
-            DispatchQueue.global(qos: .userInitiated).async {
+            scheduler {
                 process.waitUntilExit()
                 finished.signal()
             }
