@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.244 - Deterministic view-model async coverage
+
+- Internal: makes `WorkbenchViewModel`'s fire-and-forget async bodies (login-shell capture, screen-quit spawn, support-diagnostics and bug-issue wrappers) deterministically covered by adding narrow test seams and awaiting completion in tests, eliminating a load-dependent coverage-gate flake at the `WorkbenchViewModel.swift` margin. Production behavior is unchanged. No user-facing behavior change.
+
 ## 0.1.243 - Complete the version contract
 
 - Internal: `scripts/verify-version-contract.sh` now also asserts the Apple distribution manifest's `store.version` (`distribution/apple-distribution.json`) matches `VERSION`, so a version bump that forgets the manifest is caught in local preflight instead of only in CI. No user-facing behavior change.
