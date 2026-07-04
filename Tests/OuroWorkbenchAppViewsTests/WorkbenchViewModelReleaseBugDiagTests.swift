@@ -30,6 +30,36 @@ final class WorkbenchViewModelReleaseBugDiagTests: XCTestCase {
         return m
     }
 
+    private func waitForSupportDiagnosticsToFinish(
+        _ m: WorkbenchViewModel,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        let deadline = ContinuousClock.now + .seconds(2)
+        while m.supportDiagnosticsIsCollecting {
+            if ContinuousClock.now >= deadline {
+                XCTFail("support diagnostics did not finish before timeout", file: file, line: line)
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+    }
+
+    private func waitForIssueFilingToFinish(
+        _ m: WorkbenchViewModel,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        let deadline = ContinuousClock.now + .seconds(2)
+        while m.bugReportIssueIsFiling {
+            if ContinuousClock.now >= deadline {
+                XCTFail("bug report issue filing did not finish before timeout", file: file, line: line)
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+    }
+
     // MARK: - runRecoveryDrill (pure)
 
     func testRunRecoveryDrill_setsResult() throws {
@@ -41,11 +71,35 @@ final class WorkbenchViewModelReleaseBugDiagTests: XCTestCase {
 
     // MARK: - collectSupportDiagnostics
 
-    func testCollectSupportDiagnostics_setsCollectingFlag() throws {
+    func testCollectSupportDiagnostics_setsCollectingFlag() async throws {
         let m = try makeVM()
+        let logBefore = m.state.actionLog.count
         XCTAssertFalse(m.supportDiagnosticsIsCollecting, "precondition")
         m.collectSupportDiagnostics()
         XCTAssertTrue(m.supportDiagnosticsIsCollecting, "collect sets the in-flight flag synchronously")
+        await waitForSupportDiagnosticsToFinish(m)
+        XCTAssertEqual(
+            m.supportDiagnosticsError,
+            SupportDiagnosticsRunnerError.scriptMissing(["test no-op"]).localizedDescription,
+            "the failure fold surfaces the diagnostics error")
+        XCTAssertEqual(m.state.actionLog.count, logBefore + 1, "the failure fold records one action-log entry")
+        XCTAssertEqual(m.state.actionLog.first?.action, "collectSupportDiagnostics")
+        XCTAssertFalse(m.state.actionLog.first?.succeeded ?? true, "the failure log entry is marked failed")
+    }
+
+    func testCollectSupportDiagnostics_success_setsResultAndLogs() async throws {
+        let m = try makeVM()
+        let archive = URL(fileURLWithPath: "/Users/microsoft/code/ouro-workbench/.build/vmrbd/diag.zip")
+        m.runSupportDiagnostics = { _ in SupportDiagnosticsResult(archiveURL: archive, output: "ok") }
+        let logBefore = m.state.actionLog.count
+        m.collectSupportDiagnostics()
+        XCTAssertTrue(m.supportDiagnosticsIsCollecting, "collect sets the in-flight flag synchronously")
+        await waitForSupportDiagnosticsToFinish(m)
+        XCTAssertEqual(m.supportDiagnosticsResult?.archiveURL, archive, "the success fold stores the result")
+        XCTAssertNil(m.supportDiagnosticsError, "the success fold leaves no error")
+        XCTAssertEqual(m.state.actionLog.count, logBefore + 1, "the success fold records one action-log entry")
+        XCTAssertEqual(m.state.actionLog.first?.action, "collectSupportDiagnostics")
+        XCTAssertTrue(m.state.actionLog.first?.succeeded ?? false, "the success log entry is marked succeeded")
     }
 
     func testCollectSupportDiagnostics_alreadyCollecting_isNoOp() throws {
@@ -60,7 +114,6 @@ final class WorkbenchViewModelReleaseBugDiagTests: XCTestCase {
 
     func testCopySupportDiagnosticsPath_noZip_setsError() throws {
         let m = try makeVM()
-        m.collectSupportDiagnostics()   // no result set yet synchronously
         m.supportDiagnosticsResult = nil
         m.copySupportDiagnosticsPath()
         XCTAssertEqual(m.errorMessage, "No support diagnostics zip has been collected yet")
@@ -118,12 +171,19 @@ final class WorkbenchViewModelReleaseBugDiagTests: XCTestCase {
         XCTAssertEqual(m.bugReportIssueError, "Create a bug report first.")
     }
 
-    func testFileIssue_withReport_setsFilingFlag() throws {
+    func testFileIssue_withReport_setsFilingFlag() async throws {
         let m = try makeVM()
-        m.lastBugReportURL = URL(fileURLWithPath: "/tmp/vmrbd/bug-report")
+        m.lastBugReportURL = URL(fileURLWithPath: "/Users/microsoft/code/ouro-workbench/.build/vmrbd/bug-report")
         m.fileGitHubIssue = { _, _, _, _, _, _, _, _ in .success("https://github.com/x/y/issues/1") }
+        let logBefore = m.state.actionLog.count
         m.fileLastBugReportAsGitHubIssue()
         XCTAssertTrue(m.bugReportIssueIsFiling, "filing sets the in-flight flag synchronously")
+        await waitForIssueFilingToFinish(m)
+        XCTAssertEqual(m.bugReportIssueURL, "https://github.com/x/y/issues/1")
+        XCTAssertNil(m.bugReportIssueError)
+        XCTAssertEqual(m.state.actionLog.count, logBefore + 1, "the success fold records one action-log entry")
+        XCTAssertEqual(m.state.actionLog.first?.action, "fileBugReportIssue")
+        XCTAssertTrue(m.state.actionLog.first?.succeeded ?? false, "the success log entry is marked succeeded")
     }
 
     func testFileIssue_alreadyFiling_isNoOp() throws {
@@ -155,12 +215,12 @@ final class WorkbenchViewModelReleaseBugDiagTests: XCTestCase {
 
     func testFileIssue_failure_surfacesErrorAndLogsFailure() async throws {
         let m = try makeVM()
-        m.lastBugReportURL = URL(fileURLWithPath: "/tmp/vmrbd/bug-report")
+        m.lastBugReportURL = URL(fileURLWithPath: "/Users/microsoft/code/ouro-workbench/.build/vmrbd/bug-report")
         m.fileGitHubIssue = { _, _, _, _, _, _, _, _ in .failure(.cliMissing) }
         let logBefore = m.state.actionLog.count
         m.fileLastBugReportAsGitHubIssue()
         XCTAssertTrue(m.bugReportIssueIsFiling, "filing sets the in-flight flag synchronously")
-        for _ in 0..<500 where m.bugReportIssueIsFiling { await Task.yield() }
+        await waitForIssueFilingToFinish(m)
         XCTAssertFalse(m.bugReportIssueIsFiling, "the .failure arm clears the in-flight flag")
         XCTAssertEqual(
             m.bugReportIssueError, GitHubIssueFilingError.cliMissing.localizedDescription,

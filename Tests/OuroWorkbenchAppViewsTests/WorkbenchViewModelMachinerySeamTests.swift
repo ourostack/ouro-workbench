@@ -65,6 +65,91 @@ final class WorkbenchViewModelMachinerySeamTests: XCTestCase {
         return (m, paths)
     }
 
+    // MARK: - loginShellPathReader seam
+
+    func testPrepareLoginShellEnvironment_readsInjectedLoginShellPathInDetachedBody() async throws {
+        let saved = TerminalEnvironment.loginShellPath
+        defer { TerminalEnvironment.loginShellPath = saved }
+        TerminalEnvironment.loginShellPath = nil
+
+        let m = try makeVM()
+        let calls = OuroBox<Int>(0)
+        m.loginShellPathReader = {
+            calls.value += 1
+            return "/deterministic/bin:/usr/bin"
+        }
+
+        await m.prepareLoginShellEnvironment()
+
+        XCTAssertEqual(calls.value, 1, "the detached body calls the injected reader exactly once")
+        XCTAssertEqual(TerminalEnvironment.loginShellPath, "/deterministic/bin:/usr/bin")
+    }
+
+    // MARK: - spawnScreenQuit static seams
+
+    func testSpawnScreenQuit_inlineSchedulerAndRunner_coversNonTimeoutPath() throws {
+        let savedScheduler = WorkbenchViewModel.spawnScreenQuitScheduler
+        let savedStarter = WorkbenchViewModel.spawnScreenQuitProcessStarter
+        defer {
+            WorkbenchViewModel.spawnScreenQuitScheduler = savedScheduler
+            WorkbenchViewModel.spawnScreenQuitProcessStarter = savedStarter
+        }
+
+        let scheduled = OuroBox<Int>(0)
+        WorkbenchViewModel.spawnScreenQuitScheduler = { work in
+            scheduled.value += 1
+            work()
+        }
+        let captured = OuroBox<(String?, [String]?, [String: String]?)?>(nil)
+        let waited = OuroBox<Bool>(false)
+        let terminated = OuroBox<Bool>(false)
+        WorkbenchViewModel.spawnScreenQuitProcessStarter = { process in
+            captured.value = (process.executableURL?.path, process.arguments, process.environment)
+            return WorkbenchViewModel.SpawnScreenQuitProcess(
+                processIdentifier: 0,
+                waitUntilExit: { waited.value = true },
+                terminate: { terminated.value = true }
+            )
+        }
+
+        WorkbenchViewModel.spawnScreenQuit(
+            arguments: ["-S", "ouro-wb-test", "-X", "quit"],
+            environment: ["STY": "test"])
+
+        XCTAssertEqual(scheduled.value, 2, "outer spawn + inner wait are both scheduled")
+        XCTAssertEqual(captured.value?.1, ["-S", "ouro-wb-test", "-X", "quit"])
+        XCTAssertEqual(captured.value?.2, ["STY": "test"])
+        XCTAssertTrue(waited.value, "the non-timeout path waits for process exit")
+        XCTAssertFalse(terminated.value, "a completed wait does not terminate/kill")
+    }
+
+    func testSpawnScreenQuit_runnerThrow_coversAlreadyGonePath() throws {
+        struct ScreenGone: Error {}
+
+        let savedScheduler = WorkbenchViewModel.spawnScreenQuitScheduler
+        let savedStarter = WorkbenchViewModel.spawnScreenQuitProcessStarter
+        defer {
+            WorkbenchViewModel.spawnScreenQuitScheduler = savedScheduler
+            WorkbenchViewModel.spawnScreenQuitProcessStarter = savedStarter
+        }
+
+        let scheduled = OuroBox<Int>(0)
+        let attempted = OuroBox<Bool>(false)
+        WorkbenchViewModel.spawnScreenQuitScheduler = { work in
+            scheduled.value += 1
+            work()
+        }
+        WorkbenchViewModel.spawnScreenQuitProcessStarter = { _ in
+            attempted.value = true
+            throw ScreenGone()
+        }
+
+        WorkbenchViewModel.spawnScreenQuit(arguments: ["-X", "quit"], environment: [:])
+
+        XCTAssertEqual(scheduled.value, 1, "the catch path returns before scheduling the wait block")
+        XCTAssertTrue(attempted.value, "the runner was invoked and threw")
+    }
+
     // MARK: - runOnboardingProviderCheck (via providerCheckRunner seam)
 
     func testOnboardingProviderCheck_launchFailure_isFailedSettingUp() async throws {
