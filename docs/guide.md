@@ -24,8 +24,8 @@ Workbench is built around these commitments:
 - The selected Ouro boss can inspect the workspace/session map and control trusted
   Workbench sessions.
 - Local Ouro agents are discovered from `~/AgentBundles/*.ouro`; Workbench can
-  switch the boss, register MCP, reveal bundles, and open install terminals for
-  new or cloned agents.
+  switch the boss, verify Workbench tool injection, reveal bundles, and open
+  install terminals for new or cloned agents.
 - Restart recovery is truthful. Processes do not survive reboot, but sessions,
   transcripts, identity, attention state, and safe resume plans persist.
 - Human interaction with terminals stays ergonomic. The human can type, copy,
@@ -114,7 +114,7 @@ Workbench with minimal babysitting.
 TTFA checks:
 
 - selected boss agent name is valid
-- Workbench MCP is registered for that boss
+- Workbench MCP runtime injection is installed and verified for that boss
 - detected agent terminals are trusted when boss control is expected
 - detected agent terminals have automatic restart strategies when they should
   recover without help
@@ -205,11 +205,12 @@ Then run first-run setup in the app:
    Mac's boss. The boss is the operator's agent for this machine; it is not the
    Desk worker and it is not tied to any single terminal tab. Click anywhere on
    an agent row to select it.
-3. On the Connect page, choose `Enable Tools` if Workbench MCP is not already
-   registered for that boss. Workbench then automatically runs mandatory live
-   provider checks for both the outward and inner lanes. If no boss is ready,
-   Workbench offers the right `ouro hatch`, `ouro clone`, `ouro connect`,
-   `ouro repair`, provider repair, or Workbench MCP registration move.
+3. On the Connect page, choose `Enable Tools` if Workbench MCP runtime injection
+   is not already available and verified for that boss. Workbench then
+   automatically runs mandatory live provider checks for both the outward and
+   inner lanes. If no boss is ready, Workbench offers the right `ouro hatch`,
+   `ouro clone`, `ouro connect`, `ouro repair`, provider repair, or Workbench
+   MCP runtime-injection cleanup move.
    Human-secret entry stays inside Ouro's own terminal/browser auth flows.
 4. Once the boss is ready, choose `Scan Recent Work`. Workbench inspects recent local
    Workbench, Claude Code, Codex, Copilot/shell, and persistent-terminal
@@ -273,19 +274,14 @@ high-trust launch posture such as `--dangerously-skip-permissions` and
 `--permission-mode bypassPermissions`, but it intentionally drops cmux hook
 settings so the resumed tab belongs to Workbench.
 
-Registering Workbench MCP writes an `ouro_workbench` server entry into the
-selected boss agent bundle:
-
-```json
-{
-  "mcpServers": {
-    "ouro_workbench": {
-      "command": "/Users/arimendelow/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP",
-      "args": []
-    }
-  }
-}
-```
+Workbench MCP does not write an `ouro_workbench` server entry into the selected
+boss agent bundle. When Workbench launches the boss, it starts
+`ouro mcp-serve --agent <boss> --workbench-mcp <OuroWorkbenchMCP>`, injecting
+the Workbench tools for that served turn while keeping the synced bundle free of
+machine-local app paths. The Connect page and `Workbench MCP` row verify the
+binary, remove stale `mcpServers.ouro_workbench` / `senses.workbench` entries
+from old setups, and then confirm that the live boss tool catalog contains
+`workbench_*` tools.
 
 ## Main Window
 
@@ -316,13 +312,13 @@ Important rows:
 - Quick asks: `What's Going On?`, `Waiting On Me?`, `Keep Moving`, and
   `Respond For Me`.
 - `Ouro Agents`: discovers local agent bundles, shows provider/model lane
-  health, switches the boss, registers Workbench MCP, reveals bundles, and opens
-  managed terminals for conversational `ouro hatch` or remote-bundle
+  health, switches the boss, verifies Workbench MCP runtime injection, reveals
+  bundles, and opens managed terminals for conversational `ouro hatch` or remote-bundle
   `ouro clone`.
 - `Transcript Search`: searches persisted transcript lines across runs.
 - `Native Runtime`: shows `Open at Login`.
 - `Recovery Drill`: dry-runs restart recovery without changing state.
-- `Workbench MCP`: shows and refreshes boss MCP registration.
+- `Workbench MCP`: shows and refreshes boss runtime injection readiness.
 - `Action Log`: records applied or denied Workbench actions.
 
 ### Terminal Pane
@@ -590,10 +586,17 @@ scope.
 
 ## Boss And Ouro CLI Integration
 
-Workbench talks to the selected boss through the Ouro CLI:
+Workbench talks to the selected boss through the Ouro CLI. Human-facing boss
+asks use the base boss plane:
 
 ```bash
 ouro mcp-serve --agent <boss>
+```
+
+Workbench tool access is a separate runtime-injected served turn:
+
+```bash
+ouro mcp-serve --agent <boss> --workbench-mcp <OuroWorkbenchMCP>
 ```
 
 There are two complementary routes:
@@ -601,7 +604,7 @@ There are two complementary routes:
 | Route | Purpose |
 | --- | --- |
 | Boss conversation plane | Human-facing asks through `Boss Line`, `Check In`, `Ask Boss`, and Boss Watch. |
-| Workbench MCP server | Tool surface the boss can call from its own Ouro runtime. |
+| Workbench MCP runtime injection | Tool surface the boss can call from its own Ouro runtime. |
 
 Workbench MCP exposes:
 
@@ -788,10 +791,10 @@ This is TTFA in product form: trust the agent, keep the trail.
 | Symptom | What it usually means | Fix |
 | --- | --- | --- |
 | TTFA says blocked | The boss cannot fully inspect, control, or recover the workspace. | Click `TTFA`, read the blocker, and use the offered fix when present. |
-| Workbench MCP is not registered | The selected boss cannot see Workbench tools from its own Ouro runtime. | Use the `Workbench MCP` row to register or refresh. |
+| Workbench MCP runtime injection is unavailable or unverified | The selected boss cannot see Workbench tools from its own Ouro runtime. | Use the `Workbench MCP` row to verify injection, clean stale bundle entries, or reinstall Workbench. |
 | An agent executable is missing | The command is not available on the app's PATH. | Install or repair the CLI, then refresh readiness. |
 | Boss Watch is paused | Automatic observation is off. | Turn on `Watch` when you want background coordination. |
-| Boss Line fails | The Ouro CLI or selected boss process could not complete the ask. | Verify `ouro mcp-serve --agent <boss>` works in a terminal. |
+| Boss Line fails | The Ouro CLI or selected boss process could not complete the ask. | Verify `ouro mcp-serve --agent <boss>` works in a terminal. This checks base boss reachability; the `Workbench MCP` row verifies runtime tool injection separately. |
 | A prompt sits high or low after focusing a terminal | A shell or TUI did not repaint cleanly after attach, focus, or resize. | Workbench automatically sends Ctrl-L after attach, focus-mode entry, and meaningful resize; click `Redraw`, press `Command-L`, or use the command palette to force one more repaint if a stubborn TUI still needs it. |
 | A session will not auto-recover | Trust, auto-resume, or native resume posture is missing. | Run `Recovery Drill` and inspect the reason. |
 | A boss action is skipped | The action violated a local trust gate or current runtime state. | Check `Action Log` for the exact result. |
@@ -841,7 +844,7 @@ A healthy Workbench has this shape:
 
 - `TTFA` is ready or only has understood watch points.
 - `Open at Login` is enabled.
-- `Workbench MCP` is registered for the selected boss.
+- `Workbench MCP` runtime injection is verified for the selected boss.
 - Boss Watch is on during autonomous work blocks.
 - Detected agent terminals are trusted, executable, and configured for the intended recovery posture.
 - Custom terminal/TUI agents are named clearly and trusted deliberately.
@@ -862,7 +865,8 @@ Workbench is already useful, but the truth matters:
 - GitHub Copilot CLI native resume behavior is not treated as verified yet.
   Workbench uses explicit respawn/checkpoint recovery for that CLI.
 - Boss `sendInput` only works for a running session with a retained controller.
-- Workbench MCP registration currently points at the installed app bundle path.
+- Workbench MCP runtime injection depends on the installed app bundle MCP binary
+  being discoverable on that machine.
 - The app is distributed as an ad-hoc-signed preview. Apple Developer ID signing
   and notarization are separate release work.
 
