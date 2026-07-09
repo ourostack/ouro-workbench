@@ -37,10 +37,17 @@ Desk mirror map so an Ouro agent can orient itself before acting.
 
 ## Boss Plane
 
-The selected Ouro boss agent is reached through MCP stdio:
+The selected Ouro boss agent is reached through MCP stdio. Human-facing boss
+asks use the base boss plane:
 
 ```bash
 ouro mcp-serve --agent slugger
+```
+
+Workbench tool access is a separate runtime-injected served turn:
+
+```bash
+ouro mcp-serve --agent slugger --workbench-mcp <OuroWorkbenchMCP>
 ```
 
 Workbench should use boss-agent turns for natural-language check-ins:
@@ -140,44 +147,26 @@ detected CLI identity. This is how an Ouro boss can answer "what is going on in
 the harness group?" without treating every terminal on the machine as a flat
 bag of processes.
 
-The native boss dashboard has a `Workbench MCP` row that registers or updates an
-`ouro_workbench` entry in `~/AgentBundles/<boss>.ouro/agent.json`. The entry
-points at the packaged `OuroWorkbenchMCP` executable and uses no arguments:
+The native boss dashboard has a `Workbench MCP` row that verifies runtime
+injection and cleans up stale synced bundle state. Workbench does not write an
+`ouro_workbench` entry or `senses.workbench.enabled` into
+`~/AgentBundles/<boss>.ouro/agent.json`. Instead, when Workbench launches the
+selected boss it starts:
 
-```json
-{
-  "mcpServers": {
-    "ouro_workbench": {
-      "command": "/Users/arimendelow/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP",
-      "args": []
-    }
-  }
-}
+```bash
+ouro mcp-serve --agent <boss> --workbench-mcp "/Users/arimendelow/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP"
 ```
 
-Once registered, the selected boss agent can discover the workbench tools from
-its normal Ouro MCP/tool surface.
+That per-turn `--workbench-mcp` parameter injects the Workbench tools into the
+boss's Ouro MCP surface without syncing a machine-local path through the agent
+bundle. A clean bundle plus an installed `OuroWorkbenchMCP` binary means runtime
+injection is available. A stale `mcpServers.ouro_workbench` or
+`senses.workbench` entry means cleanup is needed, not that Workbench should
+persist new config.
 
-Registration is also a sense declaration. The registrar keeps the boss bundle's
-`agent.json` coherent by writing both:
-
-```json
-{
-  "senses": {
-    "workbench": { "enabled": true }
-  },
-  "mcpServers": {
-    "ouro_workbench": {
-      "command": "/Users/arimendelow/Applications/Ouro Workbench.app/Contents/MacOS/OuroWorkbenchMCP",
-      "args": []
-    }
-  }
-}
-```
-
-If the MCP server is present but `senses.workbench.enabled` is missing,
-Workbench treats registration as needing repair. This prevents the boss from
-having a hidden tool surface that its own sense inventory cannot name.
+After handoff, Workbench also probes the live tool catalog. A config-only
+`.registered` snapshot is not enough for green readiness; the boss must actually
+receive one or more `workbench_*` tools.
 
 ## TTFA Readiness
 
@@ -185,7 +174,7 @@ having a hidden tool surface that its own sense inventory cannot name.
 boss can be trusted to run the Workbench with minimal babysitting:
 
 - boss agent name is valid
-- Workbench MCP is registered for that boss
+- Workbench MCP runtime injection is installed and verified for that boss
 - detected Claude Code, GitHub Copilot CLI, and OpenAI Codex terminals are
   trusted when boss control is expected
 - detected agent terminals have automatic restart strategies enabled when they
@@ -195,5 +184,5 @@ boss can be trusted to run the Workbench with minimal babysitting:
 - Boss Watch and Open at Login are enabled or called out as watch points
 
 The readiness popover can apply obvious local fixes, including Workbench MCP
-registration, Boss Watch startup, Open at Login registration, and a fresh boss
-ask.
+runtime-injection cleanup, Boss Watch startup, Open at Login registration, and a
+fresh boss ask.
