@@ -1126,7 +1126,7 @@ final class RemoteSessionSafetyTests: XCTestCase {
         try removeACL(from: aclDirectory)
     }
 
-    func testInheritedACLsClosePostCreationStatAndOpenFileStatFailures() throws {
+    func testDirectoryACLAndDescriptorSubstitutionClosePostCreationValidationFailures() throws {
         let root = try remoteTemporaryDirectory("inherited-acl-failures")
         defer { try? FileManager.default.removeItem(at: root) }
 
@@ -1144,9 +1144,14 @@ final class RemoteSessionSafetyTests: XCTestCase {
             try FileManager.default.createDirectory(at: fileParent, withIntermediateDirectories: true)
             try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: fileParent.path)
             if name == "durable" {
-                try addDenyACL("readattr,file_inherit,only_inherit", to: fileParent)
-                assertRemoteErrorContains("temporary file is not private") { try RemoteDurableFile.write(Data("x".utf8), to: fileParent.appendingPathComponent("value")) }
-                try removeACLRecursively(from: fileParent)
+                let directoryDescriptor = Darwin.open(fileParent.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
+                XCTAssertGreaterThanOrEqual(directoryDescriptor, 0)
+                defer { Darwin.close(directoryDescriptor) }
+                assertRemoteErrorContains("temporary file is not private") {
+                    try RemoteDurableFile.write(Data("x".utf8), named: "value", in: directoryDescriptor, directoryURL: fileParent, checkpoint: { _, _, _ in }, temporaryOpened: { descriptor in
+                        XCTAssertEqual(Darwin.dup2(directoryDescriptor, descriptor), descriptor)
+                    })
+                }
             } else {
                 let priorMask = Darwin.umask(0o777)
                 defer { Darwin.umask(priorMask) }

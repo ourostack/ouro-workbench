@@ -79,6 +79,18 @@ public enum RemoteDurableFile {
         mode: mode_t = 0o600,
         checkpoint: (RemoteDurableWriteCheckpoint, URL, Data) throws -> Void = { _, _, _ in }
     ) throws {
+        try write(data, named: destinationName, in: directoryDescriptor, directoryURL: directoryURL, mode: mode, checkpoint: checkpoint, temporaryOpened: { _ in })
+    }
+
+    public static func write(
+        _ data: Data,
+        named destinationName: String,
+        in directoryDescriptor: Int32,
+        directoryURL: URL,
+        mode: mode_t = 0o600,
+        checkpoint: (RemoteDurableWriteCheckpoint, URL, Data) throws -> Void,
+        temporaryOpened: (Int32) throws -> Void
+    ) throws {
         guard !destinationName.isEmpty,
               destinationName != ".",
               destinationName != "..",
@@ -115,6 +127,7 @@ public enum RemoteDurableFile {
             if openDescriptor >= 0 { Darwin.close(openDescriptor) }
             _ = temporaryName.withCString { unlinkat(directoryDescriptor, $0, 0) }
         }
+        try temporaryOpened(descriptor)
         var temporaryStat = stat()
         guard fstat(descriptor, &temporaryStat) == 0,
               temporaryStat.st_mode & S_IFMT == S_IFREG,
