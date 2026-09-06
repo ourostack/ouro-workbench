@@ -97,7 +97,14 @@ private func remoteCollectHealth(_ context: RemoteHelperContext, observedAt: Dat
                 )
                 switch try adapter.probe(sessionName: runtime.sessionName) {
                 case let .running(inventory):
-                    checks.append(RemoteHealthCheck(name: "herdr-active-generation", source: runtime.socketPath, observedAt: observedAt, state: inventory.version == "0.8.2" ? .healthy : .degraded, detail: "generation \(runtime.generation) has \(inventory.panes.count) panes"))
+                    let exact = try adapter.activeRuntimeIsExact(runtime, inventory: inventory)
+                    checks.append(RemoteHealthCheck(
+                        name: "herdr-active-generation",
+                        source: runtime.socketPath,
+                        observedAt: observedAt,
+                        state: exact ? .healthy : .degraded,
+                        detail: exact ? "generation \(runtime.generation) has \(inventory.panes.count) exact managed panes" : "published generation inventory or worker identity is not exact"
+                    ))
                 case .absent:
                     checks.append(RemoteHealthCheck(name: "herdr-active-generation", source: runtime.socketPath, observedAt: observedAt, state: .unavailable, detail: "published generation is absent"))
                 case let .degraded(detail):

@@ -554,9 +554,31 @@ enum RemoteNativeProcessIdentity {
     }
 }
 
+public struct RemoteProcessSnapshot: Equatable, Sendable {
+    public var arguments: [String]
+    public var environment: [String: String]
+
+    public init(arguments: [String], environment: [String: String]) {
+        self.arguments = arguments
+        self.environment = environment
+    }
+}
+
+public enum RemoteArgvDigest {
+    public static let unavailable = String(repeating: "0", count: 64)
+
+    public static func sha256(_ arguments: [String]) -> String {
+        RemoteArtifactVerifier.sha256(try! JSONEncoder().encode(arguments))
+    }
+}
+
 public enum RemoteProcessArguments {
     public static func read(pid: Int32) -> [String]? {
-        read(
+        readSnapshot(pid: pid)?.arguments
+    }
+
+    public static func readSnapshot(pid: Int32) -> RemoteProcessSnapshot? {
+        rawSnapshot(
             pid: pid,
             querySize: { candidate in
                 var keys = [Int32(CTL_KERN), Int32(KERN_PROCARGS2), candidate]
@@ -579,6 +601,14 @@ public enum RemoteProcessArguments {
         querySize: (Int32) -> (result: Int32, size: Int),
         queryBytes: (Int32, Int) -> (result: Int32, size: Int, bytes: [UInt8])
     ) -> [String]? {
+        rawSnapshot(pid: pid, querySize: querySize, queryBytes: queryBytes)?.arguments
+    }
+
+    static func rawSnapshot(
+        pid: Int32,
+        querySize: (Int32) -> (result: Int32, size: Int),
+        queryBytes: (Int32, Int) -> (result: Int32, size: Int, bytes: [UInt8])
+    ) -> RemoteProcessSnapshot? {
         guard pid > 0 else { return nil }
         let sizeResult = querySize(pid)
         guard sizeResult.result == 0, sizeResult.size >= MemoryLayout<Int32>.size, sizeResult.size <= 1_048_576 else { return nil }
@@ -586,10 +616,14 @@ public enum RemoteProcessArguments {
         guard bytesResult.result == 0, bytesResult.size >= MemoryLayout<Int32>.size, bytesResult.size <= bytesResult.bytes.count else { return nil }
         var argumentCount: Int32 = 0
         withUnsafeMutableBytes(of: &argumentCount) { $0.copyBytes(from: bytesResult.bytes.prefix(MemoryLayout<Int32>.size)) }
-        return decode(argumentCount: argumentCount, bytesAfterCount: Array(bytesResult.bytes[MemoryLayout<Int32>.size..<bytesResult.size]))
+        return decodeSnapshot(argumentCount: argumentCount, bytesAfterCount: Array(bytesResult.bytes[MemoryLayout<Int32>.size..<bytesResult.size]))
     }
 
     static func decode(argumentCount: Int32, bytesAfterCount bytes: [UInt8]) -> [String]? {
+        decodeSnapshot(argumentCount: argumentCount, bytesAfterCount: bytes)?.arguments
+    }
+
+    static func decodeSnapshot(argumentCount: Int32, bytesAfterCount bytes: [UInt8]) -> RemoteProcessSnapshot? {
         guard argumentCount > 0, let executableEnd = bytes.firstIndex(of: 0) else { return nil }
         var offset = executableEnd
         while offset < bytes.count, bytes[offset] == 0 { offset += 1 }
@@ -599,7 +633,19 @@ public enum RemoteProcessArguments {
             arguments.append(String(decoding: bytes[offset..<end], as: UTF8.self))
             offset = end + 1
         }
-        return arguments
+        var environment: [String: String] = [:]
+        while offset < bytes.count {
+            while offset < bytes.count, bytes[offset] == 0 { offset += 1 }
+            guard offset < bytes.count else { break }
+            guard let end = bytes[offset...].firstIndex(of: 0), end > offset else { return nil }
+            let entry = String(decoding: bytes[offset..<end], as: UTF8.self)
+            guard let separator = entry.firstIndex(of: "="), separator != entry.startIndex else { return nil }
+            let key = String(entry[..<separator])
+            guard environment[key] == nil else { return nil }
+            environment[key] = String(entry[entry.index(after: separator)...])
+            offset = end + 1
+        }
+        return RemoteProcessSnapshot(arguments: arguments, environment: environment)
     }
 }
 

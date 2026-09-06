@@ -37,6 +37,7 @@ public struct RemoteLastKnownGoodSelection: Equatable, Sendable {
 public enum RemoteLastKnownGoodCheckpoint: String, CaseIterable, Equatable, Sendable {
     case snapshotCopied = "snapshot_copied"
     case manifestWritten = "manifest_written"
+    case generationSynchronized = "generation_synchronized"
     case generationPromoted = "generation_promoted"
 }
 
@@ -106,8 +107,13 @@ public struct RemoteLastKnownGoodStore {
         do { try RemoteDurableFile.write(encoder.encode(manifest), to: stageURL.appendingPathComponent("manifest.json")) }
         catch { throw RemoteControlError.guardian("last-known-good manifest could not be written") }
         try Self.runCheckpoint(.manifestWritten, checkpoint)
+        do { try remoteSynchronizeTree(rootURL: stageURL) }
+        catch { throw RemoteControlError.guardian("last-known-good generation could not be synchronized") }
+        try Self.runCheckpoint(.generationSynchronized, checkpoint)
         do { try FileManager.default.moveItem(at: stageURL, to: destinationURL) }
         catch { throw RemoteControlError.guardian("last-known-good generation could not be promoted") }
+        do { try remoteSynchronizeNode(generationsURL, kind: .directory) }
+        catch { throw RemoteControlError.guardian("last-known-good promotion could not be synchronized") }
         cleanupStage = false
         try Self.runCheckpoint(.generationPromoted, checkpoint)
         do { try RemoteDurableFile.write(Data("\(captureID)\n".utf8), to: lastKnownGoodURL.appendingPathComponent("current")) }
@@ -287,15 +293,33 @@ public struct RemoteLastKnownGoodStore {
         return true
     }
 
-    private static func ensurePrivateDirectory(_ url: URL, label: String) throws {
+    static func ensurePrivateDirectory(
+        _ url: URL,
+        label: String,
+        validationCheckpoint: () throws -> Void = {}
+    ) throws {
         var value = stat()
         if lstat(url.path, &value) != 0 {
             do { try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700]) }
             catch { throw RemoteControlError.guardian("\(label) could not be created") }
         }
-        try validatePrivateDirectory(url, label: label)
-        do { try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: url.path) }
-        catch { throw RemoteControlError.guardian("\(label) permissions could not be secured") }
+        let descriptor = Darwin.open(url.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
+        guard descriptor >= 0 else { throw RemoteControlError.guardian("\(label) permissions could not be secured") }
+        defer { Darwin.close(descriptor) }
+        var anchored = stat()
+        guard fstat(descriptor, &anchored) == 0,
+              anchored.st_mode & S_IFMT == S_IFDIR,
+              anchored.st_uid == geteuid()
+        else { throw RemoteControlError.guardian("\(label) permissions could not be secured") }
+        try validationCheckpoint()
+        guard fchmod(descriptor, 0o700) == 0,
+              Darwin.fsync(descriptor) == 0
+        else { throw RemoteControlError.guardian("\(label) permissions could not be secured") }
+        var current = stat()
+        guard lstat(url.path, &current) == 0,
+              current.st_dev == anchored.st_dev,
+              current.st_ino == anchored.st_ino
+        else { throw RemoteControlError.guardian("\(label) changed while its permissions were secured") }
     }
 
     private static func validatePrivateDirectory(_ url: URL, label: String) throws {

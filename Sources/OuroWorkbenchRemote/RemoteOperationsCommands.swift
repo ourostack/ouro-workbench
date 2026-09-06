@@ -85,7 +85,6 @@ func remoteRunPackage(_ context: RemoteHelperContext) throws {
 
 func remoteRunShellBootstrap(_ context: RemoteHelperContext) throws {
     let outputRoot = URL(fileURLWithPath: try context.path("output"), isDirectory: true)
-    try remoteEnsurePrivateDirectory(outputRoot)
     let files = try RemoteShellBootstrap.render(
         zshExecutable: try context.path("zsh"),
         realZDOTDIR: try context.path("real-zdotdir"),
@@ -94,8 +93,10 @@ func remoteRunShellBootstrap(_ context: RemoteHelperContext) throws {
         configPath: try context.path("config"),
         sessionMapPath: try context.path("session-map")
     )
+    let outputDescriptor = try remoteEnsurePrivateDirectory(outputRoot)
+    defer { Darwin.close(outputDescriptor) }
     for (name, data) in files {
-        try RemoteDurableFile.write(data, to: outputRoot.appendingPathComponent(name), mode: 0o600)
+        try RemoteDurableFile.write(data, named: name, in: outputDescriptor, directoryURL: outputRoot, mode: 0o600)
     }
 }
 
@@ -143,14 +144,15 @@ func remoteRunRollback(_ context: RemoteHelperContext) throws {
     catch let error as RemoteControlError { throw error }
     catch { throw RemoteControlError.artifact("install provenance is invalid") }
     guard provenance.revision == revision else { throw RemoteControlError.artifact("install provenance revision mismatch") }
+    let nativeSessionReferencesRemain = try RemoteRuntimeReferenceScanner(runtimeRootURL: runtimeRoot).references(revision: revision)
     let result = try RemoteRuntimeInstaller(rootURL: runtimeRoot).rollback(
         provenance: provenance,
-        nativeSessionReferencesRemain: true
+        nativeSessionReferencesRemain: nativeSessionReferencesRemain
     )
     try remoteWriteJSON(["result": String(describing: result), "revision": revision])
 }
 
-func remoteEnsurePrivateDirectory(_ url: URL) throws {
+func remoteEnsurePrivateDirectory(_ url: URL) throws -> Int32 {
     var requested = stat()
     if lstat(url.path, &requested) != 0 {
         guard errno == ENOENT else { throw RemoteControlError.invalidConfiguration("private directory is unavailable") }
@@ -159,7 +161,8 @@ func remoteEnsurePrivateDirectory(_ url: URL) throws {
     }
     let descriptor = Darwin.open(url.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
     guard descriptor >= 0 else { throw RemoteControlError.invalidConfiguration("private directory must be a directory and not a symbolic link") }
-    defer { Darwin.close(descriptor) }
+    var keepDescriptor = false
+    defer { if !keepDescriptor { Darwin.close(descriptor) } }
     var anchored = stat()
     guard fstat(descriptor, &anchored) == 0,
           anchored.st_mode & S_IFMT == S_IFDIR,
@@ -172,6 +175,9 @@ func remoteEnsurePrivateDirectory(_ url: URL) throws {
           current.st_dev == anchored.st_dev,
           current.st_ino == anchored.st_ino
     else { throw RemoteControlError.invalidConfiguration("private directory changed while it was secured") }
+    guard Darwin.fsync(descriptor) == 0 else { throw RemoteControlError.invalidConfiguration("private directory could not be synchronized") }
+    keepDescriptor = true
+    return descriptor
 }
 
 func remoteWriteJSON<T: Encodable>(_ value: T) throws {

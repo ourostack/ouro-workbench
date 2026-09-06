@@ -255,25 +255,26 @@ public struct RemoteHerdrAdapter {
                     && candidate.phase != .exited
             }
             var verifiedLogin: String?
-            let exactChild = record?.childIdentity.flatMap { expected -> RemoteProcessIdentity? in
-                guard let nativeSessionID,
-                      let mapping,
-                      let profile = try? registry.profile(id: mapping.profileID),
-                      let foreground = processInfo.foregroundProcesses.first(where: { $0.pid == expected.pid })
-                else { return nil }
-                let actualLogin = verifiedGitHubLogin(profile)
-                guard RemoteWorkerIntegrity.matches(
-                    recordedIdentity: expected,
-                    liveIdentity: processIdentityForPID(expected.pid, sessionName),
-                    herdrPID: foreground.pid,
-                    herdrArgv: foreground.argv,
-                    expectedExecutable: profile.copilotExecutable,
-                    expectedArguments: RemoteAccountBroker.managedCopilotArguments(profile: profile, originalArguments: ["--resume=\(nativeSessionID)"]),
-                    actualGitHubLogin: actualLogin,
-                    expectedGitHubLogin: profile.githubLogin
-                ) else { return nil }
-                verifiedLogin = actualLogin
-                return expected
+            let exactChild = record.flatMap { record in
+                record.childIdentity.flatMap { expected -> RemoteProcessIdentity? in
+                    guard let mapping,
+                          let profile = try? registry.profile(id: mapping.profileID),
+                          let foreground = processInfo.foregroundProcesses.first(where: { $0.pid == expected.pid })
+                    else { return nil }
+                    let actualLogin = verifiedGitHubLogin(profile)
+                    guard RemoteWorkerIntegrity.matches(
+                        recordedIdentity: expected,
+                        liveIdentity: processIdentityForPID(expected.pid, sessionName),
+                        herdrPID: foreground.pid,
+                        herdrArgv: foreground.argv,
+                        expectedExecutable: profile.copilotExecutable,
+                        expectedArgvSHA256: record.expectedArgvSHA256,
+                        actualGitHubLogin: actualLogin,
+                        expectedGitHubLogin: profile.githubLogin
+                    ) else { return nil }
+                    verifiedLogin = actualLogin
+                    return expected
+                }
             }
             let hookObserved = record?.hookSessionID == nativeSessionID
                 && [.hookObservedAwaitingPID, .hookConfirmed].contains(record?.phase)
@@ -294,6 +295,11 @@ public struct RemoteHerdrAdapter {
             )
         }
         return RemoteHerdrInventory(version: snapshot.result.snapshot.version, panes: panes)
+    }
+
+    public func activeRuntimeIsExact(_ runtime: RemoteActiveRuntime, inventory: RemoteHerdrInventory) throws -> Bool {
+        let expected = try loadExpectedInventory(for: runtime)
+        return reactivationInventory(inventory, matches: expected, generation: runtime.generation, completedCount: expected.panes.count)
     }
 
     private func startServer(sessionName: String, preSpawnFailure: Bool) throws -> RemoteHerdrInventory {

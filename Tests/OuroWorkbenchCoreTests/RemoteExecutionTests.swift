@@ -97,7 +97,7 @@ final class RemoteExecutionTests: XCTestCase {
         let started = Date()
 
         assertRemoteErrorContains("timed out") {
-            _ = try RemoteSystemRunner(timeout: 0.02).run(.init(
+            _ = try RemoteSystemRunner(timeout: 0.5).run(.init(
                 executable: "/bin/sh",
                 arguments: ["-c", "trap '' TERM; sleep 5 & child=$!; printf '%s' \"$child\" > \"$1\"; wait", "sh", descendantPID.path]
             ))
@@ -281,6 +281,15 @@ final class RemoteExecutionTests: XCTestCase {
         let config = root.appendingPathComponent("profiles.json")
         var object = remoteRegistryObject(profileCount: 1)
         var profiles = object["profiles"] as! [[String: Any]]
+        let copilotHome = root.appendingPathComponent("copilot", isDirectory: true)
+        let ghConfigDir = root.appendingPathComponent("gh", isDirectory: true)
+        let gitConfigParent = root.appendingPathComponent("git", isDirectory: true)
+        for directory in [copilotHome, ghConfigDir, gitConfigParent] {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        }
+        profiles[0]["copilotHome"] = copilotHome.path
+        profiles[0]["ghConfigDir"] = ghConfigDir.path
+        profiles[0]["gitConfigGlobal"] = gitConfigParent.appendingPathComponent("config").path
         for key in ["copilotExecutable", "ghExecutable", "gitExecutable", "herdrExecutable", "zshExecutable"] {
             profiles[0][key] = "/bin/sh"
         }
@@ -308,6 +317,10 @@ final class RemoteExecutionTests: XCTestCase {
         XCTAssertNil(RemoteProcessArguments.decode(argumentCount: 0, bytesAfterCount: []))
         XCTAssertNil(RemoteProcessArguments.decode(argumentCount: 1, bytesAfterCount: Array("unterminated".utf8)))
         XCTAssertNil(RemoteProcessArguments.decode(argumentCount: 2, bytesAfterCount: Array("/bin/sh\0\0only-one\0".utf8)))
+        XCTAssertNil(RemoteProcessArguments.decodeSnapshot(argumentCount: 1, bytesAfterCount: Array("/bin/sh\0\0/bin/sh\0UNTERMINATED".utf8)))
+        XCTAssertNil(RemoteProcessArguments.decodeSnapshot(argumentCount: 1, bytesAfterCount: Array("/bin/sh\0\0/bin/sh\0MISSING-SEPARATOR\0".utf8)))
+        XCTAssertNil(RemoteProcessArguments.decodeSnapshot(argumentCount: 1, bytesAfterCount: Array("/bin/sh\0\0/bin/sh\0=value\0".utf8)))
+        XCTAssertNil(RemoteProcessArguments.decodeSnapshot(argumentCount: 1, bytesAfterCount: Array("/bin/sh\0\0/bin/sh\0KEY=one\0KEY=two\0".utf8)))
         XCTAssertNotNil(RemoteProcessArguments.read(pid: getpid()))
         XCTAssertNil(RemoteProcessArguments.read(pid: -1))
         XCTAssertNil(RemoteProcessArguments.read(pid: 1, querySize: { _ in (1, 4) }, queryBytes: { _, _ in XCTFail("unexpected query"); return (0, 4, []) }))
@@ -316,6 +329,26 @@ final class RemoteExecutionTests: XCTestCase {
         XCTAssertNil(RemoteProcessArguments.read(pid: 1, querySize: { _ in (0, 4) }, queryBytes: { _, _ in (1, 4, [0, 0, 0, 0]) }))
         XCTAssertNil(RemoteProcessArguments.read(pid: 1, querySize: { _ in (0, 4) }, queryBytes: { _, _ in (0, 3, [0, 0, 0, 0]) }))
         XCTAssertNil(RemoteProcessArguments.read(pid: 1, querySize: { _ in (0, 4) }, queryBytes: { _, _ in (0, 5, [0, 0, 0, 0]) }))
+    }
+
+    func testNativeProcessSnapshotReadsExactArgvAndManagedIdentityEnvironment() throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/yes")
+        process.arguments = ["alpha", "beta"]
+        process.environment = ["OURO_PROFILE_ID": "personal", "OURO_GENERATION": "g1", "OURO_PANE_ID": "p1"]
+        process.standardOutput = FileHandle.nullDevice
+        try process.run()
+        defer {
+            process.terminate()
+            process.waitUntilExit()
+        }
+
+        let snapshot = try XCTUnwrap(RemoteProcessArguments.readSnapshot(pid: process.processIdentifier))
+
+        XCTAssertEqual(snapshot.arguments, ["/usr/bin/yes", "alpha", "beta"])
+        XCTAssertEqual(snapshot.environment["OURO_PROFILE_ID"], "personal")
+        XCTAssertEqual(snapshot.environment["OURO_GENERATION"], "g1")
+        XCTAssertEqual(snapshot.environment["OURO_PANE_ID"], "p1")
     }
 
     func testNativePIDEnumerationAndHerdrScannerRequireStableExactServerProcesses() throws {
@@ -354,8 +387,21 @@ final class RemoteExecutionTests: XCTestCase {
         let malformed = RemoteHerdrProcessScanner(herdrExecutable: executable, listProcessIDs: { [2] }, processIdentityForPID: { _, _ in .init(pid: 2, startIdentity: "same", executable: executable, generation: "process-inventory") }, processArgumentsForPID: { _ in [executable, "--session", "any-session", "server", "extra"] })
         assertRemoteErrorContains("arguments are not exact") { _ = try malformed.listServerSessions() }
 
-        let ownExecutable = try XCTUnwrap(remoteProcessIdentity(pid: getpid(), generation: "scanner-default")?.executable)
-        XCTAssertEqual(try RemoteHerdrProcessScanner(herdrExecutable: ownExecutable).listServerSessions(), [])
+        XCTAssertEqual(try RemoteHerdrProcessScanner(herdrExecutable: "/private/fixtures/no-running-herdr").listServerSessions(), [])
+        let ownIdentity = try XCTUnwrap(remoteProcessIdentity(pid: getpid(), generation: "scanner-default"))
+        let resolvedOwnExecutable = URL(fileURLWithPath: ownIdentity.executable).resolvingSymlinksInPath().standardizedFileURL.path
+        let canonicalOwnIdentity = RemoteProcessIdentity(
+            pid: ownIdentity.pid,
+            startIdentity: ownIdentity.startIdentity,
+            executable: resolvedOwnExecutable,
+            generation: ownIdentity.generation
+        )
+        let defaultArguments = RemoteHerdrProcessScanner(
+            herdrExecutable: resolvedOwnExecutable,
+            listProcessIDs: { [getpid()] },
+            processIdentityForPID: { _, _ in canonicalOwnIdentity }
+        )
+        XCTAssertEqual(try defaultArguments.listServerSessions(), [])
     }
 
     func testWaitStatusAndExitStatusClassifyInterruptedUnavailableExitedAndSignaledChildren() throws {

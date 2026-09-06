@@ -1,4 +1,7 @@
+import Darwin
 import Foundation
+
+public typealias RemoteCredentialStoreResolver = (String, Bool) throws -> (path: String, identity: String)
 
 public enum RemoteControlError: Error, Equatable, LocalizedError {
     case invalidConfiguration(String)
@@ -61,6 +64,14 @@ public struct RemoteProfileRegistry: Equatable, Sendable {
         _ data: Data,
         executableExists: (String) -> Bool = { FileManager.default.isExecutableFile(atPath: $0) }
     ) throws -> RemoteProfileRegistry {
+        try decode(data, executableExists: executableExists, credentialStoreResolver: physicalCredentialStore)
+    }
+
+    public static func decode(
+        _ data: Data,
+        executableExists: (String) -> Bool = { FileManager.default.isExecutableFile(atPath: $0) },
+        credentialStoreResolver: RemoteCredentialStoreResolver
+    ) throws -> RemoteProfileRegistry {
         let object: Any
         do {
             object = try JSONSerialization.jsonObject(with: data)
@@ -95,11 +106,25 @@ public struct RemoteProfileRegistry: Equatable, Sendable {
         struct Payload: Decodable {
             var profiles: [RemoteProfile]
         }
-        let decoded: Payload
+        var decoded: Payload
         do {
             decoded = try JSONDecoder().decode(Payload.self, from: data)
         } catch {
             throw RemoteControlError.invalidConfiguration("profile fields are missing or have the wrong type")
+        }
+        var physicalStores = Set<String>()
+        for index in decoded.profiles.indices {
+            let copilot = try credentialStoreResolver(decoded.profiles[index].copilotHome, true)
+            let github = try credentialStoreResolver(decoded.profiles[index].ghConfigDir, true)
+            let git = try credentialStoreResolver(decoded.profiles[index].gitConfigGlobal, false)
+            for store in [copilot, github, git] {
+                guard physicalStores.insert(store.identity).inserted else {
+                    throw RemoteControlError.invalidConfiguration("duplicate physical credential store")
+                }
+            }
+            decoded.profiles[index].copilotHome = copilot.path
+            decoded.profiles[index].ghConfigDir = github.path
+            decoded.profiles[index].gitConfigGlobal = git.path
         }
         try validate(decoded.profiles, executableExists: executableExists)
         return RemoteProfileRegistry(profiles: decoded.profiles)
@@ -209,6 +234,54 @@ public struct RemoteProfileRegistry: Equatable, Sendable {
     private static func isAbsoluteNormalized(_ path: String) -> Bool {
         path.hasPrefix("/") && URL(fileURLWithPath: path).standardizedFileURL.path == path
     }
+
+    private static func physicalCredentialStore(path: String, directory: Bool) throws -> (path: String, identity: String) {
+        guard isAbsoluteNormalized(path) else {
+            throw RemoteControlError.invalidConfiguration("credential store path must be absolute and normalized")
+        }
+        let requested = URL(fileURLWithPath: path).standardizedFileURL
+        var requestedMetadata = stat()
+        if lstat(requested.path, &requestedMetadata) != 0 {
+            guard !directory, errno == ENOENT else {
+                throw RemoteControlError.invalidConfiguration("credential store is unavailable or unsafe")
+            }
+            let parent = requested.deletingLastPathComponent().resolvingSymlinksInPath().standardizedFileURL
+            let descriptor = Darwin.open(parent.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
+            guard descriptor >= 0 else { throw RemoteControlError.invalidConfiguration("credential store parent is unavailable or unsafe") }
+            defer { Darwin.close(descriptor) }
+            var metadata = stat()
+            guard fstat(descriptor, &metadata) == 0,
+                  metadata.st_mode & S_IFMT == S_IFDIR,
+                  metadata.st_uid == geteuid(),
+                  metadata.st_mode & mode_t(0o777) == 0o700
+            else { throw RemoteControlError.invalidConfiguration("credential store parent must be an owned 0700 directory") }
+            return (
+                parent.appendingPathComponent(requested.lastPathComponent).path,
+                "new:\(metadata.st_dev):\(metadata.st_ino):\(requested.lastPathComponent)"
+            )
+        }
+
+        let physical = requested.resolvingSymlinksInPath().standardizedFileURL
+        let flags = directory ? O_RDONLY | O_DIRECTORY | O_NOFOLLOW : O_RDONLY | O_NOFOLLOW
+        let descriptor = Darwin.open(physical.path, flags)
+        guard descriptor >= 0 else { throw RemoteControlError.invalidConfiguration("credential store is unavailable or unsafe") }
+        defer { Darwin.close(descriptor) }
+        var metadata = stat()
+        guard fstat(descriptor, &metadata) == 0, metadata.st_uid == geteuid() else {
+            throw RemoteControlError.invalidConfiguration("credential store must be owned by the current user")
+        }
+        if directory {
+            guard metadata.st_mode & S_IFMT == S_IFDIR, metadata.st_mode & mode_t(0o777) == 0o700 else {
+                throw RemoteControlError.invalidConfiguration("credential store directory must have 0700 permissions")
+            }
+        } else {
+            guard metadata.st_mode & S_IFMT == S_IFREG,
+                  metadata.st_nlink == 1,
+                  metadata.st_mode & mode_t(0o777) == 0o600
+            else { throw RemoteControlError.invalidConfiguration("credential store file must be a private 0600 regular file") }
+        }
+        return (physical.path, "existing:\(metadata.st_dev):\(metadata.st_ino)")
+    }
 }
 
 public struct RemoteProcessRequest: Equatable, CustomStringConvertible {
@@ -292,18 +365,18 @@ public struct RemoteAccountBroker {
         guard environment["HERDR_ENV"] == "1" else {
             throw RemoteControlError.resume("managed dispatch is unavailable outside Herdr")
         }
+        let generation = try Self.exactHerdrContext(environment: environment, ouroKey: "OURO_GENERATION", herdrKey: "HERDR_SESSION")
+        let paneID = try Self.exactHerdrContext(environment: environment, ouroKey: "OURO_PANE_ID", herdrKey: "HERDR_PANE_ID")
         guard let canonical = try Self.resumeUUID(in: arguments) else {
-            let generation = try Self.exactHerdrContext(environment: environment, ouroKey: "OURO_GENERATION", herdrKey: "HERDR_SESSION")
-            let paneID = try Self.exactHerdrContext(environment: environment, ouroKey: "OURO_PANE_ID", herdrKey: "HERDR_PANE_ID")
             let entries = try RemoteSessionMapStore.read(mapURL: sessionMapURL, registry: registry)
             let matches = entries.filter { $0.generation == generation && $0.paneID == paneID }
-            guard matches.count == 1 else { throw RemoteControlError.resume("Herdr pane has no unique durable session map context") }
-            let mapping = matches[0]
-            if let ambientProfile = environment["OURO_PROFILE_ID"], ambientProfile != mapping.profileID {
+            let profileIDs = Set(matches.map(\.profileID))
+            guard profileIDs.count == 1, let profileID = profileIDs.first else { throw RemoteControlError.resume("Herdr pane has no unique durable session map context") }
+            if let ambientProfile = environment["OURO_PROFILE_ID"], ambientProfile != profileID {
                 throw RemoteControlError.resume("Herdr profile context disagrees with durable session ownership")
             }
             return try managedRequest(
-                profile: registry.profile(id: mapping.profileID),
+                profile: registry.profile(id: profileID),
                 originalArguments: arguments,
                 generation: generation,
                 paneID: paneID
@@ -315,8 +388,11 @@ public struct RemoteAccountBroker {
             throw RemoteControlError.resume("resume UUID has no unique session map entry")
         }
         let mapping = matches[0]
+        if let ambientProfile = environment["OURO_PROFILE_ID"], ambientProfile != mapping.profileID {
+            throw RemoteControlError.resume("Herdr profile context disagrees with durable session ownership")
+        }
         let profile = try registry.profile(id: mapping.profileID)
-        return try managedRequest(profile: profile, originalArguments: arguments, generation: mapping.generation, paneID: mapping.paneID)
+        return try managedRequest(profile: profile, originalArguments: arguments, generation: generation, paneID: paneID)
     }
 
     private static func exactHerdrContext(environment: [String: String], ouroKey: String, herdrKey: String) throws -> String {

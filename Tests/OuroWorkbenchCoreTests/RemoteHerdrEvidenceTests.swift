@@ -19,7 +19,8 @@ final class RemoteHerdrEvidenceTests: XCTestCase {
             listServerSessions: { [] },
             processIdentityForPID: { _, _ in nil }
         )
-        try ledger.prepare(attemptID: "run-1", nativeSessionID: "8d5177d6-b6d1-4b5f-a546-564ed0ef8748", profileID: "personal", generation: "ouro-a", paneID: "desk:p1", ownerPID: getpid())
+        let record = resumeRecord()
+        try ledger.prepare(attemptID: "run-1", nativeSessionID: record.nativeSessionID, profileID: "personal", generation: "ouro-a", paneID: "desk:p1", ownerPID: getpid(), expectedArgvSHA256: record.expectedArgvSHA256)
         try ledger.markSpawnIntent(attemptID: "run-1")
 
         try ledger.reconcile(attemptID: "run-1", resolution: .abandon)
@@ -31,10 +32,97 @@ final class RemoteHerdrEvidenceTests: XCTestCase {
         var profiles = mismatched["profiles"] as! [[String: Any]]
         profiles[1]["herdrExecutable"] = "/fixtures/bin/other-herdr"
         mismatched["profiles"] = profiles
-        let mismatchedRegistry = try RemoteProfileRegistry.decode(try remoteJSONData(mismatched), executableExists: { _ in true })
+        let mismatchedRegistry = try RemoteProfileRegistry.decode(try remoteJSONData(mismatched), executableExists: { _ in true }, credentialStoreResolver: remoteFixtureCredentialStore)
         assertRemoteErrorContains("one exact Herdr executable") {
             _ = try RemoteResumeLedgerFactory.make(ledgerRootURL: root, herdrRootURL: root, registry: mismatchedRegistry, inheritedEnvironment: [:])
         }
+    }
+
+    func testProductionReconcileRetainsOwnershipWhenHerdrDiedButExactCopilotOrphanLives() throws {
+        let root = try remoteTemporaryDirectory("global-copilot-orphan")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let nativeSessionID = "8d5177d6-b6d1-4b5f-a546-564ed0ef8748"
+        var object = remoteRegistryObject(profileCount: 1)
+        var profiles = try XCTUnwrap(object["profiles"] as? [[String: Any]])
+        profiles[0]["copilotExecutable"] = "/usr/bin/tail"
+        object["profiles"] = profiles
+        let registry = try RemoteProfileRegistry.decode(
+            try remoteJSONData(object),
+            executableExists: { _ in true },
+            credentialStoreResolver: remoteFixtureCredentialStore
+        )
+        let profile = try registry.profile(id: "personal")
+        let expectedArguments = ["-f", "/dev/null"]
+        let orphan = Process()
+        orphan.executableURL = URL(fileURLWithPath: profile.copilotExecutable)
+        orphan.arguments = expectedArguments
+        orphan.environment = [
+            "OURO_PROFILE_ID": profile.id,
+            "OURO_GENERATION": "ouro-a",
+            "OURO_PANE_ID": "desk:p1"
+        ]
+        orphan.standardOutput = FileHandle.nullDevice
+        orphan.standardError = FileHandle.nullDevice
+        try orphan.run()
+        defer {
+            orphan.terminate()
+            orphan.waitUntilExit()
+        }
+        XCTAssertTrue(orphan.isRunning)
+        let orphanIdentity = try XCTUnwrap(remoteProcessIdentity(pid: orphan.processIdentifier, generation: "ouro-a"))
+        XCTAssertEqual(orphanIdentity.executable, URL(fileURLWithPath: profile.copilotExecutable).resolvingSymlinksInPath().standardizedFileURL.path)
+        let orphanSnapshot = try XCTUnwrap(RemoteProcessArguments.readSnapshot(pid: orphan.processIdentifier))
+        XCTAssertEqual(orphanSnapshot.arguments, [profile.copilotExecutable] + expectedArguments)
+        XCTAssertEqual(orphanSnapshot.environment["OURO_PROFILE_ID"], profile.id)
+        XCTAssertEqual(orphanSnapshot.environment["OURO_GENERATION"], "ouro-a")
+        XCTAssertEqual(orphanSnapshot.environment["OURO_PANE_ID"], "desk:p1")
+        XCTAssertTrue(try RemoteNativeProcessIDs.all().contains(orphan.processIdentifier))
+        let recorder = RemoteCallRecorder(responses: [
+            .init(exitCode: 0, stdout: Data("herdr 0.8.2\n".utf8)),
+            .init(exitCode: 0, stdout: try remoteJSONData(["sessions": []]))
+        ])
+        let ledger = try RemoteResumeLedgerFactory.make(
+            ledgerRootURL: root.appendingPathComponent("ledger"),
+            herdrRootURL: root.appendingPathComponent("herdr"),
+            registry: registry,
+            inheritedEnvironment: [:],
+            run: recorder.run,
+            listServerSessions: { [] }
+        )
+        try ledger.prepare(
+            attemptID: "orphan",
+            nativeSessionID: nativeSessionID,
+            profileID: profile.id,
+            generation: "ouro-a",
+            paneID: "desk:p1",
+            ownerPID: getpid(),
+            expectedArgvSHA256: RemoteArgvDigest.sha256([profile.copilotExecutable] + expectedArguments)
+        )
+        try ledger.markSpawnIntent(attemptID: "orphan")
+        let saved = try XCTUnwrap(ledger.record(attemptID: "orphan"))
+        XCTAssertEqual(saved.expectedArgvSHA256, RemoteArgvDigest.sha256(orphanSnapshot.arguments))
+        XCTAssertEqual(saved.profileID, orphanSnapshot.environment["OURO_PROFILE_ID"])
+        XCTAssertEqual(saved.generation, orphanSnapshot.environment["OURO_GENERATION"])
+        XCTAssertEqual(saved.paneID, orphanSnapshot.environment["OURO_PANE_ID"])
+        let directRecorder = RemoteCallRecorder(responses: [
+            .init(exitCode: 0, stdout: Data("herdr 0.8.2\n".utf8)),
+            .init(exitCode: 0, stdout: try remoteJSONData(["sessions": []]))
+        ])
+        let provider = RemoteHerdrForegroundEvidenceProvider(
+            rootURL: root.appendingPathComponent("herdr"),
+            registry: registry,
+            inheritedEnvironment: [:],
+            run: directRecorder.run,
+            listServerSessions: { [] },
+            processIdentityForPID: { pid, generation in OuroWorkbenchCore.remoteProcessIdentity(pid: pid, generation: generation) }
+        )
+        XCTAssertEqual(provider.inspect(saved), .live)
+
+        assertRemoteErrorContains("live child") {
+            try ledger.reconcile(attemptID: "orphan", resolution: .abandon)
+        }
+        XCTAssertEqual(try ledger.record(attemptID: "orphan")?.phase, .spawnIntent)
+        XCTAssertTrue(ledger.lockExists(nativeSessionID: nativeSessionID))
     }
 
     func testForegroundEvidenceProvesAbsenceAcrossEveryRunningHerdrPane() throws {
@@ -83,12 +171,12 @@ final class RemoteHerdrEvidenceTests: XCTestCase {
             ]
             let recorder = RemoteCallRecorder(responses: [
                 .init(exitCode: 0, stdout: Data("herdr 0.8.2\n".utf8)),
-                .init(exitCode: 0, stdout: try remoteJSONData(["sessions": [["name": "other-session", "running": true]]])),
-                .init(exitCode: 0, stdout: snapshot(session: "other-session", panes: ["other:pane"])),
+                .init(exitCode: 0, stdout: try remoteJSONData(["sessions": [["name": "ouro-original", "running": true]]])),
+                .init(exitCode: 0, stdout: snapshot(session: "ouro-original", panes: ["other:pane"])),
                 .init(exitCode: 0, stdout: processInfo(pane: "other:pane", processes: [process]))
             ])
-            let provider = try makeProvider(recorder: recorder, serverSessions: ["other-session"], identities: [
-                pid: remoteProcessIdentity(pid: pid, executable: mode == "argv" ? "/fixtures/bin/copilot" : "/different", generation: "other-session")
+            let provider = try makeProvider(recorder: recorder, serverSessions: ["ouro-original"], identities: [
+                pid: remoteProcessIdentity(pid: pid, executable: "/fixtures/bin/copilot", generation: "ouro-original")
             ])
 
             XCTAssertEqual(provider.inspect(record), .live, mode)
@@ -136,7 +224,7 @@ final class RemoteHerdrEvidenceTests: XCTestCase {
         var profiles = mismatched["profiles"] as! [[String: Any]]
         profiles[1]["herdrExecutable"] = "/fixtures/bin/other-herdr"
         mismatched["profiles"] = profiles
-        let mismatchedRegistry = try RemoteProfileRegistry.decode(try remoteJSONData(mismatched), executableExists: { _ in true })
+        let mismatchedRegistry = try RemoteProfileRegistry.decode(try remoteJSONData(mismatched), executableExists: { _ in true }, credentialStoreResolver: remoteFixtureCredentialStore)
         let mismatchedProvider = RemoteHerdrForegroundEvidenceProvider(
             rootURL: URL(fileURLWithPath: "/tmp/herdr", isDirectory: true),
             registry: mismatchedRegistry,
@@ -188,6 +276,81 @@ final class RemoteHerdrEvidenceTests: XCTestCase {
         XCTAssertEqual(try makeProvider(recorder: wrongIdentity, serverSessions: ["ouro-a"], identities: [401: remoteProcessIdentity(pid: 401, executable: "/wrong")]).inspect(record), .unavailable)
     }
 
+    func testForegroundEvidenceRejectsMissingDigestsAndUnstableNativeProcessProof() throws {
+        var unavailableDigest = resumeRecord()
+        unavailableDigest.expectedArgvSHA256 = RemoteArgvDigest.unavailable
+        XCTAssertEqual(try makeProvider(recorder: RemoteCallRecorder(), serverSessions: []).inspect(unavailableDigest), .unavailable)
+        var unknownProfile = resumeRecord()
+        unknownProfile.profileID = "missing"
+        XCTAssertEqual(try makeProvider(recorder: RemoteCallRecorder(), serverSessions: []).inspect(unknownProfile), .unavailable)
+
+        let profile = try remoteRegistry().profile(id: "personal")
+        let child = remoteProcessIdentity(pid: 401, executable: profile.copilotExecutable, generation: "ouro-original")
+        let childRecord = resumeRecord(childIdentity: child)
+        let expectedArguments = [profile.copilotExecutable] + RemoteAccountBroker.managedCopilotArguments(profile: profile, originalArguments: ["--resume=\(childRecord.nativeSessionID!)"])
+        let unstableChild = RemoteCallRecorder(responses: [
+            .init(exitCode: 0, stdout: Data("herdr 0.8.2\n".utf8)),
+            .init(exitCode: 0, stdout: try remoteJSONData(["sessions": [["name": "ouro-original", "running": true]]])),
+            .init(exitCode: 0, stdout: snapshot(session: "ouro-original", panes: ["desk:p1"])),
+            .init(exitCode: 0, stdout: processInfo(pane: "desk:p1", processes: [["pid": 401, "argv": expectedArguments]]))
+        ])
+        let childProvider = RemoteHerdrForegroundEvidenceProvider(
+            rootURL: URL(fileURLWithPath: "/tmp/herdr", isDirectory: true),
+            registry: try remoteRegistry(),
+            inheritedEnvironment: [:],
+            run: unstableChild.run,
+            listServerSessions: { ["ouro-original"] },
+            processIdentityForPID: { _, _ in remoteProcessIdentity(pid: 401, startIdentity: "changed", executable: profile.copilotExecutable, generation: "ouro-original") },
+            listProcessIDs: { [] }
+        )
+        XCTAssertEqual(childProvider.inspect(childRecord), .unavailable)
+
+        let globalIdentity = remoteProcessIdentity(pid: 402, executable: profile.copilotExecutable, generation: "ouro-original")
+        let missingSnapshot = RemoteHerdrForegroundEvidenceProvider(
+            rootURL: URL(fileURLWithPath: "/tmp/herdr", isDirectory: true),
+            registry: try remoteRegistry(),
+            inheritedEnvironment: [:],
+            run: RemoteCallRecorder().run,
+            listServerSessions: { [] },
+            processIdentityForPID: { _, _ in globalIdentity },
+            listProcessIDs: { [402] },
+            processSnapshotForPID: { _ in nil }
+        )
+        XCTAssertEqual(missingSnapshot.inspect(resumeRecord()), .unavailable)
+
+        var identityReads = 0
+        let changedAfterSnapshot = RemoteHerdrForegroundEvidenceProvider(
+            rootURL: URL(fileURLWithPath: "/tmp/herdr", isDirectory: true),
+            registry: try remoteRegistry(),
+            inheritedEnvironment: [:],
+            run: RemoteCallRecorder().run,
+            listServerSessions: { [] },
+            processIdentityForPID: { _, _ in
+                identityReads += 1
+                return identityReads == 1 ? globalIdentity : remoteProcessIdentity(pid: 402, startIdentity: "changed", executable: profile.copilotExecutable, generation: "ouro-original")
+            },
+            listProcessIDs: { [402] },
+            processSnapshotForPID: { _ in RemoteProcessSnapshot(arguments: expectedArguments, environment: [:]) }
+        )
+        XCTAssertEqual(changedAfterSnapshot.inspect(resumeRecord()), .unavailable)
+
+        let mismatchedEnvironmentRecorder = RemoteCallRecorder(responses: [
+            .init(exitCode: 0, stdout: Data("herdr 0.8.2\n".utf8)),
+            .init(exitCode: 0, stdout: try remoteJSONData(["sessions": []]))
+        ])
+        let mismatchedEnvironment = RemoteHerdrForegroundEvidenceProvider(
+            rootURL: URL(fileURLWithPath: "/tmp/herdr", isDirectory: true),
+            registry: try remoteRegistry(),
+            inheritedEnvironment: [:],
+            run: mismatchedEnvironmentRecorder.run,
+            listServerSessions: { [] },
+            processIdentityForPID: { _, _ in globalIdentity },
+            listProcessIDs: { [402] },
+            processSnapshotForPID: { _ in RemoteProcessSnapshot(arguments: expectedArguments, environment: ["OURO_PROFILE_ID": "wrong"]) }
+        )
+        XCTAssertEqual(mismatchedEnvironment.inspect(resumeRecord()), .absent)
+    }
+
     func testProductionLedgerFactoryDefaultRunnerAndProcessScannerExecuteAgainstPinnedFixture() throws {
         let root = try remoteTemporaryDirectory("evidence-defaults")
         defer { try? FileManager.default.removeItem(at: root) }
@@ -207,14 +370,15 @@ final class RemoteHerdrEvidenceTests: XCTestCase {
         var profiles = object["profiles"] as! [[String: Any]]
         for index in profiles.indices { profiles[index]["herdrExecutable"] = executable.path }
         object["profiles"] = profiles
-        let registry = try RemoteProfileRegistry.decode(try remoteJSONData(object), executableExists: { _ in true })
+        let registry = try RemoteProfileRegistry.decode(try remoteJSONData(object), executableExists: { _ in true }, credentialStoreResolver: remoteFixtureCredentialStore)
         let ledger = try RemoteResumeLedgerFactory.make(
             ledgerRootURL: root.appendingPathComponent("ledger"),
             herdrRootURL: root.appendingPathComponent("herdr-root"),
             registry: registry,
             inheritedEnvironment: ["PATH": "/usr/bin:/bin"]
         )
-        try ledger.prepare(attemptID: "run-defaults", nativeSessionID: resumeRecord().nativeSessionID, profileID: "personal", generation: "ouro-a", paneID: "desk:p1", ownerPID: getpid())
+        let record = resumeRecord()
+        try ledger.prepare(attemptID: "run-defaults", nativeSessionID: record.nativeSessionID, profileID: "personal", generation: "ouro-a", paneID: "desk:p1", ownerPID: getpid(), expectedArgvSHA256: record.expectedArgvSHA256)
         try ledger.markSpawnIntent(attemptID: "run-defaults")
         try ledger.reconcile(attemptID: "run-defaults", resolution: .abandon)
         XCTAssertEqual(try ledger.record(attemptID: "run-defaults")?.phase, .exited)
@@ -231,12 +395,27 @@ final class RemoteHerdrEvidenceTests: XCTestCase {
             inheritedEnvironment: ["HOME": "/Users/example", "GH_TOKEN": "drop-me"],
             run: recorder.run,
             listServerSessions: { serverSessions },
-            processIdentityForPID: { pid, generation in identities[pid].map { RemoteProcessIdentity(pid: $0.pid, startIdentity: $0.startIdentity, executable: $0.executable, generation: generation) } }
+            processIdentityForPID: { pid, generation in identities[pid].map { RemoteProcessIdentity(pid: $0.pid, startIdentity: $0.startIdentity, executable: $0.executable, generation: generation) } },
+            listProcessIDs: { [] }
         )
     }
 
     private func resumeRecord(nativeSessionID: String? = "8d5177d6-b6d1-4b5f-a546-564ed0ef8748", childIdentity: RemoteProcessIdentity? = nil) -> RemoteResumeRecord {
-        RemoteResumeRecord(attemptID: "run-1", nativeSessionID: nativeSessionID, profileID: "personal", generation: "ouro-original", paneID: "desk:p1", ownerPID: 10, childIdentity: childIdentity, hookSessionID: nativeSessionID, phase: .recoveryRequired, exitStatus: nil)
+        let profile = try! remoteRegistry().profile(id: "personal")
+        let arguments = nativeSessionID.map { RemoteAccountBroker.managedCopilotArguments(profile: profile, originalArguments: ["--resume=\($0)"]) } ?? []
+        return RemoteResumeRecord(
+            attemptID: "run-1",
+            nativeSessionID: nativeSessionID,
+            profileID: "personal",
+            generation: "ouro-original",
+            paneID: "desk:p1",
+            ownerPID: 10,
+            expectedArgvSHA256: RemoteArgvDigest.sha256([profile.copilotExecutable] + arguments),
+            childIdentity: childIdentity,
+            hookSessionID: nativeSessionID,
+            phase: .recoveryRequired,
+            exitStatus: nil
+        )
     }
 
     private func snapshot(session: String, panes: [String]) -> Data {

@@ -247,6 +247,77 @@ final class RemoteOperationsTests: XCTestCase {
         XCTAssertEqual(try installer.install(artifactRoot: fixture.artifactRoot, expectedRevision: fixture.revision), provenance)
     }
 
+    func testPermissionHardeningPinsTheOpenedNodeAcrossPathRetargeting() throws {
+        let root = try remoteTemporaryDirectory("permission-anchor")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let target = root.appendingPathComponent("target", isDirectory: true)
+        let moved = root.appendingPathComponent("moved", isDirectory: true)
+        let replacement = root.appendingPathComponent("replacement", isDirectory: true)
+        for directory in [target, replacement] {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o755])
+        }
+
+        assertRemoteErrorContains("changed while its permissions were secured") {
+            try remoteSetPermissions(0o700, at: target, label: "fixture directory", domain: .artifact) {
+                try FileManager.default.moveItem(at: target, to: moved)
+                try FileManager.default.moveItem(at: replacement, to: target)
+            }
+        }
+
+        XCTAssertEqual(try permissions(at: moved), 0o700)
+        XCTAssertEqual(try permissions(at: target), 0o755)
+    }
+
+    func testRuntimeDurabilityWalksEveryFileAndSynchronizesChildrenBeforeTheirParent() throws {
+        let root = try remoteTemporaryDirectory("durability-tree")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let child = root.appendingPathComponent("child", isDirectory: true)
+        try FileManager.default.createDirectory(at: child, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        let rootFile = root.appendingPathComponent("root.json")
+        let childFile = child.appendingPathComponent("child.bin")
+        try Data("root".utf8).write(to: rootFile)
+        try Data("child".utf8).write(to: childFile)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: rootFile.path)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: childFile.path)
+        var synchronized: [(String, RemoteSyncNodeKind)] = []
+
+        try remoteSynchronizeTree(rootURL: root) { url, kind in
+            synchronized.append((url.path, kind))
+        }
+
+        XCTAssertEqual(Set(synchronized.filter { $0.1 == .regular }.map(\.0)), Set([rootFile.path, childFile.path]))
+        XCTAssertEqual(synchronized.filter { $0.1 == .directory }.map(\.0), [child.path, root.path])
+    }
+
+    func testRuntimeDurabilityRejectsEveryInspectionAndSynchronizationFailure() throws {
+        let root = try remoteTemporaryDirectory("durability-failures")
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        assertRemoteErrorContains("tree could not be inspected") {
+            try remoteSynchronizeTree(rootURL: root, listSubpaths: { _ in throw RemoteFixtureError.expected })
+        }
+        assertRemoteErrorContains("changed during inspection") {
+            try remoteSynchronizeTree(rootURL: root, listSubpaths: { _ in ["missing"] })
+        }
+        let symlink = root.appendingPathComponent("link")
+        try FileManager.default.createSymbolicLink(at: symlink, withDestinationURL: root)
+        assertRemoteErrorContains("special entry") { try remoteSynchronizeTree(rootURL: root) }
+        try FileManager.default.removeItem(at: symlink)
+
+        let noAccess = root.appendingPathComponent("no-access", isDirectory: true)
+        try FileManager.default.createDirectory(at: noAccess, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: noAccess.path)
+        assertRemoteErrorContains("could not be anchored") { try remoteSynchronizeTree(rootURL: noAccess) }
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: noAccess.path)
+        assertRemoteErrorContains("could not be anchored") { try remoteSynchronizeTree(rootURL: URL(fileURLWithPath: "/private", isDirectory: true)) }
+
+        let missing = root.appendingPathComponent("missing")
+        assertRemoteErrorContains("permissions could not be secured") { try remoteSetPermissions(0o600, at: missing, label: "missing", domain: .artifact) }
+        assertRemoteErrorContains("permissions could not be secured") { try remoteSetPermissions(0o600, at: URL(fileURLWithPath: "/etc/hosts"), label: "foreign", domain: .artifact) }
+        assertRemoteErrorContains("could not be opened") { try remoteSynchronizeNode(missing, kind: .regular) }
+        assertRemoteErrorContains("could not be synchronized") { try remoteSynchronizeNode(root, kind: .regular) }
+    }
+
     func testInstallerRejectsArtifactTreePermissionDriftBeforeRuntimeMutation() throws {
         for target in ["root", "manifest", "directory"] {
             let fixture = try ArtifactFixture()
@@ -602,6 +673,152 @@ final class RemoteOperationsTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: fixture.currentPointerURL, encoding: .utf8), fixture.revision + "\n")
     }
 
+    func testRuntimeReferenceScannerRequiresStableExactOwnedProcessEvidence() throws {
+        let runtime = URL(fileURLWithPath: "/private/fixtures/runtime", isDirectory: true)
+        let revision = String(repeating: "a", count: 40)
+        let external = RemoteProcessIdentity(pid: 41, startIdentity: "start", executable: "/usr/bin/copilot", generation: "runtime-reference")
+        let referenced = RemoteRuntimeReferenceScanner(
+            runtimeRootURL: runtime,
+            listProcessIDs: { [41] },
+            processOwnerForPID: { _ in geteuid() },
+            processIdentityForPID: { _, _ in external },
+            processSnapshotForPID: { _ in
+                RemoteProcessSnapshot(
+                    arguments: ["/usr/bin/copilot"],
+                    environment: ["OURO_HELPER_PATH": "/private/fixtures/runtime/versions/\(revision)/bin/OuroWorkbenchRemote"]
+                )
+            },
+            currentProcessID: { 999 }
+        )
+        XCTAssertTrue(try referenced.references(revision: revision))
+
+        let unrelated = RemoteRuntimeReferenceScanner(
+            runtimeRootURL: runtime,
+            listProcessIDs: { [41] },
+            processOwnerForPID: { _ in geteuid() },
+            processIdentityForPID: { _, _ in external },
+            processSnapshotForPID: { _ in RemoteProcessSnapshot(arguments: ["/usr/bin/copilot"], environment: ["PATH": "/usr/bin:/bin"]) },
+            currentProcessID: { 999 }
+        )
+        XCTAssertFalse(try unrelated.references(revision: revision))
+
+        let unreadable = RemoteRuntimeReferenceScanner(
+            runtimeRootURL: runtime,
+            listProcessIDs: { [41] },
+            processOwnerForPID: { _ in geteuid() },
+            processIdentityForPID: { _, _ in external },
+            processSnapshotForPID: { _ in nil },
+            currentProcessID: { 999 }
+        )
+        assertRemoteErrorContains("reference evidence is unavailable") {
+            _ = try unreadable.references(revision: revision)
+        }
+    }
+
+    func testRuntimeReferenceScannerCoversEveryProcessEvidenceBoundary() throws {
+        let runtime = URL(fileURLWithPath: "/private/fixtures/runtime", isDirectory: true)
+        let revision = String(repeating: "a", count: 40)
+        let version = "/private/fixtures/runtime/versions/\(revision)"
+        let owner = geteuid()
+        let nativeList = RemoteRuntimeReferenceScanner(runtimeRootURL: runtime, processOwnerForPID: { _ in nil })
+        XCTAssertFalse(try nativeList.references(revision: revision))
+        let nativeEvidence = RemoteRuntimeReferenceScanner(
+            runtimeRootURL: runtime,
+            listProcessIDs: { [getpid()] },
+            currentProcessID: { -1 }
+        )
+        XCTAssertFalse(try nativeEvidence.references(revision: revision))
+        XCTAssertEqual(RemoteNativeProcessOwner.read(getpid()), owner)
+        XCTAssertNil(RemoteNativeProcessOwner.read(Int32.max))
+
+        let invalid = RemoteRuntimeReferenceScanner(runtimeRootURL: runtime, listProcessIDs: { [] })
+        assertRemoteErrorContains("revision is invalid") { _ = try invalid.references(revision: "bad") }
+        let unavailableList = RemoteRuntimeReferenceScanner(runtimeRootURL: runtime, listProcessIDs: { throw RemoteFixtureError.expected })
+        assertRemoteErrorContains("evidence is unavailable") { _ = try unavailableList.references(revision: revision) }
+
+        let filtered = RemoteRuntimeReferenceScanner(
+            runtimeRootURL: runtime,
+            listProcessIDs: { [-1, 41, 42] },
+            processOwnerForPID: { _ in owner + 1 },
+            processIdentityForPID: { _, _ in XCTFail("filtered process reached identity lookup"); return nil },
+            currentProcessID: { 42 }
+        )
+        XCTAssertFalse(try filtered.references(revision: revision))
+
+        let missingIdentity = RemoteRuntimeReferenceScanner(
+            runtimeRootURL: runtime,
+            listProcessIDs: { [41] },
+            processOwnerForPID: { _ in owner },
+            processIdentityForPID: { _, _ in nil },
+            currentProcessID: { 999 }
+        )
+        assertRemoteErrorContains("process 41") { _ = try missingIdentity.references(revision: revision) }
+
+        var ownerChecks = 0
+        let vanished = RemoteRuntimeReferenceScanner(
+            runtimeRootURL: runtime,
+            listProcessIDs: { [41] },
+            processOwnerForPID: { _ in ownerChecks += 1; return ownerChecks == 1 ? owner : nil },
+            processIdentityForPID: { _, _ in nil },
+            currentProcessID: { 999 }
+        )
+        XCTAssertFalse(try vanished.references(revision: revision))
+
+        let direct = RemoteProcessIdentity(pid: 41, startIdentity: "start", executable: "\(version)/bin/copilot", generation: "runtime-reference")
+        let directScanner = RemoteRuntimeReferenceScanner(
+            runtimeRootURL: runtime,
+            listProcessIDs: { [41] },
+            processOwnerForPID: { _ in owner },
+            processIdentityForPID: { _, _ in direct },
+            processSnapshotForPID: { _ in XCTFail("direct executable reference needed no snapshot"); return nil },
+            currentProcessID: { 999 }
+        )
+        XCTAssertTrue(try directScanner.references(revision: revision))
+
+        let ordinary = RemoteProcessIdentity(pid: 41, startIdentity: "start", executable: "/usr/bin/python3", generation: "runtime-reference")
+        let ordinaryScanner = RemoteRuntimeReferenceScanner(
+            runtimeRootURL: runtime,
+            listProcessIDs: { [41] },
+            processOwnerForPID: { _ in owner },
+            processIdentityForPID: { _, _ in ordinary },
+            processSnapshotForPID: { _ in nil },
+            currentProcessID: { 999 }
+        )
+        XCTAssertFalse(try ordinaryScanner.references(revision: revision))
+
+        let copilot = RemoteProcessIdentity(pid: 41, startIdentity: "start", executable: "/usr/bin/copilot", generation: "runtime-reference")
+        var identityReads = 0
+        let vanishedAfterSnapshot = RemoteRuntimeReferenceScanner(
+            runtimeRootURL: runtime,
+            listProcessIDs: { [41] },
+            processOwnerForPID: { _ in owner },
+            processIdentityForPID: { _, _ in identityReads += 1; return identityReads == 1 ? copilot : nil },
+            processSnapshotForPID: { _ in RemoteProcessSnapshot(arguments: [], environment: ["OURO_HELPER_PATH": "relative"]) },
+            currentProcessID: { 999 }
+        )
+        XCTAssertFalse(try vanishedAfterSnapshot.references(revision: revision))
+
+        let unstableAfterSnapshot = RemoteRuntimeReferenceScanner(
+            runtimeRootURL: runtime,
+            listProcessIDs: { [41] },
+            processOwnerForPID: { _ in owner },
+            processIdentityForPID: { _, _ in RemoteProcessIdentity(pid: 41, startIdentity: UUID().uuidString, executable: "/usr/bin/copilot", generation: "runtime-reference") },
+            processSnapshotForPID: { _ in RemoteProcessSnapshot(arguments: [], environment: [:]) },
+            currentProcessID: { 999 }
+        )
+        assertRemoteErrorContains("evidence is unavailable") { _ = try unstableAfterSnapshot.references(revision: revision) }
+
+        let pathScanner = RemoteRuntimeReferenceScanner(
+            runtimeRootURL: runtime,
+            listProcessIDs: { [41] },
+            processOwnerForPID: { _ in owner },
+            processIdentityForPID: { _, _ in copilot },
+            processSnapshotForPID: { _ in RemoteProcessSnapshot(arguments: [], environment: ["OURO_HELPER_PATH": "relative", "PATH": "/usr/bin:\(version)/bin"]) },
+            currentProcessID: { 999 }
+        )
+        XCTAssertTrue(try pathScanner.references(revision: revision))
+    }
+
     func testEveryInstallCheckpointPreservesThePriorPointerUntilPromotionCompletes() throws {
         for interruptedAt in RemoteInstallCheckpoint.allCases {
             let fixture = try ArtifactFixture()
@@ -755,6 +972,31 @@ final class RemoteOperationsTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: second.appendingPathComponent("container/runtime/current").path))
     }
 
+    func testInstallRejectsARuntimeDirectoryReplacementAtTheSamePhysicalPath() throws {
+        let fixture = try ArtifactFixture()
+        defer { fixture.remove() }
+        let moved = fixture.root.appendingPathComponent("moved-runtime", isDirectory: true)
+
+        assertRemoteErrorContains("runtime root physical location changed") {
+            _ = try RemoteRuntimeInstaller(rootURL: fixture.runtimeRoot).install(
+                artifactRoot: fixture.artifactRoot,
+                expectedRevision: fixture.revision,
+                checkpoint: { point in
+                    guard point == .copied else { return }
+                    let versions = fixture.runtimeRoot.appendingPathComponent("versions", isDirectory: true)
+                    let stageName = try XCTUnwrap(FileManager.default.contentsOfDirectory(atPath: versions.path).first { $0.hasPrefix(".install-") })
+                    try FileManager.default.moveItem(at: fixture.runtimeRoot, to: moved)
+                    try FileManager.default.createDirectory(
+                        at: fixture.runtimeRoot.appendingPathComponent("versions/\(stageName)", isDirectory: true),
+                        withIntermediateDirectories: true,
+                        attributes: [.posixPermissions: 0o700]
+                    )
+                }
+            )
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.currentPointerURL.path))
+    }
+
     func testInstallAdoptsOnlyACompleteExactPreexistingVersion() throws {
         let fixture = try ArtifactFixture()
         defer { fixture.remove() }
@@ -762,6 +1004,12 @@ final class RemoteOperationsTests: XCTestCase {
             let source = fixture.artifactRoot.appendingPathComponent(file.relativePath)
             let destination = fixture.versionRoot.appendingPathComponent(file.relativePath)
             try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+            var directory = destination.deletingLastPathComponent()
+            while directory.path.hasPrefix(fixture.versionRoot.path) {
+                try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
+                if directory == fixture.versionRoot { break }
+                directory.deleteLastPathComponent()
+            }
             try FileManager.default.copyItem(at: source, to: destination)
             try FileManager.default.setAttributes([.posixPermissions: file.mode], ofItemAtPath: destination.path)
         }

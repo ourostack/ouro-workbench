@@ -7,9 +7,6 @@ private func remoteFlock(_ descriptor: Int32, _ operation: Int32) -> Int32
 @_silgen_name("link")
 private func remoteLink(_ source: UnsafePointer<CChar>, _ destination: UnsafePointer<CChar>) -> Int32
 
-@_silgen_name("rename")
-private func remoteRename(_ source: UnsafePointer<CChar>, _ destination: UnsafePointer<CChar>) -> Int32
-
 private func remoteEnsurePrivateLedgerDirectory(_ url: URL, label: String) throws {
     var value = stat()
     if lstat(url.path, &value) != 0 {
@@ -55,23 +52,76 @@ public enum RemoteDurableFile {
         _ data: Data,
         to destination: URL,
         mode: mode_t = 0o600,
-        checkpoint: (RemoteDurableWriteCheckpoint, URL, Data) throws -> Void = { _, _, _ in }
+        checkpoint: (RemoteDurableWriteCheckpoint, URL, Data) throws -> Void = { _, _, _ in },
+        directoryOpened: (Int32) throws -> Void = { _ in }
     ) throws {
         let directory = destination.deletingLastPathComponent()
         try remoteEnsurePrivateLedgerDirectory(directory, label: "durable file directory")
-        var destinationStat = stat()
-        if lstat(destination.path, &destinationStat) == 0 { _ = try remoteValidatePrivateLedgerFile(destination, label: "durable destination") }
-        else if errno != ENOENT { throw RemoteControlError.ledger("durable destination is unavailable") }
-        let temporary = directory.appendingPathComponent(".\(destination.lastPathComponent).\(UUID().uuidString).tmp")
-        let descriptor = Darwin.open(temporary.path, O_CREAT | O_EXCL | O_WRONLY | O_NOFOLLOW, mode)
+        let directoryDescriptor = Darwin.open(directory.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
+        guard directoryDescriptor >= 0 else { throw RemoteControlError.ledger("durable directory could not be opened") }
+        defer { Darwin.close(directoryDescriptor) }
+        try directoryOpened(directoryDescriptor)
+        var anchored = stat()
+        var current = stat()
+        guard fstat(directoryDescriptor, &anchored) == 0,
+              lstat(directory.path, &current) == 0,
+              anchored.st_dev == current.st_dev,
+              anchored.st_ino == current.st_ino
+        else { throw RemoteControlError.ledger("durable directory changed while it was opened") }
+        try write(data, named: destination.lastPathComponent, in: directoryDescriptor, directoryURL: directory, mode: mode, checkpoint: checkpoint)
+    }
+
+    public static func write(
+        _ data: Data,
+        named destinationName: String,
+        in directoryDescriptor: Int32,
+        directoryURL: URL,
+        mode: mode_t = 0o600,
+        checkpoint: (RemoteDurableWriteCheckpoint, URL, Data) throws -> Void = { _, _, _ in }
+    ) throws {
+        guard !destinationName.isEmpty,
+              destinationName != ".",
+              destinationName != "..",
+              !destinationName.contains("/"),
+              !destinationName.unicodeScalars.contains(where: { $0.value == 0 })
+        else { throw RemoteControlError.ledger("durable destination name is unsafe") }
+        var directoryStat = stat()
+        guard fstat(directoryDescriptor, &directoryStat) == 0,
+              directoryStat.st_mode & S_IFMT == S_IFDIR,
+              directoryStat.st_uid == geteuid(),
+              directoryStat.st_mode & mode_t(0o777) == 0o700
+        else { throw RemoteControlError.ledger("durable directory descriptor is not private") }
+        let destination = directoryURL.appendingPathComponent(destinationName)
+        var initialDestination = stat()
+        let destinationExisted = destinationName.withCString {
+            fstatat(directoryDescriptor, $0, &initialDestination, AT_SYMLINK_NOFOLLOW)
+        } == 0
+        if destinationExisted {
+            guard initialDestination.st_mode & S_IFMT == S_IFREG,
+                  initialDestination.st_nlink == 1,
+                  initialDestination.st_uid == geteuid(),
+                  initialDestination.st_mode & mode_t(0o777) == mode
+            else { throw RemoteControlError.ledger("durable destination must be a private regular file") }
+        } else if errno != ENOENT {
+            throw RemoteControlError.ledger("durable destination is unavailable")
+        }
+        let temporaryName = ".\(destinationName).\(UUID().uuidString).tmp"
+        let descriptor = temporaryName.withCString {
+            openat(directoryDescriptor, $0, O_CREAT | O_EXCL | O_WRONLY | O_NOFOLLOW, mode)
+        }
         guard descriptor >= 0 else { throw RemoteControlError.ledger("durable temporary file could not be opened") }
         var openDescriptor = descriptor
         defer {
             if openDescriptor >= 0 { Darwin.close(openDescriptor) }
-            try? FileManager.default.removeItem(at: temporary)
+            _ = temporaryName.withCString { unlinkat(directoryDescriptor, $0, 0) }
         }
         var temporaryStat = stat()
-        guard fstat(descriptor, &temporaryStat) == 0, temporaryStat.st_mode & S_IFMT == S_IFREG, temporaryStat.st_nlink == 1 else {
+        guard fstat(descriptor, &temporaryStat) == 0,
+              temporaryStat.st_mode & S_IFMT == S_IFREG,
+              temporaryStat.st_nlink == 1,
+              temporaryStat.st_uid == geteuid(),
+              fchmod(descriptor, mode) == 0
+        else {
             throw RemoteControlError.ledger("durable temporary file is not private")
         }
         try checkpoint(.temporaryOpened, destination, data)
@@ -94,12 +144,25 @@ public enum RemoteDurableFile {
             throw RemoteControlError.ledger("durable file close failed")
         }
         openDescriptor = -1
-        let renamed = temporary.path.withCString { source in destination.path.withCString { target in remoteRename(source, target) } }
+        var currentDestination = stat()
+        let destinationStillExists = destinationName.withCString {
+            fstatat(directoryDescriptor, $0, &currentDestination, AT_SYMLINK_NOFOLLOW)
+        } == 0
+        if destinationExisted {
+            guard destinationStillExists,
+                  currentDestination.st_dev == initialDestination.st_dev,
+                  currentDestination.st_ino == initialDestination.st_ino
+            else { throw RemoteControlError.ledger("durable file rename failed because destination changed") }
+        } else {
+            guard !destinationStillExists, errno == ENOENT else {
+                throw RemoteControlError.ledger("durable file rename failed because destination changed")
+            }
+        }
+        let renamed = temporaryName.withCString { source in
+            destinationName.withCString { target in renameat(directoryDescriptor, source, directoryDescriptor, target) }
+        }
         guard renamed == 0 else { throw RemoteControlError.ledger("durable file rename failed") }
         try checkpoint(.renamed, destination, data)
-        let directoryDescriptor = Darwin.open(directory.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
-        guard directoryDescriptor >= 0 else { throw RemoteControlError.ledger("durable directory could not be opened") }
-        defer { Darwin.close(directoryDescriptor) }
         guard Darwin.fsync(directoryDescriptor) == 0 else { throw RemoteControlError.ledger("durable directory fsync failed") }
         try checkpoint(.directorySynced, destination, data)
     }
@@ -448,10 +511,37 @@ public struct RemoteResumeRecord: Codable, Equatable, Sendable {
     public var generation: String
     public var paneID: String
     public var ownerPID: Int32
+    public var expectedArgvSHA256: String
     public var childIdentity: RemoteProcessIdentity?
     public var hookSessionID: String?
     public var phase: RemoteResumePhase
     public var exitStatus: Int32?
+
+    public init(
+        attemptID: String,
+        nativeSessionID: String?,
+        profileID: String,
+        generation: String,
+        paneID: String,
+        ownerPID: Int32,
+        expectedArgvSHA256: String = RemoteArgvDigest.unavailable,
+        childIdentity: RemoteProcessIdentity?,
+        hookSessionID: String?,
+        phase: RemoteResumePhase,
+        exitStatus: Int32?
+    ) {
+        self.attemptID = attemptID
+        self.nativeSessionID = nativeSessionID
+        self.profileID = profileID
+        self.generation = generation
+        self.paneID = paneID
+        self.ownerPID = ownerPID
+        self.expectedArgvSHA256 = expectedArgvSHA256
+        self.childIdentity = childIdentity
+        self.hookSessionID = hookSessionID
+        self.phase = phase
+        self.exitStatus = exitStatus
+    }
 }
 
 public final class RemoteResumeLedger {
@@ -476,7 +566,15 @@ public final class RemoteResumeLedger {
         self.durabilityCheckpoint = durabilityCheckpoint
     }
 
-    public func prepare(attemptID: String, nativeSessionID: String?, profileID: String, generation: String, paneID: String, ownerPID: Int32) throws {
+    public func prepare(
+        attemptID: String,
+        nativeSessionID: String?,
+        profileID: String,
+        generation: String,
+        paneID: String,
+        ownerPID: Int32,
+        expectedArgvSHA256: String = RemoteArgvDigest.unavailable
+    ) throws {
         try withStateMutation {
             try validateIdentifier(attemptID, label: "attempt id")
             try validateIdentifier(profileID, label: "profile id")
@@ -495,7 +593,7 @@ public final class RemoteResumeLedger {
             }
             let lockURL = lockURL(nativeSessionID: canonical, attemptID: attemptID)
             let lock = try RemoteAdvisoryLock.acquire(url: lockURL)
-            let record = RemoteResumeRecord(attemptID: attemptID, nativeSessionID: canonical, profileID: profileID, generation: generation, paneID: paneID, ownerPID: ownerPID, childIdentity: nil, hookSessionID: nil, phase: .preSpawn, exitStatus: nil)
+            let record = RemoteResumeRecord(attemptID: attemptID, nativeSessionID: canonical, profileID: profileID, generation: generation, paneID: paneID, ownerPID: ownerPID, expectedArgvSHA256: expectedArgvSHA256, childIdentity: nil, hookSessionID: nil, phase: .preSpawn, exitStatus: nil)
             do {
                 try write(record)
                 heldLocks[attemptID] = lock
@@ -686,7 +784,7 @@ public final class RemoteResumeLedger {
             object = decoded
         } catch let error as RemoteControlError { throw error }
         catch { throw RemoteControlError.ledger("attempt record is corrupt") }
-        let keys = Set(["attemptID", "nativeSessionID", "profileID", "generation", "paneID", "ownerPID", "childIdentity", "hookSessionID", "phase", "exitStatus"])
+        let keys = Set(["attemptID", "nativeSessionID", "profileID", "generation", "paneID", "ownerPID", "expectedArgvSHA256", "childIdentity", "hookSessionID", "phase", "exitStatus"])
         guard Set(object.keys).subtracting(keys).isEmpty else { throw RemoteControlError.ledger("attempt record contains unknown keys") }
         if let child = object["childIdentity"] as? [String: Any], Set(child.keys) != Set(["pid", "startIdentity", "executable", "generation"]) {
             throw RemoteControlError.ledger("attempt record child identity keys are invalid")
@@ -790,6 +888,9 @@ public final class RemoteResumeLedger {
         try validateIdentifier(value.generation, label: "generation")
         try validatePaneID(value.paneID)
         guard value.ownerPID > 0 else { throw RemoteControlError.ledger("attempt record owner pid is invalid") }
+        guard value.expectedArgvSHA256.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil else {
+            throw RemoteControlError.ledger("attempt record argv digest is invalid")
+        }
         let native = try value.nativeSessionID.map(canonicalUUID)
         let hook = try value.hookSessionID.map(canonicalUUID)
         guard native == value.nativeSessionID, hook == value.hookSessionID, hook == nil || hook == native else { throw RemoteControlError.ledger("attempt record native session evidence is invalid") }
@@ -866,7 +967,15 @@ public struct RemoteChildSupervisor {
     }
 
     public func run(request: RemoteProcessRequest, attemptID: String, nativeSessionID: String?, profileID: String, generation: String, paneID: String, ownerPID: Int32) throws -> Int32 {
-        try ledger.prepare(attemptID: attemptID, nativeSessionID: nativeSessionID, profileID: profileID, generation: generation, paneID: paneID, ownerPID: ownerPID)
+        try ledger.prepare(
+            attemptID: attemptID,
+            nativeSessionID: nativeSessionID,
+            profileID: profileID,
+            generation: generation,
+            paneID: paneID,
+            ownerPID: ownerPID,
+            expectedArgvSHA256: RemoteArgvDigest.sha256([request.executable] + request.arguments)
+        )
         try ledger.markSpawnIntent(attemptID: attemptID)
         let child: RemoteSupervisedChild
         do {

@@ -50,4 +50,19 @@ test "$("$installed" --version)" = 'OuroWorkbenchRemote 0.1.0'
 test -x "$installed"
 test "$(cat "$runtime/current")" = "$revision"
 
+printf '%s\n' second-revision >> "$source_root/tracked.txt"
+git -C "$source_root" add tracked.txt
+git -C "$source_root" commit --quiet -m second-fixture
+second_revision=$(git -C "$source_root" rev-parse --verify 'HEAD^{commit}')
+second_artifact=$test_root/second-artifact
+(
+  cd "$source_root"
+  "$helper" package --revision "$second_revision" --expected-helper-sha256 "$helper_sha256" --output "$second_artifact" >/dev/null
+)
+"$helper" install --runtime-root "$runtime" --artifact-root "$second_artifact" --revision "$second_revision" --expected-helper-sha256 "$helper_sha256" >/dev/null
+second_installed=$runtime/versions/$second_revision/bin/OuroWorkbenchRemote
+test "$(cat "$runtime/current")" = "$second_revision"
+"$second_installed" rollback --runtime-root "$runtime" --revision "$revision" | jq -e '.result == "removed"' >/dev/null
+test ! -e "$runtime/versions/$revision"
+
 printf '%s\n' 'installed remote helper smoke ok'

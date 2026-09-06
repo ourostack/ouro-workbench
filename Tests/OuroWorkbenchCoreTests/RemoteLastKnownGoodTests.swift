@@ -10,9 +10,11 @@ final class RemoteLastKnownGoodTests: XCTestCase {
         XCTAssertEqual(mkfifo(fixture.sourceSessionURL.appendingPathComponent("herdr.sock").path, 0o600), 0)
         XCTAssertEqual(mkfifo(fixture.sourceSessionURL.appendingPathComponent("herdr-client.sock").path, 0o600), 0)
         let store = RemoteLastKnownGoodStore(rootURL: fixture.root, makeCaptureID: { "capture-a" })
+        var checkpoints: [RemoteLastKnownGoodCheckpoint] = []
 
-        let manifest = try store.capture(sourceGeneration: fixture.generation, inventory: fixture.inventory)
+        let manifest = try store.capture(sourceGeneration: fixture.generation, inventory: fixture.inventory) { checkpoints.append($0) }
 
+        XCTAssertEqual(checkpoints, [.snapshotCopied, .manifestWritten, .generationSynchronized, .generationPromoted])
         XCTAssertEqual(manifest.captureID, "capture-a")
         XCTAssertEqual(manifest.sourceGeneration, fixture.generation)
         XCTAssertEqual(manifest.generationManifest.sourceSession, fixture.generation)
@@ -35,6 +37,42 @@ final class RemoteLastKnownGoodTests: XCTestCase {
             _ = try store.capture(sourceGeneration: fixture.generation, inventory: fixture.inventory)
         }
         XCTAssertEqual(try String(contentsOf: fixture.currentURL, encoding: .utf8), "capture-a\n")
+    }
+
+    func testDirectoryHardeningDoesNotChmodAReplacementAtTheSamePath() throws {
+        let root = try remoteTemporaryDirectory("lkg-permission-anchor")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let target = root.appendingPathComponent("target", isDirectory: true)
+        let moved = root.appendingPathComponent("moved", isDirectory: true)
+        let replacement = root.appendingPathComponent("replacement", isDirectory: true)
+        for directory in [target, replacement] {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o755])
+        }
+
+        assertRemoteErrorContains("changed while its permissions were secured") {
+            try RemoteLastKnownGoodStore.ensurePrivateDirectory(target, label: "fixture directory") {
+                try FileManager.default.moveItem(at: target, to: moved)
+                try FileManager.default.moveItem(at: replacement, to: target)
+            }
+        }
+
+        XCTAssertEqual(try permissions(at: moved), 0o700)
+        XCTAssertEqual(try permissions(at: target), 0o755)
+    }
+
+    func testDirectoryHardeningRejectsUnopenableAndForeignOwnedDirectories() throws {
+        let root = try remoteTemporaryDirectory("lkg-directory-errors")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let file = root.appendingPathComponent("file")
+        try Data().write(to: file)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+
+        assertRemoteErrorContains("permissions could not be secured") {
+            try RemoteLastKnownGoodStore.ensurePrivateDirectory(file, label: "file")
+        }
+        assertRemoteErrorContains("permissions could not be secured") {
+            try RemoteLastKnownGoodStore.ensurePrivateDirectory(URL(fileURLWithPath: "/private/tmp", isDirectory: true), label: "foreign")
+        }
     }
 
     func testCaptureRequiresAnExactGenerationAcknowledgementForAnEmptyFleet() throws {
@@ -221,6 +259,33 @@ final class RemoteLastKnownGoodTests: XCTestCase {
                 }
             }
             XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.captureRootURL(captureID).path))
+        }
+    }
+
+    func testCaptureTranslatesGenerationAndPromotionSynchronizationFailures() throws {
+        do {
+            let fixture = try LastKnownGoodFixture(name: "generation-sync")
+            defer { fixture.remove() }
+            let captureID = "sync-tree"
+            let stage = fixture.generationsURL.appendingPathComponent(".\(captureID).stage", isDirectory: true)
+            assertRemoteErrorContains("generation could not be synchronized") {
+                _ = try RemoteLastKnownGoodStore(rootURL: fixture.root, makeCaptureID: { captureID }).capture(sourceGeneration: fixture.generation, inventory: fixture.inventory) { point in
+                    if point == .manifestWritten {
+                        try FileManager.default.createSymbolicLink(at: stage.appendingPathComponent("unsafe-link"), withDestinationURL: stage)
+                    }
+                }
+            }
+        }
+
+        do {
+            let fixture = try LastKnownGoodFixture(name: "promotion-sync")
+            defer { fixture.remove() }
+            defer { try? removeACL(from: fixture.generationsURL) }
+            assertRemoteErrorContains("promotion could not be synchronized") {
+                _ = try RemoteLastKnownGoodStore(rootURL: fixture.root, makeCaptureID: { "promotion-sync" }).capture(sourceGeneration: fixture.generation, inventory: fixture.inventory) { point in
+                    if point == .generationSynchronized { try addDenyACL("read", to: fixture.generationsURL) }
+                }
+            }
         }
     }
 

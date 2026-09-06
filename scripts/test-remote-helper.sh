@@ -75,6 +75,19 @@ if [[ "$(stat -f '%Lp' "$test_root/bootstrap-symlink-target")" != 755 ]]; then
   print -u2 'shell bootstrap mutated a symbolic-link target before rejecting it'
   exit 84
 fi
+if "$helper" shell-bootstrap \
+  --output "$test_root/bootstrap-invalid-output" \
+  --real-zdotdir "$test_root/real-zdotdir" \
+  --helper "$helper" \
+  --config "$config" \
+  --session-map "$session_map" >/dev/null 2>&1; then
+  print -u2 'shell bootstrap accepted an incomplete invocation'
+  exit 85
+fi
+if [[ -e "$test_root/bootstrap-invalid-output" ]]; then
+  print -u2 'shell bootstrap mutated its output before validating the complete invocation'
+  exit 86
+fi
 "$helper" shell-bootstrap \
   --output "$test_root/ouro-zdotdir" \
   --zsh /bin/zsh \

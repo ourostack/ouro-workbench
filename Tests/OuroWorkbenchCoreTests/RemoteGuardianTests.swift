@@ -3,6 +3,9 @@ import Foundation
 import XCTest
 @testable import OuroWorkbenchCore
 
+@_silgen_name("flock")
+private func guardianTestFlock(_ descriptor: Int32, _ operation: Int32) -> Int32
+
 final class RemoteGuardianTests: XCTestCase {
     func testGuardianPromotesAndRevalidatesAnExplicitAcknowledgedEmptyGeneration() throws {
         let fixture = try GuardianFixture(acknowledgedEmpty: true)
@@ -107,6 +110,91 @@ final class RemoteGuardianTests: XCTestCase {
             stop: { _ in XCTFail("a promoted generation must not stop"); return .absent }
         )
         XCTAssertEqual(try restartedGuardian.tick(), .alreadyRunning("stage-1"))
+    }
+
+    func testGuardianWaitsForTheSharedActiveRuntimeLeaseBeforeInspectingOrPromoting() throws {
+        let fixture = try GuardianFixture()
+        defer { fixture.remove() }
+        let leaseURL = fixture.root.appendingPathComponent("active-runtime.lock")
+        let descriptor = Darwin.open(leaseURL.path, O_CREAT | O_RDWR | O_NOFOLLOW, mode_t(0o600))
+        XCTAssertGreaterThanOrEqual(descriptor, 0)
+        defer { if descriptor >= 0 { Darwin.close(descriptor) } }
+        XCTAssertEqual(guardianTestFlock(descriptor, LOCK_SH), 0)
+        defer { _ = guardianTestFlock(descriptor, LOCK_UN) }
+
+        let reachedBoot = DispatchSemaphore(value: 0)
+        let finished = DispatchSemaphore(value: 0)
+        let result = GuardianThreadResult()
+        var livePanes = fixture.structuralInventory.panes
+        var resumed = 0
+        let guardian = fixture.guardian(
+            probe: { _ in .absent },
+            boot: { _ in reachedBoot.signal(); return fixture.structuralInventory },
+            resume: { _ in
+                let expected = fixture.manifest.expectedPanes[resumed]
+                let index = try XCTUnwrap(livePanes.firstIndex(where: { $0.paneID == expected.paneID }))
+                livePanes[index] = fixture.resumedInventory(for: expected)
+                resumed += 1
+                return RemoteHerdrInventory(version: "0.8.2", panes: livePanes)
+            },
+            stop: { _ in .absent }
+        )
+        GuardianThreadRun(guardian: guardian, result: result, finished: finished).start()
+        usleep(50_000)
+        XCTAssertNil(result.get())
+        XCTAssertEqual(reachedBoot.wait(timeout: .now()), .timedOut)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.activeRuntimeURL.path))
+
+        XCTAssertEqual(guardianTestFlock(descriptor, LOCK_UN), 0)
+        XCTAssertEqual(reachedBoot.wait(timeout: .now() + 2), .success)
+        XCTAssertEqual(finished.wait(timeout: .now() + 2), .success)
+        XCTAssertEqual(try result.get()?.get(), .promoted("stage-1"))
+    }
+
+    func testGuardianRefusesRecoveryWhileARelayTopologyTransactionIsUnresolved() throws {
+        let fixture = try GuardianFixture()
+        defer { fixture.remove() }
+        try fixture.writePrivateData(
+            Data(#"{"schema_version":1,"generation":"old","request_id":"request","action":"agent_start","panes":[]}"#.utf8),
+            to: fixture.root.appendingPathComponent("topology-transaction.json")
+        )
+        var probed = false
+        let guardian = fixture.guardian(
+            probe: { _ in probed = true; return .absent },
+            boot: { _ in XCTFail("an unresolved topology transaction must block recovery"); return fixture.structuralInventory },
+            resume: { _ in fixture.structuralInventory },
+            stop: { _ in .absent }
+        )
+        assertRemoteErrorContains("topology transaction") { _ = try guardian.tick() }
+        XCTAssertFalse(probed)
+    }
+
+    func testGuardianFailsClosedWhenTheRuntimeLeaseOrTopologyTransactionEvidenceIsUnreadable() throws {
+        do {
+            let fixture = try GuardianFixture(stageName: "blocked-lease")
+            defer { fixture.remove() }
+            try FileManager.default.createDirectory(at: fixture.root.appendingPathComponent("active-runtime.lock"), withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+            let guardian = fixture.guardian(
+                probe: { _ in XCTFail("an unsafe runtime lease must block recovery"); return .absent },
+                boot: { _ in fixture.structuralInventory },
+                resume: { _ in fixture.structuralInventory },
+                stop: { _ in .absent }
+            )
+            assertRemoteErrorContains("active runtime lease is unavailable") { _ = try guardian.tick() }
+        }
+
+        do {
+            let fixture = try GuardianFixture(stageName: "unreadable-topology")
+            defer { fixture.remove() }
+            let guardian = fixture.guardian(
+                probe: { _ in XCTFail("unreadable topology evidence must block recovery"); return .absent },
+                boot: { _ in fixture.structuralInventory },
+                resume: { _ in fixture.structuralInventory },
+                stop: { _ in .absent },
+                snapshotLstat: { _, _ in errno = EACCES; return -1 }
+            )
+            assertRemoteErrorContains("topology transaction state is unreadable") { _ = try guardian.tick() }
+        }
     }
 
     func testGuardianUsesTheOneDigestBoundSelectionReadBeforeAPointerRace() throws {
@@ -380,7 +468,8 @@ final class RemoteGuardianTests: XCTestCase {
                     let identity = remoteProcessIdentity(pid: pane.childPID, startIdentity: "birth-\(pane.childPID)", executable: profile.copilotExecutable, generation: priorGeneration)
                     identities[pane.childPID] = identity
                     let attemptID = "rollback-\(pane.childPID)"
-                    try fixture.ledger.prepare(attemptID: attemptID, nativeSessionID: pane.expected.nativeSessionID, profileID: pane.expected.profileID, generation: priorGeneration, paneID: pane.expected.paneID, ownerPID: getpid())
+                    let argv = [profile.copilotExecutable] + RemoteAccountBroker.managedCopilotArguments(profile: profile, originalArguments: ["--resume=\(pane.expected.nativeSessionID)"])
+                    try fixture.ledger.prepare(attemptID: attemptID, nativeSessionID: pane.expected.nativeSessionID, profileID: pane.expected.profileID, generation: priorGeneration, paneID: pane.expected.paneID, ownerPID: getpid(), expectedArgvSHA256: RemoteArgvDigest.sha256(argv))
                     try fixture.ledger.markSpawnIntent(attemptID: attemptID)
                     try fixture.ledger.recordChild(attemptID: attemptID, identity: identity)
                     try fixture.ledger.confirm(nativeSessionID: pane.expected.nativeSessionID, profileID: pane.expected.profileID, generation: priorGeneration, paneID: pane.expected.paneID)
@@ -995,6 +1084,42 @@ final class RemoteGuardianTests: XCTestCase {
         try process.run()
         process.waitUntilExit()
         XCTAssertEqual(process.terminationStatus, 0)
+    }
+}
+
+private final class GuardianThreadResult: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: Result<RemoteGuardianResult, Error>?
+
+    func set(_ value: Result<RemoteGuardianResult, Error>) {
+        lock.lock()
+        self.value = value
+        lock.unlock()
+    }
+
+    func get() -> Result<RemoteGuardianResult, Error>? {
+        lock.lock()
+        defer { lock.unlock() }
+        return value
+    }
+}
+
+private final class GuardianThreadRun: @unchecked Sendable {
+    private let guardian: RemoteGuardian
+    private let result: GuardianThreadResult
+    private let finished: DispatchSemaphore
+
+    init(guardian: RemoteGuardian, result: GuardianThreadResult, finished: DispatchSemaphore) {
+        self.guardian = guardian
+        self.result = result
+        self.finished = finished
+    }
+
+    func start() {
+        Thread.detachNewThread { [self] in
+            result.set(Result { try guardian.tick() })
+            finished.signal()
+        }
     }
 }
 

@@ -67,8 +67,13 @@ func remoteJSONData(_ object: Any) throws -> Data {
 func remoteRegistry(profileCount: Int = 2) throws -> RemoteProfileRegistry {
     try RemoteProfileRegistry.decode(
         try remoteJSONData(remoteRegistryObject(profileCount: profileCount)),
-        executableExists: { _ in true }
+        executableExists: { _ in true },
+        credentialStoreResolver: remoteFixtureCredentialStore
     )
+}
+
+func remoteFixtureCredentialStore(path: String, directory: Bool) -> (path: String, identity: String) {
+    (path, "\(directory ? "directory" : "file"):\(path)")
 }
 
 func assertRemoteErrorContains(

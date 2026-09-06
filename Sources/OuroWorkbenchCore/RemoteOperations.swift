@@ -255,7 +255,6 @@ public enum RemoteArtifactBuilder {
             let manifestURL = stageURL.appendingPathComponent("manifest.json")
             try remoteWriteData(try encoder.encode(manifest), to: manifestURL, label: "artifact manifest")
             _ = try remoteRequireRegular(manifestURL, label: "artifact manifest", domain: .artifact)
-            try remoteSetPermissions(0o600, at: manifestURL, label: "artifact manifest", domain: .artifact)
             try remoteArtifactBuildCheckpoint(.manifestWritten, callback: checkpoint)
 
             try remoteRevalidatePhysicalDirectory(sourceRoot, label: "trusted source root", domain: .artifact)
@@ -269,6 +268,7 @@ public enum RemoteArtifactBuilder {
                     throw RemoteControlError.artifact("staged artifact manifest changed before promotion")
                 }
                 try remoteVerifyExactArtifactTree(rootURL: stageURL, manifest: manifest)
+                try remoteSynchronizeTree(rootURL: stageURL)
             } catch {
                 throw RemoteControlError.artifact("staged artifact does not match the verified package")
             }
@@ -278,6 +278,7 @@ public enum RemoteArtifactBuilder {
             } catch {
                 throw RemoteControlError.artifact("artifact could not be promoted")
             }
+            try remoteSynchronizeNode(outputParent.physicalURL, kind: .directory)
             cleanupURL = outputURL
             try remoteArtifactBuildCheckpoint(.promoted, callback: checkpoint)
             let verified = try RemoteArtifactVerifier.load(rootURL: outputURL)
@@ -407,6 +408,92 @@ public enum RemoteRollbackResult: Equatable, Sendable {
     case retainedForNativeResume
     case preservedAdopted
     case removed
+}
+
+public struct RemoteRuntimeReferenceScanner {
+    public let runtimeRootURL: URL
+    private let listProcessIDs: () throws -> [Int32]
+    private let processOwnerForPID: (Int32) -> uid_t?
+    private let processIdentityForPID: (Int32, String) -> RemoteProcessIdentity?
+    private let processSnapshotForPID: (Int32) -> RemoteProcessSnapshot?
+    private let currentProcessID: () -> Int32
+
+    public init(
+        runtimeRootURL: URL,
+        listProcessIDs: @escaping () throws -> [Int32] = RemoteNativeProcessIDs.all,
+        processOwnerForPID: @escaping (Int32) -> uid_t? = RemoteNativeProcessOwner.read,
+        processIdentityForPID: @escaping (Int32, String) -> RemoteProcessIdentity? = remoteProcessIdentity,
+        processSnapshotForPID: @escaping (Int32) -> RemoteProcessSnapshot? = RemoteProcessArguments.readSnapshot,
+        currentProcessID: @escaping () -> Int32 = getpid
+    ) {
+        self.runtimeRootURL = runtimeRootURL.standardizedFileURL
+        self.listProcessIDs = listProcessIDs
+        self.processOwnerForPID = processOwnerForPID
+        self.processIdentityForPID = processIdentityForPID
+        self.processSnapshotForPID = processSnapshotForPID
+        self.currentProcessID = currentProcessID
+    }
+
+    public func references(revision: String) throws -> Bool {
+        guard remoteIsRevision(revision) else { throw RemoteControlError.artifact("runtime reference revision is invalid") }
+        let versionRoot = runtimeRootURL
+            .appendingPathComponent("versions/\(revision)", isDirectory: true)
+            .resolvingSymlinksInPath()
+            .standardizedFileURL
+        let processIDs: [Int32]
+        do { processIDs = try listProcessIDs() }
+        catch { throw RemoteControlError.artifact("runtime reference evidence is unavailable") }
+        let owner = geteuid()
+        for pid in processIDs where pid > 0 && pid != currentProcessID() {
+            guard processOwnerForPID(pid) == owner else { continue }
+            guard let before = processIdentityForPID(pid, "runtime-reference") else {
+                if processOwnerForPID(pid) == owner { throw RemoteControlError.artifact("runtime reference evidence is unavailable for process \(pid)") }
+                continue
+            }
+            if Self.path(before.executable, isWithin: versionRoot) { return true }
+            guard let snapshot = processSnapshotForPID(pid) else {
+                if Self.isManagedRuntimeCandidate(before.executable), processIdentityForPID(pid, "runtime-reference") == before {
+                    throw RemoteControlError.artifact("runtime reference evidence is unavailable for process \(pid)")
+                }
+                continue
+            }
+            guard let after = processIdentityForPID(pid, "runtime-reference") else { continue }
+            guard after == before else { throw RemoteControlError.artifact("runtime reference evidence is unavailable for process \(pid)") }
+            if [snapshot.environment["OURO_HELPER_PATH"], snapshot.environment["OURO_SHIM_DIRECTORY"]]
+                .compactMap({ $0 })
+                .contains(where: { Self.path($0, isWithin: versionRoot) })
+            {
+                return true
+            }
+            if snapshot.environment["PATH"]?
+                .split(separator: ":", omittingEmptySubsequences: false)
+                .map(String.init)
+                .contains(where: { Self.path($0, isWithin: versionRoot) }) == true
+            {
+                return true
+            }
+        }
+        return false
+    }
+
+    private static func path(_ value: String, isWithin root: URL) -> Bool {
+        guard value.hasPrefix("/") else { return false }
+        let path = URL(fileURLWithPath: value).resolvingSymlinksInPath().standardizedFileURL.path
+        return path == root.path || path.hasPrefix(root.path + "/")
+    }
+
+    private static func isManagedRuntimeCandidate(_ executable: String) -> Bool {
+        ["OuroWorkbenchRemote", "copilot", "herdr", "zsh"].contains(URL(fileURLWithPath: executable).lastPathComponent)
+    }
+}
+
+public enum RemoteNativeProcessOwner {
+    public static func read(_ pid: Int32) -> uid_t? {
+        var info = proc_bsdinfo()
+        let size = Int32(MemoryLayout<proc_bsdinfo>.size)
+        guard withUnsafeMutablePointer(to: &info, { proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, $0, size) }) == size else { return nil }
+        return info.pbi_uid
+    }
 }
 
 public struct RemoteRuntimeInstaller {
@@ -545,6 +632,7 @@ public struct RemoteRuntimeInstaller {
                     provenance: provenance,
                     runtimeRootURL: runtimeRootURL
                 )
+                try remoteSynchronizeTree(rootURL: stagedRoot)
             } catch {
                 try remoteRemoveItem(stagedRoot, label: "runtime staging root")
                 throw RemoteControlError.artifact("staged runtime does not match the verified artifact")
@@ -555,6 +643,7 @@ public struct RemoteRuntimeInstaller {
                 try remoteRemoveItem(stagedRoot, label: "runtime staging root")
                 throw RemoteControlError.artifact("artifact could not be installed into the versioned runtime")
             }
+            try remoteSynchronizeNode(versionsRoot, kind: .directory)
         } else if needsManifestWrite {
             try remoteVerifyRuntimePayload(manifest, rootURL: versionRoot, additionalExpectedFiles: [:])
             try remoteWriteProvenance(provenance, at: versionRoot.appendingPathComponent("install-manifest.json"))
@@ -658,6 +747,8 @@ private struct RemoteFileMetadata {
 private struct RemotePhysicalDirectory {
     var requestedURL: URL
     var physicalURL: URL
+    var device: dev_t
+    var inode: ino_t
 }
 
 private func remoteMetadata(at url: URL, label: String, domain: RemoteFilesystemDomain) throws -> RemoteFileMetadata? {
@@ -720,7 +811,24 @@ private func remotePhysicalDirectory(
     _ = try remoteRequireDirectory(requestedURL, label: label, domain: domain)
     let physicalURL = requestedURL.resolvingSymlinksInPath().standardizedFileURL
     _ = try remoteRequireDirectory(physicalURL, label: label, domain: domain)
-    return RemotePhysicalDirectory(requestedURL: requestedURL, physicalURL: physicalURL)
+    let descriptor = Darwin.open(physicalURL.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
+    guard descriptor >= 0 else { throw domain.error("\(label) could not be anchored") }
+    defer { Darwin.close(descriptor) }
+    var anchored = stat()
+    var current = stat()
+    guard fstat(descriptor, &anchored) == 0,
+          anchored.st_mode & S_IFMT == S_IFDIR,
+          anchored.st_uid == geteuid(),
+          lstat(physicalURL.path, &current) == 0,
+          current.st_dev == anchored.st_dev,
+          current.st_ino == anchored.st_ino
+    else { throw domain.error("\(label) could not be anchored") }
+    return RemotePhysicalDirectory(
+        requestedURL: requestedURL,
+        physicalURL: physicalURL,
+        device: anchored.st_dev,
+        inode: anchored.st_ino
+    )
 }
 
 private func remoteRevalidatePhysicalDirectory(
@@ -730,7 +838,10 @@ private func remoteRevalidatePhysicalDirectory(
 ) throws {
     do {
         let current = try remotePhysicalDirectory(anchor.requestedURL, label: label, domain: domain)
-        guard current.physicalURL.path == anchor.physicalURL.path else {
+        guard current.physicalURL.path == anchor.physicalURL.path,
+              current.device == anchor.device,
+              current.inode == anchor.inode
+        else {
             throw domain.error("\(label) physical location changed")
         }
     } catch {
@@ -771,12 +882,97 @@ private func remoteEnsureDirectory(_ url: URL, mode: Int, label: String, domain:
     try remoteSetPermissions(mode, at: url, label: label, domain: domain)
 }
 
-private func remoteSetPermissions(_ mode: Int, at url: URL, label: String, domain: RemoteFilesystemDomain) throws {
-    do {
-        try FileManager.default.setAttributes([.posixPermissions: mode], ofItemAtPath: url.path)
-    } catch {
-        throw domain.error("\(label) permissions could not be secured")
+func remoteSetPermissions(
+    _ mode: Int,
+    at url: URL,
+    label: String,
+    domain: RemoteFilesystemDomain,
+    validationCheckpoint: () throws -> Void = {}
+) throws {
+    let descriptor = Darwin.open(url.path, O_RDONLY | O_NOFOLLOW)
+    guard descriptor >= 0 else { throw domain.error("\(label) permissions could not be secured") }
+    defer { Darwin.close(descriptor) }
+    var anchored = stat()
+    guard fstat(descriptor, &anchored) == 0,
+          anchored.st_uid == geteuid(),
+          anchored.st_mode & S_IFMT == S_IFDIR || anchored.st_mode & S_IFMT == S_IFREG,
+          anchored.st_mode & S_IFMT != S_IFREG || anchored.st_nlink == 1
+    else { throw domain.error("\(label) permissions could not be secured") }
+    try validationCheckpoint()
+    guard fchmod(descriptor, mode_t(mode)) == 0,
+          Darwin.fsync(descriptor) == 0
+    else { throw domain.error("\(label) permissions could not be secured") }
+    var current = stat()
+    guard lstat(url.path, &current) == 0,
+          current.st_dev == anchored.st_dev,
+          current.st_ino == anchored.st_ino
+    else { throw domain.error("\(label) changed while its permissions were secured") }
+}
+
+enum RemoteSyncNodeKind: Equatable {
+    case regular
+    case directory
+}
+
+func remoteSynchronizeTree(
+    rootURL: URL,
+    synchronize: (URL, RemoteSyncNodeKind) throws -> Void = { url, kind in
+        try remoteSynchronizeNode(url, kind: kind)
+    },
+    listSubpaths: (String) throws -> [String] = { try FileManager.default.subpathsOfDirectory(atPath: $0) }
+) throws {
+    let root = try remotePhysicalDirectory(rootURL, label: "durability root", domain: .artifact).physicalURL
+    let subpaths: [String]
+    do { subpaths = try listSubpaths(root.path) }
+    catch { throw RemoteControlError.artifact("durability tree could not be inspected") }
+    var regularFiles: [URL] = []
+    var directories: [URL] = []
+    for subpath in subpaths {
+        let url = root.appendingPathComponent(subpath)
+        guard let metadata = try remoteMetadata(at: url, label: "durability item", domain: .artifact) else {
+            throw RemoteControlError.artifact("durability tree changed during inspection")
+        }
+        switch metadata.kind {
+        case .regular:
+            _ = try remoteRequireRegular(url, label: "durability file", domain: .artifact)
+            regularFiles.append(url)
+        case .directory:
+            directories.append(url)
+        case .symbolicLink, .other:
+            throw RemoteControlError.artifact("durability tree contains a special entry")
+        }
     }
+    for url in regularFiles.sorted(by: { $0.path < $1.path }) {
+        try synchronize(url, .regular)
+    }
+    directories.sort {
+        let leftDepth = $0.pathComponents.count
+        let rightDepth = $1.pathComponents.count
+        return leftDepth == rightDepth ? $0.path < $1.path : leftDepth > rightDepth
+    }
+    for url in directories {
+        try synchronize(url, .directory)
+    }
+    try synchronize(root, .directory)
+}
+
+func remoteSynchronizeNode(_ url: URL, kind: RemoteSyncNodeKind) throws {
+    let flags = O_RDONLY | O_NOFOLLOW | (kind == .directory ? O_DIRECTORY : 0)
+    let descriptor = Darwin.open(url.path, flags)
+    guard descriptor >= 0 else { throw RemoteControlError.artifact("durability item could not be opened") }
+    defer { Darwin.close(descriptor) }
+    var anchored = stat()
+    var current = stat()
+    let expectedType = kind == .directory ? mode_t(S_IFDIR) : mode_t(S_IFREG)
+    guard fstat(descriptor, &anchored) == 0,
+          anchored.st_mode & S_IFMT == expectedType,
+          anchored.st_uid == geteuid(),
+          kind == .directory || anchored.st_nlink == 1,
+          Darwin.fsync(descriptor) == 0,
+          lstat(url.path, &current) == 0,
+          current.st_dev == anchored.st_dev,
+          current.st_ino == anchored.st_ino
+    else { throw RemoteControlError.artifact("durability item could not be synchronized") }
 }
 
 private func remoteRedact(_ value: String, secrets: [String]) -> String {
@@ -858,9 +1054,8 @@ private func remoteWriteRuntimeFile(_ data: Data, relativePath: String, mode: In
         try remoteRequirePhysicalContainment(directory, in: physicalRoot, label: "runtime directory", domain: .artifact)
     }
     let destination = directory.appendingPathComponent(components.last!)
-    try remoteWriteData(data, to: destination, label: "runtime file")
+    try remoteWriteData(data, to: destination, label: "runtime file", mode: mode)
     _ = try remoteRequireRegular(destination, label: "runtime file", domain: .artifact)
-    try remoteSetPermissions(mode, at: destination, label: "runtime file", domain: .artifact)
 }
 
 func remoteTrustedSourceRevision(
@@ -1001,7 +1196,6 @@ private func remoteWriteProvenance(_ provenance: RemoteProvenanceManifest, at ur
     let data = try encoder.encode(provenance)
     try remoteWriteData(data, to: url, label: "install provenance")
     _ = try remoteRequireRegular(url, label: "install provenance", domain: .artifact)
-    try remoteSetPermissions(0o600, at: url, label: "install provenance", domain: .artifact)
 }
 
 private func remoteReadProvenance(at url: URL, rootURL: URL) throws -> RemoteProvenanceManifest {
@@ -1151,7 +1345,6 @@ private func remoteWriteCurrentRevision(_ revision: String, rootURL: URL) throws
     _ = try remoteReadCurrentRevisionIfPresent(pointer)
     try remoteWriteData(Data("\(revision)\n".utf8), to: pointer, label: "runtime pointer")
     _ = try remoteRequireRegular(pointer, label: "runtime pointer", domain: .artifact)
-    try remoteSetPermissions(0o600, at: pointer, label: "runtime pointer", domain: .artifact)
 }
 
 private func remoteReadCurrentRevisionIfPresent(_ pointer: URL) throws -> String? {
@@ -1204,9 +1397,9 @@ private func remoteRemoveItem(_ url: URL, label: String) throws {
     }
 }
 
-private func remoteWriteData(_ data: Data, to url: URL, label: String) throws {
+private func remoteWriteData(_ data: Data, to url: URL, label: String, mode: Int = 0o600) throws {
     do {
-        try data.write(to: url, options: .atomic)
+        try RemoteDurableFile.write(data, to: url, mode: mode_t(mode))
     } catch {
         throw RemoteControlError.artifact("\(label) could not be written")
     }

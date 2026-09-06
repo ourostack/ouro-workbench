@@ -114,7 +114,7 @@ final class RemoteAccountSafetyTests: XCTestCase {
             }
         }
         realExecutables["profiles"] = profiles
-        XCTAssertEqual(try RemoteProfileRegistry.decode(remoteJSONData(realExecutables)).profiles.count, 2)
+        XCTAssertEqual(try RemoteProfileRegistry.decode(remoteJSONData(realExecutables), credentialStoreResolver: remoteFixtureCredentialStore).profiles.count, 2)
     }
 
     func testRegistryRejectsDuplicateIdentityAndStorageBoundaries() throws {
@@ -134,6 +134,117 @@ final class RemoteAccountSafetyTests: XCTestCase {
         assertInvalid(owners, contains: "duplicate GitHub owner")
     }
 
+    func testRegistryRejectsDuplicateLogicalStoresEvenWhenAResolverReturnsDistinctIdentities() throws {
+        let cases = [
+            ("copilotHome", "duplicate Copilot home"),
+            ("ghConfigDir", "duplicate GitHub config directory"),
+            ("gitConfigGlobal", "duplicate Git config")
+        ]
+        for (key, expected) in cases {
+            var object = remoteRegistryObject()
+            var profiles = try XCTUnwrap(object["profiles"] as? [[String: Any]])
+            profiles[1][key] = profiles[0][key]
+            object["profiles"] = profiles
+            var sequence = 0
+            assertRemoteErrorContains(expected) {
+                _ = try RemoteProfileRegistry.decode(
+                    try remoteJSONData(object),
+                    executableExists: { _ in true },
+                    credentialStoreResolver: { path, _ in
+                        sequence += 1
+                        return (path, "unique-\(sequence)")
+                    }
+                )
+            }
+        }
+    }
+
+    func testPhysicalCredentialStoreResolverRejectsEveryUnsafeFilesystemShape() throws {
+        let cases = ["non-normalized-path", "missing-directory", "missing-parent", "unsafe-parent-mode", "directory-is-file", "foreign-owner", "unsafe-directory-mode", "config-is-directory"]
+        for name in cases {
+            let root = try remoteTemporaryDirectory("credential-shape-\(name)")
+            defer { try? FileManager.default.removeItem(at: root) }
+            let copilotHome = root.appendingPathComponent("copilot", isDirectory: true)
+            let ghConfig = root.appendingPathComponent("gh", isDirectory: true)
+            let gitParent = root.appendingPathComponent("git", isDirectory: true)
+            for directory in [copilotHome, ghConfig, gitParent] {
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+            }
+            let gitConfig = gitParent.appendingPathComponent("config")
+            try Data().write(to: gitConfig)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: gitConfig.path)
+            var object = remoteRegistryObject(profileCount: 1)
+            var profiles = try XCTUnwrap(object["profiles"] as? [[String: Any]])
+            profiles[0]["copilotHome"] = copilotHome.path
+            profiles[0]["ghConfigDir"] = ghConfig.path
+            profiles[0]["gitConfigGlobal"] = gitConfig.path
+            for key in ["copilotExecutable", "ghExecutable", "gitExecutable", "herdrExecutable", "zshExecutable"] {
+                profiles[0][key] = "/bin/sh"
+            }
+            switch name {
+            case "non-normalized-path":
+                profiles[0]["copilotHome"] = "\(root.path)/git/../copilot"
+            case "missing-directory":
+                try FileManager.default.removeItem(at: copilotHome)
+            case "missing-parent":
+                profiles[0]["gitConfigGlobal"] = root.appendingPathComponent("missing/config").path
+            case "unsafe-parent-mode":
+                try FileManager.default.removeItem(at: gitConfig)
+                try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: gitParent.path)
+            case "directory-is-file":
+                try FileManager.default.removeItem(at: copilotHome)
+                try Data().write(to: copilotHome)
+                try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: copilotHome.path)
+            case "foreign-owner":
+                profiles[0]["gitConfigGlobal"] = "/etc/hosts"
+            case "unsafe-directory-mode":
+                try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: copilotHome.path)
+            case "config-is-directory":
+                try FileManager.default.removeItem(at: gitConfig)
+                try FileManager.default.createDirectory(at: gitConfig, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+            default:
+                XCTFail("unknown credential shape")
+            }
+            object["profiles"] = profiles
+
+            assertRemoteErrorContains("credential store") {
+                _ = try RemoteProfileRegistry.decode(try remoteJSONData(object), executableExists: { _ in true })
+            }
+        }
+    }
+
+    func testRegistryRejectsDistinctPathsThatAliasOnePhysicalCredentialStore() throws {
+        let root = try remoteTemporaryDirectory("profile-storage-alias")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let sharedHome = root.appendingPathComponent("shared-home", isDirectory: true)
+        let aliasedHome = root.appendingPathComponent("aliased-home", isDirectory: true)
+        let personalGH = root.appendingPathComponent("personal-gh", isDirectory: true)
+        let managedGH = root.appendingPathComponent("managed-gh", isDirectory: true)
+        let personalGit = root.appendingPathComponent("personal.gitconfig")
+        let managedGit = root.appendingPathComponent("managed.gitconfig")
+        for directory in [sharedHome, personalGH, managedGH] {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        }
+        try FileManager.default.createSymbolicLink(at: aliasedHome, withDestinationURL: sharedHome)
+        for file in [personalGit, managedGit] {
+            try Data().write(to: file)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
+        }
+        var object = remoteRegistryObject()
+        var profiles = try XCTUnwrap(object["profiles"] as? [[String: Any]])
+        profiles[0]["copilotHome"] = sharedHome.path
+        profiles[0]["ghConfigDir"] = personalGH.path
+        profiles[0]["gitConfigGlobal"] = personalGit.path
+        profiles[1]["copilotHome"] = aliasedHome.path
+        profiles[1]["ghConfigDir"] = managedGH.path
+        profiles[1]["gitConfigGlobal"] = managedGit.path
+        object["profiles"] = profiles
+
+        assertRemoteErrorContains("physical credential store") {
+            _ = try RemoteProfileRegistry.decode(try remoteJSONData(object), executableExists: { _ in true })
+        }
+    }
+
     func testRegistryRequiresEveryExactExecutable() throws {
         let data = try remoteJSONData(remoteRegistryObject())
         var checked: [String] = []
@@ -142,7 +253,7 @@ final class RemoteAccountSafetyTests: XCTestCase {
             _ = try RemoteProfileRegistry.decode(data, executableExists: { path in
                 checked.append(path)
                 return !path.hasSuffix("/herdr")
-            })
+            }, credentialStoreResolver: remoteFixtureCredentialStore)
         }
         XCTAssertTrue(checked.contains("/fixtures/bin/herdr"))
     }
@@ -226,7 +337,7 @@ final class RemoteAccountSafetyTests: XCTestCase {
             profiles[0][key] = "/bin/sh"
         }
         object["profiles"] = profiles
-        let registry = try RemoteProfileRegistry.decode(try remoteJSONData(object))
+        let registry = try RemoteProfileRegistry.decode(try remoteJSONData(object), credentialStoreResolver: remoteFixtureCredentialStore)
         let broker = RemoteAccountBroker(
             registry: registry,
             environment: environment,
@@ -536,6 +647,32 @@ final class RemoteAccountSafetyTests: XCTestCase {
         assertRemoteErrorContains("unique") { _ = try ambiguous.dispatch(arguments: arguments, sessionMapURL: ambiguousURL) }
     }
 
+    func testDispatchUsesOnePaneProfileAcrossSequentialFreshSessionHistory() throws {
+        let root = try remoteTemporaryDirectory("sequential-session-history")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let mapURL = root.appendingPathComponent("session-map.json")
+        try remoteJSONData(["schemaVersion": 1, "entries": [
+            ["sessionID": "8d5177d6-b6d1-4b5f-a546-564ed0ef8748", "profileID": "personal", "paneID": "desk:p1", "generation": "g-current"],
+            ["sessionID": "29633c1f-f185-41a7-b628-8f7e54d74422", "profileID": "personal", "paneID": "desk:p1", "generation": "g-current"]
+        ]]).write(to: mapURL)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: mapURL.path)
+        let recorder = RemoteCallRecorder(responses: [
+            .init(exitCode: 0, stdout: Data("fixture-token".utf8)),
+            .init(exitCode: 0, stdout: try remoteJSONData(["login": "arimendelow"])),
+            .init(exitCode: 0)
+        ])
+        let broker = try makeBroker(
+            recorder: recorder,
+            environment: ["HERDR_ENV": "1", "HERDR_SESSION": "g-current", "HERDR_PANE_ID": "desk:p1"]
+        )
+
+        let request = try broker.dispatch(arguments: ["keep-going"], sessionMapURL: mapURL)
+
+        XCTAssertEqual(request.environment["OURO_PROFILE_ID"], "personal")
+        XCTAssertEqual(request.environment["OURO_GENERATION"], "g-current")
+        XCTAssertEqual(request.environment["OURO_PANE_ID"], "desk:p1")
+    }
+
     func testDispatchResumeRequiresOneCanonicalMappedUUID() throws {
         let root = try remoteTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -574,7 +711,7 @@ final class RemoteAccountSafetyTests: XCTestCase {
         let recorder = RemoteCallRecorder(responses: responses)
         let broker = RemoteAccountBroker(
             registry: registry,
-            environment: ["HERDR_ENV": "1"],
+            environment: ["HERDR_ENV": "1", "HERDR_SESSION": "g-current", "HERDR_PANE_ID": "desk:current"],
             workingDirectory: "/tmp/desk",
             shimDirectory: "/tmp/ouro/shims",
             profileConfigPath: "/tmp/ouro/profiles.json",
@@ -584,8 +721,22 @@ final class RemoteAccountSafetyTests: XCTestCase {
         let request = try broker.dispatch(arguments: ["--resume=\(uuid.lowercased())"], sessionMapURL: store.mapURL)
 
         XCTAssertEqual(request.environment["OURO_PROFILE_ID"], "personal")
+        XCTAssertEqual(request.environment["OURO_GENERATION"], "g-current")
+        XCTAssertEqual(request.environment["OURO_PANE_ID"], "desk:current")
         XCTAssertEqual(request.arguments.last, "--resume=\(uuid.lowercased())")
         XCTAssertTrue(request.arguments.contains("--remote"))
+
+        let conflictingProfile = RemoteAccountBroker(
+            registry: registry,
+            environment: ["HERDR_ENV": "1", "HERDR_SESSION": "g-current", "HERDR_PANE_ID": "desk:current", "OURO_PROFILE_ID": "emu"],
+            workingDirectory: "/tmp/desk",
+            shimDirectory: "/tmp/ouro/shims",
+            profileConfigPath: "/tmp/ouro/profiles.json",
+            run: recorder.run
+        )
+        assertRemoteErrorContains("profile context disagrees") {
+            _ = try conflictingProfile.dispatch(arguments: ["--resume=\(uuid.lowercased())"], sessionMapURL: store.mapURL)
+        }
 
         for spelling in [["--resume", uuid], ["-r", uuid], ["--session-id", uuid], ["--session-id=\(uuid)"]] {
             let spelled = try broker.dispatch(arguments: spelling, sessionMapURL: store.mapURL)
@@ -609,7 +760,10 @@ final class RemoteAccountSafetyTests: XCTestCase {
         let root = try remoteTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
         let uuid = "8d5177d6-b6d1-4b5f-a546-564ed0ef8748"
-        let broker = try makeBroker(recorder: RemoteCallRecorder(), environment: ["HERDR_ENV": "1"])
+        let broker = try makeBroker(
+            recorder: RemoteCallRecorder(),
+            environment: ["HERDR_ENV": "1", "HERDR_SESSION": "g-current", "HERDR_PANE_ID": "desk:current"]
+        )
         let missing = root.appendingPathComponent("missing.json")
         assertRemoteErrorContains("session map") {
             _ = try broker.dispatch(arguments: ["--resume=\(uuid)"], sessionMapURL: missing)
@@ -656,7 +810,7 @@ final class RemoteAccountSafetyTests: XCTestCase {
         ])
         let broker = RemoteAccountBroker(
             registry: try remoteRegistry(),
-            environment: ["HERDR_ENV": "1"],
+            environment: ["HERDR_ENV": "1", "HERDR_SESSION": "g-new", "HERDR_PANE_ID": "desk:p1"],
             workingDirectory: "/tmp/desk",
             shimDirectory: "/tmp/ouro/shims",
             profileConfigPath: "/tmp/ouro/profiles.json",
@@ -762,7 +916,7 @@ final class RemoteAccountSafetyTests: XCTestCase {
             profiles[0][key] = "/bin/sh"
         }
         object["profiles"] = profiles
-        let registry = try RemoteProfileRegistry.decode(try remoteJSONData(object))
+        let registry = try RemoteProfileRegistry.decode(try remoteJSONData(object), credentialStoreResolver: remoteFixtureCredentialStore)
         let recorder = RemoteCallRecorder(responses: [
             .init(exitCode: 0, stdout: Data("fixture-token".utf8)),
             .init(exitCode: 0, stdout: try remoteJSONData(["login": "arimendelow"])),
@@ -1166,7 +1320,11 @@ final class RemoteAccountSafetyTests: XCTestCase {
 
     private func assertInvalid(_ object: [String: Any], contains text: String, file: StaticString = #filePath, line: UInt = #line) {
         assertRemoteErrorContains(text, file: file, line: line) {
-            _ = try RemoteProfileRegistry.decode(try remoteJSONData(object), executableExists: { _ in true })
+            _ = try RemoteProfileRegistry.decode(
+                try remoteJSONData(object),
+                executableExists: { _ in true },
+                credentialStoreResolver: remoteFixtureCredentialStore
+            )
         }
     }
 

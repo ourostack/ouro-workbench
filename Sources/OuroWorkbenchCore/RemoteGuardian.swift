@@ -147,6 +147,26 @@ public enum RemoteWorkerIntegrity {
             && herdrArgv == [expectedExecutable] + expectedArguments
             && actualGitHubLogin == expectedGitHubLogin
     }
+
+    public static func matches(
+        recordedIdentity: RemoteProcessIdentity,
+        liveIdentity: RemoteProcessIdentity?,
+        herdrPID: Int32,
+        herdrArgv: [String]?,
+        expectedExecutable: String,
+        expectedArgvSHA256: String,
+        actualGitHubLogin: String?,
+        expectedGitHubLogin: String
+    ) -> Bool {
+        let resolvedExecutable = URL(fileURLWithPath: expectedExecutable).resolvingSymlinksInPath().standardizedFileURL.path
+        return recordedIdentity.pid > 0
+            && liveIdentity == recordedIdentity
+            && herdrPID == recordedIdentity.pid
+            && recordedIdentity.executable == resolvedExecutable
+            && herdrArgv.map(RemoteArgvDigest.sha256) == expectedArgvSHA256
+            && expectedArgvSHA256 != RemoteArgvDigest.unavailable
+            && actualGitHubLogin == expectedGitHubLogin
+    }
 }
 
 public enum RemoteHerdrServerProcess {
@@ -224,6 +244,7 @@ public enum RemoteGuardianResult: Equatable, Sendable {
 
 public struct RemoteGuardian {
     public static let maximumControlFileBytes = 65_536
+    public static let topologyTransactionName = "topology-transaction.json"
     public let rootURL: URL
     public let helperPath: String
     public let ledger: RemoteResumeLedger
@@ -308,6 +329,11 @@ public struct RemoteGuardian {
         do { guardianLock = try RemoteAdvisoryLock.acquire(url: rootURL.appendingPathComponent("guardian.lock")) }
         catch { throw RemoteControlError.guardian("guardian is already running") }
         defer { guardianLock.release() }
+        let runtimeLock: RemoteAdvisoryLock
+        do { runtimeLock = try RemoteAdvisoryLock.acquire(url: rootURL.appendingPathComponent("active-runtime.lock"), nonBlocking: false) }
+        catch { throw RemoteControlError.guardian("active runtime lease is unavailable") }
+        defer { runtimeLock.release() }
+        try ensureNoTopologyTransaction()
 
         let lastKnownGood = try RemoteLastKnownGoodStore(rootURL: rootURL).loadCurrent()
         let manifest = lastKnownGood.manifest.generationManifest
@@ -432,6 +458,17 @@ public struct RemoteGuardian {
             return try failAfterPossibleSpawn(error, generation: generation, staged: staged)
         }
         return .promoted(generation)
+    }
+
+    private func ensureNoTopologyTransaction() throws {
+        let marker = rootURL.appendingPathComponent(Self.topologyTransactionName)
+        var value = stat()
+        if snapshotLstat(marker.path, &value) == 0 {
+            throw RemoteControlError.guardian("relay topology transaction is unresolved; recovery required")
+        }
+        guard errno == ENOENT else {
+            throw RemoteControlError.guardian("relay topology transaction state is unreadable; recovery required")
+        }
     }
 
     private func failBeforeSpawn(

@@ -8,7 +8,9 @@ public enum RemoteResumeLedgerFactory {
         inheritedEnvironment: [String: String],
         run: @escaping (RemoteProcessRequest) throws -> RemoteProcessResult = { try RemoteSystemRunner(timeout: 10, maximumOutputBytes: 65_536).run($0) },
         listServerSessions: (() throws -> [String])? = nil,
-        processIdentityForPID: @escaping (Int32, String) -> RemoteProcessIdentity? = remoteProcessIdentity
+        processIdentityForPID: @escaping (Int32, String) -> RemoteProcessIdentity? = remoteProcessIdentity,
+        listProcessIDs: @escaping () throws -> [Int32] = RemoteNativeProcessIDs.all,
+        processSnapshotForPID: @escaping (Int32) -> RemoteProcessSnapshot? = RemoteProcessArguments.readSnapshot
     ) throws -> RemoteResumeLedger {
         let herdrExecutables = Set(registry.profiles.map(\.herdrExecutable))
         guard herdrExecutables.count == 1, let herdrExecutable = herdrExecutables.first else {
@@ -24,7 +26,9 @@ public enum RemoteResumeLedgerFactory {
             inheritedEnvironment: inheritedEnvironment,
             run: run,
             listServerSessions: scan,
-            processIdentityForPID: processIdentityForPID
+            processIdentityForPID: processIdentityForPID,
+            listProcessIDs: listProcessIDs,
+            processSnapshotForPID: processSnapshotForPID
         )
         return RemoteResumeLedger(
             rootURL: ledgerRootURL,
@@ -41,6 +45,8 @@ public struct RemoteHerdrForegroundEvidenceProvider {
     private let run: (RemoteProcessRequest) throws -> RemoteProcessResult
     private let listServerSessions: () throws -> [String]
     private let processIdentityForPID: (Int32, String) -> RemoteProcessIdentity?
+    private let listProcessIDs: () throws -> [Int32]
+    private let processSnapshotForPID: (Int32) -> RemoteProcessSnapshot?
 
     public init(
         rootURL: URL,
@@ -48,7 +54,9 @@ public struct RemoteHerdrForegroundEvidenceProvider {
         inheritedEnvironment: [String: String],
         run: @escaping (RemoteProcessRequest) throws -> RemoteProcessResult,
         listServerSessions: @escaping () throws -> [String],
-        processIdentityForPID: @escaping (Int32, String) -> RemoteProcessIdentity?
+        processIdentityForPID: @escaping (Int32, String) -> RemoteProcessIdentity?,
+        listProcessIDs: @escaping () throws -> [Int32] = RemoteNativeProcessIDs.all,
+        processSnapshotForPID: @escaping (Int32) -> RemoteProcessSnapshot? = RemoteProcessArguments.readSnapshot
     ) {
         self.rootURL = rootURL.standardizedFileURL
         self.registry = registry
@@ -56,6 +64,8 @@ public struct RemoteHerdrForegroundEvidenceProvider {
         self.run = run
         self.listServerSessions = listServerSessions
         self.processIdentityForPID = processIdentityForPID
+        self.listProcessIDs = listProcessIDs
+        self.processSnapshotForPID = processSnapshotForPID
     }
 
     public func inspect(_ record: RemoteResumeRecord) -> RemotePresenceEvidence {
@@ -64,9 +74,9 @@ public struct RemoteHerdrForegroundEvidenceProvider {
     }
 
     private func inspectExactly(_ record: RemoteResumeRecord) throws -> RemotePresenceEvidence {
-        guard let nativeSessionID = record.nativeSessionID,
-              let profile = try? registry.profile(id: record.profileID)
-        else { return .unavailable }
+        guard let profile = try? registry.profile(id: record.profileID), record.expectedArgvSHA256 != RemoteArgvDigest.unavailable else { return .unavailable }
+        let global = try inspectGlobalProcesses(record, profile: profile)
+        guard global == .absent else { return global }
         let herdrExecutables = Set(registry.profiles.map(\.herdrExecutable))
         guard herdrExecutables.count == 1, let herdrExecutable = herdrExecutables.first else { return .unavailable }
         let version = try execute(herdrExecutable, arguments: ["--version"])
@@ -83,8 +93,6 @@ public struct RemoteHerdrForegroundEvidenceProvider {
         let processSessions = Set(try listServerSessions())
         guard processSessions == runningSessions else { return .unavailable }
 
-        let expectedArguments = RemoteAccountBroker.managedCopilotArguments(profile: profile, originalArguments: ["--resume=\(nativeSessionID)"])
-        let expectedArgv = [profile.copilotExecutable] + expectedArguments
         let resolvedExecutable = URL(fileURLWithPath: profile.copilotExecutable).resolvingSymlinksInPath().standardizedFileURL.path
         for session in runningSessions.sorted() {
             let snapshotResult = try execute(herdrExecutable, arguments: ["--session", session, "api", "snapshot"])
@@ -100,14 +108,31 @@ public struct RemoteHerdrForegroundEvidenceProvider {
                       processInfo.paneID == pane.paneID
                 else { return .unavailable }
                 for process in processInfo.foregroundProcesses {
-                    if process.pid == record.childIdentity?.pid { return .live }
+                    if let child = record.childIdentity, process.pid == child.pid {
+                        guard processIdentityForPID(process.pid, session) == child else { return .unavailable }
+                        return .live
+                    }
                     guard let argv = process.argv else { return .unavailable }
-                    if argv == expectedArgv {
+                    if RemoteArgvDigest.sha256(argv) == record.expectedArgvSHA256 {
                         guard processIdentityForPID(process.pid, session)?.executable == resolvedExecutable else { return .unavailable }
                         return .live
                     }
                 }
             }
+        }
+        return .absent
+    }
+
+    private func inspectGlobalProcesses(_ record: RemoteResumeRecord, profile: RemoteProfile) throws -> RemotePresenceEvidence {
+        let resolvedExecutable = URL(fileURLWithPath: profile.copilotExecutable).resolvingSymlinksInPath().standardizedFileURL.path
+        for pid in try listProcessIDs() where pid > 0 {
+            guard let before = processIdentityForPID(pid, record.generation), before.executable == resolvedExecutable else { continue }
+            guard let snapshot = processSnapshotForPID(pid), processIdentityForPID(pid, record.generation) == before else { return .unavailable }
+            guard snapshot.environment["OURO_PROFILE_ID"] == record.profileID,
+                  snapshot.environment["OURO_GENERATION"] == record.generation,
+                  snapshot.environment["OURO_PANE_ID"] == record.paneID
+            else { continue }
+            if RemoteArgvDigest.sha256(snapshot.arguments) == record.expectedArgvSHA256 { return .live }
         }
         return .absent
     }

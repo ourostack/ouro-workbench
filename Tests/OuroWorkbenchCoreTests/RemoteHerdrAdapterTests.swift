@@ -61,6 +61,63 @@ final class RemoteHerdrAdapterTests: XCTestCase {
         XCTAssertEqual(try fixture.adapter().probe(sessionName: "ouro-a"), .degraded("inventory probe failed"))
     }
 
+    func testInventoryVerifiesAFreshLaunchUsingItsDurableExactArgvDigest() throws {
+        let fixture = try AdapterFixture()
+        try fixture.installMapping()
+        let profile = try remoteRegistry().profile(id: "personal")
+        let freshArguments = RemoteAccountBroker.managedCopilotArguments(profile: profile, originalArguments: ["start fresh"])
+        let identity = remoteProcessIdentity(pid: 200, startIdentity: "birth-200", executable: profile.copilotExecutable, generation: "ouro-a")
+        fixture.identities[200] = identity
+        fixture.identities[88] = remoteProcessIdentity(pid: 88, executable: "/bin/zsh", generation: "ouro-a")
+        try fixture.ledger.prepare(
+            attemptID: "fresh",
+            nativeSessionID: nil,
+            profileID: profile.id,
+            generation: "ouro-a",
+            paneID: "desk:p1",
+            ownerPID: getpid(),
+            expectedArgvSHA256: RemoteArgvDigest.sha256([profile.copilotExecutable] + freshArguments)
+        )
+        try fixture.ledger.markSpawnIntent(attemptID: "fresh")
+        try fixture.ledger.recordChild(attemptID: "fresh", identity: identity)
+        try fixture.ledger.confirm(nativeSessionID: fixture.nativeSessionID, profileID: profile.id, generation: "ouro-a", paneID: "desk:p1")
+        fixture.responses = [
+            .init(exitCode: 0, stdout: try fixture.snapshot(panes: [fixture.snapshotPane()])),
+            .init(exitCode: 0, stdout: try fixture.processInfo(argv: [profile.copilotExecutable] + freshArguments)),
+            .init(exitCode: 0, stdout: Data("arimendelow\n".utf8))
+        ]
+
+        let inventory = try fixture.adapter().inventory(sessionName: "ouro-a")
+
+        XCTAssertEqual(inventory.panes.first?.profileID, profile.id)
+        XCTAssertEqual(inventory.panes.first?.childPresent, true)
+        XCTAssertEqual(inventory.panes.first?.hookObserved, true)
+    }
+
+    func testActiveRuntimeHealthRequiresExactExpectedInventoryAndWorkerIdentity() throws {
+        let fixture = try AdapterFixture()
+        try fixture.installVerifiedPane()
+        fixture.expectedInventoryData = try remoteJSONData([
+            "version": 1,
+            "generation": "ouro-a",
+            "acknowledged_empty": false,
+            "panes": [["pane_id": "desk:p1", "native_session_id": fixture.nativeSessionID, "profile_id": "personal"]]
+        ])
+        fixture.responses = [
+            .init(exitCode: 0, stdout: try fixture.snapshot(panes: [fixture.snapshotPane()])),
+            .init(exitCode: 0, stdout: try fixture.processInfo()),
+            .init(exitCode: 0, stdout: Data("arimendelow\n".utf8))
+        ]
+        let adapter = try fixture.adapter()
+        let inventory = try adapter.inventory(sessionName: "ouro-a")
+
+        XCTAssertTrue(try adapter.activeRuntimeIsExact(fixture.runtime(), inventory: inventory))
+
+        var mismatched = inventory
+        mismatched.panes[0].githubLogin = "wrong-account"
+        XCTAssertFalse(try adapter.activeRuntimeIsExact(fixture.runtime(), inventory: mismatched))
+    }
+
     func testSessionListingRejectsNonzeroAndMalformedResponses() throws {
         let fixture = try AdapterFixture()
         fixture.responses = [.init(exitCode: 4)]
@@ -342,7 +399,8 @@ final class RemoteHerdrAdapterTests: XCTestCase {
                 let profile = try remoteRegistry().profile(id: pane.profile)
                 let identity = remoteProcessIdentity(pid: pane.childPID, startIdentity: "birth-\(pane.childPID)", executable: profile.copilotExecutable, generation: "ouro-a")
                 fixture.identities[pane.childPID] = identity
-                try fixture.ledger.prepare(attemptID: "attempt-\(pane.childPID)", nativeSessionID: pane.uuid, profileID: pane.profile, generation: "ouro-a", paneID: pane.id, ownerPID: getpid())
+                let expectedArguments = RemoteAccountBroker.managedCopilotArguments(profile: profile, originalArguments: ["--resume=\(pane.uuid)"])
+                try fixture.ledger.prepare(attemptID: "attempt-\(pane.childPID)", nativeSessionID: pane.uuid, profileID: pane.profile, generation: "ouro-a", paneID: pane.id, ownerPID: getpid(), expectedArgvSHA256: RemoteArgvDigest.sha256([profile.copilotExecutable] + expectedArguments))
                 try fixture.ledger.markSpawnIntent(attemptID: "attempt-\(pane.childPID)")
                 try fixture.ledger.recordChild(attemptID: "attempt-\(pane.childPID)", identity: identity)
                 try fixture.ledger.confirm(nativeSessionID: pane.uuid, profileID: pane.profile, generation: "ouro-a", paneID: pane.id)
@@ -496,7 +554,7 @@ final class RemoteHerdrAdapterTests: XCTestCase {
         var profiles = try XCTUnwrap(object["profiles"] as? [[String: Any]])
         profiles[1]["zshExecutable"] = "/bin/bash"
         object["profiles"] = profiles
-        fixture.registry = try RemoteProfileRegistry.decode(try remoteJSONData(object), executableExists: { _ in true })
+        fixture.registry = try RemoteProfileRegistry.decode(try remoteJSONData(object), executableExists: { _ in true }, credentialStoreResolver: remoteFixtureCredentialStore)
         fixture.useDefaultShellReadiness = true
         fixture.responses = [
             .init(exitCode: 0, stdout: try fixture.snapshot(panes: [fixture.snapshotPane()])),
@@ -923,10 +981,12 @@ private final class AdapterFixture {
     }
 
     func installLedgerOnly(markExited: Bool = false) throws {
+        let profile = try remoteRegistry().profile(id: "personal")
+        let expectedArguments = RemoteAccountBroker.managedCopilotArguments(profile: profile, originalArguments: ["--resume=\(nativeSessionID)"])
         let identity = remoteProcessIdentity(pid: 200, startIdentity: "birth-200", executable: "/fixtures/bin/copilot", generation: "ouro-a")
         identities[200] = identity
         identities[88] = remoteProcessIdentity(pid: 88, executable: "/bin/zsh", generation: "ouro-a")
-        try ledger.prepare(attemptID: "attempt-a", nativeSessionID: nativeSessionID, profileID: "personal", generation: "ouro-a", paneID: "desk:p1", ownerPID: getpid())
+        try ledger.prepare(attemptID: "attempt-a", nativeSessionID: nativeSessionID, profileID: "personal", generation: "ouro-a", paneID: "desk:p1", ownerPID: getpid(), expectedArgvSHA256: RemoteArgvDigest.sha256([profile.copilotExecutable] + expectedArguments))
         try ledger.markSpawnIntent(attemptID: "attempt-a")
         try ledger.recordChild(attemptID: "attempt-a", identity: identity)
         try ledger.confirm(nativeSessionID: nativeSessionID, profileID: "personal", generation: "ouro-a", paneID: "desk:p1")

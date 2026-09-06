@@ -639,6 +639,37 @@ final class RemoteSessionSafetyTests: XCTestCase {
         XCTAssertTrue(ledger.lockExists(nativeSessionID: uuid))
     }
 
+    func testSupervisorPersistsTheExactOriginalManagedArgvBeforeKernelSpawn() throws {
+        let root = try remoteTemporaryDirectory("supervisor-exact-argv")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let ledger = RemoteResumeLedger(rootURL: root, processIdentityForPID: { _, _ in nil })
+        let arguments = ["--agent", "desk:worker", "--allow-all", "fresh request"]
+        let supervisor = RemoteChildSupervisor(ledger: ledger, spawn: { _ in
+            throw RemoteSupervisedSpawnFailure.afterKernel
+        })
+
+        assertRemoteErrorContains("kernel child may exist") {
+            _ = try supervisor.run(
+                request: RemoteProcessRequest(executable: "/fixtures/bin/copilot", arguments: arguments),
+                attemptID: "fresh-argv",
+                nativeSessionID: nil,
+                profileID: "personal",
+                generation: "g1",
+                paneID: "p1",
+                ownerPID: 1
+            )
+        }
+
+        let data = try Data(contentsOf: root.appendingPathComponent("attempts/fresh-argv.json"))
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let expectedDigest = RemoteArtifactVerifier.sha256(try JSONEncoder().encode(["/fixtures/bin/copilot"] + arguments))
+        XCTAssertEqual(object["expectedArgvSHA256"] as? String, expectedDigest)
+
+        assertRemoteErrorContains("attempt state could not be persisted") {
+            try ledger.prepare(attemptID: "bad-digest", nativeSessionID: nil, profileID: "personal", generation: "g1", paneID: "p1", ownerPID: 1, expectedArgvSHA256: "not-a-digest")
+        }
+    }
+
     func testSupervisorSupportsHookFirstAndPIDFirstAndHoldsLockForChildLifetime() throws {
         let root = try remoteTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -752,12 +783,90 @@ final class RemoteSessionSafetyTests: XCTestCase {
 
         let movedRoot = root.deletingLastPathComponent().appendingPathComponent("\(root.lastPathComponent)-moved")
         defer { try? FileManager.default.removeItem(at: movedRoot) }
-        let directoryOpenDestination = root.appendingPathComponent("directory-open-failure")
+        let pinnedDestination = root.appendingPathComponent("pinned-after-rename")
+        try RemoteDurableFile.write(Data("payload".utf8), to: pinnedDestination) { point, _, _ in
+            if point == .renamed {
+                try FileManager.default.moveItem(at: root, to: movedRoot)
+                try FileManager.default.createSymbolicLink(at: root, withDestinationURL: movedRoot)
+            }
+        }
+        XCTAssertEqual(try String(contentsOf: movedRoot.appendingPathComponent("pinned-after-rename"), encoding: .utf8), "payload")
+    }
+
+    func testDurableFilePinsItsDirectoryDescriptorAcrossPathRetargeting() throws {
+        let root = try remoteTemporaryDirectory("durable-directory-anchor")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let original = root.appendingPathComponent("original", isDirectory: true)
+        let moved = root.appendingPathComponent("moved", isDirectory: true)
+        try FileManager.default.createDirectory(at: original, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        let descriptor = Darwin.open(original.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
+        XCTAssertGreaterThanOrEqual(descriptor, 0)
+        defer { Darwin.close(descriptor) }
+
+        try RemoteDurableFile.write(Data("payload".utf8), named: "value", in: descriptor, directoryURL: original) { point, _, _ in
+            if point == .temporaryOpened {
+                try FileManager.default.moveItem(at: original, to: moved)
+                try FileManager.default.createDirectory(at: original, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+            }
+        }
+
+        XCTAssertEqual(try String(contentsOf: moved.appendingPathComponent("value"), encoding: .utf8), "payload")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: original.appendingPathComponent("value").path))
+    }
+
+    func testDurableFileRejectsEveryDescriptorAndRenameRaceBoundary() throws {
+        let root = try remoteTemporaryDirectory("durable-race-boundaries")
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let denied = root.appendingPathComponent("denied", isDirectory: true)
+        try FileManager.default.createDirectory(at: denied, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        try addDenyACL("read", to: denied)
         assertRemoteErrorContains("directory could not be opened") {
-            try RemoteDurableFile.write(Data("payload".utf8), to: directoryOpenDestination) { point, _, _ in
-                if point == .renamed {
-                    try FileManager.default.moveItem(at: root, to: movedRoot)
-                    try FileManager.default.createSymbolicLink(at: root, withDestinationURL: movedRoot)
+            try RemoteDurableFile.write(Data("x".utf8), to: denied.appendingPathComponent("value"))
+        }
+        try removeACL(from: denied)
+
+        let original = root.appendingPathComponent("original", isDirectory: true)
+        let moved = root.appendingPathComponent("moved", isDirectory: true)
+        try FileManager.default.createDirectory(at: original, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        assertRemoteErrorContains("directory changed while it was opened") {
+            try RemoteDurableFile.write(Data("x".utf8), to: original.appendingPathComponent("value"), directoryOpened: { _ in
+                try FileManager.default.moveItem(at: original, to: moved)
+                try FileManager.default.createDirectory(at: original, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+            })
+        }
+
+        let descriptor = Darwin.open(root.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
+        XCTAssertGreaterThanOrEqual(descriptor, 0)
+        defer { Darwin.close(descriptor) }
+        try RemoteDurableFile.write(Data("default".utf8), named: "default", in: descriptor, directoryURL: root)
+        for name in ["", ".", "..", "nested/value", "nul\0value"] {
+            assertRemoteErrorContains("destination name is unsafe") {
+                try RemoteDurableFile.write(Data(), named: name, in: descriptor, directoryURL: root)
+            }
+        }
+        assertRemoteErrorContains("descriptor is not private") {
+            try RemoteDurableFile.write(Data(), named: "value", in: -1, directoryURL: root)
+        }
+
+        let existing = root.appendingPathComponent("existing")
+        try RemoteDurableFile.write(Data("old".utf8), to: existing)
+        assertRemoteErrorContains("destination changed") {
+            try RemoteDurableFile.write(Data("new".utf8), to: existing) { point, _, _ in
+                if point == .fileSynced {
+                    try FileManager.default.removeItem(at: existing)
+                    try Data("replacement".utf8).write(to: existing)
+                    try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: existing.path)
+                }
+            }
+        }
+
+        let missingTemporary = root.appendingPathComponent("missing-temporary")
+        assertRemoteErrorContains("durable file rename failed") {
+            try RemoteDurableFile.write(Data("new".utf8), to: missingTemporary) { point, _, _ in
+                if point == .fileSynced {
+                    let temporary = try XCTUnwrap(FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil).first { $0.lastPathComponent.hasPrefix(".missing-temporary.") && $0.pathExtension == "tmp" })
+                    try FileManager.default.removeItem(at: temporary)
                 }
             }
         }
@@ -1075,41 +1184,13 @@ final class RemoteSessionSafetyTests: XCTestCase {
     func testDurableFileReportsDirectorySyncFailureWhenItsOpenedDescriptorIsInvalidated() throws {
         let root = try remoteTemporaryDirectory("directory-sync-failure")
         defer { try? FileManager.default.removeItem(at: root) }
-        var observedSyncFailure = false
-        for attempt in 0..<10 where !observedSyncFailure {
-            var closer: RemoteTestDescriptorCloser?
-            var fillers: [Int32] = []
-            var originalLimit = rlimit()
-            var limitChanged = false
-            do {
-                try RemoteDurableFile.write(Data("payload".utf8), to: root.appendingPathComponent("value-\(attempt)")) { point, _, _ in
-                    if point == .renamed {
-                        let candidate = RemoteTestDescriptorCloser()
-                        candidate.start()
-                        XCTAssertEqual(getrlimit(RLIMIT_NOFILE, &originalLimit), 0)
-                        var constrained = originalLimit
-                        constrained.rlim_cur = min(originalLimit.rlim_cur, 128)
-                        XCTAssertEqual(setrlimit(RLIMIT_NOFILE, &constrained), 0)
-                        limitChanged = true
-                        while true {
-                            let filler = Darwin.open("/dev/null", O_RDONLY)
-                            if filler < 0 { break }
-                            fillers.append(filler)
-                        }
-                        let descriptor = try XCTUnwrap(fillers.popLast())
-                        Darwin.close(descriptor)
-                        candidate.arm(descriptor: descriptor)
-                        closer = candidate
-                    }
-                }
-            } catch {
-                observedSyncFailure = error.localizedDescription.contains("directory fsync failed")
+        let descriptor = Darwin.open(root.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
+        XCTAssertGreaterThanOrEqual(descriptor, 0)
+        assertRemoteErrorContains("directory fsync failed") {
+            try RemoteDurableFile.write(Data("payload".utf8), named: "value", in: descriptor, directoryURL: root) { point, _, _ in
+                if point == .renamed { Darwin.close(descriptor) }
             }
-            closer?.stop()
-            fillers.forEach { Darwin.close($0) }
-            if limitChanged { XCTAssertEqual(setrlimit(RLIMIT_NOFILE, &originalLimit), 0) }
         }
-        XCTAssertTrue(observedSyncFailure)
     }
 
     func testSupervisorKeepsDurableAmbiguityWhenCancellationOrChildIdentityRecordingFails() throws {
