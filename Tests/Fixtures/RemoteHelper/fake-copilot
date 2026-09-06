@@ -1,0 +1,31 @@
+#!/bin/sh
+set -eu
+
+[ "${COPILOT_GITHUB_TOKEN:-}" = fixture-profile-token ]
+[ -z "${GH_TOKEN:-}" ]
+[ -z "${GITHUB_TOKEN:-}" ]
+[ "${OURO_PROFILE_ID:-}" = personal ]
+[ "${OURO_GENERATION:-}" = ouro-fixture ]
+[ "${OURO_PANE_ID:-}" = w1:p1 ]
+
+arguments=" $* "
+case "$arguments" in *' --agent desk:worker '*) ;; *) exit 75 ;; esac
+case "$arguments" in *' --allow-all '*) ;; *) exit 76 ;; esac
+case "$arguments" in *' --remote '*) ;; *) exit 77 ;; esac
+case "$arguments" in *' --mode autopilot '*) ;; *) exit 78 ;; esac
+case "$arguments" in *' --max-autopilot-continues 100 '*) ;; *) exit 79 ;; esac
+case "$arguments" in *' --no-auto-update '*) ;; *) exit 80 ;; esac
+case "$arguments" in *' --secret-env-vars=COPILOT_GITHUB_TOKEN,GH_TOKEN,GITHUB_TOKEN '*) ;; *) exit 81 ;; esac
+
+sleep 0.2
+printf '%s' '{"hook_event_name":"SessionStart","session_id":"11111111-1111-4111-8111-111111111111","timestamp":"2026-09-06T03:45:12.123Z","cwd":"/fixture/desk","source":"new","initial_prompt":"fixture prompt"}' | "$COPILOT_HOME/hooks/ouro-session-map-hook"
+[ "$(gh api /user --jq .login)" = arimendelow ]
+git status
+
+case "$arguments" in
+  *' interrupt fixture '*)
+    trap 'exit 130' INT
+    : > "$COPILOT_HOME/interrupt-ready"
+    while :; do sleep 1; done
+    ;;
+esac
