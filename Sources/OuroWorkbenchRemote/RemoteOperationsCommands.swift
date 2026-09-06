@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import OuroWorkbenchCore
 
@@ -150,12 +151,27 @@ func remoteRunRollback(_ context: RemoteHelperContext) throws {
 }
 
 func remoteEnsurePrivateDirectory(_ url: URL) throws {
-    if !FileManager.default.fileExists(atPath: url.path) {
+    var requested = stat()
+    if lstat(url.path, &requested) != 0 {
+        guard errno == ENOENT else { throw RemoteControlError.invalidConfiguration("private directory is unavailable") }
         do { try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700]) }
         catch { throw RemoteControlError.invalidConfiguration("private directory could not be created") }
     }
-    do { try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: url.path) }
-    catch { throw RemoteControlError.invalidConfiguration("private directory permissions could not be set") }
+    let descriptor = Darwin.open(url.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW)
+    guard descriptor >= 0 else { throw RemoteControlError.invalidConfiguration("private directory must be a directory and not a symbolic link") }
+    defer { Darwin.close(descriptor) }
+    var anchored = stat()
+    guard fstat(descriptor, &anchored) == 0,
+          anchored.st_mode & S_IFMT == S_IFDIR,
+          anchored.st_uid == geteuid()
+    else { throw RemoteControlError.invalidConfiguration("private directory must be owned by the current user") }
+    guard fchmod(descriptor, 0o700) == 0 else { throw RemoteControlError.invalidConfiguration("private directory permissions could not be set") }
+    var current = stat()
+    guard lstat(url.path, &current) == 0,
+          current.st_mode & S_IFMT == S_IFDIR,
+          current.st_dev == anchored.st_dev,
+          current.st_ino == anchored.st_ino
+    else { throw RemoteControlError.invalidConfiguration("private directory changed while it was secured") }
 }
 
 func remoteWriteJSON<T: Encodable>(_ value: T) throws {

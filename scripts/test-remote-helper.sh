@@ -59,6 +59,22 @@ ln -s "$helper" "$test_root/shims/gh"
 ln -s "$helper" "$test_root/shims/git"
 
 mkdir -m 700 "$test_root/real-zdotdir"
+mkdir -m 755 "$test_root/bootstrap-symlink-target"
+ln -s "$test_root/bootstrap-symlink-target" "$test_root/bootstrap-symlink-output"
+if "$helper" shell-bootstrap \
+  --output "$test_root/bootstrap-symlink-output" \
+  --zsh /bin/zsh \
+  --real-zdotdir "$test_root/real-zdotdir" \
+  --helper "$helper" \
+  --config "$config" \
+  --session-map "$session_map" >/dev/null 2>&1; then
+  print -u2 'shell bootstrap accepted a symbolic-link output directory'
+  exit 83
+fi
+if [[ "$(stat -f '%Lp' "$test_root/bootstrap-symlink-target")" != 755 ]]; then
+  print -u2 'shell bootstrap mutated a symbolic-link target before rejecting it'
+  exit 84
+fi
 "$helper" shell-bootstrap \
   --output "$test_root/ouro-zdotdir" \
   --zsh /bin/zsh \
