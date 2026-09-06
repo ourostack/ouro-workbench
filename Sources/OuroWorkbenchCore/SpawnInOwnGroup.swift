@@ -24,6 +24,11 @@ import Darwin
 /// helper (100%-tested by value); only the raw `posix_spawn` call + its `guard rc == 0`
 /// are impure (proven by the real-spawn integration tests).
 public enum SpawnInOwnGroup {
+    public enum ProcessGroup: Equatable, Sendable {
+        case isolated
+        case inherited
+    }
+
     /// A spawned child in its own process group. `pid` is also its pgid (SETPGROUP), so
     /// `killpg(pid, SIGKILL)` reaps the child + every grandchild.
     public struct Spawned: Equatable, Sendable {
@@ -94,22 +99,30 @@ public enum SpawnInOwnGroup {
             .map { "\($0.key)=\($0.value)" }
     }
 
-    /// Spawn `executablePath` with `arguments` (full argv incl. argv[0]) and `environment`,
-    /// dup2-ing `stdio` onto the child's fds 0/1/2, in a FRESH process group (pgid == child
-    /// pid). Returns the child pid; throws `.posixSpawnFailed` iff `posix_spawn` failed.
+    /// Spawn with exact argv, environment, stdio, and optional working directory. The default isolated group owns descendants for bounded cleanup; interactive children can explicitly inherit the caller's foreground group.
     public static func spawn(
         executablePath: String,
         arguments: [String],
         environment: [String: String],
-        stdio: StdioFDs
+        stdio: StdioFDs,
+        workingDirectory: String? = nil,
+        processGroup: ProcessGroup = .isolated
     ) throws -> Spawned {
         var attributes = posix_spawnattr_t(bitPattern: 0)
         posix_spawnattr_init(&attributes)
         defer { posix_spawnattr_destroy(&attributes) }
-        // Own group: kernel sets pgid == child pid BEFORE exec, so grandchildren are born
-        // in the same group and killpg(childPid, …) reaps the whole tree.
-        posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETPGROUP))
-        posix_spawnattr_setpgroup(&attributes, 0)
+        var flags: Int32 = 0
+        if processGroup == .isolated {
+            flags |= POSIX_SPAWN_SETPGROUP
+            posix_spawnattr_setpgroup(&attributes, 0)
+        } else {
+            var defaults = sigset_t()
+            sigemptyset(&defaults)
+            for value in [SIGINT, SIGQUIT, SIGTSTP] { sigaddset(&defaults, value) }
+            posix_spawnattr_setsigdefault(&attributes, &defaults)
+            flags |= POSIX_SPAWN_SETSIGDEF
+        }
+        posix_spawnattr_setflags(&attributes, Int16(flags))
 
         var fileActions = posix_spawn_file_actions_t(bitPattern: 0)
         posix_spawn_file_actions_init(&fileActions)
@@ -117,6 +130,9 @@ public enum SpawnInOwnGroup {
         posix_spawn_file_actions_adddup2(&fileActions, stdio.stdin, 0)
         posix_spawn_file_actions_adddup2(&fileActions, stdio.stdout, 1)
         posix_spawn_file_actions_adddup2(&fileActions, stdio.stderr, 2)
+        if let workingDirectory {
+            posix_spawn_file_actions_addchdir_np(&fileActions, workingDirectory)
+        }
 
         let argv = cStrings(arguments)
         defer { argv.deallocate() }

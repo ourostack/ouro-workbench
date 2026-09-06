@@ -73,6 +73,22 @@ final class SpawnInOwnGroupTests: XCTestCase {
         waitpid(spawned.pid, &status, 0)
     }
 
+    func testSpawnCanPreserveTheCallingForegroundGroupForInteractiveChildren() throws {
+        let devNull = try openDevNull()
+        defer { close(devNull) }
+        let spawned = try SpawnInOwnGroup.spawn(
+            executablePath: "/bin/sleep",
+            arguments: ["sleep", "5"],
+            environment: [:],
+            stdio: SpawnInOwnGroup.StdioFDs(stdin: devNull, stdout: devNull, stderr: devNull),
+            processGroup: .inherited
+        )
+        XCTAssertEqual(getpgid(spawned.pid), getpgrp())
+        XCTAssertEqual(kill(spawned.pid, SIGTERM), 0)
+        var status: Int32 = 0
+        XCTAssertEqual(waitpid(spawned.pid, &status, 0), spawned.pid)
+    }
+
     // MARK: - Integration: THE grandchild-reap proof
 
     func testKillpgReapsTheChildAndItsGrandchild() throws {

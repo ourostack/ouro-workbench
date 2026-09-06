@@ -1,0 +1,25 @@
+#!/bin/sh
+set -eu
+
+case "${GH_CONFIG_DIR:-}" in
+  */personal) login=arimendelow ;;
+  */emu) login=arimendelow_microsoft ;;
+  *) exit 71 ;;
+esac
+
+if [ "${1:-}" = auth ] && [ "${2:-}" = token ] && [ "${3:-}" = --user ] && [ "${4:-}" = "$login" ]; then
+  printf '%s\n' fixture-profile-token
+  exit 0
+fi
+if [ "${1:-}" = api ] && [ "${2:-}" = /user ]; then
+  if [ "${3:-}" = --jq ] && [ "${4:-}" = .login ]; then
+    printf '%s\n' "$login"
+  else
+    printf '{"login":"%s"}\n' "$login"
+  fi
+  exit 0
+fi
+if [ "${1:-}" = alias ] && [ "${2:-}" = list ]; then
+  exit 0
+fi
+exit 72

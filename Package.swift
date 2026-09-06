@@ -10,6 +10,7 @@ let package = Package(
     products: [
         .library(name: "OuroWorkbenchCore", targets: ["OuroWorkbenchCore"]),
         .executable(name: "OuroWorkbench", targets: ["OuroWorkbenchApp"]),
+        .executable(name: "OuroWorkbenchRemote", targets: ["OuroWorkbenchRemote"]),
         .executable(name: "OuroWorkbenchMCP", targets: ["OuroWorkbenchMCP"]),
         .executable(name: "OuroWorkbenchScenarioVerifier", targets: ["OuroWorkbenchScenarioVerifier"])
     ],
@@ -66,6 +67,10 @@ let package = Package(
                 .product(name: "OuroAppShellUI", package: "ouro-native-apple-app-shell"),
                 .product(name: "SwiftTerm", package: "SwiftTerm")
             ]
+        ),
+        .executableTarget(
+            name: "OuroWorkbenchRemote",
+            dependencies: ["OuroWorkbenchCore"]
         ),
         .executableTarget(
             name: "OuroWorkbenchMCP",

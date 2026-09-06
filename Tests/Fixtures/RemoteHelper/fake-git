@@ -1,0 +1,16 @@
+#!/bin/sh
+set -eu
+
+if [ "${1:-}" = config ] && [ "${2:-}" = --get-regexp ]; then
+  exit 1
+fi
+if [ "${1:-}" = remote ] && [ "$#" -eq 1 ]; then
+  exit 0
+fi
+if [ "${1:-}" = status ]; then
+  [ -n "${GIT_CONFIG_GLOBAL:-}" ]
+  [ -n "${GIT_AUTHOR_NAME:-}" ]
+  [ -z "${COPILOT_GITHUB_TOKEN:-}" ]
+  exit 0
+fi
+exit 73
