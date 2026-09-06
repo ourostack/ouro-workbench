@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.245 - Account-safe mobile remote control plane
+
+- Feature: adds the Workbench-side remote control plane for durable Herdr sessions, with physical per-account Copilot credentials, exact runtime identity, shared ownership leases, orphan recovery, last-known-good restore, descriptor-safe state writes, and installed-helper rollback proofs.
+
 ## 0.1.244 - Deterministic view-model async coverage
 
 - Internal: makes `WorkbenchViewModel`'s fire-and-forget async bodies (login-shell capture, screen-quit spawn, support-diagnostics and bug-issue wrappers) deterministically covered by adding narrow test seams and awaiting completion in tests, eliminating a load-dependent coverage-gate flake at the `WorkbenchViewModel.swift` margin. Production behavior is unchanged. No user-facing behavior change.
