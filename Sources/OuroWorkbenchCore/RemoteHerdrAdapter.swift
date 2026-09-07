@@ -27,6 +27,9 @@ public struct RemoteHerdrServerHandle {
 }
 
 public struct RemoteHerdrAdapter {
+    private static let serverBootReadinessTimeout: TimeInterval = 60
+    private static let serverStopEvidenceTimeout: TimeInterval = 30
+
     public let rootURL: URL
     public let registry: RemoteProfileRegistry
     public let ledger: RemoteResumeLedger
@@ -176,19 +179,16 @@ public struct RemoteHerdrAdapter {
     public func stop(sessionName: String) throws -> RemoteHerdrProbe {
         let result = try runHerdr(["session", "stop", sessionName, "--json"], timeout: 20)
         guard result.exitCode == 0 || result.exitCode == 1 else { return .degraded("session stop failed") }
-        let deadline = now().addingTimeInterval(5)
+        let deadline = now().addingTimeInterval(Self.serverStopEvidenceTimeout)
         repeat {
             let status = try probe(sessionName: sessionName)
             if status == .absent {
                 let sessionRoot = rootURL.appendingPathComponent("sessions/\(sessionName)", isDirectory: true)
-                guard !fileExists(sessionRoot.appendingPathComponent("herdr.sock").path),
-                      !fileExists(sessionRoot.appendingPathComponent("herdr-client.sock").path),
-                      try !listManagedProcessSessions().contains(sessionName)
-                else {
-                    sleep(0.05)
-                    continue
+                if !fileExists(sessionRoot.appendingPathComponent("herdr.sock").path),
+                   !fileExists(sessionRoot.appendingPathComponent("herdr-client.sock").path),
+                   try !listManagedProcessSessions().contains(sessionName) {
+                    return .absent
                 }
-                return .absent
             }
             sleep(0.05)
         } while now() < deadline
@@ -316,7 +316,7 @@ public struct RemoteHerdrAdapter {
             if preSpawnFailure { throw RemotePaneResumeFailure.preSpawn("Herdr server spawn failed") }
             throw RemoteControlError.guardian("Herdr server spawn failed")
         }
-        let deadline = now().addingTimeInterval(15)
+        let deadline = now().addingTimeInterval(Self.serverBootReadinessTimeout)
         repeat {
             if !process.isRunning {
                 if preSpawnFailure { throw RemotePaneResumeFailure.preSpawn("Herdr server exited during boot") }

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.248 - Resilient Herdr cold starts
+
+- Fix: gives launchd-started Herdr generations up to 60 seconds to reach exact restored-pane readiness and gives detached sockets and managed processes up to 30 seconds to disappear before cleanup is declared degraded, preserving fail-closed evidence checks while tolerating normal cold-start and shutdown latency.
+
 ## 0.1.247 - Sealed Herdr integration
 
 - Feature: ships a signed, checksummed Herdr integration inside the Workbench app, including an exact-revision standalone `OuroWorkbenchRemote` artifact, declarative profile schema and dependency pins, hardened install/rollback adapters, an installed-bundle smoke, and a namespaced read-only MCP health tool. Herdr remains the canonical owner of its panes and sessions.
