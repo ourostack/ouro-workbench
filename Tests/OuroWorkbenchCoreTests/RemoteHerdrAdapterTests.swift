@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import XCTest
 @testable import OuroWorkbenchCore
@@ -338,6 +339,11 @@ final class RemoteHerdrAdapterTests: XCTestCase {
     }
 
     func testStopRequiresCommandSuccessAndProvesSessionSocketAndProcessAbsence() throws {
+        let unsafe = try AdapterFixture()
+        unsafe.responses = [.init(exitCode: 2)]
+        XCTAssertEqual(try unsafe.adapter().stop(sessionName: "../outside"), .degraded("session stop name is unsafe"))
+        XCTAssertTrue(unsafe.calls.isEmpty)
+
         let failure = try AdapterFixture()
         failure.responses = [.init(exitCode: 2)]
         XCTAssertEqual(try failure.adapter().stop(sessionName: "ouro-a"), .degraded("session stop failed"))
@@ -404,6 +410,25 @@ final class RemoteHerdrAdapterTests: XCTestCase {
 
         XCTAssertEqual(try fixture.adapter().stop(sessionName: "ouro-a"), .absent)
         XCTAssertEqual(fixture.sleepDurations, [0.05, 0.05])
+    }
+
+    func testStopUnlinksInertSocketNodesAfterServerOwnershipEnds() throws {
+        let fixture = try AdapterFixture()
+        fixture.advancePerSleep = 31
+        let sessionRoot = fixture.root.appendingPathComponent("sessions/ouro-a", isDirectory: true)
+        try FileManager.default.createDirectory(at: sessionRoot, withIntermediateDirectories: true)
+        let serverSocket = sessionRoot.appendingPathComponent("herdr.sock").path
+        let clientSocket = sessionRoot.appendingPathComponent("herdr-client.sock").path
+        XCTAssertEqual(mkfifo(serverSocket, 0o600), 0)
+        XCTAssertEqual(mkfifo(clientSocket, 0o600), 0)
+        fixture.responses = [
+            .init(exitCode: 0),
+            .init(exitCode: 0, stdout: try remoteJSONData(["sessions": []]))
+        ]
+
+        XCTAssertEqual(try fixture.adapter().stop(sessionName: "ouro-a"), .absent)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: serverSocket))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: clientSocket))
     }
 
     func testReactivateReturnsRunningOrDegradedWithoutLeakingStartErrors() throws {

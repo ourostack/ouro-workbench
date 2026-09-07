@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 public struct RemoteHerdrServerHandle {
@@ -177,6 +178,9 @@ public struct RemoteHerdrAdapter {
     }
 
     public func stop(sessionName: String) throws -> RemoteHerdrProbe {
+        guard sessionName.range(of: "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", options: .regularExpression) != nil else {
+            return .degraded("session stop name is unsafe")
+        }
         let result = try runHerdr(["session", "stop", sessionName, "--json"], timeout: 20)
         guard result.exitCode == 0 || result.exitCode == 1 else { return .degraded("session stop failed") }
         let deadline = now().addingTimeInterval(Self.serverStopEvidenceTimeout)
@@ -184,9 +188,14 @@ public struct RemoteHerdrAdapter {
             let status = try probe(sessionName: sessionName)
             if status == .absent {
                 let sessionRoot = rootURL.appendingPathComponent("sessions/\(sessionName)", isDirectory: true)
-                if !fileExists(sessionRoot.appendingPathComponent("herdr.sock").path),
-                   !fileExists(sessionRoot.appendingPathComponent("herdr-client.sock").path),
-                   try !listManagedProcessSessions().contains(sessionName) {
+                let serverSocket = sessionRoot.appendingPathComponent("herdr.sock").path
+                let clientSocket = sessionRoot.appendingPathComponent("herdr-client.sock").path
+                let processAbsent = try !listManagedProcessSessions().contains(sessionName)
+                if processAbsent {
+                    if fileExists(serverSocket) { _ = unlink(serverSocket) }
+                    if fileExists(clientSocket) { _ = unlink(clientSocket) }
+                }
+                if !fileExists(serverSocket), !fileExists(clientSocket), processAbsent {
                     return .absent
                 }
             }
