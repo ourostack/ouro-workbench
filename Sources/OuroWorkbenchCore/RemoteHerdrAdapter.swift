@@ -321,7 +321,15 @@ public struct RemoteHerdrAdapter {
                 if preSpawnFailure { throw RemotePaneResumeFailure.preSpawn("Herdr server exited during boot") }
                 throw RemoteControlError.guardian("Herdr server exited during boot")
             }
-            if case let .running(inventory) = try probe(sessionName: sessionName) { return inventory }
+            if case let .running(inventory) = try probe(sessionName: sessionName) {
+                let wrappersStillStarting = !inventory.panes.isEmpty
+                    && inventory.panes.contains { !$0.wrapperReady }
+                    && inventory.panes.allSatisfy {
+                        $0.nativeSessionID != nil && $0.profileID == nil && $0.githubLogin == nil
+                            && !$0.childPresent && !$0.hookObserved && $0.foregroundProcess == nil
+                    }
+                if !wrappersStillStarting { return inventory }
+            }
             sleep(0.1)
         } while now() < deadline
         guard process.terminateAndWait(timeout: 2) else {

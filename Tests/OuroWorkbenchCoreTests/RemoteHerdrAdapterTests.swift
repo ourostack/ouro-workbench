@@ -270,6 +270,26 @@ final class RemoteHerdrAdapterTests: XCTestCase {
         assertRemoteErrorContains("cleanup timed out") { _ = try cleanupFailure.adapter().boot(cleanupFailure.bootRequest()) }
     }
 
+    func testBootWaitsForRestoredShellWrapperReadinessAfterServerBecomesReachable() throws {
+        let fixture = try AdapterFixture()
+        fixture.identities[88] = remoteProcessIdentity(pid: 88, executable: "/bin/zsh", generation: "ouro-a")
+        let snapshot = try fixture.snapshot(panes: [fixture.snapshotPane()])
+        fixture.responses = [
+            .init(exitCode: 0),
+            .init(exitCode: 0, stdout: try remoteJSONData(["sessions": [["name": "ouro-a", "running": true]]])),
+            .init(exitCode: 0, stdout: snapshot),
+            .init(exitCode: 0, stdout: try remoteJSONData(["result": ["process_info": ["shell_pid": 77, "foreground_processes": []]]])),
+            .init(exitCode: 0, stdout: try remoteJSONData(["sessions": [["name": "ouro-a", "running": true]]])),
+            .init(exitCode: 0, stdout: snapshot),
+            .init(exitCode: 0, stdout: try remoteJSONData(["result": ["process_info": ["shell_pid": 88, "foreground_processes": []]]]))
+        ]
+
+        let inventory = try fixture.adapter().boot(fixture.bootRequest())
+
+        XCTAssertTrue(try XCTUnwrap(inventory.panes.first).wrapperReady)
+        XCTAssertEqual(fixture.sleepDurations, [0.1])
+    }
+
     func testStopRequiresCommandSuccessAndProvesSessionSocketAndProcessAbsence() throws {
         let failure = try AdapterFixture()
         failure.responses = [.init(exitCode: 2)]
