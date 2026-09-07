@@ -118,6 +118,23 @@ public struct RemotePaneResumeCommand: Equatable, Sendable {
     }
 }
 
+public struct RemotePaneLaunchCommand: Equatable, Sendable {
+    public static let readinessPrompt = "Call desk_status once, then reply exactly OURO-REMOTE-READY."
+    public var paneID: String
+    public var helperPath: String
+    public var arguments: [String]
+
+    public init(paneID: String, helperPath: String, arguments: [String]) {
+        self.paneID = paneID
+        self.helperPath = helperPath
+        self.arguments = arguments
+    }
+
+    public var shellCommand: String {
+        ([RemoteShellBootstrap.quote(helperPath)] + arguments.map(RemoteShellBootstrap.quote)).joined(separator: " ")
+    }
+}
+
 public enum RemotePaneResumeFailure: Error, LocalizedError, Equatable, Sendable {
     case preSpawn(String)
     case postIntent(String)
@@ -255,10 +272,12 @@ public struct RemoteGuardian {
     private let listManagedProcessSessions: () throws -> [String]
     private let boot: (RemoteHerdrBootRequest) throws -> RemoteHerdrInventory
     private let resume: (RemotePaneResumeCommand) throws -> RemoteHerdrInventory
+    private let launchFresh: (RemotePaneLaunchCommand) throws -> RemoteHerdrInventory
     private let stop: (String) throws -> RemoteHerdrProbe
     private let reactivate: (RemoteActiveRuntime) throws -> RemoteHerdrProbe
     private let nativeSessionOwnerExists: (String) -> Bool
     private let makeGenerationName: () -> String
+    private let freshSessions: Bool
     private let snapshotLstat: (String, UnsafeMutablePointer<stat>) -> Int32
 
     public init(
@@ -270,10 +289,12 @@ public struct RemoteGuardian {
         listManagedProcessSessions: @escaping () throws -> [String],
         boot: @escaping (RemoteHerdrBootRequest) throws -> RemoteHerdrInventory,
         resume: @escaping (RemotePaneResumeCommand) throws -> RemoteHerdrInventory,
+        launchFresh: @escaping (RemotePaneLaunchCommand) throws -> RemoteHerdrInventory,
         stop: @escaping (String) throws -> RemoteHerdrProbe,
         reactivate: @escaping (RemoteActiveRuntime) throws -> RemoteHerdrProbe,
         nativeSessionOwnerExists: @escaping (String) -> Bool,
-        makeGenerationName: @escaping () -> String
+        makeGenerationName: @escaping () -> String,
+        freshSessions: Bool
     ) {
         self.init(
             rootURL: rootURL,
@@ -284,10 +305,12 @@ public struct RemoteGuardian {
             listManagedProcessSessions: listManagedProcessSessions,
             boot: boot,
             resume: resume,
+            launchFresh: launchFresh,
             stop: stop,
             reactivate: reactivate,
             nativeSessionOwnerExists: nativeSessionOwnerExists,
             makeGenerationName: makeGenerationName,
+            freshSessions: freshSessions,
             snapshotLstat: { path, value in path.withCString { Darwin.lstat($0, value) } }
         )
     }
@@ -301,10 +324,12 @@ public struct RemoteGuardian {
         listManagedProcessSessions: @escaping () throws -> [String],
         boot: @escaping (RemoteHerdrBootRequest) throws -> RemoteHerdrInventory,
         resume: @escaping (RemotePaneResumeCommand) throws -> RemoteHerdrInventory,
+        launchFresh: @escaping (RemotePaneLaunchCommand) throws -> RemoteHerdrInventory,
         stop: @escaping (String) throws -> RemoteHerdrProbe,
         reactivate: @escaping (RemoteActiveRuntime) throws -> RemoteHerdrProbe,
         nativeSessionOwnerExists: @escaping (String) -> Bool,
         makeGenerationName: @escaping () -> String,
+        freshSessions: Bool,
         snapshotLstat: @escaping (String, UnsafeMutablePointer<stat>) -> Int32
     ) {
         self.rootURL = rootURL
@@ -315,10 +340,12 @@ public struct RemoteGuardian {
         self.listManagedProcessSessions = listManagedProcessSessions
         self.boot = boot
         self.resume = resume
+        self.launchFresh = launchFresh
         self.stop = stop
         self.reactivate = reactivate
         self.nativeSessionOwnerExists = nativeSessionOwnerExists
         self.makeGenerationName = makeGenerationName
+        self.freshSessions = freshSessions
         self.snapshotLstat = snapshotLstat
     }
 
@@ -348,10 +375,10 @@ public struct RemoteGuardian {
             case let .degraded(detail):
                 throw RemoteControlError.guardian("active generation is degraded: \(detail)")
             case let .running(inventory):
-                guard finalInventory(inventory, matches: manifest, generation: priorRuntime.generation) else {
+                let activeManifest = try validateExpectedInventory(priorRuntime, matches: manifest)
+                guard finalInventory(inventory, matches: activeManifest, generation: priorRuntime.generation) else {
                     throw RemoteControlError.guardian("active generation inventory is not exact")
                 }
-                try validateExpectedInventory(priorRuntime, matches: manifest)
                 return .alreadyRunning(priorRuntime.generation)
             }
         }
@@ -411,14 +438,35 @@ public struct RemoteGuardian {
         }
 
         var inventory = bootInventory
+        var activeManifest = manifest
+        let retiredNativeSessionIDs = Set(manifest.expectedPanes.map(\.nativeSessionID))
+        var freshNativeSessionIDs = Set<String>()
         var completed = 0
         for expected in manifest.expectedPanes {
             do {
-                inventory = try resume(RemotePaneResumeCommand(
-                    paneID: expected.paneID,
-                    helperPath: helperPath,
-                    arguments: ["resume", "--uuid", expected.nativeSessionID, "--profile", expected.profileID, "--generation", generation, "--pane", expected.paneID]
-                ))
+                if freshSessions {
+                    inventory = try launchFresh(RemotePaneLaunchCommand(
+                        paneID: expected.paneID,
+                        helperPath: helperPath,
+                        arguments: ["launch", "--profile", expected.profileID, "--generation", generation, "--pane", expected.paneID, "--", "--interactive", RemotePaneLaunchCommand.readinessPrompt]
+                    ))
+                    guard let live = inventory.panes.first(where: { $0.paneID == expected.paneID }),
+                          let nativeSessionID = live.nativeSessionID,
+                          let uuid = UUID(uuidString: nativeSessionID),
+                          uuid.uuidString.lowercased() == nativeSessionID,
+                          !retiredNativeSessionIDs.contains(nativeSessionID),
+                          freshNativeSessionIDs.insert(nativeSessionID).inserted
+                    else {
+                        return try failAfterPossibleSpawn(RemoteControlError.guardian("fresh launch did not produce a new unique native session for pane \(expected.paneID)"), generation: generation, staged: staged)
+                    }
+                    activeManifest.expectedPanes[completed].nativeSessionID = nativeSessionID
+                } else {
+                    inventory = try resume(RemotePaneResumeCommand(
+                        paneID: expected.paneID,
+                        helperPath: helperPath,
+                        arguments: ["resume", "--uuid", expected.nativeSessionID, "--profile", expected.profileID, "--generation", generation, "--pane", expected.paneID]
+                    ))
+                }
             } catch let error as RemotePaneResumeFailure {
                 if case .preSpawn = error, completed == 0 {
                     return try failBeforeSpawn(error, generation: generation, staged: staged, quarantine: quarantine, priorRuntime: priorRuntime, manifest: manifest)
@@ -427,8 +475,8 @@ public struct RemoteGuardian {
             } catch {
                 return try failAfterPossibleSpawn(error, generation: generation, staged: staged)
             }
-            guard partialInventory(inventory, matches: manifest, generation: generation, completedCount: completed + 1) else {
-                return try failAfterPossibleSpawn(RemoteControlError.guardian("resume verification failed for pane \(expected.paneID)"), generation: generation, staged: staged)
+            guard partialInventory(inventory, matches: activeManifest, generation: generation, completedCount: completed + 1) else {
+                return try failAfterPossibleSpawn(RemoteControlError.guardian("worker verification failed for pane \(expected.paneID)"), generation: generation, staged: staged)
             }
             completed += 1
         }
@@ -438,8 +486,8 @@ public struct RemoteGuardian {
             encoder.outputFormatting = [.sortedKeys]
             let relayInventory = RemoteRelayExpectedInventory(
                 generation: generation,
-                acknowledgedEmpty: manifest.acknowledgedEmpty,
-                panes: manifest.expectedPanes.map {
+                acknowledgedEmpty: activeManifest.acknowledgedEmpty,
+                panes: activeManifest.expectedPanes.map {
                     RemoteRelayExpectedInventory.Pane(
                         paneID: $0.paneID,
                         nativeSessionID: $0.nativeSessionID,
@@ -448,6 +496,14 @@ public struct RemoteGuardian {
                 }
             )
             try RemoteDurableFile.write(encoder.encode(relayInventory), to: inventoryURL)
+            if freshSessions {
+                _ = try RemoteLastKnownGoodStore(rootURL: rootURL).capture(
+                    sourceGeneration: generation,
+                    inventory: inventory,
+                    acknowledgedEmptyGeneration: activeManifest.acknowledgedEmpty
+                        ? generation
+                        : nil)
+            }
             let runtime = RemoteActiveRuntime(
                 schemaVersion: 1,
                 generation: generation,
@@ -498,12 +554,41 @@ public struct RemoteGuardian {
         }
         do {
             switch try reactivate(priorRuntime) {
-            case let .running(inventory) where finalInventory(inventory, matches: manifest, generation: priorRuntime.generation):
+            case let .running(inventory):
+                if freshSessions {
+                    guard let recovered = manifestMatching(inventory, topology: manifest, generation: priorRuntime.generation) else {
+                        try writeRecoveryMarker(at: quarantine, generation: generation, detail: "prior generation reactivation was not exact")
+                        throw RemoteControlError.guardian("staged generation failed and prior availability requires recovery")
+                    }
+                    do { try persistExpectedInventory(recovered, runtime: priorRuntime) }
+                    catch {
+                        try writeRecoveryMarker(at: quarantine, generation: generation, detail: "reactivated expected inventory was not durable")
+                        throw RemoteControlError.guardian("staged generation failed and prior availability requires recovery")
+                    }
+                    return try stagedFailure(error)
+                }
+                do {
+                    let activeManifest = try validateExpectedInventory(
+                        priorRuntime,
+                        matches: manifest)
+                    guard finalInventory(
+                        inventory,
+                        matches: activeManifest,
+                        generation: priorRuntime.generation)
+                    else {
+                        throw RemoteControlError.guardian(
+                            "prior generation reactivation was not exact")
+                    }
+                } catch {
+                    try writeRecoveryMarker(at: quarantine, generation: generation, detail: "prior generation reactivation was not exact")
+                    throw RemoteControlError.guardian("staged generation failed and prior availability requires recovery")
+                }
                 return try stagedFailure(error)
-            case .absent, .degraded, .running:
-                try writeRecoveryMarker(at: quarantine, generation: generation, detail: "prior generation reactivation was not exact")
-                throw RemoteControlError.guardian("staged generation failed and prior availability requires recovery")
+            case .absent, .degraded:
+                break
             }
+            try writeRecoveryMarker(at: quarantine, generation: generation, detail: "prior generation reactivation was not exact")
+            throw RemoteControlError.guardian("staged generation failed and prior availability requires recovery")
         } catch let control as RemoteControlError {
             throw control
         } catch {
@@ -568,7 +653,7 @@ public struct RemoteGuardian {
         else { throw RemoteControlError.guardian("active runtime paths are invalid") }
     }
 
-    private func validateExpectedInventory(_ runtime: RemoteActiveRuntime, matches manifest: RemoteGenerationManifest) throws {
+    private func validateExpectedInventory(_ runtime: RemoteActiveRuntime, matches manifest: RemoteGenerationManifest) throws -> RemoteGenerationManifest {
         let url = URL(fileURLWithPath: runtime.expectedInventoryPath)
         try validatePrivateRegularFile(url, label: "expected inventory")
         let data = try boundedData(url, label: "expected inventory")
@@ -584,15 +669,64 @@ public struct RemoteGuardian {
         let expected: RemoteRelayExpectedInventory
         do { expected = try JSONDecoder().decode(RemoteRelayExpectedInventory.self, from: data) }
         catch { throw RemoteControlError.guardian("expected inventory fields are invalid") }
-        let livePanes = manifest.expectedPanes.map { pane in
-            RemoteRelayExpectedInventory.Pane(paneID: pane.paneID, nativeSessionID: pane.nativeSessionID, profileID: pane.profileID)
-        }
-        let order: (RemoteRelayExpectedInventory.Pane, RemoteRelayExpectedInventory.Pane) -> Bool = {
-            ($0.paneID, $0.nativeSessionID, $0.profileID) < ($1.paneID, $1.nativeSessionID, $1.profileID)
-        }
-        guard expected.version == 1, expected.generation == runtime.generation, expected.acknowledgedEmpty == manifest.acknowledgedEmpty, expected.panes.sorted(by: order) == livePanes.sorted(by: order) else {
+        guard expected.version == 1,
+              expected.generation == runtime.generation,
+              expected.acknowledgedEmpty == manifest.acknowledgedEmpty,
+              expected.panes.count == manifest.expectedPanes.count,
+              Set(expected.panes.map(\.paneID)).count == expected.panes.count,
+              Set(expected.panes.map(\.nativeSessionID)).count == expected.panes.count
+        else {
             throw RemoteControlError.guardian("expected inventory does not match the live generation")
         }
+        var activeManifest = manifest
+        for index in activeManifest.expectedPanes.indices {
+            let source = activeManifest.expectedPanes[index]
+            guard let pane = expected.panes.first(where: { $0.paneID == source.paneID }),
+                  pane.profileID == source.profileID,
+                  let uuid = UUID(uuidString: pane.nativeSessionID),
+                  uuid.uuidString.lowercased() == pane.nativeSessionID,
+                  freshSessions || pane.nativeSessionID == source.nativeSessionID
+            else {
+                throw RemoteControlError.guardian("expected inventory does not match the live generation")
+            }
+            activeManifest.expectedPanes[index].nativeSessionID = pane.nativeSessionID
+        }
+        try validate(activeManifest)
+        return activeManifest
+    }
+
+    private func manifestMatching(_ inventory: RemoteHerdrInventory, topology manifest: RemoteGenerationManifest, generation: String) -> RemoteGenerationManifest? {
+        guard inventory.version == manifest.herdrVersion,
+              inventory.panes.count == manifest.expectedPanes.count,
+              Set(inventory.panes.map(\.paneID)).count == inventory.panes.count
+        else { return nil }
+        var activeManifest = manifest
+        var nativeSessionIDs = Set<String>()
+        for index in activeManifest.expectedPanes.indices {
+            let expected = activeManifest.expectedPanes[index]
+            guard let live = inventory.panes.first(where: { $0.paneID == expected.paneID }),
+                  let nativeSessionID = live.nativeSessionID,
+                  let uuid = UUID(uuidString: nativeSessionID),
+                  uuid.uuidString.lowercased() == nativeSessionID,
+                  nativeSessionIDs.insert(nativeSessionID).inserted
+            else { return nil }
+            activeManifest.expectedPanes[index].nativeSessionID = nativeSessionID
+        }
+        return finalInventory(inventory, matches: activeManifest, generation: generation) ? activeManifest : nil
+    }
+
+    private func persistExpectedInventory(_ manifest: RemoteGenerationManifest, runtime: RemoteActiveRuntime) throws {
+        let expected = RemoteRelayExpectedInventory(
+            generation: runtime.generation,
+            acknowledgedEmpty: manifest.acknowledgedEmpty,
+            panes: manifest.expectedPanes.map {
+                RemoteRelayExpectedInventory.Pane(paneID: $0.paneID, nativeSessionID: $0.nativeSessionID, profileID: $0.profileID)
+            }
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        do { try RemoteDurableFile.write(encoder.encode(expected), to: URL(fileURLWithPath: runtime.expectedInventoryPath)) }
+        catch { throw RemoteControlError.guardian("reactivated expected inventory was not durable") }
     }
 
     private func publish(_ runtime: RemoteActiveRuntime) throws {

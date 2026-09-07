@@ -41,6 +41,7 @@ public struct RemoteHerdrAdapter {
     public let shimDirectory: String
     public let zdotdir: String
     public let inheritedEnvironment: [String: String]
+    public let freshSessions: Bool
     private let runProcess: (RemoteProcessRequest, TimeInterval) throws -> RemoteProcessResult
     private let scanHerdrProcesses: () throws -> [String]
     private let processIdentityForPID: (Int32, String) -> RemoteProcessIdentity?
@@ -63,6 +64,7 @@ public struct RemoteHerdrAdapter {
         shimDirectory: String,
         zdotdir: String,
         inheritedEnvironment: [String: String],
+        freshSessions: Bool = false,
         run: @escaping (RemoteProcessRequest, TimeInterval) throws -> RemoteProcessResult = { request, timeout in try RemoteSystemRunner(timeout: timeout).run(request) },
         listHerdrProcessSessions: (() throws -> [String])? = nil,
         processIdentityForPID: @escaping (Int32, String) -> RemoteProcessIdentity? = remoteProcessIdentity,
@@ -84,6 +86,7 @@ public struct RemoteHerdrAdapter {
         self.shimDirectory = shimDirectory
         self.zdotdir = zdotdir
         self.inheritedEnvironment = inheritedEnvironment
+        self.freshSessions = freshSessions
         runProcess = run
         scanHerdrProcesses = listHerdrProcessSessions ?? RemoteHerdrProcessScanner(herdrExecutable: herdrExecutable, processIdentityForPID: processIdentityForPID).listServerSessions
         self.processIdentityForPID = processIdentityForPID
@@ -159,9 +162,31 @@ public struct RemoteHerdrAdapter {
               arguments[8] == command.paneID
         else { throw RemotePaneResumeFailure.preSpawn("resume request is not exact") }
         let generation = arguments[6]
+        return try runPaneCommand(paneID: command.paneID, generation: generation, shellCommand: command.shellCommand)
+    }
+
+    public func launchFresh(_ command: RemotePaneLaunchCommand) throws -> RemoteHerdrInventory {
+        let arguments = command.arguments
+        guard command.helperPath == helperPath,
+              arguments.count == 10,
+              arguments[0] == "launch",
+              arguments[1] == "--profile",
+              registry.profiles.contains(where: { $0.id == arguments[2] }),
+              arguments[3] == "--generation",
+              arguments[4].range(of: "^ouro-[A-Za-z0-9][A-Za-z0-9._-]{0,122}$", options: .regularExpression) != nil,
+              arguments[5] == "--pane",
+              arguments[6] == command.paneID,
+              arguments[7] == "--",
+              arguments[8] == "--interactive",
+              arguments[9] == RemotePaneLaunchCommand.readinessPrompt
+        else { throw RemotePaneResumeFailure.preSpawn("fresh launch request is not exact") }
+        return try runPaneCommand(paneID: command.paneID, generation: arguments[4], shellCommand: command.shellCommand)
+    }
+
+    private func runPaneCommand(paneID: String, generation: String, shellCommand: String) throws -> RemoteHerdrInventory {
         let result: RemoteProcessResult
         do {
-            result = try runHerdr(["--session", generation, "pane", "run", command.paneID, command.shellCommand], timeout: 15)
+            result = try runHerdr(["--session", generation, "pane", "run", paneID, shellCommand], timeout: 15)
         } catch {
             throw RemotePaneResumeFailure.postIntent("Herdr pane.run transport failed")
         }
@@ -170,11 +195,11 @@ public struct RemoteHerdrAdapter {
         repeat {
             let current: RemoteHerdrInventory
             do { current = try inventory(sessionName: generation) }
-            catch { throw RemotePaneResumeFailure.postIntent("resume evidence could not be proven after pane.run") }
-            if current.panes.contains(where: { $0.paneID == command.paneID && $0.childPresent && $0.hookObserved }) { return current }
+            catch { throw RemotePaneResumeFailure.postIntent("worker evidence could not be proven after pane.run") }
+            if current.panes.contains(where: { $0.paneID == paneID && $0.childPresent && $0.hookObserved }) { return current }
             sleep(0.1)
         } while now() < deadline
-        throw RemotePaneResumeFailure.postIntent("resume evidence timed out after pane.run")
+        throw RemotePaneResumeFailure.postIntent("worker evidence timed out after pane.run")
     }
 
     public func stop(sessionName: String) throws -> RemoteHerdrProbe {
@@ -208,7 +233,7 @@ public struct RemoteHerdrAdapter {
         var serverMayExist = false
         var expectedNativeSessionIDs: [String] = []
         do {
-            let expected = try loadExpectedInventory(for: runtime)
+            var expected = try loadExpectedInventory(for: runtime)
             expectedNativeSessionIDs = expected.panes.map(\.nativeSessionID)
             try verifyAutomaticResumeDisabled()
             var inventory = try startServer(sessionName: runtime.sessionName, preSpawnFailure: false, minimumPaneCount: expected.panes.count)
@@ -216,14 +241,33 @@ public struct RemoteHerdrAdapter {
             guard reactivationInventory(inventory, matches: expected, generation: runtime.generation, completedCount: 0) else {
                 throw RemoteControlError.guardian("prior generation structural inventory is not exact")
             }
-            for (index, pane) in expected.panes.enumerated() {
-                inventory = try resume(RemotePaneResumeCommand(
-                    paneID: pane.paneID,
-                    helperPath: helperPath,
-                    arguments: ["resume", "--uuid", pane.nativeSessionID, "--profile", pane.profileID, "--generation", runtime.generation, "--pane", pane.paneID]
-                ))
+            let retiredNativeSessionIDs = Set(expected.panes.map(\.nativeSessionID))
+            var freshNativeSessionIDs = Set<String>()
+            for index in expected.panes.indices {
+                let pane = expected.panes[index]
+                if freshSessions {
+                    inventory = try launchFresh(RemotePaneLaunchCommand(
+                        paneID: pane.paneID,
+                        helperPath: helperPath,
+                        arguments: ["launch", "--profile", pane.profileID, "--generation", runtime.generation, "--pane", pane.paneID, "--", "--interactive", RemotePaneLaunchCommand.readinessPrompt]
+                    ))
+                    guard let nativeSessionID = inventory.panes.first(where: { $0.paneID == pane.paneID })?.nativeSessionID,
+                          let uuid = UUID(uuidString: nativeSessionID),
+                          uuid.uuidString.lowercased() == nativeSessionID,
+                          !retiredNativeSessionIDs.contains(nativeSessionID),
+                          freshNativeSessionIDs.insert(nativeSessionID).inserted
+                    else { throw RemoteControlError.guardian("prior generation fresh launch identity is not exact") }
+                    expected.panes[index].nativeSessionID = nativeSessionID
+                    expectedNativeSessionIDs.append(nativeSessionID)
+                } else {
+                    inventory = try resume(RemotePaneResumeCommand(
+                        paneID: pane.paneID,
+                        helperPath: helperPath,
+                        arguments: ["resume", "--uuid", pane.nativeSessionID, "--profile", pane.profileID, "--generation", runtime.generation, "--pane", pane.paneID]
+                    ))
+                }
                 guard reactivationInventory(inventory, matches: expected, generation: runtime.generation, completedCount: index + 1) else {
-                    throw RemoteControlError.guardian("prior generation resume inventory is not exact")
+                    throw RemoteControlError.guardian("prior generation worker inventory is not exact")
                 }
             }
             return .running(inventory)
@@ -233,7 +277,9 @@ public struct RemoteHerdrAdapter {
             guard serverMayExist else { return .degraded("prior generation reactivation failed") }
             do {
                 let stopped = try stop(sessionName: runtime.sessionName)
-                let outstanding = try ledger.hasOutstandingOwnership(nativeSessionIDs: expectedNativeSessionIDs)
+                let outstanding = try ledger.hasAmbiguousAttempt()
+                    || ledger.hasOutstandingOwnership(
+                        nativeSessionIDs: expectedNativeSessionIDs)
                 if stopped == .absent, !outstanding {
                     return .degraded("prior generation reactivation failed; no managed process remains")
                 }

@@ -55,6 +55,8 @@ final class RemoteHelperContractTests: XCTestCase {
         }
         XCTAssertTrue(try RemoteHelperInvocation.parse(["doctor", "--json"]).hasFlag("json"))
         XCTAssertFalse(try RemoteHelperInvocation.parse(["doctor"]).hasFlag("json"))
+        XCTAssertTrue(try RemoteHelperInvocation.parse(["guardian", "--fresh-sessions"]).hasFlag("fresh-sessions"))
+        assertRemoteErrorContains("unknown flag") { _ = try RemoteHelperInvocation.parse(["launch", "--fresh-sessions"]) }
     }
 
     func testRequiredValuesRejectMissingWhitespaceAndNonNormalizedPaths() {

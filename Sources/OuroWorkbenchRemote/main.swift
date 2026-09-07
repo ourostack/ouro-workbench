@@ -79,7 +79,7 @@ private func printRemoteHelp() {
       snapshot          Atomically capture a healthy non-empty last-known-good generation
       acknowledge-empty Capture an intentional empty fleet for one exact active generation
       session-map-hook  Join Copilot SessionStart evidence to the durable profile map
-      guardian          Restore or verify the managed Herdr generation
+      guardian          Restore or verify the managed Herdr generation; add --fresh-sessions to replace dead workers without Copilot history
       observe           Record bounded read-only health evidence
       doctor            Print source-specific health; add --json for machine output
       package           Package this exact executable from the current clean Git root
