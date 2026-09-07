@@ -68,6 +68,7 @@ final class RemoteGuardianTests: XCTestCase {
 
         XCTAssertEqual(try guardian.tick(), .promoted("stage-1"))
         XCTAssertEqual(bootRequests.count, 1)
+        XCTAssertEqual(bootRequests[0].expectedPaneCount, fixture.manifest.expectedPanes.count)
         XCTAssertFalse(bootRequests[0].resumeAgentsOnRestore)
         XCTAssertEqual(resumeCommands.map(\.paneID), ["desk:p1", "desk:p2"])
         XCTAssertEqual(resumeCommands.map(\.arguments), fixture.manifest.expectedPanes.map {

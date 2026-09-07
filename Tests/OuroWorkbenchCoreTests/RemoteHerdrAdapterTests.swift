@@ -207,6 +207,7 @@ final class RemoteHerdrAdapterTests: XCTestCase {
         let invalid = [
             RemoteHerdrBootRequest(sessionName: valid.sessionName, stagedSessionURL: fixture.root.appendingPathComponent("other"), expectedVersion: valid.expectedVersion, resumeAgentsOnRestore: false),
             RemoteHerdrBootRequest(sessionName: valid.sessionName, stagedSessionURL: valid.stagedSessionURL, expectedVersion: "0.8.1", resumeAgentsOnRestore: false),
+            RemoteHerdrBootRequest(sessionName: valid.sessionName, stagedSessionURL: valid.stagedSessionURL, expectedVersion: valid.expectedVersion, expectedPaneCount: -1, resumeAgentsOnRestore: false),
             RemoteHerdrBootRequest(sessionName: valid.sessionName, stagedSessionURL: valid.stagedSessionURL, expectedVersion: valid.expectedVersion, resumeAgentsOnRestore: true)
         ]
         for request in invalid {
@@ -290,6 +291,31 @@ final class RemoteHerdrAdapterTests: XCTestCase {
         XCTAssertEqual(fixture.sleepDurations, [0.1])
     }
 
+    func testBootWaitsForRestoredPaneInventoryToHydrateAfterServerBecomesReachable() throws {
+        let fixture = try AdapterFixture()
+        fixture.expectedInventoryData = try remoteJSONData([
+            "version": 1,
+            "generation": "ouro-source",
+            "acknowledged_empty": false,
+            "panes": [["pane_id": "desk:p1", "native_session_id": fixture.nativeSessionID, "profile_id": "personal"]]
+        ])
+        fixture.identities[88] = remoteProcessIdentity(pid: 88, executable: "/bin/zsh", generation: "ouro-a")
+        fixture.responses = [
+            .init(exitCode: 0),
+            .init(exitCode: 0, stdout: try remoteJSONData(["sessions": [["name": "ouro-a", "running": true]]])),
+            .init(exitCode: 0, stdout: try fixture.snapshot()),
+            .init(exitCode: 0, stdout: try remoteJSONData(["sessions": [["name": "ouro-a", "running": true]]])),
+            .init(exitCode: 0, stdout: try fixture.snapshot(panes: [fixture.snapshotPane()])),
+            .init(exitCode: 0, stdout: try remoteJSONData(["result": ["process_info": ["shell_pid": 88, "foreground_processes": []]]]))
+        ]
+
+        let inventory = try fixture.adapter().boot(fixture.bootRequest())
+
+        XCTAssertEqual(inventory.panes.map(\.paneID), ["desk:p1"])
+        XCTAssertTrue(try XCTUnwrap(inventory.panes.first).wrapperReady)
+        XCTAssertEqual(fixture.sleepDurations, [0.1])
+    }
+
     func testStopRequiresCommandSuccessAndProvesSessionSocketAndProcessAbsence() throws {
         let failure = try AdapterFixture()
         failure.responses = [.init(exitCode: 2)]
@@ -361,14 +387,6 @@ final class RemoteHerdrAdapterTests: XCTestCase {
         dead.serverRunning = false
         XCTAssertEqual(try dead.adapter().reactivate(dead.runtime()), .degraded("prior generation reactivation failed"))
 
-        let timeout = try AdapterFixture()
-        timeout.advancePerSleep = 16
-        timeout.responses = [.init(exitCode: 0), .init(exitCode: 0, stdout: try remoteJSONData(["sessions": []]))]
-        XCTAssertEqual(try timeout.adapter().reactivate(timeout.runtime()), .degraded("prior generation reactivation failed"))
-        XCTAssertEqual(timeout.terminateCount, 1)
-        XCTAssertEqual(timeout.waitCount, 1)
-
-
         let cleanupFailure = try AdapterFixture()
         cleanupFailure.advancePerSleep = 16
         cleanupFailure.cleanupSucceeds = false
@@ -384,6 +402,17 @@ final class RemoteHerdrAdapterTests: XCTestCase {
         invalid.responses = [.init(exitCode: 1)]
         XCTAssertEqual(try invalid.adapter().reactivate(invalid.runtime()), .degraded("prior generation reactivation failed"))
         XCTAssertTrue(invalid.spawnedRequests.isEmpty)
+    }
+
+    func testReactivateContainsAStartTimeoutAfterTheServerProcessIsCleanlyReaped() throws {
+        let fixture = try AdapterFixture()
+        fixture.advancePerSleep = 16
+        fixture.responses = [.init(exitCode: 0), .init(exitCode: 0, stdout: try remoteJSONData(["sessions": []]))]
+
+        XCTAssertEqual(try fixture.adapter().reactivate(fixture.runtime()), .degraded("prior generation reactivation failed"))
+        XCTAssertEqual(fixture.sleepDurations, [0.1])
+        XCTAssertEqual(fixture.terminateCount, 1)
+        XCTAssertEqual(fixture.waitCount, 1)
     }
 
     func testReactivateSequentiallyResumesEveryExpectedPaneToExactInventory() throws {
@@ -965,7 +994,9 @@ private final class AdapterFixture {
     }
 
     func bootRequest() -> RemoteHerdrBootRequest {
-        .init(sessionName: "ouro-a", stagedSessionURL: root.appendingPathComponent("sessions/ouro-a", isDirectory: true), expectedVersion: "0.8.2", resumeAgentsOnRestore: false)
+        let object = (try? JSONSerialization.jsonObject(with: expectedInventoryData)) as? [String: Any]
+        let expectedPaneCount = (object?["panes"] as? [Any])?.count ?? 0
+        return .init(sessionName: "ouro-a", stagedSessionURL: root.appendingPathComponent("sessions/ouro-a", isDirectory: true), expectedVersion: "0.8.2", expectedPaneCount: expectedPaneCount, resumeAgentsOnRestore: false)
     }
 
     func runtime() -> RemoteActiveRuntime {
