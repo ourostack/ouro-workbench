@@ -842,7 +842,7 @@ final class RemoteAccountSafetyTests: XCTestCase {
             "--agent", "desk:worker", "--allow-all", "--remote", "--mode", "autopilot",
             "--max-autopilot-continues", "100", "--no-auto-update",
             "--secret-env-vars=COPILOT_GITHUB_TOKEN,GH_TOKEN,GITHUB_TOKEN",
-            "--interactive", "/usage", "--resume=\(mapped)"
+            "--interactive", "Call desk_status once, then reply exactly OURO-REMOTE-READY.", "--resume=\(mapped)"
         ])
     }
 

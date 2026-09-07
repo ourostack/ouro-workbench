@@ -478,7 +478,7 @@ public struct RemoteAccountBroker {
     }
 
     private static func resumeArguments(nativeSessionID: String) -> [String] {
-        ["--interactive", "/usage", "--resume=\(nativeSessionID)"]
+        ["--interactive", "Call desk_status once, then reply exactly OURO-REMOTE-READY.", "--resume=\(nativeSessionID)"]
     }
 
     public func gh(profileID: String, arguments: [String], remoteURLs: [String]) throws -> RemoteProcessRequest {
