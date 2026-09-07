@@ -448,7 +448,7 @@ final class RemoteHerdrAdapterTests: XCTestCase {
                 let profile = try remoteRegistry().profile(id: pane.profile)
                 let identity = remoteProcessIdentity(pid: pane.childPID, startIdentity: "birth-\(pane.childPID)", executable: profile.copilotExecutable, generation: "ouro-a")
                 fixture.identities[pane.childPID] = identity
-                let expectedArguments = RemoteAccountBroker.managedCopilotArguments(profile: profile, originalArguments: ["--resume=\(pane.uuid)"])
+                let expectedArguments = RemoteAccountBroker.managedCopilotResumeArguments(profile: profile, nativeSessionID: pane.uuid)
                 try fixture.ledger.prepare(attemptID: "attempt-\(pane.childPID)", nativeSessionID: pane.uuid, profileID: pane.profile, generation: "ouro-a", paneID: pane.id, ownerPID: getpid(), expectedArgvSHA256: RemoteArgvDigest.sha256([profile.copilotExecutable] + expectedArguments))
                 try fixture.ledger.markSpawnIntent(attemptID: "attempt-\(pane.childPID)")
                 try fixture.ledger.recordChild(attemptID: "attempt-\(pane.childPID)", identity: identity)
@@ -462,7 +462,7 @@ final class RemoteHerdrAdapterTests: XCTestCase {
                     let profile = try remoteRegistry().profile(id: pane.profile)
                     foreground = [[
                         "pid": pane.childPID,
-                        "argv": [profile.copilotExecutable] + RemoteAccountBroker.managedCopilotArguments(profile: profile, originalArguments: ["--resume=\(pane.uuid)"])
+                        "argv": [profile.copilotExecutable] + RemoteAccountBroker.managedCopilotResumeArguments(profile: profile, nativeSessionID: pane.uuid)
                     ]]
                 } else {
                     foreground = []
@@ -1016,7 +1016,7 @@ private final class AdapterFixture {
     func processInfo(shellPID: Int32? = 88, foregroundPID: Int32 = 200, argv: [String]? = nil) throws -> Data {
         let profile = try remoteRegistry().profile(id: "personal")
         var foreground: [String: Any] = ["pid": foregroundPID]
-        foreground["argv"] = argv ?? [profile.copilotExecutable] + RemoteAccountBroker.managedCopilotArguments(profile: profile, originalArguments: ["--resume=\(nativeSessionID)"])
+        foreground["argv"] = argv ?? [profile.copilotExecutable] + RemoteAccountBroker.managedCopilotResumeArguments(profile: profile, nativeSessionID: nativeSessionID)
         var process: [String: Any] = ["foreground_processes": [foreground]]
         if let shellPID { process["shell_pid"] = shellPID }
         return try remoteJSONData(["result": ["process_info": process]])
@@ -1033,7 +1033,7 @@ private final class AdapterFixture {
 
     func installLedgerOnly(markExited: Bool = false) throws {
         let profile = try remoteRegistry().profile(id: "personal")
-        let expectedArguments = RemoteAccountBroker.managedCopilotArguments(profile: profile, originalArguments: ["--resume=\(nativeSessionID)"])
+        let expectedArguments = RemoteAccountBroker.managedCopilotResumeArguments(profile: profile, nativeSessionID: nativeSessionID)
         let identity = remoteProcessIdentity(pid: 200, startIdentity: "birth-200", executable: "/fixtures/bin/copilot", generation: "ouro-a")
         identities[200] = identity
         identities[88] = remoteProcessIdentity(pid: 88, executable: "/bin/zsh", generation: "ouro-a")

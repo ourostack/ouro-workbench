@@ -469,7 +469,7 @@ final class RemoteGuardianTests: XCTestCase {
                     let identity = remoteProcessIdentity(pid: pane.childPID, startIdentity: "birth-\(pane.childPID)", executable: profile.copilotExecutable, generation: priorGeneration)
                     identities[pane.childPID] = identity
                     let attemptID = "rollback-\(pane.childPID)"
-                    let argv = [profile.copilotExecutable] + RemoteAccountBroker.managedCopilotArguments(profile: profile, originalArguments: ["--resume=\(pane.expected.nativeSessionID)"])
+                    let argv = [profile.copilotExecutable] + RemoteAccountBroker.managedCopilotResumeArguments(profile: profile, nativeSessionID: pane.expected.nativeSessionID)
                     try fixture.ledger.prepare(attemptID: attemptID, nativeSessionID: pane.expected.nativeSessionID, profileID: pane.expected.profileID, generation: priorGeneration, paneID: pane.expected.paneID, ownerPID: getpid(), expectedArgvSHA256: RemoteArgvDigest.sha256(argv))
                     try fixture.ledger.markSpawnIntent(attemptID: attemptID)
                     try fixture.ledger.recordChild(attemptID: attemptID, identity: identity)
@@ -483,7 +483,7 @@ final class RemoteGuardianTests: XCTestCase {
                         let profile = try registry.profile(id: pane.expected.profileID)
                         foreground = [[
                             "pid": pane.childPID,
-                            "argv": [profile.copilotExecutable] + RemoteAccountBroker.managedCopilotArguments(profile: profile, originalArguments: ["--resume=\(pane.expected.nativeSessionID)"])
+                            "argv": [profile.copilotExecutable] + RemoteAccountBroker.managedCopilotResumeArguments(profile: profile, nativeSessionID: pane.expected.nativeSessionID)
                         ]]
                     } else {
                         foreground = []

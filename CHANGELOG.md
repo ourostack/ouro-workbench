@@ -2,7 +2,7 @@
 
 ## 0.1.246 - Reliable restored-shell readiness
 
-- Fix: the mobile-control-plane guardian now gives Herdr its bounded startup window to hydrate the expected restored panes and publish each shell's exact wrapper-readiness marker before judging the generation, while still rejecting malformed inventory immediately.
+- Fix: the mobile-control-plane guardian now gives Herdr its bounded startup window to hydrate the expected restored panes and publish each shell's exact wrapper-readiness marker before judging the generation, while still rejecting malformed inventory immediately. Managed Copilot resumes also use the CLI's native initial-input path to run `/usage`, allowing the `SessionStart` hook to confirm readiness without waiting for operator input or consuming a model turn.
 
 ## 0.1.245 - Account-safe mobile remote control plane
 
