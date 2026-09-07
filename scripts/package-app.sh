@@ -6,6 +6,7 @@ eval "$("$ROOT_DIR/scripts/read-workbench-release.sh")"
 APP_NAME="$WORKBENCH_APP_NAME"
 PRODUCT_NAME="$WORKBENCH_BUNDLE_EXECUTABLE"
 MCP_PRODUCT_NAME="$WORKBENCH_MCP_EXECUTABLE"
+REMOTE_PRODUCT_NAME="OuroWorkbenchRemote"
 BUNDLE_ID="$WORKBENCH_BUNDLE_IDENTIFIER"
 MINIMUM_MACOS_VERSION="$WORKBENCH_MINIMUM_MACOS_VERSION"
 VERSION_FILE="$ROOT_DIR/VERSION"
@@ -15,6 +16,10 @@ CONTENTS_DIR="$APP_DIR/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 TOOLS_DIR="$MACOS_DIR/Tools"
+INTEGRATION_SOURCE_DIR="$ROOT_DIR/integrations/herdr"
+INTEGRATION_DIR="$RESOURCES_DIR/integrations/herdr"
+INTEGRATION_STATIC_DIR="$INTEGRATION_DIR/static"
+REMOTE_ARTIFACT_DIR="$INTEGRATION_DIR/runtime"
 SCREEN_SOURCE="/usr/bin/screen"
 SWIFTTERM_BUNDLE_NAME="SwiftTerm_SwiftTerm.bundle"
 APP_ICON_NAME="$PRODUCT_NAME.icns"
@@ -67,6 +72,7 @@ if [[ "$VERSION" != "$WORKBENCH_VERSION" ]]; then
   exit 1
 fi
 BUILD_NUMBER="1"
+SOURCE_REVISION=""
 if git -C "$ROOT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   IS_SHALLOW="$(git -C "$ROOT_DIR" rev-parse --is-shallow-repository 2>/dev/null || printf 'false')"
   if [[ "$IS_SHALLOW" == "true" ]]; then
@@ -80,12 +86,18 @@ if git -C "$ROOT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     printf 'Unable to derive numeric bundle build number from git history.\n' >&2
     exit 1
   fi
+  SOURCE_REVISION="$(git -C "$ROOT_DIR" rev-parse --verify 'HEAD^{commit}')"
+fi
+if [[ ! "$SOURCE_REVISION" =~ ^[0-9a-f]{40}$ ]]; then
+  printf 'Packaging the Herdr integration requires an exact Git revision.\n' >&2
+  exit 1
 fi
 
 swift package resolve
 patch_swiftterm_resource_lookup
 swift build -c release "${SWIFT_STRICT_FLAGS[@]}" --product "$PRODUCT_NAME"
 swift build -c release "${SWIFT_STRICT_FLAGS[@]}" --product "$MCP_PRODUCT_NAME"
+swift build -c release "${SWIFT_STRICT_FLAGS[@]}" --product "$REMOTE_PRODUCT_NAME"
 SWIFTTERM_BUNDLE="$(find "$ROOT_DIR/.build" -path "*/release/$SWIFTTERM_BUNDLE_NAME" -type d -print -quit)"
 if [[ -z "$SWIFTTERM_BUNDLE" ]]; then
   printf 'Required SwiftTerm resource bundle is missing from release build\n' >&2
@@ -93,7 +105,7 @@ if [[ -z "$SWIFTTERM_BUNDLE" ]]; then
 fi
 
 rm -rf "$APP_DIR"
-mkdir -p "$MACOS_DIR" "$RESOURCES_DIR" "$TOOLS_DIR"
+mkdir -p "$MACOS_DIR" "$RESOURCES_DIR" "$TOOLS_DIR" "$INTEGRATION_DIR"
 
 cp "$ROOT_DIR/.build/release/$PRODUCT_NAME" "$MACOS_DIR/$PRODUCT_NAME"
 chmod 755 "$MACOS_DIR/$PRODUCT_NAME"
@@ -102,6 +114,11 @@ chmod 755 "$MACOS_DIR/$MCP_PRODUCT_NAME"
 cp "$ROOT_DIR/scripts/collect-support-diagnostics.sh" "$RESOURCES_DIR/collect-support-diagnostics.sh"
 chmod 755 "$RESOURCES_DIR/collect-support-diagnostics.sh"
 ditto "$SWIFTTERM_BUNDLE" "$RESOURCES_DIR/$SWIFTTERM_BUNDLE_NAME"
+ditto "$INTEGRATION_SOURCE_DIR" "$INTEGRATION_STATIC_DIR"
+
+REMOTE_HELPER="$ROOT_DIR/.build/release/$REMOTE_PRODUCT_NAME"
+REMOTE_HELPER_SHA256="$(/usr/bin/shasum -a 256 "$REMOTE_HELPER" | /usr/bin/awk '{print $1}')"
+"$REMOTE_HELPER" package --output "$REMOTE_ARTIFACT_DIR" --revision "$SOURCE_REVISION" --expected-helper-sha256 "$REMOTE_HELPER_SHA256" >/dev/null
 
 if [[ ! -x "$SCREEN_SOURCE" ]]; then
   printf 'Required terminal persistence backend is missing: %s\n' "$SCREEN_SOURCE" >&2

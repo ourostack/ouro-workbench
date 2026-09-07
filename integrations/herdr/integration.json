@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "ouro.herdr",
+  "displayName": "Ouro Herdr Mobile Control Plane",
+  "canonicalOwner": "Herdr",
+  "dependencies": [
+    {
+      "id": "herdr",
+      "version": "0.8.2",
+      "revision": "9eb521456ac0d19d3ab3d9d7cea3cca10baa8a4c",
+      "sha256Arm64": "a5d4f4d504d8b309c91f811050559300faba31258425f53c50852fc96f6ae574"
+    },
+    {
+      "id": "herdr-mobile-relay",
+      "version": "0.20.8",
+      "revision": "fa64ecfb55db23a5b843d1deb78ef52f378b56be",
+      "sha256Arm64": "8309ad805e7c3be537a1f60c9848714ac3c059250b0b14112b6ab09ba60aac9c",
+      "webSha256": "6ef5a79faf41699aa20679e1453bf8e985746e33a1525d5facb3372126c89707"
+    },
+    {
+      "id": "github-copilot-cli",
+      "version": "1.0.84-1",
+      "sourceRevision": "4ed21b54a279c1f273942a4f7d0043e1d9c0424b"
+    }
+  ],
+  "artifact": {
+    "directory": "runtime",
+    "helper": "bin/OuroWorkbenchRemote"
+  },
+  "health": {
+    "namespace": "herdrIntegrationHealth",
+    "owner": "Herdr",
+    "defaultObservation": ".local/state/ouro-mobile-control-plane/observer/observations/latest.json"
+  }
+}

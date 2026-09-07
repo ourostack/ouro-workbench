@@ -190,6 +190,7 @@ preflight_app_bundle() {
   scripts/smoke-verify-app-timeout.sh
   scripts/package-app.sh
   scripts/verify-app-bundle.sh
+  scripts/smoke-herdr-integration-bundle.sh
   rm -rf .build/support-diagnostics-preflight
   "dist/$WORKBENCH_APP_NAME.app/Contents/Resources/collect-support-diagnostics.sh" \
     --out .build/support-diagnostics-preflight >/dev/null
