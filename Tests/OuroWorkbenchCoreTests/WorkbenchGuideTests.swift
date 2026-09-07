@@ -42,6 +42,7 @@ final class WorkbenchGuideTests: XCTestCase {
             "workbench_status",
             "workbench_onboarding_status",
             "workbench_autonomy_readiness",
+            "workbench_herdr_integration_health",
             "workbench_sessions",
             "workbench_attention_queue",
             "workbench_action_result",

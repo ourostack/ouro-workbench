@@ -613,6 +613,7 @@ Workbench MCP exposes:
 | `workbench_status` | Summarize persisted state, process entries, recovery plans, and transcript paths. |
 | `workbench_onboarding_status` | Read the selected boss's daemon/credential onboarding readiness: ordered steps, each with its remediation. |
 | `workbench_autonomy_readiness` | Read the boss's TTFA autonomy-readiness snapshot (read-only sensor): overall state (`ready`/`watch`/`blocked`), each check's status, and per non-green check whether the boss can queue the fix itself (a `workbench_request_action` verb), the operator has a one-tap fix to relay, or it's genuinely degraded — plus one human-relayable "get to green" ask. |
+| `workbench_herdr_integration_health` | Read the private, bounded Herdr observer snapshot as namespaced health. This is read-only; Herdr remains the canonical owner of panes and sessions. |
 | `workbench_sessions` | Machine-readable JSON list of sessions for programmatic clients (filters: `owner` / `name` / `attention` / `includeArchived`). |
 | `workbench_attention_queue` | One-call attention queue: only the sessions needing a human, each with its inline waiting-prompt, in triage order. |
 | `workbench_action_result` | Poll a `workbench_request_action`'s `requestId` for its outcome (`queued` / `applied` / `failed` / `unknown`). |

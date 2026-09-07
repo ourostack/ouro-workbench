@@ -111,10 +111,6 @@ public struct RemoteObserver {
         guard maximumBytes > 0 else {
             throw RemoteControlError.observation("observer requires a positive byte bound")
         }
-        struct Observation: Codable {
-            var observedAt: Date
-            var checks: [RemoteHealthCheck]
-        }
         let safeSecrets = secrets.filter { !$0.isEmpty }
         let safeChecks = checks.map {
             RemoteHealthCheck(
@@ -128,7 +124,7 @@ public struct RemoteObserver {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.sortedKeys]
-        let data = try encoder.encode(Observation(observedAt: observedAt, checks: safeChecks))
+        let data = try encoder.encode(RemoteHealthObservation(schemaVersion: 1, observedAt: observedAt, checks: safeChecks))
         guard data.count <= maximumBytes else {
             throw RemoteControlError.observation("observation exceeds the configured byte bound")
         }

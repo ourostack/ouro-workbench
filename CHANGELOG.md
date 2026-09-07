@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.247 - Sealed Herdr integration
+
+- Feature: ships a signed, checksummed Herdr integration inside the Workbench app, including an exact-revision standalone `OuroWorkbenchRemote` artifact, declarative profile schema and dependency pins, hardened install/rollback adapters, an installed-bundle smoke, and a namespaced read-only MCP health tool. Herdr remains the canonical owner of its panes and sessions.
+
 ## 0.1.246 - Reliable restored-shell readiness
 
 - Fix: the mobile-control-plane guardian now gives Herdr its bounded startup window to hydrate the expected restored panes and publish each shell's exact wrapper-readiness marker before judging the generation, while still rejecting malformed inventory immediately. Managed Copilot resumes also use the CLI's native initial-input path to run a bounded Desk readiness check, allowing the `SessionStart` hook and real `desk_status` call to confirm the worker without waiting for operator input.

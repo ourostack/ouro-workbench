@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ouro.bot/schemas/herdr-profiles-v1.json",
+  "title": "Ouro Herdr profiles",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "profiles"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "profiles": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/profile" }
+    }
+  },
+  "$defs": {
+    "absolutePath": { "type": "string", "pattern": "^/" },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "githubLogin", "displayLabel", "displayColor", "copilotHome", "ghConfigDir", "gitConfigGlobal", "allowedGitHubOwners", "commitName", "commitEmail", "copilotExecutable", "ghExecutable", "gitExecutable", "herdrExecutable", "zshExecutable", "deskRoot", "workerID", "continuationCap", "remote", "autonomy"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,31}$" },
+        "githubLogin": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "displayLabel": { "type": "string", "minLength": 1 },
+        "displayColor": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+        "copilotHome": { "$ref": "#/$defs/absolutePath" },
+        "ghConfigDir": { "$ref": "#/$defs/absolutePath" },
+        "gitConfigGlobal": { "$ref": "#/$defs/absolutePath" },
+        "allowedGitHubOwners": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "commitName": { "type": "string", "minLength": 1 },
+        "commitEmail": { "type": "string", "format": "email" },
+        "copilotExecutable": { "$ref": "#/$defs/absolutePath" },
+        "ghExecutable": { "$ref": "#/$defs/absolutePath" },
+        "gitExecutable": { "$ref": "#/$defs/absolutePath" },
+        "herdrExecutable": { "$ref": "#/$defs/absolutePath" },
+        "zshExecutable": { "$ref": "#/$defs/absolutePath" },
+        "deskRoot": { "$ref": "#/$defs/absolutePath" },
+        "workerID": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9:_-]+$" },
+        "continuationCap": { "const": 100 },
+        "remote": { "const": true },
+        "autonomy": { "const": true }
+      }
+    }
+  }
+}

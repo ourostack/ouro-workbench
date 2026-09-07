@@ -198,6 +198,8 @@ final class WorkbenchMCPServer {
             return try onboardingStatus()
         case WorkbenchAutonomyReadinessRenderer.toolName:
             return try autonomyReadiness()
+        case HerdrIntegrationHealth.toolName:
+            return try herdrIntegrationHealth()
         case "workbench_sessions":
             return try sessionsList(arguments: arguments)
         case WorkbenchAttentionQueueRenderer.toolName:
@@ -231,6 +233,13 @@ final class WorkbenchMCPServer {
         default:
             throw MCPToolFailure("Unknown tool: \(name)")
         }
+    }
+
+    private func herdrIntegrationHealth() throws -> String {
+        let environment = ProcessInfo.processInfo.environment
+        let sourceURL = environment["OURO_HERDR_INTEGRATION_HEALTH"].map { URL(fileURLWithPath: $0) }
+            ?? HerdrIntegrationHealthReader.defaultObservationURL(homeDirectory: FileManager.default.homeDirectoryForCurrentUser)
+        return try encodeJSON(HerdrIntegrationHealthReader.read(sourceURL: sourceURL, now: Date()))
     }
 
     private func workbenchStatus() throws -> String {
@@ -1082,6 +1091,15 @@ final class WorkbenchMCPServer {
             [
                 "name": WorkbenchAutonomyReadinessRenderer.toolName,
                 "description": WorkbenchAutonomyReadinessRenderer.toolDescription,
+                "inputSchema": [
+                    "type": "object",
+                    "properties": [:],
+                    "additionalProperties": false
+                ]
+            ],
+            [
+                "name": HerdrIntegrationHealth.toolName,
+                "description": HerdrIntegrationHealth.toolDescription,
                 "inputSchema": [
                     "type": "object",
                     "properties": [:],
