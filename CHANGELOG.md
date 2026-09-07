@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.250 - Safe fresh-session recovery
+
+- Fix: adds explicit fresh-session recovery that preserves the Herdr pane and profile topology while launching new Copilot histories, keeps every post-intent attempt conservatively owned until exact evidence resolves it, and rebases last-known-good before publishing the recovered generation.
+
 ## 0.1.249 - Reliable stopped-session cleanup
 
 - Fix: after Herdr reports a managed generation stopped and its exact server process is absent, the remote helper now safely unlinks Herdr's two reserved inert socket nodes and re-verifies their disappearance instead of treating the intentionally retained session directory as live ownership. Unsafe session names fail closed and recovery evidence remains intact.
