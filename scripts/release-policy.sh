@@ -719,7 +719,12 @@ for needle in (
         raise SystemExit(f"archive-app-artifact.sh must contain {needle!r}")
 for needle in (
     "--options runtime",
+    "Contents/Resources/integrations/herdr/runtime",
+    "files.0.sha256",
     "xcrun notarytool submit",
+    "--output-format json",
+    "xcrun notarytool log",
+    '"Accepted"',
     "xcrun stapler staple",
     "spctl --assess",
 ):
