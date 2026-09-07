@@ -252,7 +252,7 @@ final class RemoteHerdrAdapterTests: XCTestCase {
         assertRemoteErrorContains("exited during boot") { _ = try dead.adapter().boot(dead.bootRequest()) }
 
         let timeout = try AdapterFixture()
-        timeout.advancePerSleep = 16
+        timeout.advancePerSleep = 61
         timeout.responses = [
             .init(exitCode: 0),
             .init(exitCode: 0, stdout: try remoteJSONData(["sessions": []]))
@@ -262,7 +262,7 @@ final class RemoteHerdrAdapterTests: XCTestCase {
         XCTAssertEqual(timeout.waitCount, 1)
 
         let cleanupFailure = try AdapterFixture()
-        cleanupFailure.advancePerSleep = 16
+        cleanupFailure.advancePerSleep = 61
         cleanupFailure.cleanupSucceeds = false
         cleanupFailure.responses = [
             .init(exitCode: 0),
@@ -273,6 +273,27 @@ final class RemoteHerdrAdapterTests: XCTestCase {
 
     func testBootWaitsForRestoredShellWrapperReadinessAfterServerBecomesReachable() throws {
         let fixture = try AdapterFixture()
+        fixture.identities[88] = remoteProcessIdentity(pid: 88, executable: "/bin/zsh", generation: "ouro-a")
+        let snapshot = try fixture.snapshot(panes: [fixture.snapshotPane()])
+        fixture.responses = [
+            .init(exitCode: 0),
+            .init(exitCode: 0, stdout: try remoteJSONData(["sessions": [["name": "ouro-a", "running": true]]])),
+            .init(exitCode: 0, stdout: snapshot),
+            .init(exitCode: 0, stdout: try remoteJSONData(["result": ["process_info": ["shell_pid": 77, "foreground_processes": []]]])),
+            .init(exitCode: 0, stdout: try remoteJSONData(["sessions": [["name": "ouro-a", "running": true]]])),
+            .init(exitCode: 0, stdout: snapshot),
+            .init(exitCode: 0, stdout: try remoteJSONData(["result": ["process_info": ["shell_pid": 88, "foreground_processes": []]]]))
+        ]
+
+        let inventory = try fixture.adapter().boot(fixture.bootRequest())
+
+        XCTAssertTrue(try XCTUnwrap(inventory.panes.first).wrapperReady)
+        XCTAssertEqual(fixture.sleepDurations, [0.1])
+    }
+
+    func testBootAllowsLaunchdColdShellReadinessToTakeMoreThanFifteenSeconds() throws {
+        let fixture = try AdapterFixture()
+        fixture.advancePerSleep = 20
         fixture.identities[88] = remoteProcessIdentity(pid: 88, executable: "/bin/zsh", generation: "ouro-a")
         let snapshot = try fixture.snapshot(panes: [fixture.snapshotPane()])
         fixture.responses = [
@@ -339,7 +360,7 @@ final class RemoteHerdrAdapterTests: XCTestCase {
 
         for blocker in ["herdr.sock", "herdr-client.sock", "process"] {
             let blocked = try AdapterFixture()
-            blocked.advancePerSleep = 6
+            blocked.advancePerSleep = 31
             blocked.responses = [
                 .init(exitCode: 0),
                 .init(exitCode: 0, stdout: try remoteJSONData(["sessions": []]))
@@ -350,7 +371,7 @@ final class RemoteHerdrAdapterTests: XCTestCase {
         }
 
         let stillRunning = try AdapterFixture()
-        stillRunning.advancePerSleep = 6
+        stillRunning.advancePerSleep = 31
         stillRunning.responses = [
             .init(exitCode: 0),
             .init(exitCode: 0, stdout: try remoteJSONData(["sessions": [["name": "ouro-a", "running": true]]])),
@@ -365,6 +386,24 @@ final class RemoteHerdrAdapterTests: XCTestCase {
             .init(exitCode: 0, stdout: try remoteJSONData(["sessions": []]))
         ]
         XCTAssertThrowsError(try scanFailure.adapter().stop(sessionName: "ouro-a"))
+    }
+
+    func testStopAllowsDetachedServerSocketsToDrainForMoreThanFiveSeconds() throws {
+        let fixture = try AdapterFixture()
+        fixture.advancePerSleep = 3
+        let socket = fixture.root.appendingPathComponent("sessions/ouro-a/herdr.sock").path
+        fixture.fileExistsHandler = { [unowned fixture] path in
+            path == socket && fixture.sleepDurations.count < 2
+        }
+        fixture.responses = [
+            .init(exitCode: 0),
+            .init(exitCode: 0, stdout: try remoteJSONData(["sessions": []])),
+            .init(exitCode: 0, stdout: try remoteJSONData(["sessions": []])),
+            .init(exitCode: 0, stdout: try remoteJSONData(["sessions": []]))
+        ]
+
+        XCTAssertEqual(try fixture.adapter().stop(sessionName: "ouro-a"), .absent)
+        XCTAssertEqual(fixture.sleepDurations, [0.05, 0.05])
     }
 
     func testReactivateReturnsRunningOrDegradedWithoutLeakingStartErrors() throws {
@@ -388,7 +427,7 @@ final class RemoteHerdrAdapterTests: XCTestCase {
         XCTAssertEqual(try dead.adapter().reactivate(dead.runtime()), .degraded("prior generation reactivation failed"))
 
         let cleanupFailure = try AdapterFixture()
-        cleanupFailure.advancePerSleep = 16
+        cleanupFailure.advancePerSleep = 61
         cleanupFailure.cleanupSucceeds = false
         cleanupFailure.responses = [.init(exitCode: 0), .init(exitCode: 0, stdout: try remoteJSONData(["sessions": []]))]
         XCTAssertEqual(try cleanupFailure.adapter().reactivate(cleanupFailure.runtime()), .degraded("prior generation reactivation failed; possible child ownership remains"))
@@ -406,7 +445,7 @@ final class RemoteHerdrAdapterTests: XCTestCase {
 
     func testReactivateContainsAStartTimeoutAfterTheServerProcessIsCleanlyReaped() throws {
         let fixture = try AdapterFixture()
-        fixture.advancePerSleep = 16
+        fixture.advancePerSleep = 61
         fixture.responses = [.init(exitCode: 0), .init(exitCode: 0, stdout: try remoteJSONData(["sessions": []]))]
 
         XCTAssertEqual(try fixture.adapter().reactivate(fixture.runtime()), .degraded("prior generation reactivation failed"))
@@ -901,6 +940,7 @@ private final class AdapterFixture {
     var scannerError: Error?
     var identities: [Int32: RemoteProcessIdentity] = [:]
     var existingPaths = Set<String>()
+    var fileExistsHandler: ((String) -> Bool)?
     var privateFileData = Data("[session]\nresume_agents_on_restore = false\n".utf8)
     var expectedInventoryData = try! remoteJSONData(["version": 1, "generation": "ouro-a", "acknowledged_empty": true, "panes": []])
     var privateFileError: Error?
@@ -959,7 +999,10 @@ private final class AdapterFixture {
             },
             processIdentityForPID: { [unowned self] pid, _ in identities[pid] },
             shellReadiness: injectedShellReadiness,
-            fileExists: { [unowned self] path in existingPaths.contains(path) || FileManager.default.fileExists(atPath: path) },
+            fileExists: { [unowned self] path in
+                if let fileExistsHandler { return fileExistsHandler(path) }
+                return existingPaths.contains(path) || FileManager.default.fileExists(atPath: path)
+            },
             readPrivateFile: { [unowned self] path, _ in
                 if let privateFileError { throw privateFileError }
                 return path == runtime().expectedInventoryPath ? expectedInventoryData : privateFileData
