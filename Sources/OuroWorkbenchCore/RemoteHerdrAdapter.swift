@@ -130,12 +130,13 @@ public struct RemoteHerdrAdapter {
     public func boot(_ request: RemoteHerdrBootRequest) throws -> RemoteHerdrInventory {
         guard request.stagedSessionURL.standardizedFileURL == rootURL.appendingPathComponent("sessions/\(request.sessionName)", isDirectory: true).standardizedFileURL,
               request.expectedVersion == "0.8.2",
+              request.expectedPaneCount >= 0,
               request.resumeAgentsOnRestore == false
         else {
             throw RemotePaneResumeFailure.preSpawn("boot request is not an exact managed generation")
         }
         try verifyAutomaticResumeDisabled()
-        return try startServer(sessionName: request.sessionName, preSpawnFailure: true)
+        return try startServer(sessionName: request.sessionName, preSpawnFailure: true, minimumPaneCount: request.expectedPaneCount)
     }
 
     public func resume(_ command: RemotePaneResumeCommand) throws -> RemoteHerdrInventory {
@@ -201,7 +202,7 @@ public struct RemoteHerdrAdapter {
             let expected = try loadExpectedInventory(for: runtime)
             expectedNativeSessionIDs = expected.panes.map(\.nativeSessionID)
             try verifyAutomaticResumeDisabled()
-            var inventory = try startServer(sessionName: runtime.sessionName, preSpawnFailure: false)
+            var inventory = try startServer(sessionName: runtime.sessionName, preSpawnFailure: false, minimumPaneCount: expected.panes.count)
             serverMayExist = true
             guard reactivationInventory(inventory, matches: expected, generation: runtime.generation, completedCount: 0) else {
                 throw RemoteControlError.guardian("prior generation structural inventory is not exact")
@@ -302,7 +303,7 @@ public struct RemoteHerdrAdapter {
         return reactivationInventory(inventory, matches: expected, generation: runtime.generation, completedCount: expected.panes.count)
     }
 
-    private func startServer(sessionName: String, preSpawnFailure: Bool) throws -> RemoteHerdrInventory {
+    private func startServer(sessionName: String, preSpawnFailure: Bool, minimumPaneCount: Int) throws -> RemoteHerdrInventory {
         let process: RemoteHerdrServerHandle
         do {
             process = try spawnServer(RemoteProcessRequest(
@@ -321,15 +322,26 @@ public struct RemoteHerdrAdapter {
                 if preSpawnFailure { throw RemotePaneResumeFailure.preSpawn("Herdr server exited during boot") }
                 throw RemoteControlError.guardian("Herdr server exited during boot")
             }
-            if case let .running(inventory) = try probe(sessionName: sessionName) { return inventory }
+            if case let .running(inventory) = try probe(sessionName: sessionName) {
+                if inventory.panes.count < minimumPaneCount {
+                    sleep(0.1)
+                    continue
+                }
+                let wrappersStillStarting = !inventory.panes.isEmpty
+                    && inventory.panes.contains { !$0.wrapperReady }
+                    && inventory.panes.allSatisfy {
+                        $0.nativeSessionID != nil && $0.profileID == nil && $0.githubLogin == nil
+                            && !$0.childPresent && !$0.hookObserved && $0.foregroundProcess == nil
+                    }
+                if !wrappersStillStarting { return inventory }
+            }
             sleep(0.1)
         } while now() < deadline
         guard process.terminateAndWait(timeout: 2) else {
             if preSpawnFailure { throw RemotePaneResumeFailure.preSpawn("Herdr server cleanup timed out") }
             throw RemoteHerdrStartFailure.possibleProcess
         }
-        if preSpawnFailure { throw RemotePaneResumeFailure.preSpawn("Herdr server boot timed out") }
-        throw RemoteControlError.guardian("Herdr server boot timed out")
+        throw RemotePaneResumeFailure.preSpawn("Herdr server boot timed out")
     }
 
     private func verifyAutomaticResumeDisabled() throws {

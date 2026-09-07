@@ -449,6 +449,10 @@ public struct RemoteAccountBroker {
         ] + originalArguments
     }
 
+    public static func managedCopilotResumeArguments(profile: RemoteProfile, nativeSessionID: String) -> [String] {
+        managedCopilotArguments(profile: profile, originalArguments: resumeArguments(nativeSessionID: nativeSessionID))
+    }
+
     public func resume(
         nativeSessionID: String,
         profileID: String,
@@ -467,10 +471,14 @@ public struct RemoteAccountBroker {
         }
         return try managedRequest(
             profile: registry.profile(id: profileID),
-            originalArguments: ["--resume=\(canonical)"],
+            originalArguments: Self.resumeArguments(nativeSessionID: canonical),
             generation: generation,
             paneID: paneID
         )
+    }
+
+    private static func resumeArguments(nativeSessionID: String) -> [String] {
+        ["--interactive", "Call desk_status once, then reply exactly OURO-REMOTE-READY.", "--resume=\(nativeSessionID)"]
     }
 
     public func gh(profileID: String, arguments: [String], remoteURLs: [String]) throws -> RemoteProcessRequest {

@@ -90,12 +90,14 @@ public struct RemoteHerdrBootRequest: Equatable, Sendable {
     public var sessionName: String
     public var stagedSessionURL: URL
     public var expectedVersion: String
+    public var expectedPaneCount: Int
     public var resumeAgentsOnRestore: Bool
 
-    public init(sessionName: String, stagedSessionURL: URL, expectedVersion: String, resumeAgentsOnRestore: Bool) {
+    public init(sessionName: String, stagedSessionURL: URL, expectedVersion: String, expectedPaneCount: Int = 0, resumeAgentsOnRestore: Bool) {
         self.sessionName = sessionName
         self.stagedSessionURL = stagedSessionURL
         self.expectedVersion = expectedVersion
+        self.expectedPaneCount = expectedPaneCount
         self.resumeAgentsOnRestore = resumeAgentsOnRestore
     }
 }
@@ -400,7 +402,7 @@ public struct RemoteGuardian {
 
         let bootInventory: RemoteHerdrInventory
         do {
-            bootInventory = try boot(RemoteHerdrBootRequest(sessionName: generation, stagedSessionURL: staged, expectedVersion: manifest.herdrVersion, resumeAgentsOnRestore: false))
+            bootInventory = try boot(RemoteHerdrBootRequest(sessionName: generation, stagedSessionURL: staged, expectedVersion: manifest.herdrVersion, expectedPaneCount: manifest.expectedPanes.count, resumeAgentsOnRestore: false))
             guard structuralInventory(bootInventory, matches: manifest, generation: generation) else {
                 throw RemoteControlError.guardian("structural boot inventory is invalid")
             }

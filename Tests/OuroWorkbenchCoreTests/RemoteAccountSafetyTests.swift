@@ -838,7 +838,12 @@ final class RemoteAccountSafetyTests: XCTestCase {
         XCTAssertEqual(request.environment["OURO_PROFILE_ID"], "personal")
         XCTAssertEqual(request.environment["OURO_GENERATION"], "g-new")
         XCTAssertEqual(request.environment["OURO_PANE_ID"], "desk:p1")
-        XCTAssertEqual(request.arguments.last, "--resume=\(mapped)")
+        XCTAssertEqual(request.arguments, [
+            "--agent", "desk:worker", "--allow-all", "--remote", "--mode", "autopilot",
+            "--max-autopilot-continues", "100", "--no-auto-update",
+            "--secret-env-vars=COPILOT_GITHUB_TOKEN,GH_TOKEN,GITHUB_TOKEN",
+            "--interactive", "Call desk_status once, then reply exactly OURO-REMOTE-READY.", "--resume=\(mapped)"
+        ])
     }
 
     func testProfileGhAndGitRequestsNeverInheritCopilotCredential() throws {

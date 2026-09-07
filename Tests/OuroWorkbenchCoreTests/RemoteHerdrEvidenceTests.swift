@@ -159,7 +159,7 @@ final class RemoteHerdrEvidenceTests: XCTestCase {
         let record = resumeRecord(childIdentity: remoteProcessIdentity(pid: 200, executable: "/fixtures/bin/copilot", generation: "ouro-original"))
         for mode in ["pid", "argv"] {
             let profile = try remoteRegistry().profile(id: "personal")
-            let argv = RemoteAccountBroker.managedCopilotArguments(profile: profile, originalArguments: ["--resume=8d5177d6-b6d1-4b5f-a546-564ed0ef8748"])
+            let argv = RemoteAccountBroker.managedCopilotResumeArguments(profile: profile, nativeSessionID: "8d5177d6-b6d1-4b5f-a546-564ed0ef8748")
             let pid: Int32 = mode == "pid" ? 200 : 300
             let process: [String: Any] = [
                 "pid": pid,
@@ -266,7 +266,7 @@ final class RemoteHerdrEvidenceTests: XCTestCase {
         }
 
         let profile = try remoteRegistry().profile(id: "personal")
-        let exactArguments = [profile.copilotExecutable] + RemoteAccountBroker.managedCopilotArguments(profile: profile, originalArguments: ["--resume=\(record.nativeSessionID!)"])
+        let exactArguments = [profile.copilotExecutable] + RemoteAccountBroker.managedCopilotResumeArguments(profile: profile, nativeSessionID: record.nativeSessionID!)
         let wrongIdentity = RemoteCallRecorder(responses: [
             .init(exitCode: 0, stdout: Data("herdr 0.8.2\n".utf8)),
             .init(exitCode: 0, stdout: try remoteJSONData(["sessions": [["name": "ouro-a", "running": true]]])),
@@ -287,7 +287,7 @@ final class RemoteHerdrEvidenceTests: XCTestCase {
         let profile = try remoteRegistry().profile(id: "personal")
         let child = remoteProcessIdentity(pid: 401, executable: profile.copilotExecutable, generation: "ouro-original")
         let childRecord = resumeRecord(childIdentity: child)
-        let expectedArguments = [profile.copilotExecutable] + RemoteAccountBroker.managedCopilotArguments(profile: profile, originalArguments: ["--resume=\(childRecord.nativeSessionID!)"])
+        let expectedArguments = [profile.copilotExecutable] + RemoteAccountBroker.managedCopilotResumeArguments(profile: profile, nativeSessionID: childRecord.nativeSessionID!)
         let unstableChild = RemoteCallRecorder(responses: [
             .init(exitCode: 0, stdout: Data("herdr 0.8.2\n".utf8)),
             .init(exitCode: 0, stdout: try remoteJSONData(["sessions": [["name": "ouro-original", "running": true]]])),
@@ -402,7 +402,7 @@ final class RemoteHerdrEvidenceTests: XCTestCase {
 
     private func resumeRecord(nativeSessionID: String? = "8d5177d6-b6d1-4b5f-a546-564ed0ef8748", childIdentity: RemoteProcessIdentity? = nil) -> RemoteResumeRecord {
         let profile = try! remoteRegistry().profile(id: "personal")
-        let arguments = nativeSessionID.map { RemoteAccountBroker.managedCopilotArguments(profile: profile, originalArguments: ["--resume=\($0)"]) } ?? []
+        let arguments = nativeSessionID.map { RemoteAccountBroker.managedCopilotResumeArguments(profile: profile, nativeSessionID: $0) } ?? []
         return RemoteResumeRecord(
             attemptID: "run-1",
             nativeSessionID: nativeSessionID,

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.246 - Reliable restored-shell readiness
+
+- Fix: the mobile-control-plane guardian now gives Herdr its bounded startup window to hydrate the expected restored panes and publish each shell's exact wrapper-readiness marker before judging the generation, while still rejecting malformed inventory immediately. Managed Copilot resumes also use the CLI's native initial-input path to run a bounded Desk readiness check, allowing the `SessionStart` hook and real `desk_status` call to confirm the worker without waiting for operator input.
+
 ## 0.1.245 - Account-safe mobile remote control plane
 
 - Feature: adds the Workbench-side remote control plane for durable Herdr sessions, with physical per-account Copilot credentials, exact runtime identity, shared ownership leases, orphan recovery, last-known-good restore, descriptor-safe state writes, and installed-helper rollback proofs.
