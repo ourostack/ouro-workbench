@@ -191,6 +191,46 @@ final class RemoteHerdrAdapterTests: XCTestCase {
         XCTAssertEqual(fixture.calls.first?.request.arguments, ["--session", "ouro-a", "pane", "run", "desk:p1", "'/runtime/helper' 'resume' '--uuid' '8d5177d6-b6d1-4b5f-a546-564ed0ef8748' '--profile' 'personal' '--generation' 'ouro-a' '--pane' 'desk:p1'"])
     }
 
+    func testFreshLaunchRunsTheExactQuotedHelperAndReturnsTheHookProvenSession() throws {
+        let fixture = try AdapterFixture()
+        try fixture.installFreshVerifiedPane(arguments: ["--interactive", RemotePaneLaunchCommand.readinessPrompt])
+        fixture.responses = [
+            .init(exitCode: 0),
+            .init(exitCode: 0, stdout: try fixture.snapshot(panes: [fixture.snapshotPane()])),
+            .init(exitCode: 0, stdout: try fixture.processInfo(argv: fixture.freshCopilotArgv())),
+            .init(exitCode: 0, stdout: Data("arimendelow\n".utf8))
+        ]
+
+        let inventory = try fixture.adapter().launchFresh(fixture.launchCommand())
+
+        XCTAssertEqual(inventory.panes.first?.nativeSessionID, fixture.nativeSessionID)
+        XCTAssertEqual(inventory.panes.first?.profileID, "personal")
+        XCTAssertEqual(fixture.calls.first?.request.arguments, ["--session", "ouro-a", "pane", "run", "desk:p1", "'/runtime/helper' 'launch' '--profile' 'personal' '--generation' 'ouro-a' '--pane' 'desk:p1' '--' '--interactive' '\(RemotePaneLaunchCommand.readinessPrompt)'"])
+    }
+
+    func testFreshLaunchRejectsEveryNonExactCommandBeforeInvocation() throws {
+        let fixture = try AdapterFixture()
+        let valid = fixture.launchCommand()
+        let invalid: [RemotePaneLaunchCommand] = [
+            .init(paneID: valid.paneID, helperPath: "/wrong", arguments: valid.arguments),
+            .init(paneID: valid.paneID, helperPath: valid.helperPath, arguments: Array(valid.arguments.dropLast())),
+            .init(paneID: valid.paneID, helperPath: valid.helperPath, arguments: ["resume"] + Array(valid.arguments.dropFirst())),
+            .init(paneID: valid.paneID, helperPath: valid.helperPath, arguments: replace(valid.arguments, at: 1, with: "--account")),
+            .init(paneID: valid.paneID, helperPath: valid.helperPath, arguments: replace(valid.arguments, at: 2, with: "missing")),
+            .init(paneID: valid.paneID, helperPath: valid.helperPath, arguments: replace(valid.arguments, at: 3, with: "--session")),
+            .init(paneID: valid.paneID, helperPath: valid.helperPath, arguments: replace(valid.arguments, at: 4, with: "unsafe/session")),
+            .init(paneID: valid.paneID, helperPath: valid.helperPath, arguments: replace(valid.arguments, at: 5, with: "--target")),
+            .init(paneID: "other:pane", helperPath: valid.helperPath, arguments: valid.arguments),
+            .init(paneID: valid.paneID, helperPath: valid.helperPath, arguments: replace(valid.arguments, at: 7, with: "--model")),
+            .init(paneID: valid.paneID, helperPath: valid.helperPath, arguments: replace(valid.arguments, at: 8, with: "--prompt")),
+            .init(paneID: valid.paneID, helperPath: valid.helperPath, arguments: replace(valid.arguments, at: 9, with: "different"))
+        ]
+        for command in invalid {
+            assertRemoteErrorContains("before spawn") { _ = try fixture.adapter().launchFresh(command) }
+        }
+        XCTAssertTrue(fixture.calls.isEmpty)
+    }
+
     func testResumeTimesOutWhenExactEvidenceNeverAppears() throws {
         let fixture = try AdapterFixture()
         fixture.advancePerSleep = 46
@@ -547,6 +587,149 @@ final class RemoteHerdrAdapterTests: XCTestCase {
         XCTAssertEqual(inventory.panes.map(\.childPresent), [true, true])
         let paneRuns = fixture.calls.filter { $0.request.arguments.count > 3 && $0.request.arguments[3] == "run" }
         XCTAssertEqual(paneRuns.map { $0.request.arguments[4] }, ["desk:p1", "desk:p2"])
+    }
+
+    func testReactivateFreshModeLaunchesANewWorkerWithoutCopilotHistory() throws {
+        let fixture = try AdapterFixture()
+        let newSessionID = "03daa52a-9ee3-4a98-a94f-53c6906a3d0b"
+        fixture.expectedInventoryData = try remoteJSONData([
+            "version": 1,
+            "generation": "ouro-a",
+            "acknowledged_empty": false,
+            "panes": [["pane_id": "desk:p1", "native_session_id": fixture.nativeSessionID, "profile_id": "personal"]]
+        ])
+        fixture.installReadyShell()
+        var launched = false
+        fixture.runHandler = { request, _ in
+            switch request.arguments {
+            case ["config", "check"]:
+                return .init(exitCode: 0)
+            case ["session", "list", "--json"]:
+                return .init(exitCode: 0, stdout: try remoteJSONData(["sessions": [["name": "ouro-a", "running": true]]]))
+            case ["--session", "ouro-a", "api", "snapshot"]:
+                let sessionID = launched ? newSessionID : fixture.nativeSessionID
+                return .init(exitCode: 0, stdout: try fixture.snapshot(panes: [fixture.snapshotPane(agent: ["agent": "copilot", "value": sessionID])]))
+            case ["--session", "ouro-a", "pane", "process-info", "--pane", "desk:p1"]:
+                return .init(exitCode: 0, stdout: try fixture.processInfo(foregroundPID: launched ? 200 : 0, argv: launched ? fixture.freshCopilotArgv() : []))
+            case let arguments where arguments.count == 6 && arguments[0...4] == ["--session", "ouro-a", "pane", "run", "desk:p1"]:
+                XCTAssertTrue(arguments[5].contains("'launch' '--profile' 'personal'"))
+                XCTAssertFalse(arguments[5].contains("'resume'"))
+                try fixture.installFreshVerifiedPane(
+                    sessionID: newSessionID,
+                    arguments: ["--interactive", RemotePaneLaunchCommand.readinessPrompt])
+                launched = true
+                return .init(exitCode: 0)
+            case ["api", "/user", "--jq", ".login"]:
+                return .init(exitCode: 0, stdout: Data("arimendelow\n".utf8))
+            default:
+                return .init(exitCode: 3)
+            }
+        }
+
+        let result = try fixture.adapter(freshSessions: true).reactivate(fixture.runtime())
+
+        guard case let .running(inventory) = result else { return XCTFail("expected exact fresh reactivation, got \(result)") }
+        XCTAssertTrue(launched)
+        XCTAssertEqual(inventory.panes.first?.nativeSessionID, newSessionID)
+        XCTAssertEqual(inventory.panes.first?.profileID, "personal")
+    }
+
+    func testReactivateFreshModeRejectsAWorkerThatReusesTheRetiredSessionID() throws {
+        let fixture = try AdapterFixture()
+        fixture.expectedInventoryData = try remoteJSONData([
+            "version": 1,
+            "generation": "ouro-a",
+            "acknowledged_empty": false,
+            "panes": [["pane_id": "desk:p1", "native_session_id": fixture.nativeSessionID, "profile_id": "personal"]]
+        ])
+        fixture.installReadyShell()
+        var launched = false
+        var stopped = false
+        fixture.runHandler = { request, _ in
+            switch request.arguments {
+            case ["config", "check"]:
+                return .init(exitCode: 0)
+            case ["session", "list", "--json"]:
+                return .init(exitCode: 0, stdout: try remoteJSONData(["sessions": stopped ? [] : [["name": "ouro-a", "running": true]]]))
+            case ["--session", "ouro-a", "api", "snapshot"]:
+                return .init(exitCode: 0, stdout: try fixture.snapshot(panes: [fixture.snapshotPane()]))
+            case ["--session", "ouro-a", "pane", "process-info", "--pane", "desk:p1"]:
+                return .init(exitCode: 0, stdout: try fixture.processInfo(foregroundPID: launched ? 200 : 0, argv: launched ? fixture.freshCopilotArgv() : []))
+            case let arguments where arguments.count == 6 && arguments[0...4] == ["--session", "ouro-a", "pane", "run", "desk:p1"]:
+                try fixture.installFreshVerifiedPane(arguments: ["--interactive", RemotePaneLaunchCommand.readinessPrompt])
+                launched = true
+                return .init(exitCode: 0)
+            case ["api", "/user", "--jq", ".login"]:
+                return .init(exitCode: 0, stdout: Data("arimendelow\n".utf8))
+            case ["session", "stop", "ouro-a", "--json"]:
+                stopped = true
+                fixture.serverSessions = []
+                return .init(exitCode: 0)
+            default:
+                return .init(exitCode: 3)
+            }
+        }
+
+        XCTAssertEqual(try fixture.adapter(freshSessions: true).reactivate(fixture.runtime()), .degraded("prior generation reactivation failed; possible child ownership remains"))
+        XCTAssertTrue(launched)
+        XCTAssertTrue(stopped)
+    }
+
+    func testReactivateFreshModeRetainsPossibleOwnershipWhenLaunchEvidenceTimesOut() throws {
+        let fixture = try AdapterFixture()
+        fixture.advancePerSleep = 46
+        fixture.installReadyShell()
+        fixture.expectedInventoryData = try remoteJSONData([
+            "version": 1,
+            "generation": "ouro-a",
+            "acknowledged_empty": false,
+            "panes": [["pane_id": "desk:p1", "native_session_id": fixture.nativeSessionID, "profile_id": "personal"]]
+        ])
+        var launched = false
+        var stopped = false
+        fixture.runHandler = { request, _ in
+            switch request.arguments {
+            case ["config", "check"]:
+                return .init(exitCode: 0)
+            case ["session", "list", "--json"]:
+                return .init(exitCode: 0, stdout: try remoteJSONData([
+                    "sessions": stopped ? [] : [["name": "ouro-a", "running": true]]
+                ]))
+            case ["--session", "ouro-a", "api", "snapshot"]:
+                return .init(
+                    exitCode: 0,
+                    stdout: try fixture.snapshot(panes: [fixture.snapshotPane()]))
+            case ["--session", "ouro-a", "pane", "process-info", "--pane", "desk:p1"]:
+                return .init(
+                    exitCode: 0,
+                    stdout: try fixture.processInfo(
+                        foregroundPID: launched ? 200 : 0,
+                        argv: launched ? fixture.freshCopilotArgv() : []))
+            case let arguments
+                where arguments.count == 6
+                    && arguments[0...4] == [
+                        "--session", "ouro-a", "pane", "run", "desk:p1"
+                    ]:
+                try fixture.installFreshOutstandingAttempt(
+                    arguments: [
+                        "--interactive", RemotePaneLaunchCommand.readinessPrompt
+                    ])
+                launched = true
+                return .init(exitCode: 0)
+            case ["session", "stop", "ouro-a", "--json"]:
+                stopped = true
+                fixture.serverSessions = []
+                return .init(exitCode: 0)
+            default:
+                return .init(exitCode: 3)
+            }
+        }
+
+        XCTAssertEqual(
+            try fixture.adapter(freshSessions: true).reactivate(fixture.runtime()),
+            .degraded("prior generation reactivation failed; possible child ownership remains"))
+        XCTAssertTrue(launched)
+        XCTAssertTrue(stopped)
     }
 
     func testReactivateStopsCleanlyAfterStructuralMismatchAndContainsStopProofFailure() throws {
@@ -993,7 +1176,7 @@ private final class AdapterFixture {
 
     deinit { try? FileManager.default.removeItem(at: root.deletingLastPathComponent()) }
 
-    func adapter() throws -> RemoteHerdrAdapter {
+    func adapter(freshSessions: Bool = false) throws -> RemoteHerdrAdapter {
         if let mappingFileData {
             try mappingFileData.write(to: root.deletingLastPathComponent().appendingPathComponent("session-map.json"))
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: root.deletingLastPathComponent().appendingPathComponent("session-map.json").path)
@@ -1012,6 +1195,7 @@ private final class AdapterFixture {
             shimDirectory: "/runtime/shims",
             zdotdir: "/runtime/zdotdir",
             inheritedEnvironment: ["HOME": "/Users/example", "LC_ALL": "C", "SECRET": "drop"],
+            freshSessions: freshSessions,
             run: { [unowned self] request, timeout in
                 calls.append(.init(request: request, timeout: timeout))
                 if let runHandler { return try runHandler(request, timeout) }
@@ -1059,6 +1243,69 @@ private final class AdapterFixture {
                 "--profile", "personal", "--generation", "ouro-a", "--pane", "desk:p1"
             ]
         )
+    }
+
+    func launchCommand() -> RemotePaneLaunchCommand {
+        RemotePaneLaunchCommand(
+            paneID: "desk:p1",
+            helperPath: "/runtime/helper",
+            arguments: [
+                "launch", "--profile", "personal", "--generation", "ouro-a", "--pane", "desk:p1",
+                "--", "--interactive", RemotePaneLaunchCommand.readinessPrompt
+            ]
+        )
+    }
+
+    func freshCopilotArgv() throws -> [String] {
+        let profile = try remoteRegistry().profile(id: "personal")
+        return [profile.copilotExecutable] + RemoteAccountBroker.managedCopilotArguments(profile: profile, originalArguments: ["--interactive", RemotePaneLaunchCommand.readinessPrompt])
+    }
+
+    func installReadyShell() {
+        identities[88] = remoteProcessIdentity(
+            pid: 88, executable: "/bin/zsh", generation: "ouro-a")
+    }
+
+    func installFreshVerifiedPane(sessionID: String? = nil, arguments: [String]) throws {
+        let selectedSessionID = sessionID ?? nativeSessionID
+        mappingFileData = try remoteJSONData([
+            "schemaVersion": 1,
+            "entries": [["sessionID": selectedSessionID, "profileID": "personal", "paneID": "desk:p1", "generation": "ouro-a"]]
+        ])
+        let mappingURL = root.deletingLastPathComponent().appendingPathComponent("session-map.json")
+        try mappingFileData?.write(to: mappingURL)
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: mappingURL.path)
+        let profile = try remoteRegistry().profile(id: "personal")
+        let identity = remoteProcessIdentity(pid: 200, startIdentity: "birth-200", executable: profile.copilotExecutable, generation: "ouro-a")
+        identities[200] = identity
+        let managedArguments = RemoteAccountBroker.managedCopilotArguments(profile: profile, originalArguments: arguments)
+        try ledger.prepare(attemptID: "fresh-launch", nativeSessionID: nil, profileID: profile.id, generation: "ouro-a", paneID: "desk:p1", ownerPID: getpid(), expectedArgvSHA256: RemoteArgvDigest.sha256([profile.copilotExecutable] + managedArguments))
+        try ledger.markSpawnIntent(attemptID: "fresh-launch")
+        try ledger.recordChild(attemptID: "fresh-launch", identity: identity)
+        try ledger.confirm(nativeSessionID: selectedSessionID, profileID: profile.id, generation: "ouro-a", paneID: "desk:p1")
+    }
+
+    func installFreshOutstandingAttempt(arguments: [String]) throws {
+        let profile = try remoteRegistry().profile(id: "personal")
+        let identity = remoteProcessIdentity(
+            pid: 200,
+            startIdentity: "birth-200",
+            executable: profile.copilotExecutable,
+            generation: "ouro-a")
+        identities[200] = identity
+        let managedArguments = RemoteAccountBroker.managedCopilotArguments(
+            profile: profile, originalArguments: arguments)
+        try ledger.prepare(
+            attemptID: "fresh-launch",
+            nativeSessionID: nil,
+            profileID: profile.id,
+            generation: "ouro-a",
+            paneID: "desk:p1",
+            ownerPID: getpid(),
+            expectedArgvSHA256: RemoteArgvDigest.sha256(
+                [profile.copilotExecutable] + managedArguments))
+        try ledger.markSpawnIntent(attemptID: "fresh-launch")
+        try ledger.recordChild(attemptID: "fresh-launch", identity: identity)
     }
 
     func bootRequest() -> RemoteHerdrBootRequest {

@@ -22,6 +22,7 @@ func remoteRunGuardian(_ context: RemoteHelperContext) throws {
         registry: registry,
         inheritedEnvironment: context.environment
     )
+    let freshSessions = context.invocation.hasFlag("fresh-sessions")
     let adapter = RemoteHerdrAdapter(
         rootURL: rootURL,
         registry: registry,
@@ -32,7 +33,8 @@ func remoteRunGuardian(_ context: RemoteHelperContext) throws {
         helperPath: helperPath,
         shimDirectory: try context.path("shim-directory", environment: "OURO_SHIM_DIRECTORY"),
         zdotdir: try context.path("zdotdir", environment: "OURO_ZDOTDIR"),
-        inheritedEnvironment: context.environment
+        inheritedEnvironment: context.environment,
+        freshSessions: freshSessions
     )
     let guardian = RemoteGuardian(
         rootURL: rootURL,
@@ -43,13 +45,15 @@ func remoteRunGuardian(_ context: RemoteHelperContext) throws {
         listManagedProcessSessions: adapter.listManagedProcessSessions,
         boot: adapter.boot,
         resume: adapter.resume,
+        launchFresh: adapter.launchFresh,
         stop: adapter.stop,
         reactivate: adapter.reactivate,
         nativeSessionOwnerExists: ledger.lockExists,
         makeGenerationName: {
             let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "").replacingOccurrences(of: "-", with: "")
             return "ouro-\(stamp)-\(UUID().uuidString.lowercased().prefix(8))"
-        }
+        },
+        freshSessions: freshSessions
     )
     let result = try guardian.tick()
     switch result {

@@ -108,7 +108,7 @@ public struct RemoteHelperInvocation: Equatable, Sendable {
         flags.contains(name)
     }
 
-    private static let booleanFlags: Set<String> = ["json", "native-refs-remain"]
+    private static let booleanFlags: Set<String> = ["fresh-sessions", "json", "native-refs-remain"]
 
     private static let allowedOptions: [Command: Set<String>] = [
         .help: [],
@@ -132,6 +132,7 @@ public struct RemoteHelperInvocation: Equatable, Sendable {
 
     private static let allowedFlags: [Command: Set<String>] = [
         .launch: ["json"],
+        .guardian: ["fresh-sessions"],
         .doctor: ["json"]
     ]
 

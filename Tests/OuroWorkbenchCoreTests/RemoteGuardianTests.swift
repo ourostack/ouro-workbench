@@ -18,7 +18,8 @@ final class RemoteGuardianTests: XCTestCase {
                 return fixture.structuralInventory
             },
             resume: { _ in resumeCount += 1; return fixture.structuralInventory },
-            stop: { _ in XCTFail("an empty successful generation must not stop"); return .absent }
+            stop: { _ in XCTFail("an empty successful generation must not stop"); return .absent },
+            freshSessions: true
         )
 
         XCTAssertEqual(try guardian.tick(), .promoted("stage-1"))
@@ -27,6 +28,10 @@ final class RemoteGuardianTests: XCTestCase {
         XCTAssertEqual(Set(document.keys), Set(["version", "generation", "acknowledged_empty", "panes"]))
         XCTAssertEqual(document["acknowledged_empty"] as? Bool, true)
         XCTAssertEqual((document["panes"] as? [Any])?.count, 0)
+        XCTAssertEqual(
+            try RemoteLastKnownGoodStore(rootURL: fixture.root)
+                .loadCurrent().manifest.sourceGeneration,
+            "stage-1")
 
         let restarted = fixture.guardian(
             probe: { _ in .running(fixture.finalInventory(generation: "stage-1")) },
@@ -111,6 +116,264 @@ final class RemoteGuardianTests: XCTestCase {
             stop: { _ in XCTFail("a promoted generation must not stop"); return .absent }
         )
         XCTAssertEqual(try restartedGuardian.tick(), .alreadyRunning("stage-1"))
+    }
+
+    func testGuardianFreshModeLaunchesNewWorkersAndPersistsTheirHookSessionIDs() throws {
+        let fixture = try GuardianFixture()
+        defer { fixture.remove() }
+        let freshIDs = [
+            "07978b70-e968-48ec-a879-ea2b915faf0f",
+            "444e4087-60b8-461c-b8dd-fc82ebc4ec63"
+        ]
+        var launchCommands: [RemotePaneLaunchCommand] = []
+        var livePanes = fixture.structuralInventory.panes
+        let guardian = fixture.guardian(
+            probe: { _ in .absent },
+            boot: { _ in fixture.structuralInventory },
+            resume: { _ in XCTFail("fresh recovery must not resume Copilot history"); return fixture.structuralInventory },
+            launchFresh: { command in
+                launchCommands.append(command)
+                let index = launchCommands.count - 1
+                let expected = fixture.manifest.expectedPanes[index]
+                let paneIndex = try XCTUnwrap(livePanes.firstIndex(where: { $0.paneID == expected.paneID }))
+                var live = fixture.resumedInventory(for: expected)
+                live.nativeSessionID = freshIDs[index]
+                livePanes[paneIndex] = live
+                return RemoteHerdrInventory(version: "0.8.2", panes: livePanes)
+            },
+            stop: { _ in XCTFail("successful generation must not stop"); return .absent },
+            freshSessions: true
+        )
+
+        XCTAssertEqual(try guardian.tick(), .promoted("stage-1"))
+        XCTAssertEqual(launchCommands.map(\.paneID), ["desk:p1", "desk:p2"])
+        XCTAssertEqual(launchCommands.map(\.arguments), fixture.manifest.expectedPanes.map {
+            ["launch", "--profile", $0.profileID, "--generation", "stage-1", "--pane", $0.paneID, "--", "--interactive", RemotePaneLaunchCommand.readinessPrompt]
+        })
+        XCTAssertTrue(launchCommands.allSatisfy { $0.shellCommand.hasPrefix("'/opt/ouro/runtime/OuroWorkbenchRemote' 'launch' '--profile'") })
+        let expectedInventory = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: fixture.stagedSessionURL.appendingPathComponent("expected-inventory.json"))) as? [String: Any])
+        let persistedPanes = try XCTUnwrap(expectedInventory["panes"] as? [[String: Any]])
+        XCTAssertEqual(persistedPanes.compactMap { $0["native_session_id"] as? String }, freshIDs)
+        let currentCapture = try RemoteLastKnownGoodStore(rootURL: fixture.root).loadCurrent()
+        XCTAssertEqual(
+            currentCapture.manifest.generationManifest.expectedPanes.map(\.nativeSessionID),
+            freshIDs)
+        XCTAssertEqual(currentCapture.manifest.sourceGeneration, "stage-1")
+
+        let restarted = fixture.guardian(
+            probe: { _ in .running(RemoteHerdrInventory(version: "0.8.2", panes: livePanes)) },
+            boot: { _ in XCTFail("an exact fresh generation must not boot again"); return fixture.structuralInventory },
+            resume: { _ in XCTFail("an exact fresh generation must not resume"); return fixture.structuralInventory },
+            launchFresh: { _ in XCTFail("an exact fresh generation must not relaunch"); return fixture.structuralInventory },
+            stop: { _ in XCTFail("an exact fresh generation must not stop"); return .absent }
+        )
+        XCTAssertEqual(try restarted.tick(), .alreadyRunning("stage-1"))
+    }
+
+    func testGuardianFreshModeMarksRecoveryWhenLastKnownGoodCannotBeRebased() throws {
+        let fixture = try GuardianFixture(stageName: "fresh-rebase-failure")
+        defer { fixture.remove() }
+        let freshIDs = [
+            "d57d6ee6-0f74-4e7a-8e9c-a7579b725370",
+            "20b10235-fbda-4a27-8c1f-ddf90dc47c28"
+        ]
+        var livePanes = fixture.structuralInventory.panes
+        var launched = 0
+        let guardian = fixture.guardian(
+            probe: { _ in .absent },
+            boot: { _ in fixture.structuralInventory },
+            resume: { _ in fixture.structuralInventory },
+            launchFresh: { _ in
+                let expected = fixture.manifest.expectedPanes[launched]
+                let paneIndex = try XCTUnwrap(
+                    livePanes.firstIndex(where: { $0.paneID == expected.paneID }))
+                var live = fixture.resumedInventory(for: expected)
+                live.nativeSessionID = freshIDs[launched]
+                livePanes[paneIndex] = live
+                launched += 1
+                if launched == freshIDs.count {
+                    let generations = fixture.root.appendingPathComponent(
+                        "last-known-good/generations")
+                    try FileManager.default.removeItem(at: generations)
+                    try fixture.writePrivateData(Data("blocked".utf8), to: generations)
+                }
+                return RemoteHerdrInventory(version: "0.8.2", panes: livePanes)
+            },
+            stop: { _ in .absent },
+            freshSessions: true
+        )
+
+        assertRemoteErrorContains("recovery required") {
+            _ = try guardian.tick()
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.recoveryMarkerURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.activeRuntimeURL.path))
+    }
+
+    func testGuardianFreshModePersistsNewWorkerIDsWhenReactivatingThePriorGeneration() throws {
+        let fixture = try GuardianFixture(stageName: "fresh-rollback")
+        defer { fixture.remove() }
+        try fixture.writeActive("old")
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: fixture.oldExpectedInventoryURL.deletingLastPathComponent().path)
+        let freshIDs = [
+            "f844c08b-b17c-4e64-9e82-d511574fc8e5",
+            "298497ce-c4f4-4a9b-a90c-827a0adca6c8"
+        ]
+        var livePanes = fixture.finalInventory(generation: "old").panes
+        for index in livePanes.indices { livePanes[index].nativeSessionID = freshIDs[index] }
+        let live = RemoteHerdrInventory(version: "0.8.2", panes: livePanes)
+        let guardian = fixture.guardian(
+            probe: { _ in .absent },
+            boot: { _ in throw RemotePaneResumeFailure.preSpawn("fixture failure") },
+            resume: { _ in fixture.structuralInventory },
+            stop: { _ in .absent },
+            reactivate: { _ in .running(live) },
+            freshSessions: true
+        )
+
+        assertRemoteErrorContains("prior generation reactivated") { _ = try guardian.tick() }
+        let expectedInventory = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: fixture.oldExpectedInventoryURL)) as? [String: Any])
+        let persistedPanes = try XCTUnwrap(expectedInventory["panes"] as? [[String: Any]])
+        XCTAssertEqual(persistedPanes.compactMap { $0["native_session_id"] as? String }, freshIDs)
+
+        let restarted = fixture.guardian(
+            probe: { _ in .running(live) },
+            boot: { _ in XCTFail("reactivated generation must remain active"); return fixture.structuralInventory },
+            resume: { _ in XCTFail("reactivated generation must not resume"); return fixture.structuralInventory },
+            stop: { _ in XCTFail("reactivated generation must not stop"); return .absent },
+            freshSessions: true
+        )
+        XCTAssertEqual(try restarted.tick(), .alreadyRunning("old"))
+    }
+
+    func testGuardianFreshModeMarksRecoveryForInvalidPriorReactivationEvidence() throws {
+        for failure in ["topology", "native-session", "worker", "persistence"] {
+            let fixture = try GuardianFixture(stageName: "fresh-invalid-\(failure)")
+            defer { fixture.remove() }
+            try fixture.writeActive("old")
+            let priorDirectory = fixture.oldExpectedInventoryURL.deletingLastPathComponent()
+            try FileManager.default.setAttributes([.posixPermissions: failure == "persistence" ? 0o755 : 0o700], ofItemAtPath: priorDirectory.path)
+            var panes = fixture.finalInventory(generation: "old").panes
+            panes[0].nativeSessionID = "61f451b9-87c9-49e5-9a30-fee5461eb19b"
+            panes[1].nativeSessionID = "2cde92d6-90fd-43c1-a07a-f63ad96d75fd"
+            if failure == "topology" { panes.removeLast() }
+            if failure == "native-session" { panes[0].nativeSessionID = "not-a-uuid" }
+            if failure == "worker" { panes[0].githubLogin = "wrong-account" }
+            let guardian = fixture.guardian(
+                probe: { _ in .absent },
+                boot: { _ in throw RemotePaneResumeFailure.preSpawn("fixture failure") },
+                resume: { _ in fixture.structuralInventory },
+                stop: { _ in .absent },
+                reactivate: { _ in .running(RemoteHerdrInventory(version: "0.8.2", panes: panes)) },
+                freshSessions: true
+            )
+
+            assertRemoteErrorContains("prior availability requires recovery") { _ = try guardian.tick() }
+            XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.quarantinedSessionURL.appendingPathComponent("recovery-required.json").path), failure)
+        }
+    }
+
+    func testGuardianFreshModeMarksRecoveryWhenPriorReactivationIsUnavailable() throws {
+        for priorProbe in [
+            RemoteHerdrProbe.absent,
+            .degraded("fixture unavailable")
+        ] {
+            let fixture = try GuardianFixture(stageName: "fresh-prior-unavailable")
+            defer { fixture.remove() }
+            try fixture.writeActive("old")
+            let guardian = fixture.guardian(
+                probe: { _ in .absent },
+                boot: { _ in throw RemotePaneResumeFailure.preSpawn("fixture failure") },
+                resume: { _ in fixture.structuralInventory },
+                stop: { _ in .absent },
+                reactivate: { _ in priorProbe },
+                freshSessions: true
+            )
+
+            assertRemoteErrorContains("prior availability requires recovery") {
+                _ = try guardian.tick()
+            }
+            XCTAssertTrue(
+                FileManager.default.fileExists(
+                    atPath: fixture.quarantinedSessionURL
+                        .appendingPathComponent("recovery-required.json").path))
+        }
+    }
+
+    func testGuardianResumeModeMarksRecoveryForInvalidPriorReactivationEvidence() throws {
+        let fixture = try GuardianFixture(stageName: "resume-invalid-prior")
+        defer { fixture.remove() }
+        try fixture.writeActive("old")
+        var panes = fixture.finalInventory(generation: "old").panes
+        panes[0].githubLogin = "wrong-account"
+        let guardian = fixture.guardian(
+            probe: { _ in .absent },
+            boot: { _ in throw RemotePaneResumeFailure.preSpawn("fixture failure") },
+            resume: { _ in fixture.structuralInventory },
+            stop: { _ in .absent },
+            reactivate: { _ in
+                .running(RemoteHerdrInventory(version: "0.8.2", panes: panes))
+            },
+            freshSessions: false
+        )
+
+        assertRemoteErrorContains("prior availability requires recovery") {
+            _ = try guardian.tick()
+        }
+        XCTAssertTrue(
+            FileManager.default.fileExists(
+                atPath: fixture.quarantinedSessionURL
+                    .appendingPathComponent("recovery-required.json").path))
+    }
+
+    func testGuardianMarksRecoveryWhenPriorExpectedInventoryCannotBeValidated() throws {
+        let fixture = try GuardianFixture(stageName: "invalid-prior-expected")
+        defer { fixture.remove() }
+        try fixture.writeActive("old")
+        try remoteJSONData([
+            "version": 1,
+            "generation": "old",
+            "acknowledged_empty": false,
+            "panes": [["pane_id": "desk:p1", "native_session_id": "wrong", "profile_id": "personal"]]
+        ]).write(to: fixture.oldExpectedInventoryURL)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o600],
+            ofItemAtPath: fixture.oldExpectedInventoryURL.path)
+        let guardian = fixture.guardian(
+            probe: { _ in .absent },
+            boot: { _ in throw RemotePaneResumeFailure.preSpawn("fixture failure") },
+            resume: { _ in fixture.structuralInventory },
+            stop: { _ in .absent },
+            reactivate: { _ in .running(fixture.finalInventory(generation: "old")) }
+        )
+
+        assertRemoteErrorContains("prior availability requires recovery") {
+            _ = try guardian.tick()
+        }
+        XCTAssertTrue(
+            FileManager.default.fileExists(
+                atPath: fixture.quarantinedSessionURL
+                    .appendingPathComponent("recovery-required.json").path))
+    }
+
+    func testGuardianFreshModeRejectsALaunchThatReusesARetiredNativeSession() throws {
+        let fixture = try GuardianFixture(stageName: "fresh-reused-native")
+        defer { fixture.remove() }
+        var panes = fixture.structuralInventory.panes
+        let guardian = fixture.guardian(
+            probe: { _ in .absent },
+            boot: { _ in fixture.structuralInventory },
+            resume: { _ in fixture.structuralInventory },
+            launchFresh: { _ in
+                panes[0] = fixture.resumedInventory(for: fixture.manifest.expectedPanes[0])
+                return RemoteHerdrInventory(version: "0.8.2", panes: panes)
+            },
+            stop: { _ in .absent },
+            freshSessions: true
+        )
+
+        assertRemoteErrorContains("possible children") { _ = try guardian.tick() }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.recoveryMarkerURL.path))
     }
 
     func testGuardianWaitsForTheSharedActiveRuntimeLeaseBeforeInspectingOrPromoting() throws {
@@ -1204,18 +1467,20 @@ private final class GuardianFixture {
         probe: @escaping (String) throws -> RemoteHerdrProbe,
         boot: @escaping (RemoteHerdrBootRequest) throws -> RemoteHerdrInventory,
         resume: @escaping (RemotePaneResumeCommand) throws -> RemoteHerdrInventory,
+        launchFresh: @escaping (RemotePaneLaunchCommand) throws -> RemoteHerdrInventory = { _ in throw RemotePaneResumeFailure.preSpawn("fresh launch unavailable") },
         stop: @escaping (String) throws -> RemoteHerdrProbe,
         nativeSessionOwnerExists: @escaping (String) -> Bool = { _ in false },
         listManagedSessions: @escaping () throws -> [String] = { [] },
         listManagedProcessSessions: @escaping () throws -> [String] = { [] },
         reactivate: ((RemoteActiveRuntime) throws -> RemoteHerdrProbe)? = nil,
+        freshSessions: Bool = false,
         helperPath: String = "/opt/ouro/runtime/OuroWorkbenchRemote",
         snapshotLstat: ((String, UnsafeMutablePointer<stat>) -> Int32)? = nil
     ) -> RemoteGuardian {
         if let snapshotLstat {
-            return RemoteGuardian(rootURL: root, helperPath: helperPath, ledger: ledger, probe: probe, listManagedSessions: listManagedSessions, listManagedProcessSessions: listManagedProcessSessions, boot: boot, resume: resume, stop: stop, reactivate: reactivate ?? { runtime in .running(self.finalInventory(generation: runtime.generation)) }, nativeSessionOwnerExists: nativeSessionOwnerExists, makeGenerationName: { self.stageName }, snapshotLstat: snapshotLstat)
+            return RemoteGuardian(rootURL: root, helperPath: helperPath, ledger: ledger, probe: probe, listManagedSessions: listManagedSessions, listManagedProcessSessions: listManagedProcessSessions, boot: boot, resume: resume, launchFresh: launchFresh, stop: stop, reactivate: reactivate ?? { runtime in .running(self.finalInventory(generation: runtime.generation)) }, nativeSessionOwnerExists: nativeSessionOwnerExists, makeGenerationName: { self.stageName }, freshSessions: freshSessions, snapshotLstat: snapshotLstat)
         }
-        return RemoteGuardian(rootURL: root, helperPath: helperPath, ledger: ledger, probe: probe, listManagedSessions: listManagedSessions, listManagedProcessSessions: listManagedProcessSessions, boot: boot, resume: resume, stop: stop, reactivate: reactivate ?? { runtime in .running(self.finalInventory(generation: runtime.generation)) }, nativeSessionOwnerExists: nativeSessionOwnerExists, makeGenerationName: { self.stageName })
+        return RemoteGuardian(rootURL: root, helperPath: helperPath, ledger: ledger, probe: probe, listManagedSessions: listManagedSessions, listManagedProcessSessions: listManagedProcessSessions, boot: boot, resume: resume, launchFresh: launchFresh, stop: stop, reactivate: reactivate ?? { runtime in .running(self.finalInventory(generation: runtime.generation)) }, nativeSessionOwnerExists: nativeSessionOwnerExists, makeGenerationName: { self.stageName }, freshSessions: freshSessions)
     }
 
     func writeActive(_ name: String) throws {
