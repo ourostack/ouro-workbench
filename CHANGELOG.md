@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.251 - Final release: Workbench is frozen
+
+- Change: Ouro Workbench is frozen and this is its last release. Installed copies keep working. Its job moves to the `cmux` sense in our harness (ourostack/ouroboros), working with stock cmux as the terminal. This release also refreshes the shared app shell dependency.
+
 ## 0.1.250 - Safe fresh-session recovery
 
 - Fix: adds explicit fresh-session recovery that preserves the Herdr pane and profile topology while launching new Copilot histories, keeps every post-intent attempt conservatively owned until exact evidence resolves it, and rebases last-known-good before publishing the recovered generation.
