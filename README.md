@@ -1,5 +1,7 @@
 # Ouro Workbench
 
+> **Frozen (2026-10-10).** This app is no longer developed. It is kept as prior art, and nothing here has been deleted. Its job, keeping many terminal coding agents moving, now belongs to the `cmux` sense in our harness ([ourostack/ouroboros](https://github.com/ourostack/ouroboros)), working with stock [cmux](https://cmux.com) as the terminal. Installed copies keep working but receive no new releases.
+
 Native macOS workbench for terminal agents, with Ouro boss-agent coordination.
 
 Ouro Workbench is a native macOS terminal-agent workbench for Claude Code,
