@@ -1,3 +1,9 @@
+<!-- ourostack:brand:start -->
+<p align="center">
+  <a href="https://github.com/ourostack"><img src="https://raw.githubusercontent.com/ourostack/.github/main/brand/ouro.png" alt="Ourostack" width="96" height="96"></a>
+</p>
+<!-- ourostack:brand:end -->
+
 # Ouro Workbench
 
 > **Frozen (2026-10-10).** This app is no longer developed. It is kept as prior art, and nothing here has been deleted. Its job, keeping many terminal coding agents moving, is moving to a new `cmux` sense in our harness ([ourostack/ouroboros](https://github.com/ourostack/ouroboros)), working with stock [cmux](https://cmux.com) as the terminal. Installed copies keep working but receive no new releases.
