@@ -12,7 +12,7 @@ permissions:
 jobs:
   swift-test:
     name: Swift tests
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -100,7 +100,7 @@ jobs:
 
   native-scenario-verifier:
     name: Native scenario verifier
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -143,7 +143,7 @@ jobs:
 
   app-bundle:
     name: App bundle
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -242,7 +242,7 @@ jobs:
 
   coverage:
     name: Coverage
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - name: Check out repository
         uses: actions/checkout@v6

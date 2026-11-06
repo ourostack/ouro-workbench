@@ -13,7 +13,21 @@ RUNS_ON_RE = re.compile(r"^\s*runs-on\s*:\s*(.*)$")
 JOBS_RE = re.compile(r"^(?P<indent>\s*)jobs\s*:\s*(?:#.*)?$")
 MAPPING_KEY_RE = re.compile(r"^(?P<indent>\s*)(?P<name>[A-Za-z0-9_-]+)\s*:\s*(?:#.*)?$")
 XCODE_STEP_RE = re.compile(r"^\s*-\s*name\s*:\s*['\"]?Select newest Xcode['\"]?\s*$")
-MACOS_14_RE = re.compile(r"(^|[^A-Za-z0-9_-])macos-14([^A-Za-z0-9_-]|$)")
+PINNED_RUNNER = "macos-15"
+# GitHub retired macos-14 on 2026-11-02, so CI runs on macos-15. The two
+# release-path workflows stay on macos-14 while Workbench is frozen at 0.1.251:
+# moving them counts as a release change under scripts/release-policy.sh and
+# needs a VERSION bump. They move to macos-15 with the next release.
+FROZEN_RELEASE_RUNNER = "macos-14"
+FROZEN_RELEASE_WORKFLOWS = {"release.yml", "shell-dependency-watch.yml"}
+
+
+def runner_re(runner: str) -> re.Pattern[str]:
+    return re.compile(r"(^|[^A-Za-z0-9_-])" + re.escape(runner) + r"([^A-Za-z0-9_-]|$)")
+
+
+def pinned_runner_for(path: Path) -> str:
+    return FROZEN_RELEASE_RUNNER if path.name in FROZEN_RELEASE_WORKFLOWS else PINNED_RUNNER
 MACOS_LATEST_RE = re.compile(r"(^|[^A-Za-z0-9_-])macos-latest([^A-Za-z0-9_-]|$)")
 MACOS_RUNNER_RE = re.compile(r"(^|[^A-Za-z0-9_-])(macos-[A-Za-z0-9_-]+)([^A-Za-z0-9_-]|$)")
 
@@ -92,7 +106,7 @@ def runs_on_value(block: list[str], index: int) -> str:
 
     # Support YAML list form:
     # runs-on:
-    #   - macos-14
+    #   - macos-15
     #   - xlarge
     parent_indent = len(line) - len(line.lstrip(" "))
     parts: list[str] = []
@@ -113,10 +127,12 @@ def main() -> int:
     macos_jobs = 0
 
     for path, text in workflow_texts():
+        pinned = pinned_runner_for(path)
+        pinned_re = runner_re(pinned)
         for match in MACOS_RUNNER_RE.finditer(text):
             runner = match.group(2)
-            if runner != "macos-14":
-                failures.append(f"{path}: {runner} is forbidden; pin macOS jobs to macos-14")
+            if runner != pinned:
+                failures.append(f"{path}: {runner} is forbidden; pin macOS jobs to {pinned}")
 
         for job_name, block in collect_job_blocks(text):
             runs_on = ""
@@ -129,11 +145,11 @@ def main() -> int:
 
             if MACOS_LATEST_RE.search(runs_on):
                 failures.append(f"{path}:{job_name}: runs-on uses moving macos-latest")
-            if "macos-" in runs_on and not MACOS_14_RE.search(runs_on):
-                failures.append(f"{path}:{job_name}: macOS runner must be macos-14, got {runs_on!r}")
+            if "macos-" in runs_on and not pinned_re.search(runs_on):
+                failures.append(f"{path}:{job_name}: macOS runner must be {pinned}, got {runs_on!r}")
             block_text = "\n".join(block)
-            expression_macos_14 = "${{" in runs_on and MACOS_14_RE.search(block_text)
-            if MACOS_14_RE.search(runs_on) or expression_macos_14:
+            expression_pinned = "${{" in runs_on and pinned_re.search(block_text)
+            if pinned_re.search(runs_on) or expression_pinned:
                 macos_jobs += 1
                 xcode_steps = sum(1 for line in block if XCODE_STEP_RE.match(line))
                 if xcode_steps != 1:
@@ -146,7 +162,7 @@ def main() -> int:
         for failure in failures:
             print(f"::error::{failure}", file=sys.stderr)
         return 1
-    print(f"macOS runner policy ok: {macos_jobs} macos-14 jobs")
+    print(f"macOS runner policy ok: {macos_jobs} macOS jobs ({PINNED_RUNNER}; frozen release workflows on {FROZEN_RELEASE_RUNNER})")
     return 0
 
 
