@@ -1,6 +1,6 @@
 <!-- ourostack:brand:start -->
 <p align="center">
-  <a href="https://github.com/ourostack"><img src="https://raw.githubusercontent.com/ourostack/.github/main/brand/ouro.png" alt="Ourostack" width="96" height="96"></a>
+  <a href="https://github.com/ourostack"><img src="https://raw.githubusercontent.com/ourostack/.github/main/brand/headers/ouro-workbench.webp" alt="Ouro resting on a cushion beside a workbench of six small monitors in a garden shed at blue hour, a dust sheet half drawn" width="100%"></a>
 </p>
 <!-- ourostack:brand:end -->
 
