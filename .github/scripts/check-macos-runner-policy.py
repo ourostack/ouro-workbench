@@ -13,7 +13,8 @@ RUNS_ON_RE = re.compile(r"^\s*runs-on\s*:\s*(.*)$")
 JOBS_RE = re.compile(r"^(?P<indent>\s*)jobs\s*:\s*(?:#.*)?$")
 MAPPING_KEY_RE = re.compile(r"^(?P<indent>\s*)(?P<name>[A-Za-z0-9_-]+)\s*:\s*(?:#.*)?$")
 XCODE_STEP_RE = re.compile(r"^\s*-\s*name\s*:\s*['\"]?Select newest Xcode['\"]?\s*$")
-MACOS_14_RE = re.compile(r"(^|[^A-Za-z0-9_-])macos-14([^A-Za-z0-9_-]|$)")
+PINNED_RUNNER = "macos-15"
+PINNED_RUNNER_RE = re.compile(r"(^|[^A-Za-z0-9_-])" + re.escape(PINNED_RUNNER) + r"([^A-Za-z0-9_-]|$)")
 MACOS_LATEST_RE = re.compile(r"(^|[^A-Za-z0-9_-])macos-latest([^A-Za-z0-9_-]|$)")
 MACOS_RUNNER_RE = re.compile(r"(^|[^A-Za-z0-9_-])(macos-[A-Za-z0-9_-]+)([^A-Za-z0-9_-]|$)")
 
@@ -92,7 +93,7 @@ def runs_on_value(block: list[str], index: int) -> str:
 
     # Support YAML list form:
     # runs-on:
-    #   - macos-14
+    #   - macos-15
     #   - xlarge
     parent_indent = len(line) - len(line.lstrip(" "))
     parts: list[str] = []
@@ -115,8 +116,8 @@ def main() -> int:
     for path, text in workflow_texts():
         for match in MACOS_RUNNER_RE.finditer(text):
             runner = match.group(2)
-            if runner != "macos-14":
-                failures.append(f"{path}: {runner} is forbidden; pin macOS jobs to macos-14")
+            if runner != PINNED_RUNNER:
+                failures.append(f"{path}: {runner} is forbidden; pin macOS jobs to {PINNED_RUNNER}")
 
         for job_name, block in collect_job_blocks(text):
             runs_on = ""
@@ -129,11 +130,11 @@ def main() -> int:
 
             if MACOS_LATEST_RE.search(runs_on):
                 failures.append(f"{path}:{job_name}: runs-on uses moving macos-latest")
-            if "macos-" in runs_on and not MACOS_14_RE.search(runs_on):
-                failures.append(f"{path}:{job_name}: macOS runner must be macos-14, got {runs_on!r}")
+            if "macos-" in runs_on and not PINNED_RUNNER_RE.search(runs_on):
+                failures.append(f"{path}:{job_name}: macOS runner must be {PINNED_RUNNER}, got {runs_on!r}")
             block_text = "\n".join(block)
-            expression_macos_14 = "${{" in runs_on and MACOS_14_RE.search(block_text)
-            if MACOS_14_RE.search(runs_on) or expression_macos_14:
+            expression_pinned = "${{" in runs_on and PINNED_RUNNER_RE.search(block_text)
+            if PINNED_RUNNER_RE.search(runs_on) or expression_pinned:
                 macos_jobs += 1
                 xcode_steps = sum(1 for line in block if XCODE_STEP_RE.match(line))
                 if xcode_steps != 1:
@@ -146,7 +147,7 @@ def main() -> int:
         for failure in failures:
             print(f"::error::{failure}", file=sys.stderr)
         return 1
-    print(f"macOS runner policy ok: {macos_jobs} macos-14 jobs")
+    print(f"macOS runner policy ok: {macos_jobs} {PINNED_RUNNER} jobs")
     return 0
 
 

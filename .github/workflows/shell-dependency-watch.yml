@@ -19,7 +19,7 @@ concurrency:
 jobs:
   refresh-shell-dependency:
     if: github.repository == 'ourostack/ouro-workbench'
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v6
