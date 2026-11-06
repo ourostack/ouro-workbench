@@ -15,7 +15,7 @@ concurrency:
 jobs:
   deep-native-scenario-verifier:
     name: Deep native scenario verifier
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - name: Check out repository
         uses: actions/checkout@v6

@@ -7,6 +7,8 @@
 # Ouro Workbench
 
 > **Frozen (2026-10-10).** This app is no longer developed. It is kept as prior art, and nothing here has been deleted. Its job, keeping many terminal coding agents moving, is moving to a new `cmux` sense in our harness ([ourostack/ouroboros](https://github.com/ourostack/ouroboros)), working with stock [cmux](https://cmux.com) as the terminal. Installed copies keep working but receive no new releases.
+>
+> CI runs on `macos-15`, because GitHub retired `macos-14` on 2026-11-02. `release.yml` and `shell-dependency-watch.yml` stay on `macos-14` and can't run. That is harmless while no release is wanted. If Workbench ever thaws, move them to `macos-15` with the next release's VERSION bump, and drop `FROZEN_RELEASE_WORKFLOWS` from `.github/scripts/check-macos-runner-policy.py`.
 
 Native macOS workbench for terminal agents, with Ouro boss-agent coordination.
 
