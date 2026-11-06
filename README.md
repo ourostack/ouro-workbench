@@ -109,9 +109,8 @@ The installer source lives at
 [web/workbench-install.sh](web/workbench-install.sh). Release verification
 fetches the immutable raw GitHub copy at the release commit, requires it to
 match this source file exactly, and then runs it against the published release.
-The optional apex Worker in [apex-worker/](apex-worker/) can re-serve the same
-raw source from `ouro.bot/workbench-install.sh` when the branded route is
-deployed, but the release gate does not depend on a Cloudflare Pages mirror.
+The release gate does not depend on a Cloudflare Pages mirror. There is no
+`ouro.bot` copy of this installer: the raw GitHub URL above is the install path.
 Override behavior with `OURO_WB_REPO`, `OURO_WB_INSTALL_DIR`, or
 `OURO_WB_NO_OPEN=1`.
 
